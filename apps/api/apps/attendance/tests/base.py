@@ -18,9 +18,12 @@ back to — the same reason timetable/tests/base.py gives.
 
 from __future__ import annotations
 
+import datetime
+
 from rest_framework.test import APITestCase
 
 from apps.attendance.tests.factories import (
+    MARKING_DATE,
     AcademicSessionFactory,
     CampusFactory,
     ClassFactory,
@@ -39,6 +42,19 @@ from apps.attendance.tests.factories import (
 from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
+# The current session's dates, relative to MARKING_DATE (today), never the shared factory's
+# fixed ones: the register refuses a session that does not contain the date it marks.
+SESSION_WINDOW = {
+    "start_date": MARKING_DATE - datetime.timedelta(days=180),
+    "end_date": MARKING_DATE + datetime.timedelta(days=180),
+}
+# The session before it, ending the day before the current one starts, and a date inside it.
+LAST_SESSION_WINDOW = {
+    "start_date": SESSION_WINDOW["start_date"] - datetime.timedelta(days=365),
+    "end_date": SESSION_WINDOW["start_date"] - datetime.timedelta(days=1),
+}
+LAST_SESSION_DATE = SESSION_WINDOW["start_date"] - datetime.timedelta(days=30)
+
 
 class AttendanceAPITestCase(APITestCase):
     def setUp(self) -> None:
@@ -51,7 +67,9 @@ class AttendanceAPITestCase(APITestCase):
 
         with tenant_context(self.tenant.id):
             self.campus = CampusFactory(tenant=self.tenant)
-            self.session = AcademicSessionFactory(tenant=self.tenant, is_current=True)
+            self.session = AcademicSessionFactory(
+                tenant=self.tenant, is_current=True, **SESSION_WINDOW
+            )
             self.school_class = ClassFactory(tenant=self.tenant, level=6)
 
             # The class teacher, and the user they sign in as. Two users, not

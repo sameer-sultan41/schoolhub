@@ -2,6 +2,7 @@ import {
   Bolt,
   BookOpen,
   CalendarClock,
+  ClipboardCheck,
   GraduationCap,
   IdCard,
   LayoutGrid,
@@ -19,6 +20,7 @@ import type { MenuConfig } from "@schoolhub/ui";
 
 import { sectionMenuItems } from "@/components/module-sections/module-sections";
 import { ACADEMICS_SECTIONS } from "@/features/academics/academics-sections";
+import { ATTENDANCE_SECTIONS } from "@/features/attendance/attendance-sections";
 import { TIMETABLE_SECTIONS } from "@/features/timetable/timetable-sections";
 
 import { Paths } from "./paths";
@@ -64,6 +66,13 @@ export const MENU_SIDEBAR: MenuConfig = [
     module: "timetable",
     // Shared with the Timetable tabs and landing, gated the same way.
     children: sectionMenuItems(TIMETABLE_SECTIONS),
+  },
+  {
+    title: "Attendance",
+    icon: ClipboardCheck,
+    module: "attendance",
+    // Shared with the Attendance tabs and landing, gated the same way.
+    children: sectionMenuItems(ATTENDANCE_SECTIONS),
   },
   { heading: "User" },
   {

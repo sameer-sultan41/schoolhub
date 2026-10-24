@@ -395,6 +395,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/attendance-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the attendance settings
+         * @description `GET/PATCH /api/v1/attendance-settings` — §19's attendance keys, typed.
+         *
+         *     A projection of three keys in ``tenant_settings.academic``, the same shape
+         *     `holiday_calendar/view.py` gives its slice, under the settings keys §4
+         *     already describes as covering academic configuration. Not `/school-settings`:
+         *     its PATCH replaces the whole `academic` JSON, so a client read-modify-write
+         *     would lose a concurrent change. This writes only its own keys, under a row
+         *     lock, and merges the nested `student_leave_approval` dict rather than
+         *     replacing it.
+         *
+         *     Switching to `period` is refused while `module.timetable` is off: without a
+         *     timetable every period register would be refused (ADR-0028).
+         */
+        get: operations["attendance_settings_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change the attendance settings
+         * @description `GET/PATCH /api/v1/attendance-settings` — §19's attendance keys, typed.
+         *
+         *     A projection of three keys in ``tenant_settings.academic``, the same shape
+         *     `holiday_calendar/view.py` gives its slice, under the settings keys §4
+         *     already describes as covering academic configuration. Not `/school-settings`:
+         *     its PATCH replaces the whole `academic` JSON, so a client read-modify-write
+         *     would lose a concurrent change. This writes only its own keys, under a row
+         *     lock, and merges the nested `student_leave_approval` dict rather than
+         *     replacing it.
+         *
+         *     Switching to `period` is refused while `module.timetable` is off: without a
+         *     timetable every period register would be refused (ADR-0028).
+         */
+        patch: operations["attendance_settings_partial_update"];
+        trace?: never;
+    };
     "/api/v1/auth/change-password": {
         parameters: {
             query?: never;
@@ -4454,6 +4500,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/student-attendance/my-registers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The registers the caller marks on a date
+         * @description `GET /student-attendance/my-registers?date=` — from the caller's own staff rows.
+         */
+        get: operations["student_attendance_my_registers_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student-attendance/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A section's register for one date: its roster, with any marks merged
+         * @description `GET /student-attendance/register?section_id=&date=[&period_id=]`.
+         *
+         *     Unpaginated by design: one section's roster. A section the caller may not
+         *     mark is a 404 here, where `:bulk-mark` answers 422 on `section_id` — a read
+         *     has no field to blame.
+         */
+        get: operations["student_attendance_register_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/student-attendance:bulk-mark": {
         parameters: {
             query?: never;
@@ -6054,6 +6144,12 @@ export interface components {
             academic_session_id: string;
         };
         /**
+         * @description * `daily` - daily
+         *     * `period` - period
+         * @enum {string}
+         */
+        AttendanceModeEnum: "daily" | "period";
+        /**
          * @description Query parameters for `GET /reports/attendance-summary` (§13, §16).
          *
          *     One endpoint with a `kind`, not six routes: §16 declares exactly one report
@@ -6068,6 +6164,11 @@ export interface components {
             end_date?: string;
             /** Format: uuid */
             section_id?: string | null;
+            /**
+             * Format: uuid
+             * @description `daily-register` only: one period's own rows instead of the derived day.
+             */
+            period_id?: string | null;
             /** Format: decimal */
             threshold?: string;
             /** @default csv */
@@ -6083,6 +6184,12 @@ export interface components {
          * @enum {string}
          */
         AttendanceReportQueryKindEnum: "daily-register" | "student-summary" | "defaulters" | "student-late-arrivals" | "staff-punctuality" | "leave";
+        /** @description `GET /attendance-settings` — the effective values, defaults applied (§19). */
+        AttendanceSettings: {
+            readonly attendance_mode: components["schemas"]["AttendanceModeEnum"];
+            readonly lock_window_days: number;
+            readonly leave_escalation_threshold_days: number;
+        };
         /**
          * @description * `manual` - Manual
          *     * `system` - System
@@ -6168,8 +6275,9 @@ export interface components {
          *
          *     `academic_session_id` is optional and falls back to the tenant's current
          *     session: a school runs one at a time and the register UI has no reason to
-         *     carry its id around. `period_id` omitted means daily mode, which is §19's
-         *     recommended default.
+         *     carry its id around. `period_id` is required in period mode and refused in
+         *     daily mode (ADR-0028); it is a plain UUID so an unknown or foreign period is
+         *     the view's 404, like the register's.
          */
         BulkMark: {
             /** Format: uuid */
@@ -7636,6 +7744,24 @@ export interface components {
          * @enum {string}
          */
         MarksStatusEnum: "draft" | "submitted" | "locked";
+        /** @description One register the caller marks on a date. The period fields are null in daily mode. */
+        MyRegister: {
+            /** Format: uuid */
+            readonly section_id: string;
+            readonly section_name: string;
+            readonly class_name: string;
+            /** Format: uuid */
+            readonly campus_id: string;
+            /** Format: uuid */
+            readonly period_id: string | null;
+            readonly period_name: string | null;
+            /** Format: time */
+            readonly start_time: string | null;
+            /** Format: time */
+            readonly end_time: string | null;
+            readonly marked_count: number;
+            readonly roster_count: number;
+        };
         Notice: {
             /** Format: uuid */
             readonly id: string;
@@ -8449,6 +8575,17 @@ export interface components {
             readonly created_at?: string;
             /** Format: date-time */
             readonly updated_at?: string;
+        };
+        /**
+         * @description `PATCH /attendance-settings` — any subset of the three keys.
+         *
+         *     Bounds are §19's: a lock window of 0-7 days, and an escalation threshold of
+         *     at least one day (zero would escalate every single-day absence).
+         */
+        PatchedAttendanceSettingsUpdate: {
+            attendance_mode?: components["schemas"]["AttendanceModeEnum"];
+            lock_window_days?: number;
+            leave_escalation_threshold_days?: number;
         };
         PatchedBudget: {
             /** Format: uuid */
@@ -9989,6 +10126,17 @@ export interface components {
          * @enum {string}
          */
         RefundStatusEnum: "requested" | "approved" | "rejected" | "processed";
+        /** @description One rostered student on a register, with the record for that date if marked. */
+        RegisterEntry: {
+            /** Format: uuid */
+            readonly student_id: string;
+            readonly student_name: string;
+            readonly admission_number: string;
+            readonly roll_number: string | null;
+            readonly record: components["schemas"]["StudentAttendance"] | null;
+            /** @description The student has a daily `on_leave` row for this date. */
+            readonly on_leave: boolean;
+        };
         /**
          * @description * `father` - Father
          *     * `mother` - Mother
@@ -10519,12 +10667,16 @@ export interface components {
             readonly id: string;
             /** Format: uuid */
             student_id: string;
+            readonly student_name: string;
+            readonly admission_number: string;
             /** Format: uuid */
             section_id: string;
+            readonly section_name: string;
             /** Format: uuid */
             academic_session_id: string;
             /** Format: uuid */
             period_id?: string | null;
+            readonly period_name: string | null;
             /**
              * Format: date
              * @description Calendar date in the tenant's timezone.
@@ -10544,7 +10696,7 @@ export interface components {
             /** @description Computed server-side from the tenant day window (§11); never client-supplied. */
             readonly late_minutes: number | null;
             /** Format: uuid */
-            readonly leave_request_id: string;
+            readonly leave_request_id: string | null;
             readonly source: components["schemas"]["AttendanceSourceEnum"];
             /**
              * Format: uuid
@@ -11728,6 +11880,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AttendanceCorrection"];
+                };
+            };
+        };
+    };
+    attendance_settings_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceSettings"];
+                };
+            };
+        };
+    };
+    attendance_settings_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedAttendanceSettingsUpdate"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedAttendanceSettingsUpdate"];
+                "multipart/form-data": components["schemas"]["PatchedAttendanceSettingsUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceSettings"];
                 };
             };
         };
@@ -17317,6 +17513,8 @@ export interface operations {
                  *     * `leave` - leave
                  */
                 kind: "daily-register" | "student-summary" | "defaulters" | "student-late-arrivals" | "staff-punctuality" | "leave";
+                /** @description `daily-register` only: one period's own rows instead of the derived day. */
+                period_id?: string | null;
                 section_id?: string | null;
                 start_date: string;
                 threshold?: string;
@@ -18679,6 +18877,7 @@ export interface operations {
         parameters: {
             query?: {
                 academic_session_id?: string;
+                class_id?: string;
                 /** @description The pagination cursor value. */
                 cursor?: string;
                 date?: string;
@@ -18764,6 +18963,53 @@ export interface operations {
             };
         };
     };
+    student_attendance_my_registers_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Defaults to today. */
+                date?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ordered by start time, then section name. `meta.attendance_mode` and `meta.date` echo what the list was resolved for. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyRegister"][];
+                };
+            };
+        };
+    };
+    student_attendance_register_retrieve: {
+        parameters: {
+            query: {
+                date: string;
+                period_id?: string | null;
+                section_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rostered students in roll-number order. `meta.attendance_mode` is `daily` or `period`; `meta.markable` is false when no row can be marked that date, with `meta.unmarkable_reason` one of `future`, `holiday` (named in `meta.holiday_name`), `non_working_day` or `session_closed`; `meta.is_locked` says only that the date is past the lock window, since the lock is per row (`record.is_locked`); `meta.academic_session_id` is the session the date resolved to. `period_id` is required in period mode, where it must name a lesson the section has that date and `module.timetable` must be on, and refused in daily mode (422 on `period_id`). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegisterEntry"][];
+                };
+            };
+        };
+    };
     "student_attendance:bulk_mark_create": {
         parameters: {
             query?: never;
@@ -18779,13 +19025,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The marked rows, plus `meta.marked`/`meta.updated` counts. */
+            /** @description The marked rows, plus `meta.marked`/`meta.updated`/`meta.alerts_queued` counts. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedStudentAttendanceList"];
+                    "application/json": components["schemas"]["StudentAttendance"][];
                 };
             };
         };

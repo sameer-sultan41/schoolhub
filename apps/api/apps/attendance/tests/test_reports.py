@@ -158,6 +158,61 @@ class DefaulterTests(ReportDataTestCase):
         self.assertNotIn(newcomer.pk, [row["student_id"] for row in rows])
 
 
+class RateRoundingTests(AttendanceAPITestCase):
+    """Rates round half up to one decimal, as examinations/grading.py does, then compare.
+
+    Over 16 counted days: 1 present is 6.25% and 13 present is 81.25%, each exactly
+    on a .x5 boundary. Banker's rounding would give 6.2 and 81.2.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.start = MARKING_DATE - datetime.timedelta(days=15)
+        self.end = MARKING_DATE
+        with tenant_context(self.tenant.id):
+            for student, present in ((self.students[0], 1), (self.students[1], 13)):
+                statuses = [AttendanceStatus.PRESENT] * present
+                statuses += [AttendanceStatus.ABSENT] * (16 - present)
+                for offset, marked in enumerate(statuses):
+                    StudentAttendanceFactory(
+                        tenant=self.tenant,
+                        student=student,
+                        section=self.section,
+                        academic_session=self.session,
+                        attendance_date=self.start + datetime.timedelta(days=offset),
+                        status=marked,
+                        marked_by=self.user.pk,
+                    )
+
+    def scoped(self):
+        return StudentAttendance.objects.alive()
+
+    def test_a_half_rounds_up(self) -> None:
+        with tenant_context(self.tenant.id):
+            rows = reports.student_summary(self.scoped(), start_date=self.start, end_date=self.end)
+        rates = {row["student_id"]: row for row in rows}
+
+        self.assertEqual(rates[self.students[0].pk]["counted_days"], 16)
+        self.assertEqual(rates[self.students[0].pk]["attendance_rate"], Decimal("6.3"))
+        self.assertEqual(rates[self.students[1].pk]["attendance_rate"], Decimal("81.3"))
+
+    def test_the_threshold_compares_the_rounded_rate(self) -> None:
+        """81.25% rounds to 81.3, which is not below 81.3: not a defaulter at that line."""
+
+        def listed(threshold: str) -> set:
+            with tenant_context(self.tenant.id):
+                rows = reports.defaulters(
+                    self.scoped(),
+                    start_date=self.start,
+                    end_date=self.end,
+                    threshold=Decimal(threshold),
+                )
+            return {row["student_id"] for row in rows}
+
+        self.assertEqual(listed("81.3"), {self.students[0].pk})
+        self.assertEqual(listed("81.4"), {self.students[0].pk, self.students[1].pk})
+
+
 class DailyRegisterTests(ReportDataTestCase):
     def test_the_register_is_one_query_for_the_whole_section(self) -> None:
         with tenant_context(self.tenant.id), self.assertNumQueries(1):

@@ -30,6 +30,8 @@ export interface FormDialogLayoutProps<TValues extends FieldValues> {
   submittingLabel: string;
   /** The submit button's text; defaults to "Save" (`common.save`). */
   submitLabel?: string;
+  /** Holds the submit back, e.g. until a value differs from the record it would change. */
+  submitDisabled?: boolean;
   children: ReactNode;
 }
 
@@ -49,6 +51,7 @@ export function FormDialogLayout<TValues extends FieldValues>({
   isPending,
   submittingLabel,
   submitLabel,
+  submitDisabled,
   children,
 }: FormDialogLayoutProps<TValues>) {
   const tCommon = useTranslations("common");
@@ -87,7 +90,12 @@ export function FormDialogLayout<TValues extends FieldValues>({
               >
                 {tCommon("cancel")}
               </Button>
-              <Button type="submit" isLoading={isPending} loadingLabel={submittingLabel}>
+              <Button
+                type="submit"
+                disabled={submitDisabled}
+                isLoading={isPending}
+                loadingLabel={submittingLabel}
+              >
                 {submitLabel ?? tCommon("save")}
               </Button>
             </ResponsiveDialogFooter>

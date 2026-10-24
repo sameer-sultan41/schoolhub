@@ -17,9 +17,11 @@ import datetime
 import logging
 import uuid
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, NamedTuple
 
 from django.db import IntegrityError, transaction
+from django.db.models import F
+from django.db.models.functions import Length
 from django.utils import timezone
 
 from apps.attendance import uploads
@@ -45,10 +47,12 @@ from apps.school_organization.models import AcademicSession
 from apps.school_organization.services import assert_session_writable
 from apps.student_management.models import EnrollmentStatus, Student, StudentEnrollment
 from apps.student_management.services import assert_file_usable
+from apps.timetable.slots.services import effective_slots_for
 from core.api.exceptions import Conflict, DomainRuleViolation
 from core.imports.tabular import parse_rows
 from core.rbac.models import RecordScope
 from core.rbac.permissions import user_scopes
+from core.tenancy.features import is_feature_enabled
 from core.tenancy.models import TenantSettings
 
 logger = logging.getLogger(__name__)
@@ -56,12 +60,42 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from apps.school_organization.models import Section
     from apps.staff_management.models import Staff
-    from apps.timetable.models import Period
+    from apps.timetable.models import Period, TimetableSlot
 
 # §19: "lock window: end of marking day (recommendation; tenant-configurable
 # 0-7 days)". Zero means "locks tonight", which is the recommended default.
 DEFAULT_LOCK_WINDOW_DAYS = 0
 MAX_LOCK_WINDOW_DAYS = 7
+
+# §19's `attendance_mode`. Daily is the default and the fallback for anything else stored.
+type AttendanceMode = Literal["daily", "period"]
+ATTENDANCE_MODE_DAILY: AttendanceMode = "daily"
+ATTENDANCE_MODE_PERIOD: AttendanceMode = "period"
+ATTENDANCE_MODES: tuple[AttendanceMode, ...] = (ATTENDANCE_MODE_DAILY, ATTENDANCE_MODE_PERIOD)
+
+# Period mode reads the timetable, so switching to it, and marking in it, need this module on.
+TIMETABLE_FEATURE = "module.timetable"
+TIMETABLE_REQUIRED = "Period attendance needs the timetable module; turn it on first."
+
+# The `tenant_settings.academic` keys this module reads and `/attendance-settings` writes.
+ATTENDANCE_MODE_SETTING = "attendance_mode"
+LOCK_WINDOW_SETTING = "attendance_lock_window_days"
+LEAVE_APPROVAL_SETTING = "student_leave_approval"
+ESCALATION_THRESHOLD_SETTING = "escalation_threshold_days"
+
+# Why the register for a date renders read-only (`meta.unmarkable_reason`).
+UNMARKABLE_FUTURE = "future"
+UNMARKABLE_HOLIDAY = "holiday"
+UNMARKABLE_NON_WORKING_DAY = "non_working_day"
+UNMARKABLE_SESSION_CLOSED = "session_closed"
+
+# The 422 on `section_id` for a marker who holds `assigned` scope but not this register.
+NOT_ASSIGNED_TO_SECTION = "You are not assigned to mark this section."
+
+# The `meta.rows` issue for a student a register may not mark because of approved leave.
+ON_APPROVED_LEAVE = (
+    "This student has approved leave on this date; cancel the leave request before marking them."
+)
 
 # The statuses that make a guardian alert appropriate (§12's first two rows).
 ALERT_STATUSES = frozenset({AttendanceStatus.ABSENT, AttendanceStatus.LATE})
@@ -77,6 +111,12 @@ SYSTEM_ONLY_STATUSES = frozenset({AttendanceStatus.ON_LEAVE})
 # ---------------------------------------------------------------------------
 
 
+def _academic_settings() -> dict:
+    """The bound tenant's `tenant_settings.academic`, or an empty dict."""
+    row = TenantSettings.objects.first()
+    return row.academic if row is not None and isinstance(row.academic, dict) else {}
+
+
 def lock_window_days() -> int:
     """How long a marked row stays editable in place, in days.
 
@@ -85,24 +125,249 @@ def lock_window_days() -> int:
     register can still be edited, and a tenant that stores 3650 has effectively
     turned the correction workflow off without anyone deciding to.
     """
-    row = TenantSettings.objects.first()
-    academic = row.academic if row is not None and isinstance(row.academic, dict) else {}
-    configured = academic.get("attendance_lock_window_days")
+    return lock_window_days_from(_academic_settings())
+
+
+def lock_window_days_from(academic: dict) -> int:
+    """``lock_window_days`` over an already-loaded `academic` dict."""
+    configured = academic.get(LOCK_WINDOW_SETTING)
     if not isinstance(configured, int) or isinstance(configured, bool):
         return DEFAULT_LOCK_WINDOW_DAYS
     return max(0, min(configured, MAX_LOCK_WINDOW_DAYS))
 
 
-def is_locked(attendance_date: datetime.date, *, today: datetime.date | None = None) -> bool:
+def attendance_mode() -> AttendanceMode:
+    """§19's `attendance_mode`: `daily` (the default) or `period`.
+
+    Read from ``tenant_settings.academic.attendance_mode``; a missing or unknown
+    value is `daily`, the same fall-back-rather-than-trust reading as
+    ``lock_window_days``.
+    """
+    return attendance_mode_from(_academic_settings())
+
+
+def attendance_mode_from(academic: dict) -> AttendanceMode:
+    """``attendance_mode`` over an already-loaded `academic` dict."""
+    if academic.get(ATTENDANCE_MODE_SETTING) == ATTENDANCE_MODE_PERIOD:
+        return ATTENDANCE_MODE_PERIOD
+    return ATTENDANCE_MODE_DAILY
+
+
+def attendance_settings_from(academic: dict) -> dict:
+    """The `/attendance-settings` shape: effective values, read the way they are enforced."""
+    return {
+        "attendance_mode": attendance_mode_from(academic),
+        "lock_window_days": lock_window_days_from(academic),
+        "leave_escalation_threshold_days": escalation_threshold_days_from(academic),
+    }
+
+
+def read_attendance_settings(*, tenant_id: uuid.UUID) -> dict:
+    """The tenant's attendance settings, defaults applied. One query."""
+    row = TenantSettings.objects.filter(tenant_id=tenant_id).first()
+    academic = row.academic if row is not None and isinstance(row.academic, dict) else {}
+    return attendance_settings_from(academic)
+
+
+def assert_mode_switch_allowed(*, changes: dict, tenant_id: uuid.UUID) -> None:
+    """Period mode reads the timetable, so it is refused while `module.timetable` is off."""
+    if changes.get("attendance_mode") != ATTENDANCE_MODE_PERIOD:
+        return
+    if not is_feature_enabled(TIMETABLE_FEATURE, tenant_id=tenant_id):
+        raise DomainRuleViolation({"attendance_mode": TIMETABLE_REQUIRED})
+
+
+def update_attendance_settings(
+    *, tenant_id: uuid.UUID, changes: dict, actor_id: uuid.UUID
+) -> tuple[TenantSettings, dict, dict]:
+    """Merge `changes` into the tenant's `academic` under a row lock: `(row, before, after)`.
+
+    Fetch-or-create, as `school_organization.tenant_settings.get_settings_row`
+    does (provisioning may not have made the row yet), but locked, so the row
+    is read once. Only the changed keys are written, so sibling keys survive,
+    and the nested `student_leave_approval` dict is merged rather than
+    replaced. Two queries when the row exists (the locked read and the update);
+    the caller holds the transaction.
+    """
+    locked, _ = TenantSettings.objects.select_for_update().get_or_create(
+        tenant_id=tenant_id, defaults={"created_by": actor_id, "updated_by": actor_id}
+    )
+    before = dict(locked.academic) if isinstance(locked.academic, dict) else {}
+    after = dict(before)
+    if "attendance_mode" in changes:
+        after[ATTENDANCE_MODE_SETTING] = changes["attendance_mode"]
+    if "lock_window_days" in changes:
+        after[LOCK_WINDOW_SETTING] = changes["lock_window_days"]
+    if "leave_escalation_threshold_days" in changes:
+        after[LEAVE_APPROVAL_SETTING] = {
+            **leave_approval_config(before),
+            ESCALATION_THRESHOLD_SETTING: changes["leave_escalation_threshold_days"],
+        }
+    locked.academic = after
+    locked.updated_by = actor_id
+    locked.save(update_fields=["academic", "updated_by", "updated_at"])
+    return locked, before, after
+
+
+def session_for_date(on_date: datetime.date) -> AcademicSession | None:
+    """The session whose dates contain `on_date` (the current one first), else the current one.
+
+    A date inside last session's lock window belongs to last session's roster
+    and timetable, not the current one's. The register views and the period
+    marker check both resolve it here so they agree.
+    """
+    containing = (
+        AcademicSession.objects.alive()
+        .filter(start_date__lte=on_date, end_date__gte=on_date)
+        .order_by("-is_current", "-start_date")
+        .first()
+    )
+    if containing is not None:
+        return containing
+    return AcademicSession.objects.alive().filter(is_current=True).first()
+
+
+# ---------------------------------------------------------------------------
+# Period mode: the timetable that day
+# ---------------------------------------------------------------------------
+
+
+class LessonCell(NamedTuple):
+    """A section's lesson in one period on one date, and who teaches it that day."""
+
+    slot: TimetableSlot
+    teacher_id: uuid.UUID | None
+
+
+def lesson_cells(
+    slots: list[TimetableSlot], overrides: dict, *, on_date: datetime.date
+) -> dict[tuple[uuid.UUID, uuid.UUID], LessonCell]:
+    """``effective_slots_for``'s answer narrowed to `on_date`'s weekday, keyed (section, period).
+
+    The teacher is the confirmed substitute where there is one: cover replaces
+    the absent teacher for that date. Break periods are never a lesson.
+    """
+    weekday = on_date.weekday()
+    cells: dict[tuple[uuid.UUID, uuid.UUID], LessonCell] = {}
+    for slot in slots:
+        if slot.day_of_week != weekday or slot.period.is_break:
+            continue
+        override = overrides.get(slot.pk)
+        teacher_id = override.substitute_staff_id if override is not None else slot.staff_id
+        cells[(slot.section_id, slot.period_id)] = LessonCell(slot, teacher_id)
+    return cells
+
+
+def effective_lessons(
+    *, session: AcademicSession, section_ids: list[uuid.UUID], on_date: datetime.date
+) -> dict[tuple[uuid.UUID, uuid.UUID], LessonCell]:
+    """The lessons these sections had on `on_date`, version- and cover-aware.
+
+    Through ``effective_slots_for``, never today's published grid: a republish
+    end-dates the old cells, so a past date inside the lock window must be read
+    against the version in force that day.
+    """
+    slots, overrides = effective_slots_for(
+        session=session, section_ids=section_ids, on_date=on_date
+    )
+    return lesson_cells(slots, overrides, on_date=on_date)
+
+
+def assert_period_fits_mode(*, period: Period | None) -> None:
+    """One mode at a time (ADR-0028): a period only in period mode, and always in it."""
+    mode = attendance_mode()
+    if mode == ATTENDANCE_MODE_DAILY and period is not None:
+        raise DomainRuleViolation(
+            {"period_id": "This school takes attendance once a day; leave the period out."}
+        )
+    if mode == ATTENDANCE_MODE_PERIOD and period is None:
+        raise DomainRuleViolation(
+            {"period_id": "This school takes attendance per period; name the period."}
+        )
+
+
+def assert_session_contains(*, session: AcademicSession, on_date: datetime.date) -> None:
+    """A register's rows and roster belong to its session, so the session must contain the date."""
+    if not session.start_date <= on_date <= session.end_date:
+        raise DomainRuleViolation(
+            {"academic_session_id": f"{on_date} is outside the {session.name} session."}
+        )
+
+
+def assert_register_period(
+    *,
+    session: AcademicSession,
+    section: Section,
+    period: Period | None,
+    on_date: datetime.date,
+    lessons: dict[tuple[uuid.UUID, uuid.UUID], LessonCell] | None = None,
+) -> None:
+    """The register's period fits the mode, its session contains the date, and in period
+    mode the period is a lesson that day.
+
+    The session check runs in both modes: a daily register named against a stale
+    session would otherwise write today's rows into it. A break, or a period with
+    no effective slot for the section on that date, is refused: there was no lesson
+    to take a register for. So is every period register while `module.timetable`
+    is off: its grid can no longer be edited or covered. `lessons`
+    is ``effective_lessons`` for this section, session and date when the caller
+    already has it (the view does, for the marker check), so the timetable is
+    read once per request.
+    """
+    assert_period_fits_mode(period=period)
+    assert_session_contains(session=session, on_date=on_date)
+    if period is None:
+        return
+    if not is_feature_enabled(TIMETABLE_FEATURE, tenant_id=section.tenant_id):
+        raise DomainRuleViolation({"period_id": TIMETABLE_REQUIRED})
+    if period.is_break:
+        raise DomainRuleViolation({"period_id": f"{period.name} is a break, not a lesson."})
+    if lessons is None:
+        lessons = effective_lessons(session=session, section_ids=[section.pk], on_date=on_date)
+    if (section.pk, period.pk) not in lessons:
+        raise DomainRuleViolation(
+            {"period_id": f"This section has no lesson in {period.name} on {on_date}."}
+        )
+
+
+def is_locked(
+    attendance_date: datetime.date,
+    *,
+    today: datetime.date | None = None,
+    window_days: int | None = None,
+) -> bool:
     """§5.5 — a row past the lock window is edited only through a correction.
 
     Computed from the date rather than read from the ``is_locked`` column so the
     answer is right the moment the window passes. The column is the *persisted*
     view of the same thing, swept nightly, and exists so a client can render the
-    state without recomputing it per row.
+    state without recomputing it per row. ``window_days`` lets a caller checking
+    many rows read the setting once.
     """
     today = today or timezone.localdate()
-    return attendance_date < today - datetime.timedelta(days=lock_window_days())
+    window = lock_window_days() if window_days is None else window_days
+    return attendance_date < today - datetime.timedelta(days=window)
+
+
+class DateIssue(NamedTuple):
+    """Why a date cannot be marked: one of the `UNMARKABLE_*` reasons."""
+
+    reason: str
+    holiday_name: str | None = None
+
+
+def unmarkable_date_issue(
+    *, on_date: datetime.date, campus_id: uuid.UUID | None
+) -> DateIssue | None:
+    """§11's calendar refusals as data, so the register renders read-only instead of failing."""
+    if on_date > timezone.localdate():
+        return DateIssue(UNMARKABLE_FUTURE)
+    holiday = calendar.holiday_name(on_date, campus_id=campus_id)
+    if holiday is not None:
+        return DateIssue(UNMARKABLE_HOLIDAY, holiday)
+    if not calendar.is_working_day(on_date, campus_id=campus_id):
+        return DateIssue(UNMARKABLE_NON_WORKING_DAY)
+    return None
 
 
 def assert_markable_date(*, on_date: datetime.date, campus_id: uuid.UUID | None) -> None:
@@ -111,55 +376,15 @@ def assert_markable_date(*, on_date: datetime.date, campus_id: uuid.UUID | None)
     The holiday case names the holiday. A teacher told only "this date cannot be
     marked" retries; one told "this is Founders Day" stops.
     """
-    today = timezone.localdate()
-    if on_date > today:
-        raise DomainRuleViolation(
-            {"attendance_date": "Attendance records what happened; it cannot be marked ahead."}
-        )
-
-    holiday = calendar.holiday_name(on_date, campus_id=campus_id)
-    if holiday is not None:
-        raise DomainRuleViolation(
-            {"attendance_date": f"{on_date} is {holiday}; the school is closed."}
-        )
-    if not calendar.is_working_day(on_date, campus_id=campus_id):
-        raise DomainRuleViolation(
-            {"attendance_date": f"{on_date} is not a working day for this school."}
-        )
-
-
-def assert_marker_may_mark_section(*, user, section: Section) -> None:
-    """§11 — the marker must hold `assigned` scope for the section unless `all`.
-
-    Checked here rather than left to ``scope_queryset`` because marking is a
-    *write* to a section the caller names in the body, not a read of a list the
-    scope narrowed. A section a caller cannot reach is a 404, never a 403
-    (AGENTS.md invariant 2), and that 404 is raised by the view resolving the
-    section through the scoped queryset — this function covers the remaining
-    case, where the scope is `assigned` and the section resolves but is not
-    theirs to mark.
-    """
-    scopes = user_scopes(user)
-    if RecordScope.ALL in scopes or RecordScope.CAMPUS in scopes:
+    issue = unmarkable_date_issue(on_date=on_date, campus_id=campus_id)
+    if issue is None:
         return
-    if RecordScope.ASSIGNED not in scopes:
-        # `own` alone cannot mark anything: a student marking their own register
-        # is not a workflow §5 describes.
-        raise DomainRuleViolation({"section_id": "You are not assigned to mark this section."})
-
-    from apps.staff_management.models import EmploymentStatus, Staff
-
-    is_class_teacher = (
-        Staff.objects.alive()
-        .filter(
-            user_id=user.pk,
-            employment_status=EmploymentStatus.ACTIVE,
-            pk=section.class_teacher_staff_id,
-        )
-        .exists()
-    )
-    if not is_class_teacher:
-        raise DomainRuleViolation({"section_id": "You are not assigned to mark this section."})
+    messages = {
+        UNMARKABLE_FUTURE: "Attendance records what happened; it cannot be marked ahead.",
+        UNMARKABLE_HOLIDAY: f"{on_date} is {issue.holiday_name}; the school is closed.",
+        UNMARKABLE_NON_WORKING_DAY: f"{on_date} is not a working day for this school.",
+    }
+    raise DomainRuleViolation({"attendance_date": messages[issue.reason]})
 
 
 # ---------------------------------------------------------------------------
@@ -167,21 +392,31 @@ def assert_marker_may_mark_section(*, user, section: Section) -> None:
 # ---------------------------------------------------------------------------
 
 
-def section_roster(*, section: Section, session: AcademicSession) -> list[Student]:
-    """The students a register covers — §6's "roster auto-loaded from enrollments".
+def roster_enrollments(*, section: Section, session: AcademicSession) -> list[StudentEnrollment]:
+    """The active enrollments a register covers, each with its student, in register order.
 
     Ordered by roll number then name so the register renders in the order a
     teacher reads a class list, with unnumbered students last rather than first.
+    Shorter roll numbers sort first because `roll_number` is text: "2" then
+    "10", not "10" then "2". A soft-deleted student is left out, which the
+    enrollment's own `.alive()` does not do (see `_enrolled_student_ids`).
     """
-    enrollments = (
+    return list(
         StudentEnrollment.objects.alive()
-        .filter(section=section, academic_session=session, status=EnrollmentStatus.ACTIVE)
+        .filter(
+            section=section,
+            academic_session=session,
+            status=EnrollmentStatus.ACTIVE,
+            student__deleted_at__isnull=True,
+        )
         .select_related("student")
-        .order_by("roll_number", "student__first_name", "student__last_name")
+        .order_by(
+            Length("roll_number").asc(nulls_last=True),
+            F("roll_number").asc(nulls_last=True),
+            "student__first_name",
+            "student__last_name",
+        )
     )
-    return [
-        enrollment.student for enrollment in enrollments if enrollment.student.deleted_at is None
-    ]
 
 
 def _enrolled_student_ids(*, section: Section, session: AcademicSession) -> set[uuid.UUID]:
@@ -190,7 +425,7 @@ def _enrolled_student_ids(*, section: Section, session: AcademicSession) -> set[
     `student__deleted_at__isnull=True` is not redundant with `.alive()`: that
     narrows the *enrollment*, and a soft-deleted student can still hold a live
     enrollment row — nothing cascades the flag. Without it a deleted student
-    stayed markable, which `section_roster` already excluded, so the roster a
+    stayed markable, which `roster_enrollments` already excluded, so the roster a
     teacher was shown and the roster the validator accepted disagreed.
     """
     return set(
@@ -211,7 +446,7 @@ def _enrolled_student_ids(*, section: Section, session: AcademicSession) -> set[
 
 
 def _resolve_times(
-    entry: dict, *, campus_id: uuid.UUID | None
+    entry: dict, *, campus_id: uuid.UUID | None, period: Period | None
 ) -> tuple[datetime.time | None, int | None]:
     """Check-in time and the lateness it implies.
 
@@ -223,7 +458,16 @@ def _resolve_times(
     check_in = entry.get("check_in_time")
     if entry.get("status") != AttendanceStatus.LATE or check_in is None:
         return check_in, None
-    return check_in, calendar.late_minutes(check_in, campus_id=campus_id)
+    return check_in, late_minutes_for(check_in, period=period, campus_id=campus_id)
+
+
+def late_minutes_for(
+    check_in: datetime.time, *, period: Period | None, campus_id: uuid.UUID | None
+) -> int:
+    """A period row is late from its period's start; a daily row from the day's start."""
+    if period is not None:
+        return calendar.late_minutes_from(period.start_time, check_in, campus_id=campus_id)
+    return calendar.late_minutes(check_in, campus_id=campus_id)
 
 
 # The fields a register submission writes. Named once because they were written
@@ -290,7 +534,7 @@ def _apply_register(
     transitioned: list[StudentAttendance] = []
 
     for entry in entries:
-        check_in, late = _resolve_times(entry, campus_id=section.campus_id)
+        check_in, late = _resolve_times(entry, campus_id=section.campus_id, period=period)
         values = {
             "section": section,
             "academic_session": session,
@@ -336,6 +580,7 @@ def bulk_mark_student_attendance(
     period: Period | None,
     entries: list[dict],
     actor_id: uuid.UUID,
+    lessons: dict[tuple[uuid.UUID, uuid.UUID], LessonCell] | None = None,
 ) -> dict:
     """§16's ``POST /student-attendance:bulk-mark`` — one section, one date.
 
@@ -357,9 +602,17 @@ def bulk_mark_student_attendance(
     ``select_for_update`` on the rows that already exist: two devices submitting
     the same register within milliseconds both read "no row" otherwise, and the
     partial unique index turns the loser into a 500 rather than an update.
+
+    **One mode at a time** (ADR-0028): a `period` only in period mode, and there
+    only for a lesson the section had that date. The importer and approved-leave
+    auto-marking stay mode-agnostic and keep writing daily rows. `lessons` passes
+    through to ``assert_register_period``.
     """
     assert_session_writable(session)
     assert_markable_date(on_date=on_date, campus_id=section.campus_id)
+    assert_register_period(
+        session=session, section=section, period=period, on_date=on_date, lessons=lessons
+    )
 
     if not entries:
         raise DomainRuleViolation({"entries": "A register with no rows marks nothing."})
@@ -422,16 +675,21 @@ def bulk_mark_student_attendance(
     # "clear the link" (which loses the fact that leave was approved) and
     # "cancel the leave" (which is a decision, not a side effect of taking a
     # register). Naming the request lets the teacher do the second deliberately.
-    on_leave = [
-        {
-            "student_id": str(student_id),
-            "issue": (
-                "This student has approved leave on this date; cancel the leave "
-                "request before marking them."
-            ),
-        }
+    #
+    # In a period register the leave is the *daily* row approved leave writes, so
+    # the server, not the screen, keeps an on-leave student out of every period
+    # that day — and out of the absence alert a period mark would send.
+    on_leave_ids = {
+        student_id
         for student_id, row in existing.items()
         if row.status == AttendanceStatus.ON_LEAVE
+    }
+    if period is not None:
+        on_leave_ids |= _daily_leave_student_ids(student_ids=seen, on_date=on_date)
+    on_leave = [
+        {"student_id": str(entry["student_id"]), "issue": ON_APPROVED_LEAVE}
+        for entry in entries
+        if entry["student_id"] in on_leave_ids
     ]
     if on_leave:
         raise DomainRuleViolation(
@@ -485,8 +743,18 @@ def bulk_mark_student_attendance(
     # requires retries, so the module's own idempotency promise was what made it
     # a repeat-notification bug rather than a rare one. `transitioned` holds the
     # rows whose status actually changed, so a resubmitted register with the same
-    # marks queues nothing.
-    alerts = [row for row in transitioned if row.status in ALERT_STATUSES]
+    # marks queues nothing. A register backfilled for a date past the lock window
+    # writes its rows but alerts no one: a guardian must not hear of a weeks-old
+    # absence as news.
+    alerts = (
+        []
+        if is_locked(on_date)
+        else _first_alerts_of_the_day(
+            [row for row in transitioned if row.status in ALERT_STATUSES],
+            on_date=on_date,
+            written=rows,
+        )
+    )
     if alerts:
         _queue_alerts(tenant_id=section.tenant_id, rows=alerts)
 
@@ -496,6 +764,54 @@ def bulk_mark_student_attendance(
         "rows": rows,
         "alerts": alerts,
     }
+
+
+def _daily_leave_student_ids(
+    *, student_ids: set[uuid.UUID], on_date: datetime.date
+) -> set[uuid.UUID]:
+    """The students with a daily `on_leave` row on `on_date`, which approved leave writes."""
+    return set(
+        StudentAttendance.objects.alive()
+        .filter(
+            student_id__in=student_ids,
+            attendance_date=on_date,
+            period__isnull=True,
+            status=AttendanceStatus.ON_LEAVE,
+        )
+        .values_list("student_id", flat=True)
+    )
+
+
+def _first_alerts_of_the_day(
+    candidates: list[StudentAttendance],
+    *,
+    on_date: datetime.date,
+    written: list[StudentAttendance],
+) -> list[StudentAttendance]:
+    """One alert per (student, date, event): drop a candidate whose event already happened.
+
+    In period mode a student absent from P1 and P2 is one absence to a guardian,
+    not two. Any other row that date counts — another period, or a daily row
+    written before a switch. Late and absent are separate events: late in P1
+    then absent in P3 sends both (§12 lists them as two). One query.
+
+    It reads committed rows, so two registers for the same student submitted at
+    the same moment (P1 and P2 from two devices) can each see no earlier absence
+    and both alert. Accepted: the cost is a duplicate alert, not a missing one.
+    """
+    if not candidates:
+        return []
+    already = set(
+        StudentAttendance.objects.alive()
+        .filter(
+            student_id__in={row.student_id for row in candidates},
+            attendance_date=on_date,
+            status__in=ALERT_STATUSES,
+        )
+        .exclude(pk__in=[row.pk for row in written])
+        .values_list("student_id", "status")
+    )
+    return [row for row in candidates if (row.student_id, row.status) not in already]
 
 
 def _queue_alerts(*, tenant_id: uuid.UUID, rows: list[StudentAttendance]) -> None:
@@ -649,14 +965,16 @@ def _apply_correction(*, correction: AttendanceCorrection, reviewer_id: uuid.UUI
     to `late` or moves `check_in_time` left the old value in place: a row
     corrected from absent to late reported zero minutes late, and §13's
     punctuality report summed those zeros. Recomputing here is the same call the
-    register makes, so both write paths agree.
+    register makes, so both write paths agree — a period row from its period's start.
     """
     target = StudentAttendance.objects.select_for_update().get(pk=correction.student_attendance_id)
     for field, value in correction.new_values.items():
         setattr(target, field, _from_json(field, value))
 
     target.late_minutes = (
-        calendar.late_minutes(target.check_in_time, campus_id=target.section.campus_id)
+        late_minutes_for(
+            target.check_in_time, period=target.period, campus_id=target.section.campus_id
+        )
         if target.status == AttendanceStatus.LATE and target.check_in_time is not None
         else None
     )
@@ -708,10 +1026,9 @@ DEFAULT_ESCALATION_THRESHOLD_DAYS = 10
 LIVE_LEAVE_STATUSES = frozenset({LeaveStatus.PENDING, LeaveStatus.APPROVED})
 
 
-def _leave_config() -> dict:
-    row = TenantSettings.objects.first()
-    academic = row.academic if row is not None and isinstance(row.academic, dict) else {}
-    config = academic.get("student_leave_approval")
+def leave_approval_config(academic: dict) -> dict:
+    """`academic.student_leave_approval`, or an empty dict when missing or malformed."""
+    config = academic.get(LEAVE_APPROVAL_SETTING)
     return config if isinstance(config, dict) else {}
 
 
@@ -723,7 +1040,12 @@ def escalation_threshold_days() -> int:
     every single-day absence and make the second approver's queue useless, so it
     is floored at one.
     """
-    configured = _leave_config().get("escalation_threshold_days")
+    return escalation_threshold_days_from(_academic_settings())
+
+
+def escalation_threshold_days_from(academic: dict) -> int:
+    """``escalation_threshold_days`` over an already-loaded `academic` dict."""
+    configured = leave_approval_config(academic).get(ESCALATION_THRESHOLD_SETTING)
     if not isinstance(configured, int) or isinstance(configured, bool):
         return DEFAULT_ESCALATION_THRESHOLD_DAYS
     return max(configured, 1)

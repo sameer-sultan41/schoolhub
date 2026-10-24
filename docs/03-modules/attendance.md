@@ -50,6 +50,8 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 
 Staff leave approval uses `hr.leave-request.approve` and is specified in [`hr-leave.md`](hr-leave.md). Approvers cannot approve requests they initiated (segregation of duties per RBAC doc §2.4).
 
+**Who `.mark` reaches** is decided by record scope and assignment, not by the key alone (§11, [ADR-0028](../decisions/0028-one-attendance-mode-per-tenant.md)): `all` scope marks any section; `campus` scope marks its own campus's sections; with `assigned` scope, the section's class teacher marks it, and in period mode so does the teacher of the section's lesson in that period on that date — a confirmed substitute **replaces** the absent teacher for that date. The register read and `my-registers` take `.mark` too: a reader who cannot submit has no use for the marking form. The attendance mode and lock window (`/attendance-settings`, §16) are read with `school.settings.view` and changed with `school.settings.update`, school-organization's keys for `tenant_settings`; this module declares none of its own for them.
+
 ## 5. Main Features
 
 1. **Student attendance marking** — per section per day (default) or per period (tenant-configurable), statuses: present, absent, late, half-day, excused, on-leave. Bulk "all present" then exceptions.
@@ -109,7 +111,7 @@ Approval chain is tenant-configurable (multi-tenancy doc §5); each step writes 
 
 ## 8. User Journeys
 
-- **Teacher:** first period each day, opens "My Sections", taps through exceptions, submits in under two minutes; sees a confirmation of alerts queued.
+- **Teacher:** first period each day, opens Attendance → Register, picks today's class from "My registers", taps Mark all present, then the exceptions, and submits in under two minutes; sees a confirmation of how many rows were marked and how many guardian alerts were queued.
 - **Guardian:** receives an 09:30 absence alert; if the child is sick, submits a leave request with a note from the portal; sees approval and the calendar update.
 - **Class teacher:** reviews pending leave requests each morning; approves routine ones; a two-week request escalates automatically to the vice principal.
 - **HR staff:** records staff check-ins (or reviews self check-ins), flags late arrivals, and exports the monthly punctuality report for payroll (hr-leave/payroll integration).
@@ -133,7 +135,9 @@ Approval chain is tenant-configurable (multi-tenancy doc §5); each step writes 
 
 - One attendance row per student per date (per period when period mode is on); enforced by unique constraints.
 - Marking date cannot be in the future; cannot mark on tenant-configured holidays/weekends (academic calendar from school-organization).
-- Marker must hold `assigned` scope for the section (teacher) unless `all`-scoped.
+- Who may mark a register (`register.may_mark_register`, one predicate for the register read, `my-registers` and `:bulk-mark`; amended by [ADR-0028](../decisions/0028-one-attendance-mode-per-tenant.md)): `all` scope; `campus` scope on the section's campus; with `assigned` scope, the section's class teacher; and, in period mode, the teacher of the section's lesson in that period on that date, read from the version-aware, cover-aware timetable for that date (never today's grid). A confirmed substitute replaces the absent teacher, who may not mark the covered period. `own` scope alone marks nothing. A register the caller may not mark is a 404 on the read and a 422 on `section_id` at `:bulk-mark` for an `assigned` caller.
+- One mode at a time: in daily mode a `period_id` is refused; in period mode it is required, and a break, a period with no lesson for the section that date, or any period while `module.timetable` is off is refused (422 on `period_id`, on the register read and at `:bulk-mark` alike). A student with a daily `on_leave` row for the date is refused in every period register, so no absence alert goes for them. A period row's lateness runs from its period's start, with the tenant's grace minutes.
+- A closed or archived session's registers are read-only (`meta.unmarkable_reason = session_closed`; `:bulk-mark` answers 422).
 - Leave: `start_date ≤ end_date`; no overlap with an existing approved/pending request for the same person; attachment required if the leave type demands it; requester must be the student or a linked guardian.
 - Corrections: only against locked records; new value must differ; approver ≠ requester.
 - Staff check-out must be after check-in; late/early minutes computed server-side, never client-supplied.
@@ -148,6 +152,8 @@ Approval chain is tenant-configurable (multi-tenancy doc §5); each step writes 
 | Leave approved / rejected | Requester (guardian/student) | Push, in-app, email | `attendance.leave-decision` |
 | Correction approved / rejected | Correction requester | In-app | `attendance.correction-decision` |
 | Chronic absence threshold crossed | Class teacher, principal | In-app, email | `attendance.chronic-absence` |
+
+Absence and late alerts go only for a date still inside the lock window (on or after today − `lock_window_days`, read the way the lock reads it): a register backfilled for an older date writes its rows and alerts no one, since a guardian must not get a weeks-old absence as news.
 
 Channels and delivery behavior follow [`notifications.md`](../02-architecture/notifications.md).
 
@@ -197,13 +203,16 @@ All tables are tenant-scoped per [`multi-tenancy.md`](../02-architecture/multi-t
 
 Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 
-- `GET /api/v1/student-attendance` — filters: `date`, `date__gte/lte`, `section_id`, `student_id`, `status`; cursor pagination.
-- `POST /api/v1/student-attendance:bulk-mark` — idempotent bulk upsert for one section+date(+period).
+- `GET /api/v1/student-attendance` — filters: `date`, `date__gte/lte`, `class_id`, `section_id`, `student_id`, `period_id`, `academic_session_id`, `status`, `is_locked`; cursor pagination.
+- `POST /api/v1/student-attendance:bulk-mark` — idempotent bulk upsert for one section+date(+period). A named `academic_session_id` must contain the date, in either mode (422 on that field).
+- `GET /api/v1/student-attendance/register?section_id=&date=[&period_id=]` — one register: the section's active roster in roll-number order, each row with its record for that date (and period) and `on_leave`. Unpaginated by design (one section). `meta`: `attendance_mode`, `markable` and `unmarkable_reason` (`future`, `holiday` with `holiday_name`, `non_working_day`, `session_closed`) for the **date only** — the lock is per row, in `record.is_locked` — plus `is_locked` (the date is past the lock window) and `academic_session_id`, the session containing the date. A date no session contains is refused in either mode (422 on `academic_session_id`). Keyed `attendance.student-attendance.mark`.
+- `GET /api/v1/student-attendance/my-registers?date=` — the registers the caller's own Staff rows mark that date (default today): in daily mode the sections they class-teach; in period mode the lessons they teach that day (less any a confirmed substitute took from them, and including any they cover), plus every effectively timetabled lesson that day of the sections they class-teach, one row per (section, period). Each row carries `marked_count`/`roster_count`, and every entry passes `:bulk-mark`'s marker and scope check (its date and session checks are not applied to the list). `meta`: `attendance_mode`, `date`. Keyed `attendance.student-attendance.mark`.
+- `GET/PATCH /api/v1/attendance-settings` — the tenant's `attendance_mode`, `lock_window_days` (0–7) and `leave_escalation_threshold_days` (at least 1). PATCH merges only the keys sent, is audited, and refuses `attendance_mode: period` (422) while `module.timetable` is off. Keyed `school.settings.view` / `school.settings.update` (§4).
 - `GET/POST /api/v1/staff-attendance` · `POST /api/v1/staff-attendance/{id}:check-out`
 - `GET/POST /api/v1/attendance-corrections` · `POST /api/v1/attendance-corrections/{id}:approve` · `:reject`
 - `GET/POST /api/v1/leave-requests` · `POST /api/v1/leave-requests/{id}:approve` · `:reject` · `:cancel`
 - `GET/POST/PATCH /api/v1/leave-types` · `/api/v1/leave-policies` · `GET /api/v1/leave-balances`
-- `GET /api/v1/reports/attendance-summary` — heavy exports return `202` + job resource per API doc §2.7. `POST` to the same path always returns a job, in `format` = `csv` | `xlsx` | `pdf` (§6).
+- `GET /api/v1/reports/attendance-summary` — heavy exports return `202` + job resource per API doc §2.7. `POST` to the same path always returns a job, in `format` = `csv` | `xlsx` | `pdf` (§6). `period_id` (the `daily-register` kind only, carried into the export job) lists one period's own rows instead of each student's derived day; `meta.attendance_mode` says which mode the tenant runs.
 - `POST /api/v1/student-attendance-imports` → `202` + job resource — §9's onboarding migration. **Not listed in this section originally**: §9 describes the capability and §4 (now) keys it, so the endpoint is declared here rather than left as a documented feature with no route.
 
 ## 17. Integration Requirements
@@ -218,7 +227,7 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 | student-management | inbound | Student rosters, guardian links for alerts |
 | staff-management | inbound | Staff records, designations for staff attendance |
 | school-organization | inbound | Academic calendar, sessions, sections, holidays |
-| timetable | outbound | Absent-teacher signal triggers substitution flow |
+| timetable | bidirectional | Outbound: absent-teacher signal triggers substitution flow. Inbound (period mode): the section's lessons on a date, version-aware and with confirmed cover applied (`timetable.slots.services.effective_slots_for`), decide who may mark a period register and which periods have one; a teacher's own lessons that day (`teacher_slots_for`, shared with `/timetables/my`) list their period registers. Read through the service, never a timetable view (ADR-0013) |
 | hr-leave | bidirectional | Staff leave policies/balances (detail there); staff attendance feeds payroll |
 | examinations | outbound | Attendance summaries printed on report cards |
 | communication | outbound | All notifications in §12 |
@@ -226,14 +235,19 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 
 ## 19. Open Questions / Recommendations
 
-- Period-wise vs daily student attendance default: **daily**, with period mode as a tenant setting (recommendation).
-- Lock window for corrections: end of marking day (recommendation; tenant-configurable 0–7 days).
+- Period-wise vs daily student attendance: **decided** ([ADR-0028](../decisions/0028-one-attendance-mode-per-tenant.md)). One mode per tenant, `tenant_settings.academic.attendance_mode`, **daily** by default and for any missing or unknown value; period mode needs `module.timetable`. Reports count derived days in either mode, so history stays comparable across a switch.
+- Lock window for corrections: end of marking day (recommendation; tenant-configurable 0–7 days, set through `/attendance-settings`).
 - Whether students may self-submit leave (vs guardian-only) should be a tenant policy toggle (recommendation). Biometric attendance is out of initial scope; the schema reserves `source` for it (recommendation).
 
 ## 20. Implementation status
 
 Built as three stacked PRs; this section is updated by each. **All three PRs have landed:
 marking (PR 1), the leave system (PR 2), staff attendance and reports (PR 3).**
+
+**The dashboard follows in three more** (plan
+`docs/superpowers/plans/2026-10-24-attendance-dashboard.md`): **PR A** — the register, Records,
+Settings and the attendance mode — is in flight; **PR B** (corrections and leave approvals) and
+**PR C** (staff attendance, reports, import) follow.
 
 ### Built
 
@@ -242,18 +256,24 @@ marking (PR 1), the leave system (PR 2), staff attendance and reports (PR 3).**
 | Area | State |
 | ---- | ----- |
 | Entities | All eight §15 tables — `student_attendance`, `staff_attendance`, `attendance_corrections`, `leave_types`, `leave_policies`, `leave_balances`, `leave_requests`, `leave_approvals` — tenant-owned with RLS policies |
-| §16 endpoints | `GET /student-attendance` (filters: `date`, `date__gte`, `date__lte`, `section_id`, `student_id`, `period_id`, `status`; cursor paginated), `POST /student-attendance:bulk-mark` (accepts `Idempotency-Key`), `GET/POST /attendance-corrections`, `POST /attendance-corrections/{id}:approve` · `:reject`, `GET/POST /leave-requests`, `POST /leave-requests/{id}:approve` · `:reject` · `:cancel`, `GET /leave-types` (read-only — see below), `GET/POST /staff-attendance`, `POST /staff-attendance/{id}:check-out`, `GET/POST /reports/attendance-summary` |
+| §16 endpoints | `GET /student-attendance` (filters: `date`, `date__gte`, `date__lte`, `class_id`, `section_id`, `student_id`, `period_id`, `academic_session_id`, `status`, `is_locked`; cursor paginated), `POST /student-attendance:bulk-mark` (accepts `Idempotency-Key`; its 200 is typed as the marked rows), `GET /student-attendance/register`, `GET /student-attendance/my-registers`, `GET/PATCH /attendance-settings`, `GET/POST /attendance-corrections`, `POST /attendance-corrections/{id}:approve` · `:reject`, `GET/POST /leave-requests`, `POST /leave-requests/{id}:approve` · `:reject` · `:cancel`, `GET /leave-types` (read-only — see below), `GET/POST /staff-attendance`, `POST /staff-attendance/{id}:check-out`, `GET/POST /reports/attendance-summary` |
 | §4 permissions | All ten keys registered. `mark` was already in `core/rbac/registry.py`'s `EXTRA_ACTIONS` |
-| §11 validations (marking) | Not future-dated · not a weekend or holiday (via `school_organization.calendar`) · one row per student per date/period, enforced by two partial unique indexes · marker holds `assigned` scope for the section unless `all`-scoped · `late_minutes` computed server-side and a client value discarded · corrections need a locked target, a changed value, and an approver who is not the requester |
+| §11 validations (marking) | Not future-dated · not a weekend or holiday (via `school_organization.calendar`) · one row per student per date/period, enforced by two partial unique indexes · the markers of §11, through one predicate (`register.may_mark_register`) · the period's shape for the mode · the register's session contains the date, in either mode (422 on `academic_session_id`) · `late_minutes` computed server-side (from the period's start for a period row) and a client value discarded · corrections need a locked target, a changed value, and an approver who is not the requester |
+| Attendance mode | `tenant_settings.academic.attendance_mode`, read by `services.attendance_mode()` (daily for a missing or unknown value) and written through `PATCH /attendance-settings` ([ADR-0028](../decisions/0028-one-attendance-mode-per-tenant.md)). In period mode: markers widened per §11, an on-leave student refused in every period register, guardian alerts deduplicated per (student, date, event) across every row that date, and `my-registers` built from the teacher's own lessons that day. The importer and approved-leave auto-marking stay mode-agnostic and write daily rows |
+| The assigned-scope fix | An `assigned`-only class teacher could not mark: `scope_queryset` resolves a model with no `filter_assigned_to_user` hook (`Section` has none) to `.none()`. The register views now resolve the section directly and let `may_mark_register` decide. Proven over HTTP in `tests/test_register_api.py` (`test_assigned_only_class_teacher_can_bulk_mark_over_http`); the live lane's class teacher is `all`-scoped and does not prove it |
+| Record scope: reads vs reports | `StudentAttendance.filter_assigned_to_user` (record reads, Records) matches the sections the user class-teaches **or rows the user marked**, so a period teacher sees their own marks. Student reports and the export job keep §13's narrower rule, class-teacher sections only (`filter_class_teacher_sections`, through `scope_queryset(..., assigned_filter=)`): a report built from one period of another class's student would be a wrong number |
+| Derived days | Every student report — summary, defaulters, late arrivals, the daily register — and report cards (through `reports.student_summary`) count one derived day per (student, date): a daily row is the day; otherwise all periods absent is `absent`, any absent `half_day`, the earliest marked period late `late` with its minutes, all excused `excused`, else `present`. Computed in SQL: the scoped queryset is wrapped as a CTE, grouped per (student, date), then per student, with the defaulter threshold and the row cap in the same statement; a queryset that can match nothing returns `[]` without a query. `attendance_rate` rounds half up to one decimal (SQL `ROUND(numeric, 1)`: 1 of 16 days is 6.3, not 6.2), matching examinations' `ROUND_HALF_UP` (`examinations/grading.py`), and the defaulter threshold compares that rounded rate (81.25% is 81.3, not below a threshold of 81.3). Applies in both modes, so daily-only data reports exactly as before |
+| Register per-row lock | `meta.markable` reflects date validity only (future, holiday, non-working day, `session_closed`). A row past the window is read-only on its own (`record.is_locked`) and offers Request correction; an unmarked student on a past working day inside the session can still be marked, as `:bulk-mark` has always allowed |
+| Dashboard (PR A) | `/attendance` with Register, Records and Settings tabs, each gated on its §4 key. **Register:** the date, My registers, Class/Section (and Period, in period mode) pickers; Mark all present; per-row status, times and remarks; a refused row shows the server's sentence inline and the register reloads; a 409 reloads with locked rows read-only; Request correction on a locked row. The mode comes from `my-registers`' meta, which every marker can read. **Records:** a cursor-paged list (Previous/Next) filtered by date range, class, section, status and lock, with Request correction on locked rows. **Settings:** mode, lock window and escalation threshold, sending only changed keys |
 | §11 validations (leave) | `start_date ≤ end_date` · no overlap with a *live* (pending or approved) request · attachment required where the type demands one · requester is the student or a portal-enabled linked guardian · `days_count` computed net of holidays and non-working days · `max_consecutive_days` honoured · approver ≠ submitter, **and no one person decides two levels of the same request** |
 | §7.2 approval chain | One level by default; a second when `days_count` exceeds `academic.student_leave_approval.escalation_threshold_days` (default 10, §8's fortnight). Approval auto-marks `on_leave` for the working days in range, skipping any date already marked. Cancellation before `start_date` withdraws the rows it wrote |
-| §12 notifications | Five of six wired: `absence-alert`, `late-alert` (portal-enabled guardians, on commit), `leave-submitted` (whoever holds the current step's key), `leave-decision` (the submitter), `chronic-absence` (staff) |
-| §5.5 lock window | `tenant_settings.academic.attendance_lock_window_days`, clamped to §19's 0–7. Persisted nightly by `apps.attendance.tasks.lock_expired_attendance`; the service recomputes from the date and never trusts the column alone |
+| §12 notifications | Five of six wired: `absence-alert`, `late-alert` (portal-enabled guardians, on commit, only for a date inside the lock window), `leave-submitted` (whoever holds the current step's key), `leave-decision` (the submitter), `chronic-absence` (staff) |
+| §5.5 lock window | `tenant_settings.academic.attendance_lock_window_days`, clamped to §19's 0–7, set through `/attendance-settings`. Persisted nightly by `apps.attendance.tasks.lock_expired_attendance`; the service recomputes from the date and never trusts the column alone |
 | Feature flag | `module.attendance`, `default_enabled=False` |
 | §13 reports | All six — daily register, student summary, defaulters, student late arrivals, staff punctuality, leave — behind one `kind`-parameterised endpoint, with a 202 + job export lane in all three of §6's formats (CSV, XLSX, PDF). Every one asserted with `assertNumQueries` |
 | §9 import | `POST /student-attendance-imports` → 202 + job, CSV or .xlsx, exact template headers, per-row error report on `GET /jobs/{id}` |
 | §18 outbound | Marking a teacher absent proposes cover for each published slot they hold that day, via `timetable.services.propose_substitutions_for_absence` |
-| Tests | Django: models, marking, leave, staff attendance, reports, API, leave API, cross-tenant, notifications, review regressions. E2E: `attendance-marking`, `attendance-leave` and `attendance-staff-reports` (live lane) |
+| Tests | Django: models, marking, leave, staff attendance, reports, API, leave API, cross-tenant, notifications, review regressions, the register and its scopes (`test_register_api.py`), the mode and period rules (`test_attendance_mode.py`). E2E: `attendance-marking` (with the register and `my-registers`), `attendance-leave` and `attendance-staff-reports` (live API lane); `attendance-register-journey` (live browser lane: the seeded `all`-scoped class teacher marks today's register and reads it back in Records); `attendance-register` (mocked lane: marking from My registers, an on-leave refusal on its row, a locked register with Request correction, a reader with Records and no Register, the settings' timetable refusal). Jest: the services, the register, Records and Settings |
 
 ### Corrected in review
 
@@ -262,9 +282,10 @@ depends on:
 
 - **`:bulk-mark` keeps `DenyRestrictedPrincipals`; the reads drop it.** A
   viewset-wide portal exemption covered the write action too. Marking writes a
-  whole section's register, and `assert_marker_may_mark_section` returns early
-  for `all`/`campus` scope — correctly, since many admin users have no `Staff`
-  row — so the principal check has to sit in front of it, not inside it.
+  whole section's register, and the marker check (now `register.may_mark_register`)
+  grants `all`/`campus` scope before it looks for a `Staff` row — correctly, since
+  many admin users have none — so the principal check has to sit in front of it,
+  not inside it. The register read and `my-registers` are staff-only the same way.
 - **A correction cannot set `on_leave`,** and its times are validated when the
   correction is *raised* rather than when approved days later. Approving a
   correction now **recomputes `late_minutes`**, which is not a correctable field
@@ -336,7 +357,10 @@ rather than worked around, because the workaround would be a key nobody declared
   exists, but "the covered period actually ran" needs a signal nothing emits —
   the register records the student's presence, not the substitute teacher's
   delivery of that period. Closing it means deciding what evidence counts, which
-  is a module-doc decision rather than a code one.
+  is a module-doc decision rather than a code one. Period mode gives a candidate: the
+  substitute submitting the covered period's register. It is recorded in
+  `docs/deferred-work.md`, not wired, because a register says who marked the period,
+  not that the lesson was taught.
 - **Cover picks the first free substitute, not the best one.** §14's AI-TTB-03
   is the ranked suggestion (workload balance, subject match) and is Phase 3 work
   behind the `core/ai` gateway that does not exist. An arbitrary pick a human
@@ -389,8 +413,16 @@ rather than worked around, because the workaround would be a key nobody declared
 - **§14's four AI capabilities.** `core/ai` does not exist, and AGENTS.md hard
   rule 6 forbids reaching a provider SDK directly. Phase 3 work, the same shape as
   `timetable`'s `:generate-draft`.
-- **Period mode is supported by the schema but has no tenant switch.** §19 makes
-  daily the default with period mode "a tenant setting"; `period_id` is accepted
-  per submission and the two indexes make both shapes coexist, but nothing yet
-  *decides* which a school runs. That decision belongs with the section-level UI,
-  not the API.
+- ~~**Period mode is supported by the schema but has no tenant switch.**~~ **Built**
+  ([ADR-0028](../decisions/0028-one-attendance-mode-per-tenant.md)): one mode per
+  tenant, switched through `PATCH /attendance-settings` and the dashboard's Settings
+  tab. Still open, in `docs/deferred-work.md`: mapping a half-day leave to periods
+  (a half-day leave writes a daily row and blocks every period that day); refusing
+  the platform-admin toggle that turns `module.timetable` off while a tenant is in
+  period mode (the registers themselves are enforced: every period register is a 422
+  on `period_id` until it is back on or the mode is daily); and two
+  simultaneous period submissions for one student, which can each send an alert.
+- **Staff-on-behalf leave submission and the home widget.** Leave stays review-only
+  in the dashboard: a student or guardian submits (§4, §11) and parent-portal brings
+  that screen. The dashboard home has no attendance widget yet. Both are in
+  `docs/deferred-work.md`.

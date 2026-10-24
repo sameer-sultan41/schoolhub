@@ -1,3 +1,5 @@
+import { AttendanceCorrectionsService } from "./modules/attendance-corrections";
+import { AttendanceSettingsService } from "./modules/attendance-settings";
 import { AuthService } from "./modules/auth";
 import { CurriculumService } from "./modules/curriculum";
 import { DashboardService } from "./modules/dashboard";
@@ -9,6 +11,7 @@ import { PromotionsService } from "./modules/promotions";
 import { RoomsService } from "./modules/rooms";
 import { SchoolOrganizationService } from "./modules/school-organization";
 import { StaffService } from "./modules/staff";
+import { StudentAttendanceService } from "./modules/student-attendance";
 import { StudentsService } from "./modules/students";
 import { StudentTransfersService } from "./modules/student-transfers";
 import { TeacherAllocationsService } from "./modules/teacher-allocations";
@@ -55,6 +58,37 @@ export type {
   PromotionTransitionResult,
   UpdateDecisionInput,
 } from "./modules/promotions";
+
+export type {
+  AttendanceMode,
+  AttendanceSettings,
+  AttendanceSettingsInput,
+} from "./modules/attendance-settings";
+
+export type {
+  AttendanceCorrectionRecord,
+  CorrectionNewValues,
+  RequestCorrectionInput,
+} from "./modules/attendance-corrections";
+
+export type {
+  AttendancePageQuery,
+  AttendanceStatus,
+  BulkMarkEntryInput,
+  BulkMarkInput,
+  BulkMarkMeta,
+  BulkMarkResult,
+  MarkableStatus,
+  MyRegister,
+  MyRegistersResult,
+  RegisterEntry,
+  RegisterMeta,
+  RegisterQuery,
+  RegisterResult,
+  RowIssue,
+  StudentAttendanceRecord,
+  UnmarkableReason,
+} from "./modules/student-attendance";
 
 export type { PeriodInput, PeriodPageQuery, PeriodRecord } from "./modules/periods";
 
@@ -131,6 +165,9 @@ export const Services = {
   rooms: RoomsService,
   timetableSlots: TimetableSlotsService,
   teacherSubstitutions: TeacherSubstitutionsService,
+  attendanceSettings: AttendanceSettingsService,
+  studentAttendance: StudentAttendanceService,
+  attendanceCorrections: AttendanceCorrectionsService,
   guardians: GuardiansService,
   staff: StaffService,
   students: StudentsService,

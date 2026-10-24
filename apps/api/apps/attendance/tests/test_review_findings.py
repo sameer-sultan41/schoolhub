@@ -21,7 +21,7 @@ from apps.attendance.models import (
     CorrectionStatus,
     StudentAttendance,
 )
-from apps.attendance.tests.base import AttendanceAPITestCase
+from apps.attendance.tests.base import SESSION_WINDOW, AttendanceAPITestCase
 from apps.attendance.tests.factories import (
     MARKING_DATE,
     AcademicSessionFactory,
@@ -109,7 +109,9 @@ class MarkingTestBase(TestCase):
         open_all_week(self.tenant)
         with tenant_context(self.tenant.id):
             self.campus = CampusFactory(tenant=self.tenant)
-            self.session = AcademicSessionFactory(tenant=self.tenant, is_current=True)
+            self.session = AcademicSessionFactory(
+                tenant=self.tenant, is_current=True, **SESSION_WINDOW
+            )
             self.school_class = ClassFactory(tenant=self.tenant, level=6)
             self.section = SectionFactory(
                 tenant=self.tenant, school_class=self.school_class, campus=self.campus
@@ -139,7 +141,7 @@ class SoftDeletedStudentTests(MarkingTestBase):
     def test_a_soft_deleted_student_is_not_markable(self) -> None:
         """`.alive()` narrows the *enrollment*; nothing cascades the student's
         own flag, so a deleted student kept a live enrollment and stayed
-        markable — while `section_roster` already excluded them. The roster a
+        markable — while `roster_enrollments` already excluded them. The roster a
         teacher saw and the roster the validator accepted disagreed."""
         with tenant_context(self.tenant.id):
             self.student.deleted_at = timezone.now()

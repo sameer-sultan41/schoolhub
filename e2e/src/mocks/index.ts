@@ -18,3 +18,5 @@ export * from "./domains/academics-promotions";
 export * from "./domains/timetable-setup";
 export * from "./domains/timetable-grid";
 export * from "./domains/timetable-cover";
+export * from "./domains/attendance-register-store";
+export * from "./domains/attendance-register";

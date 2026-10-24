@@ -45,14 +45,26 @@ def _fk(model, **kwargs) -> serializers.PrimaryKeyRelatedField:
     return serializers.PrimaryKeyRelatedField(queryset=model.objects, **kwargs)
 
 
+# The serializer context key that carries the lock window across one response's rows.
+LOCK_WINDOW_CONTEXT_KEY = "attendance_lock_window_days"
+
+
 class StudentAttendanceSerializer(serializers.ModelSerializer):
     """`student_attendance` — read shape. Rows are written by `:bulk-mark`."""
 
+    # The names are read-only; every caller loads the relations up front, so they
+    # cost no query per row.
     student_id = _fk(Student, source="student", read_only=False)
+    student_name = serializers.CharField(source="student.full_name", read_only=True)
+    admission_number = serializers.CharField(source="student.admission_number", read_only=True)
     section_id = _fk(Section, source="section")
+    section_name = serializers.CharField(source="section.name", read_only=True)
     academic_session_id = _fk(AcademicSession, source="academic_session")
     period_id = _fk(Period, source="period", allow_null=True, required=False)
-    leave_request_id = serializers.PrimaryKeyRelatedField(source="leave_request", read_only=True)
+    period_name = serializers.CharField(source="period.name", read_only=True, allow_null=True)
+    leave_request_id = serializers.PrimaryKeyRelatedField(
+        source="leave_request", read_only=True, allow_null=True
+    )
     is_locked = serializers.SerializerMethodField()
 
     class Meta:
@@ -60,9 +72,13 @@ class StudentAttendanceSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "student_id",
+            "student_name",
+            "admission_number",
             "section_id",
+            "section_name",
             "academic_session_id",
             "period_id",
+            "period_name",
             "attendance_date",
             "status",
             "check_in_time",
@@ -96,7 +112,13 @@ class StudentAttendanceSerializer(serializers.ModelSerializer):
         rendering the column alone offered an edit that could not succeed. Same
         expression, one source.
         """
-        return bool(row.is_locked or services.is_locked(row.attendance_date))
+        # Read once per response and kept in the root's context, or every row
+        # would re-read the tenant's settings.
+        window = self.context.get(LOCK_WINDOW_CONTEXT_KEY)
+        if window is None:
+            window = services.lock_window_days()
+            self.context[LOCK_WINDOW_CONTEXT_KEY] = window
+        return bool(row.is_locked or services.is_locked(row.attendance_date, window_days=window))
 
 
 class BulkMarkEntrySerializer(serializers.Serializer):
@@ -127,15 +149,62 @@ class BulkMarkSerializer(serializers.Serializer):
 
     `academic_session_id` is optional and falls back to the tenant's current
     session: a school runs one at a time and the register UI has no reason to
-    carry its id around. `period_id` omitted means daily mode, which is §19's
-    recommended default.
+    carry its id around. `period_id` is required in period mode and refused in
+    daily mode (ADR-0028); it is a plain UUID so an unknown or foreign period is
+    the view's 404, like the register's.
     """
 
     section_id = _fk(Section, source="section")
     academic_session_id = _fk(AcademicSession, source="academic_session", required=False)
-    period_id = _fk(Period, source="period", required=False, allow_null=True)
+    period_id = serializers.UUIDField(required=False, allow_null=True)
     attendance_date = serializers.DateField()
     entries = serializers.ListField(child=BulkMarkEntrySerializer(), allow_empty=False)
+
+
+class RegisterQuerySerializer(serializers.Serializer):
+    """Query parameters of `GET /student-attendance/register`.
+
+    `section_id` and `period_id` are plain UUIDs rather than related fields so an
+    unknown or foreign id is the view's 404, not a 400 (AGENTS.md invariant 2).
+    """
+
+    section_id = serializers.UUIDField()
+    date = serializers.DateField()
+    period_id = serializers.UUIDField(required=False, allow_null=True)
+
+
+class RegisterEntrySerializer(serializers.Serializer):
+    """One rostered student on a register, with the record for that date if marked."""
+
+    student_id = serializers.UUIDField(source="student.pk", read_only=True)
+    student_name = serializers.CharField(source="student.full_name", read_only=True)
+    admission_number = serializers.CharField(source="student.admission_number", read_only=True)
+    roll_number = serializers.CharField(read_only=True, allow_null=True)
+    record = StudentAttendanceSerializer(read_only=True, allow_null=True)
+    on_leave = serializers.BooleanField(
+        read_only=True, help_text="The student has a daily `on_leave` row for this date."
+    )
+
+
+class MyRegistersQuerySerializer(serializers.Serializer):
+    """Query parameters of `GET /student-attendance/my-registers`."""
+
+    date = serializers.DateField(required=False, help_text="Defaults to today.")
+
+
+class MyRegisterSerializer(serializers.Serializer):
+    """One register the caller marks on a date. The period fields are null in daily mode."""
+
+    section_id = serializers.UUIDField(read_only=True)
+    section_name = serializers.CharField(read_only=True)
+    class_name = serializers.CharField(read_only=True)
+    campus_id = serializers.UUIDField(read_only=True)
+    period_id = serializers.UUIDField(read_only=True, allow_null=True)
+    period_name = serializers.CharField(read_only=True, allow_null=True)
+    start_time = serializers.TimeField(read_only=True, allow_null=True)
+    end_time = serializers.TimeField(read_only=True, allow_null=True)
+    marked_count = serializers.IntegerField(read_only=True)
+    roster_count = serializers.IntegerField(read_only=True)
 
 
 class AttendanceCorrectionSerializer(serializers.ModelSerializer):
@@ -395,6 +464,11 @@ class AttendanceReportQuerySerializer(serializers.Serializer):
     start_date = serializers.DateField()
     end_date = serializers.DateField(required=False)
     section_id = serializers.UUIDField(required=False, allow_null=True)
+    period_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text="`daily-register` only: one period's own rows instead of the derived day.",
+    )
     threshold = serializers.DecimalField(
         max_digits=4, decimal_places=1, required=False, min_value=0, max_value=100
     )
@@ -412,6 +486,32 @@ class AttendanceReportQuerySerializer(serializers.Serializer):
         attrs.setdefault("end_date", attrs["start_date"])
         services.assert_report_range(start_date=attrs["start_date"], end_date=attrs["end_date"])
         return attrs
+
+
+class AttendanceSettingsSerializer(serializers.Serializer):
+    """`GET /attendance-settings` — the effective values, defaults applied (§19)."""
+
+    attendance_mode = serializers.ChoiceField(
+        choices=[(mode, mode) for mode in services.ATTENDANCE_MODES], read_only=True
+    )
+    lock_window_days = serializers.IntegerField(read_only=True)
+    leave_escalation_threshold_days = serializers.IntegerField(read_only=True)
+
+
+class AttendanceSettingsUpdateSerializer(serializers.Serializer):
+    """`PATCH /attendance-settings` — any subset of the three keys.
+
+    Bounds are §19's: a lock window of 0-7 days, and an escalation threshold of
+    at least one day (zero would escalate every single-day absence).
+    """
+
+    attendance_mode = serializers.ChoiceField(
+        choices=[(mode, mode) for mode in services.ATTENDANCE_MODES], required=False
+    )
+    lock_window_days = serializers.IntegerField(
+        required=False, min_value=0, max_value=services.MAX_LOCK_WINDOW_DAYS
+    )
+    leave_escalation_threshold_days = serializers.IntegerField(required=False, min_value=1)
 
 
 class AttendanceImportRequestSerializer(serializers.Serializer):
