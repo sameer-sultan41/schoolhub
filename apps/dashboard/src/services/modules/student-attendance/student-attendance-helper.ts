@@ -1,4 +1,5 @@
 import { ApiError } from "@schoolhub/api-client";
+import { addDays, formatISO, parseISO } from "date-fns";
 import { FILTER_ALL } from "@/lib/constants";
 import { copyMappedFields } from "@/lib/helpers";
 import type { AttendanceMode } from "@/services/modules/attendance-settings/attendance-settings-type";
@@ -43,13 +44,10 @@ export function toAttendanceQueryParams(
   return params as Record<string, string | number | boolean | undefined>;
 }
 
-const MS_PER_DAY = 86_400_000;
-const ISO_DATE_LENGTH = 10;
-
-/** `date` (`YYYY-MM-DD`) moved by `days` calendar days, in UTC so no clock change shifts it. */
+/** `date` (`YYYY-MM-DD`) moved by `days` calendar days. Parsed and formatted in local time on
+ * both ends, so neither the UTC offset nor a DST change can move it a day. */
 export function shiftIsoDate(date: string, days: number): string {
-  const shifted = new Date(Date.parse(`${date}T00:00:00Z`) + days * MS_PER_DAY);
-  return shifted.toISOString().slice(0, ISO_DATE_LENGTH);
+  return formatISO(addDays(parseISO(date), days), { representation: "date" });
 }
 
 /** The Records list's default window: the last `RECORDS_DEFAULT_RANGE_DAYS` days, `today`
