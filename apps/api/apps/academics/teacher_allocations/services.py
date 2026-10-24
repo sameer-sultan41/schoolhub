@@ -244,7 +244,7 @@ def update_allocation(
         )
         if clash is not None:
             raise Conflict(
-                f"{staff_display_name(staff)} already has an allocation for this section and "
+                f"{staff.full_name} already has an allocation for this section and "
                 "subject. Edit or reinstate that allocation instead."
             )
 
