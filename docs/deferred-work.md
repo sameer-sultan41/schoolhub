@@ -248,8 +248,10 @@ either this file or `project-status.md`.
     `Idempotency-Key`, which the API's CORS preflight did not allow (django-cors-headers'
     default list, no `CORS_ALLOW_HEADERS`), so the browser refused the request. The mocked lane
     never showed it because its router answers every preflight with the header allowed.
-    **Fixed** by allowing the header in `config/settings/base.py`; the next nightly run
-    confirms both journeys.
+    **Fixed** by allowing the header in `config/settings/base.py`. Run 40132416580 confirmed
+    it: the register journey passes, and the promotion journey now gets past prepare and
+    approve but times out waiting for the batch to show "Executed" after `:execute`. That is
+    a separate failure (the execute job, or the screen's poll of it), not yet diagnosed.
   - Cross-origin responses don't expose `X-Request-ID` (no `CORS_EXPOSE_HEADERS`), so
     `ApiError.requestId` is always null in the dashboard. Nothing shows it today; exposing it
     is its own change with its own test.
