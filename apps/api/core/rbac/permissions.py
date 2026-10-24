@@ -122,7 +122,8 @@ class HasPermissionKey(permissions.BasePermission):
             return False
         if not request.user or not request.user.is_authenticated:
             return False
-        return any(has_permission_key(request.user, key) for key in declared_keys(required))
+        held = effective_permission_keys(request.user)  # one cache read, however many keys
+        return any(key in held for key in declared_keys(required))
 
     @staticmethod
     def _required_key(request, view) -> str | AnyOf | None:

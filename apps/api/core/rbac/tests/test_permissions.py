@@ -81,3 +81,19 @@ class HasPermissionKeyTests(SimpleTestCase):
         view = self.view(required_permission_map={"approve": APPROVE})
 
         self.assertTrue(check(view, request_for(VIEW)))
+
+    def test_an_any_of_works_as_the_class_level_declaration_too(self) -> None:
+        view = SimpleNamespace(action="list", required_permission=AnyOf(APPROVE, CREATE))
+
+        self.assertTrue(check(view, request_for(CREATE)))
+        self.assertFalse(check(view, request_for(VIEW)))
+
+    def test_the_users_keys_are_read_once_however_many_keys_are_declared(self) -> None:
+        view = self.view(required_permission_map={"cancel": AnyOf(APPROVE, CREATE, VIEW)})
+        request = request_for(VIEW)
+
+        with mock.patch("core.rbac.permissions.effective_permission_keys") as keys:
+            keys.return_value = request._keys
+            HasPermissionKey().has_permission(request, view)
+
+        self.assertEqual(keys.call_count, 1)

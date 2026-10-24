@@ -133,11 +133,13 @@ class WritePermissionContractTests(TestCase):
             mapping = getattr(view, "required_permission_map", None) or {}
             fallback = getattr(view, "required_permission", None)
             checked["api_view" if actions is None else "viewset"] += len(writes)
+            # The fallback may be a key or an `AnyOf`; a falsy one rejects everyone.
+            fallback_keys = declared_keys(fallback) if fallback else ()
             for method, action in writes:
-                if mapping.get(action):
+                # As in `_required_key`: an action that is in the map is decided by its entry.
+                if action in mapping:
                     continue
-                # `not fallback`, as in _required_key: an empty string also rejects everyone.
-                if not fallback or fallback.rpartition(".")[2] == "view":
+                if not fallback_keys or any(k.rpartition(".")[2] == "view" for k in fallback_keys):
                     offenders.append(
                         f"{method.upper()} {route} ({view.__name__}.{action}) -> {fallback!r}"
                     )
@@ -159,7 +161,9 @@ class AnyOfContractTests(TestCase):
         """A route a read key opens is a read route: `AnyOf` is for writes two callers share."""
         offenders = []
         for route, view in _api_views():
+            # Per-action entries and the class-level fallback: both are declarations.
             declared = list((getattr(view, "required_permission_map", None) or {}).values())
+            declared.append(getattr(view, "required_permission", None))
             for value in declared:
                 if isinstance(value, AnyOf):
                     offenders.extend(
