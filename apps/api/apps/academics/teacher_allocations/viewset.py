@@ -180,7 +180,7 @@ class TeacherAllocationViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
             record_audit(request, "update", allocation, before=before, after=body)
         else:
             # A reassignment: the old row was end-dated, and the response is the new primary row.
-            instance.refresh_from_db(from_queryset=self.get_queryset())
+            instance.refresh_from_db(fields=["effective_to", "updated_by", "updated_at"])
             record_audit(
                 request,
                 "update",

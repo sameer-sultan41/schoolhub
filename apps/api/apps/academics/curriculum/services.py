@@ -13,7 +13,7 @@ import uuid
 from django.db import transaction
 
 from apps.school_organization.models import AcademicSession, Class, ClassSubject
-from apps.school_organization.services import assert_session_writable
+from apps.school_organization.services import assert_session_writable, can_map_to_curriculum
 from core.api.exceptions import DomainRuleViolation
 
 
@@ -115,7 +115,9 @@ def clone_curriculum(
     )
     for row in source_rows:
         key = (row.school_class_id, row.subject_id, row.campus_id)
-        if key in existing or not (row.school_class.is_active and row.subject.is_active):
+        if key in existing or not can_map_to_curriculum(
+            school_class=row.school_class, subject=row.subject
+        ):
             skipped += 1
             continue
         to_create.append(
