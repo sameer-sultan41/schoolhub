@@ -201,7 +201,7 @@ class StudentAttendance(TenantOwnedModel):
 
     @classmethod
     def filter_assigned_to_user(cls, queryset, user):
-        """Record scope `assigned` — a class teacher's own sections.
+        """Record scope `assigned` — a class teacher's own sections, and rows the user marked.
 
         The same join ``Student.filter_assigned_to_user`` uses
         (`section.class_teacher_staff_id -> staff.user_id`), applied to this
@@ -209,6 +209,24 @@ class StudentAttendance(TenantOwnedModel):
         attendance row already records the section it was marked in, so going
         back through `student_enrollments` would both cost a join and answer for
         the student's *current* section instead of the marked one.
+
+        `marked_by` widens it so a teacher who marked a register they do not
+        class-teach (a slot teacher or substitute in period mode) can still see
+        and correct what they marked. Reports do not take the widening: they use
+        ``filter_class_teacher_sections``.
+        """
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+        marked_by_them = queryset.filter(marked_by=user.pk)
+        return cls.filter_class_teacher_sections(queryset, user) | marked_by_them
+
+    @classmethod
+    def filter_class_teacher_sections(cls, queryset, user):
+        """`assigned` for §13's reports: rows in the sections the user class-teaches, only.
+
+        A report speaks for whole sections, so a row the caller merely marked in
+        someone else's section (the record-read widening above) must not turn
+        that section's student into a partial line in their summary.
         """
         if user is None or not getattr(user, "is_authenticated", False):
             return queryset.none()

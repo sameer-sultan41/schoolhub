@@ -16,8 +16,8 @@ exemption covered ``:bulk-mark`` as well, and marking is not a scoped read of
 one child's row — it writes a whole section's register. §4 grants
 `attendance.student-attendance.mark` to `teacher`/`class_teacher` only, so a
 restricted principal holding it is already a misconfiguration; the point is that
-it should not also be an escalation. `assert_marker_may_mark_section` cannot
-close this on its own: it returns early for `RecordScope.ALL`/`CAMPUS`, which is
+it should not also be an escalation. `register.may_mark_register` cannot close
+this on its own: it returns early for `RecordScope.ALL`/`CAMPUS`, which is
 correct for an admin (many admin users have no `Staff` row at all, so requiring
 one would break the legitimate case) and is exactly why the principal check has
 to sit in front of it rather than inside it.
@@ -43,7 +43,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from django.db import transaction
+from django.db.models import prefetch_related_objects
+from django.http import Http404
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import mixins, viewsets
 from rest_framework.parsers import MultiPartParser
@@ -51,6 +54,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.attendance import register as attendance_register
 from apps.attendance import services
 from apps.attendance.filters import (
     AttendanceCorrectionFilterSet,
@@ -72,24 +76,34 @@ from apps.attendance.serializers import (
     AttendanceCorrectionSerializer,
     AttendanceImportRequestSerializer,
     AttendanceReportQuerySerializer,
+    AttendanceSettingsSerializer,
+    AttendanceSettingsUpdateSerializer,
     BulkMarkSerializer,
     CorrectionDecisionSerializer,
     LeaveDecisionSerializer,
     LeaveRequestSerializer,
     LeaveTypeSerializer,
+    MyRegisterSerializer,
+    MyRegistersQuerySerializer,
+    RegisterEntrySerializer,
+    RegisterQuerySerializer,
     StaffAttendanceSerializer,
     StaffCheckOutSerializer,
     StudentAttendanceSerializer,
 )
-from apps.school_organization.models import AcademicSession
+from apps.school_organization.models import AcademicSession, Section
+from apps.timetable.models import Period
 from core.api.exceptions import DomainRuleViolation
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
 from core.idempotency.services import replay_or_execute
-from core.rbac.permissions import DenyRestrictedPrincipals, HasPermissionKey
+from core.rbac.models import RecordScope
+from core.rbac.permissions import DenyRestrictedPrincipals, HasPermissionKey, user_scopes
 
 if TYPE_CHECKING:
+    import datetime
+
     from rest_framework.request import Request
 
 FEATURE = "module.attendance"
@@ -106,18 +120,29 @@ STAFF_PERMISSIONS = [
 PORTAL_READABLE_PERMISSIONS = [IsAuthenticated, RequiresModuleFeature, HasPermissionKey]
 
 
-def _resolve_session(session: AcademicSession | None) -> AcademicSession:
-    """Fall back to the tenant's current session when the caller names none.
+def _resolve_session(
+    session: AcademicSession | None, *, on_date: datetime.date | None = None
+) -> AcademicSession:
+    """The session the caller named, else the one whose dates contain `on_date`, else the current.
 
     A school runs one session at a time and the register UI has no reason to
     carry its id around, but "no current session" is a real configuration state
     — so it is a 422 naming the field rather than an AttributeError later. Same
     shape as timetable/views.py's own resolver.
+
+    A register's date picks its session (``services.session_for_date``): a date
+    inside last session's lock window belongs to last session's roster, not the
+    current one's. The register read, `my-registers`, `:bulk-mark` and the period
+    marker check all resolve it there so they agree.
     """
     if session is not None:
         return session
-    current = AcademicSession.objects.alive().filter(is_current=True).first()
-    if current is None:
+    resolved = (
+        services.session_for_date(on_date)
+        if on_date is not None
+        else AcademicSession.objects.alive().filter(is_current=True).first()
+    )
+    if resolved is None:
         raise DomainRuleViolation(
             {
                 "academic_session_id": (
@@ -125,7 +150,12 @@ def _resolve_session(session: AcademicSession | None) -> AcademicSession:
                 )
             }
         )
-    return current
+    return resolved
+
+
+def _period_or_404(period_id) -> Period | None:
+    """A named period, resolved like `section_id`: unknown or another tenant's is a 404."""
+    return get_object_or_404(Period.objects.alive(), pk=period_id) if period_id else None
 
 
 class StudentAttendanceViewSet(
@@ -157,15 +187,21 @@ class StudentAttendanceViewSet(
     scope_campus_field = "section__campus_id"
     required_feature = FEATURE
     required_permission = "attendance.student-attendance.view"
-    required_permission_map = {"bulk_mark": "attendance.student-attendance.mark"}
+    # The register and `my-registers` are the marking screen's reads, so they take
+    # the marking key: a reader who cannot submit has no use for the roster form.
+    required_permission_map = {
+        "bulk_mark": "attendance.student-attendance.mark",
+        "register": "attendance.student-attendance.mark",
+        "my_registers": "attendance.student-attendance.mark",
+    }
     http_method_names = ["get", "post", "head", "options"]
 
     # Reads are open to restricted principals (§4 grants them an `own`-scoped
-    # view); writes are not. Anything not named here is a read.
-    STAFF_ONLY_ACTIONS = frozenset({"bulk_mark"})
+    # view); writes, and the marking screen's own reads, are not.
+    STAFF_ONLY_ACTIONS = frozenset({"bulk_mark", "register", "my_registers"})
 
     def get_permissions(self):
-        """Add `DenyRestrictedPrincipals` to the write action only.
+        """Add `DenyRestrictedPrincipals` to the marking actions only.
 
         DRF resolves `permission_classes` per view, not per action, so a viewset
         that serves both a portal read and a staff write has to choose here. See
@@ -189,7 +225,10 @@ class StudentAttendanceViewSet(
         responses={
             200: OpenApiResponse(
                 response=StudentAttendanceSerializer(many=True),
-                description="The marked rows, plus `meta.marked`/`meta.updated` counts.",
+                description=(
+                    "The marked rows, plus `meta.marked`/`meta.updated`/`meta.alerts_queued` "
+                    "counts."
+                ),
             )
         },
     )
@@ -206,19 +245,29 @@ class StudentAttendanceViewSet(
         serializer.is_valid(raise_exception=True)
         payload = serializer.validated_data
 
-        section = self._scoped_section(payload["section"].pk)
-        session = _resolve_session(payload.get("academic_session"))
-        services.assert_marker_may_mark_section(user=request.user, section=section)
+        on_date = payload["attendance_date"]
+        period = _period_or_404(payload.get("period_id"))
+        session = _resolve_session(payload.get("academic_session"), on_date=on_date)
+        section, lessons = self._section_for_marking(
+            payload["section"].pk,
+            session=session,
+            on_date=on_date,
+            period=period,
+            refuse_assigned_with_422=True,
+        )
 
         def execute() -> Response:
             result = services.bulk_mark_student_attendance(
                 section=section,
                 session=session,
-                on_date=payload["attendance_date"],
-                period=payload.get("period"),
+                on_date=on_date,
+                period=period,
                 entries=payload["entries"],
                 actor_id=request.user.pk,
+                lessons=lessons,
             )
+            # One query for every row's student, whose name the response carries.
+            prefetch_related_objects(result["rows"], "student")
             rows = StudentAttendanceSerializer(result["rows"], many=True).data
             for row in result["rows"]:
                 record_audit(request, "mark", row)
@@ -241,21 +290,149 @@ class StudentAttendanceViewSet(
             execute=execute,
         )
 
-    def _scoped_section(self, pk):
-        """Resolve the section under the caller's record scope.
+    @extend_schema(
+        summary="A section's register for one date: its roster, with any marks merged",
+        parameters=[RegisterQuerySerializer],
+        responses={
+            200: OpenApiResponse(
+                response=RegisterEntrySerializer(many=True),
+                description=(
+                    "Rostered students in roll-number order. `meta.attendance_mode` is "
+                    "`daily` or `period`; `meta.markable` is false when no row can be marked "
+                    "that date, with `meta.unmarkable_reason` one of `future`, `holiday` "
+                    "(named in `meta.holiday_name`), `non_working_day` or `session_closed`; "
+                    "`meta.is_locked` says only that the date is past the lock window, since "
+                    "the lock is per row (`record.is_locked`); `meta.academic_session_id` is "
+                    "the session the date resolved to. `period_id` is required in period mode, "
+                    "where it must name a lesson the section has that date and "
+                    "`module.timetable` must be on, and refused in daily mode (422 on "
+                    "`period_id`)."
+                ),
+            )
+        },
+    )
+    def register(self, request: Request) -> Response:
+        """`GET /student-attendance/register?section_id=&date=[&period_id=]`.
 
-        Through the scoped queryset rather than a bare manager lookup: a
-        campus-scoped admin must not mark another campus's register, and the
-        tenant-scoped manager alone would let them. A section they cannot reach
-        is a 404, never a 403 (AGENTS.md invariant 2).
+        Unpaginated by design: one section's roster. A section the caller may not
+        mark is a 404 here, where `:bulk-mark` answers 422 on `section_id` — a read
+        has no field to blame.
         """
-        from apps.school_organization.models import Section
-        from core.rbac.permissions import scope_queryset
+        query = RegisterQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        on_date = query.validated_data["date"]
+        period = _period_or_404(query.validated_data.get("period_id"))
+        session = _resolve_session(None, on_date=on_date)
 
-        return get_object_or_404(
-            scope_queryset(Section.objects.alive(), self.request.user, campus_field="campus_id"),
-            pk=pk,
+        section, lessons = self._section_for_marking(
+            query.validated_data["section_id"],
+            session=session,
+            on_date=on_date,
+            period=period,
+            refuse_assigned_with_422=False,
         )
+        # The same gate `:bulk-mark` applies, so the screen never offers a register
+        # the submission would refuse: the mode's shape, a break, a period with no lesson.
+        services.assert_register_period(
+            session=session, section=section, period=period, on_date=on_date, lessons=lessons
+        )
+
+        entries = attendance_register.register_for(
+            section=section, session=session, on_date=on_date, period=period
+        )
+        return Response(
+            {
+                "data": RegisterEntrySerializer(entries, many=True).data,
+                "meta": {
+                    **attendance_register.register_meta(
+                        section=section, session=session, on_date=on_date
+                    ),
+                    "academic_session_id": str(session.pk),
+                },
+            }
+        )
+
+    @extend_schema(
+        summary="The registers the caller marks on a date",
+        parameters=[MyRegistersQuerySerializer],
+        responses={
+            200: OpenApiResponse(
+                response=MyRegisterSerializer(many=True),
+                description=(
+                    "Ordered by start time, then section name. `meta.attendance_mode` and "
+                    "`meta.date` echo what the list was resolved for."
+                ),
+            )
+        },
+    )
+    def my_registers(self, request: Request) -> Response:
+        """`GET /student-attendance/my-registers?date=` — from the caller's own staff rows."""
+        query = MyRegistersQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        on_date = query.validated_data.get("date") or timezone.localdate()
+        session = _resolve_session(None, on_date=on_date)
+
+        entries = attendance_register.my_registers(
+            user=request.user, session=session, on_date=on_date
+        )
+        return Response(
+            {
+                "data": MyRegisterSerializer(entries, many=True).data,
+                "meta": {
+                    "attendance_mode": services.attendance_mode(),
+                    "date": on_date.isoformat(),
+                },
+            }
+        )
+
+    def _section_for_marking(
+        self,
+        pk,
+        *,
+        session: AcademicSession,
+        on_date: datetime.date,
+        period: Period | None,
+        refuse_assigned_with_422: bool,
+    ) -> tuple[Section, dict | None]:
+        """Resolve the section a register is read or marked for, if the caller may mark it.
+
+        Returns the section and, for a period register, the section's lessons that
+        date in the request's one resolved `session`: the marker check and the
+        service's gate both read them, so the timetable is read once and both read
+        the same session. A session that does not contain the date is refused
+        first (422 on `academic_session_id`).
+
+        One resolution for `register` and `:bulk-mark`, decided by
+        ``may_mark_register`` (which holds the campus line itself), so neither can
+        disagree with the other or with `my-registers` — a caller with a campus
+        role *and* an `assigned` role reaches every section either one grants.
+
+        Root cause of the assigned-scope 404 this replaces: the section resolved
+        through ``scope_queryset``, which returns `.none()` for `assigned` scope
+        when the model has no `filter_assigned_to_user` hook
+        (core/rbac/permissions.py:268-273), and `Section` has none — so a class
+        teacher holding only `assigned` roles could never mark.
+
+        A refused section is a 404, never a 403 (AGENTS.md invariant 2), with one
+        exception: `:bulk-mark` keeps its 422 on `section_id` for a caller holding
+        `assigned` scope, for whom the refusal is "not your register", not "not
+        there".
+        """
+        user = self.request.user
+        section = get_object_or_404(Section.objects.alive(), pk=pk)
+        lessons = None
+        if period is not None:
+            services.assert_session_contains(session=session, on_date=on_date)
+            lessons = services.effective_lessons(
+                session=session, section_ids=[section.pk], on_date=on_date
+            )
+        if attendance_register.may_mark_register(
+            user=user, section=section, on_date=on_date, period=period, lessons=lessons
+        ):
+            return section, lessons
+        if refuse_assigned_with_422 and RecordScope.ASSIGNED in user_scopes(user):
+            raise DomainRuleViolation({"section_id": services.NOT_ASSIGNED_TO_SECTION})
+        raise Http404
 
 
 class AttendanceCorrectionViewSet(
@@ -708,7 +885,12 @@ class AttendanceReportView(TenantScopedViewSetMixin, APIView):
         return Response(
             {
                 "data": rows,
-                "meta": {"kind": params["kind"], "row_count": len(rows)},
+                "meta": {
+                    "kind": params["kind"],
+                    "row_count": len(rows),
+                    # Student reports count days in either mode; this says how they were marked.
+                    "attendance_mode": services.attendance_mode(),
+                },
             }
         )
 
@@ -740,6 +922,7 @@ class AttendanceReportView(TenantScopedViewSetMixin, APIView):
             start_date=params["start_date"],
             end_date=params["end_date"],
             section_id=str(params["section_id"]) if params.get("section_id") else None,
+            period_id=str(params["period_id"]) if params.get("period_id") else None,
             limit=limit,
         )
 
@@ -756,6 +939,7 @@ class AttendanceReportView(TenantScopedViewSetMixin, APIView):
                 "start_date": params["start_date"].isoformat(),
                 "end_date": params["end_date"].isoformat(),
                 "section_id": str(params["section_id"]) if params.get("section_id") else None,
+                "period_id": str(params["period_id"]) if params.get("period_id") else None,
                 "format": params.get("format", "csv"),
                 # The *requester*, so the job rebuilds the same record scope. Not
                 # the actor of the moment the worker runs, which is nobody.
@@ -772,6 +956,56 @@ class AttendanceReportView(TenantScopedViewSetMixin, APIView):
         )
         record_audit(request, "export", job)
         return ActionResponse.accepted(str(job.pk), message=f"Report queued: {reason}.")
+
+
+class AttendanceSettingsView(TenantScopedViewSetMixin, APIView):
+    """`GET/PATCH /api/v1/attendance-settings` — §19's attendance keys, typed.
+
+    A projection of three keys in ``tenant_settings.academic``, the same shape
+    `holiday_calendar/view.py` gives its slice, under the settings keys §4
+    already describes as covering academic configuration. Not `/school-settings`:
+    its PATCH replaces the whole `academic` JSON, so a client read-modify-write
+    would lose a concurrent change. This writes only its own keys, under a row
+    lock, and merges the nested `student_leave_approval` dict rather than
+    replacing it.
+
+    Switching to `period` is refused while `module.timetable` is off: without a
+    timetable every period register would be refused (ADR-0028).
+    """
+
+    permission_classes = STAFF_PERMISSIONS
+    required_feature = FEATURE
+    required_permission = "school.settings.view"
+    required_permission_map = {"patch": "school.settings.update"}
+    serializer_class = AttendanceSettingsSerializer
+
+    @extend_schema(
+        summary="Read the attendance settings", responses={200: AttendanceSettingsSerializer}
+    )
+    def get(self, request: Request) -> Response:
+        return ActionResponse.ok(services.read_attendance_settings(tenant_id=request.tenant.pk))
+
+    @extend_schema(
+        summary="Change the attendance settings",
+        request=AttendanceSettingsUpdateSerializer,
+        responses={200: AttendanceSettingsSerializer},
+    )
+    def patch(self, request: Request) -> Response:
+        body = AttendanceSettingsUpdateSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        changes = body.validated_data
+        services.assert_mode_switch_allowed(changes=changes, tenant_id=request.tenant.pk)
+
+        with transaction.atomic():
+            row, before, academic = services.update_attendance_settings(
+                tenant_id=request.tenant.pk, changes=changes, actor_id=request.user.pk
+            )
+
+        after = services.attendance_settings_from(academic)
+        record_audit(
+            request, "update", row, before=services.attendance_settings_from(before), after=after
+        )
+        return ActionResponse.ok(after, message="Attendance settings updated.")
 
 
 class AttendanceImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):

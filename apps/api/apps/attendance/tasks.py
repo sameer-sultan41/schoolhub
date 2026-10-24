@@ -211,6 +211,7 @@ def export_attendance_report_task(self, *, tenant_id: str, job_id: str, actor_id
                 start_date=datetime.date.fromisoformat(payload["start_date"]),
                 end_date=datetime.date.fromisoformat(payload["end_date"]),
                 section_id=payload.get("section_id"),
+                period_id=payload.get("period_id"),
             )
 
             fmt = payload.get("format", "csv")
@@ -243,6 +244,7 @@ def build_report_rows(
     start_date: datetime.date,
     end_date: datetime.date,
     section_id: str | None = None,
+    period_id: str | None = None,
     limit: int | None = None,
 ) -> list[dict]:
     """Build one §13 report's rows under `user`'s record scope.
@@ -281,14 +283,21 @@ def build_report_rows(
         )
         return reports.leave_report(scoped, start_date=start_date, end_date=end_date, limit=limit)
 
+    # Not the model's widened `assigned` hook: a report covers the caller's own
+    # sections, not every row they happened to mark elsewhere.
     scoped = scope_queryset(
-        StudentAttendance.objects.alive(), user, campus_field="section__campus_id"
+        StudentAttendance.objects.alive(),
+        user,
+        campus_field="section__campus_id",
+        assigned_filter=StudentAttendance.filter_class_teacher_sections,
     )
     if section_id:
         scoped = scoped.filter(section_id=section_id)
 
+    # Every student kind counts days: a daily row as it is, a date of period rows as
+    # the day `reports.derived_days` makes of them (ADR-0028).
     if kind == "daily-register":
-        return reports.daily_register(scoped, on_date=start_date, limit=limit)
+        return reports.daily_register(scoped, on_date=start_date, period_id=period_id, limit=limit)
     if kind == "defaulters":
         return reports.defaulters(scoped, start_date=start_date, end_date=end_date, limit=limit)
     if kind == "student-late-arrivals":

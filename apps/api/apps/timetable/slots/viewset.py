@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 from apps.school_organization.models import AcademicSession, Section
 from apps.staff_management.models import Staff
 from apps.student_management.models import EnrollmentStatus, Student, StudentEnrollment
-from apps.timetable.models import SlotStatus, SubstitutionStatus, TeacherSubstitution, TimetableSlot
+from apps.timetable.models import TimetableSlot
 from apps.timetable.slots import services
 from apps.timetable.slots.filters import TimetableSlotFilterSet
 from apps.timetable.slots.serializers import (
@@ -388,8 +388,8 @@ class MyTimetableViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
         # enrollments instead.
         staff = Staff.objects.alive().filter(user_id=request.user.pk).first()
         if staff is not None:
-            slots, overrides = self._teacher_timetable(
-                staff=staff, session=session, on_date=on_date
+            slots, overrides = services.teacher_slots_for(
+                staff_ids=[staff.pk], session=session, on_date=on_date
             )
             audience = "teacher"
         else:
@@ -409,49 +409,6 @@ class MyTimetableViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
                 },
             }
         )
-
-    def _teacher_timetable(
-        self, *, staff: Staff, session: AcademicSession, on_date: date | None
-    ) -> tuple[list, dict]:
-        """The teacher's own periods, plus anything they are covering that day.
-
-        Two bounded queries feed ``effective_slots_for`` the section set, and the
-        result is filtered in Python — never a query per cell. The cover set is
-        needed because a substitution can put a teacher in a section they
-        otherwise never teach, which the "sections I hold slots in" set alone
-        would miss entirely.
-
-        The section lookup uses the same ``slot_version_window`` the cell lookup
-        does, so a past date resolves the sections the teacher held *then* — not
-        only the ones they hold now.
-        """
-        section_ids = set(
-            TimetableSlot.objects.alive()
-            .filter(
-                services.slot_version_window(on_date),
-                academic_session=session,
-                staff=staff,
-                status=SlotStatus.PUBLISHED,
-            )
-            .values_list("section_id", flat=True)
-        )
-        if on_date is not None:
-            section_ids |= set(
-                TeacherSubstitution.objects.alive()
-                .filter(substitute_staff=staff, date=on_date, status=SubstitutionStatus.CONFIRMED)
-                .values_list("timetable_slot__section_id", flat=True)
-            )
-
-        slots, overrides = services.effective_slots_for(
-            session=session, section_ids=list(section_ids), on_date=on_date
-        )
-        mine = [
-            slot
-            for slot in slots
-            if slot.staff_id == staff.pk
-            or getattr(overrides.get(slot.pk), "substitute_staff_id", None) == staff.pk
-        ]
-        return mine, overrides
 
     def _learner_timetable(
         self, *, session: AcademicSession, on_date: date | None

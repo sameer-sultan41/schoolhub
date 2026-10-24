@@ -16,7 +16,10 @@ from apps.attendance.models import AttendanceStatus, CorrectionStatus, StudentAt
 from apps.attendance.tests.base import AttendanceAPITestCase
 from apps.attendance.tests.factories import (
     MARKING_DATE,
+    ClassFactory,
     GuardianFactory,
+    SectionFactory,
+    StudentAttendanceFactory,
     StudentGuardianFactory,
     UserFactory,
     authenticate,
@@ -154,6 +157,39 @@ class StudentAttendanceListTests(AttendanceAPITestCase):
     def test_the_list_filters_by_section(self) -> None:
         response = self.client.get(f"{LIST}?section_id={self.other_section.pk}")
 
+        self.assertEqual(response.data["data"], [])
+
+    def test_the_list_filters_by_class(self) -> None:
+        """`class_id` reaches through the section: the rows of every section of that class,
+        and no other class's."""
+        with tenant_context(self.tenant.id):
+            other_class = ClassFactory(tenant=self.tenant, level=7)
+            other_class_section = SectionFactory(
+                tenant=self.tenant, school_class=other_class, campus=self.campus
+            )
+            elsewhere = StudentAttendanceFactory(
+                tenant=self.tenant,
+                student=self.students[0],
+                section=other_class_section,
+                academic_session=self.session,
+                attendance_date=MARKING_DATE - datetime.timedelta(days=1),
+                marked_by=self.user.pk,
+            )
+
+        in_class = self.client.get(f"{LIST}?class_id={self.school_class.pk}")
+        in_other_class = self.client.get(f"{LIST}?class_id={other_class.pk}")
+
+        ids_in_class = [str(row["id"]) for row in in_class.data["data"]]
+        ids_in_other_class = [str(row["id"]) for row in in_other_class.data["data"]]
+        self.assertEqual(in_class.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(ids_in_class), 3)
+        self.assertNotIn(str(elsewhere.pk), ids_in_class)
+        self.assertEqual(ids_in_other_class, [str(elsewhere.pk)])
+
+    def test_an_unknown_class_id_matches_nothing_rather_than_erroring(self) -> None:
+        response = self.client.get(f"{LIST}?class_id=0f3b4a1e-0000-4000-8000-000000000000")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["data"], [])
 
     def test_the_list_filters_by_a_date_range(self) -> None:

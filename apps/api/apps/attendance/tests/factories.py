@@ -42,7 +42,7 @@ from apps.student_management.tests.factories import (
     StudentFactory,
     StudentGuardianFactory,
 )
-from apps.timetable.tests.factories import PeriodFactory, enable_feature
+from apps.timetable.tests.factories import PeriodFactory, disable_feature, enable_feature
 from core.tenancy.context import tenant_context
 from core.tenancy.models import TenantSettings
 
@@ -65,6 +65,7 @@ __all__ = [
     "UserFactory",
     "authenticate",
     "configure_academic",
+    "disable_feature",
     "enable_feature",
     "grant",
     "holiday",

@@ -129,6 +129,15 @@ def enable_feature(tenant, key: str) -> None:
     would otherwise stick and the test would fail on a disabled module rather
     than on what it meant to assert.
     """
+    _override_feature(tenant, key, enabled=True)
+
+
+def disable_feature(tenant, key: str) -> None:
+    """The mirror of `enable_feature`, for a test asserting what a module-off tenant gets."""
+    _override_feature(tenant, key, enabled=False)
+
+
+def _override_feature(tenant, key: str, *, enabled: bool) -> None:
     from core.tenancy.context import tenant_context
 
     flag = FeatureFlag.objects.get(key=key)
@@ -136,7 +145,7 @@ def enable_feature(tenant, key: str) -> None:
         TenantFeatureOverride.objects.update_or_create(
             tenant=tenant,
             feature_flag=flag,
-            defaults={"enabled": True, "reason": "timetable test fixture"},
+            defaults={"enabled": enabled, "reason": "timetable test fixture"},
         )
 
 
@@ -162,6 +171,7 @@ __all__ = [
     "TimetableSlotFactory",
     "UserFactory",
     "authenticate",
+    "disable_feature",
     "enable_feature",
     "grant",
     "period_window",

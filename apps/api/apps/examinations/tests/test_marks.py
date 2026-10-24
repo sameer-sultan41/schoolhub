@@ -370,7 +370,7 @@ class AllocationScopeTests(MarksTestCase):
     def test_an_all_scoped_caller_needs_no_allocation(self) -> None:
         """Many `exam_staff` and admin users have no `Staff` row at all, so
         requiring an allocation would break the legitimate case — the same early
-        return `attendance.assert_marker_may_mark_section` makes."""
+        return `attendance.register.may_mark_register` makes."""
         response = self.submit()
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())

@@ -22,8 +22,8 @@ from core.api.exceptions import DomainRuleViolation
 ZERO = Decimal("0.00")
 HUNDRED = Decimal("100.00")
 # One decimal place, matching `results.percentage` (NUMERIC(5,2) holds two, but
-# a school publishes one) and `attendance.reports._rate`, so the two modules'
-# percentages round the same way.
+# a school publishes one) and the attendance rate (`attendance.reports`, SQL
+# `ROUND(..., 1)`, also half up), so the two modules' percentages round the same way.
 PERCENT_PRECISION = Decimal("0.1")
 
 

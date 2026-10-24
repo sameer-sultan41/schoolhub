@@ -221,10 +221,24 @@ def late_minutes(check_in: datetime.time, *, campus_id: uuid.UUID | None = None)
     by exactly the grace window.
     """
     window = day_window(campus_id=campus_id)
-    minutes = _minutes_between(window.start, check_in)
-    if minutes <= window.grace_minutes:
-        return 0
-    return minutes
+    return _late_after(window.start, check_in, grace_minutes=window.grace_minutes)
+
+
+def late_minutes_from(
+    start: datetime.time, check_in: datetime.time, *, campus_id: uuid.UUID | None = None
+) -> int:
+    """Minutes late, measured from `start` (a period's start), with the tenant's grace.
+
+    The same rule as ``late_minutes`` against another start: attendance's period
+    rows are late from their own period, not from the start of the day.
+    """
+    grace = day_window(campus_id=campus_id).grace_minutes
+    return _late_after(start, check_in, grace_minutes=grace)
+
+
+def _late_after(start: datetime.time, check_in: datetime.time, *, grace_minutes: int) -> int:
+    minutes = _minutes_between(start, check_in)
+    return 0 if minutes <= grace_minutes else minutes
 
 
 def early_departure_minutes(check_out: datetime.time, *, campus_id: uuid.UUID | None = None) -> int:

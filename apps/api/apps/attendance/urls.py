@@ -17,6 +17,7 @@ from apps.attendance.views import (
     AttendanceCorrectionViewSet,
     AttendanceImportViewSet,
     AttendanceReportView,
+    AttendanceSettingsView,
     LeaveRequestViewSet,
     LeaveTypeViewSet,
     StaffAttendanceViewSet,
@@ -33,6 +34,7 @@ router.register("leave-requests", LeaveRequestViewSet, basename="leave-requests"
 router.register("staff-attendance", StaffAttendanceViewSet, basename="staff-attendance")
 
 urlpatterns = [
+    path("attendance-settings", AttendanceSettingsView.as_view(), name="attendance-settings"),
     path(
         "student-attendance-imports",
         AttendanceImportViewSet.as_view({"post": "create"}),
@@ -45,8 +47,28 @@ urlpatterns = [
     ),
     path(
         "student-attendance:bulk-mark",
-        StudentAttendanceViewSet.as_view({"post": "bulk_mark"}),
+        # A plain array of rows: without these the viewset's cursor pagination would
+        # make drf-spectacular document the response as a page.
+        StudentAttendanceViewSet.as_view(
+            {"post": "bulk_mark"}, pagination_class=None, filter_backends=[]
+        ),
         name="student-attendance-bulk-mark",
+    ),
+    # Before the router's `student-attendance/<pk>` detail route, or "register"
+    # and "my-registers" would be parsed as primary keys. Unpaginated by design.
+    path(
+        "student-attendance/register",
+        StudentAttendanceViewSet.as_view(
+            {"get": "register"}, pagination_class=None, filter_backends=[]
+        ),
+        name="student-attendance-register",
+    ),
+    path(
+        "student-attendance/my-registers",
+        StudentAttendanceViewSet.as_view(
+            {"get": "my_registers"}, pagination_class=None, filter_backends=[]
+        ),
+        name="student-attendance-my-registers",
     ),
     path(
         "attendance-corrections/<uuid:pk>:approve",

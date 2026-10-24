@@ -273,6 +273,56 @@ class AttendanceSnapshotTests(PublishedResultsTestCase):
         self.assertEqual(summary["present_days"], 3)
         self.assertEqual(summary["attendance_rate"], "75.0")
 
+    def test_a_period_mode_card_counts_days_and_matches_the_summary(self) -> None:
+        """ADR-0028: period rows are reported as derived days, on the card as in §13's report."""
+        from apps.attendance import reports
+        from apps.attendance.models import AttendanceStatus, StudentAttendance
+        from apps.attendance.tests.factories import StudentAttendanceFactory, configure_academic
+        from apps.timetable.tests.factories import PeriodFactory
+
+        present, absent = AttendanceStatus.PRESENT, AttendanceStatus.ABSENT
+        configure_academic(self.tenant, attendance_mode="period")
+        start, end = services.report_card_period(exam=self.exam)
+        # A half day (one period absent), an absent day, and a present day.
+        plan = [(present, absent), (absent, absent), (present, present)]
+        with tenant_context(self.tenant.id):
+            periods = [PeriodFactory(tenant=self.tenant, sequence=n) for n in (21, 22)]
+            for offset, statuses in enumerate(plan):
+                for period, value in zip(periods, statuses, strict=True):
+                    StudentAttendanceFactory(
+                        tenant=self.tenant,
+                        student=self.students[0],
+                        section=self.section,
+                        academic_session=self.session,
+                        period=period,
+                        attendance_date=start + datetime.timedelta(days=offset),
+                        status=value,
+                        marked_by=self.user.pk,
+                    )
+            cards = services.attendance_summary_for(
+                students=list(self.students), start_date=start, end_date=end
+            )
+            summary = reports.student_summary(
+                StudentAttendance.objects.alive().filter(student__in=self.students),
+                start_date=start,
+                end_date=end,
+            )
+
+        card = cards[self.students[0].pk]
+        self.assertEqual(card["counted_days"], 3)
+        self.assertEqual(card["present_days"], 2)
+        self.assertEqual(card["absent_days"], 1)
+        self.assertEqual(card["attendance_rate"], "66.7")
+        self.assertEqual(card["attendance_rate"], str(summary[0]["attendance_rate"]))
+
+    def test_an_empty_cohort_has_no_summaries(self) -> None:
+        """A published exam with every result withheld asks for no one: an empty mapping."""
+        start, end = services.report_card_period(exam=self.exam)
+        with tenant_context(self.tenant.id):
+            summaries = services.attendance_summary_for(students=[], start_date=start, end_date=end)
+
+        self.assertEqual(summaries, {})
+
     def test_a_student_with_no_register_rows_is_absent_from_the_mapping(self) -> None:
         """Not present with zeros: a school that has not kept attendance has no
         figure, and printing 0% attended would be a claim the data does not

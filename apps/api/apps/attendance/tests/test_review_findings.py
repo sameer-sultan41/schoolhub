@@ -139,7 +139,7 @@ class SoftDeletedStudentTests(MarkingTestBase):
     def test_a_soft_deleted_student_is_not_markable(self) -> None:
         """`.alive()` narrows the *enrollment*; nothing cascades the student's
         own flag, so a deleted student kept a live enrollment and stayed
-        markable — while `section_roster` already excluded them. The roster a
+        markable — while `roster_enrollments` already excluded them. The roster a
         teacher saw and the roster the validator accepted disagreed."""
         with tenant_context(self.tenant.id):
             self.student.deleted_at = timezone.now()
