@@ -1,5 +1,5 @@
 import type { ApiClient } from "@schoolhub/api-client";
-import { buildLiveStudent } from "@/data/live-factories";
+import { createStudentReadyToEnrol } from "@/lib/live-student";
 import { seedTimetableScaffold, type TimetableScaffold } from "@/lib/live-timetable-grid";
 
 /**
@@ -13,10 +13,6 @@ import { seedTimetableScaffold, type TimetableScaffold } from "@/lib/live-timeta
  * first submission look like an update and the assertions lie.
  */
 
-interface Identified {
-  id: string;
-}
-
 export interface AttendanceRegister extends TimetableScaffold {
   studentIds: string[];
 }
@@ -27,10 +23,8 @@ export async function seedAttendanceRegister(client: ApiClient): Promise<Attenda
   const scaffold = await seedTimetableScaffold(client);
 
   const students = await Promise.all(
-    Array.from({ length: ROSTER_SIZE }, () =>
-      client.post("/students", { ...buildLiveStudent(), campus_id: scaffold.campusId }),
-    ),
-  ).then((responses) => responses.map((response) => response.data as Identified));
+    Array.from({ length: ROSTER_SIZE }, () => createStudentReadyToEnrol(client, scaffold.campusId)),
+  );
 
   // Sequential, not Promise.all: enrolment allocates a roll number per section and
   // `student_enrollments_unique_roll_per_section` is what decides the race. Three rows
