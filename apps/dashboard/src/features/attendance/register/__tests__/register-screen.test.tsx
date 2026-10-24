@@ -195,7 +195,7 @@ describe("RegisterScreen", () => {
     const user = renderScreen();
 
     expect(await screen.findByText(issue)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Retry" }));
+    await user.click(screen.getByRole("button", { name: "Try again" }));
 
     await waitFor(() => {
       expect(svc.studentAttendance.fetchRegister).toHaveBeenLastCalledWith({

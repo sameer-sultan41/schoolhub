@@ -477,6 +477,6 @@ describe("RegisterTable", () => {
     renderRegister();
 
     expect(await screen.findByText(issue)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 });

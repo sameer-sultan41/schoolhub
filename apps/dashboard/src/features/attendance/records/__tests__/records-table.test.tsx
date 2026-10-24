@@ -239,7 +239,7 @@ describe("RecordsTable", () => {
     const user = await renderRecords();
 
     expect(await screen.findByText(/permission/i)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Retry" }));
+    await user.click(screen.getByRole("button", { name: "Try again" }));
 
     expect(await screen.findByText("Amna Raza")).toBeInTheDocument();
   });

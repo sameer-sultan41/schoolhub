@@ -121,7 +121,7 @@ describe("RecordsTable paging", () => {
     await screen.findByText("Amna Raza");
     await user.click(screen.getByRole("button", { name: "Next" }));
 
-    await user.click(await screen.findByRole("button", { name: "Retry" }));
+    await user.click(await screen.findByRole("button", { name: "Try again" }));
 
     expect(await screen.findByText("Amna Raza")).toBeInTheDocument();
     expect(lastQuery()).toEqual(expect.objectContaining({ cursor: undefined }));
