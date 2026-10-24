@@ -137,6 +137,16 @@ describe("Services", () => {
     expect(typeof Services.teacherSubstitutions.fetchCandidates).toBe("function");
     expect(typeof Services.teacherSubstitutions.decideSubstitution).toBe("function");
 
+    expect(typeof Services.periods.fetchPeriodPage).toBe("function");
+    expect(typeof Services.periods.createPeriod).toBe("function");
+    expect(typeof Services.periods.updatePeriod).toBe("function");
+    expect(typeof Services.periods.deletePeriod).toBe("function");
+
+    expect(typeof Services.rooms.fetchRoomPage).toBe("function");
+    expect(typeof Services.rooms.createRoom).toBe("function");
+    expect(typeof Services.rooms.updateRoom).toBe("function");
+    expect(typeof Services.rooms.deleteRoom).toBe("function");
+
     expect(typeof Services.promotions.fetchPromotionBatches).toBe("function");
     expect(typeof Services.promotions.fetchPromotionBatch).toBe("function");
     expect(typeof Services.promotions.createPromotionBatch).toBe("function");
