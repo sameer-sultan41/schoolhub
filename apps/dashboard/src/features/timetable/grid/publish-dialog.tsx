@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 
 import { ResponsiveAlertDialog } from "@/components/responsive-alert-dialog";
+import { useInvalidateModule } from "@/hooks/use-invalidate-module";
 import { useConfirmAction } from "@/hooks/use-confirm-action";
 import { queryKeys } from "@/lib/query-client";
 import { Services, type TimetableConflict } from "@/services";
@@ -37,6 +38,7 @@ export function PublishDialog({
   const t = useTranslations("timetable");
   const tCommon = useTranslations("common");
   const queryClient = useQueryClient();
+  const invalidateSlots = useInvalidateModule(TIMETABLE_SLOTS_QUERY_MODULE);
 
   const { error, isPending, confirm } = useConfirmAction({
     mutationFn: async () => {
@@ -49,9 +51,7 @@ export function PublishDialog({
       }
     },
     onSuccess: (result) => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.module(TIMETABLE_SLOTS_QUERY_MODULE),
-      });
+      invalidateSlots();
       // The home screen's "next period" reads the published week.
       void queryClient.invalidateQueries({ queryKey: queryKeys.myTimetable() });
       onConflicts(result.conflicts);

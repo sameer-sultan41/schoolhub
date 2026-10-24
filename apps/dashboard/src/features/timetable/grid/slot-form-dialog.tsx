@@ -1,14 +1,13 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { FormDialogLayout } from "@/components/form-dialog-layout";
 import { useFormDialogSubmit } from "@/hooks/use-form-dialog-submit";
-import { queryKeys } from "@/lib/query-client";
+import { useInvalidateModule } from "@/hooks/use-invalidate-module";
 import { Services, type TimetableConflict, type TimetableSlotRecord } from "@/services";
 import {
   SLOT_ERROR_FIELDS,
@@ -62,7 +61,7 @@ export function SlotFormDialog({
 }: SlotFormDialogProps) {
   const t = useTranslations("timetable");
   const tCommon = useTranslations("common");
-  const queryClient = useQueryClient();
+  const invalidateSlots = useInvalidateModule(TIMETABLE_SLOTS_QUERY_MODULE);
 
   const form = useForm<SlotFormValues>({
     resolver: zodResolver(slotFormSchema),
@@ -79,9 +78,7 @@ export function SlotFormDialog({
     },
     knownFields: SLOT_ERROR_FIELDS,
     onSuccess: (result) => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.module(TIMETABLE_SLOTS_QUERY_MODULE),
-      });
+      invalidateSlots();
       onConflicts(result.conflicts);
       toast.success(t("grid.saved"));
       onOpenChange(false);

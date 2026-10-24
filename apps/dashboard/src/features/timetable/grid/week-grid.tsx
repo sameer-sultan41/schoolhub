@@ -53,6 +53,8 @@ export interface WeekGridProps {
   conflicts: readonly TimetableConflict[];
   canCreate: boolean;
   canUpdate: boolean;
+  /** A move is in flight: no new drag starts, but cells still open for editing. */
+  isMoving: boolean;
   canDelete: boolean;
   onOpenCell: (position: GridPosition, cell: GridCell | undefined) => void;
   onDiscard: (slot: TimetableSlotRecord) => void;
@@ -170,7 +172,7 @@ export function WeekGrid(props: WeekGridProps) {
                       cell={cell}
                       conflicts={slot ? (conflictIndex.get(slot.id) ?? []) : []}
                       canOpen={canOpen}
-                      canDrag={props.canUpdate && isDraggableCell(cell)}
+                      canDrag={props.canUpdate && !props.isMoving && isDraggableCell(cell)}
                       canDiscard={props.canDelete}
                       onOpen={() => {
                         props.onOpenCell({ dayOfWeek: day, periodId: period.id }, cell);

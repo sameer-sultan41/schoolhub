@@ -182,8 +182,9 @@ export function TimetableGridScreen() {
           cells={grid.cells}
           conflicts={conflicts}
           canCreate={canCreate}
+          canUpdate={canUpdate}
           // No second drag while a move is in flight: the cell index is a move behind.
-          canUpdate={canUpdate && !move.isPending}
+          isMoving={move.isPending}
           canDelete={canDelete}
           onOpenCell={(position, cell) => {
             setEditing({ position, cell });
