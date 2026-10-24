@@ -11,7 +11,7 @@ from django.test import SimpleTestCase, TestCase
 from django.urls import get_resolver
 from rest_framework.permissions import AllowAny
 
-from core.rbac.permissions import HasPermissionKey
+from core.rbac.permissions import AnyOf, HasPermissionKey, declared_keys
 from core.rbac.registry import registry
 from tests.source_tree import source_modules
 
@@ -86,10 +86,12 @@ class EndpointContractTests(TestCase):
         """Catches typos: a key that is not registered can never be granted to a role."""
         unknown: list[str] = []
         for route, view in _api_views():
-            keys = set(getattr(view, "required_permission_map", {}).values())
+            keys: set[str] = set()
+            for declared in getattr(view, "required_permission_map", {}).values():
+                keys.update(declared_keys(declared))
             single = getattr(view, "required_permission", None)
             if single:
-                keys.add(single)
+                keys.update(declared_keys(single))
             unknown.extend(f"{route}: {key}" for key in keys if key not in registry)
         self.assertEqual(unknown, [], f"Unregistered permission keys referenced: {unknown}")
 
@@ -150,6 +152,22 @@ class WritePermissionContractTests(TestCase):
         # broke, every ViewSet would look write-free.
         self.assertGreater(checked["viewset"], 0, f"no ViewSet write routes found: {checked}")
         self.assertGreater(checked["api_view"], 0, f"no APIView write routes found: {checked}")
+
+
+class AnyOfContractTests(TestCase):
+    def test_an_any_of_never_lists_a_read_key(self):
+        """A route a read key opens is a read route: `AnyOf` is for writes two callers share."""
+        offenders = []
+        for route, view in _api_views():
+            declared = list((getattr(view, "required_permission_map", None) or {}).values())
+            for value in declared:
+                if isinstance(value, AnyOf):
+                    offenders.extend(
+                        f"{route} ({view.__name__}): {key}"
+                        for key in value.keys
+                        if key.rpartition(".")[2] == "view"
+                    )
+        self.assertEqual(offenders, [], f"AnyOf lists a read key: {offenders}")
 
 
 def _inline_permission_keys() -> list[tuple[str, int, str]]:

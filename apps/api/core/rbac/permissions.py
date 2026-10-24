@@ -65,12 +65,46 @@ def has_permission_key(user, key: str) -> bool:
     return key in effective_permission_keys(user)
 
 
+class AnyOf:
+    """A declared permission that any one of several keys satisfies.
+
+    ``required_permission_map = {"cancel": AnyOf("a.b.approve", "a.b.create")}``: a route
+    with more than one legitimate caller declares them all, so the declaration says what the
+    class enforces. An explicit marker rather than a bare tuple, because Django's own
+    ``permission_required`` reads an iterable as *all of*, and a stray tuple read that way
+    would silently widen access. Needs at least one key, so it can't be written empty.
+    """
+
+    __slots__ = ("keys",)
+
+    def __init__(self, *keys: str) -> None:
+        if not keys or not all(isinstance(key, str) and key for key in keys):
+            raise ImproperlyConfigured("AnyOf takes one or more non-empty permission keys.")
+        self.keys = keys
+
+
+def declared_keys(declared: str | AnyOf) -> tuple[str, ...]:
+    """The keys one `required_permission(_map)` value names: a key, or an `AnyOf`'s keys.
+
+    Shared with the contract tests so both read a declaration the same way. Anything else
+    (a tuple, a list, None) is a configuration error, not a quietly different meaning.
+    """
+    if isinstance(declared, str):
+        return (declared,)
+    if isinstance(declared, AnyOf):
+        return declared.keys
+    raise ImproperlyConfigured(
+        f"A permission declaration is a key or AnyOf(...), not {type(declared).__name__}."
+    )
+
+
 class HasPermissionKey(permissions.BasePermission):
     """Enforces the ``required_permission`` declared on the view.
 
     Views declare permissions rather than checking inline, so the requirement is
-    introspectable — it is published in the OpenAPI schema and asserted by the
-    RBAC matrix tests.
+    introspectable: the endpoint-contract tests read every declaration (the OpenAPI
+    schema does not publish it). A value is one key, or ``AnyOf(...)`` for a route two
+    kinds of caller may use.
 
     Usage::
 
@@ -88,13 +122,17 @@ class HasPermissionKey(permissions.BasePermission):
             return False
         if not request.user or not request.user.is_authenticated:
             return False
-        return has_permission_key(request.user, required)
+        return any(has_permission_key(request.user, key) for key in declared_keys(required))
 
     @staticmethod
-    def _required_key(request, view) -> str | None:
+    def _required_key(request, view) -> str | AnyOf | None:
         action = getattr(view, "action", None) or request.method.lower()
         mapping = getattr(view, "required_permission_map", None) or {}
-        return mapping.get(action) or getattr(view, "required_permission", None)
+        # An action that is in the map is decided by its entry, whatever it holds: an empty
+        # string must refuse everyone, not fall back to the resource's (read) key.
+        if action in mapping:
+            return mapping[action]
+        return getattr(view, "required_permission", None)
 
 
 class IsPlatformPrincipal(permissions.BasePermission):
