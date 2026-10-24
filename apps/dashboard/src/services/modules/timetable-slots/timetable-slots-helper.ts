@@ -105,7 +105,7 @@ export function buildCellIndex(slots: readonly TimetableSlotRecord[]): Map<strin
 
 /** The week's columns: Monday to Friday, plus any weekend day that holds a cell, so a
  * Saturday school is never cut short. */
-export function visibleWeekdays(slots: readonly TimetableSlotRecord[]): number[] {
+export function visibleWeekdays(slots: readonly { day_of_week: number }[]): number[] {
   const scheduled = new Set(slots.map((slot) => slot.day_of_week));
   return ALL_WEEKDAYS.filter((day) => DEFAULT_VISIBLE_WEEKDAYS.includes(day) || scheduled.has(day));
 }

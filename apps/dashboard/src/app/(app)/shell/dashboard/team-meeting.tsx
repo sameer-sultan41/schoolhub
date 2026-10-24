@@ -58,7 +58,7 @@ export function TeamMeeting() {
 
   const { data, isPending, isError, error } = useQuery({
     queryKey: queryKeys.myTimetable(date),
-    queryFn: () => Services.dashboard.fetchMyTimetable(date),
+    queryFn: () => Services.timetableSlots.fetchMyTimetable(date),
   });
 
   const nextSlot = useMemo(() => {

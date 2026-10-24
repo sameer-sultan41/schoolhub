@@ -32,6 +32,8 @@ export const Paths = {
   TIMETABLE_GRID: "/timetable/grid",
   TIMETABLE_PERIODS: "/timetable/periods",
   TIMETABLE_ROOMS: "/timetable/rooms",
+  TIMETABLE_SUBSTITUTIONS: "/timetable/substitutions",
+  TIMETABLE_MY: "/timetable/my",
   LOGIN: "/login",
   FORGOT_PASSWORD: "/forgot-password",
   RESET_PASSWORD: "/reset-password",

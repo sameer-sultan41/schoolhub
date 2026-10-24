@@ -61,9 +61,13 @@ registry.register("timetable.room.create", "Add a room.", GRID_ADMINS)
 registry.register("timetable.room.update", "Edit a room or its capacity.", GRID_ADMINS)
 registry.register("timetable.room.delete", "Remove a room.", GRID_ADMINS)
 
-registry.register("timetable.substitution.create", "Propose a substitution.", BUILDERS)
+registry.register(
+    "timetable.substitution.create",
+    "Propose a substitution, see who is free to cover, and withdraw your own proposal.",
+    BUILDERS,
+)
 registry.register(
     "timetable.substitution.approve",
-    "Approve or reject a substitution.",
+    "Approve or reject a substitution, and cancel open cover.",
     SUBSTITUTION_APPROVERS,
 )

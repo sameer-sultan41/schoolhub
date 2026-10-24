@@ -114,4 +114,35 @@ describe("timetable-slots-service", () => {
       academic_session_id: "sess-1",
     });
   });
+  it("reads the caller's own week, with a date only when one is chosen, as the data array", async () => {
+    const { fetchMyTimetable } = await import("../timetable-slots-service");
+    mockGet.mockResolvedValue({ data: [{ id: "s1" }], meta: { audience: "teacher" } });
+
+    expect(await fetchMyTimetable()).toEqual([{ id: "s1" }]);
+    await fetchMyTimetable("2026-10-19");
+
+    expect(mockGet).toHaveBeenNthCalledWith(1, "/timetables/my", { query: {} });
+    expect(mockGet).toHaveBeenNthCalledWith(2, "/timetables/my", {
+      query: { date: "2026-10-19" },
+    });
+  });
+
+  it("reads one teacher's live published classes on a weekday", async () => {
+    const { fetchTeacherClassesOn } = await import("../timetable-slots-service");
+    mockGet.mockResolvedValue({ data: [{ id: "s1" }], meta: {} });
+
+    expect(await fetchTeacherClassesOn("sess-1", "staff-1", 2)).toEqual([{ id: "s1" }]);
+    expect(mockGet).toHaveBeenCalledWith(
+      "/timetable-slots",
+      expect.objectContaining({
+        query: expect.objectContaining({
+          academic_session_id: "sess-1",
+          teacher_id: "staff-1",
+          weekday: 2,
+          status: "published",
+          current: true,
+        }),
+      }),
+    );
+  });
 });

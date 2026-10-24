@@ -105,6 +105,11 @@
   - Give layout helpers unequal boxes in their unit tests.
   - Read a library's source before deciding what a DOM signal proves. In a browser spec, put an ordering barrier (a `setTimeout(0)` of your own) behind a timer the library schedules, rather than a sleep (`WeekGridPage.keyboardMove`).
 
+### L15. A new rule breaks the specs that relied on the old one
+
+- **Mistake.** Timetable PR C opened "My timetable" to `timetable.timetable.view`, but PR A's spec still asserted a view-only user sees no Timetable group. It also made cover campus-bound, while the live cover journey's substitute sat on the seeded campus and its grid on a fresh one. Both would have failed CI or the nightly run, and the change review caught them, not the author.
+- **Check.** When a change widens or narrows who sees something, or what a rule accepts, grep the specs and live fixtures for the old behaviour: assertions of absence (`toHaveCount(0)`), fixtures built for the rule (campus, session dates, seeded staff), and wall-clock dates against fixed fixture windows. Fix them in the same PR.
+
 ### L17. A Dockerfile change breaks the compose targets that name it; a never-green workflow hides every later step
 
 - **Mistake.** `f7511d7` created the frontend `Dockerfile`s with `deps`/`builder`/`runner`, while compose kept building `target: dev`; the API `Dockerfile`'s own comment records the same break once before. `e2e-live` then failed all 50 recorded runs, and its first fix (MinIO, ADR-0025) only uncovered the next break: no PgBouncer userlist, migrations as the app role, env names the apps don't read, and then a `0600` userlist that a Linux bind mount hides from PgBouncer's uid 70 (macOS's Docker Desktop never showed it). The first plan said "no other change needed for CI", from a workflow that had never got past building images.

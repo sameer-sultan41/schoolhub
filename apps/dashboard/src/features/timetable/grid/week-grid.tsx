@@ -33,7 +33,7 @@ import {
   type GridPosition,
 } from "./resolve-drop";
 import { SlotCell } from "./slot-cell";
-import { useCellLabel } from "./use-cell-label";
+import { useCellLabel } from "@/features/timetable/use-cell-label";
 
 /**
  * A drop lands on the cell the drag is inside, or nowhere. A pointer drop is the cell under

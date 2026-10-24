@@ -1,5 +1,5 @@
-import type { TimetableConflict, TimetableSlotRecord } from "@/services";
-import { SESSION_ID } from "@/test-fixtures/academics";
+import type { EffectiveSlotRecord, TimetableConflict, TimetableSlotRecord } from "@/services";
+import { CAMPUS_ID, SESSION_ID } from "@/test-fixtures/academics";
 
 // UUID-shaped: the URL and the forms drop an id that isn't one.
 export const SECTION_ID = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d";
@@ -20,6 +20,7 @@ export function slotRecord(overrides: Partial<TimetableSlotRecord> = {}): Timeta
     academic_session_id: SESSION_ID,
     section_id: SECTION_ID,
     section_name: "A",
+    campus_id: CAMPUS_ID,
     day_of_week: 0,
     period_id: PERIOD_1_ID,
     period_name: "Period 1",
@@ -49,6 +50,32 @@ export function conflict(overrides: Partial<TimetableConflict> = {}): TimetableC
     slot_ids: [],
     // `slots/conflicts.py`'s own wording for this type.
     message: "This teacher is already teaching in this period.",
+    ...overrides,
+  };
+}
+
+/** A cell of the viewer's own week (`/timetables/my`): Monday, Period 1, Mathematics. */
+export function effectiveSlotRecord(
+  overrides: Partial<EffectiveSlotRecord> = {},
+): EffectiveSlotRecord {
+  return {
+    id: SECTION_ID,
+    day_of_week: 0,
+    period_id: PERIOD_1_ID,
+    period_name: "Period 1",
+    period_sequence: 1,
+    start_time: "08:00:00",
+    end_time: "08:45:00",
+    section_id: SECTION_ID,
+    section_name: "Grade 5-A",
+    subject_id: SUBJECT_ID,
+    subject_name: "Mathematics",
+    staff_id: TEACHER_ID,
+    staff_name: "Amna Raza",
+    room_id: ROOM_ID,
+    room_name: "Room 101",
+    notes: null,
+    substitution: null,
     ...overrides,
   };
 }
