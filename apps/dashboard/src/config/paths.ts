@@ -29,6 +29,7 @@ export const Paths = {
   ACADEMICS_ALLOCATIONS: "/academics/allocations",
   ACADEMICS_PROMOTIONS: "/academics/promotions",
   TIMETABLE: "/timetable",
+  TIMETABLE_GRID: "/timetable/grid",
   TIMETABLE_PERIODS: "/timetable/periods",
   TIMETABLE_ROOMS: "/timetable/rooms",
   LOGIN: "/login",

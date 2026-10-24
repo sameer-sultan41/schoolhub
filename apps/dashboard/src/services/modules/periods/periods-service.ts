@@ -1,4 +1,4 @@
-import { fetchPage } from "@schoolhub/api-client";
+import { fetchPage, MAX_PAGE_SIZE } from "@schoolhub/api-client";
 import type { Page } from "@schoolhub/types";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
@@ -11,6 +11,16 @@ export async function fetchPeriodPage(query: PeriodPageQuery): Promise<Page<Peri
   return fetchPage<PeriodRecord>(apiClient, endpoints.periods.list, {
     query: toPeriodQueryParams(query),
   });
+}
+
+/** Every period that runs at a campus (its own plus the tenant-wide ones), in the day's
+ * order: a section's week-grid rows. One `MAX_PAGE_SIZE` page: a bell schedule is a few
+ * dozen rows at most. */
+export async function fetchCampusPeriods(campusId: string): Promise<PeriodRecord[]> {
+  const { items } = await fetchPage<PeriodRecord>(apiClient, endpoints.periods.list, {
+    query: { for_campus: campusId, ordering: "sequence", page_size: MAX_PAGE_SIZE },
+  });
+  return items;
 }
 
 export async function createPeriod(input: PeriodInput): Promise<PeriodRecord> {

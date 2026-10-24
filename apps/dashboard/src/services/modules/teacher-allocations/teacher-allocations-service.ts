@@ -1,4 +1,4 @@
-import { fetchPage } from "@schoolhub/api-client";
+import { fetchPage, MAX_PAGE_SIZE } from "@schoolhub/api-client";
 import type { Page } from "@schoolhub/types";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
@@ -29,6 +29,21 @@ export async function fetchAllocationsPage(
   return fetchPage<TeacherAllocationRecord>(apiClient, endpoints.teacherAllocations.list, {
     query: toAllocationQueryParams(query),
   });
+}
+
+/** A section's current allocations in one session: who teaches what there, for the grid's
+ * teacher picker. One `MAX_PAGE_SIZE` page: a section has one row per subject teacher. */
+export async function fetchSectionAllocations(
+  academicSessionId: string,
+  sectionId: string,
+): Promise<TeacherAllocationRecord[]> {
+  const { items } = await fetchAllocationsPage({
+    academicSessionId,
+    sectionId,
+    current: true,
+    pageSize: MAX_PAGE_SIZE,
+  });
+  return items;
 }
 
 /** Resolves with the over-norm warnings the answer's `meta` carries; the save still happened. */

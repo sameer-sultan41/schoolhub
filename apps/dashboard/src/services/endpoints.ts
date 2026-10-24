@@ -105,6 +105,14 @@ export const endpoints = {
     list: "/periods",
     detail: (id: string) => `/periods/${id}`,
   },
+  /** The week grid: `/timetable-slots`, and the section colon-actions on `/timetables/{id}`,
+   * where the id is a **section** id (`apps/api/apps/timetable/slots/urls.py`). */
+  timetableSlots: {
+    list: "/timetable-slots",
+    detail: (id: string) => `/timetable-slots/${id}`,
+    validate: (sectionId: string) => `/timetables/${sectionId}:validate`,
+    publish: (sectionId: string) => `/timetables/${sectionId}:publish`,
+  },
   /** `apps/api/apps/timetable/rooms/urls.py`. */
   rooms: {
     list: "/rooms",

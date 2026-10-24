@@ -10,7 +10,8 @@ import {
 } from "@/services/modules/curriculum/curriculum-constant";
 import { curriculumToSubjectOptions } from "@/services/modules/teacher-allocations/teacher-allocations-helper";
 
-/** A class's curriculum subjects for a session: the only ones to allocate. Needs a class. */
+/** A class's curriculum subjects for a session: the only ones to allocate or timetable. Needs
+ * a class. */
 export function useClassSubjectOptions(sessionId: string, classId: string) {
   return useQuery({
     queryKey: queryKeys.list(CURRICULUM_QUERY_MODULE, CURRICULUM_FOR_CLASS_RESOURCE, {

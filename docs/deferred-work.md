@@ -222,13 +222,26 @@ either this file or `project-status.md`.
   setup sections (gated on `timetable.period.update` / `timetable.room.update`), so a viewer
   holding just `timetable.timetable.view` gets no sidebar group, and `/timetable` shows the
   "no permission" landing. PR C adds My timetable, which every role reaches.
-- **The nightly build-and-publish CUJ is stale until the week grid ships.**
-  `e2e/tests/live/timetable-build-publish-journey.spec.ts` (and its page object,
-  `e2e/src/pages/dashboard/timetable/week-grid.page.ts`) drive a `/timetable` week grid the
-  shell reset deleted; the CUJ fails at its first sidebar click. Timetable dashboard PR A
-  (setup: periods and rooms) does not bring the grid back. PR B
-  (`docs/superpowers/plans/2026-10-19-timetable-dashboard.md`, Task 8) rebuilds the grid at
-  `/timetable/grid` and updates the page object and the CUJ with it.
+- **The week grid's drag-and-drop moves pure drafts only, into empty cells.** A published
+  cell, or a draft that replaces one, has no handle: moving it would leave the published class
+  showing at the source, because a published cell can't be cleared (the entry below). A drop
+  onto an occupied cell is refused rather than swapped. Both wait for a decision on removing
+  published cells.
+- **A period edit can strand timetable cells.** Editing a period to a break, or dropping a
+  weekday from it, is not checked against the cells that use it (`periods/services.py` guards
+  only overlap and removal). Those cells then raise hard `period_is_break` /
+  `period_not_on_weekday` findings and block publish; the week grid still shows them, with
+  Discard on a draft, but a *published* cell in that state can't be cleared (the entry below).
+  A guard on the period edit, like the delete guard, is the fix.
+- **The week grid's columns are Monday to Friday, with no way to start a Saturday.** A weekend
+  column appears only once a cell already sits on it (`visibleWeekdays`,
+  `DEFAULT_VISIBLE_WEEKDAYS`), so a six-day school can never place its first Saturday period
+  from the grid, though the API accepts any weekday and a period's `weekdays` can name one.
+  Deriving the columns needs the tenant's working days, which the dashboard doesn't read yet
+  (the settings screen is not built); showing every day a period runs on is the interim.
+- **The grid shows no weekly-target indicator.** `weekly_periods` on the curriculum and on an
+  allocation is not checked by the conflict engine, and the grid doesn't count placed periods
+  against it either; a "Mathematics 4 of 5" strip is a client-side follow-up.
 - **A published timetable cell cannot be removed.** `:publish` now supersedes
   cell by cell — a live row is end-dated only where a draft exists to replace
   it. Before, it end-dated every live row in the section, and since the builder

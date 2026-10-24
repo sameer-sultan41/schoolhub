@@ -12,6 +12,7 @@ import { StaffService } from "./modules/staff";
 import { StudentsService } from "./modules/students";
 import { StudentTransfersService } from "./modules/student-transfers";
 import { TeacherAllocationsService } from "./modules/teacher-allocations";
+import { TimetableSlotsService } from "./modules/timetable-slots";
 import { TenantService } from "./modules/tenant";
 
 /**
@@ -59,8 +60,19 @@ export type { PeriodInput, PeriodPageQuery, PeriodRecord } from "./modules/perio
 export type { RoomInput, RoomPageQuery, RoomRecord, RoomType } from "./modules/rooms";
 
 export type {
+  ConflictSeverity,
+  SlotInput,
+  SlotWriteResult,
+  TimetableConflict,
+  TimetablePublishResult,
+  TimetableSlotRecord,
+  TimetableValidation,
+} from "./modules/timetable-slots";
+
+export type {
   AcademicSessionSummary,
   SchoolOrganizationOption,
+  SectionOption,
 } from "./modules/school-organization";
 
 export type {
@@ -106,6 +118,7 @@ export const Services = {
   promotions: PromotionsService,
   periods: PeriodsService,
   rooms: RoomsService,
+  timetableSlots: TimetableSlotsService,
   guardians: GuardiansService,
   staff: StaffService,
   students: StudentsService,

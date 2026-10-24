@@ -4,12 +4,14 @@ import {
   endAllocation,
   fetchAllocationsPage,
   fetchLoadSummary,
+  fetchSectionAllocations,
   reinstateAllocation,
   updateAllocation,
 } from "./teacher-allocations-service";
 
 export const TeacherAllocationsService = {
   fetchAllocationsPage,
+  fetchSectionAllocations,
   allocateTeacher,
   updateAllocation,
   endAllocation,

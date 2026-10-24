@@ -2,8 +2,8 @@ import type { Locator } from "@playwright/test";
 import { BasePage } from "../../base.page";
 
 /**
- * `/timetable` — the week grid (`apps/dashboard/src/features/timetable/week-grid-screen.tsx`
- * and `slot-form.tsx`).
+ * `/timetable/grid` — the week grid (`apps/dashboard/src/features/timetable/grid/`:
+ * `timetable-grid-screen.tsx`, `week-grid.tsx`, `slot-cell.tsx`, `slot-form-dialog.tsx`).
  *
  * Accessible names come from `apps/dashboard/messages/en.json`'s `timetable.*` and
  * `common.*` namespaces, never from CSS or a `data-testid` (e2e/README.md's "Selectors").
@@ -21,12 +21,16 @@ import { BasePage } from "../../base.page";
  * Locators and navigation only — no assertions (see `base.page.ts`).
  */
 export class WeekGridPage extends BasePage {
-  readonly path = "/timetable";
+  readonly path = "/timetable/grid";
 
   // --- The section picker and the two section-level actions ---
 
   get academicSession(): Locator {
     return this.page.getByRole("combobox", { name: "Academic session", exact: true });
+  }
+
+  get schoolClass(): Locator {
+    return this.page.getByRole("combobox", { name: "Class", exact: true });
   }
 
   get section(): Locator {
@@ -38,8 +42,20 @@ export class WeekGridPage extends BasePage {
     return this.page.getByRole("button", { name: "Check for conflicts", exact: true });
   }
 
+  /** The toolbar's Publish, which opens a confirm; `confirmPublish` presses the dialog's. */
   get publish(): Locator {
-    return this.page.getByRole("button", { name: "Publish", exact: true });
+    return this.page.getByRole("button", { name: "Publish", exact: true }).first();
+  }
+
+  /** The publish confirm. Its button repeats the trigger's name, so it is scoped here. */
+  get publishDialog(): Locator {
+    return this.page.getByRole("alertdialog");
+  }
+
+  async publishAndConfirm(): Promise<void> {
+    await this.publish.click();
+    await this.publishDialog.getByRole("button", { name: "Publish", exact: true }).click();
+    await this.publishDialog.waitFor({ state: "hidden" });
   }
 
   // --- Findings ---
@@ -47,24 +63,36 @@ export class WeekGridPage extends BasePage {
   /**
    * The conflict panel, scoped by its own label.
    *
-   * Necessary rather than tidy: `CellConflicts` renders the same message a second time
-   * inside every cell the finding names, so an unscoped `getByText` on a conflict
+   * Necessary rather than tidy: every cell a finding names repeats its message, so an unscoped `getByText` on a conflict
    * message is a strict-mode violation as soon as one is reported.
    */
   get conflictPanel(): Locator {
     return this.page.getByRole("list", { name: "Conflicts" });
   }
 
-  /** Rendered only after a *successful* `:validate` run with nothing to report. */
+  /** Rendered, outside the list, only after a check that found nothing. */
   get noConflicts(): Locator {
     return this.page.getByText("No conflicts found.", { exact: true });
   }
 
+  /** The publish toast, in `grid.published`'s singular or plural. */
   publishedSummary(count: number): Locator {
-    return this.page.getByText(`Published ${count} periods.`, { exact: true });
+    const periods = count === 1 ? "period" : "periods";
+    return this.page.getByText(`Published ${count} ${periods}.`, { exact: true });
+  }
+
+  /** A refused drop's toast, for the sighted user. A toast is a list item; the same words in
+   * dnd-kit's screen-reader live region are not. */
+  refusedToast(message: string): Locator {
+    return this.page.getByRole("listitem").filter({ hasText: message });
   }
 
   // --- Cells ---
+
+  /** A pure draft's drag handle; a published cell, or a draft over one, has none. */
+  moveHandle(weekday: string, periodName: string): Locator {
+    return this.page.getByRole("button", { name: `Move ${weekday} · ${periodName}`, exact: true });
+  }
 
   emptyCell(weekday: string, periodName: string): Locator {
     return this.page.getByRole("button", { name: `Fill ${weekday} · ${periodName}`, exact: true });
@@ -76,7 +104,43 @@ export class WeekGridPage extends BasePage {
 
   // --- The cell editor dialog ---
 
-  private get dialog(): Locator {
+  /**
+   * Moves a draft by keyboard: Space on its handle, one arrow key per step, Space to drop.
+   * `overCells` names the cell each step lands on ("Tuesday · Period 1").
+   *
+   * Waits for each step's live-region announcement before the next key, so a step that lands
+   * on the wrong cell fails on that step, naming it.
+   *
+   * `aria-pressed` alone doesn't mean arrow keys are heard: dnd-kit's `KeyboardSensor` renders
+   * the drag first and adds its keydown listener in a `setTimeout`, and Chrome runs a queued
+   * key before a timer. A `setTimeout(0)` of our own, queued after that one, fires only once
+   * the listener is in place.
+   */
+  async keyboardMove(
+    weekday: string,
+    periodName: string,
+    steps: readonly { key: "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown"; over: string }[],
+  ): Promise<void> {
+    const handle = this.moveHandle(weekday, periodName);
+    await handle.focus();
+    await this.page.keyboard.press("Space");
+    await this.page.locator('[aria-roledescription="draggable"][aria-pressed="true"]').waitFor();
+    await this.page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          setTimeout(resolve, 0);
+        }),
+    );
+    for (const step of steps) {
+      await this.page.keyboard.press(step.key);
+      await this.page
+        .getByText(`Over ${step.over}.`, { exact: true })
+        .waitFor({ state: "attached" });
+    }
+    await this.page.keyboard.press("Space");
+  }
+
+  get dialog(): Locator {
     return this.page.getByRole("dialog");
   }
 
@@ -108,18 +172,19 @@ export class WeekGridPage extends BasePage {
     await this.page.getByRole("option", { name }).click();
   }
 
-  /**
-   * `sectionLabel` is matched as a substring: the option renders as
-   * `"{class name} {section name}"`, and the class half comes from a *separate* query
-   * (`useClasses`) that may not have resolved yet — passing the run-unique section name
-   * alone identifies the row either way.
-   */
+  async selectClass(name: string): Promise<void> {
+    await this.schoolClass.click();
+    await this.page.getByRole("option", { name, exact: true }).click();
+  }
+
+  /** The section picker lists the picked class's sections, by section name. */
   async selectSection(sectionLabel: string): Promise<void> {
     await this.section.click();
     await this.page.getByRole("option", { name: sectionLabel }).click();
   }
 
-  /** Fills an empty cell: subject, teacher, save. */
+  /** Fills an empty cell: subject, teacher, save. A teacher allocated to the subject is
+   * listed as "{name} · allocated", so the name is matched as a substring. */
   async fillCellWith(values: {
     weekday: string;
     periodName: string;
