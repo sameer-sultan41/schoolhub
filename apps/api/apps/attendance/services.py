@@ -287,7 +287,7 @@ def assert_period_fits_mode(*, period: Period | None) -> None:
 
 
 def assert_session_contains(*, session: AcademicSession, on_date: datetime.date) -> None:
-    """A period register reads that session's timetable, so the session must contain the date."""
+    """A register's rows and roster belong to its session, so the session must contain the date."""
     if not session.start_date <= on_date <= session.end_date:
         raise DomainRuleViolation(
             {"academic_session_id": f"{on_date} is outside the {session.name} session."}
@@ -302,22 +302,24 @@ def assert_register_period(
     on_date: datetime.date,
     lessons: dict[tuple[uuid.UUID, uuid.UUID], LessonCell] | None = None,
 ) -> None:
-    """The register's period fits the mode, and in period mode is a lesson that day.
+    """The register's period fits the mode, its session contains the date, and in period
+    mode the period is a lesson that day.
 
-    A break, or a period with no effective slot for the section on that date, is
-    refused: there was no lesson to take a register for. So is a session that
-    does not contain the date, and so is every period register while
-    `module.timetable` is off: its grid can no longer be edited or covered. `lessons`
+    The session check runs in both modes: a daily register named against a stale
+    session would otherwise write today's rows into it. A break, or a period with
+    no effective slot for the section on that date, is refused: there was no lesson
+    to take a register for. So is every period register while `module.timetable`
+    is off: its grid can no longer be edited or covered. `lessons`
     is ``effective_lessons`` for this section, session and date when the caller
     already has it (the view does, for the marker check), so the timetable is
     read once per request.
     """
     assert_period_fits_mode(period=period)
+    assert_session_contains(session=session, on_date=on_date)
     if period is None:
         return
     if not is_feature_enabled(TIMETABLE_FEATURE, tenant_id=section.tenant_id):
         raise DomainRuleViolation({"period_id": TIMETABLE_REQUIRED})
-    assert_session_contains(session=session, on_date=on_date)
     if period.is_break:
         raise DomainRuleViolation({"period_id": f"{period.name} is a break, not a lesson."})
     if lessons is None:

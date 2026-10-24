@@ -174,8 +174,10 @@ def my_registers(*, user, session: AcademicSession, on_date: datetime.date) -> l
       the sections they class-teach. One entry per (section, period).
 
     Each entry satisfies an assignment rule of ``may_mark_register`` by
-    construction, and record scope is applied the same way, so this lists
-    nothing `:bulk-mark` would refuse.
+    construction, and record scope is applied the same way, so `:bulk-mark`'s
+    marker and scope check accepts every entry. Its date and session checks are
+    not applied here: a future date, a holiday or a date outside every session
+    can still list entries.
 
     A bounded number of queries whatever the number of sections or lessons, plus
     the scope lookup, which is cached per user.

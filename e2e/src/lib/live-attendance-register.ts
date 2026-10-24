@@ -55,9 +55,9 @@ export async function todaysSession(client: ApiClient): Promise<RegisterSession>
 }
 
 /**
- * Enrols the run-unique roster in `session`, or in the scaffold's own session when none is
- * given. The API lane names its session on every call, so the scaffold's serves it; a
- * browser register needs `todaysSession`.
+ * Enrols the run-unique roster in `session`, or in the scaffold's own far-future session when
+ * none is given. Anything that marks or reads today's register needs `todaysSession`: the
+ * server refuses a session that does not contain the date (422 on `academic_session_id`).
  */
 export async function seedAttendanceRegister(
   client: ApiClient,

@@ -18,7 +18,11 @@ from rest_framework import status
 
 from apps.attendance.models import AttendanceStatus
 from apps.attendance.register import may_mark_register
-from apps.attendance.tests.base import AttendanceAPITestCase
+from apps.attendance.tests.base import (
+    LAST_SESSION_DATE,
+    LAST_SESSION_WINDOW,
+    AttendanceAPITestCase,
+)
 from apps.attendance.tests.factories import (
     MARKING_DATE,
     AcademicSessionFactory,
@@ -364,8 +368,7 @@ class RegisterContentTests(RegisterTestCase):
         with tenant_context(self.tenant.id):
             last = AcademicSessionFactory(
                 tenant=self.tenant,
-                start_date=datetime.date(2025, 4, 1),
-                end_date=datetime.date(2026, 3, 31),
+                **LAST_SESSION_WINDOW,
             )
             alumnus = StudentFactory(tenant=self.tenant, campus=self.campus)
             StudentEnrollmentFactory(
@@ -376,7 +379,7 @@ class RegisterContentTests(RegisterTestCase):
                 section=self.section,
             )
 
-        body = self.client.get(self.register_url(on_date=datetime.date(2026, 3, 2))).json()
+        body = self.client.get(self.register_url(on_date=LAST_SESSION_DATE)).json()
 
         self.assertEqual([row["student_id"] for row in body["data"]], [str(alumnus.pk)])
         self.assertEqual(body["meta"]["academic_session_id"], str(last.pk))
@@ -438,12 +441,11 @@ class RegisterMetaTests(RegisterTestCase):
         with tenant_context(self.tenant.id):
             AcademicSessionFactory(
                 tenant=self.tenant,
-                start_date=datetime.date(2025, 4, 1),
-                end_date=datetime.date(2026, 3, 31),
+                **LAST_SESSION_WINDOW,
                 status=SessionStatus.CLOSED,
             )
 
-        meta = self.meta(datetime.date(2026, 3, 2))
+        meta = self.meta(LAST_SESSION_DATE)
 
         self.assertFalse(meta["markable"])
         self.assertEqual(meta["unmarkable_reason"], "session_closed")
@@ -603,8 +605,7 @@ class BulkMarkSessionTests(RegisterTestCase):
         with tenant_context(self.tenant.id):
             last = AcademicSessionFactory(
                 tenant=self.tenant,
-                start_date=datetime.date(2025, 4, 1),
-                end_date=datetime.date(2026, 3, 31),
+                **LAST_SESSION_WINDOW,
             )
             alumnus = StudentFactory(tenant=self.tenant, campus=self.campus)
             StudentEnrollmentFactory(
@@ -615,7 +616,10 @@ class BulkMarkSessionTests(RegisterTestCase):
                 section=self.section,
             )
         self.sign_in(self.user, MARK, scope=RecordScope.ALL)
-        payload = {**self.bulk_payload(students=[alumnus]), "attendance_date": "2026-03-02"}
+        payload = {
+            **self.bulk_payload(students=[alumnus]),
+            "attendance_date": LAST_SESSION_DATE.isoformat(),
+        }
 
         response = self.client.post(BULK_MARK, payload, format="json")
 
