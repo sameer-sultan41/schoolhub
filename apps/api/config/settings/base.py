@@ -172,6 +172,16 @@ PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.PBKDF2PasswordHasher",
 ]
 
+# api-architecture.md §2.5's limits, fixed here and in production. Only the dev settings
+# (local and e2e-live) let the environment lift them.
+THROTTLE_RATES: dict[str, str] = {
+    "tenant": "600/min",
+    "user": "60/min",
+    "anon": "20/min",
+    "auth": "10/min",
+    "public_form": "5/min",
+}
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
@@ -194,15 +204,7 @@ REST_FRAMEWORK = {
         "core.api.throttling.TenantRateThrottle",
         "core.api.throttling.UserRateThrottle",
     ),
-    # api-architecture.md §2.5's limits. Overridable per environment only so a throwaway
-    # stack (e2e-live) can lift them; production runs these defaults.
-    "DEFAULT_THROTTLE_RATES": {
-        "tenant": env.str("THROTTLE_RATE_TENANT", default="600/min"),
-        "user": env.str("THROTTLE_RATE_USER", default="60/min"),
-        "anon": env.str("THROTTLE_RATE_ANON", default="20/min"),
-        "auth": env.str("THROTTLE_RATE_AUTH", default="10/min"),
-        "public_form": env.str("THROTTLE_RATE_PUBLIC_FORM", default="5/min"),
-    },
+    "DEFAULT_THROTTLE_RATES": THROTTLE_RATES,
 }
 
 SIMPLE_JWT = {

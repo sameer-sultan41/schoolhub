@@ -3,7 +3,7 @@
 import re
 
 from config.settings.base import *
-from config.settings.base import PLATFORM_DOMAIN, env
+from config.settings.base import PLATFORM_DOMAIN, THROTTLE_RATES, env
 
 DEBUG = True
 ALLOWED_HOSTS = ["*"]
@@ -36,3 +36,17 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
     rf"^https?://([a-z0-9-]+\.)*{re.escape(PLATFORM_DOMAIN)}(:\d+)?$",
 ]
 CORS_ALLOW_CREDENTIALS = True
+
+# The rate limits can be lifted per environment, here only: a throwaway stack hit by
+# parallel test workers from one IP (e2e-live) would otherwise be throttled on its own
+# logins. base.py (and so production) keeps api-architecture.md §2.5's fixed limits.
+REST_FRAMEWORK = {
+    **REST_FRAMEWORK,
+    "DEFAULT_THROTTLE_RATES": {
+        "tenant": env.str("THROTTLE_RATE_TENANT", default=THROTTLE_RATES["tenant"]),
+        "user": env.str("THROTTLE_RATE_USER", default=THROTTLE_RATES["user"]),
+        "anon": env.str("THROTTLE_RATE_ANON", default=THROTTLE_RATES["anon"]),
+        "auth": env.str("THROTTLE_RATE_AUTH", default=THROTTLE_RATES["auth"]),
+        "public_form": env.str("THROTTLE_RATE_PUBLIC_FORM", default=THROTTLE_RATES["public_form"]),
+    },
+}

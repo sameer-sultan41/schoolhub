@@ -55,7 +55,7 @@
 - Sorting: `?ordering=-created_at,name`, whitelisted per endpoint.
 
 ### 2.5 Rate Limiting & Idempotency
-- Redis token-bucket per user and per tenant (defaults: 60 r/min user, 600 r/min tenant; auth endpoints stricter: 10 r/min per IP). `429` + `Retry-After`. Each rate can be overridden by a `THROTTLE_RATE_*` environment variable; production runs the defaults, and only the throwaway `e2e-live` stack raises them.
+- Redis token-bucket per user and per tenant (defaults: 60 r/min user, 600 r/min tenant; auth endpoints stricter: 10 r/min per IP). `429` + `Retry-After`. The dev settings (local and the throwaway `e2e-live` stack) can override each rate with a `THROTTLE_RATE_*` environment variable; production settings keep them fixed.
 - Mutating endpoints with money or external side effects (fee payments, notification sends, admissions submissions) accept an `Idempotency-Key` header; the key + response are stored 24 h and replayed on retry.
 
 ### 2.6 Webhooks
