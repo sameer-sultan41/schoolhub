@@ -27,7 +27,7 @@ from core.rbac.management.commands.seed_e2e_data import (
 )
 from core.rbac.models import Role, User, UserRole
 from core.tenancy.context import tenant_context
-from core.tenancy.models import Tenant, TenantStatus
+from core.tenancy.models import Tenant, TenantSettings, TenantStatus
 
 
 class SeedE2EDataTests(TestCase):
@@ -47,6 +47,15 @@ class SeedE2EDataTests(TestCase):
             user = User.objects.get(tenant=row, email=email)
             self.assertTrue(user.check_password(E2E_ADMIN_PASSWORD))
             self.assertTrue(UserRole.objects.filter(user=user, role=role).exists())
+
+    def test_the_e2e_tenant_works_every_day_so_today_can_always_be_marked(self) -> None:
+        call_command("seed_e2e_data")
+        tenant = Tenant.objects.get(slug=E2E_TENANT_SLUG)
+
+        with tenant_context(tenant.id):
+            academic = TenantSettings.objects.get(tenant=tenant).academic
+
+        self.assertEqual(academic["working_days"], [0, 1, 2, 3, 4, 5, 6])
 
     def test_seeds_baseline_school_organization_data_on_the_primary_tenant(self) -> None:
         call_command("seed_e2e_data")

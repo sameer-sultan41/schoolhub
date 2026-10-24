@@ -196,8 +196,13 @@ either this file or `project-status.md`.
   - `academics-promotion-journey.spec.ts` fails in the browser; the cause is not yet read from
     its trace.
   - `students-admission-enrollment.spec.ts` was already known broken (project-status).
-  The attendance specs' missing guardian and the session-date overlaps were fixed with
-  `createStudentReadyToEnrol` and per-worker date bands.
+  - `attendance-leave.spec.ts` submits leave as the admin, and the API (correctly, §11) accepts
+    it only from the student or a guardian linked to a portal account
+    (`assert_may_request_for_student`). The spec needs a student or guardian identity to sign in
+    as, as the promotion journey needed a second one.
+  The attendance specs' missing guardian, the session-date overlaps and the weekend ("today is
+  not a working day") were fixed with `createStudentReadyToEnrol`, per-worker date bands drawn
+  once per process, and a seven-day working week in the e2e seed.
 - **`frontend.yml`'s Playwright browser cache never hits the right key.** Its version step
   runs `require('@playwright/test/package.json')` from the repo root, where the package (an
   `e2e` dependency, not hoisted) can't be found, so the key is always `playwright-Linux-`.

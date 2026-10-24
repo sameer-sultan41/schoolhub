@@ -218,14 +218,16 @@ const WORKER_BANDS = 4;
 /** The random part of a worker's start, well inside its band for ~500 sessions of 800 days. */
 const BAND_RANDOM_DAYS = 300_000;
 
+// Drawn once per process: a fresh draw per call would put a worker's own sessions at random
+// spots in its band again, and they'd overlap (the birthday problem this band exists to avoid).
+const bandStartDays =
+  3650 +
+  (env.WORKER_INDEX % WORKER_BANDS) * WORKER_BAND_DAYS +
+  Math.floor(Math.random() * BAND_RANDOM_DAYS);
+
 export function farFutureSessionWindow(): { start_date: string; end_date: string } {
   sequence += 1;
-  const worker = env.WORKER_INDEX % WORKER_BANDS;
-  const baseDays =
-    3650 +
-    worker * WORKER_BAND_DAYS +
-    Math.floor(Math.random() * BAND_RANDOM_DAYS) +
-    sequence * 800;
+  const baseDays = bandStartDays + sequence * 800;
   const start = new Date();
   start.setDate(start.getDate() + baseDays);
   const end = new Date(start);
