@@ -33,7 +33,9 @@ const LOCKED_LATE = attendanceRecord({
   is_locked: true,
 });
 
-function correction(overrides: Partial<AttendanceCorrectionRecord> = {}) {
+function correction(
+  overrides: Partial<AttendanceCorrectionRecord> = {},
+): AttendanceCorrectionRecord {
   return {
     id: "99999999-aaaa-4bbb-8ccc-000000000001",
     subject_type: "student",
