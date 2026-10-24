@@ -5,6 +5,7 @@ import { Services } from "@/services";
 import { buildUser, renderWithProviders } from "@/test-utils";
 
 import { ACADEMICS_SECTIONS } from "@/features/academics/academics-sections";
+import { TIMETABLE_SECTIONS } from "@/features/timetable/timetable-sections";
 
 import { ModuleLanding } from "../module-landing";
 
@@ -59,6 +60,28 @@ describe("ModuleLanding", () => {
       expect(mockReplace).toHaveBeenCalledWith("/academics/promotions");
     });
     expect(mockReplace).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends a teacher, who holds only the timetable view key, to their own week", async () => {
+    mockFetchCurrentUser.mockResolvedValue(buildUser(["timetable.timetable.view"]));
+
+    renderWithProviders(<ModuleLanding sections={TIMETABLE_SECTIONS} />);
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/timetable/my");
+    });
+  });
+
+  it("sends an approver of cover who builds nothing to Substitutions", async () => {
+    mockFetchCurrentUser.mockResolvedValue(
+      buildUser(["timetable.timetable.view", "timetable.substitution.approve"]),
+    );
+
+    renderWithProviders(<ModuleLanding sections={TIMETABLE_SECTIONS} />);
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/timetable/substitutions");
+    });
   });
 
   it("shows the permission message, and goes nowhere, without any section key", async () => {

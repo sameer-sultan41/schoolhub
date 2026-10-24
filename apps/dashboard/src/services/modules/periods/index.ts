@@ -1,7 +1,14 @@
-import { createPeriod, deletePeriod, fetchPeriodPage, updatePeriod } from "./periods-service";
+import {
+  createPeriod,
+  deletePeriod,
+  fetchCampusPeriods,
+  fetchPeriodPage,
+  updatePeriod,
+} from "./periods-service";
 
 export const PeriodsService = {
   fetchPeriodPage,
+  fetchCampusPeriods,
   createPeriod,
   updatePeriod,
   deletePeriod,

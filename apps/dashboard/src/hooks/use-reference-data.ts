@@ -4,6 +4,11 @@ import { useQuery } from "@tanstack/react-query";
 
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
+import {
+  STAFF_QUERY_MODULE,
+  TEACHING_OPTIONS_RESOURCE,
+} from "@/services/modules/staff/staff-constant";
+import { toStaffOptions } from "@/services/modules/staff/staff-helper";
 
 /**
  * The school-organization lists a form or a filter picks from. Each hook uses the key the
@@ -60,5 +65,14 @@ export function useSections(classId: string, { isActive }: { isActive?: boolean 
     queryKey: queryKeys.list("school-organization", "sections", params),
     queryFn: () => Services.schoolOrganization.fetchSections(params),
     enabled: classId !== "",
+  });
+}
+
+/** The active teachers a picker offers (allocations, the timetable grid); one cache entry. */
+export function useTeachingStaffOptions() {
+  return useQuery({
+    queryKey: queryKeys.list(STAFF_QUERY_MODULE, TEACHING_OPTIONS_RESOURCE),
+    queryFn: () => Services.staff.fetchTeachingStaffOptions(),
+    select: toStaffOptions,
   });
 }

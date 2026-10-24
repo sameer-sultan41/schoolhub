@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { Card, CardContent, Skeleton } from "@schoolhub/ui";
 
+import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
 import { QueryErrorMessage } from "@/app/(app)/shell/dashboard/query-error-message";
 
@@ -56,8 +57,8 @@ export function TeamMeeting() {
   const date = useMemo(() => toIsoDate(now), [now]);
 
   const { data, isPending, isError, error } = useQuery({
-    queryKey: ["dashboard", "my-timetable", date],
-    queryFn: () => Services.dashboard.fetchMyTimetable(date),
+    queryKey: queryKeys.myTimetable(date),
+    queryFn: () => Services.timetableSlots.fetchMyTimetable(date),
   });
 
   const nextSlot = useMemo(() => {

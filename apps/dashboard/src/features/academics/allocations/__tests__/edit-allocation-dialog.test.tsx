@@ -281,6 +281,27 @@ describe("EditAllocationDialog", () => {
       expect(mockToastSuccess).not.toHaveBeenCalled();
     });
 
+    it("shows the end-before-start refusal under the start date", async () => {
+      // The start moved past the row's end date: the server keys the refusal to `effective_from`.
+      const issue = "The end date cannot be before the start date.";
+      mockUpdateAllocation.mockRejectedValue(
+        apiError(400, "validation_error", "effective_from", issue),
+      );
+      const { onOpenChange, user } = renderEdit(
+        allocationRecord({ effective_from: "2026-09-01", effective_to: "2026-09-10" }),
+      );
+
+      fireEvent.change(screen.getByLabelText("Effective from"), {
+        target: { value: "2026-09-20" },
+      });
+      await save(user);
+
+      expect(await screen.findByText(issue)).toBeInTheDocument();
+      expect(screen.getByLabelText("Effective from")).toHaveAttribute("aria-invalid", "true");
+      expect(screen.getByLabelText("Weekly periods")).not.toHaveAttribute("aria-invalid", "true");
+      expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    });
+
     it("shows an error naming a field it doesn't edit as the form's own message", async () => {
       const issue = "Teacher 'Ayesha Khan' is no longer active.";
       mockUpdateAllocation.mockRejectedValue(

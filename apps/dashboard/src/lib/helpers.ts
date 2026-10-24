@@ -152,6 +152,12 @@ export function isUuid(value: string): boolean {
   return Regex.UUID.test(value);
 }
 
+/** Whether `value` is a `YYYY-MM-DD` date — how a date filter read from the URL is checked
+ * before it is sent to the API. */
+export function isIsoDate(value: string): boolean {
+  return Regex.ISO_DATE.test(value);
+}
+
 /** The first 10 characters of an ISO timestamp are its date. */
 const ISO_DATE_LENGTH = 10;
 

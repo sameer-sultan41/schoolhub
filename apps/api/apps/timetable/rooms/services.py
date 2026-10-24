@@ -5,8 +5,12 @@ from __future__ import annotations
 from django.db.models import Q
 from django.utils import timezone
 
-from apps.timetable.models import Room, TeacherSubstitution, TimetableSlot
-from apps.timetable.periods.services import OPEN_SUBSTITUTION_STATUSES
+from apps.timetable.models import (
+    OPEN_SUBSTITUTION_STATUSES,
+    Room,
+    TeacherSubstitution,
+    TimetableSlot,
+)
 from core.api.exceptions import DomainRuleViolation
 
 

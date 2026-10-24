@@ -409,6 +409,70 @@ class CurriculumElectiveGroupTests(AcademicsAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
 
+    def test_a_patch_blanking_the_group_of_an_elective_row_is_refused(self) -> None:
+        """The stored group must not stand in for the blank one the PATCH sent.
+
+        A sibling keeps the group populated, so only the serializer's own rule can refuse this:
+        without it the PATCH saves a blank group on an elective row.
+        """
+        self.allow("academics.curriculum.update")
+        sole = self._elective("Languages")
+        self._elective("Languages")
+
+        response = self.client.patch(
+            f"/api/v1/class-subjects/{sole.pk}", {"elective_group": ""}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.json())
+        self.assertIn(
+            "elective_group",
+            {row["field"] for row in response.json()["error"]["details"]},
+        )
+        with tenant_context(self.tenant.id):
+            sole.refresh_from_db()
+        self.assertEqual(sole.elective_group, "Languages", "the refused PATCH must not have saved")
+
+    def test_a_patch_with_a_whitespace_only_group_on_an_elective_row_is_refused(self) -> None:
+        # The field trims "   " to "" before `validate` runs; this pins the rule users see.
+        self.allow("academics.curriculum.update")
+        sole = self._elective("Languages")
+        self._elective("Languages")
+
+        response = self.client.patch(
+            f"/api/v1/class-subjects/{sole.pk}", {"elective_group": "   "}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.json())
+        self.assertIn(
+            "elective_group",
+            {row["field"] for row in response.json()["error"]["details"]},
+        )
+
+    def test_a_patch_making_a_row_core_may_blank_its_group(self) -> None:
+        """Negative control: the group is only required while the row is an elective."""
+        self.allow("academics.curriculum.update")
+        leaving = self._elective("Languages")
+        self._elective("Languages")
+
+        response = self.client.patch(
+            f"/api/v1/class-subjects/{leaving.pk}",
+            {"is_elective": False, "elective_group": ""},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+
+    def test_a_patch_that_does_not_name_the_group_keeps_an_elective_row_valid(self) -> None:
+        """Negative control: with no `elective_group` key the stored group still counts."""
+        self.allow("academics.curriculum.update")
+        sole = self._elective("Languages")
+
+        response = self.client.patch(
+            f"/api/v1/class-subjects/{sole.pk}", {"weekly_periods": 3}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+
 
 class CurriculumDeleteTests(AcademicsAPITestCase):
     """`BlockingDestroyMixin`, which the move from school_organization dropped.
@@ -481,6 +545,75 @@ class CloneCurriculumTests(AcademicsAPITestCase):
         second = self.client.post("/api/v1/class-subjects:clone", payload, format="json")
 
         self.assertEqual(second.json()["data"], {"created": 0, "skipped": 1})
+
+    def _clone(self):
+        return self.client.post(
+            "/api/v1/class-subjects:clone",
+            {
+                "source_academic_session_id": str(self.session.pk),
+                "target_academic_session_id": str(self.next_session.pk),
+            },
+            format="json",
+        )
+
+    def test_a_row_for_an_inactive_class_is_skipped_not_copied(self) -> None:
+        """Create and PATCH refuse an inactive class, so a clone cannot be the way past it."""
+        self.allow("academics.curriculum.create")
+        with tenant_context(self.tenant.id):
+            retired_subject = SubjectFactory(tenant=self.tenant)
+            ClassSubjectFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                school_class=self.next_class,
+                subject=retired_subject,
+            )
+            self.next_class.is_active = False
+            self.next_class.save(update_fields=["is_active"])
+
+        response = self._clone()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json()["data"], {"created": 1, "skipped": 1})
+        with tenant_context(self.tenant.id):
+            copied = ClassSubject.objects.alive().filter(academic_session=self.next_session)
+            self.assertEqual(
+                {(row.school_class_id, row.subject_id) for row in copied},
+                {(self.school_class.pk, self.subject.pk)},
+            )
+
+    def test_a_row_for_an_inactive_subject_is_skipped_not_copied(self) -> None:
+        self.allow("academics.curriculum.create")
+        with tenant_context(self.tenant.id):
+            retired_subject = SubjectFactory(tenant=self.tenant, is_active=False)
+            ClassSubjectFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                school_class=self.school_class,
+                subject=retired_subject,
+            )
+
+        response = self._clone()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json()["data"], {"created": 1, "skipped": 1})
+        with tenant_context(self.tenant.id):
+            copied = ClassSubject.objects.alive().filter(academic_session=self.next_session)
+            self.assertEqual({row.subject_id for row in copied}, {self.subject.pk})
+
+    def test_rows_for_active_classes_and_subjects_are_all_copied(self) -> None:
+        """Negative control: nothing is skipped when nothing is inactive."""
+        self.allow("academics.curriculum.create")
+        with tenant_context(self.tenant.id):
+            ClassSubjectFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                school_class=self.next_class,
+                subject=SubjectFactory(tenant=self.tenant),
+            )
+
+        response = self._clone()
+
+        self.assertEqual(response.json()["data"], {"created": 2, "skipped": 0})
 
     def test_cloning_a_session_onto_itself_is_rejected(self) -> None:
         self.allow("academics.curriculum.create")

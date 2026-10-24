@@ -1,7 +1,11 @@
 import { collectPages, fetchPage, MAX_PAGE_SIZE } from "@schoolhub/api-client";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
-import type { AcademicSessionSummary, SchoolOrganizationOption } from "./school-organization-type";
+import type {
+  AcademicSessionSummary,
+  SchoolOrganizationOption,
+  SectionOption,
+} from "./school-organization-type";
 
 /**
  * The school-organization domain's reference-data calls. Every consumer reaches these
@@ -55,8 +59,8 @@ export async function fetchSections(params: {
   classId: string;
   campusId?: string;
   isActive?: boolean;
-}): Promise<SchoolOrganizationOption[]> {
-  const { items } = await fetchPage<SchoolOrganizationOption>(
+}): Promise<SectionOption[]> {
+  const { items } = await fetchPage<SectionOption>(
     apiClient,
     endpoints.schoolOrganization.sections,
     {

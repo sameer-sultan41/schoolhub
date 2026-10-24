@@ -7,6 +7,8 @@ import type { RoomInput, RoomPageQuery, RoomType } from "./rooms-type";
 /** The query-key module every room read lives under; a room write invalidates it. */
 export const ROOMS_QUERY_MODULE = "rooms";
 export const ROOMS_LIST_RESOURCE = "list";
+/** One campus's rooms in service: the grid cell's room picker. */
+export const ROOMS_ACTIVE_RESOURCE = "active";
 
 /** Every room type, keyed so the compiler checks the set against the generated enum: a type
  * the API adds or drops fails here rather than going missing from the picker. */

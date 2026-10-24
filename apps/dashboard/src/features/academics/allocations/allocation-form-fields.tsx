@@ -14,15 +14,14 @@ import {
 } from "@schoolhub/ui";
 
 import { FormSelectField } from "@/components/form-select-field";
-import { useClasses, useSections } from "@/hooks/use-reference-data";
+import { useClasses, useSections, useTeachingStaffOptions } from "@/hooks/use-reference-data";
 import type { TeacherAllocationRecord } from "@/services";
 import { ALLOCATION_MIN_WEEKLY_PERIODS } from "@/services/modules/teacher-allocations/teacher-allocations-constant";
 import type {
   AllocationEditFormValues,
   AllocationFormValues,
 } from "@/services/modules/teacher-allocations/teacher-allocations.schema";
-import { useClassSubjectOptions } from "./use-class-subject-options";
-import { useTeachingStaffOptions } from "./use-teaching-staff-options";
+import { useClassSubjectOptions } from "@/hooks/use-class-subject-options";
 
 export interface AllocationIdentityFieldsProps {
   form: UseFormReturn<AllocationFormValues>;
