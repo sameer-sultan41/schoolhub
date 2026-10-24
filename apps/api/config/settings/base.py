@@ -9,6 +9,7 @@ from pathlib import Path
 
 import environ
 from celery.schedules import crontab
+from corsheaders.defaults import default_headers
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -102,6 +103,10 @@ MIDDLEWARE = [
     # for the transaction, which is what the RLS policies read.
     "core.tenancy.middleware.TenantMiddleware",
 ]
+
+# The dashboard calls the API cross-origin, so a request header the preflight doesn't allow
+# never reaches it. `Idempotency-Key` is the one custom header the dashboard sends (§2.5).
+CORS_ALLOW_HEADERS = (*default_headers, "idempotency-key")
 
 ROOT_URLCONF = "config.urls"
 WSGI_APPLICATION = "config.wsgi.application"

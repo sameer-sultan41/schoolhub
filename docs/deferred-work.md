@@ -188,13 +188,21 @@ either this file or `project-status.md`.
   transaction, unlike `TenantMiddleware` — resolved it.
   `e2e/tests/live/api/school-settings.spec.ts` now asserts the working
   patch→read journey rather than pinning the bug.
-- **Three live E2E specs still fail on CI, and two are undiagnosed.** The lane now brings the
+- **Live E2E specs that failed on CI.** The lane now brings the
   stack up and runs (ADR-0025, ADR-0026), and the timetable journeys pass. The first full runs
   also showed the rest of the lane had drifted while it could not run:
   - `dashboard-summary.spec.ts` asserts a "Today's schedule" list. The `scheduleLabel` message
     still exists, but nothing renders it, so the spec is stale against today's home page.
-  - `academics-promotion-journey.spec.ts` fails in the browser; the cause is not yet read from
-    its trace.
+  - `academics-promotion-journey.spec.ts` (and the attendance register journey, the first time
+    it ran) failed in the browser with "We could not reach the server": their writes send
+    `Idempotency-Key`, which the API's CORS preflight did not allow (django-cors-headers'
+    default list, no `CORS_ALLOW_HEADERS`), so the browser refused the request. The mocked lane
+    never showed it because its router answers every preflight with the header allowed.
+    **Fixed** by allowing the header in `config/settings/base.py`; the next nightly run
+    confirms both journeys.
+  - Cross-origin responses don't expose `X-Request-ID` (no `CORS_EXPOSE_HEADERS`), so
+    `ApiError.requestId` is always null in the dashboard. Nothing shows it today; exposing it
+    is its own change with its own test.
   - `students-admission-enrollment.spec.ts` was already known broken (project-status).
   - `attendance-leave.spec.ts` submits leave as the admin, and the API (correctly, §11) accepts
     it only from the student or a guardian linked to a portal account
