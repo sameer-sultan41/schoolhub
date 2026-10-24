@@ -33,6 +33,7 @@ const mockFetchSections = Services.schoolOrganization.fetchSections as jest.Mock
 
 const CAMPUSES = [{ id: "campus-1", name: "Main Campus" }];
 const OPTIONS = [{ id: "option-1", name: "Grade 1" }];
+const SECTION_OPTIONS = [{ id: "section-1", name: "A", campus_id: "campus-1" }];
 const CLASS_ID = "class-1";
 
 /** A client the test can read back, so a key is checked as the cache sees it. */
@@ -54,7 +55,7 @@ describe("use-reference-data", () => {
     mockFetchCampuses.mockReset().mockResolvedValue(CAMPUSES);
     mockFetchClasses.mockReset().mockResolvedValue(OPTIONS);
     mockFetchSubjects.mockReset().mockResolvedValue(OPTIONS);
-    mockFetchSections.mockReset().mockResolvedValue(OPTIONS);
+    mockFetchSections.mockReset().mockResolvedValue(SECTION_OPTIONS);
   });
 
   describe("useCampuses", () => {
@@ -155,7 +156,7 @@ describe("use-reference-data", () => {
         expect(result.current.isSuccess).toBe(true);
       });
       expect(mockFetchSections).toHaveBeenCalledWith({ classId: CLASS_ID });
-      expect(cached(queryClient, "sections", { classId: CLASS_ID })).toEqual(OPTIONS);
+      expect(cached(queryClient, "sections", { classId: CLASS_ID })).toEqual(SECTION_OPTIONS);
     });
 
     it("passes isActive through, under its own key", async () => {
@@ -168,7 +169,7 @@ describe("use-reference-data", () => {
       });
       expect(mockFetchSections).toHaveBeenCalledWith({ classId: CLASS_ID, isActive: true });
       expect(cached(queryClient, "sections", { classId: CLASS_ID, isActive: true })).toEqual(
-        OPTIONS,
+        SECTION_OPTIONS,
       );
       expect(cached(queryClient, "sections", { classId: CLASS_ID })).toBeUndefined();
     });

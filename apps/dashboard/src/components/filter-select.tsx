@@ -7,8 +7,9 @@ import { FILTER_ALL as ALL } from "@/lib/constants";
 export interface FilterSelectProps {
   /** The trigger's accessible name and placeholder: it has no visible `<label>`. */
   label: string;
-  /** The first option, standing for no filter. */
-  allLabel: string;
+  /** The first option, standing for no filter. Omit it for a pick that is required (a value or
+   * nothing yet), as the timetable grid's class and section are. */
+  allLabel?: string;
   /** The picked id, or `""` for no filter. */
   value: string;
   /** Called with the picked id, or `""` for no filter. */
@@ -17,7 +18,8 @@ export interface FilterSelectProps {
   disabled?: boolean;
 }
 
-/** A list filter `Select` over `{ id, name }` options, with an "All" choice for no filter. */
+/** A list filter `Select` over `{ id, name }` options, with an "All" choice for no filter
+ * unless `allLabel` is left out. */
 export function FilterSelect({
   label,
   allLabel,
@@ -28,7 +30,7 @@ export function FilterSelect({
 }: FilterSelectProps) {
   return (
     <Select
-      value={value || ALL}
+      value={value || (allLabel === undefined ? "" : ALL)}
       onValueChange={(selected) => {
         onChange(selected === ALL ? "" : selected);
       }}
@@ -38,7 +40,7 @@ export function FilterSelect({
         <SelectValue placeholder={label} />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value={ALL}>{allLabel}</SelectItem>
+        {allLabel !== undefined && <SelectItem value={ALL}>{allLabel}</SelectItem>}
         {options.map((option) => (
           <SelectItem key={option.id} value={option.id}>
             {option.name}

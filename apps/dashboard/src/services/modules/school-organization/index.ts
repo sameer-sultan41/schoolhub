@@ -13,4 +13,8 @@ export const SchoolOrganizationService = {
   fetchSubjects,
   fetchAcademicSessions,
 };
-export type { AcademicSessionSummary, SchoolOrganizationOption } from "./school-organization-type";
+export type {
+  AcademicSessionSummary,
+  SchoolOrganizationOption,
+  SectionOption,
+} from "./school-organization-type";

@@ -180,10 +180,10 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
   `DELETE` on either is a 422 while a current grid cell (draft or live published) or upcoming
   proposed/confirmed cover still uses the row; a room still in use is taken out of service
   (`is_active: false`) instead.
-- `GET /api/v1/timetable-slots` — filters: `section_id`, `teacher_id`, `room_id`, `weekday`, `status`, `academic_session_id`; cursor pagination.
-- `POST/PATCH/DELETE /api/v1/timetable-slots` — per-edit conflict check in the response (`meta.conflicts`).
-- `POST /api/v1/timetables/{section_id}:validate` — full conflict run, returns conflict list.
-- `POST /api/v1/timetables/{section_id}:publish` — permission-guarded, audited; 422 on hard conflicts.
+- `GET /api/v1/timetable-slots` — filters: `section_id`, `teacher_id`, `room_id`, `weekday`, `status`, `academic_session_id`, and `current` (`effective_to IS NULL`: drafts and live published cells, never superseded history); `?ordering=period_sequence`; cursor pagination. Every row carries `section_name`, `subject_name`, `staff_name`, `room_name`, `period_name`, `period_sequence`, `start_time` and `end_time`.
+- `POST/PATCH/DELETE /api/v1/timetable-slots` — per-edit conflict check in the response (`meta.conflicts`, a list of `TimetableConflict`). A closed or archived session refuses all three (422 on `academic_session_id`); a PATCH that moves a draft into another session needs that one open too.
+- `POST /api/v1/timetables/{section_id}:validate` — full conflict run, returns `TimetableValidation` (`conflicts`, `has_hard_conflicts`).
+- `POST /api/v1/timetables/{section_id}:publish` — permission-guarded, audited; returns `TimetablePublishResult`; 422 on hard conflicts, the findings in `error.meta.conflicts`.
 - `GET /api/v1/timetables/my` — caller's effective timetable (teacher/student/guardian scope), date-aware (substitutions applied).
 - `GET/POST /api/v1/teacher-substitutions` · `POST /api/v1/teacher-substitutions/{id}:approve` · `:reject`
 - `POST /api/v1/timetables/{section_id}:generate-draft` — AI generation (AI-TTB-01); returns `202` + job resource per API doc §2.7.
@@ -270,4 +270,24 @@ or response shape changed anywhere in the module.
   while the timetable still uses it (§16), and the dialog shows the server's reason. Periods and rooms have no
   view key of their own (§4), so each tab is gated on its `.update` key: the
   `timetable.timetable.view` every role holds would open the setup screens to everyone.
+- **PR B, the week grid.** `/timetable/grid` (the first tab, gated on `timetable.slot.view`):
+  pick the session, class and section (all three in the URL), and the section's campus
+  periods become the rows and Monday to Friday the columns (a weekend day appears once it
+  holds a cell). A cell shows the draft when a draft and a published row share it, marked
+  "Replaces the published period". Breaks, and periods that don't run that day, are inert.
+  Clicking a cell opens its editor: a subject from the class's curriculum, a teacher (every
+  teaching staff member, those allocated to the section and subject first and marked), a room
+  in service at the campus, and a note. An empty or published cell gets a new draft; a draft
+  is updated; a draft can be discarded. A pure draft (no published cell under it) has a drag
+  handle that moves it to an empty teaching cell, by pointer or by keyboard (one cell per
+  arrow key, measured from the cell, not the handle), with translated screen-reader
+  announcements; a drop lands on the cell under the pointer, and one on a break, a period
+  that doesn't run that day, an occupied cell or outside the grid moves nothing and says why.
+  A cell whose period has since become a break still shows, so it can be discarded. Findings
+  belong to one section: picking another clears them. The conflict panel lists the last
+  write's, check's or refused publish's findings in the server's order, translated by type
+  with the server's message as the fallback, and each cell repeats its own. Publish asks
+  for confirmation; a refusal keeps the dialog open and fills the panel. Cell editing needs
+  the `timetable.slot.*` keys and publishing only `timetable.timetable.publish`, so a
+  principal publishes a grid they cannot edit. A closed session is read-only.
 

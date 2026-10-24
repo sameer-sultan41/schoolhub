@@ -40,6 +40,18 @@ def assert_slot_writable(slot: TimetableSlot) -> None:
         )
 
 
+def assert_slot_session_writable(session: AcademicSession) -> None:
+    """A closed or archived session's grid is read-only, for drafts as well as publish.
+
+    `assert_session_writable`, re-raised on `academic_session_id` so the grid can say which
+    input is wrong rather than showing a bare message.
+    """
+    try:
+        assert_session_writable(session)
+    except DomainRuleViolation as exc:
+        raise DomainRuleViolation({"academic_session_id": str(exc.detail)}) from exc
+
+
 def conflicts_for(*, session: AcademicSession, section: Section | None = None) -> list[dict]:
     return detect_conflicts(session=session, section=section)
 

@@ -1,7 +1,14 @@
-import { createRoom, deleteRoom, fetchRoomPage, updateRoom } from "./rooms-service";
+import {
+  createRoom,
+  deleteRoom,
+  fetchActiveRooms,
+  fetchRoomPage,
+  updateRoom,
+} from "./rooms-service";
 
 export const RoomsService = {
   fetchRoomPage,
+  fetchActiveRooms,
   createRoom,
   updateRoom,
   deleteRoom,

@@ -75,7 +75,7 @@ describe("StudentDirectoryFilters — academic session/class/section", () => {
       { id: "class-1", name: "Grade 1" },
       { id: "class-2", name: "Grade 2 (inactive)" },
     ]);
-    mockFetchSections.mockResolvedValue([{ id: "section-1", name: "A" }]);
+    mockFetchSections.mockResolvedValue([{ id: "section-1", name: "A", campus_id: "campus-1" }]);
     mockFetchAcademicSessions.mockResolvedValue([
       { id: "sess-1", name: "2026-27", status: "active", is_current: true },
       { id: "sess-closed", name: "2024-25", status: "closed", is_current: false },

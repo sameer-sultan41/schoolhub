@@ -226,6 +226,7 @@ Steps:
   - the 422 error with `meta.conflicts`;
   - DELETE 200.
 - [ ] Slot-write `meta.conflicts` is read through a single client helper typed `ApiSchemas["TimetableConflict"][]`. This is academics' recorded `meta.warnings` exception, now on a generated item type.
+- [ ] **Amended after PR B's change review (2026-10-19):** the DELETE 200 and the publish 422 stay *described*, not typed. Both carry their findings in an envelope's `meta` (a success's `meta.conflicts`, an error's `error.meta.conflicts`), and this repo's schema describes no endpoint's envelope `meta`; the item type is the generated `TimetableConflict` (from `:validate`), applied by `conflictsFromMeta`/`conflictsFromError`. Typing one envelope here would be a one-off shape every other endpoint lacks.
 - [ ] Slot create, update and delete re-raise `assert_session_writable` as a field error on `academic_session_id`. A PATCH checks both the old and the new session (precedent `academics/teacher_allocations/services.py:197,224`).
 - [ ] Tests:
   - names;

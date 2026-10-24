@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import datetime
 
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 
 from apps.school_organization.models import SessionStatus
@@ -246,6 +248,145 @@ class TimetableSlotEndpointTests(TimetableAPITestCase):
 
         self.assertEqual([row["id"] for row in drafts], [str(draft.pk)])
         self.assertEqual([row["id"] for row in live], [str(published.pk)])
+
+
+class GridContractTests(TimetableAPITestCase):
+    """What the dashboard's week grid reads: names on every cell, the `current` filter,
+    period order, and the closed-session lock on every draft write."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.allow("timetable.slot.view")
+
+    def test_every_cell_carries_the_names_a_grid_shows(self) -> None:
+        self.make_slot()
+
+        row = self.client.get("/api/v1/timetable-slots").json()["data"][0]
+
+        self.assertEqual(row["section_name"], self.section.name)
+        self.assertEqual(row["subject_name"], self.subject.name)
+        self.assertEqual(row["staff_name"], self.teacher.full_name)
+        self.assertEqual(row["room_name"], self.room.name)
+        self.assertEqual(row["period_name"], self.period.name)
+        self.assertEqual(row["period_sequence"], self.period.sequence)
+        self.assertEqual(row["start_time"], self.period.start_time.isoformat())
+
+    def test_a_homeroom_cell_names_no_subject_teacher_or_room(self) -> None:
+        self.make_slot(subject=None, staff=None, room=None)
+
+        row = self.client.get("/api/v1/timetable-slots").json()["data"][0]
+
+        self.assertIsNone(row["subject_name"])
+        self.assertIsNone(row["staff_name"])
+        self.assertIsNone(row["room_name"])
+
+    def test_current_leaves_out_the_superseded_history(self) -> None:
+        draft = self.make_slot()
+        live = self.make_slot(period=self.periods[1], status=SlotStatus.PUBLISHED)
+        self.make_slot(
+            period=self.periods[2],
+            status=SlotStatus.PUBLISHED,
+            effective_from=datetime.date(2026, 4, 1),
+            effective_to=datetime.date(2026, 4, 2),
+        )
+
+        rows = self.client.get("/api/v1/timetable-slots?current=true").json()["data"]
+
+        self.assertEqual({row["id"] for row in rows}, {str(draft.pk), str(live.pk)})
+
+    def test_cells_sort_by_period_sequence(self) -> None:
+        """Created early-first, so the default `-created_at` order would put `late` first."""
+        early = self.make_slot(period=self.periods[0])
+        late = self.make_slot(period=self.periods[2])
+
+        rows = self.client.get("/api/v1/timetable-slots?ordering=period_sequence").json()["data"]
+
+        self.assertEqual([row["id"] for row in rows], [str(early.pk), str(late.pk)])
+
+    def test_the_names_cost_no_query_per_cell(self) -> None:
+        def queries() -> int:
+            with CaptureQueriesContext(connection) as captured:
+                self.client.get("/api/v1/timetable-slots?page_size=50")
+            return len(captured)
+
+        self.make_slot()
+        queries()  # warm any per-request caches (feature flag, permissions)
+        before = queries()
+        for day in range(1, 5):
+            self.make_slot(day_of_week=day)
+
+        self.assertEqual(queries(), before)
+
+    def _close_session(self) -> None:
+        with tenant_context(self.tenant.id):
+            self.session.status = SessionStatus.CLOSED
+            self.session.save(update_fields=["status"])
+
+    def assert_locked(self, response) -> None:
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        fields = {detail["field"] for detail in response.json()["error"]["details"]}
+        self.assertIn("academic_session_id", fields)
+
+    def test_a_closed_session_refuses_a_new_draft_cell(self) -> None:
+        self.allow("timetable.slot.create")
+        self._close_session()
+
+        response = self.client.post(
+            "/api/v1/timetable-slots",
+            {
+                "academic_session_id": str(self.session.pk),
+                "section_id": str(self.section.pk),
+                "day_of_week": 0,
+                "period_id": str(self.period.pk),
+            },
+            format="json",
+        )
+
+        self.assert_locked(response)
+
+    def test_a_closed_session_refuses_editing_and_removing_a_draft(self) -> None:
+        self.allow("timetable.slot.update", "timetable.slot.delete")
+        draft = self.make_slot()
+        self._close_session()
+
+        edited = self.client.patch(
+            f"/api/v1/timetable-slots/{draft.pk}", {"notes": "x"}, format="json"
+        )
+        removed = self.client.delete(f"/api/v1/timetable-slots/{draft.pk}")
+
+        self.assert_locked(edited)
+        self.assert_locked(removed)
+
+    def test_a_draft_cannot_be_moved_into_a_closed_session(self) -> None:
+        self.allow("timetable.slot.update")
+        draft = self.make_slot()
+        with tenant_context(self.tenant.id):
+            closed = AcademicSessionFactory(
+                tenant=self.tenant, is_current=False, status=SessionStatus.CLOSED
+            )
+
+        response = self.client.patch(
+            f"/api/v1/timetable-slots/{draft.pk}",
+            {"academic_session_id": str(closed.pk)},
+            format="json",
+        )
+
+        self.assert_locked(response)
+
+
+class ValidateConflictShapeTests(TimetableAPITestCase):
+    def test_validate_answers_in_the_typed_shape(self) -> None:
+        """`TimetableValidationSerializer`'s keys, so the generated client is the truth."""
+        self.allow("timetable.slot.view")
+        self.make_slot()
+
+        data = self.client.post(
+            f"/api/v1/timetables/{self.section.pk}:validate", {}, format="json"
+        ).json()["data"]
+
+        self.assertEqual(
+            set(data), {"section_id", "academic_session_id", "conflicts", "has_hard_conflicts"}
+        )
 
 
 class ValidateAndPublishTests(TimetableAPITestCase):

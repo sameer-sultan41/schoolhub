@@ -13,6 +13,8 @@ import type {
  * list, the load panel and the dashboard's teacher-load widget together. */
 export const ALLOCATION_QUERY_MODULE = "teacher-allocations";
 export const ALLOCATION_LIST_RESOURCE = "allocations";
+/** One section's current allocations: the timetable grid's teacher hint. */
+export const ALLOCATION_SECTION_RESOURCE = "for-section";
 export const ALLOCATION_LOAD_SUMMARY_RESOURCE = "load-summary";
 
 /** Column id -> the `?ordering=` field the allocations list accepts. */

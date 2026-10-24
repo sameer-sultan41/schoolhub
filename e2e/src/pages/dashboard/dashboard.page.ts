@@ -45,12 +45,12 @@ export class DashboardPage extends BasePage {
   }
 
   /**
-   * A tab of the bar above every Academics screen, e.g. `sectionTab("Promotions")`: only the
-   * sections the viewer holds the `.view` key for are in it.
+   * A tab of the bar above a module's screens, e.g. `sectionTab("Promotions")` or
+   * `sectionTab("Week grid", "Timetable")`: only the sections the viewer may open are in it.
    */
-  sectionTab(name: string): Locator {
+  sectionTab(name: string, module: "Academics" | "Timetable" = "Academics"): Locator {
     return this.page
-      .getByRole("navigation", { name: "Academics sections", exact: true })
+      .getByRole("navigation", { name: `${module} sections`, exact: true })
       .getByRole("link", { name, exact: true });
   }
 
