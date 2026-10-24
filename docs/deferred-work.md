@@ -188,10 +188,16 @@ either this file or `project-status.md`.
   transaction, unlike `TenantMiddleware` — resolved it.
   `e2e/tests/live/api/school-settings.spec.ts` now asserts the working
   patch→read journey rather than pinning the bug.
-- **The live E2E lane has not yet run past setup on CI.** All 50 recorded `e2e-live` runs
-  failed before a test: MinIO's withdrawn images (ADR-0025), then the frontend build, the
-  PgBouncer userlist and migrations (ADR-0026). Until a dispatched run gets to the tests, no
-  live journey (timetable, academics, students) has run against the real stack.
+- **Three live E2E specs still fail on CI, and two are undiagnosed.** The lane now brings the
+  stack up and runs (ADR-0025, ADR-0026), and the timetable journeys pass. The first full runs
+  also showed the rest of the lane had drifted while it could not run:
+  - `dashboard-summary.spec.ts` asserts a "Today's schedule" list. The `scheduleLabel` message
+    still exists, but nothing renders it, so the spec is stale against today's home page.
+  - `academics-promotion-journey.spec.ts` fails in the browser; the cause is not yet read from
+    its trace.
+  - `students-admission-enrollment.spec.ts` was already known broken (project-status).
+  The attendance specs' missing guardian and the session-date overlaps were fixed with
+  `createStudentReadyToEnrol` and per-worker date bands.
 - **`frontend.yml`'s Playwright browser cache never hits the right key.** Its version step
   runs `require('@playwright/test/package.json')` from the repo root, where the package (an
   `e2e` dependency, not hoisted) can't be found, so the key is always `playwright-Linux-`.
