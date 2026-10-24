@@ -48,7 +48,10 @@ export class DashboardPage extends BasePage {
    * A tab of the bar above a module's screens, e.g. `sectionTab("Promotions")` or
    * `sectionTab("Week grid", "Timetable")`: only the sections the viewer may open are in it.
    */
-  sectionTab(name: string, module: "Academics" | "Timetable" = "Academics"): Locator {
+  sectionTab(
+    name: string,
+    module: "Academics" | "Timetable" | "Attendance" = "Academics",
+  ): Locator {
     return this.page
       .getByRole("navigation", { name: `${module} sections`, exact: true })
       .getByRole("link", { name, exact: true });

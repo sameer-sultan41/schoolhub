@@ -171,6 +171,32 @@ export const TIMETABLE_COVER_PERMISSIONS: PermissionKey[] = [
   "staff.staff.view",
 ];
 
+/**
+ * A teacher at the register (attendance.md §4): marking, reading records, asking for a locked
+ * row's correction, and the class and section reads the register's pickers make.
+ */
+export const ATTENDANCE_MARKER_PERMISSIONS: PermissionKey[] = [
+  "attendance.student-attendance.mark",
+  "attendance.student-attendance.view",
+  "attendance.correction.create",
+  "school.class.view",
+  "school.section.view",
+];
+
+/** A reader of attendance records who may not mark: the Records tab and no Register tab. */
+export const ATTENDANCE_VIEWER_PERMISSIONS: PermissionKey[] = [
+  "attendance.student-attendance.view",
+  "school.class.view",
+  "school.section.view",
+];
+
+/** The Settings tab: reading the school's settings and changing them. */
+export const ATTENDANCE_SETTINGS_PERMISSIONS: PermissionKey[] = [
+  "attendance.student-attendance.view",
+  "school.settings.view",
+  "school.settings.update",
+];
+
 /** A module this user must *not* see, for the negative half of a filtering assertion. */
 export const MODULE_WITHOUT_PERMISSION = "Fees & Finance";
 

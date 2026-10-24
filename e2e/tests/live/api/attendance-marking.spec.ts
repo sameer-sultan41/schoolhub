@@ -2,7 +2,7 @@ import { ApiError, type ApiClient } from "@schoolhub/api-client";
 import { env } from "@/env";
 import { expect, test } from "@/fixtures";
 import { createLiveSession } from "@/lib/live-api";
-import { seedAttendanceRegister, today } from "@/lib/live-attendance-register";
+import { seedAttendanceRegister, today, todaysSession } from "@/lib/live-attendance-register";
 import { E2E_CLASS_TEACHER_EMAIL } from "@/lib/seed-constants";
 
 /**
@@ -32,11 +32,20 @@ import { E2E_CLASS_TEACHER_EMAIL } from "@/lib/seed-constants";
  * else, and widening the admin fixture to hold it would let this lane assert a
  * permission the module does not actually grant.
  *
- * Endpoints covered: `GET /student-attendance`, `POST /student-attendance:bulk-mark`.
+ * Endpoints covered: `GET /student-attendance`, `POST /student-attendance:bulk-mark`,
+ * `GET /student-attendance/register` and `GET /student-attendance/my-registers`. The register
+ * is read the way the dashboard reads it, by section and date only, so its roster is enrolled
+ * in the session containing today (`todaysSession`).
  * The correction flow needs a *locked* row, which needs a date this lane cannot reach —
  * it is covered in the Django suite (`apps/attendance/tests/test_api.py`) and noted here
  * rather than faked with a hand-set `is_locked`, which no endpoint exposes.
  */
+
+interface RegisterEntry {
+  student_id: string;
+  record: AttendanceRow | null;
+  on_leave: boolean;
+}
 
 interface AttendanceRow {
   id: string;
@@ -46,11 +55,19 @@ interface AttendanceRow {
   late_minutes: number | null;
 }
 
+let markerLogin: Promise<ApiClient> | undefined;
+
+/**
+ * The class teacher's session, one login per worker rather than per test: four tests here
+ * would otherwise spend four of `AuthEndpointThrottle`'s 10 a minute (e2e/AGENTS.md). Safe to
+ * share for the reason `liveApiClient` is: a raw fetch session, whose cookie nothing rotates.
+ */
 async function markerSession(): Promise<ApiClient> {
-  return createLiveSession({
+  markerLogin ??= createLiveSession({
     identifier: E2E_CLASS_TEACHER_EMAIL,
     password: env.LIVE_ADMIN_PASSWORD,
   });
+  return markerLogin;
 }
 
 test.describe("attendance marking (live API)", () => {
@@ -93,6 +110,48 @@ test.describe("attendance marking (live API)", () => {
     expect(rows.filter((row) => row.status === "absent")).toHaveLength(1);
     // Computed server-side and never client-supplied (§11) — nothing was sent for it.
     expect(rows.every((row) => row.late_minutes === null)).toBe(true);
+  });
+
+  test("the register reads today's roster, and a submission merges into it", async ({
+    liveApiClient,
+  }) => {
+    const session = await todaysSession(liveApiClient);
+    const register = await seedAttendanceRegister(liveApiClient, session);
+    const marker = await markerSession();
+    const date = today();
+    const path = `/student-attendance/register?section_id=${register.sectionId}&date=${date}`;
+
+    const before = await marker.get(path);
+    const roster = before.data as RegisterEntry[];
+    expect(roster.map((entry) => entry.student_id).sort()).toEqual([...register.studentIds].sort());
+    expect(roster.every((entry) => entry.record === null && !entry.on_leave)).toBe(true);
+    // The lock is per row, so `markable` speaks for the date alone: today, a working day.
+    expect(before.meta).toMatchObject({
+      attendance_mode: "daily",
+      markable: true,
+      unmarkable_reason: null,
+      academic_session_id: register.sessionId,
+    });
+
+    await marker.post("/student-attendance:bulk-mark", {
+      section_id: register.sectionId,
+      academic_session_id: before.meta?.academic_session_id,
+      attendance_date: date,
+      period_id: null,
+      entries: register.studentIds.map((id) => ({ student_id: id, status: "present" })),
+    });
+
+    const after = (await marker.get(path)).data as RegisterEntry[];
+    expect(after.every((entry) => entry.record?.status === "present")).toBe(true);
+    expect(after.every((entry) => entry.record?.is_locked === false)).toBe(true);
+
+    // `my-registers` lists the sections the caller's own Staff rows class-teach or teach that
+    // day. The seeded class teacher is `all`-scoped and has no Staff row, so it lists none and
+    // the teacher opens a register through the pickers; the listing itself is pinned in
+    // `tests/test_register_api.py` (MyRegistersTests).
+    const mine = await marker.get(`/student-attendance/my-registers?date=${date}`);
+    expect(mine.data).toEqual([]);
+    expect(mine.meta).toMatchObject({ attendance_mode: "daily", date });
   });
 
   test("a student outside the section fails the submission and writes nothing", async ({
