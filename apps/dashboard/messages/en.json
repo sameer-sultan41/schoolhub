@@ -783,7 +783,7 @@
         "targetSession": "Copy into",
         "confirm": "Clone",
         "submitting": "Cloning",
-        "result": "{created} mappings created, {skipped} already present."
+        "result": "{created} mappings created, {skipped} skipped (already in the target, or for an inactive class or subject)."
       },
       "delete": {
         "title": "Remove this subject",
@@ -1270,21 +1270,33 @@
         "cancelled": "Cancelled"
       },
       "columns": {
-        "actions": "Actions"
+        "actions": "Actions",
+        "date": "Date",
+        "period": "Period",
+        "cover": "Covering"
       },
       "list": {
         "caption": "Teacher substitutions",
         "emptyTitle": "No substitutions yet",
-        "emptyDescription": "Propose cover when a teacher is away, and it appears here for approval."
+        "emptyDescription": "Propose cover when a teacher is away, and it appears here for approval.",
+        "loadError": "The substitutions couldn't be loaded.",
+        "searchPlaceholder": "Search by teacher",
+        "noMatches": "No substitutions match these filters",
+        "noMatchesDescription": "Try a different search, or clear a filter."
       },
       "filters": {
         "from": "From",
-        "to": "To"
+        "to": "To",
+        "status": "Status"
       },
       "actions": {
         "create": "Propose a substitution",
         "approve": "Approve",
-        "reject": "Reject"
+        "reject": "Decline",
+        "cancel": "Cancel cover",
+        "approveRow": "Approve cover for {absent} on {date}",
+        "rejectRow": "Decline cover for {absent} on {date}",
+        "cancelRow": "Cancel cover for {absent} on {date}"
       },
       "form": {
         "createTitle": "Propose a substitution",
@@ -1293,7 +1305,33 @@
         "periodHint": "Only the periods this section holds on that weekday are offered.",
         "substituteHint": "The covering teacher must be free in that period.",
         "unknownTeacher": "Unknown teacher",
-        "pickPeriodFirst": "Pick a period first."
+        "pickPeriodFirst": "Pick a period first.",
+        "classLabel": "Class to cover",
+        "selectClass": "Select one of their classes",
+        "classOption": "{period} · {section} · {subject}",
+        "noClasses": "This teacher has no published class that day.",
+        "pickClassFirst": "Pick a class first.",
+        "noCandidates": "No teacher is free in that period.",
+        "keepRoom": "Keep the timetabled room",
+        "roomHint": "Move the class for this date only."
+      },
+      "proposed": "Cover proposed.",
+      "approved": "Cover confirmed.",
+      "rejected": "Cover declined.",
+      "cancelled": "Cover cancelled.",
+      "confirm": {
+        "approve": {
+          "title": "Approve this cover",
+          "description": "{substitute} covers {section}, {period}, on {date}. They are told."
+        },
+        "reject": {
+          "title": "Decline this cover",
+          "description": "Nobody covers {section}, {period}, on {date} until someone else is proposed."
+        },
+        "cancel": {
+          "title": "Cancel this cover",
+          "description": "{substitute} no longer covers {section}, {period}, on {date}, and is told. The period can be covered again."
+        }
       }
     },
     "my": {
@@ -1303,10 +1341,12 @@
       "dateLabel": "Show cover for",
       "dateHint": "Leave the date empty for the normal week.",
       "loading": "Loading your timetable…",
+      "loadError": "Your timetable couldn't be loaded.",
       "free": "Free",
       "substituted": "Covered",
       "emptyTitle": "No timetable published yet",
-      "emptyDescription": "Once your school publishes the week, your periods appear here."
+      "emptyDescription": "Once your school publishes the week, your periods appear here.",
+      "coverBy": "Covered by {name}"
     },
     "publish": {
       "title": "Publish this timetable",

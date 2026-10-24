@@ -131,6 +131,23 @@ class DetailReadTests(TimetableCrossTenantTestCase):
         )
 
 
+class CoverActionTests(TimetableCrossTenantTestCase):
+    def test_cancelling_another_tenants_cover_is_404(self) -> None:
+        response = self.client.post(
+            f"/api/v1/teacher-substitutions/{self.other_substitution.pk}:cancel", {}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_candidates_for_another_tenants_slot_is_404(self) -> None:
+        response = self.client.get(
+            "/api/v1/teacher-substitutions/candidates",
+            {"timetable_slot_id": str(self.other_slot.pk), "date": MONDAY.isoformat()},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
 class ListLeakageTests(TimetableCrossTenantTestCase):
     def test_no_list_ever_contains_another_tenants_rows(self) -> None:
         rooms = {row["id"] for row in self.client.get("/api/v1/rooms").json()["data"]}

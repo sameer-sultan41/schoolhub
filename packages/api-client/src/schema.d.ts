@@ -5336,7 +5336,7 @@ export interface paths {
         delete: operations["teacher_subject_allocations_destroy"];
         options?: never;
         head?: never;
-        /** @description `teacher_subject_allocations` — who teaches what, to whom (§5.3). */
+        /** @description `teacher_subject_allocations` — who teaches what, to whom (§5.3). Changing the teacher of a current primary allocation (a primary with no end date) is a reassignment: the patched allocation is end-dated and kept as history, and a NEW primary allocation is created for the new teacher and returned, so the `id` in the response can differ from the one patched. A teacher change sent together with an end date, a demotion or a move is refused (422 on `staff_id`): send them separately. */
         patch: operations["teacher_subject_allocations_partial_update"];
         trace?: never;
     };
@@ -5438,6 +5438,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/teacher-substitutions/{id}:cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel open cover (an approver), or withdraw your own proposal
+         * @description `teacher_substitutions` — dated teacher overrides (§7.2).
+         *
+         *     No PATCH and no DELETE: §16 lists neither, and a substitution's only mutable
+         *     state is its approval, which moves through `:approve` / `:reject` so the
+         *     already-decided guard and the notification cannot be bypassed.
+         */
+        post: operations["teacher_substitutions_:cancel_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/teacher-substitutions/{id}:reject": {
         parameters: {
             query?: never;
@@ -5456,6 +5480,26 @@ export interface paths {
          *     already-decided guard and the notification cannot be bypassed.
          */
         post: operations["teacher_substitutions_:reject_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/teacher-substitutions/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The teachers free to cover a published slot on a date
+         * @description Active teaching staff at the slot's campus who are not its teacher, have no class or open cover in that period, and are neither on approved leave nor marked absent that day; ordered by name. Unpaged and unfiltered.
+         */
+        get: operations["teacher_substitutions_candidates_list"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -9532,6 +9576,8 @@ export interface components {
             /** Format: uuid */
             section_id?: string;
             readonly section_name?: string;
+            /** Format: uuid */
+            readonly campus_id?: string;
             /** @description 0-6; the week's start comes from tenant configuration. */
             day_of_week?: number;
             /** Format: uuid */
@@ -10699,6 +10745,13 @@ export interface components {
          * @enum {string}
          */
         SubjectSubjectTypeEnum: "core" | "elective" | "co_curricular";
+        /** @description A teacher free to cover the slot that day (`services.free_substitutes`). */
+        SubstituteCandidate: {
+            /** Format: uuid */
+            staff_id: string;
+            staff_name: string;
+            employee_number: string;
+        };
         TeacherAllocation: {
             /** Format: uuid */
             readonly id: string;
@@ -10763,15 +10816,23 @@ export interface components {
              * @description Must fall on the slot's weekday and inside the session.
              */
             date: string;
+            readonly day_of_week: number;
+            readonly section_name: string;
+            readonly subject_name: string | null;
+            readonly period_name: string;
             /** Format: uuid */
             absent_staff_id: string;
+            readonly absent_staff_name: string;
             /** Format: uuid */
             substitute_staff_id: string;
+            readonly substitute_staff_name: string;
+            readonly slot_room_name: string | null;
             /**
              * Format: uuid
              * @description Ad-hoc room change for this date only. Omitted = keep the slot's room.
              */
             room_id?: string | null;
+            readonly room_name: string | null;
             reason?: string | null;
             /**
              * Format: uuid
@@ -10779,6 +10840,8 @@ export interface components {
              */
             readonly leave_request_id: string | null;
             readonly status: components["schemas"]["TeacherSubstitutionStatusEnum"];
+            /** Format: uuid */
+            readonly created_by: string | null;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -10875,6 +10938,8 @@ export interface components {
             /** Format: uuid */
             section_id: string;
             readonly section_name: string;
+            /** Format: uuid */
+            readonly campus_id: string;
             /** @description 0-6; the week's start comes from tenant configuration. */
             day_of_week: number;
             /** Format: uuid */
@@ -20191,6 +20256,48 @@ export interface operations {
             };
         };
     };
+    "teacher_substitutions_:cancel_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeacherSubstitution"];
+                };
+            };
+            /** @description Neither an approver nor this proposal's proposer. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Already declined, cancelled or completed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The cover's date has passed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     "teacher_substitutions_:reject_create": {
         parameters: {
             query?: never;
@@ -20209,6 +20316,42 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TeacherSubstitution"];
                 };
+            };
+        };
+    };
+    teacher_substitutions_candidates_list: {
+        parameters: {
+            query: {
+                date: string;
+                timetable_slot_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubstituteCandidate"][];
+                };
+            };
+            /** @description No such slot within your scope. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The slot isn't published or has no teacher, or the date is not its day or is outside its session. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

@@ -12599,7 +12599,13 @@ paths:
           description: ''
     patch:
       operationId: teacher_subject_allocations_partial_update
-      description: '`teacher_subject_allocations` — who teaches what, to whom (§5.3).'
+      description: '`teacher_subject_allocations` — who teaches what, to whom (§5.3).
+        Changing the teacher of a current primary allocation (a primary with no end
+        date) is a reassignment: the patched allocation is end-dated and kept as history,
+        and a NEW primary allocation is created for the new teacher and returned,
+        so the `id` in the response can differ from the one patched. A teacher change
+        sent together with an end date, a demotion or a move is refused (422 on `staff_id`):
+        send them separately.'
       parameters:
       - in: path
         name: id
@@ -12850,6 +12856,40 @@ paths:
               schema:
                 $ref: '#/components/schemas/TeacherSubstitution'
           description: ''
+  /api/v1/teacher-substitutions/{id}:cancel:
+    post:
+      operationId: teacher_substitutions_:cancel_create
+      description: |-
+        `teacher_substitutions` — dated teacher overrides (§7.2).
+
+        No PATCH and no DELETE: §16 lists neither, and a substitution's only mutable
+        state is its approval, which moves through `:approve` / `:reject` so the
+        already-decided guard and the notification cannot be bypassed.
+      summary: Cancel open cover (an approver), or withdraw your own proposal
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - teacher-substitutions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeacherSubstitution'
+          description: ''
+        '403':
+          description: Neither an approver nor this proposal's proposer.
+        '409':
+          description: Already declined, cancelled or completed.
+        '422':
+          description: The cover's date has passed.
   /api/v1/teacher-substitutions/{id}:reject:
     post:
       operationId: teacher_substitutions_:reject_create
@@ -12878,6 +12918,44 @@ paths:
               schema:
                 $ref: '#/components/schemas/TeacherSubstitution'
           description: ''
+  /api/v1/teacher-substitutions/candidates:
+    get:
+      operationId: teacher_substitutions_candidates_list
+      description: Active teaching staff at the slot's campus who are not its teacher,
+        have no class or open cover in that period, and are neither on approved leave
+        nor marked absent that day; ordered by name. Unpaged and unfiltered.
+      summary: The teachers free to cover a published slot on a date
+      parameters:
+      - in: query
+        name: date
+        schema:
+          type: string
+          format: date
+        required: true
+      - in: query
+        name: timetable_slot_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - teacher-substitutions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SubstituteCandidate'
+          description: ''
+        '404':
+          description: No such slot within your scope.
+        '422':
+          description: The slot isn't published or has no teacher, or the date is
+            not its day or is outside its session.
   /api/v1/terms:
     get:
       operationId: terms_list
@@ -21048,6 +21126,10 @@ components:
         section_name:
           type: string
           readOnly: true
+        campus_id:
+          type: string
+          format: uuid
+          readOnly: true
         day_of_week:
           type: integer
           maximum: 32767
@@ -23467,6 +23549,21 @@ components:
         * `core` - Core
         * `elective` - Elective
         * `co_curricular` - Co-curricular
+    SubstituteCandidate:
+      type: object
+      description: A teacher free to cover the slot that day (`services.free_substitutes`).
+      properties:
+        staff_id:
+          type: string
+          format: uuid
+        staff_name:
+          type: string
+        employee_number:
+          type: string
+      required:
+      - employee_number
+      - staff_id
+      - staff_name
     TeacherAllocation:
       type: object
       properties:
@@ -23591,18 +23688,45 @@ components:
           type: string
           format: date
           description: Must fall on the slot's weekday and inside the session.
+        day_of_week:
+          type: integer
+          readOnly: true
+        section_name:
+          type: string
+          readOnly: true
+        subject_name:
+          type: string
+          readOnly: true
+          nullable: true
+        period_name:
+          type: string
+          readOnly: true
         absent_staff_id:
           type: string
           format: uuid
+        absent_staff_name:
+          type: string
+          readOnly: true
         substitute_staff_id:
           type: string
           format: uuid
+        substitute_staff_name:
+          type: string
+          readOnly: true
+        slot_room_name:
+          type: string
+          readOnly: true
+          nullable: true
         room_id:
           type: string
           format: uuid
           nullable: true
           description: Ad-hoc room change for this date only. Omitted = keep the slot's
             room.
+        room_name:
+          type: string
+          readOnly: true
+          nullable: true
         reason:
           type: string
           nullable: true
@@ -23617,6 +23741,11 @@ components:
           allOf:
           - $ref: '#/components/schemas/TeacherSubstitutionStatusEnum'
           readOnly: true
+        created_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -23627,12 +23756,21 @@ components:
           readOnly: true
       required:
       - absent_staff_id
+      - absent_staff_name
       - created_at
+      - created_by
       - date
+      - day_of_week
       - id
       - leave_request_id
+      - period_name
+      - room_name
+      - section_name
+      - slot_room_name
       - status
+      - subject_name
       - substitute_staff_id
+      - substitute_staff_name
       - timetable_slot_id
       - updated_at
     TeacherSubstitutionStatusEnum:
@@ -23785,6 +23923,10 @@ components:
         section_name:
           type: string
           readOnly: true
+        campus_id:
+          type: string
+          format: uuid
+          readOnly: true
         day_of_week:
           type: integer
           maximum: 32767
@@ -23861,6 +24003,7 @@ components:
           readOnly: true
       required:
       - academic_session_id
+      - campus_id
       - created_at
       - day_of_week
       - effective_from

@@ -277,8 +277,8 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 >   sweep that belongs with the coverage report.
 
 - `GET/POST /api/v1/class-subjects` · `GET/PATCH/DELETE /api/v1/class-subjects/{id}` — filters: `academic_session_id`, `class_id`, `campus_id`, `subject_id`, `is_elective`.
-- `POST /api/v1/class-subjects:clone` — clone curriculum between sessions: synchronous `200` with `{created, skipped}`, `Idempotency-Key` supported (see the implementation notes above).
-- `GET/POST /api/v1/teacher-subject-allocations` · `PATCH/DELETE /api/v1/teacher-subject-allocations/{id}` — filters: `academic_session_id`, `class_id`, `campus_id`, `section_id`, `subject_id`, `staff_id`, `current` (`true`: no end date, `false`: ended, absent: both); `search` over the teacher's first and last name, the subject's name and the section's name. POST and PATCH answer `{data, meta: {warnings}}` (the over-norm warning rides in `meta`, never a `422`). `effective_to` is the UTC date: the server runs on UTC, so the dashboard sends the UTC date. The rules behind PATCH, End and Reinstate are in §20.
+- `POST /api/v1/class-subjects:clone` — clone curriculum between sessions: synchronous `200` with `{created, skipped}`, `Idempotency-Key` supported (see the implementation notes above). A source row the target already has, or whose class or subject is inactive (create, and a `PATCH` that moves a row onto one, refuse those too), is counted in `skipped` and not copied.
+- `GET/POST /api/v1/teacher-subject-allocations` · `PATCH/DELETE /api/v1/teacher-subject-allocations/{id}` — filters: `academic_session_id`, `class_id`, `campus_id`, `section_id`, `subject_id`, `staff_id`, `current` (`true`: no end date, `false`: ended, absent: both); `search` over the teacher's first and last name, the subject's name and the section's name. POST and PATCH answer `{data, meta: {warnings}}` (the over-norm warning rides in `meta`, never a `422`); a PATCH that changes the teacher of a current primary answers the **new** row, whose `id` differs from the one patched (§20). `effective_to` is the UTC date: the server runs on UTC, so the dashboard sends the UTC date. The rules behind PATCH, End and Reinstate are in §20.
 - `GET /api/v1/teacher-subject-allocations/load-summary` — per-teacher aggregates; `academic_session_id` is required and returns typed rows `{staff_id, name, weekly_periods, allocations, norm, over_norm}`.
 - `GET/POST /api/v1/student-promotions` (batches) · `GET /api/v1/student-promotions/{id}` (batch with per-student decisions, unpaginated) · `PATCH /api/v1/student-promotions/{id}/decisions/{student_id}` — the list is page-number paginated, newest batch first, with filters `status`, `decision`, `batch_id`, `student_id`, `from_academic_session_id`, `to_academic_session_id` and `from_class_id` and ordering by `status`, `students` or `started_at`. `GET …/{id}` ignores them: a batch is returned whole, or is a `404`. Typed responses: `PromotionBatch` (a list row), `PromotionBatchDetail`, `PromotionBatchCreated` (`201`) and the decision row's `PromotionDecision`, with the name fields and the `PromotionStatusEnum` status described in the implementation notes above.
 - `POST /api/v1/student-promotions/{id}:submit` · `:approve` · `:reject` · `:revert` (colon-actions answering `PromotionTransitionResult` `{updated}`; they ignore `Idempotency-Key`, so a retry is a `409`) · `:execute` (`202` + job; the one that honours `Idempotency-Key`). `:submit`, `:approve` and `:execute` answer `422` when the target session is closed or archived (`:reject` and `:revert` only release or undo rows, so they do not); the job reports a student whose source enrollment ended after approval as failed, by name, and does not enrol them onward. A failure of the whole batch puts only an API error's own message in the job's `error`; anything else is logged and shows a generic line.
@@ -416,6 +416,26 @@ coverage-gap notification are in `deferred-work.md`.
   primary to a slot that already has one, or reinstating a primary end-dates the current primary
   instead of surfacing the one-primary constraint as a `409`. `PATCH` answers `{data, meta:
   {warnings}}`, like `POST`.
+- **Changing a current primary's teacher is a reassignment, and the `id` changes.** `PATCH
+  {staff_id}` on a row that is a current primary (`is_primary`, no `effective_to`) keeps the old
+  row as history and creates a new one. The old row is end-dated at `max(today, effective_from)`,
+  as when a new primary displaces it, and a new primary row for the new teacher is created in the
+  same section and subject, after the checks `POST` runs for that teacher (active teaching staff,
+  the subject in the curriculum, a writable session). The new row starts the day the old one ends,
+  so the two never overlap in the history and the slot is never left without a primary. A `PATCH`
+  may name that day as `effective_from`, but an earlier or a later date is refused (`422` on
+  `effective_from`, naming the day). `weekly_periods` carries over unless the same `PATCH` sets it. The response is the
+  **new** row, so its `id` is not the one in the URL; the audit log records the old row as an
+  `update` (before and after) and the new row as a `create`, and the new teacher is the one
+  notified and the one the load warning is for. If the new teacher already holds a row for that
+  section and subject in any state (`tsa_unique_allocation`), the answer is a `409` that names the
+  way out: Reinstate an ended primary row, Reinstate and then make an ended co-teacher row the
+  primary, or make a current co-teacher row the primary. A teacher change sent together with an
+  end date, a demotion (`is_primary: false`) or a move (session, section or subject) is refused
+  with a `422` on `staff_id` before anything is written: change the teacher on its own, then end,
+  demote or move the allocation. A co-teacher's or an ended row's teacher change edits the row in
+  place. The dashboard's Edit never sends `staff_id`, so it is unaffected. The teacher who loses
+  the slot is not notified; that gap is in `deferred-work.md`.
 - **`effective_to` has three behaviours, all on `PATCH`:**
 
   | Action | Request | Rule |
@@ -430,8 +450,9 @@ coverage-gap notification are in `deferred-work.md`.
   silently, and an explicit `null` is accepted as a no-op. A displaced future-start row can carry
   a future `effective_to`, so the future ceiling runs only when `effective_to` is itself in the
   payload; the ordering check (the end is not before the start) runs whenever either date is, so
-  moving only the start of such a row works until it passes the end. The dashboard's edit sends
-  only the fields that changed.
+  moving only the start of such a row works until it passes the end, and then the `400` is keyed to
+  `effective_from`, the date being edited (a `PATCH` that sends `effective_to` keeps it on
+  `effective_to`). The dashboard's edit sends only the fields that changed.
 - **"Today" is the UTC date.** The server runs `TIME_ZONE = UTC`, so `timezone.localdate()` (the
   end-date ceiling and the load summary's "current" window) is the UTC date. The dashboard's End
   therefore sends `todayIsoDate()`, the UTC date: a viewer's local date, east of UTC, would be

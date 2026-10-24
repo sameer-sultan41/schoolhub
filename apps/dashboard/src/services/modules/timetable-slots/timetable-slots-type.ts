@@ -6,6 +6,8 @@ export type TimetableConflict = ApiSchemas["TimetableConflict"];
 export type TimetableValidation = ApiSchemas["TimetableValidation"];
 export type TimetablePublishResult = ApiSchemas["TimetablePublishResult"];
 export type ConflictSeverity = TimetableConflict["severity"];
+/** One cell of the viewer's own week (`/timetables/my`), with cover applied for a date. */
+export type EffectiveSlotRecord = ApiSchemas["EffectiveSlot"];
 
 /** One cell's write. A null subject, teacher or room is a homeroom or assembly period. */
 export interface SlotInput {

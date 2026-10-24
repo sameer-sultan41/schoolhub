@@ -18,4 +18,6 @@ export const Regex = {
   UUID: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
   /** A whole number from 1 up, with no sign, decimals or leading zeros — e.g. a page number. */
   POSITIVE_INTEGER: /^[1-9]\d*$/,
+  /** A calendar date as the API and a date input write it, `YYYY-MM-DD`. */
+  ISO_DATE: /^\d{4}-\d{2}-\d{2}$/,
 } as const;

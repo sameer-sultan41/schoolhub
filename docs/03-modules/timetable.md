@@ -39,8 +39,8 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 | `timetable.timetable.publish` | Publish/republish a section's timetable | `principal`, `vice_principal`, `school_admin` |
 | `timetable.period.create` / `update` / `delete` | Manage the period grid | `school_admin` |
 | `timetable.room.create` / `update` / `delete` | Manage rooms and capacities | `school_admin` |
-| `timetable.substitution.create` | Propose a substitution | `school_admin`, `vice_principal` |
-| `timetable.substitution.approve` | Approve/reject substitutions | `vice_principal`, `principal` |
+| `timetable.substitution.create` | Propose a substitution, list free teachers for it, and withdraw (cancel) one's own still-proposed substitution | `school_admin`, `vice_principal` |
+| `timetable.substitution.approve` | Approve/reject substitutions, and cancel any proposed or confirmed one | `vice_principal`, `principal` |
 | `timetable.timetable.export` | Export/print timetables | `school_admin`, `vice_principal`, `principal`, `teacher` (own) |
 
 ## 5. Main Features
@@ -98,6 +98,12 @@ flowchart TD
 
 The absence signal arrives from [`attendance.md`](attendance.md); a substitution overrides the published slot for specific dates only — the base timetable is untouched.
 
+Cover that is no longer wanted is cancelled (`:cancel`), which is distinct from an approver
+declining it (`:reject`): an approver cancels any proposed or confirmed cover, the proposer may
+withdraw their own while it is still proposed, and past cover cannot be cancelled. The
+substitute is told. A slot holds at most one *open* (proposed or confirmed) substitution per
+date, so once one is declined or cancelled the same period can be proposed again.
+
 ## 8. User Journeys
 
 - **School admin:** at session start, copies last year's Grade 7-A timetable, adjusts for the new teacher allocations, clears the 12 conflicts the validator lists, and sends for publish.
@@ -134,6 +140,7 @@ The absence signal arrives from [`attendance.md`](attendance.md); a substitution
 | Substitution assigned | Substitute teacher | Push, in-app, email | `timetable.substitution-assigned` |
 | Substitution affecting a class | Students/guardians of the section | In-app (push optional per tenant) | `timetable.class-substitution` |
 | Substitution approved / rejected | Proposing admin | In-app | `timetable.substitution-decision` |
+| Substitution cancelled | Substitute teacher | In-app, email | `timetable.substitution-cancelled` |
 | Draft validation failed at publish | Publisher | In-app | `timetable.validation-failed` |
 
 Channels and delivery behavior follow [`notifications.md`](../02-architecture/notifications.md).
@@ -180,12 +187,13 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
   `DELETE` on either is a 422 while a current grid cell (draft or live published) or upcoming
   proposed/confirmed cover still uses the row; a room still in use is taken out of service
   (`is_active: false`) instead.
-- `GET /api/v1/timetable-slots` — filters: `section_id`, `teacher_id`, `room_id`, `weekday`, `status`, `academic_session_id`, and `current` (`effective_to IS NULL`: drafts and live published cells, never superseded history); `?ordering=period_sequence`; cursor pagination. Every row carries `section_name`, `subject_name`, `staff_name`, `room_name`, `period_name`, `period_sequence`, `start_time` and `end_time`.
+- `GET /api/v1/timetable-slots` — filters: `section_id`, `teacher_id`, `room_id`, `weekday`, `status`, `academic_session_id`, and `current` (`effective_to IS NULL`: drafts and live published cells, never superseded history); `?ordering=period_sequence`; cursor pagination. Every row carries `section_name`, `campus_id` (the section's), `subject_name`, `staff_name`, `room_name`, `period_name`, `period_sequence`, `start_time` and `end_time`.
 - `POST/PATCH/DELETE /api/v1/timetable-slots` — per-edit conflict check in the response (`meta.conflicts`, a list of `TimetableConflict`). A closed or archived session refuses all three (422 on `academic_session_id`); a PATCH that moves a draft into another session needs that one open too.
 - `POST /api/v1/timetables/{section_id}:validate` — full conflict run, returns `TimetableValidation` (`conflicts`, `has_hard_conflicts`).
 - `POST /api/v1/timetables/{section_id}:publish` — permission-guarded, audited; returns `TimetablePublishResult`; 422 on hard conflicts, the findings in `error.meta.conflicts`.
-- `GET /api/v1/timetables/my` — caller's effective timetable (teacher/student/guardian scope), date-aware (substitutions applied).
-- `GET/POST /api/v1/teacher-substitutions` · `POST /api/v1/teacher-substitutions/{id}:approve` · `:reject`
+- `GET /api/v1/timetables/my` — caller's effective timetable (teacher/student/guardian scope), date-aware (substitutions applied). Its `meta` (`audience`, `academic_session_id`, `date`) is described, not typed.
+- `GET/POST /api/v1/teacher-substitutions` · `POST /api/v1/teacher-substitutions/{id}:approve` · `:reject` · `:cancel`. Every row carries `created_by` and the names a queue shows: `absent_staff_name`, `substitute_staff_name`, `section_name`, `subject_name`, `period_name`, `day_of_week`, `slot_room_name` (the timetabled room) and `room_name` (the cover's own room change, if any); `search` matches either teacher's name. `:cancel` (§7.2) is 403 for a caller who neither approves nor proposed the row, 409 once the row is no longer cancellable, and 422 on `date` for past cover.
+- `GET /api/v1/teacher-substitutions/candidates?timetable_slot_id=&date=` — needs `timetable.substitution.create`. The teachers free to cover that published slot on that date, by name: active teaching staff at the slot's campus, not the absent teacher, without a current published class or open cover in that period, and neither on approved leave nor marked absent that day. 404 for a slot outside the caller's scope; 422 for a slot that isn't live and published or has no teacher, or a date that isn't the slot's weekday or falls outside its session. The same rule is what a proposal's substitute is checked against (each part with its own message on `substitute_staff_id`, a teacher from another campus included) and what the automatic proposal picks from. Returns `[{staff_id, staff_name, employee_number}]`, unranked (§6's ranking is not built).
 - `POST /api/v1/timetables/{section_id}:generate-draft` — AI generation (AI-TTB-01); returns `202` + job resource per API doc §2.7.
 
 ## 17. Integration Requirements
@@ -254,7 +262,7 @@ disclosed docstring-only lines (a serializer's new ownership note, and an
 updated cross-reference to a function that moved). No endpoint, permission,
 or response shape changed anywhere in the module.
 
-**Dashboard (as shipped).** Being built in three PRs (setup, the week grid, cover); plan:
+**Dashboard (as shipped).** Built in three PRs (setup, the week grid, cover); plan:
 `docs/superpowers/plans/2026-10-19-timetable-dashboard.md`.
 
 - **PR A, setup.** A Timetable sidebar group and a `/timetable` layout with a tab bar, both
@@ -290,4 +298,15 @@ or response shape changed anywhere in the module.
   for confirmation; a refusal keeps the dialog open and fills the panel. Cell editing needs
   the `timetable.slot.*` keys and publishing only `timetable.timetable.publish`, so a
   principal publishes a grid they cannot edit. A closed session is read-only.
+- **PR C, cover.** `/timetable/substitutions` (open to either substitution key) is the cover
+  queue: date, period, class, absent and covering teacher, room and status, with search, a
+  status filter and a date range in the URL. Proposing walks a chain where each step resets
+  the later ones: a date, the absent teacher, one of their published classes that weekday,
+  then a colleague from `candidates` (an empty state when nobody is free), with an optional
+  room move and reason. Approve and decline act on proposed cover; Cancel follows §7.2's
+  rights and hides for past dates. Each goes through a confirm, and a 409 (someone acted
+  first) refreshes the list. `/timetable/my` (`timetable.timetable.view`, so every role) is
+  the viewer's own week, with a date picker that overlays that day's confirmed cover; a user
+  whose only timetable key is that one lands there. The home dashboard's meeting card reads
+  the same `/timetables/my`.
 

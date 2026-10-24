@@ -84,18 +84,21 @@ test.describe("timetable sidebar group", () => {
   });
 
   test.describe("with only the timetable view key", () => {
-    // Every role holds `timetable.timetable.view`; it opens no setup section.
+    // Every role holds `timetable.timetable.view`: it opens My timetable, never a setup
+    // section.
     test.use({
       authUser: buildUser({
         permissions: [...SCHOOL_ADMIN_PERMISSIONS, "timetable.timetable.view"],
       }),
     });
 
-    test("is hidden", async ({ dashboardPage, signedIn: _signedIn }) => {
+    test("lists only My timetable", async ({ dashboardPage, signedIn: _signedIn }) => {
       await dashboardPage.goto();
 
-      await expect(dashboardPage.navLink("Students")).toBeVisible();
-      await expect(dashboardPage.navGroup("Timetable")).toHaveCount(0);
+      await dashboardPage.navGroup("Timetable").click();
+      await expect(dashboardPage.navLink("My timetable")).toBeVisible();
+      await expect(dashboardPage.navLink("Periods")).toHaveCount(0);
+      await expect(dashboardPage.navLink("Rooms")).toHaveCount(0);
     });
   });
 });

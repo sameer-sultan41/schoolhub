@@ -43,6 +43,22 @@ class TeacherSubstitutionSerializer(serializers.ModelSerializer):
         allow_null=True,
         help_text="Ad-hoc room change for this date only. Omitted = keep the slot's room.",
     )
+    # What the cover queue shows, read through the viewset's `select_related`. Two rooms:
+    # `slot_room_name` is where the class is timetabled, `room_name` the move for this date.
+    absent_staff_name = serializers.CharField(source="absent_staff.full_name", read_only=True)
+    substitute_staff_name = serializers.CharField(
+        source="substitute_staff.full_name", read_only=True
+    )
+    section_name = serializers.CharField(source="timetable_slot.section.name", read_only=True)
+    subject_name = serializers.CharField(
+        source="timetable_slot.subject.name", read_only=True, allow_null=True
+    )
+    period_name = serializers.CharField(source="timetable_slot.period.name", read_only=True)
+    day_of_week = serializers.IntegerField(source="timetable_slot.day_of_week", read_only=True)
+    slot_room_name = serializers.CharField(
+        source="timetable_slot.room.name", read_only=True, allow_null=True
+    )
+    room_name = serializers.CharField(source="room.name", read_only=True, allow_null=True)
 
     class Meta:
         model = TeacherSubstitution
@@ -50,12 +66,23 @@ class TeacherSubstitutionSerializer(serializers.ModelSerializer):
             "id",
             "timetable_slot_id",
             "date",
+            "day_of_week",
+            "section_name",
+            "subject_name",
+            "period_name",
             "absent_staff_id",
+            "absent_staff_name",
             "substitute_staff_id",
+            "substitute_staff_name",
+            "slot_room_name",
             "room_id",
+            "room_name",
             "reason",
             "leave_request_id",
             "status",
+            # Who proposed it: a proposer may withdraw their own proposal (`:cancel`), so
+            # the queue offers that only on their rows.
+            "created_by",
             "created_at",
             "updated_at",
         )
@@ -65,7 +92,7 @@ class TeacherSubstitutionSerializer(serializers.ModelSerializer):
         # set by that module's service when it proposes cover — a client naming
         # one on a hand-created substitution would be asserting a connection
         # nothing checked.
-        read_only_fields = (*READ_ONLY_FIELDS, "status", "leave_request_id")
+        read_only_fields = (*READ_ONLY_FIELDS, "status", "leave_request_id", "created_by")
 
     def validate_substitute_staff_id(self, value: Staff) -> Staff:
         """Fails on the substitute's own field rather than in `non_field`.
@@ -76,3 +103,18 @@ class TeacherSubstitutionSerializer(serializers.ModelSerializer):
         """
         assert_staff_is_active_teacher(value)
         return value
+
+
+class SubstituteCandidatesQuerySerializer(serializers.Serializer):
+    """`GET /teacher-substitutions/candidates`: the published slot and the date to cover."""
+
+    timetable_slot_id = serializers.UUIDField()
+    date = serializers.DateField()
+
+
+class SubstituteCandidateSerializer(serializers.Serializer):
+    """A teacher free to cover the slot that day (`services.free_substitutes`)."""
+
+    staff_id = serializers.UUIDField(source="pk")
+    staff_name = serializers.CharField(source="full_name")
+    employee_number = serializers.CharField()

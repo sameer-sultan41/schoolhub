@@ -210,7 +210,7 @@ either this file or `project-status.md`.
   rule 6), and that package does not exist — a 202 pointing at a job nothing
   runs would be worse than the omission. Also absent, each lacking a §16
   endpoint to hang it on: §13's five reports, §6's copy-from-previous-session
-  and bulk-clear, AI-TTB-03 substitute ranking, and PDF/Excel/iCal export —
+  and bulk-clear, and PDF/Excel/iCal export (substitute ranking has its own entry) —
   `timetable.timetable.export` is registered as §4 declares it but no route
   exercises it, the same deliberate shape as `staff.performance-review.*`.
   Two of §12's five notification triggers are deferred to the communication
@@ -218,10 +218,6 @@ either this file or `project-status.md`.
   families. `services._slot_weekday` is correct only while a tenant starts its
   week on Monday; the real conversion belongs with the tenant week-start
   setting, which does not exist yet.
-- **A teacher has no Timetable entry until PR C.** Timetable dashboard PR A ships only the
-  setup sections (gated on `timetable.period.update` / `timetable.room.update`), so a viewer
-  holding just `timetable.timetable.view` gets no sidebar group, and `/timetable` shows the
-  "no permission" landing. PR C adds My timetable, which every role reaches.
 - **The week grid's drag-and-drop moves pure drafts only, into empty cells.** A published
   cell, or a draft that replaces one, has no handle: moving it would leave the published class
   showing at the source, because a published cell can't be cleared (the entry below). A drop
@@ -263,19 +259,33 @@ either this file or `project-status.md`.
   this needs a decision about what removing a live cell means — a tombstone
   draft, an explicit whole-grid publish mode, or a `:clear-cell` action — not a
   filter change. No deletion flow was invented in the meantime.
-- **`SubstitutionStatus.completed` and `.cancelled` are reserved and
-  unreachable.** Both are in the locked entity map's enum;
-  `decide_substitution` only ever produces `confirmed` or `declined`, and §16
-  declares no endpoint that reaches either. `completed` waits on the attendance
-  module to signal that a covered period actually ran — nothing in `timetable`
-  knows a period happened. `cancelled` waits on a `:cancel` action for the case
-  §7.2's flowchart stops short of: the absent teacher returns and confirmed
-  cover has to be released. That one has a real cost — a confirmed substitution
-  holds `subs_substitute_one_per_period` for its (date, period), so the
-  substitute cannot be assigned elsewhere and nothing can let them go — but
-  building it means inventing an endpoint §16 does not list and a notification
-  §12 does not list, so it waits on the module doc rather than being
-  half-built. `models.py` carries the same note beside the enum.
+- **`SubstitutionStatus.completed` is reserved and unreachable.** It is in the
+  locked entity map's enum, but nothing in `timetable` knows a covered period
+  actually ran, so it waits on a signal from attendance. (`cancelled` is now
+  `:cancel`'s, timetable dashboard PR C, which added the endpoint to §16 and its
+  notification to §12; `models.py` carries the same note beside the enum.)
+- **Cover has no "uncovered periods today" view and no self-approval guard.**
+  The substitutions queue lists cover that exists; a view of the day's periods
+  whose teacher is away with nobody covering would need a read joining the
+  absence feed to the published grid. And an approver who also proposed cover
+  may approve their own proposal: §4 doesn't forbid it, and leave's
+  self-approval refusal (`attendance.md`) is the model if a school wants one.
+- **Proposing cover isn't campus-scoped for the slot.** `POST /teacher-substitutions`
+  resolves `timetable_slot_id` through the tenant-scoped manager, not the caller's campus
+  scope, so a campus-scoped proposer could post another campus's slot (with that campus's
+  teacher, which the campus check then allows). `candidates` already 404s such a slot; the
+  create serializer's slot field needs the same `scope_queryset`. It predates the
+  dashboard, which only offers the caller's own slots.
+- **Substitute candidates are unranked.** `GET /teacher-substitutions/candidates`
+  returns everyone free, by name. §6's ranking (subject qualification,
+  familiarity with the class, the day's free periods, weekly cover load) and
+  AI-TTB-03 on top of it are a spec gap: neither has an inputs-and-weights
+  definition to build against, and the staff qualifications they need are not
+  modelled.
+- **`/timetables/my`'s `meta` is described, not typed.** Its `audience`,
+  `academic_session_id` and `date` are in the endpoint's description only, the
+  same as every other endpoint's envelope `meta` in this schema; the dashboard
+  reads only `data`.
 - **`teacher_substitutions.room_id` was added to the locked entity map.**
   `timetable.md` §6 and §15 both promise "ad-hoc room change supported on the
   substitution" while `entities/academics.md`'s column list omitted the column.
@@ -1253,10 +1263,10 @@ either this file or `project-status.md`.
   fields added to `search_fields`.
 
 - **The clone toast reads "1 mappings created".** `academics.curriculum.clone.result` is
-  `"{created} mappings created, {skipped} already present."` in both locales, with no plural
-  form, so a count of one is ungrammatical in English. It needs an ICU `plural` for each count
-  in `en.json` and `ur.json`, and the e2e assertion on "1 mappings created, 1 already present."
-  (`e2e/tests/dashboard/academics-curriculum.spec.ts`) updated with it.
+  `"{created} mappings created, {skipped} skipped (already in the target, or for an inactive class
+  or subject)."` in English, with no plural form, so a count of one is ungrammatical. It needs an
+  ICU `plural` for each count in `en.json` and `ur.json`, and the e2e assertion on "1 mappings
+  created, 1 skipped (…)." (`e2e/tests/dashboard/academics-curriculum.spec.ts`) updated with it.
 
 - **The clone endpoint's OpenAPI response lost its prose description.** When
   `POST /class-subjects:clone` gained a typed serializer for its `{created, skipped}` result
@@ -1391,9 +1401,25 @@ either this file or `project-status.md`.
   Reinstate. Fetching the outgoing rows and recording each through `record_audit` closes it, at the
   cost of a read before the write.
 
+- **A displaced primary teacher is never told.** When a new, reinstated, promoted or reassigned
+  primary end-dates the current one (`_end_date_current_primary`,
+  `teacher_allocations/services.py`), only the teacher on the row the request wrote is notified
+  (`notify_allocation_changed`); the teacher who just lost the slot gets nothing. It is not fixed
+  because `academics.allocation-changed`'s copy speaks to the assignee only: both templates read
+  "{{ teacher.first_name }}, you are now teaching {{ subject.name }} to {{ section.name }} for
+  {{ session.name }}." (subject "Your teaching allocation changed"), so sending it to the displaced
+  teacher would tell someone who just lost the slot that they are now teaching it. The catalog
+  description says "assigned to, or removed from", which the copy does not do yet. Closing it needs
+  wording for the removed teacher (a second template under the same trigger, which §12's "affected
+  teacher" covers) and `_end_date_current_primary` returning the rows it end-dates, which means
+  fetching them before the `.update()` as the audit entry above also wants; every caller (create,
+  Reinstate, promote, slot move, teacher reassignment) then notifies each displaced teacher through
+  `notify_allocation_changed`.
+
 - **A future-start replacement primary ends today's primary today.** Allocating, or reinstating, a
   primary that starts next term end-dates the current primary immediately, so nobody is in force
-  between now and the start date. `tsa_one_primary_per_section_subject` only counts rows with
+  between now and the start date. A reassignment (changing a current primary's teacher) does not
+  have this gap: it takes effect at once and refuses a later start. `tsa_one_primary_per_section_subject` only counts rows with
   `effective_to IS NULL`, so the model cannot say "current until the new one starts". Expressing it
   needs either a constraint over the date range (an exclusion constraint on the section and
   subject with a date range) or holding the replacement in a pending state until its start.
@@ -1490,7 +1516,8 @@ either this file or `project-status.md`.
   `academics.promotions.*` keys in `apps/dashboard/messages/ur.json` have been checked for parity
   and ICU syntax, not for wording; the transition confirmations, the report lines and the
   missing-section advisories (draft and approved) in particular need a review by a native
-  speaker.
+  speaker. The curriculum clone result (`academics.curriculum.clone.result`) was written the same
+  way.
 
 - **The job-poll "refused / stalled / active" logic is in three copies.** `isPollRefused` (a
   non-transient poll error) and the active/stalled derivation sit in `use-promotion-execution.ts`,

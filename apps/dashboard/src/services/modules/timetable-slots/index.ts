@@ -1,7 +1,9 @@
 import {
   createSlot,
   deleteSlot,
+  fetchMyTimetable,
   fetchSectionSlots,
+  fetchTeacherClassesOn,
   publishSection,
   updateSlot,
   validateSection,
@@ -14,9 +16,12 @@ export const TimetableSlotsService = {
   deleteSlot,
   validateSection,
   publishSection,
+  fetchMyTimetable,
+  fetchTeacherClassesOn,
 };
 export type {
   ConflictSeverity,
+  EffectiveSlotRecord,
   SlotInput,
   SlotWriteResult,
   TimetableConflict,

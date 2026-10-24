@@ -1,14 +1,15 @@
 import { screen } from "@testing-library/react";
 import { renderWithProviders } from "@/test-utils";
 import { Services } from "@/services";
+import { effectiveSlotRecord } from "@/services/modules/timetable-slots/__tests__/timetable-slots-fixtures";
 import { TeamMeeting } from "../team-meeting";
 
 jest.mock("@/services", () => ({
-  Services: { dashboard: { fetchMyTimetable: jest.fn() } },
+  Services: { timetableSlots: { fetchMyTimetable: jest.fn() } },
 }));
 
-const mockFetchMyTimetable = Services.dashboard.fetchMyTimetable as jest.MockedFunction<
-  typeof Services.dashboard.fetchMyTimetable
+const mockFetchMyTimetable = Services.timetableSlots.fetchMyTimetable as jest.MockedFunction<
+  typeof Services.timetableSlots.fetchMyTimetable
 >;
 
 /** Wednesday 2026-09-09, 10:20 local. `day_of_week` is Monday-based, so Wednesday is 2. */
@@ -54,7 +55,7 @@ describe("TeamMeeting", () => {
 
   it("shows the soonest slot today that hasn't ended yet", async () => {
     mockFetchMyTimetable.mockResolvedValue([
-      {
+      effectiveSlotRecord({
         id: "slot-past",
         day_of_week: WEDNESDAY,
         start_time: "08:00:00",
@@ -63,8 +64,8 @@ describe("TeamMeeting", () => {
         subject_name: "Science",
         staff_name: null,
         room_name: null,
-      },
-      {
+      }),
+      effectiveSlotRecord({
         id: "slot-next",
         day_of_week: WEDNESDAY,
         start_time: "11:00:00",
@@ -73,8 +74,8 @@ describe("TeamMeeting", () => {
         subject_name: "Mathematics",
         staff_name: "Ayesha Khan",
         room_name: "Room 12",
-      },
-      {
+      }),
+      effectiveSlotRecord({
         id: "slot-tomorrow",
         day_of_week: WEDNESDAY + 1,
         start_time: "09:00:00",
@@ -83,7 +84,7 @@ describe("TeamMeeting", () => {
         subject_name: "History",
         staff_name: null,
         room_name: null,
-      },
+      }),
     ]);
 
     renderWithProviders(<TeamMeeting />);
@@ -100,7 +101,7 @@ describe("TeamMeeting", () => {
 
   it("says there's nothing left today when every slot has already ended", async () => {
     mockFetchMyTimetable.mockResolvedValue([
-      {
+      effectiveSlotRecord({
         id: "slot-past",
         day_of_week: WEDNESDAY,
         start_time: "08:00:00",
@@ -109,7 +110,7 @@ describe("TeamMeeting", () => {
         subject_name: "Science",
         staff_name: null,
         room_name: null,
-      },
+      }),
     ]);
 
     renderWithProviders(<TeamMeeting />);
