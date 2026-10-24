@@ -51,7 +51,7 @@ erDiagram
 
 | Layer | Mechanism |
 | ----- | --------- |
-| API | Permission decorator per endpoint (declared, not ad-hoc) — the OpenAPI spec publishes each endpoint's required key |
+| API | Permission key per endpoint, declared on the view (`required_permission` / `required_permission_map`, `AnyOf(...)` where two kinds of caller share a route), not checked ad hoc — the endpoint-contract tests read every declaration; the OpenAPI spec does not publish them |
 | Query | Scope filters applied in the base queryset, not in view code |
 | Frontend | UI hides/disables by permission, but this is UX only — server checks are authoritative |
 | Jobs/AI | Background jobs and AI tools run with the *initiating user's* permission context, never a superuser context |

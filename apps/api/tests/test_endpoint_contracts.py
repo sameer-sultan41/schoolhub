@@ -11,7 +11,7 @@ from django.test import SimpleTestCase, TestCase
 from django.urls import get_resolver
 from rest_framework.permissions import AllowAny
 
-from core.rbac.permissions import HasPermissionKey
+from core.rbac.permissions import AnyOf, HasPermissionKey, declared_keys
 from core.rbac.registry import registry
 from tests.source_tree import source_modules
 
@@ -86,10 +86,12 @@ class EndpointContractTests(TestCase):
         """Catches typos: a key that is not registered can never be granted to a role."""
         unknown: list[str] = []
         for route, view in _api_views():
-            keys = set(getattr(view, "required_permission_map", {}).values())
+            keys: set[str] = set()
+            for declared in getattr(view, "required_permission_map", {}).values():
+                keys.update(declared_keys(declared))
             single = getattr(view, "required_permission", None)
             if single:
-                keys.add(single)
+                keys.update(declared_keys(single))
             unknown.extend(f"{route}: {key}" for key in keys if key not in registry)
         self.assertEqual(unknown, [], f"Unregistered permission keys referenced: {unknown}")
 
@@ -131,11 +133,13 @@ class WritePermissionContractTests(TestCase):
             mapping = getattr(view, "required_permission_map", None) or {}
             fallback = getattr(view, "required_permission", None)
             checked["api_view" if actions is None else "viewset"] += len(writes)
+            # The fallback may be a key or an `AnyOf`; a falsy one rejects everyone.
+            fallback_keys = declared_keys(fallback) if fallback else ()
             for method, action in writes:
-                if mapping.get(action):
+                # As in `_required_key`: an action that is in the map is decided by its entry.
+                if action in mapping:
                     continue
-                # `not fallback`, as in _required_key: an empty string also rejects everyone.
-                if not fallback or fallback.rpartition(".")[2] == "view":
+                if not fallback_keys or any(k.rpartition(".")[2] == "view" for k in fallback_keys):
                     offenders.append(
                         f"{method.upper()} {route} ({view.__name__}.{action}) -> {fallback!r}"
                     )
@@ -150,6 +154,24 @@ class WritePermissionContractTests(TestCase):
         # broke, every ViewSet would look write-free.
         self.assertGreater(checked["viewset"], 0, f"no ViewSet write routes found: {checked}")
         self.assertGreater(checked["api_view"], 0, f"no APIView write routes found: {checked}")
+
+
+class AnyOfContractTests(TestCase):
+    def test_an_any_of_never_lists_a_read_key(self):
+        """A route a read key opens is a read route: `AnyOf` is for writes two callers share."""
+        offenders = []
+        for route, view in _api_views():
+            # Per-action entries and the class-level fallback: both are declarations.
+            declared = list((getattr(view, "required_permission_map", None) or {}).values())
+            declared.append(getattr(view, "required_permission", None))
+            for value in declared:
+                if isinstance(value, AnyOf):
+                    offenders.extend(
+                        f"{route} ({view.__name__}): {key}"
+                        for key in value.keys
+                        if key.rpartition(".")[2] == "view"
+                    )
+        self.assertEqual(offenders, [], f"AnyOf lists a read key: {offenders}")
 
 
 def _inline_permission_keys() -> list[tuple[str, int, str]]:

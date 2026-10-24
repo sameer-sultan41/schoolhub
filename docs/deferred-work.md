@@ -229,6 +229,12 @@ either this file or `project-status.md`.
   `period_not_on_weekday` findings and block publish; the week grid still shows them, with
   Discard on a draft, but a *published* cell in that state can't be cleared (the entry below).
   A guard on the period edit, like the delete guard, is the fix.
+- **The write-fallback contract test doesn't see a write mapped to a read key by name.**
+  `WritePermissionContractTests` skips any action that is explicitly in `required_permission_map`,
+  so a write mapped to a plain `.view` string (how #123's `cancel` first shipped) still passes.
+  Some read-only POSTs do map to `.view` on purpose (`preview`, `validate`, `download`); the
+  check needs a named allowlist of them before it can flag the rest. `AnyOf` members are
+  already checked (ADR-0027).
 - **The week grid's columns are Monday to Friday, with no way to start a Saturday.** A weekend
   column appears only once a cell already sits on it (`visibleWeekdays`,
   `DEFAULT_VISIBLE_WEEKDAYS`), so a six-day school can never place its first Saturday period

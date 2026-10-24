@@ -107,6 +107,10 @@ apps/api/apps/<module>/
        "revert": "academics.promotion.update",
    }
    ```
+   An action two kinds of caller share (an approver and a proposer) maps to
+   `AnyOf("a.b.approve", "a.b.create")` (`core/rbac/permissions.py`), never to the view key with
+   the real check hidden in the body; the body keeps only the row-level rule. A bare tuple is
+   rejected, since Django reads one as all-of.
    The one safe fallback is a single-purpose viewset whose `required_permission` is itself the
    write key (the import/export viewsets). Restrict `http_method_names` to what the module doc's
    §16 actually exposes. `WritePermissionContractTests` in `apps/api/tests/test_endpoint_contracts.py`
