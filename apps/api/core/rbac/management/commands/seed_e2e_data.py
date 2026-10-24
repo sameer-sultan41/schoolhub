@@ -416,7 +416,7 @@ class Command(BaseCommand):
         )
 
         with tenant_context(tenant.id):
-            TenantSettings.all_tenants.get_or_create(tenant=tenant)
+            self._ensure_seven_day_week(tenant)
             campus = self._ensure_campus(tenant)
             school_class, section = self._ensure_class_and_section(tenant, campus)
             self._ensure_second_campus_section(tenant, school_class)
@@ -510,6 +510,18 @@ class Command(BaseCommand):
                 f"{E2E_OTHER_ADMIN_EMAIL}"
             )
         )
+
+    def _ensure_seven_day_week(self, tenant: Tenant) -> None:
+        """The live lane marks attendance for *today*, and today is not always a weekday.
+
+        A school week of Monday to Friday refuses the date on a Saturday or Sunday
+        ("is not a working day for this school"), so the live specs would pass or fail with the
+        day they run. The e2e tenant works every day, as the backend tests' `open_all_week` does.
+        Merged into the existing `academic` settings, so anything else configured stays.
+        """
+        row, _ = TenantSettings.all_tenants.get_or_create(tenant=tenant)
+        row.academic = {**(row.academic or {}), "working_days": [0, 1, 2, 3, 4, 5, 6]}
+        row.save(update_fields=["academic", "updated_at"])
 
     def _ensure_students_module_enabled(self, tenant: Tenant) -> None:
         """`module.students` defaults off (features.py) — every endpoint 403s with

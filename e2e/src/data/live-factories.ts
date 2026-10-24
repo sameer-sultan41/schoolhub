@@ -1,3 +1,5 @@
+import { env } from "@/env";
+
 /**
  * Data builders for the live API lane (`e2e/tests/live/api/`).
  *
@@ -199,18 +201,33 @@ export function buildLiveEmergencyContact() {
  * for a new run to collide with; there is no server-side "is this window free?" check to
  * ask instead, so this leans on a wide enough spread that a real collision is negligible.
  *
- * Two prior versions both proved too narrow against the real API (not assumed): a single
- * random day offset within one future year let two 364-day windows in the same run
- * overlap, and a later fix based on the current second was still only a few hundred days
- * apart for two runs a few minutes apart — exactly what iterating on this file locally
- * does. `sequence` still guarantees calls *within* one run never overlap (800-day steps);
- * the random component now spans ~1,400 years, wide enough that even back-to-back reruns
- * land nowhere near each other.
+ * Three versions have been too narrow against the real API (not assumed). A single random
+ * day offset within one future year let two 364-day windows in a run overlap. A fix based on
+ * the current second was only a few hundred days apart for reruns minutes apart. And a wide
+ * random spread, shared by every worker, is a birthday problem: `sequence` is per process, so
+ * with two workers and dozens of sessions a run, two windows overlapped (`Dates overlap
+ * academic session`, `attendance-staff-reports`). Each worker now draws from its own band of
+ * dates (`TEST_PARALLEL_INDEX`), so workers can't collide with each other, and `sequence`
+ * steps (800 days) keep one worker's calls apart. Only a rerun against a database that kept an
+ * earlier run's sessions can still land on one, within the worker's own band.
  */
 let sequence = 0;
+/** Days in one worker's band: four bands end before year 9999, the API's last valid date. */
+const WORKER_BAND_DAYS = 700_000;
+const WORKER_BANDS = 4;
+/** The random part of a worker's start, well inside its band for ~500 sessions of 800 days. */
+const BAND_RANDOM_DAYS = 300_000;
+
+// Drawn once per process: a fresh draw per call would put a worker's own sessions at random
+// spots in its band again, and they'd overlap (the birthday problem this band exists to avoid).
+const bandStartDays =
+  3650 +
+  (env.WORKER_INDEX % WORKER_BANDS) * WORKER_BAND_DAYS +
+  Math.floor(Math.random() * BAND_RANDOM_DAYS);
+
 export function farFutureSessionWindow(): { start_date: string; end_date: string } {
   sequence += 1;
-  const baseDays = 3650 + Math.floor(Math.random() * 500_000) + sequence * 800;
+  const baseDays = bandStartDays + sequence * 800;
   const start = new Date();
   start.setDate(start.getDate() + baseDays);
   const end = new Date(start);

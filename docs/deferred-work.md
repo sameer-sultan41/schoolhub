@@ -188,10 +188,21 @@ either this file or `project-status.md`.
   transaction, unlike `TenantMiddleware` — resolved it.
   `e2e/tests/live/api/school-settings.spec.ts` now asserts the working
   patch→read journey rather than pinning the bug.
-- **The live E2E lane has not yet run past setup on CI.** All 50 recorded `e2e-live` runs
-  failed before a test: MinIO's withdrawn images (ADR-0025), then the frontend build, the
-  PgBouncer userlist and migrations (ADR-0026). Until a dispatched run gets to the tests, no
-  live journey (timetable, academics, students) has run against the real stack.
+- **Three live E2E specs still fail on CI, and two are undiagnosed.** The lane now brings the
+  stack up and runs (ADR-0025, ADR-0026), and the timetable journeys pass. The first full runs
+  also showed the rest of the lane had drifted while it could not run:
+  - `dashboard-summary.spec.ts` asserts a "Today's schedule" list. The `scheduleLabel` message
+    still exists, but nothing renders it, so the spec is stale against today's home page.
+  - `academics-promotion-journey.spec.ts` fails in the browser; the cause is not yet read from
+    its trace.
+  - `students-admission-enrollment.spec.ts` was already known broken (project-status).
+  - `attendance-leave.spec.ts` submits leave as the admin, and the API (correctly, §11) accepts
+    it only from the student or a guardian linked to a portal account
+    (`assert_may_request_for_student`). The spec needs a student or guardian identity to sign in
+    as, as the promotion journey needed a second one.
+  The attendance specs' missing guardian, the session-date overlaps and the weekend ("today is
+  not a working day") were fixed with `createStudentReadyToEnrol`, per-worker date bands drawn
+  once per process, and a seven-day working week in the e2e seed.
 - **`frontend.yml`'s Playwright browser cache never hits the right key.** Its version step
   runs `require('@playwright/test/package.json')` from the repo root, where the package (an
   `e2e` dependency, not hoisted) can't be found, so the key is always `playwright-Linux-`.
@@ -235,6 +246,11 @@ either this file or `project-status.md`.
   Some read-only POSTs do map to `.view` on purpose (`preview`, `validate`, `download`); the
   check needs a named allowlist of them before it can flag the rest. `AnyOf` members are
   already checked (ADR-0027).
+- **Cover screen and service cleanup the #123 review left.** Redundant `_staff_away_on` queries
+  when one proposal runs several checks, three near-identical notification helpers
+  (`_notify_decision`, `_notify_cancelled` and the assignment one), duplicated table markup between
+  the queue and My timetable, `today` captured once in the substitutions table so it goes stale
+  past midnight, and the propose fields' repeated placeholder ternaries. None changes behaviour.
 - **The week grid's columns are Monday to Friday, with no way to start a Saturday.** A weekend
   column appears only once a cell already sits on it (`visibleWeekdays`,
   `DEFAULT_VISIBLE_WEEKDAYS`), so a six-day school can never place its first Saturday period

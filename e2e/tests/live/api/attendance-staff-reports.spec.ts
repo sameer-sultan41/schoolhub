@@ -123,10 +123,11 @@ test.describe("attendance reports (live API)", () => {
     );
 
     expect(report.meta).toMatchObject({ kind: "student-summary" });
-    const rows = report.data as { student_id: string; attendance_rate: string }[];
+    const rows = report.data as { student_id: string; attendance_rate: string | number }[];
     expect(rows).toHaveLength(register.studentIds.length);
-    // One absent of three: the others are at 100%, the absentee at 0%.
-    expect(rows.filter((row) => row.attendance_rate === "0.0")).toHaveLength(1);
+    // One absent of three: the others are at 100%, the absentee at 0%. A decimal comes back as
+    // "0.0" or "0.00" depending on its serialisation, so compare the number, not the text.
+    expect(rows.filter((row) => Number(row.attendance_rate) === 0)).toHaveLength(1);
   });
 
   test("the daily register needs only a start date", async ({ liveApiClient }) => {

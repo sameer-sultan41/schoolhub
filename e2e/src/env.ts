@@ -28,6 +28,8 @@ const schema = z.object({
   LIVE_ADMIN_PASSWORD: z.string().min(1).default("e2e-not-a-real-password"),
   /** A second tenant, used to prove cross-tenant reads return 404 and never 403. */
   LIVE_OTHER_TENANT_SLUG: z.string().min(1).default("e2e-other-school"),
+  /** Playwright's own index for this worker process; 0 outside a worker. */
+  WORKER_INDEX: z.coerce.number().int().min(0).default(0),
 });
 
 const parsed = schema.safeParse({
@@ -39,6 +41,7 @@ const parsed = schema.safeParse({
   LIVE_ADMIN_IDENTIFIER: process.env.E2E_LIVE_ADMIN_IDENTIFIER,
   LIVE_ADMIN_PASSWORD: process.env.E2E_LIVE_ADMIN_PASSWORD,
   LIVE_OTHER_TENANT_SLUG: process.env.E2E_LIVE_OTHER_TENANT_SLUG,
+  WORKER_INDEX: process.env.TEST_PARALLEL_INDEX,
 });
 
 if (!parsed.success) {

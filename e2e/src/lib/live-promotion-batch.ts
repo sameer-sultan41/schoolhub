@@ -3,12 +3,10 @@ import {
   buildLiveAcademicSession,
   buildLiveCampus,
   buildLiveClass,
-  buildLiveEmergencyContact,
-  buildLiveGuardian,
   buildLiveSection,
-  buildLiveStudent,
 } from "@/data/live-factories";
 import { expect } from "@/fixtures";
+import { createStudentReadyToEnrol } from "@/lib/live-student";
 
 /**
  * Builds the preconditions a promotion batch needs, through the real API.
@@ -77,14 +75,7 @@ export async function seedPromotionBatch(client: ApiClient): Promise<PromotionBa
     })
   ).data as Identified;
 
-  const student = (await client.post("/students", { ...buildLiveStudent(), campus_id: campus.id }))
-    .data as Identified;
-  const guardian = (await client.post("/guardians", buildLiveGuardian())).data as Identified;
-  await client.post(`/students/${student.id}/guardians`, {
-    guardian_id: guardian.id,
-    relationship: "mother",
-  });
-  await client.post(`/students/${student.id}/emergency-contacts`, buildLiveEmergencyContact());
+  const student = await createStudentReadyToEnrol(client, campus.id);
 
   // The session's own start date, not today: `assert_date_in_session` rejects a date
   // outside the session window, and `farFutureSessionWindow()` puts every generated
