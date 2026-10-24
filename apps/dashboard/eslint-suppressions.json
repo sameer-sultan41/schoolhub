@@ -28,9 +28,6 @@
     }
   },
   "src/app/(app)/shell/dashboard/team-meeting.tsx": {
-    "no-restricted-syntax": {
-      "count": 1
-    },
     "react/jsx-no-literals": {
       "count": 4
     }

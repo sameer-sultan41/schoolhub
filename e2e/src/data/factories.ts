@@ -146,6 +146,31 @@ export const TIMETABLE_SETUP_PERMISSIONS: PermissionKey[] = [
   "timetable.room.delete",
 ];
 
+/**
+ * The keys the week grid reads and writes (timetable.md §4): a `school_admin`'s set, plus the
+ * academics reads its cell form uses (every staff role holds those).
+ */
+export const TIMETABLE_GRID_PERMISSIONS: PermissionKey[] = [
+  "timetable.timetable.view",
+  "timetable.slot.view",
+  "timetable.slot.create",
+  "timetable.slot.update",
+  "timetable.slot.delete",
+  "timetable.timetable.publish",
+  "academics.curriculum.view",
+  "academics.teacher-allocation.view",
+  "staff.staff.view",
+];
+
+/** The cover keys (timetable.md §4): proposing it and deciding on it. */
+export const TIMETABLE_COVER_PERMISSIONS: PermissionKey[] = [
+  "timetable.timetable.view",
+  "timetable.slot.view",
+  "timetable.substitution.create",
+  "timetable.substitution.approve",
+  "staff.staff.view",
+];
+
 /** A module this user must *not* see, for the negative half of a filtering assertion. */
 export const MODULE_WITHOUT_PERMISSION = "Fees & Finance";
 

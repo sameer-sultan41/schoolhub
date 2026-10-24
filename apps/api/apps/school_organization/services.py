@@ -128,6 +128,14 @@ def assert_capacity_not_below_occupancy(section: Section, *, occupied: int) -> N
         )
 
 
+def can_map_to_curriculum(*, school_class: Class, subject: Subject) -> bool:
+    """§11: a curriculum row needs an active class and an active subject.
+
+    The one place the rule lives, so the raising check below and the clone's skip agree.
+    """
+    return school_class.is_active and subject.is_active
+
+
 def assert_class_subject_mapping_valid(
     *,
     session: AcademicSession,
@@ -142,9 +150,9 @@ def assert_class_subject_mapping_valid(
     check for a duplicate without colliding with the row being edited.
     """
     assert_session_writable(session)
-    if not school_class.is_active:
-        raise DomainRuleViolation({"class_id": f"Class '{school_class.name}' is inactive."})
-    if not subject.is_active:
+    if not can_map_to_curriculum(school_class=school_class, subject=subject):
+        if not school_class.is_active:
+            raise DomainRuleViolation({"class_id": f"Class '{school_class.name}' is inactive."})
         raise DomainRuleViolation({"subject_id": f"Subject '{subject.name}' is inactive."})
     duplicate = ClassSubject.objects.alive().filter(
         academic_session=session, school_class=school_class, subject=subject, campus=campus

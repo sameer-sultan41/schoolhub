@@ -12,7 +12,9 @@ import { StaffService } from "./modules/staff";
 import { StudentsService } from "./modules/students";
 import { StudentTransfersService } from "./modules/student-transfers";
 import { TeacherAllocationsService } from "./modules/teacher-allocations";
+import { TeacherSubstitutionsService } from "./modules/teacher-substitutions";
 import { TenantService } from "./modules/tenant";
+import { TimetableSlotsService } from "./modules/timetable-slots";
 
 /**
  * `ApiError` is re-exported so feature code can `instanceof`-check API failures without
@@ -59,8 +61,20 @@ export type { PeriodInput, PeriodPageQuery, PeriodRecord } from "./modules/perio
 export type { RoomInput, RoomPageQuery, RoomRecord, RoomType } from "./modules/rooms";
 
 export type {
+  ConflictSeverity,
+  EffectiveSlotRecord,
+  SlotInput,
+  SlotWriteResult,
+  TimetableConflict,
+  TimetablePublishResult,
+  TimetableSlotRecord,
+  TimetableValidation,
+} from "./modules/timetable-slots";
+
+export type {
   AcademicSessionSummary,
   SchoolOrganizationOption,
+  SectionOption,
 } from "./modules/school-organization";
 
 export type {
@@ -72,6 +86,15 @@ export type {
   TeacherLoadWarning,
   UpdateAllocationInput,
 } from "./modules/teacher-allocations";
+
+export type {
+  ProposeSubstitutionInput,
+  SubstituteCandidate,
+  SubstitutionAction,
+  SubstitutionPageQuery,
+  SubstitutionStatus,
+  TeacherSubstitutionRecord,
+} from "./modules/teacher-substitutions";
 
 /** `UpdateGuardianLinkInput` is re-exported here (not just from the guardians module
  * itself) because Task 7's `GuardianLinkFlagsDialog` imports it from `@/services`, not
@@ -106,6 +129,8 @@ export const Services = {
   promotions: PromotionsService,
   periods: PeriodsService,
   rooms: RoomsService,
+  timetableSlots: TimetableSlotsService,
+  teacherSubstitutions: TeacherSubstitutionsService,
   guardians: GuardiansService,
   staff: StaffService,
   students: StudentsService,

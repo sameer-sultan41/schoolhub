@@ -55,33 +55,6 @@ export async function fetchDashboardOverview(): Promise<DashboardOverview> {
   return { students, staff, classes, sections, subjects, campuses };
 }
 
-export interface MyTimetableSlot {
-  id: string;
-  day_of_week: number;
-  start_time: string;
-  end_time: string;
-  section_name: string;
-  subject_name: string | null;
-  staff_name: string | null;
-  room_name: string | null;
-}
-
-/**
- * The viewer's own timetable slots for one date.
- *
- * The endpoint's own response is `{ data: MyTimetableSlot[], meta: { academic_session_id,
- * date, audience, ... } }` — the slot list is the top-level `data`, not nested under a
- * `slots` field (confirmed directly against the running API; the fuller `MyTimetable`
- * shape with a `slots` wrapper some other schoolhub frontends assume does not match this
- * endpoint's actual contract).
- */
-export async function fetchMyTimetable(date: string): Promise<MyTimetableSlot[]> {
-  const { data } = await apiClient.get<MyTimetableSlot[]>(endpoints.dashboard.myTimetable, {
-    query: { date },
-  });
-  return data;
-}
-
 /** `/staff`/`/campuses`/`/departments`/`/designations`'s own hard page-size ceiling
  * (api-architecture.md §2.4). */
 const MAX_PAGE_SIZE = 100;

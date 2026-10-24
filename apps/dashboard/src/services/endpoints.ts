@@ -48,7 +48,6 @@ export const endpoints = {
     departments: "/departments",
     designations: "/designations",
     academicSessions: "/academic-sessions",
-    myTimetable: "/timetables/my",
   },
   /**
    * The presigned upload flow (`core.files`, api-architecture.md §2.8) — real platform
@@ -104,6 +103,24 @@ export const endpoints = {
   periods: {
     list: "/periods",
     detail: (id: string) => `/periods/${id}`,
+  },
+  /** The week grid: `/timetable-slots`, and the section colon-actions on `/timetables/{id}`,
+   * where the id is a **section** id (`apps/api/apps/timetable/slots/urls.py`). */
+  timetableSlots: {
+    list: "/timetable-slots",
+    detail: (id: string) => `/timetable-slots/${id}`,
+    validate: (sectionId: string) => `/timetables/${sectionId}:validate`,
+    publish: (sectionId: string) => `/timetables/${sectionId}:publish`,
+    /** The viewer's own effective week: a teacher's classes and cover, a learner's section. */
+    my: "/timetables/my",
+  },
+  /** Cover: `/teacher-substitutions`, its colon-actions and the free-teacher lookup
+   * (`apps/api/apps/timetable/substitutions/urls.py`). */
+  teacherSubstitutions: {
+    list: "/teacher-substitutions",
+    candidates: "/teacher-substitutions/candidates",
+    action: (id: string, action: "approve" | "reject" | "cancel") =>
+      `/teacher-substitutions/${id}:${action}`,
   },
   /** `apps/api/apps/timetable/rooms/urls.py`. */
   rooms: {

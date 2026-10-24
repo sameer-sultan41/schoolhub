@@ -7,6 +7,8 @@ import type { PeriodInput, PeriodPageQuery } from "./periods-type";
 /** The query-key module every period read lives under; a period write invalidates it. */
 export const PERIODS_QUERY_MODULE = "periods";
 export const PERIODS_LIST_RESOURCE = "list";
+/** The periods that run at one campus: the week grid's rows. */
+export const PERIODS_FOR_CAMPUS_RESOURCE = "for-campus";
 
 /** Column id -> the `?ordering=` field `/periods` accepts. */
 export const PERIODS_SORT_FIELD: Record<string, string> = {

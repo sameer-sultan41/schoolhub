@@ -226,6 +226,7 @@ Steps:
   - the 422 error with `meta.conflicts`;
   - DELETE 200.
 - [ ] Slot-write `meta.conflicts` is read through a single client helper typed `ApiSchemas["TimetableConflict"][]`. This is academics' recorded `meta.warnings` exception, now on a generated item type.
+- [ ] **Amended after PR B's change review (2026-10-19):** the DELETE 200 and the publish 422 stay *described*, not typed. Both carry their findings in an envelope's `meta` (a success's `meta.conflicts`, an error's `error.meta.conflicts`), and this repo's schema describes no endpoint's envelope `meta`; the item type is the generated `TimetableConflict` (from `:validate`), applied by `conflictsFromMeta`/`conflictsFromError`. Typing one envelope here would be a one-off shape every other endpoint lacks.
 - [ ] Slot create, update and delete re-raise `assert_session_writable` as a field error on `academic_session_id`. A PATCH checks both the old and the new session (precedent `academics/teacher_allocations/services.py:197,224`).
 - [ ] Tests:
   - names;
@@ -328,7 +329,7 @@ Steps:
   - the slot is resolved through `scope_queryset`, so it is a 404 outside the caller's campus;
   - 422 for a slot that isn't published or a date whose weekday doesn't match;
   - returns `[{staff_id, staff_name, employee_number}]` ordered by name.
-- [ ] Type `/timetables/my`'s envelope meta (`audience`, `academic_session_id`, `date`).
+- [ ] ~~Type `/timetables/my`'s envelope meta (`audience`, `academic_session_id`, `date`).~~ **Amended while building PR C (2026-10-21):** described, not typed, for PR B's reason (no endpoint's envelope `meta` is typed in this schema); the dashboard reads only `data`. Recorded in `deferred-work.md`.
 - [ ] Tests:
   - every `:cancel` transition and both permission paths;
   - a past date, and a double cancel;
@@ -357,9 +358,10 @@ Steps:
   - a Today panel from `?date=today`, showing cover badges (`substitute_staff_name`, room).
   - Cells use the server's names, so the view needs no reference-list requests.
 - [ ] Tests: cover in, cover out; an empty timetable for a non-teaching role.
+- [ ] **Amended while building PR C (2026-10-21):** one view, not a week plus a Today panel. A "Show cover for" date picker re-reads `/timetables/my?date=` and marks that day's covered cells ("Covered by {name}"); empty, it is the normal week. A fixed "today" panel could not show tomorrow's cover, which is what a teacher checks the evening before. `my-today.tsx` was not created.
 
 ### Task 12: E2E, docs, PR C
-**Files:** `e2e/src/mocks/domains/timetable-cover.ts`; `e2e/tests/dashboard/timetable-{substitutions,my}.spec.ts`; extend `e2e/tests/live/api/timetable.spec.ts` (`:cancel`, `candidates`, re-propose after reject); docs.
+**Files:** `e2e/src/mocks/domains/timetable-cover.ts`; `e2e/tests/dashboard/timetable-cover.spec.ts` (one spec for both screens: they share the mock and the landing redirect); extend `e2e/tests/live/api/timetable.spec.ts` (`:cancel`, `candidates`, re-propose after reject); docs.
 - [ ] Docs:
   - `timetable.md` §4 (cancel rights), §7.2 (cancel, re-propose), §12 (new template), §16 and §20;
   - `project-status.md`: timetable full-stack complete, next is the attendance dashboard;

@@ -15,10 +15,10 @@ import { E2E_BASELINE_TEACHER_EMPLOYEE_NUMBER } from "@/lib/seed-constants";
  * Shared by `tests/live/api/timetable.spec.ts` and the browser journey rather than
  * duplicated, the same way `live-promotion-batch.ts` is — and, like that file,
  * deliberately built on run-unique rows rather than on `seed_e2e_data`'s baseline
- * section. Publishing is *destructive to the previous version*: it end-dates every
- * currently published slot of that section and promotes the drafts in their place, so a
- * spec that published into the seeded section would supersede the seeded week and leave
- * the next spec — and the next run — reading a grid the seed no longer describes.
+ * section. Publishing *replaces what it touches*: it end-dates each published cell a draft
+ * replaces and promotes the drafts in their place, so a spec that published into the seeded
+ * section would supersede the seeded cells it drafted over and leave the next spec — and the
+ * next run — reading a grid the seed no longer describes.
  *
  * Two things it does reuse from the seed, because both are genuinely shared
  * infrastructure rather than per-test data:
@@ -177,16 +177,20 @@ export async function seedTimetableGrid(client: ApiClient): Promise<TimetableGri
       .then((r) => r.data as Identified),
   ]);
 
-  // Only the allocated subject needs a curriculum row: `assert_subject_in_class_curriculum`
-  // guards the *allocation*, not the slot — timetable does not re-police academics'
-  // curriculum, it reports the missing allocation as a conflict (§11, and
-  // `SubjectlessGridTests` in the Django suite pins exactly that).
-  await client.post("/class-subjects", {
-    academic_session_id: scaffold.sessionId,
-    class_id: scaffold.classId,
-    subject_id: allocated.id,
-    weekly_periods: CURRICULUM_WEEKLY_PERIODS,
-  });
+  // Both subjects are in the class's curriculum: the grid's subject picker offers the
+  // curriculum's subjects, so the unallocated one has to be there to be picked. What makes it
+  // a clash is the missing *allocation*, which timetable reports as a hard conflict rather
+  // than refusing (§11; `SubjectlessGridTests` in the Django suite pins the same).
+  await Promise.all(
+    [allocated.id, unallocated.id].map((subjectId) =>
+      client.post("/class-subjects", {
+        academic_session_id: scaffold.sessionId,
+        class_id: scaffold.classId,
+        subject_id: subjectId,
+        weekly_periods: CURRICULUM_WEEKLY_PERIODS,
+      }),
+    ),
+  );
 
   await client.post("/teacher-subject-allocations", {
     academic_session_id: scaffold.sessionId,

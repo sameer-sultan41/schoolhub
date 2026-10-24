@@ -158,6 +158,76 @@ describe("foldUnknownFieldErrors", () => {
     });
   });
 
+  it("joins the reasons of two unknown fields into the one message the dialog shows", () => {
+    const error = apiError("unprocessable", [
+      { field: "academic_session_id", issue: "Session is closed." },
+      { field: "staff_id", issue: "Teacher is not active." },
+    ]);
+
+    const folded = foldUnknownFieldErrors(error, ["weekly_periods"]) as ApiError;
+
+    expect(resolveErrorMessage(folded, tErrors, "fallback", "non_field")).toBe(
+      "Session is closed. Teacher is not active.",
+    );
+    expect(folded.details).toHaveLength(1);
+  });
+
+  it("puts an existing non_field reason first, then the folded ones", () => {
+    const error = apiError("unprocessable", [
+      { field: "staff_id", issue: "Teacher is not active." },
+      { field: "non_field", issue: "Session is closed." },
+    ]);
+
+    const folded = foldUnknownFieldErrors(error, ["weekly_periods"]);
+
+    expect(resolveErrorMessage(folded, tErrors, "fallback", "non_field")).toBe(
+      "Session is closed. Teacher is not active.",
+    );
+  });
+
+  it("shows a reason once when several details carry it", () => {
+    const error = apiError("unprocessable", [
+      { field: "academic_session_id", issue: "Session is closed." },
+      { field: "non_field", issue: "Session is closed." },
+      { field: "staff_id", issue: "Session is closed." },
+    ]);
+
+    const folded = foldUnknownFieldErrors(error);
+
+    expect(resolveErrorMessage(folded, tErrors, "fallback", "non_field")).toBe(
+      "Session is closed.",
+    );
+  });
+
+  it("leaves known fields on their own key and merges the rest where the first one was", () => {
+    const error = apiError("unprocessable", [
+      { field: "academic_session_id", issue: "Session is closed." },
+      { field: "weekly_periods", issue: "Too few." },
+      { field: "staff_id", issue: "Teacher is not active." },
+    ]);
+
+    const folded = foldUnknownFieldErrors(error, ["weekly_periods"]) as ApiError;
+
+    expect(folded.details.map((detail) => detail.field)).toEqual(["non_field", "weekly_periods"]);
+    expect(folded.fieldErrors()).toEqual({
+      weekly_periods: "Too few.",
+      non_field: "Session is closed. Teacher is not active.",
+    });
+  });
+
+  it("merges two non_field reasons even when no field is unknown", () => {
+    const error = apiError("unprocessable", [
+      { field: "non_field", issue: "Session is closed." },
+      { field: "non_field", issue: "Teacher is not active." },
+    ]);
+
+    const folded = foldUnknownFieldErrors(error, ["weekly_periods"]);
+
+    expect(resolveErrorMessage(folded, tErrors, "fallback", "non_field")).toBe(
+      "Session is closed. Teacher is not active.",
+    );
+  });
+
   it("returns the same error when nothing is unknown, and anything that isn't an ApiError", () => {
     const known = apiError("unprocessable", [
       { field: "weekly_periods", issue: "Too few." },

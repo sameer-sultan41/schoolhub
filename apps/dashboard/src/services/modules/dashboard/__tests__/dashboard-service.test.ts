@@ -108,33 +108,6 @@ describe("DashboardService", () => {
     });
   });
 
-  describe("fetchMyTimetable", () => {
-    it("returns the slot list directly — the endpoint's data IS the array, not {slots}", async () => {
-      const { fetchMyTimetable } = await import("../dashboard-service");
-      const slots = [
-        {
-          id: "slot-1",
-          day_of_week: 2,
-          start_time: "09:00:00",
-          end_time: "09:45:00",
-          section_name: "Grade 5-A",
-          subject_name: "Mathematics",
-          staff_name: "Ayesha Khan",
-          room_name: "Room 12",
-        },
-      ];
-      mockGet.mockResolvedValue({
-        data: slots,
-        meta: { academic_session_id: "sess-1", date: "2026-09-09", audience: "teacher" },
-      });
-
-      const result = await fetchMyTimetable("2026-09-09");
-
-      expect(mockGet).toHaveBeenCalledWith("/timetables/my", { query: { date: "2026-09-09" } });
-      expect(result).toEqual(slots);
-    });
-  });
-
   describe("fetchCampuses", () => {
     it("returns every campus as selectable options, capped at 100", async () => {
       const { fetchCampuses } = await import("../dashboard-service");

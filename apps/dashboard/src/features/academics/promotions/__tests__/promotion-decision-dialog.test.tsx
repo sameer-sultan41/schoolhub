@@ -53,9 +53,9 @@ const CLASSES = [
   { id: NEXT_CLASS_ID, name: "Grade 2" },
   { id: FAR_CLASS_ID, name: "Grade 3" },
 ];
-const SECTIONS: Record<string, { id: string; name: string }[]> = {
-  [NEXT_CLASS_ID]: [{ id: NEXT_SECTION_ID, name: "A" }],
-  [FAR_CLASS_ID]: [{ id: OTHER_SECTION_ID, name: "B" }],
+const SECTIONS: Record<string, { id: string; name: string; campus_id: string }[]> = {
+  [NEXT_CLASS_ID]: [{ id: NEXT_SECTION_ID, name: "A", campus_id: "campus-1" }],
+  [FAR_CLASS_ID]: [{ id: OTHER_SECTION_ID, name: "B", campus_id: "campus-1" }],
 };
 
 /** The row's student: Ayesha Khan, in the shared decision fixture. */

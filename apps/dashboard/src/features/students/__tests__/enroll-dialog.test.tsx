@@ -53,7 +53,7 @@ describe("EnrollDialog", () => {
       { id: "sess-closed", name: "2024-25", status: "closed", is_current: false },
     ]);
     mockFetchClasses.mockResolvedValue([{ id: "class-1", name: "Grade 1" }]);
-    mockFetchSections.mockResolvedValue([{ id: "section-1", name: "A" }]);
+    mockFetchSections.mockResolvedValue([{ id: "section-1", name: "A", campus_id: "campus-1" }]);
   });
 
   it("excludes closed/archived sessions from the session picker", async () => {

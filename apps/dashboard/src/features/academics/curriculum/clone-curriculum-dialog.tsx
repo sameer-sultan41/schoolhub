@@ -28,8 +28,9 @@ export interface CloneCurriculumDialogProps {
 }
 
 /**
- * Copies every curriculum mapping from one session into another. Rows the target already has
- * are skipped, so a repeat converges; the synchronous result is `{ created, skipped }`.
+ * Copies every curriculum mapping from one session into another. Rows the target already has,
+ * and rows for an inactive class or subject, are skipped, so a repeat converges; the synchronous
+ * result is `{ created, skipped }`.
  *
  * Mounting contract: the caller mounts this only while it is open, so each open is a new
  * instance with its own idempotency keys. The server replays by key and ignores the body, so

@@ -41,6 +41,18 @@ class TimetableSlotSerializer(serializers.ModelSerializer):
     subject_id = _fk(Subject, source="subject", required=False, allow_null=True)
     staff_id = _fk(Staff, source="staff", required=False, allow_null=True)
     room_id = _fk(Room, source="room", required=False, allow_null=True)
+    # Names for the grid, read through the viewset's `select_related`: one query for the
+    # whole list, and a cell never needs a reference list to label itself.
+    section_name = serializers.CharField(source="section.name", read_only=True)
+    # The section's campus: whose periods and rooms the cell can use (a cover's room move too).
+    campus_id = serializers.UUIDField(source="section.campus_id", read_only=True)
+    period_name = serializers.CharField(source="period.name", read_only=True)
+    period_sequence = serializers.IntegerField(source="period.sequence", read_only=True)
+    start_time = serializers.TimeField(source="period.start_time", read_only=True)
+    end_time = serializers.TimeField(source="period.end_time", read_only=True)
+    subject_name = serializers.CharField(source="subject.name", read_only=True, allow_null=True)
+    staff_name = serializers.SerializerMethodField()
+    room_name = serializers.CharField(source="room.name", read_only=True, allow_null=True)
 
     class Meta:
         model = TimetableSlot
@@ -48,11 +60,20 @@ class TimetableSlotSerializer(serializers.ModelSerializer):
             "id",
             "academic_session_id",
             "section_id",
+            "section_name",
+            "campus_id",
             "day_of_week",
             "period_id",
+            "period_name",
+            "period_sequence",
+            "start_time",
+            "end_time",
             "subject_id",
+            "subject_name",
             "staff_id",
+            "staff_name",
             "room_id",
+            "room_name",
             "status",
             "effective_from",
             "effective_to",
@@ -61,6 +82,9 @@ class TimetableSlotSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = (*READ_ONLY_FIELDS, "status", "effective_from", "effective_to")
+
+    def get_staff_name(self, obj: TimetableSlot) -> str | None:
+        return obj.staff.full_name if obj.staff is not None else None
 
     def validate_day_of_week(self, value: int) -> int:
         """Mirrors `slots_day_of_week_range` so the caller gets a field error."""
@@ -83,6 +107,39 @@ class TimetableSlotSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 # Colon-action request bodies and derived read payloads
 # ---------------------------------------------------------------------------
+
+
+class TimetableConflictSerializer(serializers.Serializer):
+    """One finding of the conflict engine (§6): what `slots.conflicts.detect_conflicts`
+    returns, typed so the client reads `:validate`, `:publish` and every slot write's
+    `meta.conflicts` through one generated shape."""
+
+    type = serializers.CharField(
+        help_text="e.g. `teacher_double_booked`; a client shows an unknown type by `message`."
+    )
+    severity = serializers.ChoiceField(
+        choices=["hard", "soft"], help_text="Hard blocks publish; soft only warns."
+    )
+    slot_ids = serializers.ListField(child=serializers.UUIDField())
+    message = serializers.CharField()
+
+
+class TimetableValidationSerializer(serializers.Serializer):
+    """`:validate`'s answer: the section's full conflict list."""
+
+    section_id = serializers.UUIDField()
+    academic_session_id = serializers.UUIDField()
+    conflicts = TimetableConflictSerializer(many=True)
+    has_hard_conflicts = serializers.BooleanField()
+
+
+class TimetablePublishResultSerializer(serializers.Serializer):
+    """`:publish`'s answer: drafts made live, live cells they end-dated, and the soft
+    conflicts accepted along the way."""
+
+    published = serializers.IntegerField()
+    superseded = serializers.IntegerField()
+    conflicts = TimetableConflictSerializer(many=True)
 
 
 class TimetableSessionRequestSerializer(serializers.Serializer):

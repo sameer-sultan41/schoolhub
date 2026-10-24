@@ -231,7 +231,9 @@ test.describe("curriculum screen", () => {
       target_academic_session_id: nextSession.id,
     });
     // English came across; the target's own Mathematics was already there, so it was skipped.
-    await expect(page.getByText("1 mappings created, 1 already present.")).toBeVisible();
+    const cloneResult =
+      "1 mappings created, 1 skipped (already in the target, or for an inactive class or subject).";
+    await expect(page.getByText(cloneResult)).toBeVisible();
     await expect(curriculumPage.cloneDialog).toBeHidden();
 
     await expect(page).toHaveURL(new RegExp(`[?&]session=${nextSession.id}`));

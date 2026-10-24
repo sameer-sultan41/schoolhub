@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 from django.db.models import F
 from django.shortcuts import get_object_or_404
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import OpenApiParameter, extend_schema
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -38,6 +38,18 @@ from core.audit.services import record_audit
 from core.rbac.permissions import DenyRestrictedPrincipals, HasPermissionKey
 
 
+@extend_schema_view(
+    partial_update=extend_schema(
+        description=(
+            "`teacher_subject_allocations` — who teaches what, to whom (§5.3). Changing the "
+            "teacher of a current primary allocation (a primary with no end date) is a "
+            "reassignment: the patched allocation is end-dated and kept as history, and a NEW "
+            "primary allocation is created for the new teacher and returned, so the `id` in the "
+            "response can differ from the one patched. A teacher change sent together with an end "
+            "date, a demotion or a move is refused (422 on `staff_id`): send them separately."
+        )
+    )
+)
 class TeacherAllocationViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     """`teacher_subject_allocations` — who teaches what, to whom (§5.3)."""
 
@@ -147,7 +159,10 @@ class TeacherAllocationViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         return Response({"data": body, "meta": {"warnings": warnings}}, status=201)
 
     def update(self, request: Request, *args, **kwargs) -> Response:
-        """PATCH through the §11 rules (the generic mixin saved straight through)."""
+        """PATCH through the §11 rules (the generic mixin saved straight through).
+
+        Changing a current primary's teacher answers the new row, so its `id` differs.
+        """
         instance = self.get_object()
         serializer = self.get_serializer(
             instance, data=request.data, partial=kwargs.pop("partial", False)
@@ -161,7 +176,19 @@ class TeacherAllocationViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
             allocation=instance, changes=changes, actor_id=request.user.pk
         )
         body = self.get_serializer(allocation).data
-        record_audit(request, "update", allocation, before=before, after=body)
+        if allocation.pk == instance.pk:
+            record_audit(request, "update", allocation, before=before, after=body)
+        else:
+            # A reassignment: the old row was end-dated, and the response is the new primary row.
+            instance.refresh_from_db(fields=["effective_to", "updated_by", "updated_at"])
+            record_audit(
+                request,
+                "update",
+                instance,
+                before=before,
+                after=self.get_serializer(instance).data,
+            )
+            record_audit(request, "create", allocation, after=body)
         if allocation.staff_id != previous_staff_id:
             services.notify_allocation_changed(allocation=allocation, tenant_id=request.tenant.pk)
 

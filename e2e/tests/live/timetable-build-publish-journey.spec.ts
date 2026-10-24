@@ -28,15 +28,15 @@ import { E2E_BASELINE_TEACHER_NAME, E2E_SCHOOL_ADMIN_EMAIL } from "@/lib/seed-co
  * the product really does unblock the publish button.
  *
  * It builds a **run-unique** section rather than using the seeded one, and that is not
- * tidiness: `publish_section_timetable` end-dates every currently published slot of the
- * section it publishes, so publishing into the seeded section would supersede the seeded
- * week and leave every later run reading a grid the seed no longer describes.
+ * tidiness: `publish_section_timetable` end-dates each published cell a draft replaces, so
+ * publishing into the seeded section would supersede the seeded cells it drafted over and
+ * leave every later run reading a grid the seed no longer describes.
  *
  * Auth budget (`AuthEndpointThrottle`: 10 requests/minute per IP across
  * login/refresh/logout — e2e/AGENTS.md): **one** browser login and one refresh. The
  * refresh is the single `page.reload()` at the end, which re-boots the app with an empty
  * in-memory access token; reaching the screen costs nothing extra because the navigation
- * to `/timetable` goes through the nav link (client-side) rather than `page.goto`, the
+ * to `/timetable/grid` goes through the sidebar (client-side) rather than `page.goto`, the
  * same economy `students-admission-enrollment.spec.ts` documents. The worker-scoped
  * `liveApiClient` this shares with the API lane adds no login of its own.
  */
@@ -70,10 +70,12 @@ test.describe("timetable build -> validate -> publish (real API, school_admin)",
     // seeded permission set: `canAccessModule` shows it only for a user holding some
     // `timetable.*` key.
     await expect(dashboardPage.heading).toBeVisible();
-    await dashboardPage.navLink("Timetable").click();
+    await dashboardPage.navGroup("Timetable").click();
+    await dashboardPage.navLink("Week grid").click();
     await expect(weekGridPage.heading).toBeVisible();
 
     await weekGridPage.selectSession(grid.sessionName);
+    await weekGridPage.selectClass(grid.className);
     await weekGridPage.selectSection(grid.sectionName);
 
     // --- 2. Two draft cells: one clean, one scheduling the teacher for a subject
@@ -119,16 +121,16 @@ test.describe("timetable build -> validate -> publish (real API, school_admin)",
     });
 
     await weekGridPage.validate.click();
-    // The panel is gone, and the run says so in its own words. Both are asserted
-    // because they come from different places: the list disappears when the findings
-    // are empty, while "No conflicts found." is rendered only once a validation run has
-    // *succeeded* — so together they say the full-section run agreed with the per-edit
-    // check, which is exactly the precondition `:publish` is about to re-run.
+    // The panel's list is gone, and the run says so in its own words, outside it. Both are
+    // asserted because they say different things: the list disappears when the findings are
+    // empty, while "No conflicts found." is rendered only once a check has run — so together
+    // they say the full-section run agreed with the per-edit check, which is exactly the
+    // precondition `:publish` is about to re-run.
     await expect(weekGridPage.conflictPanel).toHaveCount(0);
     await expect(weekGridPage.noConflicts).toBeVisible();
 
-    // --- 5. Publish. ---
-    await weekGridPage.publish.click();
+    // --- 5. Publish, through its confirm. ---
+    await weekGridPage.publishAndConfirm();
     await expect(weekGridPage.publishedSummary(2)).toBeVisible();
     await expect(weekGridPage.filledCell(MONDAY, period.name)).toContainText("Published");
     await expect(weekGridPage.filledCell(TUESDAY, period.name)).toContainText("Published");
@@ -139,10 +141,9 @@ test.describe("timetable build -> validate -> publish (real API, school_admin)",
     // the write that caused it. A reload starts a new query client against a new app
     // instance, so what renders here came from the database and nothing else. It is the
     // one refresh this spec spends — see the header's auth budget.
+    // The session, class and section are in the URL, so the reload lands on the same week.
     await page.reload();
     await expect(weekGridPage.heading).toBeVisible();
-    await weekGridPage.selectSession(grid.sessionName);
-    await weekGridPage.selectSection(grid.sectionName);
 
     await expect(weekGridPage.filledCell(MONDAY, period.name)).toContainText("Published");
     await expect(weekGridPage.filledCell(TUESDAY, period.name)).toContainText("Published");

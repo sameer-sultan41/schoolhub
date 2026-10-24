@@ -256,6 +256,9 @@ SPECTACULAR_SETTINGS = {
         # any *other* module's status choices move and churns the generated
         # TypeScript client for a diff that has nothing to do with it.
         "AttendanceStatusEnum": "apps.attendance.models.AttendanceStatus",
+        # The conflict engine's `severity`: named for its owner, so a later `severity`
+        # choice elsewhere can't take the bare `SeverityEnum` from it.
+        "TimetableConflictSeverityEnum": [("hard", "hard"), ("soft", "soft")],
         "AttendanceCorrectionStatusEnum": "apps.attendance.models.CorrectionStatus",
         "AttendanceSourceEnum": "apps.attendance.models.AttendanceSource",
         "AttendanceCorrectionSubjectTypeEnum": "apps.attendance.models.CorrectionSubjectType",
