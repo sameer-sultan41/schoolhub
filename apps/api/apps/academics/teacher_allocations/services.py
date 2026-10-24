@@ -66,11 +66,6 @@ def assert_subject_in_class_curriculum(
         )
 
 
-def staff_display_name(staff: Staff) -> str:
-    """A teacher's name as the allocation screens show it: first name, then last."""
-    return f"{staff.first_name} {staff.last_name}"
-
-
 def weekly_load_by_staff(*, session: AcademicSession) -> dict[uuid.UUID, int]:
     """Weekly period load per teacher for a session, in two queries flat.
 
@@ -290,7 +285,7 @@ def _reassign_primary(
         else:
             recourse = "Reinstate that allocation and make it the primary"
         raise Conflict(
-            f"{staff_display_name(staff)} already has an allocation for this section and "
+            f"{staff.full_name} already has an allocation for this section and "
             f"subject. {recourse} instead of reassigning this one."
         )
 

@@ -13,7 +13,7 @@ from rest_framework import serializers
 
 from apps.academics.models import TeacherSubjectAllocation
 from apps.academics.serializers import READ_ONLY_FIELDS, _fk
-from apps.academics.teacher_allocations import dates, services
+from apps.academics.teacher_allocations import dates
 from apps.school_organization.models import AcademicSession, Section, Subject
 from apps.staff_management.models import Staff
 from core.api.exceptions import DomainRuleViolation
