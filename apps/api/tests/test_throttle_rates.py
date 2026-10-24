@@ -1,8 +1,9 @@
 """The rate limits production runs (api-architecture.md §2.5).
 
-Each rate can be overridden by an environment variable, so a throwaway stack (e2e-live) can
-lift it. This pins the defaults, so an override can't quietly become the shipped value, and
-checks every throttle class reads its rate from settings rather than a class attribute.
+`base.py` fixes them (production inherits that); only `config.settings.dev` reads
+`THROTTLE_RATE_*` overrides, for the throwaway e2e-live stack. This pins the base values, so
+an override can't become the shipped limit, and checks every throttle class reads its rate
+from settings rather than a class attribute.
 """
 
 from __future__ import annotations
