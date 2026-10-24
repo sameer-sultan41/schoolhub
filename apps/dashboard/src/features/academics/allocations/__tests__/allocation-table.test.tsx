@@ -179,7 +179,9 @@ describe("AllocationTable", () => {
       { id: OTHER_CLASS_ID, name: "Grade 2" },
     ]);
     mockFetchSubjects.mockReset().mockResolvedValue([{ id: SUBJECT_ID, name: "Mathematics" }]);
-    mockFetchSections.mockReset().mockResolvedValue([{ id: SECTION_ID, name: "A" }]);
+    mockFetchSections
+      .mockReset()
+      .mockResolvedValue([{ id: SECTION_ID, name: "A", campus_id: "campus-1" }]);
   });
 
   describe("rows", () => {
@@ -653,7 +655,9 @@ describe("AllocationTable", () => {
 
     it("drops a section that isn't one of the class's sections once they load", async () => {
       setUrl(`/academics/allocations?class=${CLASS_ID}&section=${SECTION_ID}`);
-      mockFetchSections.mockResolvedValue([{ id: OTHER_SECTION_ID, name: "B" }]);
+      mockFetchSections.mockResolvedValue([
+        { id: OTHER_SECTION_ID, name: "B", campus_id: "campus-1" },
+      ]);
 
       renderScreen();
 

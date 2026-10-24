@@ -33,12 +33,14 @@ barcoded
 baselined
 Bibi
 Bilal
+bitnamilegacy
 blockable
 bonafide
 bookmarkable
 Brien
 bursty
 BYPASSRLS
+chainguard
 Chandni
 chartable
 choosable
@@ -117,9 +119,9 @@ Keyspace
 Laiba
 Laravel
 launchable
-libgdk
+libharfbuzz
 libpango
-libpangocairo
+libpangoft
 libpq
 linkedunion
 Mahnoor
@@ -167,6 +169,7 @@ PGDATABASE
 PGHOST
 PGPASSWORD
 PGPORT
+pgsty
 PGUSER
 pidfile
 pinnable

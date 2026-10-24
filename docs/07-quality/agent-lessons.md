@@ -59,7 +59,8 @@
 ### L7. A change can break a sibling PR's test
 
 - **Mistake.** Adding Promotions to the Academics sidebar made the allocations spec ("a user with only the promotion view key sees no Academics group") false, in a PR that was already open.
-- **Check.** When you change shared navigation, permissions, barrels or fixtures, grep the specs and tests on sibling branches and open PRs for the behaviour, and fix them in the PR that causes the change.
+- **Mistake (again, #119).** Registering `Services.periods`/`Services.rooms` broke `services/__tests__/index.test.ts`, which lists every domain; CI's coverage job caught it.
+- **Check.** When you change shared navigation, permissions, barrels or fixtures, grep the specs and tests on sibling branches and open PRs for the behaviour, and fix them in the PR that causes the change. A new `Services` domain also updates the aggregate test that enumerates them.
 
 ### L8. Row ids must be unique in the data the API returns
 
@@ -84,12 +85,30 @@
 ### L12. Keep comments and docs true to the change
 
 - **Mistake.** A docstring still said examinations and attendance do not exist after they shipped, and a comment said a row "can be fixed later" when it could not.
+  The timetable setup screens shipped delete copy ("a period in use cannot be removed") for a refusal the server never made: a soft delete never meets `on_delete=PROTECT` (#119, caught in change review).
 - **Check.** After a change, grep the nearby comments, docstrings and docs for the claim it makes false, and fix them in the same commit.
 
 ### L13. Check the machine before heavy work
 
 - **Mistake.** A full disk made shell calls fail mid-review, and the commit hooks write to disk too. A machine that sleeps also kills background agents.
 - **Check.** Run `df -h` before a long review wave or a commit. Have long-running agents write their report file early and keep it current.
+
+### L14. A drag handle is not the thing being dropped
+
+- **Mistake.** The timetable grid's keyboard drag measured collisions with `closestCenter` from a small drag handle in a cell's corner, so the "nearest cell" was often the neighbour or the source itself; the mocked E2E keyboard moves made no request (#120). Unit tests passed because they fed cell-sized boxes, not the handle-sized one dnd-kit actually measures.
+- **Check.** When the draggable node is a handle, decide collisions by what contains it (`pointerWithin` for a pointer, `rectIntersection` for keyboard), never by nearest centre, and give the pure helpers the handle-sized box the sensor really reports.
+- **Mistake (again, three times).** The keyboard E2E kept failing because two causes overlapped, and each fix chased one.
+  - **Layout.** The trace's live-region text showed one ArrowRight announcing "Over Wednesday". `keyboardStep` kept the handle's pixel offset from its cell's edge, and a filled Monday column is wider than an empty Tuesday. The Jest cases used equal-width cells.
+  - **Timing.** dnd-kit's `KeyboardSensor.attach()` renders the drag (`aria-pressed`) and only then adds its keydown listener in a `setTimeout`. Chrome runs a queued key before a timer, so waiting for `aria-pressed` didn't help. A throwaway draft PR with logging passed outright, which showed the slowdown alone was enough; the sensor's source confirmed it.
+- **Check.**
+  - Read the failing run's trace before writing any second fix, including what the page *said* (live regions, error text in the snapshots).
+  - Give layout helpers unequal boxes in their unit tests.
+  - Read a library's source before deciding what a DOM signal proves. In a browser spec, put an ordering barrier (a `setTimeout(0)` of your own) behind a timer the library schedules, rather than a sleep (`WeekGridPage.keyboardMove`).
+
+### L17. A Dockerfile change breaks the compose targets that name it; a never-green workflow hides every later step
+
+- **Mistake.** `f7511d7` created the frontend `Dockerfile`s with `deps`/`builder`/`runner`, while compose kept building `target: dev`; the API `Dockerfile`'s own comment records the same break once before. `e2e-live` then failed all 50 recorded runs, and its first fix (MinIO, ADR-0025) only uncovered the next break: no PgBouncer userlist, migrations as the app role, env names the apps don't read, and then a `0600` userlist that a Linux bind mount hides from PgBouncer's uid 70 (macOS's Docker Desktop never showed it). The first plan said "no other change needed for CI", from a workflow that had never got past building images.
+- **Check.** When a `Dockerfile`'s stages or build args change, check every compose `target:` and `args:` that names them (`infra-compose`'s `images` job now builds them all). Before claiming a never-green workflow needs only one fix, read every step after the first failure as untested.
 
 ## 4. Adding a lesson
 

@@ -83,4 +83,19 @@ describe("filterMenuByAccess", () => {
 
     expect(childTitles(MENU, "Academics")).toEqual(["Curriculum", "Allocations"]);
   });
+
+  it("keeps an item gated on a list of keys for a holder of any one of them", () => {
+    const menu: MenuConfig = [
+      {
+        title: "Substitutions",
+        path: "/timetable/substitutions",
+        permission: ["timetable.substitution.create", "timetable.substitution.approve"],
+      },
+    ];
+
+    expect(titles(filterMenuByAccess(menu, buildUser(["timetable.substitution.approve"])))).toEqual(
+      ["Substitutions"],
+    );
+    expect(filterMenuByAccess(menu, buildUser(["timetable.timetable.view"]))).toEqual([]);
+  });
 });

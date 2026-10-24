@@ -37,13 +37,16 @@ describe("Services", () => {
       "files",
       "guardians",
       "jobs",
+      "periods",
       "promotions",
+      "rooms",
       "schoolOrganization",
       "staff",
       "studentTransfers",
       "students",
       "teacherAllocations",
       "tenant",
+      "timetableSlots",
     ]);
 
     expect(typeof Services.auth.login).toBe("function");
@@ -105,6 +108,36 @@ describe("Services", () => {
     expect(typeof Services.teacherAllocations.reinstateAllocation).toBe("function");
     expect(typeof Services.teacherAllocations.deleteAllocation).toBe("function");
     expect(typeof Services.teacherAllocations.fetchLoadSummary).toBe("function");
+    expect(typeof Services.teacherAllocations.fetchSectionAllocations).toBe("function");
+
+    expect(typeof Services.periods.fetchPeriodPage).toBe("function");
+    expect(typeof Services.periods.fetchCampusPeriods).toBe("function");
+    expect(typeof Services.periods.createPeriod).toBe("function");
+    expect(typeof Services.periods.updatePeriod).toBe("function");
+    expect(typeof Services.periods.deletePeriod).toBe("function");
+
+    expect(typeof Services.rooms.fetchRoomPage).toBe("function");
+    expect(typeof Services.rooms.fetchActiveRooms).toBe("function");
+    expect(typeof Services.rooms.createRoom).toBe("function");
+    expect(typeof Services.rooms.updateRoom).toBe("function");
+    expect(typeof Services.rooms.deleteRoom).toBe("function");
+
+    expect(typeof Services.timetableSlots.fetchSectionSlots).toBe("function");
+    expect(typeof Services.timetableSlots.createSlot).toBe("function");
+    expect(typeof Services.timetableSlots.updateSlot).toBe("function");
+    expect(typeof Services.timetableSlots.deleteSlot).toBe("function");
+    expect(typeof Services.timetableSlots.validateSection).toBe("function");
+    expect(typeof Services.timetableSlots.publishSection).toBe("function");
+
+    expect(typeof Services.periods.fetchPeriodPage).toBe("function");
+    expect(typeof Services.periods.createPeriod).toBe("function");
+    expect(typeof Services.periods.updatePeriod).toBe("function");
+    expect(typeof Services.periods.deletePeriod).toBe("function");
+
+    expect(typeof Services.rooms.fetchRoomPage).toBe("function");
+    expect(typeof Services.rooms.createRoom).toBe("function");
+    expect(typeof Services.rooms.updateRoom).toBe("function");
+    expect(typeof Services.rooms.deleteRoom).toBe("function");
 
     expect(typeof Services.promotions.fetchPromotionBatches).toBe("function");
     expect(typeof Services.promotions.fetchPromotionBatch).toBe("function");

@@ -194,7 +194,15 @@ REST_FRAMEWORK = {
         "core.api.throttling.TenantRateThrottle",
         "core.api.throttling.UserRateThrottle",
     ),
-    "DEFAULT_THROTTLE_RATES": {"tenant": "600/min", "user": "60/min", "anon": "20/min"},
+    # api-architecture.md §2.5's limits. Overridable per environment only so a throwaway
+    # stack (e2e-live) can lift them; production runs these defaults.
+    "DEFAULT_THROTTLE_RATES": {
+        "tenant": env.str("THROTTLE_RATE_TENANT", default="600/min"),
+        "user": env.str("THROTTLE_RATE_USER", default="60/min"),
+        "anon": env.str("THROTTLE_RATE_ANON", default="20/min"),
+        "auth": env.str("THROTTLE_RATE_AUTH", default="10/min"),
+        "public_form": env.str("THROTTLE_RATE_PUBLIC_FORM", default="5/min"),
+    },
 }
 
 SIMPLE_JWT = {
@@ -246,6 +254,9 @@ SPECTACULAR_SETTINGS = {
         # any *other* module's status choices move and churns the generated
         # TypeScript client for a diff that has nothing to do with it.
         "AttendanceStatusEnum": "apps.attendance.models.AttendanceStatus",
+        # The conflict engine's `severity`: named for its owner, so a later `severity`
+        # choice elsewhere can't take the bare `SeverityEnum` from it.
+        "TimetableConflictSeverityEnum": [("hard", "hard"), ("soft", "soft")],
         "AttendanceCorrectionStatusEnum": "apps.attendance.models.CorrectionStatus",
         "AttendanceSourceEnum": "apps.attendance.models.AttendanceSource",
         "AttendanceCorrectionSubjectTypeEnum": "apps.attendance.models.CorrectionSubjectType",

@@ -13,6 +13,7 @@ from django.db.models import F
 from rest_framework import viewsets
 
 from apps.timetable.models import Room
+from apps.timetable.rooms import services
 from apps.timetable.rooms.filters import RoomFilterSet
 from apps.timetable.rooms.serializers import RoomSerializer
 from apps.timetable.views import FEATURE, SCAFFOLDING_VIEW_KEY, STAFF_PERMISSIONS
@@ -68,6 +69,11 @@ class RoomViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         "destroy": "timetable.room.delete",
     }
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def perform_destroy(self, instance):
+        """Refuse removing a room the timetable still uses (`assert_room_not_in_use`)."""
+        services.assert_room_not_in_use(instance)
+        super().perform_destroy(instance)
 
     def get_queryset(self):
         """`campus_name` is annotated, never traversed in `ordering_fields`.

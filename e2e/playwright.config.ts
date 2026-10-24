@@ -48,9 +48,10 @@ const appEnv = {
  *   `PLATFORM_DOMAIN` ("localhost"), so "/" always classifies as an unverified custom
  *   domain, 404s once the tenant lookup misses, and 404 is not an accepted readiness
  *   status (only 2xx/3xx/400–403 are) — the probe would poll it for the full timeout
- *   while the server sat healthy the whole time. `/robots.txt` is a metadata route: it
- *   is not wrapped by the root layout, so it never calls `resolveTenant()`, and returns
- *   200 regardless of Host — confirmed with `curl` before relying on it here.
+ *   while the server sat healthy the whole time. `/robots.txt` is a metadata route
+ *   outside the root layout. It does call `resolveTenant()` (`app/robots.ts`), but an
+ *   unknown host only turns it into a blanket disallow, still a 200, so it answers once
+ *   the API it asks (the stub, or the real one under `E2E_REAL_API`) is up.
  */
 const HEALTH_PATH = { dashboard: "/", website: "/robots.txt" } as const;
 
@@ -142,22 +143,27 @@ export default defineConfig({
     },
   ],
 
-  // `live` brings its own stack (compose), so the built-in servers cover the other two.
+  // The apps are always served here. `E2E_REAL_API` (the live lane) drops the stub, since
+  // the real API already answers on its origin; `E2E_NO_SERVER` serves nothing (listing).
   webServer: process.env.E2E_NO_SERVER
     ? undefined
     : [
         // Must be first: the website's root layout fetches this on every request,
         // including its own readiness probe. See scripts/tenant-lookup-stub.mjs for why
         // this exists at all — MockApi cannot reach a server-side fetch.
-        {
-          command: "node scripts/tenant-lookup-stub.mjs",
-          url: `${new URL(env.API_BASE_URL).origin}/healthz`,
-          env: { API_BASE_URL: env.API_BASE_URL },
-          reuseExistingServer: !isCI,
-          timeout: 15_000,
-          stdout: "pipe" as const,
-          stderr: "pipe" as const,
-        },
+        ...(process.env.E2E_REAL_API
+          ? []
+          : [
+              {
+                command: "node scripts/tenant-lookup-stub.mjs",
+                url: `${new URL(env.API_BASE_URL).origin}/healthz`,
+                env: { API_BASE_URL: env.API_BASE_URL },
+                reuseExistingServer: !isCI,
+                timeout: 15_000,
+                stdout: "pipe" as const,
+                stderr: "pipe" as const,
+              },
+            ]),
         serve("dashboard", env.DASHBOARD_URL),
         serve("website", env.WEBSITE_URL),
       ],

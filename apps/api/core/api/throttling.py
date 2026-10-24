@@ -3,6 +3,7 @@
 Two independent buckets so one noisy user cannot exhaust a school's budget and one
 busy school cannot degrade the platform. Defaults come from
 docs/02-architecture/api-architecture.md §2.5; auth endpoints tighten them further.
+Every rate is read from `REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]` by scope.
 """
 
 from rest_framework.throttling import SimpleRateThrottle
@@ -41,7 +42,6 @@ class AuthEndpointThrottle(SimpleRateThrottle):
     """
 
     scope = "auth"
-    rate = "10/min"
 
     def get_cache_key(self, request, view):
         return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
@@ -51,7 +51,6 @@ class PublicFormThrottle(SimpleRateThrottle):
     """For unauthenticated public endpoints (contact, admission enquiry)."""
 
     scope = "public_form"
-    rate = "5/min"
 
     def get_cache_key(self, request, view):
         return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}

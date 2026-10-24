@@ -96,9 +96,6 @@ export const PROMOTION_SECTION_ADVISORY_STATUSES: readonly PromotionStatus[] = [
 /** The target-section select's value for "no section", as a `SelectItem` can't hold `""`. */
 export const PROMOTION_NO_SECTION = SORT_NONE;
 
-/** What a cell shows when a decision has no target class (a graduating student's has none). */
-export const PROMOTION_EMPTY_CELL = "—";
-
 /**
  * The query-key module and resources the promotion screens read under: the batch list under
  * `queryKeys.list(PROMOTION_QUERY_MODULE, PROMOTION_BATCHES_RESOURCE, params)`, one batch under

@@ -206,7 +206,7 @@ class TeacherAllocationViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
                 allocation.staff_id,
                 {
                     "staff_id": allocation.staff_id,
-                    "name": f"{allocation.staff.first_name} {allocation.staff.last_name}",
+                    "name": allocation.staff.full_name,
                     "weekly_periods": load,
                     "allocations": 0,
                     "norm": services.DEFAULT_WEEKLY_PERIOD_NORM,

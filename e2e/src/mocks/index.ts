@@ -15,3 +15,5 @@ export * from "./domains/student-transfers";
 export * from "./domains/academics-curriculum";
 export * from "./domains/academics-allocations";
 export * from "./domains/academics-promotions";
+export * from "./domains/timetable-setup";
+export * from "./domains/timetable-grid";

@@ -172,11 +172,18 @@ Referenced (owned elsewhere): `classes`, `sections`, `subjects`, `class_subjects
 
 Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 
-- `GET/POST/PATCH/DELETE /api/v1/periods` · `/api/v1/rooms`
-- `GET /api/v1/timetable-slots` — filters: `section_id`, `teacher_id`, `room_id`, `weekday`, `status`, `academic_session_id`; cursor pagination.
-- `POST/PATCH/DELETE /api/v1/timetable-slots` — per-edit conflict check in the response (`meta.conflicts`).
-- `POST /api/v1/timetables/{section_id}:validate` — full conflict run, returns conflict list.
-- `POST /api/v1/timetables/{section_id}:publish` — permission-guarded, audited; 422 on hard conflicts.
+- `GET/POST/PATCH/DELETE /api/v1/periods` · `/api/v1/rooms`. Both carry a read-only
+  `campus_name` (null for a tenant-wide period). `/periods` filters: `campus_id` (that
+  campus's own periods only), `for_campus` (the periods that run at that campus: its own plus
+  the tenant-wide ones, the set a section's week grid is drawn on), `is_break`, `search`.
+  `/rooms` filters: `campus_id`, `room_type`, `is_active`, `search`. Both page by number.
+  `DELETE` on either is a 422 while a current grid cell (draft or live published) or upcoming
+  proposed/confirmed cover still uses the row; a room still in use is taken out of service
+  (`is_active: false`) instead.
+- `GET /api/v1/timetable-slots` — filters: `section_id`, `teacher_id`, `room_id`, `weekday`, `status`, `academic_session_id`, and `current` (`effective_to IS NULL`: drafts and live published cells, never superseded history); `?ordering=period_sequence`; cursor pagination. Every row carries `section_name`, `subject_name`, `staff_name`, `room_name`, `period_name`, `period_sequence`, `start_time` and `end_time`.
+- `POST/PATCH/DELETE /api/v1/timetable-slots` — per-edit conflict check in the response (`meta.conflicts`, a list of `TimetableConflict`). A closed or archived session refuses all three (422 on `academic_session_id`); a PATCH that moves a draft into another session needs that one open too.
+- `POST /api/v1/timetables/{section_id}:validate` — full conflict run, returns `TimetableValidation` (`conflicts`, `has_hard_conflicts`).
+- `POST /api/v1/timetables/{section_id}:publish` — permission-guarded, audited; returns `TimetablePublishResult`; 422 on hard conflicts, the findings in `error.meta.conflicts`.
 - `GET /api/v1/timetables/my` — caller's effective timetable (teacher/student/guardian scope), date-aware (substitutions applied).
 - `GET/POST /api/v1/teacher-substitutions` · `POST /api/v1/teacher-substitutions/{id}:approve` · `:reject`
 - `POST /api/v1/timetables/{section_id}:generate-draft` — AI generation (AI-TTB-01); returns `202` + job resource per API doc §2.7.
@@ -214,7 +221,7 @@ the same layout already applied to `apps/communication`, `apps/
 school_organization`, and `apps/staff_management` (see those modules' own
 §20). `viewset.py` stays one file per resource, every action a plain method;
 `services.py` splits per package only where a resource has real business
-logic — `rooms/` has none at all (its fields need no service-level rule).
+logic — `rooms/` has only the delete guard (`assert_room_not_in_use`, added with the dashboard).
 
 The conflict-detection engine (`conflicts.py`) moved into `slots/` as a
 whole file, unchanged — it has no consumer outside the slot/timetable-grid
@@ -246,3 +253,41 @@ Pure reorganization: `openapi.yaml`/`schema.d.ts` differ from `main` by two
 disclosed docstring-only lines (a serializer's new ownership note, and an
 updated cross-reference to a function that moved). No endpoint, permission,
 or response shape changed anywhere in the module.
+
+**Dashboard (as shipped).** Being built in three PRs (setup, the week grid, cover); plan:
+`docs/superpowers/plans/2026-10-19-timetable-dashboard.md`.
+
+- **PR A, setup.** A Timetable sidebar group and a `/timetable` layout with a tab bar, both
+  drawn from one section list (`features/timetable/timetable-sections.ts`) through the shared
+  `components/module-sections/` kit Academics now also uses: `/timetable` sends the viewer to
+  the first section they may open. `/timetable/periods` is the bell schedule (sequence, name,
+  time, kind, weekdays, campus; search, a campus filter that uses `for_campus`, and a kind
+  filter, all in the URL), with add, edit and remove. The form picks weekdays with a toggle
+  group (none picked is `null`, the tenant's working days) and shows the server's overlap
+  error under the start time. `/timetable/rooms` lists rooms (code, name, type, capacity,
+  location, campus, in or out of service; campus, type and status filters in the URL), with
+  add, edit (including taking a room out of service) and remove. Removing either is refused
+  while the timetable still uses it (§16), and the dialog shows the server's reason. Periods and rooms have no
+  view key of their own (§4), so each tab is gated on its `.update` key: the
+  `timetable.timetable.view` every role holds would open the setup screens to everyone.
+- **PR B, the week grid.** `/timetable/grid` (the first tab, gated on `timetable.slot.view`):
+  pick the session, class and section (all three in the URL), and the section's campus
+  periods become the rows and Monday to Friday the columns (a weekend day appears once it
+  holds a cell). A cell shows the draft when a draft and a published row share it, marked
+  "Replaces the published period". Breaks, and periods that don't run that day, are inert.
+  Clicking a cell opens its editor: a subject from the class's curriculum, a teacher (every
+  teaching staff member, those allocated to the section and subject first and marked), a room
+  in service at the campus, and a note. An empty or published cell gets a new draft; a draft
+  is updated; a draft can be discarded. A pure draft (no published cell under it) has a drag
+  handle that moves it to an empty teaching cell, by pointer or by keyboard (one cell per
+  arrow key, measured from the cell, not the handle), with translated screen-reader
+  announcements; a drop lands on the cell under the pointer, and one on a break, a period
+  that doesn't run that day, an occupied cell or outside the grid moves nothing and says why.
+  A cell whose period has since become a break still shows, so it can be discarded. Findings
+  belong to one section: picking another clears them. The conflict panel lists the last
+  write's, check's or refused publish's findings in the server's order, translated by type
+  with the server's message as the fallback, and each cell repeats its own. Publish asks
+  for confirmation; a refusal keeps the dialog open and fills the panel. Cell editing needs
+  the `timetable.slot.*` keys and publishing only `timetable.timetable.publish`, so a
+  principal publishes a grid they cannot edit. A closed session is read-only.
+

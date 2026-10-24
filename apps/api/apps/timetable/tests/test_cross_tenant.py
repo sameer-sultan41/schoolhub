@@ -152,10 +152,16 @@ class ListLeakageTests(TimetableCrossTenantTestCase):
         )
         by_teacher = self.client.get(f"/api/v1/timetable-slots?teacher_id={self.other_staff.pk}")
         by_campus = self.client.get(f"/api/v1/rooms?campus_id={self.other_campus.pk}")
+        periods_for_campus = self.client.get(f"/api/v1/periods?for_campus={self.other_campus.pk}")
 
         self.assertEqual(by_section.json()["data"], [])
         self.assertEqual(by_teacher.json()["data"], [])
         self.assertEqual(by_campus.json()["data"], [])
+        # The other tenant's tenant-wide period must not match the `campus IS NULL` half of
+        # the `for_campus` union.
+        self.assertNotIn(
+            str(self.other_period.pk), {row["id"] for row in periods_for_campus.json()["data"]}
+        )
 
     def test_filtering_substitutions_by_another_tenants_staff_returns_nothing(self) -> None:
         response = self.client.get(

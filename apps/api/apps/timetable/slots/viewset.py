@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from django.db.models import F
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import viewsets
@@ -48,8 +49,10 @@ from apps.timetable.slots.filters import TimetableSlotFilterSet
 from apps.timetable.slots.serializers import (
     EffectiveSlotSerializer,
     MyTimetableQuerySerializer,
+    TimetablePublishResultSerializer,
     TimetableSessionRequestSerializer,
     TimetableSlotSerializer,
+    TimetableValidationSerializer,
 )
 from apps.timetable.views import FEATURE, STAFF_PERMISSIONS
 from core.api.exceptions import DomainRuleViolation
@@ -112,7 +115,10 @@ class TimetableSlotViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     serializer_class = TimetableSlotSerializer
     filterset_class = TimetableSlotFilterSet
     search_fields = ["notes"]
-    ordering_fields = ["day_of_week", "created_at"]
+    # `period_sequence` is the grid's row order; annotated, never `period__sequence`, per the
+    # no-`__` rule tests/test_endpoint_contracts.py enforces.
+    ordering_fields = ["day_of_week", "period_sequence", "created_at"]
+    ordering_annotations = ("period_sequence",)
     # "own" for a teacher means the slots they teach, joined through
     # staff.user_id — TimetableSlot.filter_owned_by_user, which takes precedence
     # over this single-column fallback.
@@ -134,6 +140,7 @@ class TimetableSlotViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
             super()
             .get_queryset()
             .select_related("academic_session", "section", "period", "subject", "staff", "room")
+            .annotate(period_sequence=F("period__sequence"))
         )
 
     def _conflict_meta(self, slot: TimetableSlot) -> dict:
@@ -153,13 +160,17 @@ class TimetableSlotViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         responses={
             201: OpenApiResponse(
                 response=TimetableSlotSerializer,
-                description="The slot, plus `meta.conflicts` for the section (§16).",
+                description=(
+                    "The slot, plus `meta.conflicts` for the section (§16): a list of "
+                    "`TimetableConflict`."
+                ),
             )
         },
     )
     def create(self, request: Request, *args, **kwargs) -> Response:
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        services.assert_slot_session_writable(serializer.validated_data["academic_session"])
         self.perform_create(serializer)
 
         # A bare Response, not ActionResponse.ok: that helper wraps its argument
@@ -175,7 +186,10 @@ class TimetableSlotViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         responses={
             200: OpenApiResponse(
                 response=TimetableSlotSerializer,
-                description="The slot, plus `meta.conflicts` for the section (§16).",
+                description=(
+                    "The slot, plus `meta.conflicts` for the section (§16): a list of "
+                    "`TimetableConflict`."
+                ),
             )
         },
     )
@@ -186,9 +200,16 @@ class TimetableSlotViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         # republishing, never in place — otherwise students read a different
         # timetable with neither validation nor notification behind the change.
         services.assert_slot_writable(instance)
+        services.assert_slot_session_writable(instance.academic_session)
 
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
+        # Moving a draft into another session needs that session open too.
+        target_session = serializer.validated_data.get(
+            "academic_session", instance.academic_session
+        )
+        if target_session != instance.academic_session:
+            services.assert_slot_session_writable(target_session)
         self.perform_update(serializer)
 
         return Response({"data": serializer.data, "meta": self._conflict_meta(serializer.instance)})
@@ -204,6 +225,7 @@ class TimetableSlotViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     def destroy(self, request: Request, *args, **kwargs) -> Response:
         instance = self.get_object()
         services.assert_slot_writable(instance)
+        services.assert_slot_session_writable(instance.academic_session)
 
         # Read before the delete: `perform_destroy` mutates the row, and the
         # conflict run needs the session and section it belonged to.
@@ -257,11 +279,12 @@ class TimetableViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
         request=TimetableSessionRequestSerializer,
         responses={
             200: OpenApiResponse(
+                response=TimetableValidationSerializer,
                 description=(
                     "`conflicts` is the machine-readable list "
                     "`{type, severity, slot_ids, message}` (§6); `has_hard_conflicts` "
                     "says whether publish would be refused."
-                )
+                ),
             )
         },
     )
@@ -284,10 +307,14 @@ class TimetableViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
         request=TimetableSessionRequestSerializer,
         responses={
             200: OpenApiResponse(
-                description="Rows published and superseded, plus the accepted soft conflicts."
+                response=TimetablePublishResultSerializer,
+                description="Rows published and superseded, plus the accepted soft conflicts.",
             ),
             422: OpenApiResponse(
-                description="A hard conflict, a locked session, or no draft to publish."
+                description=(
+                    "A hard conflict (the full list in `error.meta.conflicts`, each a "
+                    "`TimetableConflict`), a locked session, or no draft to publish."
+                )
             ),
         },
     )

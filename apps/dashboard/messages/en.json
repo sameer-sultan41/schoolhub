@@ -690,6 +690,15 @@
       "failed": "The export failed."
     }
   },
+  "academicSession": {
+    "label": "Academic session",
+    "placeholder": "Select a session",
+    "current": "Current",
+    "locked": "Closed",
+    "lockedNotice": "{session} is closed, so its records are read-only.",
+    "noSessionTitle": "No current academic session",
+    "noSessionDescription": "Pick a session to see its records, or set one as current under school setup."
+  },
   "academics": {
     "nav": {
       "label": "Academics sections",
@@ -699,11 +708,6 @@
     },
     "common": {
       "close": "Close",
-      "currentSession": "Current",
-      "locked": "Closed",
-      "lockedNotice": "{session} is closed, so its records are read-only.",
-      "noSessionTitle": "No current academic session",
-      "noSessionDescription": "Pick a session to see its records, or set one as current under school setup.",
       "submitFailed": "Something went wrong. Please try again."
     },
     "filters": {
@@ -1009,7 +1013,9 @@
       "close": "Close"
     },
     "filters": {
-      "all": "All"
+      "all": "All",
+      "search": "Search",
+      "clearSearch": "Clear search"
     },
     "fields": {
       "academicSession": "Academic session",
@@ -1045,7 +1051,8 @@
       "substituteTeacher": "Covering teacher",
       "reason": "Reason",
       "status": "Status",
-      "none": "None"
+      "none": "None",
+      "class": "Class"
     },
     "weekdays": {
       "0": "Monday",
@@ -1083,9 +1090,29 @@
       "fillCell": "Fill {cell}",
       "draft": "Draft",
       "publishedBadge": "Published",
-      "published": "Published {count} periods.",
+      "published": "Published {count, plural, one {# period} other {# periods}}.",
       "noPeriods": "No periods have been set up yet. Add the bell schedule first.",
-      "noPeriodsTitle": "No periods yet"
+      "noPeriodsTitle": "No periods yet",
+      "loadError": "The timetable couldn't be loaded.",
+      "replacesPublished": "Replaces the published period",
+      "moveCell": "Move {cell}",
+      "dragInstructions": "To move a draft period, press Space or Enter on its move handle, use the arrow keys to reach an empty period, then press Space or Enter again. Press Escape to cancel.",
+      "dragStart": "Picked up {cell}.",
+      "dragOver": "Over {cell}.",
+      "dragOverInvalid": "{cell}: {reason}",
+      "dragEnd": "Moved to {cell}.",
+      "dragEndInvalid": "Not moved: {reason}",
+      "dragCancel": "Move cancelled.",
+      "dropReasons": {
+        "occupied": "that period already has a class.",
+        "break": "that period is a break.",
+        "notRunning": "that period doesn't run on that day.",
+        "same": "it is already there."
+      },
+      "saved": "Period saved.",
+      "moved": "Period moved.",
+      "discarded": "Draft discarded.",
+      "cellLabel": "{weekday} · {period}"
     },
     "conflicts": {
       "title": "Conflicts",
@@ -1106,18 +1133,26 @@
         "room_over_capacity": "This room is smaller than the section.",
         "subject_repeated_in_day": "This subject appears more than once on one day.",
         "consecutive_periods_over_threshold": "This teacher has more consecutive periods than the school allows."
-      }
+      },
+      "goTo": "Go to {cell}"
     },
     "slot": {
       "form": {
         "createTitle": "Fill this period",
         "editTitle": "Edit this period",
         "subjectHint": "Leave empty for a homeroom or assembly period.",
-        "allocationHint": "This teacher must already be allocated to this section and subject.",
-        "notesHint": "A short per-cell note, such as “double period”."
+        "allocationHint": "Teachers allocated to this subject are listed first. Anyone else can be picked, and is flagged as a conflict.",
+        "notesHint": "A short per-cell note, such as “double period”.",
+        "allocated": "{name} · allocated"
       },
       "actions": {
-        "clear": "Clear this period"
+        "clear": "Clear this period",
+        "discard": "Discard draft",
+        "discardCell": "Discard the draft for {cell}"
+      },
+      "discard": {
+        "title": "Discard this draft",
+        "description": "The draft goes. A published period underneath stays as it is."
       }
     },
     "periods": {
@@ -1134,12 +1169,18 @@
       "list": {
         "caption": "Bell schedule periods",
         "emptyTitle": "No bell schedule yet",
-        "emptyDescription": "Add the periods your day runs on — every week grid is built from these."
+        "emptyDescription": "Add the periods your day runs on — every week grid is built from these.",
+        "loadError": "The bell schedule couldn't be loaded.",
+        "searchPlaceholder": "Search by name",
+        "noMatches": "No periods match these filters",
+        "noMatchesDescription": "Try a different search, or clear a filter."
       },
       "actions": {
         "create": "Add period",
         "edit": "Edit",
-        "delete": "Remove"
+        "delete": "Remove",
+        "editRow": "Edit {name}",
+        "deleteRow": "Remove {name}"
       },
       "form": {
         "createTitle": "Add a period",
@@ -1147,11 +1188,19 @@
         "description": "Periods in one day template may not overlap.",
         "sequenceHint": "The order this period runs in the day, starting at 1.",
         "isBreakHint": "Breaks are never schedulable.",
-        "weekdaysHint": "Leave every box clear to run on the school's normal working days."
+        "weekdaysHint": "Leave every box clear to run on the school's normal working days.",
+        "sequenceInvalid": "Enter a whole number of at least 1.",
+        "endBeforeStart": "The end time must be after the start."
       },
       "delete": {
         "title": "Remove this period",
-        "description": "A period already used by a timetable slot cannot be removed."
+        "description": "A period still on a timetable, in a grid cell or upcoming cover, cannot be removed.",
+        "titleNamed": "Remove {name}"
+      },
+      "saved": "Period saved.",
+      "removed": "Period removed.",
+      "filters": {
+        "kind": "Kind"
       }
     },
     "rooms": {
@@ -1175,12 +1224,18 @@
       "list": {
         "caption": "Rooms",
         "emptyTitle": "No rooms yet",
-        "emptyDescription": "Add the rooms your school teaches in, so the conflict check knows what fits where."
+        "emptyDescription": "Add the rooms your school teaches in, so the conflict check knows what fits where.",
+        "loadError": "The rooms couldn't be loaded.",
+        "searchPlaceholder": "Search by name, code or building",
+        "noMatches": "No rooms match these filters",
+        "noMatchesDescription": "Try a different search, or clear a filter."
       },
       "actions": {
         "create": "Add room",
         "edit": "Edit",
-        "delete": "Remove"
+        "delete": "Remove",
+        "editRow": "Edit {name}",
+        "deleteRow": "Remove {name}"
       },
       "form": {
         "createTitle": "Add a room",
@@ -1189,11 +1244,19 @@
         "codeHint": "Short code shown in the week grid, such as L-12.",
         "capacityHint": "A section larger than this raises a warning, not a block.",
         "capacityBlankHint": "Leave blank when the room has no fixed seating.",
-        "isActiveHint": "A room out of service is not offered when filling the grid."
+        "isActiveHint": "A room out of service is not offered when filling the grid.",
+        "capacityInvalid": "Enter a whole number of at least 1, or leave it blank."
       },
       "delete": {
         "title": "Remove this room",
-        "description": "A room already used by a timetable slot or a section cannot be removed. Take it out of service instead."
+        "description": "A room still on a timetable, in a grid cell or upcoming cover, cannot be removed. Take it out of service instead.",
+        "titleNamed": "Remove {name}"
+      },
+      "saved": "Room saved.",
+      "removed": "Room removed.",
+      "filters": {
+        "type": "Room type",
+        "status": "Status"
       }
     },
     "substitutions": {
@@ -1244,6 +1307,10 @@
       "substituted": "Covered",
       "emptyTitle": "No timetable published yet",
       "emptyDescription": "Once your school publishes the week, your periods appear here."
+    },
+    "publish": {
+      "title": "Publish this timetable",
+      "description": "Teachers, students and guardians see the published week. A timetable with blocking conflicts can't be published."
     }
   },
   "bulkImport": {
@@ -1279,6 +1346,7 @@
     "previous": "Previous",
     "finish": "Finish",
     "noResults": "No records found.",
+    "noOptions": "No options available.",
     "requiredField": "This field is required.",
     "details": "Details",
     "new": "New",
@@ -1311,7 +1379,9 @@
       "uploading": "Uploading photo…",
       "onFile": "Photo on file",
       "uploadFailed": "The photo could not be uploaded."
-    }
+    },
+    "submitFailed": "Something went wrong. Please try again.",
+    "saving": "Saving"
   },
   "errors": {
     "validation_error": "Please correct the highlighted fields.",

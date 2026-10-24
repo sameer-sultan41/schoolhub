@@ -17,9 +17,9 @@ export interface MenuItem {
   separator?: boolean;
   /** A permission-gated module key (e.g. "staff") — an app filters on this; this package never does. */
   module?: string;
-  /** A permission key gating this item (e.g. "academics.curriculum.view") — an app filters on
-   * this; this package never does. */
-  permission?: string;
+  /** The permission key gating this item (e.g. "academics.curriculum.view"), or a list of
+   * keys any one of which will do — an app filters on this; this package never does. */
+  permission?: string | readonly string[];
 }
 
 export type MenuConfig = MenuItem[];

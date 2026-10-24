@@ -72,4 +72,15 @@ describe("FilterSelect", () => {
 
     expect(screen.getByRole("combobox", { name: "Class" })).toBeDisabled();
   });
+
+  it("offers no all choice without allLabel, showing its label until a pick", async () => {
+    const user = userEvent.setup();
+    render(<FilterSelect label="Section" value="" onChange={jest.fn()} options={OPTIONS} />);
+
+    const trigger = screen.getByRole("combobox", { name: "Section" });
+    expect(trigger).toHaveTextContent("Section");
+    await user.click(trigger);
+
+    expect(await screen.findAllByRole("option")).toHaveLength(OPTIONS.length);
+  });
 });

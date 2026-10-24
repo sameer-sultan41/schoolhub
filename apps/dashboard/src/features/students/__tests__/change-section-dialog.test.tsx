@@ -36,7 +36,7 @@ describe("ChangeSectionDialog", () => {
   beforeEach(() => {
     mockFetchSections.mockReset();
     mockChangeStudentSection.mockReset();
-    mockFetchSections.mockResolvedValue([{ id: "section-2", name: "B" }]);
+    mockFetchSections.mockResolvedValue([{ id: "section-2", name: "B", campus_id: "campus-1" }]);
   });
 
   it("shows the current class as a fixed label, not an editable field", () => {

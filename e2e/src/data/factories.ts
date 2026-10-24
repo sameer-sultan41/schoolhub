@@ -131,6 +131,37 @@ export const ACADEMICS_PROMOTION_PERMISSIONS: PermissionKey[] = [
   "academics.promotion.execute",
 ];
 
+/**
+ * The keys the timetable setup screens (periods, rooms) read (timetable.md §4): a
+ * `school_admin`'s set, kept apart from `SCHOOL_ADMIN_PERMISSIONS` so the default admin has no
+ * Timetable sidebar group unless a spec opts in.
+ */
+export const TIMETABLE_SETUP_PERMISSIONS: PermissionKey[] = [
+  "timetable.timetable.view",
+  "timetable.period.create",
+  "timetable.period.update",
+  "timetable.period.delete",
+  "timetable.room.create",
+  "timetable.room.update",
+  "timetable.room.delete",
+];
+
+/**
+ * The keys the week grid reads and writes (timetable.md §4): a `school_admin`'s set, plus the
+ * academics reads its cell form uses (every staff role holds those).
+ */
+export const TIMETABLE_GRID_PERMISSIONS: PermissionKey[] = [
+  "timetable.timetable.view",
+  "timetable.slot.view",
+  "timetable.slot.create",
+  "timetable.slot.update",
+  "timetable.slot.delete",
+  "timetable.timetable.publish",
+  "academics.curriculum.view",
+  "academics.teacher-allocation.view",
+  "staff.staff.view",
+];
+
 /** A module this user must *not* see, for the negative half of a filtering assertion. */
 export const MODULE_WITHOUT_PERMISSION = "Fees & Finance";
 

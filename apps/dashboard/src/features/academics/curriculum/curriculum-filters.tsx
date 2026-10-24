@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FilterSelect } from "@/components/filter-select";
 import { SearchInput } from "@/components/search-input";
 import { useCampuses, useClasses } from "@/hooks/use-reference-data";
-import { SessionPicker } from "@/features/academics/session-picker";
+import { SessionPicker } from "@/components/academic-session/session-picker";
 import type { AcademicSessionSummary } from "@/services";
 import { CURRICULUM_KIND } from "@/services/modules/curriculum/curriculum-constant";
 

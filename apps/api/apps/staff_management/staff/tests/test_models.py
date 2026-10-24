@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime
 
 from django.db import IntegrityError, transaction
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 
 from apps.school_organization.tests.factories import UserFactory
 from apps.staff_management.models import Staff
@@ -106,3 +106,9 @@ class FilterAssignedToUserTests(TenantFixtureMixin, TestCase):
             result = Staff.filter_assigned_to_user(Staff.objects.alive(), user=None)
 
             self.assertFalse(result.exists())
+
+
+class StaffFullNameTests(SimpleTestCase):
+    def test_full_name_is_first_then_last(self) -> None:
+        """The one display format every serializer shows (allocations, slots, cover)."""
+        self.assertEqual(Staff(first_name="Amna", last_name="Raza").full_name, "Amna Raza")

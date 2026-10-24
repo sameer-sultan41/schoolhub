@@ -6,11 +6,11 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Badge, BadgeDot, Button, DataGridColumnHeader, Skeleton } from "@schoolhub/ui";
 import { CalendarOff, Pencil, Trash2, Undo2 } from "lucide-react";
 
+import { EMPTY_VALUE } from "@/lib/constants";
 import { formatDate, todayIsoDate } from "@/lib/helpers";
 import type { TeacherAllocationRecord } from "@/services";
 import {
   ALLOCATION_ACTIONS_COLUMN_ID,
-  ALLOCATION_EMPTY_CELL,
   ALLOCATION_ROW_ACTION,
 } from "@/services/modules/teacher-allocations/teacher-allocations-constant";
 import {
@@ -197,7 +197,7 @@ export function useAllocationColumns(
           if (periods !== null) return periods;
           return (
             <span title={t("allocations.curriculumDefault")}>
-              <span aria-hidden="true">{ALLOCATION_EMPTY_CELL}</span>
+              <span aria-hidden="true">{EMPTY_VALUE}</span>
               <span className="sr-only">{t("allocations.curriculumDefault")}</span>
             </span>
           );

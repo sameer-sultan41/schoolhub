@@ -6,8 +6,8 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Badge, BadgeDot, Button, DataGridColumnHeader } from "@schoolhub/ui";
 import { Pencil } from "lucide-react";
 
+import { EMPTY_VALUE } from "@/lib/constants";
 import type { PromotionDecisionRecord } from "@/services";
-import { PROMOTION_EMPTY_CELL } from "@/services/modules/promotions/promotions-constant";
 import { lacksTargetSection } from "@/services/modules/promotions/promotions-helper";
 import { PromotionDecisionBadge } from "./promotion-decision-badge";
 
@@ -17,7 +17,7 @@ function EmptyCell() {
 
   return (
     <>
-      <span aria-hidden="true">{PROMOTION_EMPTY_CELL}</span>
+      <span aria-hidden="true">{EMPTY_VALUE}</span>
       <span className="sr-only">{t("promotions.fields.none")}</span>
     </>
   );

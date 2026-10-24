@@ -6,11 +6,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 import { FilterSelect } from "@/components/filter-select";
 import { SearchInput } from "@/components/search-input";
-import { SessionPicker } from "@/features/academics/session-picker";
-import { useClasses, useSections, useSubjects } from "@/hooks/use-reference-data";
+import { SessionPicker } from "@/components/academic-session/session-picker";
+import {
+  useClasses,
+  useSections,
+  useSubjects,
+  useTeachingStaffOptions,
+} from "@/hooks/use-reference-data";
 import type { AcademicSessionSummary } from "@/services";
 import { ALLOCATION_STATE } from "@/services/modules/teacher-allocations/teacher-allocations-constant";
-import { useTeachingStaffOptions } from "./use-teaching-staff-options";
 
 export interface AllocationFiltersProps {
   searchInput: string;

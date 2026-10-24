@@ -161,7 +161,8 @@ either this file or `project-status.md`.
 - **No `node_modules` locally.** Nothing is installed, built, linted, or tested
   locally — CI is the source of truth.
 - **No module screens beyond the dashboard home + student-management +
-  staff-management + timetable.** Fees, attendance, academics, examinations,
+  staff-management + academics + timetable's setup screens (periods, rooms).** Fees,
+  attendance, examinations,
   communication, parent-portal, … are untouched — the gap against
   [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.md) tier 2+.
   Attendance is **deliberately** backend-only for now: its three PRs ship the API
@@ -187,6 +188,22 @@ either this file or `project-status.md`.
   transaction, unlike `TenantMiddleware` — resolved it.
   `e2e/tests/live/api/school-settings.spec.ts` now asserts the working
   patch→read journey rather than pinning the bug.
+- **The live E2E lane has not yet run past setup on CI.** All 50 recorded `e2e-live` runs
+  failed before a test: MinIO's withdrawn images (ADR-0025), then the frontend build, the
+  PgBouncer userlist and migrations (ADR-0026). Until a dispatched run gets to the tests, no
+  live journey (timetable, academics, students) has run against the real stack.
+- **`frontend.yml`'s Playwright browser cache never hits the right key.** Its version step
+  runs `require('@playwright/test/package.json')` from the repo root, where the package (an
+  `e2e` dependency, not hoisted) can't be found, so the key is always `playwright-Linux-`.
+  `e2e-live` dropped its browser cache for this reason (ADR-0026). The PR gate's cache is left
+  as is, since removing it changes the gate's timing, a decision of its own. Either resolve
+  the version with `pnpm --filter @schoolhub/e2e exec node -p …` or drop the cache, as
+  Playwright's CI docs advise.
+- **The dashboard image's auth-proxy target is fixed at build time.** The `/api/auth/*`
+  rewrite reads `API_BASE_URL` (then `NEXT_PUBLIC_API_BASE_URL`) in `next.config.ts`, which a
+  standalone build serializes at `next build`. One image can't be pointed at a different API
+  per environment without a rebuild, which `infra/AGENTS.md` rule 5 (one image promoted
+  staging → production) will need before a real deploy.
 - **`timetable`'s gaps are named, not hidden.** `POST
   /timetables/{section_id}:generate-draft` is **not built**: it is AI-TTB-01,
   Phase 3 work that has to go through the `core/ai` gateway (AGENTS.md hard
@@ -201,6 +218,30 @@ either this file or `project-status.md`.
   families. `services._slot_weekday` is correct only while a tenant starts its
   week on Monday; the real conversion belongs with the tenant week-start
   setting, which does not exist yet.
+- **A teacher has no Timetable entry until PR C.** Timetable dashboard PR A ships only the
+  setup sections (gated on `timetable.period.update` / `timetable.room.update`), so a viewer
+  holding just `timetable.timetable.view` gets no sidebar group, and `/timetable` shows the
+  "no permission" landing. PR C adds My timetable, which every role reaches.
+- **The week grid's drag-and-drop moves pure drafts only, into empty cells.** A published
+  cell, or a draft that replaces one, has no handle: moving it would leave the published class
+  showing at the source, because a published cell can't be cleared (the entry below). A drop
+  onto an occupied cell is refused rather than swapped. Both wait for a decision on removing
+  published cells.
+- **A period edit can strand timetable cells.** Editing a period to a break, or dropping a
+  weekday from it, is not checked against the cells that use it (`periods/services.py` guards
+  only overlap and removal). Those cells then raise hard `period_is_break` /
+  `period_not_on_weekday` findings and block publish; the week grid still shows them, with
+  Discard on a draft, but a *published* cell in that state can't be cleared (the entry below).
+  A guard on the period edit, like the delete guard, is the fix.
+- **The week grid's columns are Monday to Friday, with no way to start a Saturday.** A weekend
+  column appears only once a cell already sits on it (`visibleWeekdays`,
+  `DEFAULT_VISIBLE_WEEKDAYS`), so a six-day school can never place its first Saturday period
+  from the grid, though the API accepts any weekday and a period's `weekdays` can name one.
+  Deriving the columns needs the tenant's working days, which the dashboard doesn't read yet
+  (the settings screen is not built); showing every day a period runs on is the interim.
+- **The grid shows no weekly-target indicator.** `weekly_periods` on the curriculum and on an
+  allocation is not checked by the conflict engine, and the grid doesn't count placed periods
+  against it either; a "Mathematics 4 of 5" strip is a client-side follow-up.
 - **A published timetable cell cannot be removed.** `:publish` now supersedes
   cell by cell — a live row is end-dated only where a draft exists to replace
   it. Before, it end-dated every live row in the section, and since the builder
@@ -1478,3 +1519,11 @@ either this file or `project-status.md`.
   the space beside "Curriculum", and expects the route to change would pin it. Top-level items
   (Students, Staff) grow their link but leave the row's side padding as a dead strip of a few
   pixels; the same stretched link would close it.
+
+- **Two dropdowns still open blank when their list is empty.** `SelectContent` now takes an
+  `emptyMessage` (translated by the caller; `packages/ui` has no i18n), and the form select field,
+  the session picker and the student enroll, class and section, transfer and create-profile
+  dropdowns pass `common.noOptions`. The guardian picker's search-result list and the campus
+  select in the staff form dialog do not yet: the staff dialog gets its text through a different
+  path than the others, so it needs its own wiring. Selects with a fixed list (gender, status)
+  can never be empty and need nothing.

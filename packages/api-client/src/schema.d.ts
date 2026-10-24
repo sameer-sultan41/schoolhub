@@ -9058,6 +9058,7 @@ export interface components {
             readonly id?: string;
             /** Format: uuid */
             campus_id?: string | null;
+            readonly campus_name?: string | null;
             /** @description e.g. "Period 1", "Recess". */
             name?: string;
             /** @description Daily order, 1-based. */
@@ -9072,7 +9073,7 @@ export interface components {
             /** @description Breaks are never schedulable (§5.1). */
             is_break?: boolean;
             /** @description Applicable weekdays as 0-6; null = the tenant's working days. */
-            weekdays?: unknown;
+            weekdays?: number[] | null;
             /** Format: date-time */
             readonly created_at?: string;
             /** Format: date-time */
@@ -9227,6 +9228,7 @@ export interface components {
             readonly id?: string;
             /** Format: uuid */
             campus_id?: string;
+            readonly campus_name?: string;
             name?: string;
             code?: string;
             room_type?: components["schemas"]["RoomTypeEnum"];
@@ -9529,16 +9531,26 @@ export interface components {
             academic_session_id?: string;
             /** Format: uuid */
             section_id?: string;
+            readonly section_name?: string;
             /** @description 0-6; the week's start comes from tenant configuration. */
             day_of_week?: number;
             /** Format: uuid */
             period_id?: string;
+            readonly period_name?: string;
+            readonly period_sequence?: number;
+            /** Format: time */
+            readonly start_time?: string;
+            /** Format: time */
+            readonly end_time?: string;
             /** Format: uuid */
             subject_id?: string | null;
+            readonly subject_name?: string | null;
             /** Format: uuid */
             staff_id?: string | null;
+            readonly staff_name?: string | null;
             /** Format: uuid */
             room_id?: string | null;
+            readonly room_name?: string | null;
             readonly status?: components["schemas"]["TimetableSlotStatusEnum"];
             /** Format: date */
             readonly effective_from?: string | null;
@@ -9610,6 +9622,7 @@ export interface components {
             readonly id: string;
             /** Format: uuid */
             campus_id?: string | null;
+            readonly campus_name: string | null;
             /** @description e.g. "Period 1", "Recess". */
             name: string;
             /** @description Daily order, 1-based. */
@@ -9624,7 +9637,7 @@ export interface components {
             /** @description Breaks are never schedulable (§5.1). */
             is_break?: boolean;
             /** @description Applicable weekdays as 0-6; null = the tenant's working days. */
-            weekdays?: unknown;
+            weekdays?: number[] | null;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -10066,6 +10079,7 @@ export interface components {
             readonly id: string;
             /** Format: uuid */
             campus_id: string;
+            readonly campus_name: string;
             name: string;
             code: string;
             room_type?: components["schemas"]["RoomTypeEnum"];
@@ -10797,6 +10811,39 @@ export interface components {
             readonly updated_at: string;
         };
         /**
+         * @description One finding of the conflict engine (§6): what `slots.conflicts.detect_conflicts`
+         *     returns, typed so the client reads `:validate`, `:publish` and every slot write's
+         *     `meta.conflicts` through one generated shape.
+         */
+        TimetableConflict: {
+            /** @description e.g. `teacher_double_booked`; a client shows an unknown type by `message`. */
+            type: string;
+            /**
+             * @description Hard blocks publish; soft only warns.
+             *
+             *     * `hard` - hard
+             *     * `soft` - soft
+             */
+            severity: components["schemas"]["TimetableConflictSeverityEnum"];
+            slot_ids: string[];
+            message: string;
+        };
+        /**
+         * @description * `hard` - hard
+         *     * `soft` - soft
+         * @enum {string}
+         */
+        TimetableConflictSeverityEnum: "hard" | "soft";
+        /**
+         * @description `:publish`'s answer: drafts made live, live cells they end-dated, and the soft
+         *     conflicts accepted along the way.
+         */
+        TimetablePublishResult: {
+            published: number;
+            superseded: number;
+            conflicts: components["schemas"]["TimetableConflict"][];
+        };
+        /**
          * @description Body of `:validate` and `:publish`.
          *
          *     The session is optional: a school runs one current session at a time and the
@@ -10827,16 +10874,26 @@ export interface components {
             academic_session_id: string;
             /** Format: uuid */
             section_id: string;
+            readonly section_name: string;
             /** @description 0-6; the week's start comes from tenant configuration. */
             day_of_week: number;
             /** Format: uuid */
             period_id: string;
+            readonly period_name: string;
+            readonly period_sequence: number;
+            /** Format: time */
+            readonly start_time: string;
+            /** Format: time */
+            readonly end_time: string;
             /** Format: uuid */
             subject_id?: string | null;
+            readonly subject_name: string | null;
             /** Format: uuid */
             staff_id?: string | null;
+            readonly staff_name: string | null;
             /** Format: uuid */
             room_id?: string | null;
+            readonly room_name: string | null;
             readonly status: components["schemas"]["TimetableSlotStatusEnum"];
             /** Format: date */
             readonly effective_from: string | null;
@@ -10858,6 +10915,15 @@ export interface components {
          * @enum {string}
          */
         TimetableSlotStatusEnum: "draft" | "published";
+        /** @description `:validate`'s answer: the section's full conflict list. */
+        TimetableValidation: {
+            /** Format: uuid */
+            section_id: string;
+            /** Format: uuid */
+            academic_session_id: string;
+            conflicts: components["schemas"]["TimetableConflict"][];
+            has_hard_conflicts: boolean;
+        };
         /**
          * @description `section_id` is required only for an inter-campus transfer whose student still has
          *
@@ -16394,6 +16460,7 @@ export interface operations {
         parameters: {
             query?: {
                 campus_id?: string;
+                for_campus?: string;
                 is_break?: boolean;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
@@ -20281,6 +20348,7 @@ export interface operations {
         parameters: {
             query?: {
                 academic_session_id?: string;
+                current?: boolean;
                 /** @description The pagination cursor value. */
                 cursor?: string;
                 /** @description Which field to use when ordering the results. */
@@ -20330,7 +20398,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The slot, plus `meta.conflicts` for the section (§16). */
+            /** @description The slot, plus `meta.conflicts` for the section (§16): a list of `TimetableConflict`. */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -20434,9 +20502,11 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["TimetablePublishResult"];
+                };
             };
-            /** @description A hard conflict, a locked session, or no draft to publish. */
+            /** @description A hard conflict (the full list in `error.meta.conflicts`, each a `TimetableConflict`), a locked session, or no draft to publish. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20467,7 +20537,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["TimetableValidation"];
+                };
             };
         };
     };

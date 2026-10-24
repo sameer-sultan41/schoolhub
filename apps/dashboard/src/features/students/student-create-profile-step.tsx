@@ -312,7 +312,7 @@ export function StudentCreateProfileStep({
                         />
                       </SelectTrigger>
                     </FormControl>
-                    <SelectContent>
+                    <SelectContent emptyMessage={tCommon("noOptions")}>
                       {(campusesQuery.data ?? []).map((c) => (
                         <SelectItem key={c.id} value={c.id}>
                           {c.name}

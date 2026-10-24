@@ -4,12 +4,15 @@ import { DashboardService } from "./modules/dashboard";
 import { FilesService } from "./modules/files";
 import { GuardiansService } from "./modules/guardians";
 import { JobsService } from "./modules/jobs";
+import { PeriodsService } from "./modules/periods";
 import { PromotionsService } from "./modules/promotions";
+import { RoomsService } from "./modules/rooms";
 import { SchoolOrganizationService } from "./modules/school-organization";
 import { StaffService } from "./modules/staff";
 import { StudentsService } from "./modules/students";
 import { StudentTransfersService } from "./modules/student-transfers";
 import { TeacherAllocationsService } from "./modules/teacher-allocations";
+import { TimetableSlotsService } from "./modules/timetable-slots";
 import { TenantService } from "./modules/tenant";
 
 /**
@@ -52,9 +55,24 @@ export type {
   UpdateDecisionInput,
 } from "./modules/promotions";
 
+export type { PeriodInput, PeriodPageQuery, PeriodRecord } from "./modules/periods";
+
+export type { RoomInput, RoomPageQuery, RoomRecord, RoomType } from "./modules/rooms";
+
+export type {
+  ConflictSeverity,
+  SlotInput,
+  SlotWriteResult,
+  TimetableConflict,
+  TimetablePublishResult,
+  TimetableSlotRecord,
+  TimetableValidation,
+} from "./modules/timetable-slots";
+
 export type {
   AcademicSessionSummary,
   SchoolOrganizationOption,
+  SectionOption,
 } from "./modules/school-organization";
 
 export type {
@@ -98,6 +116,9 @@ export const Services = {
   curriculum: CurriculumService,
   teacherAllocations: TeacherAllocationsService,
   promotions: PromotionsService,
+  periods: PeriodsService,
+  rooms: RoomsService,
+  timetableSlots: TimetableSlotsService,
   guardians: GuardiansService,
   staff: StaffService,
   students: StudentsService,

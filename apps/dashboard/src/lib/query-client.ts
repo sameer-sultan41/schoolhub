@@ -59,6 +59,12 @@ export const queryKeys = {
   session: () => ["session"] as const,
   tenant: () => ["tenant"] as const,
   currentUser: () => ["dashboard", "current-user"] as const,
+  /** The home screen's read of `/timetables/my` for one date; with no date, every date's
+   * entry (a timetable publish refreshes them all). */
+  myTimetable: (date?: string) =>
+    date === undefined
+      ? (["dashboard", "my-timetable"] as const)
+      : (["dashboard", "my-timetable", date] as const),
   module: (module: string) => [module] as const,
   list: (module: string, resource: string, params?: Record<string, unknown>) =>
     [module, resource, "list", params ?? {}] as const,

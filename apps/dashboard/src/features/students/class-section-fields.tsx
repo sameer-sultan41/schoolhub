@@ -117,7 +117,7 @@ export function ClassSectionFields<TFieldValues extends FieldValues>({
                     />
                   </SelectTrigger>
                 </FormControl>
-                <SelectContent>
+                <SelectContent emptyMessage={tCommon("noOptions")}>
                   {(classesQuery.data ?? []).map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       {c.name}
@@ -148,7 +148,7 @@ export function ClassSectionFields<TFieldValues extends FieldValues>({
                   />
                 </SelectTrigger>
               </FormControl>
-              <SelectContent>
+              <SelectContent emptyMessage={tCommon("noOptions")}>
                 {(sectionsQuery.data ?? []).map((s) => (
                   <SelectItem key={s.id} value={s.id}>
                     {s.name}
