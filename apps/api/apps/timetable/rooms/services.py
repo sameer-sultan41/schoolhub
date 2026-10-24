@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.timetable.models import (
@@ -21,8 +22,11 @@ def assert_room_not_in_use(room: Room) -> None:
     (`is_active`) is the way to retire one that is still timetabled.
     """
     in_grid = TimetableSlot.objects.alive().filter(room=room, effective_to__isnull=True)
+    # A cover with no room of its own keeps its slot's room, so it names this one too.
     in_cover = TeacherSubstitution.objects.alive().filter(
-        room=room, status__in=OPEN_SUBSTITUTION_STATUSES, date__gte=timezone.localdate()
+        Q(room=room) | Q(room__isnull=True, timetable_slot__room=room),
+        status__in=OPEN_SUBSTITUTION_STATUSES,
+        date__gte=timezone.localdate(),
     )
     if in_grid.exists() or in_cover.exists():
         raise DomainRuleViolation(
