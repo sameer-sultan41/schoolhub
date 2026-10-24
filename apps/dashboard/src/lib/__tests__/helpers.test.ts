@@ -1,6 +1,7 @@
 import {
   downloadFile,
   formatDate,
+  isIsoDate,
   isUuid,
   stableSignedUrl,
   todayIsoDate,
@@ -117,6 +118,26 @@ describe("formatDate", () => {
     it("renders a date-only string as the same calendar date, not one day earlier", () => {
       expect(formatDate("2026-01-05")).toBe("January 5th, 2026");
     });
+  });
+});
+
+describe("isIsoDate", () => {
+  it("accepts a real calendar date, a leap day included", () => {
+    expect(isIsoDate("2026-10-24")).toBe(true);
+    expect(isIsoDate("2028-02-29")).toBe(true);
+  });
+
+  it("rejects a date that is not on the calendar", () => {
+    expect(isIsoDate("2026-13-45")).toBe(false);
+    expect(isIsoDate("2026-02-30")).toBe(false);
+    expect(isIsoDate("2027-02-29")).toBe(false);
+    expect(isIsoDate("2026-00-10")).toBe(false);
+  });
+
+  it("rejects text that is not YYYY-MM-DD", () => {
+    expect(isIsoDate("")).toBe(false);
+    expect(isIsoDate("2026-1-5")).toBe(false);
+    expect(isIsoDate("24/10/2026")).toBe(false);
   });
 });
 
