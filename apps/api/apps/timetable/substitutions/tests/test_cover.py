@@ -4,6 +4,7 @@ again after a reject or a cancel (timetable.md §7.2)."""
 from __future__ import annotations
 
 import datetime
+from unittest import mock
 
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
@@ -342,6 +343,19 @@ class CandidatesTests(CoverTestCase):
             )
 
         self.assertEqual([cover.substitute_staff_id for cover in proposed], [first.pk])
+
+    def test_a_supplied_away_set_is_used_without_another_lookup(self) -> None:
+        with (
+            tenant_context(self.tenant.id),
+            mock.patch.object(services, "_staff_away_on") as lookup,
+        ):
+            free = services.free_substitutes(
+                slot=self.slot, on_date=MONDAY, absent_staff=self.teacher, away={self.cover.pk}
+            )
+            names = {staff.pk for staff in free}
+
+        lookup.assert_not_called()
+        self.assertNotIn(self.cover.pk, names)
 
     def test_a_draft_slot_or_the_wrong_weekday_is_refused(self) -> None:
         draft = self.make_slot(period=self.periods[1])

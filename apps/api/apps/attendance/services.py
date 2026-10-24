@@ -1397,7 +1397,7 @@ def staff_away_on(*, on_date: datetime.date) -> set[uuid.UUID]:
         StaffAttendance.objects.alive()
         .filter(
             attendance_date=on_date,
-            status__in=(StaffAttendanceStatus.ABSENT, StaffAttendanceStatus.ON_LEAVE),
+            status__in=ABSENT_STAFF_STATUSES,
         )
         .values_list("staff_id", flat=True)
     )
