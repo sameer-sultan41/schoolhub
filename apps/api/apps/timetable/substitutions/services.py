@@ -101,7 +101,9 @@ def _staff_away_on(on_date: date) -> set[uuid.UUID]:
     return staff_away_on(on_date=on_date)
 
 
-def free_substitutes(*, slot: TimetableSlot, on_date: date, absent_staff: Staff):
+def free_substitutes(
+    *, slot: TimetableSlot, on_date: date, absent_staff: Staff, away: set[uuid.UUID] | None = None
+):
     """Every teacher who could cover `slot` on `on_date`, in one query plus attendance's two.
 
     Active teaching staff **at the slot's own campus** (cover across sites is a teacher
@@ -120,7 +122,7 @@ def free_substitutes(*, slot: TimetableSlot, on_date: date, absent_staff: Staff)
         .exclude(pk=absent_staff.pk)
         .exclude(pk__in=_teaching_in_cell(slot).filter(staff__isnull=False).values("staff_id"))
         .exclude(pk__in=_covering_in_cell(slot, on_date).values("substitute_staff_id"))
-        .exclude(pk__in=_staff_away_on(on_date))
+        .exclude(pk__in=_staff_away_on(on_date) if away is None else away)
     )
 
 
@@ -448,6 +450,7 @@ def propose_substitutions_for_absence(
     the coverable ones uncovered too. The caller logs the shortfall.
     """
     proposed: list[TeacherSubstitution] = []
+    away = _staff_away_on(on_date)  # the same for every slot of the day
 
     for slot in slots_needing_cover(staff=staff, on_date=on_date):
         already = TeacherSubstitution.objects.alive().filter(
@@ -456,7 +459,9 @@ def propose_substitutions_for_absence(
         if already.exists():
             continue
 
-        substitute = _first_free_substitute(slot=slot, on_date=on_date, absent_staff=staff)
+        substitute = _first_free_substitute(
+            slot=slot, on_date=on_date, absent_staff=staff, away=away
+        )
         if substitute is None:
             logger.info(
                 "no free substitute for slot %s on %s; leaving it uncovered", slot.pk, on_date
@@ -487,9 +492,10 @@ def propose_substitutions_for_absence(
 
 
 def _first_free_substitute(
-    *, slot: TimetableSlot, on_date: date, absent_staff: Staff
+    *, slot: TimetableSlot, on_date: date, absent_staff: Staff, away: set[uuid.UUID] | None = None
 ) -> Staff | None:
-    """The first of `free_substitutes`, by `pk`.
+    """The first of `free_substitutes`, by `pk`. `away` is the day's away set when the caller
+    already has it (one lookup for a whole absence, not one per slot).
 
     Deliberately *first free*, not *best*: §6's ranking and §14's AI-TTB-03 are the
     ranked suggestion (workload balance, subject match), and neither exists yet. Picking
@@ -497,7 +503,7 @@ def _first_free_substitute(
     at least stable across runs.
     """
     return (
-        free_substitutes(slot=slot, on_date=on_date, absent_staff=absent_staff)
+        free_substitutes(slot=slot, on_date=on_date, absent_staff=absent_staff, away=away)
         .order_by("pk")
         .first()
     )
