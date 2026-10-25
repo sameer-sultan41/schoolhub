@@ -39,6 +39,7 @@ describe("Services", () => {
       "files",
       "guardians",
       "jobs",
+      "leaveRequests",
       "periods",
       "promotions",
       "rooms",
@@ -149,6 +150,12 @@ describe("Services", () => {
     expect(typeof Services.studentAttendance.bulkMark).toBe("function");
 
     expect(typeof Services.attendanceCorrections.requestCorrection).toBe("function");
+    expect(typeof Services.attendanceCorrections.fetchCorrectionPage).toBe("function");
+    expect(typeof Services.attendanceCorrections.decideCorrection).toBe("function");
+
+    expect(typeof Services.leaveRequests.fetchLeavePage).toBe("function");
+    expect(typeof Services.leaveRequests.fetchLeaveTypes).toBe("function");
+    expect(typeof Services.leaveRequests.decideLeave).toBe("function");
 
     expect(typeof Services.periods.fetchPeriodPage).toBe("function");
     expect(typeof Services.periods.createPeriod).toBe("function");

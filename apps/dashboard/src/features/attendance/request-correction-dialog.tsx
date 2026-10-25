@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
@@ -20,6 +21,7 @@ import { FormDialogLayout } from "@/components/form-dialog-layout";
 import { FormSelectField } from "@/components/form-select-field";
 import { useFormDialogSubmit } from "@/hooks/use-form-dialog-submit";
 import { formatDate } from "@/lib/helpers";
+import { queryKeys } from "@/lib/query-client";
 import {
   Services,
   type AttendanceCorrectionRecord,
@@ -28,6 +30,7 @@ import {
 import {
   CORRECTION_ERROR_FIELDS,
   CORRECTION_REASON_MAX_LENGTH,
+  CORRECTIONS_QUERY_MODULE,
 } from "@/services/modules/attendance-corrections/attendance-corrections-constant";
 import {
   buildCorrectionNewValues,
@@ -79,6 +82,7 @@ export function RequestCorrectionDialog({
   const t = useTranslations("attendance");
   const tCommon = useTranslations("common");
   const locale = useLocale();
+  const queryClient = useQueryClient();
   const { record } = target;
 
   const schema = useMemo(
@@ -108,6 +112,8 @@ export function RequestCorrectionDialog({
       }),
     knownFields: CORRECTION_ERROR_FIELDS,
     onSuccess: (correction) => {
+      // The request joins the Corrections queue.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.module(CORRECTIONS_QUERY_MODULE) });
       toast.success(t("correction.requested"));
       onRequested?.(correction);
       onOpenChange(false);

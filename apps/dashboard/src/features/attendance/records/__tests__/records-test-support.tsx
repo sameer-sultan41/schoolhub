@@ -1,5 +1,5 @@
 import type { PermissionKey } from "@schoolhub/types";
-import { screen, within } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { Services } from "@/services";
@@ -8,6 +8,7 @@ import {
   SECTION_ID,
 } from "@/services/modules/student-attendance/__tests__/student-attendance-fixtures";
 import { amna, bilal, CAMPUS_ID, CLASS_ID, sara } from "@/test-fixtures/attendance-records";
+import { cursorPages, lastArg, mocked } from "@/test-fixtures/list-screen";
 import { USER_LOADED, UserLoaded } from "@/test-fixtures/user-loaded";
 import { buildUser, renderWithProviders, setUrl } from "@/test-utils";
 
@@ -15,8 +16,8 @@ import { RecordsTable } from "../records-table";
 
 /** Shared setup for the Records tests; each file keeps its own `jest.mock` calls (hoisting). */
 
-export const mocked = <T extends (...args: never[]) => unknown>(fn: T) =>
-  fn as jest.MockedFunction<T>;
+export { pick, rowOf, urlParam } from "@/test-fixtures/list-screen";
+
 export const fetchPage = mocked(Services.studentAttendance.fetchAttendancePage);
 export const requestCorrection = mocked(Services.attendanceCorrections.requestCorrection);
 
@@ -43,11 +44,10 @@ export function stubRecordsServices() {
 
 /** Two pages by cursor: Amna and Bilal, then Sara (`c2`). */
 export function pageByCursor() {
-  fetchPage.mockImplementation((query) =>
-    Promise.resolve(
-      query.cursor === "c2"
-        ? attendancePage([sara], { previous: "c1" })
-        : attendancePage([amna, bilal], { next: "c2" }),
+  fetchPage.mockImplementation(
+    cursorPages(
+      attendancePage([amna, bilal], { next: "c2" }),
+      attendancePage([sara], { previous: "c1" }),
     ),
   );
 }
@@ -63,22 +63,4 @@ export async function renderRecords() {
   return userEvent.setup();
 }
 
-export const urlParam = (key: string) => new URLSearchParams(window.location.search).get(key);
-export const lastQuery = () => fetchPage.mock.calls[fetchPage.mock.calls.length - 1]?.[0];
-
-/** Queries within the table row that shows `name`. */
-export function rowOf(name: string) {
-  const row = screen.getByText(name).closest("tr");
-  if (!row) throw new Error(`no row for ${name}`);
-  return within(row);
-}
-
-/** Opens the `combobox` select and picks `option`. */
-export async function pick(
-  user: ReturnType<typeof userEvent.setup>,
-  combobox: string,
-  option: string,
-) {
-  await user.click(screen.getByRole("combobox", { name: combobox }));
-  await user.click(await screen.findByRole("option", { name: option }));
-}
+export const lastQuery = () => lastArg(fetchPage);

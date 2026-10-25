@@ -3,7 +3,10 @@ import { z } from "zod";
 import { ATTENDANCE_REMARKS_MAX_LENGTH } from "@/services/modules/student-attendance/student-attendance-constant";
 import { isMarkableStatus } from "@/services/modules/student-attendance/student-attendance-helper";
 import type { MarkableStatus } from "@/services/modules/student-attendance/student-attendance-type";
-import { CORRECTION_REASON_MAX_LENGTH } from "./attendance-corrections-constant";
+import {
+  CORRECTION_REASON_MAX_LENGTH,
+  CORRECTION_REVIEW_NOTE_MAX_LENGTH,
+} from "./attendance-corrections-constant";
 
 /**
  * The request-correction form, with the API's own field names so a server error lands under
@@ -45,3 +48,12 @@ export function createCorrectionFormSchema(messages: CorrectionFormMessages) {
 export const correctionFormSchema = createCorrectionFormSchema(CORRECTION_FORM_MESSAGE_KEYS);
 
 export type CorrectionFormValues = z.infer<typeof correctionFormSchema>;
+
+/** The approve / reject dialog: an optional note, `""` for none. */
+export function createDecisionFormSchema(messages: { noteTooLong: string }) {
+  return z.object({
+    review_note: z.string().max(CORRECTION_REVIEW_NOTE_MAX_LENGTH, messages.noteTooLong),
+  });
+}
+
+export type CorrectionDecisionFormValues = z.infer<ReturnType<typeof createDecisionFormSchema>>;
