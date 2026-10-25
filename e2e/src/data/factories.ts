@@ -197,6 +197,23 @@ export const ATTENDANCE_SETTINGS_PERMISSIONS: PermissionKey[] = [
   "school.settings.update",
 ];
 
+/** A correction approver (attendance.md §4: `principal`, `vice_principal`, `school_admin`). */
+export const ATTENDANCE_CORRECTION_APPROVER_PERMISSIONS: PermissionKey[] = [
+  "attendance.correction.approve",
+  "attendance.student-attendance.view",
+];
+
+/**
+ * A leave approver (attendance.md §4: `class_teacher`, `vice_principal`, `principal`): the queue,
+ * the decision, and `platform.file.view` for an attachment, which every staff role holds.
+ */
+export const ATTENDANCE_LEAVE_APPROVER_PERMISSIONS: PermissionKey[] = [
+  "attendance.leave-request.view",
+  "attendance.leave-request.approve",
+  "attendance.student-attendance.view",
+  "platform.file.view",
+];
+
 /** A module this user must *not* see, for the negative half of a filtering assertion. */
 export const MODULE_WITHOUT_PERMISSION = "Fees & Finance";
 

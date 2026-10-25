@@ -3,6 +3,8 @@ export * from "./dashboard/academics/allocations.page";
 export * from "./dashboard/academics/curriculum.page";
 export * from "./dashboard/academics/promotion-batch.page";
 export * from "./dashboard/academics/promotions.page";
+export * from "./dashboard/attendance/corrections.page";
+export * from "./dashboard/attendance/leave.page";
 export * from "./dashboard/attendance/records.page";
 export * from "./dashboard/attendance/register.page";
 export * from "./dashboard/attendance/settings.page";

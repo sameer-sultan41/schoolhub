@@ -1,4 +1,4 @@
-import { fail, pagedList, type MockResponse } from "./envelope";
+import { fail, pagedList, paginated, type MockResponse } from "./envelope";
 import type { AcademicSession } from "./domains/school-organization";
 
 /**
@@ -51,6 +51,45 @@ export function pageOf(matching: readonly unknown[], params: URLSearchParams): M
     page,
     page_size: pageSize,
     total_count: matching.length,
+  });
+}
+
+/** DRF's `CursorPagination.invalid_cursor_message`, verbatim (no full stop). */
+export const INVALID_CURSOR = "Invalid cursor";
+
+/** What `CursorPagination.decode_cursor` raises for a cursor it cannot decode, as the envelope
+ * handler flattens a string detail. */
+export function invalidCursorResponse(): MockResponse {
+  return fail(404, INVALID_CURSOR, { details: [{ field: "non_field", issue: INVALID_CURSOR }] });
+}
+
+/** `core.api.pagination.CursorPagination.page_size`. */
+const CURSOR_PAGE_SIZE = 25;
+/** The stub's own cursor token; DRF's is opaque base64, and the dashboard only echoes it back. */
+const CURSOR_PREFIX = "e2e-offset-";
+
+/**
+ * One cursor page of `matching`, honouring `?page_size=` and a `?cursor=` this helper issued.
+ * Any other cursor, or one past the end, is the server's 404 "Invalid cursor".
+ */
+export function cursorPageOf(matching: readonly unknown[], params: URLSearchParams): MockResponse {
+  const pageSize = Number(params.get("page_size")) || CURSOR_PAGE_SIZE;
+  const cursor = params.get("cursor");
+  let start = 0;
+  if (cursor) {
+    const offset = cursor.startsWith(CURSOR_PREFIX)
+      ? Number(cursor.slice(CURSOR_PREFIX.length))
+      : Number.NaN;
+    if (!Number.isInteger(offset) || offset < 0 || offset >= matching.length) {
+      return invalidCursorResponse();
+    }
+    start = offset;
+  }
+  const end = start + pageSize;
+  return paginated(matching.slice(start, end), {
+    page_size: pageSize,
+    next_cursor: end < matching.length ? `${CURSOR_PREFIX}${end}` : null,
+    previous_cursor: start > 0 ? `${CURSOR_PREFIX}${Math.max(0, start - pageSize)}` : null,
   });
 }
 
