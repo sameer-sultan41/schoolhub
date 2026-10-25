@@ -11,9 +11,11 @@ import { isIsoDate, isUuid, todayIsoDate } from "@/lib/helpers";
 import { queryKeys } from "@/lib/query-client";
 import { Services, type MyRegister } from "@/services";
 import {
-  DEFAULT_ATTENDANCE_MODE,
-  MY_REGISTERS_RESOURCE,
+  DAILY_ATTENDANCE_MODE,
   PERIOD_ATTENDANCE_MODE,
+} from "@/services/modules/attendance-settings/attendance-settings-constant";
+import {
+  MY_REGISTERS_RESOURCE,
   REGISTER_URL_KEYS,
   STUDENT_ATTENDANCE_QUERY_MODULE,
 } from "@/services/modules/student-attendance/student-attendance-constant";
@@ -50,7 +52,7 @@ export function RegisterScreen() {
   const mode = myRegistersQuery.data?.attendanceMode;
   const registers = myRegistersQuery.data?.registers;
   const periodMode = mode === PERIOD_ATTENDANCE_MODE;
-  const periodId = mode === DEFAULT_ATTENDANCE_MODE ? "" : periodParam;
+  const periodId = mode === DAILY_ATTENDANCE_MODE ? "" : periodParam;
   const sameSection = (register: MyRegister) => register.section_id === sectionId;
   const openRegister = registers?.find(
     (register) => sameSection(register) && (register.period_id ?? "") === periodId,
