@@ -14,6 +14,10 @@ something §13's reports and §5.5's correction gate depend on.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+from django.db import models
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.attendance import services
@@ -32,8 +36,59 @@ from apps.student_management.models import Student
 from apps.timetable.models import Period
 from core.exports import tabular
 from core.files.models import File
+from core.rbac.models import User
+
+if TYPE_CHECKING:
+    import uuid
+    from collections.abc import Iterable
 
 READ_ONLY_FIELDS = ("id", "created_at", "updated_at")
+
+# The serializer context key that carries one response's `users(id) -> name` map.
+USER_NAMES_CONTEXT_KEY = "attendance_user_names"
+
+
+def _load_user_names(context: dict, user_ids: Iterable[uuid.UUID | None]) -> dict:
+    """Names for every id not loaded yet, in one query, kept in the root's context.
+
+    `requested_by`, `submitted_by` and `approver_id` are plain `users(id)` columns,
+    not foreign keys, so there is nothing to `select_related`. An unknown id maps to
+    None and is not asked for again.
+    """
+    names = context.setdefault(USER_NAMES_CONTEXT_KEY, {})
+    missing = {user_id for user_id in user_ids if user_id is not None and user_id not in names}
+    if missing:
+        users = User.objects.filter(pk__in=missing).only("id", "first_name", "last_name", "email")
+        names.update({user.pk: user.get_full_name() for user in users})
+        names.update({user_id: None for user_id in missing if user_id not in names})
+    return names
+
+
+class UserNamesListSerializer(serializers.ListSerializer):
+    """Loads every row's user names in one query before the rows render."""
+
+    def to_representation(self, data):
+        rows = list(data.all() if isinstance(data, models.manager.BaseManager) else data)
+        _load_user_names(self.context, (uid for row in rows for uid in self.child.user_ids(row)))
+        return super().to_representation(rows)
+
+
+class UserNamesModelSerializer(serializers.ModelSerializer):
+    """`*_name` fields for `users(id)` columns, through `User.get_full_name`.
+
+    A subclass lists its ids in `user_ids` and sets `UserNamesListSerializer` as its
+    `Meta.list_serializer_class`, so a page costs one user query, not one per row.
+    """
+
+    def user_ids(self, instance) -> Iterable[uuid.UUID | None]:
+        raise NotImplementedError
+
+    def user_name(self, user_id: uuid.UUID | None) -> str | None:
+        return _load_user_names(self.context, [user_id]).get(user_id) if user_id else None
+
+    def to_representation(self, instance):
+        _load_user_names(self.context, self.user_ids(instance))
+        return super().to_representation(instance)
 
 
 def _fk(model, **kwargs) -> serializers.PrimaryKeyRelatedField:
@@ -207,23 +262,50 @@ class MyRegisterSerializer(serializers.Serializer):
     roster_count = serializers.IntegerField(read_only=True)
 
 
-class AttendanceCorrectionSerializer(serializers.ModelSerializer):
-    """`attendance_corrections` — the request half. Decisions are colon-actions."""
+class AttendanceCorrectionSerializer(UserNamesModelSerializer):
+    """`attendance_corrections` — the request half. Decisions are colon-actions.
 
-    student_attendance_id = _fk(StudentAttendance, source="student_attendance")
+    `student_attendance_id` is a plain UUID, not a related field: the view resolves
+    it through the caller's scoped rows, so a row outside their scope (or another
+    tenant's) is a 404, not a 400 (AGENTS.md invariant 2). The target's fields are
+    read-only and null for a staff correction.
+    """
+
+    student_attendance_id = serializers.UUIDField()
+    student_id = serializers.UUIDField(
+        source="student_attendance.student_id", read_only=True, allow_null=True
+    )
+    student_name = serializers.CharField(
+        source="student_attendance.student.full_name", read_only=True, allow_null=True
+    )
+    attendance_date = serializers.DateField(
+        source="student_attendance.attendance_date", read_only=True, allow_null=True
+    )
+    period_name = serializers.CharField(
+        source="student_attendance.period.name", read_only=True, allow_null=True
+    )
+    requested_by_name = serializers.SerializerMethodField()
+    reviewed_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = AttendanceCorrection
+        list_serializer_class = UserNamesListSerializer
         fields = (
             "id",
             "subject_type",
             "student_attendance_id",
+            "student_id",
+            "student_name",
+            "attendance_date",
+            "period_name",
             "requested_by",
+            "requested_by_name",
             "old_values",
             "new_values",
             "reason",
             "status",
             "reviewed_by",
+            "reviewed_by_name",
             "reviewed_at",
             "review_note",
             "created_at",
@@ -242,6 +324,17 @@ class AttendanceCorrectionSerializer(serializers.ModelSerializer):
             "reviewed_at",
             "review_note",
         )
+
+    def user_ids(self, instance: AttendanceCorrection) -> list[uuid.UUID | None]:
+        return [instance.requested_by, instance.reviewed_by]
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_requested_by_name(self, correction: AttendanceCorrection) -> str | None:
+        return self.user_name(correction.requested_by)
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_reviewed_by_name(self, correction: AttendanceCorrection) -> str | None:
+        return self.user_name(correction.reviewed_by)
 
     def validate_new_values(self, value: dict) -> dict:
         """Validate the proposal at the point it is *raised*, not when applied.
@@ -315,21 +408,32 @@ class LeaveTypeSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class LeaveApprovalSerializer(serializers.ModelSerializer):
+class LeaveApprovalSerializer(UserNamesModelSerializer):
     """One step of §7.2's chain, nested on the request it belongs to."""
+
+    approver_name = serializers.SerializerMethodField()
 
     class Meta:
         model = LeaveApproval
+        list_serializer_class = UserNamesListSerializer
         fields = (
             "id",
             "level",
             "required_permission",
             "approver_id",
+            "approver_name",
             "decision",
             "decided_at",
             "note",
         )
         read_only_fields = fields
+
+    def user_ids(self, instance: LeaveApproval) -> list[uuid.UUID | None]:
+        return [instance.approver_id]
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_approver_name(self, step: LeaveApproval) -> str | None:
+        return self.user_name(step.approver_id)
 
 
 class LeaveRequestSerializer(serializers.ModelSerializer):
@@ -343,21 +447,35 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
     The chain is nested rather than fetched separately: a requester's first
     question is "how many people have to say yes", and §16 declares no
     `/leave-requests/{id}/approvals` sub-resource to ask it with.
+
+    `section_name` is the queryset's annotation (`LeaveRequest.with_section_name`):
+    the student's ACTIVE enrollment in the current session, null when there is none.
     """
 
     student_id = _fk(Student, source="student")
+    student_name = serializers.CharField(source="student.full_name", read_only=True)
+    admission_number = serializers.CharField(source="student.admission_number", read_only=True)
+    section_name = serializers.CharField(read_only=True, allow_null=True)
     leave_type_id = _fk(LeaveType, source="leave_type")
+    leave_type_name = serializers.CharField(source="leave_type.name", read_only=True)
+    submitted_by_name = serializers.SerializerMethodField()
     attachment_file_id = _fk(File, source="attachment_file", required=False, allow_null=True)
     approvals = LeaveApprovalSerializer(many=True, read_only=True)
 
     class Meta:
         model = LeaveRequest
+        list_serializer_class = UserNamesListSerializer
         fields = (
             "id",
             "requester_type",
             "student_id",
+            "student_name",
+            "admission_number",
+            "section_name",
             "submitted_by",
+            "submitted_by_name",
             "leave_type_id",
+            "leave_type_name",
             "start_date",
             "end_date",
             "day_part",
@@ -380,6 +498,14 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
             "current_approval_level",
             "decided_at",
         )
+
+    def user_ids(self, instance: LeaveRequest) -> list[uuid.UUID | None]:
+        # `.all()` reads the prefetched chain, so the steps' approvers load with the request's.
+        return [instance.submitted_by, *(step.approver_id for step in instance.approvals.all())]
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_submitted_by_name(self, leave_request: LeaveRequest) -> str | None:
+        return self.user_name(leave_request.submitted_by)
 
 
 class LeaveDecisionSerializer(serializers.Serializer):

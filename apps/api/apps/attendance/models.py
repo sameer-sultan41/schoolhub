@@ -321,6 +321,26 @@ class AttendanceCorrection(TenantOwnedModel):
     def __str__(self) -> str:
         return f"{self.subject_type} correction ({self.status})"
 
+    @classmethod
+    def filter_owned_by_user(cls, queryset, user):
+        """Record scope `own` — the corrections the user requested."""
+        return cls.filter_requested_by(queryset, user)
+
+    @classmethod
+    def filter_assigned_to_user(cls, queryset, user):
+        """Record scope `assigned` — a teacher's own requests, not their sections' queue.
+
+        Deciding is `campus`/`all` work (§7); an assigned teacher's Corrections tab
+        tracks what they raised.
+        """
+        return cls.filter_requested_by(queryset, user)
+
+    @staticmethod
+    def filter_requested_by(queryset, user):
+        if user is None or not getattr(user, "is_authenticated", False):
+            return queryset.none()
+        return queryset.filter(requested_by=user.pk)
+
 
 class LeaveAppliesTo(models.TextChoices):
     STAFF = "staff", "Staff"
@@ -627,6 +647,25 @@ class LeaveRequest(TenantOwnedModel):
 
         assigned = Student.filter_assigned_to_user(Student.objects.alive(), user)
         return queryset.filter(student__in=assigned)
+
+    @classmethod
+    def with_section_name(cls, queryset):
+        """Annotate `section_name`: the student's ACTIVE enrollment in the current session.
+
+        One correlated subquery rather than a per-row lookup; null when the student
+        has no such enrollment (between sessions, or withdrawn).
+        """
+        from apps.student_management.models import EnrollmentStatus, StudentEnrollment
+
+        current_section = StudentEnrollment.objects.alive().filter(
+            student_id=models.OuterRef("student_id"),
+            status=EnrollmentStatus.ACTIVE,
+            academic_session__is_current=True,
+            academic_session__deleted_at__isnull=True,
+        )
+        return queryset.annotate(
+            section_name=models.Subquery(current_section.values("section__name")[:1])
+        )
 
 
 class LeaveApproval(TenantOwnedModel):
