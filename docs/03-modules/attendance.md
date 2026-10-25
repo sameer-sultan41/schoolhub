@@ -210,7 +210,7 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - `GET/PATCH /api/v1/attendance-settings` — the tenant's `attendance_mode`, `lock_window_days` (0–7) and `leave_escalation_threshold_days` (at least 1). PATCH merges only the keys sent, is audited, and refuses `attendance_mode: period` (422) while `module.timetable` is off. Keyed `school.settings.view` / `school.settings.update` (§4).
 - `GET/POST /api/v1/staff-attendance` · `POST /api/v1/staff-attendance/{id}:check-out`
 - `GET/POST /api/v1/attendance-corrections` · `POST /api/v1/attendance-corrections/{id}:approve` · `:reject`
-  - **List and retrieve** take either `attendance.correction.create` or `.approve` ([ADR-0027](../decisions/0027-any-of-permission-keys.md)). Which rows a caller reads is their record scope, not the key that matched: `all` reads the tenant's queue, `campus` the requests whose target row's section is on their campus, and `assigned` or `own` only the caller's own requests. So an `assigned` holder of `.approve` has nothing to decide (§4 grants it to campus- and school-wide roles).
+  - **List and retrieve** take either `attendance.correction.create` or `.approve` ([ADR-0027](../decisions/0027-any-of-permission-keys.md)). Which rows a caller reads is their record scope, not the key that matched: `all` reads the tenant's queue, `campus` the requests whose target row's section is on their campus, and `assigned` or `own` only the caller's own requests. So an `assigned` holder of `.approve` has nothing to decide (its default holders are normally assigned school- or campus-wide; scope comes from the role assignment, not §4).
   - **Filters:** `status`, `subject_type`, `student_attendance_id` and `mine` (`true` is the caller's own requests; `false` is everyone else's, the approver's queue); `ordering` by `created_at` or `status`; cursor pagination.
   - **Each row** names its target for a reader: `student_id`, `student_name`, `attendance_date`, `period_name` (null for a daily row), `requested_by_name` and `reviewed_by_name`. All are nullable, because a staff correction has no student row.
   - **POST** resolves `student_attendance_id` through the caller's own record scope on student attendance, the same scope `GET /student-attendance` applies. A target that is out of scope, unknown or another tenant's is a **404**. It used to resolve tenant-wide, so a campus-A teacher could raise, and on approval have applied, a correction to a campus-B row by its id.
@@ -434,6 +434,7 @@ rather than worked around, because the workaround would be a key nobody declared
   simultaneous period submissions for one student, which can each send an alert.
 - **Staff-on-behalf leave submission and the home widget.** Leave stays review-only
   in the dashboard: a student or guardian submits (§4, §11) and parent-portal brings
-  that screen. A staff member entering leave for a family that phoned in was
-  considered for PR B and rejected: it needs a requester rule §11 does not have. The
+  that screen. A staff member entering leave for a family that phoned in needs a
+  requester rule §11 does not have: the user chose review-only leave in the dashboard
+  (2026-10-24), and submission waits for parent-portal. The
   dashboard home has no attendance widget yet. Both are in `docs/deferred-work.md`.

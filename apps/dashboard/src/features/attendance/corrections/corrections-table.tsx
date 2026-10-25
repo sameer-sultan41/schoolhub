@@ -12,6 +12,7 @@ import {
   CardTable,
   CardToolbar,
   cn,
+  CursorPagination,
   DATA_GRID_CARD_CLASSNAME,
   DataGrid,
   DataGridColumnVisibility,
@@ -25,7 +26,6 @@ import { isCursorPagination } from "@schoolhub/types";
 
 import { DASHBOARD_DATA_GRID_LABELS } from "@/app/(app)/shell/data-grid-labels";
 import { LoadErrorCard } from "@/components/load-error-card";
-import { CursorPager } from "@/features/attendance/cursor-pager";
 import { CorrectionDecisionDialog } from "@/features/attendance/corrections/correction-decision-dialog";
 import { useCorrectionColumns } from "@/features/attendance/corrections/correction-columns";
 import { CorrectionsFilters } from "@/features/attendance/corrections/corrections-filters";
@@ -60,6 +60,7 @@ import {
  */
 export function CorrectionsTable() {
   const t = useTranslations("attendance");
+  const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const { data: currentUser } = useCurrentUser();
   const canApprove = hasPermission(currentUser, "attendance.correction.approve");
@@ -185,11 +186,13 @@ export function CorrectionsTable() {
             </ScrollArea>
           </div>
           <CardFooter className="justify-end gap-2 border-t-0">
-            <CursorPager
+            {/* While a new page loads, the shown rows are the old page's: hold both arrows. */}
+            <CursorPagination
               label={t("corrections.pagination")}
-              hasPrevious={stack.hasPrevious}
-              hasNext={nextCursor !== null}
-              disabled={query.isPlaceholderData}
+              previousLabel={tCommon("previous")}
+              nextLabel={tCommon("next")}
+              hasPrevious={stack.hasPrevious && !query.isPlaceholderData}
+              hasNext={nextCursor !== null && !query.isPlaceholderData}
               onPrevious={stack.goPrevious}
               onNext={() => {
                 if (nextCursor !== null) stack.goNext(nextCursor);

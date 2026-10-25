@@ -104,8 +104,8 @@ either this file or `project-status.md`.
   - **Leave submission waits for parent-portal.** The dashboard's leave screens (PR B)
     review and decide; they do not submit. §4 and §11 make the requester the student or a
     linked guardian, so a staff member entering leave for a guardian who phoned in
-    would need a rule the module doc does not have. That staff-on-behalf submission was
-    proposed for PR B and the user rejected it; submission arrives with parent-portal.
+    would need a rule the module doc does not have. The user chose review-only leave in the
+    dashboard (2026-10-24); submission waits for parent-portal.
   - **Half-day leave mapped to periods.** A `first_half`/`second_half` leave writes a
     daily `on_leave` row, which refuses the student in *every* period register that
     day ([ADR-0028](decisions/0028-one-attendance-mode-per-tenant.md)). Mapping a half
@@ -148,6 +148,12 @@ either this file or `project-status.md`.
     class-teach (`test_campus_a_plus_assigned_marks_the_section_they_class_teach_on_campus_b`)
     cannot see those rows in Records. Making the read path a union is a core RBAC
     change that touches every module's lists, so it belongs in its own reviewed PR.
+  - **`:bulk-mark` makes one extra `TenantSettings` read.** The lock window is read twice
+    in one submission (once for the lock, once for the alert boundary). Passing the first
+    read through would save the query; it is not worth a signature change on its own.
+  - **The lock-window-0 alert boundary is pinned only through the default.** The tests reach
+    "today only" through the default window; an explicit `attendance_lock_window_days=0`
+    test would keep that boundary pinned if the default ever changes.
 - **The attendance dashboard's PR B (the corrections and leave queues) left these out:**
   - **A guardian cannot attach a document to a leave request.** `platform.file.create`
     (`core/files/permissions.py`) is granted to staff roles only, so a guardian or student
@@ -178,8 +184,7 @@ either this file or `project-status.md`.
     leave request leaves the approver's scope (or is deleted) while its dialog is open,
     `:approve`/`:reject` answers 404 and the dialog shows the generic "We could not find
     what you were looking for." without reloading the queue, so the row stays until the
-    next refetch. A 409 keeps the server's sentence
-    and reloads.
+    next refetch. A 409 keeps the server's sentence and reloads.
   - **An `assigned`-scoped holder of `attendance.correction.approve` sees only their own
     requests,** so in practice decides nothing. The key's default holders (principal, vice
     principal, school admin) are campus- or school-wide, so no seeded role meets it; a

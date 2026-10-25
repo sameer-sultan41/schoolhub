@@ -12,6 +12,7 @@ import {
   CardTable,
   CardToolbar,
   cn,
+  CursorPagination,
   DATA_GRID_CARD_CLASSNAME,
   DataGrid,
   DataGridColumnVisibility,
@@ -25,7 +26,6 @@ import { isCursorPagination } from "@schoolhub/types";
 
 import { DASHBOARD_DATA_GRID_LABELS } from "@/app/(app)/shell/data-grid-labels";
 import { LoadErrorCard } from "@/components/load-error-card";
-import { CursorPager } from "@/features/attendance/cursor-pager";
 import { LeaveDecisionDialog } from "@/features/attendance/leave/leave-decision-dialog";
 import { LeaveDetailSheet } from "@/features/attendance/leave/leave-detail-sheet";
 import { useLeaveColumns } from "@/features/attendance/leave/leave-columns";
@@ -60,6 +60,7 @@ import { statusFilterToStatus } from "@/services/modules/leave-requests/leave-re
  */
 export function LeaveTable() {
   const t = useTranslations("attendance");
+  const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const { data: currentUser } = useCurrentUser();
   const canApprove = hasPermission(currentUser, "attendance.leave-request.approve");
@@ -190,11 +191,13 @@ export function LeaveTable() {
             </ScrollArea>
           </div>
           <CardFooter className="justify-end gap-2 border-t-0">
-            <CursorPager
+            {/* While a new page loads, the shown rows are the old page's: hold both arrows. */}
+            <CursorPagination
               label={t("leave.pagination")}
-              hasPrevious={stack.hasPrevious}
-              hasNext={nextCursor !== null}
-              disabled={query.isPlaceholderData}
+              previousLabel={tCommon("previous")}
+              nextLabel={tCommon("next")}
+              hasPrevious={stack.hasPrevious && !query.isPlaceholderData}
+              hasNext={nextCursor !== null && !query.isPlaceholderData}
               onPrevious={stack.goPrevious}
               onNext={() => {
                 if (nextCursor !== null) stack.goNext(nextCursor);

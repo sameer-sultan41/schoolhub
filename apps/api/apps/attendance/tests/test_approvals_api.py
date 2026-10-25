@@ -27,7 +27,7 @@ from apps.attendance.models import (
     RequesterType,
     StudentAttendance,
 )
-from apps.attendance.tests.base import AttendanceAPITestCase
+from apps.attendance.tests.base import LAST_SESSION_WINDOW, AttendanceAPITestCase
 from apps.attendance.tests.factories import (
     MARKING_DATE,
     AcademicSessionFactory,
@@ -397,7 +397,9 @@ class LeaveReviewRecordTests(ApprovalsTestCase):
     def test_the_section_is_the_active_enrollment_in_the_current_session(self) -> None:
         """A past session's enrollment, or a withdrawn one, is not today's section."""
         with tenant_context(self.tenant.id):
-            past_session = AcademicSessionFactory(tenant=self.tenant, is_current=False)
+            past_session = AcademicSessionFactory(
+                tenant=self.tenant, is_current=False, **LAST_SESSION_WINDOW
+            )
             moved_on = StudentFactory(tenant=self.tenant, campus=self.campus)
             StudentEnrollmentFactory(
                 tenant=self.tenant,
@@ -422,7 +424,9 @@ class LeaveReviewRecordTests(ApprovalsTestCase):
     def test_a_past_sessions_section_does_not_shadow_the_current_one(self) -> None:
         student = self.students[0]
         with tenant_context(self.tenant.id):
-            past_session = AcademicSessionFactory(tenant=self.tenant, is_current=False)
+            past_session = AcademicSessionFactory(
+                tenant=self.tenant, is_current=False, **LAST_SESSION_WINDOW
+            )
             StudentEnrollmentFactory(
                 tenant=self.tenant,
                 student=student,
