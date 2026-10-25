@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 // Side-effect import: must run before `./src/env` parses process.env.
 import "./src/load-env";
+import { LIVE_WORKER_BANDS } from "./src/data/live-worker-bands";
 import { env } from "./src/env";
 
 /**
@@ -85,7 +86,10 @@ export default defineConfig({
   forbidOnly: isCI,
   // One retry in CI absorbs genuine flake; a spec that needs two is quarantined, not retried.
   retries: isCI ? 1 : 0,
-  workers: isCI ? 2 : undefined,
+  // The live lane gives each worker its own band of session dates, so more workers than
+  // bands would share one (`src/data/live-worker-bands.ts`); locally the default is half
+  // the cores, which can exceed it.
+  workers: isCI ? 2 : process.env.E2E_REAL_API ? LIVE_WORKER_BANDS : undefined,
   timeout: 30_000,
   expect: { timeout: 5_000 },
 

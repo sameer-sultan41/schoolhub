@@ -210,7 +210,11 @@ either this file or `project-status.md`.
     as, as the promotion journey needed a second one.
   The attendance specs' missing guardian, the session-date overlaps and the weekend ("today is
   not a working day") were fixed with `createStudentReadyToEnrol`, per-worker date bands drawn
-  once per process, and a seven-day working week in the e2e seed.
+  once per process, and a seven-day working week in the e2e seed. There are four bands
+  (`LIVE_WORKER_BANDS`): the live lane defaults to four workers locally and refuses a fifth,
+  which would share a band. Still open: a worker restarted after a failed test redraws its
+  start within its own band, so a retried test can meet its dead predecessor's windows. A
+  per-run seed plus `TEST_WORKER_INDEX` (which grows on restarts) would close it.
 - **`frontend.yml`'s Playwright browser cache never hits the right key.** Its version step
   runs `require('@playwright/test/package.json')` from the repo root, where the package (an
   `e2e` dependency, not hoisted) can't be found, so the key is always `playwright-Linux-`.
