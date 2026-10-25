@@ -72,5 +72,13 @@ export const AUTO_MARKED_DAYS_KEY = "auto_marked_days";
 /** `days_count` is a one-decimal figure (half days): show at most this many digits. */
 export const LEAVE_DAYS_FRACTION_DIGITS = 1;
 
+/** The key that decides a student leave step (`STUDENT_LEAVE_APPROVE`). */
+export const LEAVE_APPROVE_PERMISSION = "attendance.leave-request.approve";
+
+/** A chain step's `required_permission` -> its label under `leave.detail.chain.permission`. */
+export const LEAVE_STEP_PERMISSION_LABELS: Readonly<Record<string, string>> = {
+  [LEAVE_APPROVE_PERMISSION]: "leaveApprove",
+};
+
 /** The decision dialog's one input: a server error on any other field is its own message. */
 export const LEAVE_DECISION_ERROR_FIELDS = ["note"] as const;

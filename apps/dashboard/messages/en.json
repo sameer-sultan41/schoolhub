@@ -1642,6 +1642,9 @@
           "title": "Approval chain",
           "level": "Level {level}",
           "requires": "Needs {key}",
+          "permission": {
+            "leaveApprove": "the leave approval permission"
+          },
           "waiting": "Waiting for a decision",
           "notReached": "Not reached",
           "decidedOn": "Decided on {date}"

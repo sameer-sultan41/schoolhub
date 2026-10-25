@@ -1642,6 +1642,9 @@
           "title": "منظوری کی زنجیر",
           "level": "درجہ {level}",
           "requires": "درکار: {key}",
+          "permission": {
+            "leaveApprove": "رخصت کی منظوری کی اجازت"
+          },
           "waiting": "فیصلے کا انتظار",
           "notReached": "اس تک نوبت نہیں آئی",
           "decidedOn": "فیصلہ: {date}"

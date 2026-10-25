@@ -162,7 +162,11 @@ export class AttendanceApprovalsStore {
     this.leaveTypes = [...(options.leaveTypes ?? [])];
   }
 
-  /** `RecordScope.ALL` or `CAMPUS` in `user_scopes`, unioned across the caller's roles. */
+  /**
+   * Any role holds `all` or `campus` scope. Record reads take the broadest scope
+   * (`scope_queryset`: all > campus > own > assigned), not a union; only the level-2
+   * escalation check reads every role like a union.
+   */
   hasWideScope(): boolean {
     return this.user.roles.some(
       (role) => role.scope === "all" || (role.scope?.startsWith("campus:") ?? false),

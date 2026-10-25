@@ -7,6 +7,7 @@ import {
   LEAVE_DAYS_FRACTION_DIGITS,
   LEAVE_QUERY_FIELDS,
   LEAVE_STATUS_PENDING,
+  LEAVE_STEP_PERMISSION_LABELS,
   LEAVE_TYPE_STAFF_ONLY,
 } from "./leave-requests-constant";
 import type {
@@ -144,4 +145,11 @@ export function leaveDecisionOutcome(
  */
 export function isStepNotReached(step: LeaveApprovalRecord, requestStatus: LeaveStatus): boolean {
   return step.decision === "pending" && requestStatus !== LEAVE_STATUS_PENDING;
+}
+
+/** The message key naming a step's required permission, or undefined for a key with no label. */
+export function stepPermissionLabelKey(permission: string): string | undefined {
+  return Object.hasOwn(LEAVE_STEP_PERMISSION_LABELS, permission)
+    ? LEAVE_STEP_PERMISSION_LABELS[permission]
+    : undefined;
 }

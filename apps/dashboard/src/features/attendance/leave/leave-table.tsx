@@ -39,6 +39,7 @@ import { hasPermission } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-client";
 import { Services, type LeaveAction, type LeaveRequestRecord } from "@/services";
 import {
+  LEAVE_APPROVE_PERMISSION,
   LEAVE_DEFAULT_SORTING,
   LEAVE_LIST_RESOURCE,
   LEAVE_ORDERING,
@@ -63,7 +64,7 @@ export function LeaveTable() {
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const { data: currentUser } = useCurrentUser();
-  const canApprove = hasPermission(currentUser, "attendance.leave-request.approve");
+  const canApprove = hasPermission(currentUser, LEAVE_APPROVE_PERMISSION);
 
   const [viewing, setViewing] = useState<LeaveRequestRecord | null>(null);
   const [deciding, setDeciding] = useState<{

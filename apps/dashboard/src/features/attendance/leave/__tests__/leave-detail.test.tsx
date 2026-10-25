@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import type * as HelpersModule from "@/lib/helpers";
 import { downloadFile } from "@/lib/helpers";
 import {
+  approvalStep,
   ATTACHMENT_FILE_ID,
   cancelledEscalatedRecord,
   decidedStep,
@@ -88,7 +89,7 @@ describe("LeaveDetailSheet", () => {
 
     expect(within(sheet).getAllByRole("listitem")).toHaveLength(2);
     const first = stepOf(sheet, 1);
-    expect(first.getByText("Needs attendance.leave-request.approve")).toBeInTheDocument();
+    expect(first.getByText("Needs the leave approval permission")).toBeInTheDocument();
     expect(first.getByText("Approved")).toBeInTheDocument();
     expect(first.getByText("Zainab Qureshi")).toBeInTheDocument();
     expect(first.getByText("Decided on October 23rd, 2026")).toBeInTheDocument();
@@ -96,6 +97,21 @@ describe("LeaveDetailSheet", () => {
     const second = stepOf(sheet, 2);
     expect(second.getByText("Pending")).toBeInTheDocument();
     expect(second.getByText("Waiting for a decision")).toBeInTheDocument();
+  });
+
+  it("names a step's unknown permission key raw rather than dropping it", async () => {
+    fetchPage.mockResolvedValue(
+      leavePage([
+        leaveRecord({
+          approvals: [approvalStep({ required_permission: "attendance.leave.audit" })],
+        }),
+      ]),
+    );
+    const user = await renderLeave();
+
+    const sheet = await openDetail(user, "Amna Raza");
+
+    expect(stepOf(sheet, 1).getByText("Needs attendance.leave.audit")).toBeInTheDocument();
   });
 
   it("shows a rejected step and the note that came with it", async () => {

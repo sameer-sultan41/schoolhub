@@ -8,7 +8,10 @@ import { RequestStatusBadge } from "@/features/attendance/request-status-badge";
 import { EMPTY_VALUE } from "@/lib/constants";
 import { formatDate } from "@/lib/helpers";
 import type { LeaveApprovalRecord, LeaveStatus } from "@/services";
-import { isStepNotReached } from "@/services/modules/leave-requests/leave-requests-helper";
+import {
+  isStepNotReached,
+  stepPermissionLabelKey,
+} from "@/services/modules/leave-requests/leave-requests-helper";
 
 export interface LeaveChainProps {
   approvals: readonly LeaveApprovalRecord[];
@@ -27,6 +30,11 @@ function LeaveChainStep({
   const t = useTranslations("attendance");
   const locale = useLocale();
   const notReached = isStepNotReached(step, requestStatus);
+  // A known key reads as its label; an unknown one shows raw rather than nothing.
+  const labelKey = stepPermissionLabelKey(step.required_permission);
+  const permission = labelKey
+    ? t(`leave.detail.chain.permission.${labelKey}`)
+    : step.required_permission;
 
   return (
     <li className="flex flex-col gap-1.5 rounded-md border border-border px-3 py-2.5">
@@ -45,7 +53,7 @@ function LeaveChainStep({
         )}
       </div>
       <span className="text-xs text-muted-foreground">
-        {t("leave.detail.chain.requires", { key: step.required_permission })}
+        {t("leave.detail.chain.requires", { key: permission })}
       </span>
       {step.decided_at && (
         <span className="text-sm text-foreground">

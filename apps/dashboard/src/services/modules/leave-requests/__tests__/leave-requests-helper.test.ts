@@ -9,6 +9,7 @@ import {
   isStepNotReached,
   leaveDecisionOutcome,
   statusFilterToStatus,
+  stepPermissionLabelKey,
   toAutoMarkedDays,
   toDecisionBody,
   toLeaveQueryParams,
@@ -225,5 +226,16 @@ describe("leaveDecisionOutcome", () => {
       key: "approve.doneNextLevel",
       values: { level: 2 },
     });
+  });
+});
+
+describe("stepPermissionLabelKey", () => {
+  it("names the leave approve key's label", () => {
+    expect(stepPermissionLabelKey("attendance.leave-request.approve")).toBe("leaveApprove");
+  });
+
+  it("has no label for an unknown key, or for an inherited property name", () => {
+    expect(stepPermissionLabelKey("attendance.leave.audit")).toBeUndefined();
+    expect(stepPermissionLabelKey("constructor")).toBeUndefined();
   });
 });
