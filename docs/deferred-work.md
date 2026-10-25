@@ -1636,3 +1636,12 @@ either this file or `project-status.md`.
   select in the staff form dialog do not yet: the staff dialog gets its text through a different
   path than the others, so it needs its own wiring. Selects with a fixed list (gender, status)
   can never be empty and need nothing.
+
+- **No shared status-badge primitive yet.** `AttendanceStatusBadge`
+  (`apps/dashboard/src/features/attendance/attendance-status.tsx`) and academics'
+  `PromotionStatusBadge` (`apps/dashboard/src/features/academics/promotions/promotion-status-badge.tsx`)
+  repeat one pattern: a status maps to a `Badge` variant, a mark (an icon; a dot for promotions)
+  and a translated label, so a status is never told by colour alone. A shared primitive (a status
+  → `{ variant, icon, label }` map rendered by one badge) would serve both and the next module's
+  statuses, but it changes two modules' screens and their tests at once, so it belongs in its own
+  PR rather than in attendance PR A's review fixes.
