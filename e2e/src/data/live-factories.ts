@@ -220,8 +220,9 @@ const WORKER_BAND_DAYS = 700_000;
 const BAND_RANDOM_DAYS = 300_000;
 
 // A worker past the last band would share one; the config's cap is only a default (`--workers`
-// overrides it, and not every live run sets `E2E_REAL_API`), so the bands enforce it here.
-if (env.WORKER_INDEX >= LIVE_WORKER_BANDS) {
+// overrides it), so the bands enforce it here. Only in a live run: without one, the run's own
+// configuration error is the one worth seeing first.
+if (env.LIVE_RUN && env.WORKER_INDEX >= LIVE_WORKER_BANDS) {
   throw new Error(
     `Live specs need at most ${String(LIVE_WORKER_BANDS)} workers (one date band each); ` +
       `this is worker ${String(env.WORKER_INDEX)}. Run with --workers=${String(LIVE_WORKER_BANDS)} or fewer.`,
