@@ -30,6 +30,8 @@ const schema = z.object({
   LIVE_OTHER_TENANT_SLUG: z.string().min(1).default("e2e-other-school"),
   /** Playwright's own index for this worker process; 0 outside a worker. */
   WORKER_INDEX: z.coerce.number().int().min(0).default(0),
+  /** A live-lane run: the real API (`E2E_REAL_API`) or compose's own apps (`E2E_NO_SERVER`). */
+  LIVE_RUN: z.boolean(),
 });
 
 const parsed = schema.safeParse({
@@ -42,6 +44,7 @@ const parsed = schema.safeParse({
   LIVE_ADMIN_PASSWORD: process.env.E2E_LIVE_ADMIN_PASSWORD,
   LIVE_OTHER_TENANT_SLUG: process.env.E2E_LIVE_OTHER_TENANT_SLUG,
   WORKER_INDEX: process.env.TEST_PARALLEL_INDEX,
+  LIVE_RUN: Boolean(process.env.E2E_REAL_API) || Boolean(process.env.E2E_NO_SERVER),
 });
 
 if (!parsed.success) {
