@@ -1,3 +1,4 @@
+import { APPROVAL_STATUS_PENDING, statusesOf } from "@/lib/approval-queue";
 import { FILTER_ALL } from "@/lib/constants";
 import type {
   CorrectionNewValues,
@@ -21,7 +22,10 @@ export const CORRECTIONS_ORDERING = "-created_at";
 /** `CorrectionDecisionSerializer.review_note`'s `max_length`. */
 export const CORRECTION_REVIEW_NOTE_MAX_LENGTH = 500;
 
-export const CORRECTION_STATUS_PENDING: CorrectionStatus = "pending";
+/** The decision body's key for the note (`CorrectionDecisionSerializer.review_note`). */
+export const CORRECTION_NOTE_FIELD = "review_note";
+
+export const CORRECTION_STATUS_PENDING: CorrectionStatus = APPROVAL_STATUS_PENDING;
 
 /** Every status, keyed so the compiler checks the set against the generated enum. */
 const STATUS_SET: Record<CorrectionStatus, true> = {
@@ -30,7 +34,7 @@ const STATUS_SET: Record<CorrectionStatus, true> = {
   rejected: true,
   cancelled: true,
 };
-export const CORRECTION_STATUSES = Object.keys(STATUS_SET) as CorrectionStatus[];
+export const CORRECTION_STATUSES = statusesOf(STATUS_SET);
 
 /** The Mine filter's one value besides "off" (a blank): the caller's own requests. */
 export const CORRECTIONS_MINE = "true";

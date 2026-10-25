@@ -1,6 +1,6 @@
 import type { AuthenticatedUser } from "@schoolhub/types";
 
-import { FILTER_ALL } from "@/lib/constants";
+import { canDecidePending, isViewer, statusFilterValue } from "@/lib/approval-queue";
 import { copyMappedFields } from "@/lib/helpers";
 import {
   AUTO_MARKED_DAYS_KEY,
@@ -38,13 +38,7 @@ export function toLeaveQueryParams(
 
 /** The status filter -> `status`: `all` is no filter. */
 export function statusFilterToStatus(value: string): LeaveStatus | undefined {
-  return value === FILTER_ALL ? undefined : (value as LeaveStatus);
-}
-
-/** The `:approve` / `:reject` body: the note when there is one, an empty body otherwise. */
-export function toDecisionBody(note?: string): Record<string, unknown> {
-  const trimmed = note?.trim();
-  return trimmed ? { note: trimmed } : {};
+  return statusFilterValue(value) as LeaveStatus | undefined;
 }
 
 /** `meta.auto_marked_days` as a count, or `null` when the server sent none. */
@@ -58,7 +52,7 @@ export function isOwnLeaveRequest(
   request: LeaveRequestRecord,
   user: AuthenticatedUser | undefined,
 ): boolean {
-  return user !== undefined && request.submitted_by === user.id;
+  return isViewer(request.submitted_by, user);
 }
 
 /** Whether `user` already decided a step of the chain: an escalation needs a second person. */
@@ -81,9 +75,7 @@ export function canDecideLeave(
   canApprove: boolean,
 ): boolean {
   return (
-    user !== undefined &&
-    canApprove &&
-    request.status === LEAVE_STATUS_PENDING &&
+    canDecidePending(request, user, canApprove) &&
     !isOwnLeaveRequest(request, user) &&
     !hasDecidedLeaveStep(request, user)
   );

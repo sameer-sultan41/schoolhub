@@ -25,14 +25,14 @@ export type CorrectionStatus = AttendanceCorrectionRecord["status"];
 /** The two decisions, each its own route (`:approve`, `:reject`). */
 export type CorrectionAction = "approve" | "reject";
 
-/** One cursor page of the corrections list. `mine`: `true` is the caller's own requests,
- * `false` everyone else's (the approver's queue), left out is both. */
+/** One cursor page of the corrections list. `mine`: `true` is the caller's own requests, left
+ * out is everyone's. (The API also takes `false`, everyone else's; the dashboard never sends it.) */
 export interface CorrectionPageQuery {
   cursor?: string;
   pageSize?: number;
   ordering?: string;
   status?: CorrectionStatus;
-  mine?: boolean;
+  mine?: true;
 }
 
 /** A correctable field and its value before and after, as the diff shows it. */

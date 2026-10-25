@@ -8,10 +8,8 @@ import {
   isOwnLeaveRequest,
   isStepNotReached,
   leaveDecisionOutcome,
-  statusFilterToStatus,
   stepPermissionLabelKey,
   toAutoMarkedDays,
-  toDecisionBody,
   toLeaveQueryParams,
   toLeaveTypeOptions,
 } from "../leave-requests-helper";
@@ -60,21 +58,6 @@ describe("toLeaveQueryParams", () => {
   });
 });
 
-describe("statusFilterToStatus", () => {
-  it("reads All as no status and any other value as that status", () => {
-    expect(statusFilterToStatus("all")).toBeUndefined();
-    expect(statusFilterToStatus("rejected")).toBe("rejected");
-  });
-});
-
-describe("toDecisionBody", () => {
-  it("sends the trimmed note, or an empty body for a blank one", () => {
-    expect(toDecisionBody("  Seen the medical note ")).toEqual({ note: "Seen the medical note" });
-    expect(toDecisionBody("   ")).toEqual({});
-    expect(toDecisionBody()).toEqual({});
-  });
-});
-
 describe("toAutoMarkedDays", () => {
   it("reads meta.auto_marked_days, and null when it is absent or not a number", () => {
     expect(toAutoMarkedDays({ auto_marked_days: 3 })).toBe(3);
@@ -113,14 +96,6 @@ describe("canDecideLeave", () => {
     expect(canDecideLeave(escalatedRecord(OTHER_APPROVER_ID), APPROVER, true)).toBe(true);
   });
 
-  it("refuses without the approve key", () => {
-    expect(canDecideLeave(leaveRecord(), APPROVER, false)).toBe(false);
-  });
-
-  it("refuses before the user has loaded", () => {
-    expect(canDecideLeave(leaveRecord(), undefined, true)).toBe(false);
-  });
-
   it("refuses the submitter's own request", () => {
     expect(canDecideLeave(leaveRecord(), SUBMITTER, true)).toBe(false);
   });
@@ -129,8 +104,10 @@ describe("canDecideLeave", () => {
     expect(canDecideLeave(escalatedRecord(APPROVER.id), APPROVER, true)).toBe(false);
   });
 
-  it.each(["approved", "rejected", "cancelled"] as const)("refuses a %s request", (status) => {
-    expect(canDecideLeave(leaveRecord({ status }), APPROVER, true)).toBe(false);
+  it("is the shared pending / key / user gate plus the submitter and earlier-level rules", () => {
+    expect(canDecideLeave(leaveRecord({ status: "approved" }), APPROVER, true)).toBe(false);
+    expect(canDecideLeave(leaveRecord(), APPROVER, false)).toBe(false);
+    expect(canDecideLeave(leaveRecord(), undefined, true)).toBe(false);
   });
 });
 

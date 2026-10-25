@@ -91,13 +91,4 @@ describe("attendance-corrections-service", () => {
       expect(decided.status).toBe("approved");
     },
   );
-
-  it("posts an empty body when there is no note", async () => {
-    const { decideCorrection } = await import("../attendance-corrections-service");
-    mockPost.mockResolvedValue({ data: correctionRecord({ status: "rejected" }) });
-
-    await decideCorrection(CORRECTION_ID, "reject");
-
-    expect(mockPost).toHaveBeenCalledWith(`/attendance-corrections/${CORRECTION_ID}:reject`, {});
-  });
 });

@@ -1,3 +1,4 @@
+import { APPROVAL_STATUS_PENDING, statusesOf } from "@/lib/approval-queue";
 import { FILTER_ALL } from "@/lib/constants";
 import { isIsoDate, isUuid } from "@/lib/helpers";
 import type { LeaveDayPart, LeavePageQuery, LeaveStatus } from "./leave-requests-type";
@@ -21,7 +22,10 @@ export const LEAVE_ORDERING = "-created_at";
 /** `LeaveDecisionSerializer.note`'s `max_length`. */
 export const LEAVE_NOTE_MAX_LENGTH = 500;
 
-export const LEAVE_STATUS_PENDING: LeaveStatus = "pending";
+/** The decision body's key for the note (`LeaveDecisionSerializer.note`). */
+export const LEAVE_NOTE_FIELD = "note";
+
+export const LEAVE_STATUS_PENDING: LeaveStatus = APPROVAL_STATUS_PENDING;
 
 /** Every status, keyed so the compiler checks the set against the generated enum. */
 const STATUS_SET: Record<LeaveStatus, true> = {
@@ -30,7 +34,7 @@ const STATUS_SET: Record<LeaveStatus, true> = {
   rejected: true,
   cancelled: true,
 };
-export const LEAVE_STATUSES = Object.keys(STATUS_SET) as LeaveStatus[];
+export const LEAVE_STATUSES = statusesOf(STATUS_SET);
 
 /** A request that names no day part (`day_part` is optional on the wire) is a full day. */
 export const LEAVE_DEFAULT_DAY_PART: LeaveDayPart = "full";
