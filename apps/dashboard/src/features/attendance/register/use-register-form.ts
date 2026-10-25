@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useReducer, useState } from "react";
 
 import type {
+  AttendanceStatus,
   BulkMarkEntryInput,
   MarkableStatus,
   RegisterEntry,
@@ -36,14 +37,9 @@ export interface RegisterRowState {
   leavesBeforeArriving: boolean;
 }
 
-export interface RegisterCounts {
-  present: number;
-  absent: number;
-  late: number;
-  /** Half day, excused and on leave. */
-  other: number;
-  unmarked: number;
-}
+/** The rows under each status, and those with none. Keyed by the generated enum, so a new
+ * status fails to compile until the tally counts it. */
+export type RegisterCounts = Record<AttendanceStatus, number> & { unmarked: number };
 
 export function rowMode(entry: RegisterEntry, markable: boolean): RowMode {
   if (entry.on_leave || entry.record?.status === "on_leave") return "leave";
@@ -69,33 +65,115 @@ function leavesBeforeArriving(draft: RowDraft): boolean {
   );
 }
 
-/** The status a row counts under in the summary. */
-function shownStatus(row: RegisterRowState): string {
+/** The status a row counts under in the summary, or `""` while it has none. */
+function shownStatus(row: RegisterRowState): AttendanceStatus | "" {
   if (row.mode === "leave") return "on_leave";
   if (row.mode === "editable") return row.draft.status;
   return row.entry.record?.status ?? "";
+}
+
+/** Every count at zero. A status missing here is a compile error, never a row counted nowhere. */
+const NO_COUNTS: RegisterCounts = {
+  present: 0,
+  absent: 0,
+  late: 0,
+  half_day: 0,
+  excused: 0,
+  on_leave: 0,
+  unmarked: 0,
+};
+
+/** Each row counted under the status it shows. */
+function tallyRows(rows: readonly RegisterRowState[]): RegisterCounts {
+  const tally = { ...NO_COUNTS };
+  for (const row of rows) {
+    const status = shownStatus(row);
+    tally[status === "" ? "unmarked" : status] += 1;
+  }
+  return tally;
 }
 
 function newKey(): string {
   return crypto.randomUUID();
 }
 
+/** The grid's edits over the saved records, and the key the next submission is sent under. */
+export interface RegisterGridState {
+  edits: ReadonlyMap<string, RowDraft>;
+  idempotencyKey: string;
+}
+
+/** A change to the grid, each carrying the key the grid is sent under once it applies. */
+export type RegisterGridAction = { key: string } &
+  /** One row's choices change; `saved` is its record's draft, the base of a first edit. */
+  (
+    | { type: "edit"; studentId: string; saved: RowDraft; patch: Partial<RowDraft> }
+    /** Each listed row with no status yet becomes present. */
+    | { type: "markAllPresent"; rows: readonly { studentId: string; draft: RowDraft }[] }
+    /** A submission was stored: the records now hold every choice. */
+    | { type: "saved" }
+  );
+
+/** The grid on load: no edits, and a key made once by `useReducer`'s initialiser. */
+export function initialRegisterGrid(): RegisterGridState {
+  return { edits: new Map(), idempotencyKey: newKey() };
+}
+
+/**
+ * Every action that changes the grid, and `saved`, takes the action's `key`, so no edit path can
+ * keep an old one: an edited grid is never sent under an older submission's key.
+ *
+ * Pure: the hook's dispatchers make the key and pass it in. React may run a reducer more than
+ * once for one update (StrictMode, and replaying updates it skipped during a render), and each
+ * run must give the same state, key included, as the one already rendered.
+ */
+export function registerGridReducer(
+  state: RegisterGridState,
+  action: RegisterGridAction,
+): RegisterGridState {
+  switch (action.type) {
+    case "edit": {
+      const current = state.edits.get(action.studentId) ?? action.saved;
+      const edits = new Map(state.edits).set(action.studentId, { ...current, ...action.patch });
+      return { edits, idempotencyKey: action.key };
+    }
+    case "markAllPresent": {
+      const edits = new Map(state.edits);
+      let changed = false;
+      for (const row of action.rows) {
+        const current = state.edits.get(row.studentId) ?? row.draft;
+        if (current.status !== "") continue;
+        edits.set(row.studentId, { ...current, status: "present" });
+        changed = true;
+      }
+      // Nothing was left unmarked: the grid, and so the key, stay as they were.
+      return changed ? { edits, idempotencyKey: action.key } : state;
+    }
+    case "saved":
+      return { edits: new Map(), idempotencyKey: action.key };
+  }
+}
+
 /**
  * A register's grid: each student's choices over their saved record, the server's per-row
  * issues, and the submission's idempotency key.
  *
- * The key is made on load and remade on **every** change to the grid and after each success, so
- * a retry of an unchanged submission is answered with its replay while an edited one is never
- * answered with an older submission's (`apps/api/core/idempotency/services.py`). A refused
- * submission keeps it: nothing was stored under it.
+ * The key is made on load and remade on **every** change to the grid and after each success
+ * (the dispatchers below make it; `registerGridReducer` stores it), so a retry of an unchanged
+ * submission is answered with its replay while an edited one is never answered with an older
+ * submission's (`apps/api/core/idempotency/services.py`). A refused submission or a dropped
+ * request keeps it: `setIssues` is not a grid change, and nothing was stored under the key.
  *
  * Edits are held per student over `entries`, so a reload (after a 409) keeps every choice on a
  * row that is still editable, and a row that became locked shows its record again.
  */
 export function useRegisterForm(entries: RegisterEntry[], markable: boolean) {
-  const [edits, setEdits] = useState<ReadonlyMap<string, RowDraft>>(() => new Map());
+  const [{ edits, idempotencyKey }, dispatch] = useReducer(
+    registerGridReducer,
+    undefined,
+    initialRegisterGrid,
+  );
   const [issues, setIssues] = useState<ReadonlyMap<string, string>>(() => new Map());
-  const [idempotencyKey, setIdempotencyKey] = useState(newKey);
 
   const rows = useMemo<RegisterRowState[]>(
     () =>
@@ -120,11 +198,13 @@ export function useRegisterForm(entries: RegisterEntry[], markable: boolean) {
     (studentId: string, patch: Partial<RowDraft>) => {
       const row = editable.find((candidate) => candidate.entry.student_id === studentId);
       if (!row) return;
-      const saved = draftFromRecord(row.entry.record);
-      setEdits((previous) =>
-        new Map(previous).set(studentId, { ...(previous.get(studentId) ?? saved), ...patch }),
-      );
-      setIdempotencyKey(newKey());
+      dispatch({
+        type: "edit",
+        key: newKey(),
+        studentId,
+        saved: draftFromRecord(row.entry.record),
+        patch,
+      });
     },
     [editable],
   );
@@ -133,28 +213,14 @@ export function useRegisterForm(entries: RegisterEntry[], markable: boolean) {
   const markAllPresent = useCallback(() => {
     const unmarked = editable.filter((row) => row.draft.status === "");
     if (unmarked.length === 0) return;
-    setEdits((previous) => {
-      const next = new Map(previous);
-      for (const row of unmarked) {
-        const current = previous.get(row.entry.student_id) ?? row.draft;
-        if (current.status !== "") continue;
-        next.set(row.entry.student_id, { ...current, status: "present" });
-      }
-      return next;
+    dispatch({
+      type: "markAllPresent",
+      key: newKey(),
+      rows: unmarked.map((row) => ({ studentId: row.entry.student_id, draft: row.draft })),
     });
-    setIdempotencyKey(newKey());
   }, [editable]);
 
-  const counts = useMemo<RegisterCounts>(() => {
-    const tally: RegisterCounts = { present: 0, absent: 0, late: 0, other: 0, unmarked: 0 };
-    for (const row of rows) {
-      const status = shownStatus(row);
-      if (status === "present" || status === "absent" || status === "late") tally[status] += 1;
-      else if (status === "") tally.unmarked += 1;
-      else tally.other += 1;
-    }
-    return tally;
-  }, [rows]);
+  const counts = useMemo(() => tallyRows(rows), [rows]);
 
   const unmarkedEditable = editable.filter((row) => row.draft.status === "").length;
   const timeErrors = editable.filter((row) => row.leavesBeforeArriving).length;
@@ -181,9 +247,8 @@ export function useRegisterForm(entries: RegisterEntry[], markable: boolean) {
 
   /** A submission was saved: the records now hold every choice. */
   const markSaved = useCallback(() => {
-    setEdits(new Map());
+    dispatch({ type: "saved", key: newKey() });
     setIssues(new Map());
-    setIdempotencyKey(newKey());
   }, []);
 
   return {

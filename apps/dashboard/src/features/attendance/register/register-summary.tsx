@@ -4,11 +4,13 @@ import { useTranslations } from "next-intl";
 import { Button } from "@schoolhub/ui";
 import { CheckCheck } from "lucide-react";
 
+import type { AttendanceStatus } from "@/services";
+import { ATTENDANCE_STATUSES } from "@/services/modules/student-attendance/student-attendance-constant";
 import type { RegisterCounts } from "./use-register-form";
 
-/** The counts named after a status, labelled by `status.*`, then the summary's own two. */
-const STATUS_COUNT_KEYS = ["present", "absent", "late"] as const;
-const OWN_COUNT_KEYS = ["other", "unmarked"] as const;
+/** Shown even at zero, so the summary always reads "Present n … Unmarked n"; every other status
+ * shows only once a row has it, which keeps a typical day's footer short. */
+const ALWAYS_SHOWN: ReadonlySet<AttendanceStatus> = new Set(["present"]);
 
 export interface RegisterSummaryProps {
   counts: RegisterCounts;
@@ -22,9 +24,9 @@ export interface RegisterSummaryProps {
 }
 
 /**
- * The register's footer, kept in view while the list scrolls: present, absent, late, other and
- * unmarked counts, **Mark all present** and **Submit**. Submit waits until every row that will
- * be sent has a status.
+ * The register's footer, kept in view while the list scrolls: a count per status (present
+ * always, the others once non-zero) and unmarked, **Mark all present** and **Submit**. Submit
+ * waits until every row that will be sent has a status.
  */
 export function RegisterSummary({
   counts,
@@ -36,9 +38,12 @@ export function RegisterSummary({
   onSubmit,
 }: RegisterSummaryProps) {
   const t = useTranslations("attendance");
+  const shownStatuses = ATTENDANCE_STATUSES.filter(
+    (status) => ALWAYS_SHOWN.has(status) || counts[status] > 0,
+  );
   const counted = [
-    ...STATUS_COUNT_KEYS.map((key) => ({ key, label: t(`status.${key}`) })),
-    ...OWN_COUNT_KEYS.map((key) => ({ key, label: t(`register.counts.${key}`) })),
+    ...shownStatuses.map((status) => ({ key: status, label: t(`status.${status}`) })),
+    { key: "unmarked" as const, label: t("register.counts.unmarked") },
   ];
 
   return (
