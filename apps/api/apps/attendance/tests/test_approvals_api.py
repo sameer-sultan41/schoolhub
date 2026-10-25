@@ -287,6 +287,13 @@ class CampusApproverQueueTests(ApprovalsTestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.assert_still_pending()
 
+    def test_approving_their_own_campus_correction_succeeds(self) -> None:
+        """The control for the 404s above: `_decide` re-reads under the same campus scope."""
+        response = self.client.post(f"{CORRECTIONS}/{self.campus_a.pk}:approve", {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json()["data"]["status"], CorrectionStatus.APPROVED)
+
 
 class CorrectionRecordTests(ApprovalsTestCase):
     def setUp(self) -> None:
@@ -322,6 +329,22 @@ class CorrectionRecordTests(ApprovalsTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
         self.assertEqual(response.json()["data"]["reviewed_by_name"], "Zainab Qureshi")
         self.assertEqual(response.json()["data"]["student_name"], self.student.full_name)
+
+    def test_a_nameless_user_is_named_null_never_by_email(self) -> None:
+        """`get_full_name` falls back to the email; a `*_name` field must not."""
+        requester = UserFactory(tenant=self.tenant, first_name="", last_name="")
+        reviewer = UserFactory(tenant=self.tenant, first_name="", last_name="")
+        queued = self.correction(self.locked_row(self.students[1]), requester)
+        self.sign_in(reviewer, APPROVE)
+
+        response = self.client.post(f"{CORRECTIONS}/{queued.pk}:reject", {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        data = response.json()["data"]
+        self.assertIsNone(data["requested_by_name"])
+        self.assertIsNone(data["reviewed_by_name"])
+        self.assertNotIn(requester.email, response.content.decode())
+        self.assertNotIn(reviewer.email, response.content.decode())
 
     def test_the_queue_costs_no_query_per_row(self) -> None:
         self.count(CORRECTIONS)  # warm the per-user permission caches
@@ -448,6 +471,24 @@ class LeaveReviewRecordTests(ApprovalsTestCase):
         data = response.json()["data"]
         self.assertEqual(data["approvals"][0]["approver_name"], "Zainab Qureshi")
         self.assertEqual(data["section_name"], self.section.name)
+
+    def test_a_nameless_submitter_and_approver_are_named_null_never_by_email(self) -> None:
+        """A co-guardian or a parent reads these names; `get_full_name` would show an email."""
+        submitter = UserFactory(tenant=self.tenant, first_name="", last_name="")
+        approver = UserFactory(tenant=self.tenant, first_name="", last_name="")
+        leave_request = self.leave(self.students[0], submitted_by=submitter)
+        self.sign_in(approver, LEAVE_VIEW, LEAVE_APPROVE)
+
+        response = self.client.post(
+            f"{LEAVE_REQUESTS}/{leave_request.pk}:approve", {}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        data = response.json()["data"]
+        self.assertIsNone(data["submitted_by_name"])
+        self.assertIsNone(data["approvals"][0]["approver_name"])
+        self.assertNotIn(submitter.email, response.content.decode())
+        self.assertNotIn(approver.email, response.content.decode())
 
     def test_a_campus_staff_member_submits_for_their_child_on_another_campus(self) -> None:
         """Was a 500: the create re-read went through their campus scope, which the

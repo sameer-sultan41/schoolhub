@@ -53,13 +53,16 @@ def _load_user_names(context: dict, user_ids: Iterable[uuid.UUID | None]) -> dic
 
     `requested_by`, `submitted_by` and `approver_id` are plain `users(id)` columns,
     not foreign keys, so there is nothing to `select_related`. An unknown id maps to
-    None and is not asked for again.
+    None and is not asked for again. So does a nameless user: `get_full_name` would
+    fall back to their email, which a co-guardian or a parent must not see.
     """
     names = context.setdefault(USER_NAMES_CONTEXT_KEY, {})
     missing = {user_id for user_id in user_ids if user_id is not None and user_id not in names}
     if missing:
-        users = User.objects.filter(pk__in=missing).only("id", "first_name", "last_name", "email")
-        names.update({user.pk: user.get_full_name() for user in users})
+        users = User.objects.filter(pk__in=missing).only("id", "first_name", "last_name")
+        names.update(
+            {user.pk: f"{user.first_name} {user.last_name}".strip() or None for user in users}
+        )
         names.update({user_id: None for user_id in missing if user_id not in names})
     return names
 
@@ -74,7 +77,7 @@ class UserNamesListSerializer(serializers.ListSerializer):
 
 
 class UserNamesModelSerializer(serializers.ModelSerializer):
-    """`*_name` fields for `users(id)` columns, through `User.get_full_name`.
+    """`*_name` fields for `users(id)` columns: first and last name, never the email.
 
     A subclass lists its ids in `user_ids` and sets `UserNamesListSerializer` as its
     `Meta.list_serializer_class`, so a page costs one user query, not one per row.
