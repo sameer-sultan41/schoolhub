@@ -19,7 +19,7 @@ from rest_framework import status
 
 from apps.attendance import register, reports, services
 from apps.attendance.models import AttendanceSource, AttendanceStatus, StudentAttendance
-from apps.attendance.tests.base import AttendanceAPITestCase
+from apps.attendance.tests.base import LAST_SESSION_WINDOW, AttendanceAPITestCase
 from apps.attendance.tests.factories import (
     MARKING_DATE,
     AcademicSessionFactory,
@@ -404,11 +404,7 @@ class WrongShapeTests(PeriodModeTestCase):
     def test_a_named_session_that_does_not_contain_the_date_is_refused(self) -> None:
         """The marker check and the gate read one session; a period register needs the date's."""
         with tenant_context(self.tenant.id):
-            last_year = AcademicSessionFactory(
-                tenant=self.tenant,
-                start_date=MARKING_DATE - datetime.timedelta(days=400),
-                end_date=MARKING_DATE - datetime.timedelta(days=40),
-            )
+            last_year = AcademicSessionFactory(tenant=self.tenant, **LAST_SESSION_WINDOW)
         body = {**self.payload(self.p1), "academic_session_id": str(last_year.pk)}
 
         response = self.client.post(BULK_MARK, body, format="json")
@@ -426,6 +422,59 @@ class WrongShapeTests(PeriodModeTestCase):
                 actor_id=self.user.pk,
             )
         self.assertIn("academic_session_id", str(raised.exception.detail))
+
+
+class DailySessionTests(ModeTestCase):
+    """Daily mode checks the session contains the date too, else rows land in the wrong one."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.sign_in(self.user, MARK, scope=RecordScope.ALL)
+        with tenant_context(self.tenant.id):
+            self.last_year = AcademicSessionFactory(tenant=self.tenant, **LAST_SESSION_WINDOW)
+
+    def test_a_named_session_that_does_not_contain_the_date_is_refused(self) -> None:
+        body = {**self.payload(), "academic_session_id": str(self.last_year.pk)}
+
+        response = self.client.post(BULK_MARK, body, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertIn("academic_session_id", self.field_errors(response))
+        with tenant_context(self.tenant.id):
+            self.assertFalse(StudentAttendance.objects.alive().exists())
+
+    def test_the_service_refuses_it_without_the_view(self) -> None:
+        entries = [{"student_id": self.students[0].pk, "status": AttendanceStatus.PRESENT}]
+        with tenant_context(self.tenant.id), self.assertRaises(DomainRuleViolation) as raised:
+            services.bulk_mark_student_attendance(
+                section=self.section,
+                session=self.last_year,
+                on_date=MARKING_DATE,
+                period=None,
+                entries=entries,
+                actor_id=self.user.pk,
+            )
+        self.assertIn("academic_session_id", str(raised.exception.detail))
+
+    def test_a_named_session_that_contains_the_date_is_marked(self) -> None:
+        body = {**self.payload(), "academic_session_id": str(self.session.pk)}
+
+        response = self.client.post(BULK_MARK, body, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        sessions = {row["academic_session_id"] for row in response.json()["data"]}
+        self.assertEqual(sessions, {str(self.session.pk)})
+
+    def test_a_register_read_outside_every_session_is_refused(self) -> None:
+        """No session contains the date, so the fallback (the current one) is refused."""
+        first_start = min(self.session.start_date, self.last_year.start_date)
+        before = first_start - datetime.timedelta(days=1)
+        url = f"{REGISTER}?section_id={self.section.pk}&date={before.isoformat()}"
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertIn("academic_session_id", self.field_errors(response))
 
 
 class TimetableOffTests(PeriodModeTestCase):

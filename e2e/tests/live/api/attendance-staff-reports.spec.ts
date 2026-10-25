@@ -2,7 +2,7 @@ import { ApiError, type ApiClient } from "@schoolhub/api-client";
 import { env } from "@/env";
 import { expect, test } from "@/fixtures";
 import { createLiveSession } from "@/lib/live-api";
-import { seedAttendanceRegister, today } from "@/lib/live-attendance-register";
+import { seedAttendanceRegister, today, todaysSession } from "@/lib/live-attendance-register";
 import { findSeededStaff } from "@/lib/live-timetable-grid";
 import {
   E2E_BASELINE_TEACHER_EMPLOYEE_NUMBER,
@@ -104,7 +104,9 @@ test.describe("staff attendance (live API)", () => {
 
 test.describe("attendance reports (live API)", () => {
   test("a summary reports the rows a register wrote", async ({ liveApiClient }) => {
-    const register = await seedAttendanceRegister(liveApiClient);
+    // Today's session: `:bulk-mark` refuses a session that does not contain the date.
+    const session = await todaysSession(liveApiClient);
+    const register = await seedAttendanceRegister(liveApiClient, session);
     const marker = await markerSession();
     const date = today();
 

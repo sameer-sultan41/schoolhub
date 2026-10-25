@@ -311,6 +311,16 @@ describe("the Records list's filters", () => {
     expect(shiftIsoDate("2026-10-03", -6)).toBe("2026-09-27");
     expect(shiftIsoDate("2027-01-02", -6)).toBe("2026-12-27");
     expect(shiftIsoDate("2028-03-01", -1)).toBe("2028-02-29");
+    expect(shiftIsoDate("2026-03-31", 1)).toBe("2026-04-01");
+  });
+
+  it("keeps the calendar date across a DST change in the local zone", () => {
+    // Jest runs in America/New_York: DST starts 2026-03-08 and ends 2026-11-01.
+    expect(shiftIsoDate("2026-03-08", 1)).toBe("2026-03-09");
+    expect(shiftIsoDate("2026-03-09", -1)).toBe("2026-03-08");
+    expect(shiftIsoDate("2026-11-01", 1)).toBe("2026-11-02");
+    expect(shiftIsoDate("2026-11-02", -1)).toBe("2026-11-01");
+    expect(shiftIsoDate("2026-10-24", 0)).toBe("2026-10-24");
   });
 
   it("turns the status choice into a status, with all meaning none", () => {

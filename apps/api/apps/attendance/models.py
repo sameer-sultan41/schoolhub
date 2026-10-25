@@ -199,6 +199,8 @@ class StudentAttendance(TenantOwnedModel):
         visible = Student.filter_owned_by_user(Student.objects.alive(), user)
         return queryset.filter(student__in=visible)
 
+    # Record reads (scope_queryset's `assigned` hook) use this widened filter; reports use
+    # the narrow `filter_class_teacher_sections` below, never this one.
     @classmethod
     def filter_assigned_to_user(cls, queryset, user):
         """Record scope `assigned` — a class teacher's own sections, and rows the user marked.
@@ -220,6 +222,8 @@ class StudentAttendance(TenantOwnedModel):
         marked_by_them = queryset.filter(marked_by=user.pk)
         return cls.filter_class_teacher_sections(queryset, user) | marked_by_them
 
+    # Reports (tasks.build_report_rows' `assigned_filter`) use this narrow filter; record reads
+    # use the `marked_by`-widened `filter_assigned_to_user` above, never this one.
     @classmethod
     def filter_class_teacher_sections(cls, queryset, user):
         """`assigned` for §13's reports: rows in the sections the user class-teaches, only.

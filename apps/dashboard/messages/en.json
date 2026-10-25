@@ -1449,7 +1449,6 @@
       "saved": "Register saved: {marked} marked, {updated} updated, {alerts, plural, =0 {no guardian alerts} one {# guardian alert} other {# guardian alerts}} queued.",
       "counts": {
         "label": "Register summary",
-        "other": "Other",
         "unmarked": "Unmarked"
       },
       "unmarkable": {

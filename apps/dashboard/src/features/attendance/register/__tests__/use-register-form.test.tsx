@@ -9,7 +9,7 @@ import {
   THIRD_STUDENT_ID,
 } from "@/services/modules/student-attendance/__tests__/student-attendance-fixtures";
 
-import { rowMode, useRegisterForm } from "../use-register-form";
+import { registerGridReducer, rowMode, useRegisterForm, type RowDraft } from "../use-register-form";
 
 const FOURTH_STUDENT_ID = "22222222-aaaa-4bbb-8ccc-000000000004";
 
@@ -73,13 +73,32 @@ describe("useRegisterForm", () => {
       checkOutTime: "",
       remarks: "",
     });
+    // Every status is counted under its own name: Bilal's leave is `on_leave`, not "other".
     expect(result.current.counts).toEqual({
       present: 0,
       absent: 1,
       late: 1,
-      other: 1,
+      half_day: 0,
+      excused: 0,
+      on_leave: 1,
       unmarked: 1,
     });
+  });
+
+  it("counts a status as it is chosen, and a cleared one as unmarked again", () => {
+    const { result } = renderForm();
+
+    act(() => {
+      result.current.editRow(STUDENT_ID, { status: "excused" });
+    });
+    expect(result.current.counts.excused).toBe(1);
+    expect(result.current.counts.unmarked).toBe(0);
+
+    act(() => {
+      result.current.editRow(STUDENT_ID, { status: "" });
+    });
+    expect(result.current.counts.excused).toBe(0);
+    expect(result.current.counts.unmarked).toBe(1);
   });
 
   it("makes an idempotency key on load and a new one on every edit", () => {
@@ -97,6 +116,27 @@ describe("useRegisterForm", () => {
       result.current.editRow(STUDENT_ID, { remarks: "Fever" });
     });
     expect(result.current.idempotencyKey).not.toBe(afterStatus);
+  });
+
+  it("keeps the key across a refused or dropped submission: nothing was stored under it", () => {
+    const { result } = renderForm();
+    act(() => {
+      result.current.editRow(STUDENT_ID, { status: "absent" });
+    });
+    const sent = result.current.idempotencyKey;
+
+    // A refusal marks the rows the server named; a dropped request changes nothing at all.
+    act(() => {
+      result.current.setIssues(new Map([[STUDENT_ID, "Not enrolled in this section."]]));
+    });
+    expect(result.current.rows[0]?.issue).toBe("Not enrolled in this section.");
+    expect(result.current.idempotencyKey).toBe(sent);
+
+    act(() => {
+      result.current.setIssues(new Map());
+    });
+    expect(result.current.idempotencyKey).toBe(sent);
+    expect(result.current.rows[0]?.draft.status).toBe("absent");
   });
 
   it("makes a new key after a success, and clears the edits onto the saved records", () => {
@@ -232,5 +272,90 @@ describe("useRegisterForm", () => {
     expect(result.current.editableCount).toBe(0);
     expect(result.current.canSubmit).toBe(false);
     expect(result.current.buildEntries()).toEqual([]);
+  });
+});
+
+describe("registerGridReducer", () => {
+  const blank: RowDraft = { status: "", checkInTime: "", checkOutTime: "", remarks: "" };
+  const loaded = { edits: new Map<string, RowDraft>(), idempotencyKey: "key-load" };
+
+  it("stores the key each grid-changing action carries", () => {
+    const edited = registerGridReducer(loaded, {
+      type: "edit",
+      key: "key-edit",
+      studentId: STUDENT_ID,
+      saved: blank,
+      patch: { status: "late" },
+    });
+    expect(edited.idempotencyKey).toBe("key-edit");
+    expect(edited.edits.get(STUDENT_ID)?.status).toBe("late");
+
+    const allPresent = registerGridReducer(edited, {
+      type: "markAllPresent",
+      key: "key-all-present",
+      rows: [{ studentId: OTHER_STUDENT_ID, draft: blank }],
+    });
+    expect(allPresent.idempotencyKey).toBe("key-all-present");
+    expect(allPresent.edits.get(OTHER_STUDENT_ID)?.status).toBe("present");
+
+    const saved = registerGridReducer(allPresent, { type: "saved", key: "key-saved" });
+    expect(saved.idempotencyKey).toBe("key-saved");
+    expect(saved.edits.size).toBe(0);
+  });
+
+  it("is pure: the same update run twice gives the same state, key included", () => {
+    const action = {
+      type: "edit",
+      key: "key-edit",
+      studentId: STUDENT_ID,
+      saved: blank,
+      patch: { status: "absent" },
+    } as const;
+
+    expect(registerGridReducer(loaded, action)).toEqual(registerGridReducer(loaded, action));
+  });
+
+  it("builds a later edit on the row's earlier one, not on its record", () => {
+    const first = registerGridReducer(loaded, {
+      type: "edit",
+      key: "key-1",
+      studentId: STUDENT_ID,
+      saved: blank,
+      patch: { status: "half_day" },
+    });
+    const second = registerGridReducer(first, {
+      type: "edit",
+      key: "key-2",
+      studentId: STUDENT_ID,
+      saved: blank,
+      patch: { checkOutTime: "11:30" },
+    });
+
+    expect(second.edits.get(STUDENT_ID)).toEqual({
+      ...blank,
+      status: "half_day",
+      checkOutTime: "11:30",
+    });
+    expect(second.idempotencyKey).toBe("key-2");
+  });
+
+  it("keeps the state, key included, when Mark all present finds every row already marked", () => {
+    const marked = registerGridReducer(loaded, {
+      type: "edit",
+      key: "key-marked",
+      studentId: STUDENT_ID,
+      saved: blank,
+      patch: { status: "absent" },
+    });
+
+    const after = registerGridReducer(marked, {
+      type: "markAllPresent",
+      key: "key-unused",
+      rows: [{ studentId: STUDENT_ID, draft: blank }],
+    });
+
+    expect(after).toBe(marked);
+    expect(after.idempotencyKey).toBe("key-marked");
+    expect(after.edits.get(STUDENT_ID)?.status).toBe("absent");
   });
 });

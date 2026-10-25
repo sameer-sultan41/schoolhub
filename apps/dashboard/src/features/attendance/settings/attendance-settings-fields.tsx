@@ -15,18 +15,13 @@ import {
   RadioGroupItem,
 } from "@schoolhub/ui";
 
-import type { AttendanceMode } from "@/services";
 import {
+  ATTENDANCE_MODES,
   ESCALATION_THRESHOLD_MIN_DAYS,
   LOCK_WINDOW_MAX_DAYS,
   LOCK_WINDOW_MIN_DAYS,
 } from "@/services/modules/attendance-settings/attendance-settings-constant";
 import type { AttendanceSettingsFormValues } from "@/services/modules/attendance-settings/attendance-settings.schema";
-
-const MODE_OPTIONS: readonly { value: AttendanceMode; labelKey: string; hintKey: string }[] = [
-  { value: "daily", labelKey: "settings.mode.daily", hintKey: "settings.mode.dailyHint" },
-  { value: "period", labelKey: "settings.mode.period", hintKey: "settings.mode.periodHint" },
-];
 
 export interface AttendanceSettingsFieldsProps {
   form: UseFormReturn<AttendanceSettingsFormValues>;
@@ -54,22 +49,22 @@ export function AttendanceSettingsFields({ form, canUpdate }: AttendanceSettings
                 onValueChange={field.onChange}
                 disabled={!canUpdate}
               >
-                {MODE_OPTIONS.map((option) => (
-                  <div key={option.value} className="flex items-start gap-3">
+                {ATTENDANCE_MODES.map((mode) => (
+                  <div key={mode} className="flex items-start gap-3">
                     <RadioGroupItem
-                      id={`attendance-mode-${option.value}`}
-                      value={option.value}
-                      aria-describedby={`attendance-mode-${option.value}-hint`}
+                      id={`attendance-mode-${mode}`}
+                      value={mode}
+                      aria-describedby={`attendance-mode-${mode}-hint`}
                     />
                     <div className="space-y-0.5">
-                      <Label htmlFor={`attendance-mode-${option.value}`}>
-                        {t(option.labelKey)}
+                      <Label htmlFor={`attendance-mode-${mode}`}>
+                        {t(`settings.mode.${mode}`)}
                       </Label>
                       <p
-                        id={`attendance-mode-${option.value}-hint`}
+                        id={`attendance-mode-${mode}-hint`}
                         className="text-xs text-muted-foreground"
                       >
-                        {t(option.hintKey)}
+                        {t(`settings.mode.${mode}Hint`)}
                       </p>
                     </div>
                   </div>

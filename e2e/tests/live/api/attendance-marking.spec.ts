@@ -4,6 +4,7 @@ import { expect, test } from "@/fixtures";
 import { createLiveSession } from "@/lib/live-api";
 import { seedAttendanceRegister, today, todaysSession } from "@/lib/live-attendance-register";
 import { E2E_CLASS_TEACHER_EMAIL } from "@/lib/seed-constants";
+import { ATTENDANCE_MESSAGES } from "@/mocks/domains/attendance-register-store";
 
 /**
  * Live API lane — no browser. See campuses.spec.ts's header for the shared rationale
@@ -74,7 +75,9 @@ test.describe("attendance marking (live API)", () => {
   test("a register is marked, re-submitted idempotently, and readable back", async ({
     liveApiClient,
   }) => {
-    const register = await seedAttendanceRegister(liveApiClient);
+    // Today's session: `:bulk-mark` refuses a session that does not contain the date.
+    const session = await todaysSession(liveApiClient);
+    const register = await seedAttendanceRegister(liveApiClient, session);
     const marker = await markerSession();
     const date = today();
     const entries = register.studentIds.map((id, index) => ({
@@ -157,8 +160,10 @@ test.describe("attendance marking (live API)", () => {
   test("a student outside the section fails the submission and writes nothing", async ({
     liveApiClient,
   }) => {
-    const register = await seedAttendanceRegister(liveApiClient);
-    const outsider = await seedAttendanceRegister(liveApiClient);
+    // Both in today's session, so the only thing wrong is the stranger's section.
+    const session = await todaysSession(liveApiClient);
+    const register = await seedAttendanceRegister(liveApiClient, session);
+    const outsider = await seedAttendanceRegister(liveApiClient, session);
     const marker = await markerSession();
     const date = today();
     const [strangerId] = outsider.studentIds;
@@ -181,6 +186,9 @@ test.describe("attendance marking (live API)", () => {
 
     expect(error).toBeInstanceOf(ApiError);
     expect((error as ApiError).status).toBe(422);
+    expect((error as ApiError).meta.rows).toEqual([
+      { student_id: strangerId, issue: ATTENDANCE_MESSAGES.notEnrolled },
+    ]);
 
     const list = await marker.get(
       `/student-attendance?section_id=${register.sectionId}&date=${date}`,

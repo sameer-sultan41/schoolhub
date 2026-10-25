@@ -1,6 +1,5 @@
 import { FILTER_ALL } from "@/lib/constants";
 import { isIsoDate, isUuid } from "@/lib/helpers";
-import type { AttendanceMode } from "@/services/modules/attendance-settings/attendance-settings-type";
 import type {
   AttendancePageQuery,
   AttendanceStatus,
@@ -51,11 +50,6 @@ export const UNMARKABLE_REASONS: readonly UnmarkableReason[] = [
   "non_working_day",
   "session_closed",
 ];
-
-/** The register's `meta.attendance_mode` values; daily is the §19 default and the fallback
- * when the server sent none. */
-export const DEFAULT_ATTENDANCE_MODE: AttendanceMode = "daily";
-export const PERIOD_ATTENDANCE_MODE: AttendanceMode = "period";
 
 /** Rows per Records page: the API's cursor list has no page-size picker here. */
 export const RECORDS_PAGE_SIZE = 25;

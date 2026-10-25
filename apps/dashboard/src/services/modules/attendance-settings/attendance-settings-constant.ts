@@ -8,9 +8,14 @@ export const ATTENDANCE_SETTINGS_RESOURCE = "settings";
 /** The one settings row of a tenant has no id: a stand-in for `queryKeys.detail`. */
 export const ATTENDANCE_SETTINGS_ID = "current";
 
-/** Every mode, keyed so the compiler checks the set against the generated enum. */
+/** Every mode, keyed so the compiler checks the set against the generated enum. The one source
+ * of the mode values: the register, the settings form and the schema all read them from here. */
 const MODE_SET: Record<AttendanceMode, true> = { daily: true, period: true };
 export const ATTENDANCE_MODES = Object.keys(MODE_SET) as AttendanceMode[];
+export const DAILY_ATTENDANCE_MODE = "daily" satisfies AttendanceMode;
+export const PERIOD_ATTENDANCE_MODE = "period" satisfies AttendanceMode;
+/** The §19 default, and the reading of a register `meta` that sent no mode. */
+export const DEFAULT_ATTENDANCE_MODE: AttendanceMode = DAILY_ATTENDANCE_MODE;
 
 /** Lock window bounds, in days (`attendance.md` §19; the API's `MAX_LOCK_WINDOW_DAYS`). */
 export const LOCK_WINDOW_MIN_DAYS = 0;

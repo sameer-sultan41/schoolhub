@@ -280,13 +280,23 @@ either this file or `project-status.md`.
   transaction, unlike `TenantMiddleware` — resolved it.
   `e2e/tests/live/api/school-settings.spec.ts` now asserts the working
   patch→read journey rather than pinning the bug.
-- **Three live E2E specs still fail on CI, and two are undiagnosed.** The lane now brings the
+- **Live E2E specs that failed on CI.** The lane now brings the
   stack up and runs (ADR-0025, ADR-0026), and the timetable journeys pass. The first full runs
   also showed the rest of the lane had drifted while it could not run:
   - `dashboard-summary.spec.ts` asserts a "Today's schedule" list. The `scheduleLabel` message
     still exists, but nothing renders it, so the spec is stale against today's home page.
-  - `academics-promotion-journey.spec.ts` fails in the browser; the cause is not yet read from
-    its trace.
+  - `academics-promotion-journey.spec.ts` (and the attendance register journey, the first time
+    it ran) failed in the browser with "We could not reach the server": their writes send
+    `Idempotency-Key`, which the API's CORS preflight did not allow (django-cors-headers'
+    default list, no `CORS_ALLOW_HEADERS`), so the browser refused the request. The mocked lane
+    never showed it because its router answers every preflight with the header allowed.
+    **Fixed** by allowing the header in `config/settings/base.py`. Run 40132416580 confirmed
+    it: the register journey passes, and the promotion journey now gets past prepare and
+    approve but times out waiting for the batch to show "Executed" after `:execute`. That is
+    a separate failure (the execute job, or the screen's poll of it), not yet diagnosed.
+  - Cross-origin responses don't expose `X-Request-ID` (no `CORS_EXPOSE_HEADERS`), so
+    `ApiError.requestId` is always null in the dashboard. Nothing shows it today; exposing it
+    is its own change with its own test.
   - `students-admission-enrollment.spec.ts` was already known broken (project-status).
   - `attendance-leave.spec.ts` submits leave as the admin, and the API (correctly, §11) accepts
     it only from the student or a guardian linked to a portal account
@@ -1668,3 +1678,12 @@ either this file or `project-status.md`.
   select in the staff form dialog do not yet: the staff dialog gets its text through a different
   path than the others, so it needs its own wiring. Selects with a fixed list (gender, status)
   can never be empty and need nothing.
+
+- **No shared status-badge primitive yet.** `AttendanceStatusBadge`
+  (`apps/dashboard/src/features/attendance/attendance-status.tsx`) and academics'
+  `PromotionStatusBadge` (`apps/dashboard/src/features/academics/promotions/promotion-status-badge.tsx`)
+  repeat one pattern: a status maps to a `Badge` variant, a mark (an icon; a dot for promotions)
+  and a translated label, so a status is never told by colour alone. A shared primitive (a status
+  → `{ variant, icon, label }` map rendered by one badge) would serve both and the next module's
+  statuses, but it changes two modules' screens and their tests at once, so it belongs in its own
+  PR rather than in attendance PR A's review fixes.

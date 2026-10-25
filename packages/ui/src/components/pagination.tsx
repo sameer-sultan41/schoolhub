@@ -1,5 +1,5 @@
 import { ChevronLeftIcon, ChevronRightIcon, MoreHorizontalIcon } from "lucide-react";
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { cn } from "../lib/cn";
 import { getPageNumbers } from "../lib/page-numbers";
 import { Button } from "./button";
@@ -52,6 +52,18 @@ import { Button } from "./button";
  *    matching `metronic nextjs/components/ui/data-grid-pagination.tsx`'s own borderless,
  *    icon-only prev/next and flat `bg-accent`-on-active page buttons exactly, rather
  *    than the outlined/text-labelled buttons this file used before.
+ *
+ * ── `CursorPagination` ──────────────────────────────────────────────────────────────
+ *
+ * 8. A cursor list knows whether there is a page before and after it, never how many
+ *    pages there are, so it cannot satisfy `Pagination`'s required `totalPages`.
+ *    `CursorPagination` is the Previous/Next pair alone, over `hasPrevious`/`hasNext`.
+ *    It renders through the same `PaginationRoot` and `PaginationStep` as `Pagination`
+ *    (factored out of it, not copied), so both pagers share the chevrons and their
+ *    `rtl:rotate-180` mirroring (2), the disabled-at-the-ends behaviour (6) and the
+ *    `Button` styling (7). Its `label`, `previousLabel` and `nextLabel` are required with
+ *    no English default (3). Unlike `Pagination` it never hides itself: on a single page
+ *    both arrows are disabled, since a cursor list cannot tell "one page" from "unknown".
  */
 
 function PaginationContent({ className, ...props }: ComponentProps<"ul">) {
@@ -88,13 +100,66 @@ function PaginationEllipsis({
   );
 }
 
+/** Props both pagers' `<nav>` takes: `aria-label`/`children` are owned by the pager, and
+ * `onChange` is omitted so a mistyped `onChange` cannot be silently accepted as a DOM handler
+ * where `onPageChange`/`onNext` was meant. */
+type PaginationNavProps = Omit<ComponentProps<"nav">, "aria-label" | "children" | "onChange">;
+
+/** The labelled `<nav>` and list both pagers render into. */
+function PaginationRoot({
+  label,
+  className,
+  children,
+  ...props
+}: PaginationNavProps & { label: string; children: ReactNode }) {
+  return (
+    <nav
+      role="navigation"
+      aria-label={label}
+      data-slot="pagination"
+      className={cn("flex justify-center", className)}
+      {...props}
+    >
+      <PaginationContent>{children}</PaginationContent>
+    </nav>
+  );
+}
+
+/** A Previous or Next arrow: disabled at its end rather than removed (header, 6), its chevron
+ * mirrored under RTL (header, 2). */
+function PaginationStep({
+  direction,
+  label,
+  disabled,
+  onClick,
+}: {
+  direction: "previous" | "next";
+  label: string;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  const Icon = direction === "previous" ? ChevronLeftIcon : ChevronRightIcon;
+  return (
+    <PaginationItem>
+      <Button
+        variant="ghost"
+        mode="icon"
+        size="sm"
+        aria-label={label}
+        disabled={disabled}
+        onClick={onClick}
+        className="size-7"
+      >
+        <Icon aria-hidden="true" className="size-4 rtl:rotate-180" />
+      </Button>
+    </PaginationItem>
+  );
+}
+
 /** One entry in the rendered row: a page button, or a gap where pages were skipped. */
 type PaginationSlot = { kind: "page"; page: number } | { kind: "gap"; edge: "start" | "end" };
 
-export interface PaginationProps
-  // `aria-label`/`children` are owned below; `onChange` is omitted so a mistyped
-  // `onChange` cannot be silently accepted as a DOM handler where `onPageChange` was meant.
-  extends Omit<ComponentProps<"nav">, "aria-label" | "children" | "onChange"> {
+export interface PaginationProps extends PaginationNavProps {
   /** The page being shown, 1-based. */
   page: number;
   /** Total number of pages. `0` or less renders nothing — there is nothing to page. */
@@ -150,78 +215,100 @@ export function Pagination({
   ];
 
   return (
-    <nav
-      role="navigation"
-      aria-label={label}
-      data-slot="pagination"
-      className={cn("flex justify-center", className)}
-      {...props}
-    >
-      <PaginationContent>
-        <PaginationItem>
-          <Button
-            variant="ghost"
-            mode="icon"
-            size="sm"
-            aria-label={previousLabel}
-            disabled={page <= 1}
-            onClick={() => {
-              onPageChange(page - 1);
-            }}
-            className="size-7"
-          >
-            <ChevronLeftIcon aria-hidden="true" className="size-4 rtl:rotate-180" />
-          </Button>
-        </PaginationItem>
+    <PaginationRoot label={label} className={className} {...props}>
+      <PaginationStep
+        direction="previous"
+        label={previousLabel}
+        disabled={page <= 1}
+        onClick={() => {
+          onPageChange(page - 1);
+        }}
+      />
 
-        {slots.map((slot) =>
-          slot.kind === "gap" ? (
-            <PaginationItem key={`gap-${slot.edge}`}>
-              <PaginationEllipsis label={morePagesLabel} className="size-7 text-muted-foreground" />
-            </PaginationItem>
-          ) : (
-            <PaginationItem key={slot.page}>
-              <Button
-                variant="ghost"
-                mode="icon"
-                size="sm"
-                aria-label={goToPageLabel(slot.page)}
-                aria-current={slot.page === page ? "page" : undefined}
-                onClick={() => {
-                  onPageChange(slot.page);
-                }}
-                className={cn(
-                  "size-7 font-numeric tabular-nums",
-                  // Fill AND weight, not colour alone, so the current page is still
-                  // findable without colour perception (WCAG 1.4.1) — no border, though:
-                  // that would diverge from the vendor's own borderless ghost styling,
-                  // which this now otherwise matches exactly.
-                  slot.page === page && "bg-muted font-bold",
-                )}
-              >
-                {slot.page}
-              </Button>
-            </PaginationItem>
-          ),
-        )}
+      {slots.map((slot) =>
+        slot.kind === "gap" ? (
+          <PaginationItem key={`gap-${slot.edge}`}>
+            <PaginationEllipsis label={morePagesLabel} className="size-7 text-muted-foreground" />
+          </PaginationItem>
+        ) : (
+          <PaginationItem key={slot.page}>
+            <Button
+              variant="ghost"
+              mode="icon"
+              size="sm"
+              aria-label={goToPageLabel(slot.page)}
+              aria-current={slot.page === page ? "page" : undefined}
+              onClick={() => {
+                onPageChange(slot.page);
+              }}
+              className={cn(
+                "size-7 font-numeric tabular-nums",
+                // Fill AND weight, not colour alone, so the current page is still
+                // findable without colour perception (WCAG 1.4.1) — no border, though:
+                // that would diverge from the vendor's own borderless ghost styling,
+                // which this now otherwise matches exactly.
+                slot.page === page && "bg-muted font-bold",
+              )}
+            >
+              {slot.page}
+            </Button>
+          </PaginationItem>
+        ),
+      )}
 
-        <PaginationItem>
-          <Button
-            variant="ghost"
-            mode="icon"
-            size="sm"
-            aria-label={nextLabel}
-            disabled={page >= totalPages}
-            onClick={() => {
-              onPageChange(page + 1);
-            }}
-            className="size-7"
-          >
-            <ChevronRightIcon aria-hidden="true" className="size-4 rtl:rotate-180" />
-          </Button>
-        </PaginationItem>
-      </PaginationContent>
-    </nav>
+      <PaginationStep
+        direction="next"
+        label={nextLabel}
+        disabled={page >= totalPages}
+        onClick={() => {
+          onPageChange(page + 1);
+        }}
+      />
+    </PaginationRoot>
+  );
+}
+
+export interface CursorPaginationProps extends PaginationNavProps {
+  /** A page comes before this one. False disables Previous. */
+  hasPrevious: boolean;
+  /** A page comes after this one. False disables Next. */
+  hasNext: boolean;
+  onPrevious: () => void;
+  onNext: () => void;
+  /** Accessible name for the `<nav>`. Required — see the file header. */
+  label: string;
+  /** Previous-page control. Required — see the file header. */
+  previousLabel: string;
+  /** Next-page control. Required — see the file header. */
+  nextLabel: string;
+}
+
+/**
+ * Previous/Next over a cursor-paginated list, which has no page count (header, 8).
+ *
+ * Holds no state: the caller keeps its cursors and says whether each direction is open.
+ */
+export function CursorPagination({
+  hasPrevious,
+  hasNext,
+  onPrevious,
+  onNext,
+  label,
+  previousLabel,
+  nextLabel,
+  className,
+  ...props
+}: CursorPaginationProps) {
+  return (
+    <PaginationRoot label={label} className={className} {...props}>
+      <PaginationStep
+        direction="previous"
+        label={previousLabel}
+        disabled={!hasPrevious}
+        onClick={onPrevious}
+      />
+      <PaginationStep direction="next" label={nextLabel} disabled={!hasNext} onClick={onNext} />
+    </PaginationRoot>
   );
 }
 
