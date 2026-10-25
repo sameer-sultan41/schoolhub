@@ -148,6 +148,17 @@ either this file or `project-status.md`.
     class-teach (`test_campus_a_plus_assigned_marks_the_section_they_class_teach_on_campus_b`)
     cannot see those rows in Records. Making the read path a union is a core RBAC
     change that touches every module's lists, so it belongs in its own reviewed PR.
+  - **A campus-staff guardian cannot see the leave they submitted for a child on
+    another campus** (found in PR B; the same precedence fix as the entry above).
+    The guardian link admits the create, so a campus-A staff member who is also a
+    linked guardian of a campus-B child gets a 201
+    (`test_a_campus_staff_member_submits_for_their_child_on_another_campus`). Every
+    read after that goes through `scope_queryset`, which takes the broadest scope in
+    the order `all` > `campus` > `own` > `assigned` and returns at its `campus`
+    branch: the list, the retrieve and `:cancel` are all a 404 on that request. A
+    union of scopes on the read path closes this gap only when the user also holds
+    the `own`-scoped guardian role: the guardian link is a data relation, not a
+    scope, so without that role there is no `own` branch to union in.
   - **`:bulk-mark` makes one extra `TenantSettings` read.** The lock window is read twice
     in one submission (once for the lock, once for the alert boundary). Passing the first
     read through would save the query; it is not worth a signature change on its own.
