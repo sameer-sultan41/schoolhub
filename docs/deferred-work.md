@@ -43,8 +43,9 @@ either this file or `project-status.md`.
   `StudentAttendanceViewSet` drops `DenyRestrictedPrincipals` so students and
   guardians can read their own attendance (§4 grants them an `own`-scoped view) —
   but the exemption was viewset-wide, so it covered `:bulk-mark` too, and
-  `assert_marker_may_mark_section` returns early for `all`/`campus` scope. It is
-  now per-action. The lesson generalises past this module: **a viewset that
+  the marker check (then `assert_marker_may_mark_section`, now
+  `register.may_mark_register`) grants `all`/`campus` scope before any Staff
+  lookup. It is now per-action. The lesson generalises past this module: **a viewset that
   serves both a portal read and a staff write cannot express that with
   `permission_classes` alone**, because DRF resolves it per view. Any later
   module granting a restricted principal a read on a table staff also write —
@@ -98,6 +99,55 @@ either this file or `project-status.md`.
   hr-leave. **Until then a tenant's leave types come from the seeds, not the
   API** — recorded rather than worked around, because the workaround is a key
   nobody declared.
+- **The attendance dashboard's PR A (register, Records, Settings, the attendance mode;
+  plan `docs/superpowers/plans/2026-10-24-attendance-dashboard.md`) left these out:**
+  - **Staff-on-behalf leave submission.** The dashboard's leave screens (PR B) review
+    and decide; they do not submit. §4 and §11 make the requester the student or a
+    linked guardian, so a staff member entering leave for a guardian who phoned in
+    would need a rule the module doc does not have. Submission arrives with
+    parent-portal.
+  - **Half-day leave mapped to periods.** A `first_half`/`second_half` leave writes a
+    daily `on_leave` row, which refuses the student in *every* period register that
+    day ([ADR-0028](decisions/0028-one-attendance-mode-per-tenant.md)). Mapping a half
+    to the periods it covers by their start times needs a rule for where a half ends,
+    which the module doc does not define.
+  - **The home widget.** The dashboard home shows no attendance figure (today's
+    absence rate, registers still unmarked). It belongs with the reports work.
+  - **The flat-app split.** `apps/attendance` is still flat (models, services, views,
+    serializers at the app root), unlike ADR-0010's one-package-per-resource layout.
+    PR A added `register.py` beside them rather than starting the split in a feature
+    PR; the split is its own refactor.
+  - **A substitute's period submission as a signal for `SubstitutionStatus.completed`.**
+    In period mode the confirmed substitute marks the covered period, which is the
+    nearest thing to "the covered period ran" the system records. It is not wired: a
+    register says who marked the period, not that the lesson was taught, and deciding
+    what evidence counts is a module-doc decision (`attendance.md` §20).
+  - **Turning `module.timetable` off while a tenant is in period mode is not refused.**
+    The flag is toggled in platform admin, outside this module, so the toggle does not
+    check the mode first. What happens next is enforced: `assert_register_period`
+    refuses every period register, on the read and at `:bulk-mark` (422 on
+    `period_id`), until the timetable is back on or the school switches to daily; the
+    Settings tab's help text says so. Still open: refusing, or warning on, the toggle
+    itself.
+  - **Two simultaneous period submissions can both alert.** The per-(student, date,
+    event) dedupe reads committed rows, so P1 and P2 marked absent in the same instant
+    each send an absence alert. The cost is a duplicate alert, never a missing one;
+    closing it needs a lock or a unique alert ledger.
+  - **`errors.validation_error` reads oddly on a list.** Records shows the shared
+    "Please correct the highlighted fields." when a filter is refused, on a screen
+    with no form. The copy is shared by every screen, so changing it is its own PR.
+  - **No index on `student_attendance.marked_by`.** Record reads for an
+    `assigned`-scoped user now also match rows they marked
+    (`StudentAttendance.filter_assigned_to_user`), an `OR` on an unindexed column. Add
+    the index (its own migration) if that read shows up slow.
+  - **Marking takes the union of a mixed user's scopes; Records does not.**
+    `register.may_mark_register` grants a caller with a `campus` role *and* an
+    `assigned` role every register either one allows, but `scope_queryset`
+    (`core/rbac/permissions.py`) returns at its `campus` branch and never reaches
+    `assigned`. So a campus-A + assigned user who marks a campus-B section they
+    class-teach (`test_campus_a_plus_assigned_marks_the_section_they_class_teach_on_campus_b`)
+    cannot see those rows in Records. Making the read path a union is a core RBAC
+    change that touches every module's lists, so it belongs in its own reviewed PR.
 - **Phase 2 Tier 2 is backend-complete.** `academics`, `timetable` and
   `attendance` have all shipped their APIs. The tier's dashboard screens are the
   outstanding half, and are deliberately the other agent's — see the module-screens
@@ -198,8 +248,10 @@ either this file or `project-status.md`.
     `Idempotency-Key`, which the API's CORS preflight did not allow (django-cors-headers'
     default list, no `CORS_ALLOW_HEADERS`), so the browser refused the request. The mocked lane
     never showed it because its router answers every preflight with the header allowed.
-    **Fixed** by allowing the header in `config/settings/base.py`; the next nightly run
-    confirms both journeys.
+    **Fixed** by allowing the header in `config/settings/base.py`. Run 40132416580 confirmed
+    it: the register journey passes, and the promotion journey now gets past prepare and
+    approve but times out waiting for the batch to show "Executed" after `:execute`. That is
+    a separate failure (the execute job, or the screen's poll of it), not yet diagnosed.
   - Cross-origin responses don't expose `X-Request-ID` (no `CORS_EXPOSE_HEADERS`), so
     `ApiError.requestId` is always null in the dashboard. Nothing shows it today; exposing it
     is its own change with its own test.
@@ -1588,3 +1640,12 @@ either this file or `project-status.md`.
   select in the staff form dialog do not yet: the staff dialog gets its text through a different
   path than the others, so it needs its own wiring. Selects with a fixed list (gender, status)
   can never be empty and need nothing.
+
+- **No shared status-badge primitive yet.** `AttendanceStatusBadge`
+  (`apps/dashboard/src/features/attendance/attendance-status.tsx`) and academics'
+  `PromotionStatusBadge` (`apps/dashboard/src/features/academics/promotions/promotion-status-badge.tsx`)
+  repeat one pattern: a status maps to a `Badge` variant, a mark (an icon; a dot for promotions)
+  and a translated label, so a status is never told by colour alone. A shared primitive (a status
+  → `{ variant, icon, label }` map rendered by one badge) would serve both and the next module's
+  statuses, but it changes two modules' screens and their tests at once, so it belongs in its own
+  PR rather than in attendance PR A's review fixes.

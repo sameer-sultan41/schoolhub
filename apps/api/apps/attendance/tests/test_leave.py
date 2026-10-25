@@ -23,6 +23,7 @@ from apps.attendance.models import (
     LeaveType,
     StudentAttendance,
 )
+from apps.attendance.tests.base import SESSION_WINDOW
 from apps.attendance.tests.factories import (
     AcademicSessionFactory,
     CampusFactory,
@@ -71,7 +72,9 @@ class LeaveTestCase(TestCase):
 
         with tenant_context(self.tenant.id):
             self.campus = CampusFactory(tenant=self.tenant)
-            self.session = AcademicSessionFactory(tenant=self.tenant, is_current=True)
+            self.session = AcademicSessionFactory(
+                tenant=self.tenant, is_current=True, **SESSION_WINDOW
+            )
             self.school_class = ClassFactory(tenant=self.tenant, level=6)
             self.section = SectionFactory(
                 tenant=self.tenant, school_class=self.school_class, campus=self.campus

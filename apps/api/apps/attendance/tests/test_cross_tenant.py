@@ -27,6 +27,7 @@ from apps.attendance.tests.factories import (
     AttendanceCorrectionFactory,
     CampusFactory,
     ClassFactory,
+    PeriodFactory,
     SectionFactory,
     StudentAttendanceFactory,
     StudentEnrollmentFactory,
@@ -125,6 +126,26 @@ class AttendanceCrossTenantTests(AttendanceAPITestCase):
         with tenant_context(self.other.id):
             self.foreign_row.refresh_from_db()
             self.assertEqual(self.foreign_row.status, AttendanceStatus.ABSENT)
+
+    def test_marking_with_another_tenants_period_is_a_404(self) -> None:
+        """The body's `period_id` resolves like the register's query: a 404, not a 400."""
+        with tenant_context(self.other.id):
+            foreign_period = PeriodFactory(tenant=self.other, sequence=1)
+
+        response = self.client.post(
+            BULK_MARK,
+            {
+                "section_id": str(self.section.pk),
+                "period_id": str(foreign_period.pk),
+                "attendance_date": MARKING_DATE.isoformat(),
+                "entries": [
+                    {"student_id": str(self.students[0].pk), "status": AttendanceStatus.PRESENT}
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_marking_another_tenants_student_into_our_own_section_is_refused(self) -> None:
         """The nastier shape: a section the caller *can* reach, holding a student

@@ -856,6 +856,72 @@ paths:
               schema:
                 $ref: '#/components/schemas/AttendanceCorrection'
           description: ''
+  /api/v1/attendance-settings:
+    get:
+      operationId: attendance_settings_retrieve
+      description: |-
+        `GET/PATCH /api/v1/attendance-settings` — §19's attendance keys, typed.
+
+        A projection of three keys in ``tenant_settings.academic``, the same shape
+        `holiday_calendar/view.py` gives its slice, under the settings keys §4
+        already describes as covering academic configuration. Not `/school-settings`:
+        its PATCH replaces the whole `academic` JSON, so a client read-modify-write
+        would lose a concurrent change. This writes only its own keys, under a row
+        lock, and merges the nested `student_leave_approval` dict rather than
+        replacing it.
+
+        Switching to `period` is refused while `module.timetable` is off: without a
+        timetable every period register would be refused (ADR-0028).
+      summary: Read the attendance settings
+      tags:
+      - attendance-settings
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceSettings'
+          description: ''
+    patch:
+      operationId: attendance_settings_partial_update
+      description: |-
+        `GET/PATCH /api/v1/attendance-settings` — §19's attendance keys, typed.
+
+        A projection of three keys in ``tenant_settings.academic``, the same shape
+        `holiday_calendar/view.py` gives its slice, under the settings keys §4
+        already describes as covering academic configuration. Not `/school-settings`:
+        its PATCH replaces the whole `academic` JSON, so a client read-modify-write
+        would lose a concurrent change. This writes only its own keys, under a row
+        lock, and merges the nested `student_leave_approval` dict rather than
+        replacing it.
+
+        Switching to `period` is refused while `module.timetable` is off: without a
+        timetable every period register would be refused (ADR-0028).
+      summary: Change the attendance settings
+      tags:
+      - attendance-settings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAttendanceSettingsUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAttendanceSettingsUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAttendanceSettingsUpdate'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceSettings'
+          description: ''
   /api/v1/auth/change-password:
     post:
       operationId: auth_change_password_create
@@ -8753,6 +8819,14 @@ paths:
           * `leave` - leave
         required: true
       - in: query
+        name: period_id
+        schema:
+          type: string
+          format: uuid
+          nullable: true
+        description: '`daily-register` only: one period''s own rows instead of the
+          derived day.'
+      - in: query
         name: section_id
         schema:
           type: string
@@ -10601,6 +10675,11 @@ paths:
         schema:
           type: string
           format: uuid
+      - in: query
+        name: class_id
+        schema:
+          type: string
+          format: uuid
       - name: cursor
         required: false
         in: query
@@ -10754,6 +10833,83 @@ paths:
               schema:
                 $ref: '#/components/schemas/StudentAttendance'
           description: ''
+  /api/v1/student-attendance/my-registers:
+    get:
+      operationId: student_attendance_my_registers_retrieve
+      description: '`GET /student-attendance/my-registers?date=` — from the caller''s
+        own staff rows.'
+      summary: The registers the caller marks on a date
+      parameters:
+      - in: query
+        name: date
+        schema:
+          type: string
+          format: date
+        description: Defaults to today.
+      tags:
+      - student-attendance
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MyRegister'
+          description: Ordered by start time, then section name. `meta.attendance_mode`
+            and `meta.date` echo what the list was resolved for.
+  /api/v1/student-attendance/register:
+    get:
+      operationId: student_attendance_register_retrieve
+      description: |-
+        `GET /student-attendance/register?section_id=&date=[&period_id=]`.
+
+        Unpaginated by design: one section's roster. A section the caller may not
+        mark is a 404 here, where `:bulk-mark` answers 422 on `section_id` — a read
+        has no field to blame.
+      summary: 'A section''s register for one date: its roster, with any marks merged'
+      parameters:
+      - in: query
+        name: date
+        schema:
+          type: string
+          format: date
+        required: true
+      - in: query
+        name: period_id
+        schema:
+          type: string
+          format: uuid
+          nullable: true
+      - in: query
+        name: section_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - student-attendance
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RegisterEntry'
+          description: Rostered students in roll-number order. `meta.attendance_mode`
+            is `daily` or `period`; `meta.markable` is false when no row can be marked
+            that date, with `meta.unmarkable_reason` one of `future`, `holiday` (named
+            in `meta.holiday_name`), `non_working_day` or `session_closed`; `meta.is_locked`
+            says only that the date is past the lock window, since the lock is per
+            row (`record.is_locked`); `meta.academic_session_id` is the session the
+            date resolved to. `period_id` is required in period mode, where it must
+            name a lesson the section has that date and `module.timetable` must be
+            on, and refused in daily mode (422 on `period_id`).
   /api/v1/student-attendance:bulk-mark:
     post:
       operationId: student_attendance:bulk_mark_create
@@ -10787,8 +10943,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedStudentAttendanceList'
-          description: The marked rows, plus `meta.marked`/`meta.updated` counts.
+                type: array
+                items:
+                  $ref: '#/components/schemas/StudentAttendance'
+          description: The marked rows, plus `meta.marked`/`meta.updated`/`meta.alerts_queued`
+            counts.
   /api/v1/student-documents/{id}:
     get:
       operationId: student_documents_retrieve
@@ -14103,6 +14262,14 @@ components:
       required:
       - academic_session_id
       - file
+    AttendanceModeEnum:
+      enum:
+      - daily
+      - period
+      type: string
+      description: |-
+        * `daily` - daily
+        * `period` - period
     AttendanceReportQuery:
       type: object
       description: |-
@@ -14124,6 +14291,12 @@ components:
           type: string
           format: uuid
           nullable: true
+        period_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: '`daily-register` only: one period''s own rows instead of the
+            derived day.'
         threshold:
           type: string
           format: decimal
@@ -14151,6 +14324,25 @@ components:
         * `student-late-arrivals` - student-late-arrivals
         * `staff-punctuality` - staff-punctuality
         * `leave` - leave
+    AttendanceSettings:
+      type: object
+      description: '`GET /attendance-settings` — the effective values, defaults applied
+        (§19).'
+      properties:
+        attendance_mode:
+          allOf:
+          - $ref: '#/components/schemas/AttendanceModeEnum'
+          readOnly: true
+        lock_window_days:
+          type: integer
+          readOnly: true
+        leave_escalation_threshold_days:
+          type: integer
+          readOnly: true
+      required:
+      - attendance_mode
+      - leave_escalation_threshold_days
+      - lock_window_days
     AttendanceSourceEnum:
       enum:
       - manual
@@ -14326,8 +14518,9 @@ components:
 
         `academic_session_id` is optional and falls back to the tenant's current
         session: a school runs one at a time and the register UI has no reason to
-        carry its id around. `period_id` omitted means daily mode, which is §19's
-        recommended default.
+        carry its id around. `period_id` is required in period mode and refused in
+        daily mode (ADR-0028); it is a plain UUID so an unknown or foreign period is
+        the view's 404, like the register's.
       properties:
         section_id:
           type: string
@@ -17315,6 +17508,61 @@ components:
         * `draft` - Draft
         * `submitted` - Submitted
         * `locked` - Locked
+    MyRegister:
+      type: object
+      description: One register the caller marks on a date. The period fields are
+        null in daily mode.
+      properties:
+        section_id:
+          type: string
+          format: uuid
+          readOnly: true
+        section_name:
+          type: string
+          readOnly: true
+        class_name:
+          type: string
+          readOnly: true
+        campus_id:
+          type: string
+          format: uuid
+          readOnly: true
+        period_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        period_name:
+          type: string
+          readOnly: true
+          nullable: true
+        start_time:
+          type: string
+          format: time
+          readOnly: true
+          nullable: true
+        end_time:
+          type: string
+          format: time
+          readOnly: true
+          nullable: true
+        marked_count:
+          type: integer
+          readOnly: true
+        roster_count:
+          type: integer
+          readOnly: true
+      required:
+      - campus_id
+      - class_name
+      - end_time
+      - marked_count
+      - period_id
+      - period_name
+      - roster_count
+      - section_id
+      - section_name
+      - start_time
     Notice:
       type: object
       properties:
@@ -18981,6 +19229,23 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedAttendanceSettingsUpdate:
+      type: object
+      description: |-
+        `PATCH /attendance-settings` — any subset of the three keys.
+
+        Bounds are §19's: a lock window of 0-7 days, and an escalation threshold of
+        at least one day (zero would escalate every single-day absence).
+      properties:
+        attendance_mode:
+          $ref: '#/components/schemas/AttendanceModeEnum'
+        lock_window_days:
+          type: integer
+          maximum: 7
+          minimum: 0
+        leave_escalation_threshold_days:
+          type: integer
+          minimum: 1
     PatchedBudget:
       type: object
       properties:
@@ -21982,6 +22247,41 @@ components:
         * `approved` - Approved
         * `rejected` - Rejected
         * `processed` - Processed
+    RegisterEntry:
+      type: object
+      description: One rostered student on a register, with the record for that date
+        if marked.
+      properties:
+        student_id:
+          type: string
+          format: uuid
+          readOnly: true
+        student_name:
+          type: string
+          readOnly: true
+        admission_number:
+          type: string
+          readOnly: true
+        roll_number:
+          type: string
+          readOnly: true
+          nullable: true
+        record:
+          allOf:
+          - $ref: '#/components/schemas/StudentAttendance'
+          readOnly: true
+          nullable: true
+        on_leave:
+          type: boolean
+          readOnly: true
+          description: The student has a daily `on_leave` row for this date.
+      required:
+      - admission_number
+      - on_leave
+      - record
+      - roll_number
+      - student_id
+      - student_name
     RelationshipEnum:
       enum:
       - father
@@ -23099,15 +23399,28 @@ components:
         student_id:
           type: string
           format: uuid
+        student_name:
+          type: string
+          readOnly: true
+        admission_number:
+          type: string
+          readOnly: true
         section_id:
           type: string
           format: uuid
+        section_name:
+          type: string
+          readOnly: true
         academic_session_id:
           type: string
           format: uuid
         period_id:
           type: string
           format: uuid
+          nullable: true
+        period_name:
+          type: string
+          readOnly: true
           nullable: true
         attendance_date:
           type: string
@@ -23135,6 +23448,7 @@ components:
           type: string
           format: uuid
           readOnly: true
+          nullable: true
         source:
           allOf:
           - $ref: '#/components/schemas/AttendanceSourceEnum'
@@ -23169,6 +23483,7 @@ components:
           readOnly: true
       required:
       - academic_session_id
+      - admission_number
       - attendance_date
       - created_at
       - id
@@ -23176,10 +23491,13 @@ components:
       - late_minutes
       - leave_request_id
       - marked_by
+      - period_name
       - section_id
+      - section_name
       - source
       - status
       - student_id
+      - student_name
       - updated_at
     StudentDocument:
       type: object

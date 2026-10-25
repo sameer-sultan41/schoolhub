@@ -848,7 +848,7 @@ class MyTimetableTests(TimetableAPITestCase):
         self.assertIsNone(row["substitution"])
 
     def test_a_covering_teacher_sees_a_section_they_never_teach(self) -> None:
-        """The cover set is why `_teacher_timetable` needs a second query."""
+        """The cover set is why `teacher_slots_for` needs a second query."""
         with tenant_context(self.tenant.id):
             stranger = StaffFactory(tenant=self.tenant, campus=self.campus)
             TeacherAllocationFactory(

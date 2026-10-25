@@ -685,7 +685,7 @@ def assert_marker_may_enter(*, user, exam_subject: ExamSubject) -> None:
     built for exactly this. An `all`- or `campus`-scoped caller returns early:
     many `exam_staff` and admin users have no `Staff` row at all, so requiring
     an allocation would break the legitimate case — the same early return
-    `attendance.assert_marker_may_mark_section` makes, and the same reason the
+    `attendance.register.may_mark_register` makes, and the same reason the
     principal check has to sit in the *view* rather than inside here.
     """
     from apps.academics.models import TeacherSubjectAllocation
@@ -693,7 +693,7 @@ def assert_marker_may_enter(*, user, exam_subject: ExamSubject) -> None:
     from core.rbac.permissions import user_scopes
 
     # `user_scopes` is keyed by **scope type**, not by permission key — the
-    # shape `attendance.assert_marker_may_mark_section` already reads. Keying it
+    # shape `attendance.register.may_mark_register` already reads. Keying it
     # by permission returned nothing and made every caller look unscoped, which
     # is how CI caught this.
     scopes = user_scopes(user)

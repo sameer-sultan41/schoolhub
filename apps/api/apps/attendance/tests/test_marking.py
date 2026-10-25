@@ -8,6 +8,7 @@ only through HTTP is a rule the other two callers can quietly skip.
 from __future__ import annotations
 
 import datetime
+from unittest import mock
 
 from django.test import TestCase
 from django.utils import timezone
@@ -19,6 +20,8 @@ from apps.attendance.models import (
     CorrectionStatus,
     StudentAttendance,
 )
+from apps.attendance.register import may_mark_register
+from apps.attendance.tests.base import SESSION_WINDOW
 from apps.attendance.tests.factories import (
     MARKING_DATE,
     AcademicSessionFactory,
@@ -32,10 +35,13 @@ from apps.attendance.tests.factories import (
     TenantFactory,
     UserFactory,
     configure_academic,
+    enable_feature,
     grant,
     holiday,
     open_all_week,
 )
+from apps.timetable.models import SlotStatus
+from apps.timetable.tests.factories import TimetableSlotFactory
 from core.api.exceptions import Conflict, DomainRuleViolation
 from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
@@ -51,7 +57,9 @@ class MarkingTestCase(TestCase):
         open_all_week(self.tenant)
         with tenant_context(self.tenant.id):
             self.campus = CampusFactory(tenant=self.tenant)
-            self.session = AcademicSessionFactory(tenant=self.tenant, is_current=True)
+            self.session = AcademicSessionFactory(
+                tenant=self.tenant, is_current=True, **SESSION_WINDOW
+            )
             self.school_class = ClassFactory(tenant=self.tenant, level=6)
             self.section = SectionFactory(
                 tenant=self.tenant, school_class=self.school_class, campus=self.campus
@@ -162,12 +170,34 @@ class BulkMarkTests(MarkingTestCase):
                 {AttendanceStatus.ABSENT},
             )
 
-    def test_a_daily_and_a_period_register_do_not_overwrite_each_other(self) -> None:
+    def test_daily_rows_then_a_switch_then_period_rows_overwrite_neither(self) -> None:
+        """One mode at a time, but rows written under the other mode stay (ADR-0028)."""
         with tenant_context(self.tenant.id):
             self.mark()
-            self.mark(period=self.period)
+            TimetableSlotFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                section=self.section,
+                period=self.period,
+                day_of_week=MARKING_DATE.weekday(),
+                status=SlotStatus.PUBLISHED,
+            )
+        configure_academic(self.tenant, attendance_mode="period")
+        enable_feature(self.tenant, "module.timetable")
 
-            self.assertEqual(StudentAttendance.objects.alive().count(), 6)
+        with tenant_context(self.tenant.id):
+            self.mark(period=self.period, entries=self.register(status=AttendanceStatus.ABSENT))
+
+            rows = StudentAttendance.objects.alive()
+            self.assertEqual(rows.count(), 6)
+            self.assertEqual(
+                set(rows.filter(period__isnull=True).values_list("status", flat=True)),
+                {AttendanceStatus.PRESENT},
+            )
+            self.assertEqual(
+                set(rows.filter(period=self.period).values_list("status", flat=True)),
+                {AttendanceStatus.ABSENT},
+            )
 
     def test_a_student_not_enrolled_in_the_section_fails_the_row_not_the_teacher(self) -> None:
         """The response carries `error.meta.rows`, the structured-meta path
@@ -300,6 +330,41 @@ class LockWindowTests(MarkingTestCase):
                 self.mark(entries=self.register(status=AttendanceStatus.ABSENT))
 
 
+class BackfillAlertTests(MarkingTestCase):
+    """Guardian alerts go only for dates still inside the lock window (§12)."""
+
+    def mark_absent(self, on_date: datetime.date) -> tuple[dict, mock.MagicMock]:
+        with (
+            tenant_context(self.tenant.id),
+            mock.patch.object(services, "_queue_alerts") as queued,
+        ):
+            result = self.mark(
+                on_date=on_date, entries=self.register(status=AttendanceStatus.ABSENT)
+            )
+        return result, queued
+
+    def test_a_register_backfilled_past_the_window_writes_rows_but_alerts_no_one(self) -> None:
+        result, queued = self.mark_absent(timezone.localdate() - datetime.timedelta(days=10))
+
+        self.assertEqual(result["marked"], 3)
+        self.assertEqual(result["alerts"], [])
+        queued.assert_not_called()
+
+    def test_todays_register_still_alerts(self) -> None:
+        result, queued = self.mark_absent(timezone.localdate())
+
+        self.assertEqual(len(result["alerts"]), 3)
+        queued.assert_called_once()
+
+    def test_a_late_filled_register_inside_the_window_still_alerts(self) -> None:
+        configure_academic(self.tenant, attendance_lock_window_days=3)
+
+        result, queued = self.mark_absent(timezone.localdate() - datetime.timedelta(days=2))
+
+        self.assertEqual(len(result["alerts"]), 3)
+        queued.assert_called_once()
+
+
 class CorrectionTests(MarkingTestCase):
     def setUp(self) -> None:
         super().setUp()
@@ -408,11 +473,16 @@ class CorrectionTests(MarkingTestCase):
 class MarkerScopeTests(MarkingTestCase):
     """§11 — the marker must hold `assigned` scope for the section unless `all`."""
 
+    def may_mark(self, user) -> bool:
+        with tenant_context(self.tenant.id):
+            return may_mark_register(
+                user=user, section=self.section, on_date=MARKING_DATE, period=None
+            )
+
     def test_an_all_scoped_user_may_mark_any_section(self) -> None:
         grant(self.user, "attendance.student-attendance.mark", scope=RecordScope.ALL)
 
-        with tenant_context(self.tenant.id):
-            services.assert_marker_may_mark_section(user=self.user, section=self.section)
+        self.assertTrue(self.may_mark(self.user))
 
     def test_the_sections_class_teacher_may_mark_it(self) -> None:
         teacher_user = UserFactory(tenant=self.tenant)
@@ -422,8 +492,7 @@ class MarkerScopeTests(MarkingTestCase):
             self.section.save(update_fields=["class_teacher_staff_id", "updated_at"])
         grant(teacher_user, "attendance.student-attendance.mark", scope=RecordScope.ASSIGNED)
 
-        with tenant_context(self.tenant.id):
-            services.assert_marker_may_mark_section(user=teacher_user, section=self.section)
+        self.assertTrue(self.may_mark(teacher_user))
 
     def test_a_teacher_of_another_section_may_not_mark_this_one(self) -> None:
         other_user = UserFactory(tenant=self.tenant)
@@ -431,24 +500,22 @@ class MarkerScopeTests(MarkingTestCase):
             StaffFactory(tenant=self.tenant, campus=self.campus, user_id=other_user.pk)
         grant(other_user, "attendance.student-attendance.mark", scope=RecordScope.ASSIGNED)
 
-        with tenant_context(self.tenant.id), self.assertRaises(DomainRuleViolation):
-            services.assert_marker_may_mark_section(user=other_user, section=self.section)
+        self.assertFalse(self.may_mark(other_user))
 
     def test_own_scope_alone_marks_nothing(self) -> None:
         """A student marking their own register is not a workflow §5 describes."""
         student_user = UserFactory(tenant=self.tenant)
         grant(student_user, "attendance.student-attendance.view", scope=RecordScope.OWN)
 
-        with tenant_context(self.tenant.id), self.assertRaises(DomainRuleViolation):
-            services.assert_marker_may_mark_section(user=student_user, section=self.section)
+        self.assertFalse(self.may_mark(student_user))
 
 
 class RosterTests(MarkingTestCase):
     def test_the_roster_is_the_sections_active_enrollments(self) -> None:
         with tenant_context(self.tenant.id):
-            roster = services.section_roster(section=self.section, session=self.session)
+            roster = services.roster_enrollments(section=self.section, session=self.session)
 
-            self.assertEqual({s.pk for s in roster}, {s.pk for s in self.students})
+            self.assertEqual({e.student_id for e in roster}, {s.pk for s in self.students})
 
     def test_a_student_enrolled_elsewhere_is_not_on_this_roster(self) -> None:
         with tenant_context(self.tenant.id):
@@ -464,6 +531,6 @@ class RosterTests(MarkingTestCase):
                 section=other_section,
             )
 
-            roster = services.section_roster(section=self.section, session=self.session)
+            roster = services.roster_enrollments(section=self.section, session=self.session)
 
-            self.assertNotIn(elsewhere.pk, {s.pk for s in roster})
+            self.assertNotIn(elsewhere.pk, {e.student_id for e in roster})

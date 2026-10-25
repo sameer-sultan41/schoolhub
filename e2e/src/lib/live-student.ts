@@ -9,6 +9,12 @@ interface Identified {
   id: string;
 }
 
+/** The part of the created `Student` a spec reads back: its id and its name. */
+export interface CreatedStudent extends Identified {
+  first_name: string;
+  last_name: string;
+}
+
 /**
  * A student `:enroll` will accept: the API refuses one with no guardian and no emergency
  * contact (`assert_enrollment_prerequisites`), so every live spec that enrols someone starts here.
@@ -16,9 +22,9 @@ interface Identified {
 export async function createStudentReadyToEnrol(
   client: ApiClient,
   campusId: string,
-): Promise<Identified> {
+): Promise<CreatedStudent> {
   const student = (await client.post("/students", { ...buildLiveStudent(), campus_id: campusId }))
-    .data as Identified;
+    .data as CreatedStudent;
   const guardian = (await client.post("/guardians", buildLiveGuardian())).data as Identified;
   await client.post(`/students/${student.id}/guardians`, {
     guardian_id: guardian.id,

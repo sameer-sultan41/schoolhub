@@ -101,6 +101,13 @@ describe("FormDialogLayout", () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
+  it("holds Save back while submitDisabled is set", () => {
+    renderWithProviders(<Harness submitDisabled />);
+
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
+  });
+
   it("disables Save and says it is saving while pending", () => {
     renderWithProviders(<Harness isPending />);
 

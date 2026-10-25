@@ -31,6 +31,8 @@ jest.mock("@schoolhub/api-client", () => {
 describe("Services", () => {
   it("aggregates every domain, each action a real function", () => {
     expect(Object.keys(Services).sort()).toEqual([
+      "attendanceCorrections",
+      "attendanceSettings",
       "auth",
       "curriculum",
       "dashboard",
@@ -42,6 +44,7 @@ describe("Services", () => {
       "rooms",
       "schoolOrganization",
       "staff",
+      "studentAttendance",
       "studentTransfers",
       "students",
       "teacherAllocations",
@@ -136,6 +139,16 @@ describe("Services", () => {
     expect(typeof Services.teacherSubstitutions.proposeSubstitution).toBe("function");
     expect(typeof Services.teacherSubstitutions.fetchCandidates).toBe("function");
     expect(typeof Services.teacherSubstitutions.decideSubstitution).toBe("function");
+
+    expect(typeof Services.attendanceSettings.fetchSettings).toBe("function");
+    expect(typeof Services.attendanceSettings.updateSettings).toBe("function");
+
+    expect(typeof Services.studentAttendance.fetchRegister).toBe("function");
+    expect(typeof Services.studentAttendance.fetchMyRegisters).toBe("function");
+    expect(typeof Services.studentAttendance.fetchAttendancePage).toBe("function");
+    expect(typeof Services.studentAttendance.bulkMark).toBe("function");
+
+    expect(typeof Services.attendanceCorrections.requestCorrection).toBe("function");
 
     expect(typeof Services.periods.fetchPeriodPage).toBe("function");
     expect(typeof Services.periods.createPeriod).toBe("function");

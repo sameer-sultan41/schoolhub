@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import operator
 import uuid
+from collections.abc import Collection
 from datetime import date
 from functools import reduce
 
@@ -212,8 +213,8 @@ def slot_version_window(on_date: date | None):
     `effective_from` means "has always been in force".
 
     Shared rather than inlined because two callers need it and they must agree:
-    `effective_slots_for` picks the cells, and the teacher projection in
-    `viewset.MyTimetableViewSet` first resolves *which sections* to look in. If
+    `effective_slots_for` picks the cells, and the teacher projection
+    `teacher_slots_for` first resolves *which sections* to look in. If
     only one of them honoured the date, a teacher who held a section only in the
     superseded version would resolve an empty section set and get an empty week
     back for a past date — version-blindness moved one layer up rather than
@@ -269,3 +270,59 @@ def effective_slots_for(*, session: AcademicSession, section_ids: list, on_date:
         .select_related("substitute_staff", "room")
     }
     return slots, overrides
+
+
+def teacher_slots_for(
+    *, staff_ids: Collection[uuid.UUID], session: AcademicSession, on_date: date | None
+) -> tuple[list[TimetableSlot], dict]:
+    """The periods these staff hold, plus anything they are covering on `on_date`.
+
+    Returns ``(slots, overrides)`` in ``effective_slots_for``'s shape, narrowed to
+    the cells one of `staff_ids` holds or covers: their own cells (a covered one
+    stays, with its override naming the substitute) and the cells a confirmed
+    substitution hands them.
+
+    Two bounded queries feed ``effective_slots_for`` the section set, and the
+    result is filtered in Python — never a query per cell. The cover set is
+    needed because a substitution can put a teacher in a section they otherwise
+    never teach, which the "sections I hold slots in" set alone would miss.
+
+    The section lookup uses the same ``slot_version_window`` the cell lookup
+    does, so a past date resolves the sections the teacher held *then* — not
+    only the ones they hold now. `GET /timetables/my` reads it, and attendance's
+    period-mode `my-registers` will, so neither re-derives the projection.
+    """
+    staff_ids = set(staff_ids)
+    if not staff_ids:
+        return [], {}
+    section_ids = set(
+        TimetableSlot.objects.alive()
+        .filter(
+            slot_version_window(on_date),
+            academic_session=session,
+            staff_id__in=staff_ids,
+            status=SlotStatus.PUBLISHED,
+        )
+        .values_list("section_id", flat=True)
+    )
+    if on_date is not None:
+        section_ids |= set(
+            TeacherSubstitution.objects.alive()
+            .filter(
+                substitute_staff_id__in=staff_ids,
+                date=on_date,
+                status=SubstitutionStatus.CONFIRMED,
+            )
+            .values_list("timetable_slot__section_id", flat=True)
+        )
+
+    slots, overrides = effective_slots_for(
+        session=session, section_ids=list(section_ids), on_date=on_date
+    )
+    mine = [
+        slot
+        for slot in slots
+        if slot.staff_id in staff_ids
+        or getattr(overrides.get(slot.pk), "substitute_staff_id", None) in staff_ids
+    ]
+    return mine, overrides

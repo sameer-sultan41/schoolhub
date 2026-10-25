@@ -310,8 +310,10 @@ E2E_PRINCIPAL_PERMISSIONS = [
 # live specs build a run-unique section per test (live-attendance-register.ts),
 # so there is no fixed section to point `class_teacher_staff_id` at. The scope
 # being wider than production's is fine here precisely because these specs assert
-# *marking behaviour*, and the narrower `assigned` path is asserted in the Django
-# suite (`MarkerScopeTests`) where the section is under the test's control.
+# *marking behaviour*, and the narrower `assigned` path is asserted over HTTP in
+# the Django suite (`test_assigned_only_class_teacher_can_bulk_mark_over_http`,
+# apps/attendance/tests/test_register_api.py) where the section is under the
+# test's control.
 E2E_CLASS_TEACHER_PERMISSIONS = [
     "attendance.student-attendance.view",
     "attendance.student-attendance.mark",
@@ -322,6 +324,9 @@ E2E_CLASS_TEACHER_PERMISSIONS = [
     # The register resolves its roster and section from these two.
     "students.student.view",
     "school.section.view",
+    # The register's and Records' Class pickers (`GET /classes`): without it the browser
+    # journey (`attendance-register-journey.spec.ts`) has no class to pick.
+    "school.class.view",
 ]
 # The one key restricted principals (student, guardian) may hold at all — auth-and-rbac.md
 # §6 rule 4 — scope-narrowed via RecordScope.OWN rather than the grant itself being unsafe.

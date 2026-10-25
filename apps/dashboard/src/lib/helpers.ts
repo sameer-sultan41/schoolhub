@@ -152,14 +152,18 @@ export function isUuid(value: string): boolean {
   return Regex.UUID.test(value);
 }
 
-/** Whether `value` is a `YYYY-MM-DD` date — how a date filter read from the URL is checked
- * before it is sent to the API. */
-export function isIsoDate(value: string): boolean {
-  return Regex.ISO_DATE.test(value);
-}
-
 /** The first 10 characters of an ISO timestamp are its date. */
 const ISO_DATE_LENGTH = 10;
+
+/** Whether `value` is a real `YYYY-MM-DD` calendar date (`2026-13-45` and `2026-02-30` are
+ * not) — how a date filter read from the URL is checked before it is sent to the API. */
+export function isIsoDate(value: string): boolean {
+  if (!Regex.ISO_DATE.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  // V8 rolls a day past the month's end over (Feb 30 -> Mar 2), so the round trip must match.
+  if (Number.isNaN(parsed.getTime())) return false;
+  return parsed.toISOString().slice(0, ISO_DATE_LENGTH) === value;
+}
 
 /**
  * Today's date as `YYYY-MM-DD`, in UTC. The server runs on UTC (`TIME_ZONE`), so its "today"

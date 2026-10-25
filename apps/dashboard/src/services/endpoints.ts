@@ -122,6 +122,20 @@ export const endpoints = {
     action: (id: string, action: "approve" | "reject" | "cancel") =>
       `/teacher-substitutions/${id}:${action}`,
   },
+  /** `GET/PATCH /attendance-settings` (`apps/api/apps/attendance/urls.py`): one row per tenant. */
+  attendanceSettings: {
+    detail: "/attendance-settings",
+  },
+  /** `apps/api/apps/attendance/urls.py`: `:bulk-mark` is a colon-action on the collection. */
+  studentAttendance: {
+    list: "/student-attendance",
+    register: "/student-attendance/register",
+    myRegisters: "/student-attendance/my-registers",
+    bulkMark: "/student-attendance:bulk-mark",
+  },
+  attendanceCorrections: {
+    list: "/attendance-corrections",
+  },
   /** `apps/api/apps/timetable/rooms/urls.py`. */
   rooms: {
     list: "/rooms",

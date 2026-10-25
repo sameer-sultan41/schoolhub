@@ -161,6 +161,11 @@ class Student(TenantOwnedModel):
     def __str__(self) -> str:
         return f"{self.first_name} {self.last_name} ({self.admission_number})"
 
+    @property
+    def full_name(self) -> str:
+        """The display name a serializer shows, as `Staff.full_name` is for staff."""
+        return f"{self.first_name} {self.last_name}"
+
     @classmethod
     def filter_owned_by_user(cls, queryset, user):
         """Record scope `own` (auth-and-rbac.md §2.3) — two distinct principals.

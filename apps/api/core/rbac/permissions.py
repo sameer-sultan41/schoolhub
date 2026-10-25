@@ -179,8 +179,14 @@ def scope_queryset(
     own_field: str | None = None,
     campus_field: str | None = "campus_id",
     campus_allows_null: bool = False,
+    assigned_filter=None,
 ):
     """Narrow a queryset by the user's record scope.
+
+    `assigned_filter(queryset, user)` replaces the model's `filter_assigned_to_user`
+    for one call, for a reader that needs a narrower `assigned` than the model's
+    record reads (attendance reports, which must not see rows only marked by the
+    caller).
 
     Tenant scoping already happened (manager + RLS); this applies the *within-tenant*
     constraint from the role assignment.
@@ -267,7 +273,7 @@ def scope_queryset(
             return queryset.filter(**{own_field: user.pk})
     if RecordScope.ASSIGNED in scopes:
         # Each module defines what "assigned" means; it must override this hook.
-        assigned = getattr(queryset.model, "filter_assigned_to_user", None)
+        assigned = assigned_filter or getattr(queryset.model, "filter_assigned_to_user", None)
         if callable(assigned):
             return assigned(queryset, user)
     return queryset.none()

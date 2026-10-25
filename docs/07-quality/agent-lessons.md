@@ -49,7 +49,8 @@
 ### L5. Fixtures and mocks must reproduce the server
 
 - **Mistake.** Tests faked a failure message the server never sends ("No target section set."), so the screen the PR gate approved was not the screen users saw. A stateful mock that skipped the override-reason rule would have let "edit, then submit" pass where the real server refuses.
-- **Check.** Copy messages, field names and status codes from the server source or its tests. A mocked-lane stub enforces the same rules as the endpoint it stands for. A stubbed API proves nothing about the server.
+- **Mistake (again, attendance dashboard PR A).** The register's on-leave test paired the generic banner "Some rows could not be marked; the register was not saved." with the on-leave issue, but the server sends that issue only in a later, separate refusal with its own sentence ("Some students are on approved leave; the register was not saved."). Other fixtures mixed a not-enrolled row and an on-leave row in one error, which the server cannot send. Each sentence was real; the pairing was not.
+- **Check.** Copy messages, field names and status codes from the server source or its tests. A mocked-lane stub enforces the same rules as the endpoint it stands for. A refusal fixture pairs each issue with the sentence the server sends for that kind of issue, in the order the server checks them, and never combines issues one response cannot carry. A stubbed API proves nothing about the server.
 
 ### L6. Size waits from the real path
 
@@ -75,6 +76,7 @@
 ### L10. Fix a hook rejection at its cause, on the files it names
 
 - **Mistake.** Hand-formatted code failed Prettier on several files; an old `noqa` was reported unused by ruff; cspell rejected two coined words in a comment and a doc.
+- **Mistake (again, attendance PR A).** `eslint --fix` dropped a type assertion it called unnecessary on a test fixture, which widened `subject_type`/`status` to `string`; the pre-push typecheck failed. The fixture needed a return type, not the assertion.
 - **Check.** Apply the fix the hook prints, on exactly the files it lists. Delete an unused `noqa` rather than re-adding it, reword a flagged word rather than growing `.cspell/project-words.txt`, and never use `--no-verify`. Keep the reason a removed `noqa` carried as a plain comment. When a hook prints no detail (the pre-push mypy check), run the command it names once and read the error before editing; two guessed fixes in a row failed before the real cause (a class variable overridden by an annotated attribute) was read.
 
 ### L11. Briefs to subagents must carry this repository's overrides
@@ -134,6 +136,11 @@
 
 - **Mistake.** The branch and HEAD changed between my commands because a second session worked in the same repository, so a branch I thought was checked out was not.
 - **Check.** Run `git branch --show-current` and `git status` before every git write. Do parallel work in a separate `git worktree`, but commit there only if the hooks can run: Prettier's Tailwind plugin and mypy failed in a worktree with a linked `node_modules`, so hook-sensitive commits belong in the main checkout.
+
+### L22. Compiling a queryset to SQL raises where iterating it returned nothing
+
+- **Mistake.** Attendance's derived-day reports wrap the scoped queryset's own SQL in a CTE (`queryset.query.sql_with_params()`, later `get_compiler(...).as_sql()`). For `.none()` — what `scope_queryset` returns to fail closed — or an empty `__in` (an exam whose results are all withheld), Django raises `EmptyResultSet` at compile time, where iterating the same queryset had returned `[]`. Every report over an empty scope, and the report-card job, would have been a 500. Caught in the change review of PR A's Task 2, not by a test.
+- **Check.** Wherever a queryset is compiled to raw SQL, catch `django.core.exceptions.EmptyResultSet` at the compile and return the empty result without running a query, as `reports._over_days` does. Test it with `.none()` and an empty `__in` under `assertNumQueries(0)`.
 
 
 

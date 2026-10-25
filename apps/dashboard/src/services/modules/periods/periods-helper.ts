@@ -3,6 +3,7 @@ import {
   PERIOD_KIND,
   PERIOD_MIN_SEQUENCE,
   PERIOD_TIME_LENGTH,
+  PERIOD_WEEKDAYS,
   PERIODS_BODY_FIELDS,
   PERIODS_QUERY_FIELDS,
 } from "./periods-constant";
@@ -49,6 +50,22 @@ export function toShortTime(time: string): string {
 /** The record's days, with an omitted value read as `null` (the tenant's working days). */
 export function periodWeekdays(record: PeriodRecord): number[] | null {
   return record.weekdays ?? null;
+}
+
+/** A `YYYY-MM-DD` date's weekday as `Period.weekdays` numbers it, Monday (0) to Sunday (6). */
+export function periodWeekdayOf(isoDate: string): number {
+  // `getUTCDay` counts from Sunday (0); shift it so Monday is 0.
+  const sundayBased = new Date(`${isoDate}T00:00:00Z`).getUTCDay();
+  return (sundayBased + PERIOD_WEEKDAYS.length - 1) % PERIOD_WEEKDAYS.length;
+}
+
+/** The lesson periods (no breaks) that run on `isoDate`; a period with no days of its own runs
+ * on the tenant's working days, which the server checks. A register is taken per lesson only. */
+export function lessonPeriodsOn(periods: readonly PeriodRecord[], isoDate: string): PeriodRecord[] {
+  const weekday = periodWeekdayOf(isoDate);
+  return periods.filter(
+    (period) => !period.is_break && (periodWeekdays(period)?.includes(weekday) ?? true),
+  );
 }
 
 /** A new period's form values: every campus, the tenant's working days. */

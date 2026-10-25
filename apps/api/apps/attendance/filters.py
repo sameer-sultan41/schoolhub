@@ -27,6 +27,9 @@ from apps.attendance.models import (
 
 class StudentAttendanceFilterSet(django_filters.FilterSet):
     section_id = django_filters.UUIDFilter(field_name="section_id")
+    # A section's class: the Python field is `school_class` (`class` is reserved), the
+    # column and the contract keep `class_id`.
+    class_id = django_filters.UUIDFilter(field_name="section__school_class_id")
     student_id = django_filters.UUIDFilter(field_name="student_id")
     academic_session_id = django_filters.UUIDFilter(field_name="academic_session_id")
     period_id = django_filters.UUIDFilter(field_name="period_id")

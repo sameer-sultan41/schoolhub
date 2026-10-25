@@ -1,6 +1,8 @@
 import {
   buildPeriodInput,
   kindToIsBreak,
+  lessonPeriodsOn,
+  periodWeekdayOf,
   periodWeekdays,
   recordToPeriodFormValues,
   toPeriodQueryParams,
@@ -51,5 +53,26 @@ describe("periods-helper", () => {
 
     expect(result.success).toBe(false);
     expect(result.error?.issues[0]?.path).toEqual(["end_time"]);
+  });
+});
+
+describe("lesson periods on a date", () => {
+  it("numbers a date's weekday from Monday", () => {
+    expect(periodWeekdayOf("2026-10-19")).toBe(0); // a Monday
+    expect(periodWeekdayOf("2026-10-24")).toBe(5); // a Saturday
+    expect(periodWeekdayOf("2026-10-25")).toBe(6); // a Sunday
+  });
+
+  it("keeps the lessons that run that day and drops breaks", () => {
+    const daily = periodRecord({ id: "p-daily", weekdays: null });
+    const mondays = periodRecord({ id: "p-monday", weekdays: [0] });
+    const fridays = periodRecord({ id: "p-friday", weekdays: [4] });
+    const recess = periodRecord({ id: "p-recess", is_break: true, weekdays: null });
+
+    const ids = lessonPeriodsOn([daily, mondays, fridays, recess], "2026-10-19").map(
+      (period) => period.id,
+    );
+
+    expect(ids).toEqual(["p-daily", "p-monday"]);
   });
 });
