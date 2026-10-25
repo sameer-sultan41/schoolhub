@@ -101,11 +101,11 @@ either this file or `project-status.md`.
   nobody declared.
 - **The attendance dashboard's PR A (register, Records, Settings, the attendance mode;
   plan `docs/superpowers/plans/2026-10-24-attendance-dashboard.md`) left these out:**
-  - **Staff-on-behalf leave submission.** The dashboard's leave screens (PR B) review
-    and decide; they do not submit. §4 and §11 make the requester the student or a
+  - **Leave submission waits for parent-portal.** The dashboard's leave screens (PR B)
+    review and decide; they do not submit. §4 and §11 make the requester the student or a
     linked guardian, so a staff member entering leave for a guardian who phoned in
-    would need a rule the module doc does not have. Submission arrives with
-    parent-portal.
+    would need a rule the module doc does not have. That staff-on-behalf submission was
+    proposed for PR B and the user rejected it; submission arrives with parent-portal.
   - **Half-day leave mapped to periods.** A `first_half`/`second_half` leave writes a
     daily `on_leave` row, which refuses the student in *every* period register that
     day ([ADR-0028](decisions/0028-one-attendance-mode-per-tenant.md)). Mapping a half
@@ -148,6 +148,48 @@ either this file or `project-status.md`.
     class-teach (`test_campus_a_plus_assigned_marks_the_section_they_class_teach_on_campus_b`)
     cannot see those rows in Records. Making the read path a union is a core RBAC
     change that touches every module's lists, so it belongs in its own reviewed PR.
+- **The attendance dashboard's PR B (the corrections and leave queues) left these out:**
+  - **A guardian cannot attach a document to a leave request.** `platform.file.create`
+    (`core/files/permissions.py`) is granted to staff roles only, so a guardian or student
+    has no way to upload the `attendance.leave-attachment` file a leave type with
+    `requires_attachment` demands. Their submission arrives with parent-portal, which
+    must grant the upload (scoped to that purpose) or the people §4 says submit leave
+    cannot submit a request of such a type.
+  - **A leave attachment downloads through the generic file endpoint, which has no record
+    scope.** The Leave detail sheet downloads through `POST /files/{id}:download`, keyed
+    `platform.file.view` (every staff role). `FileViewSet.get_queryset`
+    (`core/files/views.py:55-64`) is `File.objects.alive()`: a class teacher who reaches
+    only their own sections' requests can still fetch any file in the tenant whose id they
+    learn. The id arrives through a record-scoped leave request, which bounds the exposure
+    in the dashboard, but not at the API. This is the platform gap recorded under
+    `core/files` below (C1 in `07-quality/2026-09-module-audit-findings.md`); for leave,
+    the fix is a `:download` action on `/leave-requests/{id}` gated by the request's own
+    scope, as `/student-documents/{id}:download` is for students' documents.
+  - **A leave request's `section_name` is the current session's section.** It is the
+    student's active enrollment in the current session, not the session the leave dates
+    fall in, so a request from last session shows today's section, or none. The queue is
+    worked in the present; showing the dates' own section needs a per-row session lookup.
+  - **Guardians and students holding `attendance.leave-request.view` see the Leave tab.**
+    §4 grants them the key (own requests), so a portal user signed in to the dashboard sees
+    a read-only Leave tab, as they see Records. The API scopes the rows to their own
+    children or themselves and they hold no `.approve`; hiding portal users from staff
+    screens is parent-portal's decision, not one module's.
+  - **A 404 on a decision shows the generic message, unlike a 409.** If a correction or a
+    leave request leaves the approver's scope (or is deleted) while its dialog is open,
+    `:approve`/`:reject` answers 404 and the dialog shows the generic "We could not find
+    what you were looking for." without reloading the queue, so the row stays until the
+    next refetch. A 409 keeps the server's sentence
+    and reloads.
+  - **An `assigned`-scoped holder of `attendance.correction.approve` sees only their own
+    requests,** so in practice decides nothing. The key's default holders (principal, vice
+    principal, school admin) are campus- or school-wide, so no seeded role meets it; a
+    tenant that grants `.approve` to an `assigned` role gets an empty queue, not the
+    sections that role teaches.
+  - **With `module.timetable` off, period-mode `my-registers` still lists lessons.** The
+    flag is enforced where a register opens (`assert_register_period`, 422 on
+    `period_id`), not in `my-registers`, which builds its list from the frozen grid; each
+    listed lesson then refuses when opened. Checking the flag there too is a small
+    backend change for its own PR.
 - **Phase 2 Tier 2 is backend-complete.** `academics`, `timetable` and
   `attendance` have all shipped their APIs. The tier's dashboard screens are the
   outstanding half, and are deliberately the other agent's — see the module-screens
