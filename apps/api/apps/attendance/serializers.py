@@ -439,7 +439,7 @@ class LeaveApprovalSerializer(UserNamesModelSerializer):
         return self.user_name(step.approver_id)
 
 
-class LeaveRequestSerializer(serializers.ModelSerializer):
+class LeaveRequestSerializer(UserNamesModelSerializer):
     """`leave_requests` — the student half (§16).
 
     `days_count` is read-only because §11 computes it net of holidays, and
