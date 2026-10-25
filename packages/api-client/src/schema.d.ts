@@ -19024,7 +19024,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Rostered students in roll-number order. `meta.attendance_mode` is `daily` or `period`; `meta.markable` is false when no row can be marked that date, with `meta.unmarkable_reason` one of `future`, `holiday` (named in `meta.holiday_name`), `non_working_day` or `session_closed`; `meta.is_locked` says only that the date is past the lock window, since the lock is per row (`record.is_locked`); `meta.academic_session_id` is the session the date resolved to. `period_id` is required in period mode, where it must name a lesson the section has that date and `module.timetable` must be on, and refused in daily mode (422 on `period_id`). */
+            /** @description Rostered students in roll-number order. `meta.attendance_mode` is `daily` or `period`; `meta.markable` is false when no row can be marked that date, with `meta.unmarkable_reason` one of `future`, `holiday` (named in `meta.holiday_name`), `non_working_day` or `session_closed`; `meta.is_locked` says only that the date is past the lock window, since the lock is per row (`record.is_locked`); `meta.academic_session_id` is the session whose dates contain the date. A date no session contains is a 422 on `academic_session_id` in either mode. `period_id` is required in period mode, where it must name a lesson the section has that date and `module.timetable` must be on, and refused in daily mode (422 on `period_id`). */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -10910,8 +10910,9 @@ paths:
             that date, with `meta.unmarkable_reason` one of `future`, `holiday` (named
             in `meta.holiday_name`), `non_working_day` or `session_closed`; `meta.is_locked`
             says only that the date is past the lock window, since the lock is per
-            row (`record.is_locked`); `meta.academic_session_id` is the session the
-            date resolved to. `period_id` is required in period mode, where it must
+            row (`record.is_locked`); `meta.academic_session_id` is the session whose
+            dates contain the date. A date no session contains is a 422 on `academic_session_id`
+            in either mode. `period_id` is required in period mode, where it must
             name a lesson the section has that date and `module.timetable` must be
             on, and refused in daily mode (422 on `period_id`).
   /api/v1/student-attendance:bulk-mark:
