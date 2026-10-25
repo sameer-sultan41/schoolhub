@@ -238,12 +238,13 @@ export { Kbd, kbdVariants } from "./components/kbd";
 export { Label } from "./components/label";
 
 export {
+  CursorPagination,
   Pagination,
   PaginationContent,
   PaginationEllipsis,
   PaginationItem,
 } from "./components/pagination";
-export type { PaginationProps } from "./components/pagination";
+export type { CursorPaginationProps, PaginationProps } from "./components/pagination";
 export { getPageNumbers, PAGE_WINDOW_SIZE } from "./lib/page-numbers";
 
 export { Popover, PopoverContent, PopoverTrigger } from "./components/popover";

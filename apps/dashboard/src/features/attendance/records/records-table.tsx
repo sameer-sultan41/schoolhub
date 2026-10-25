@@ -5,7 +5,6 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import {
-  Button,
   Card,
   CardFooter,
   CardHeader,
@@ -13,6 +12,7 @@ import {
   CardTable,
   CardToolbar,
   cn,
+  CursorPagination,
   DATA_GRID_CARD_CLASSNAME,
   DataGrid,
   DataGridColumnVisibility,
@@ -27,6 +27,7 @@ import { isCursorPagination } from "@schoolhub/types";
 import { DASHBOARD_DATA_GRID_LABELS } from "@/app/(app)/shell/data-grid-labels";
 import { LoadErrorCard } from "@/components/load-error-card";
 import { RequestCorrectionDialog } from "@/features/attendance/request-correction-dialog";
+import { useCursorStack } from "@/features/attendance/use-cursor-stack";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { hideableColumnIds, useDataGridUrlState } from "@/hooks/use-data-grid-url-state";
 import { useSections } from "@/hooks/use-reference-data";
@@ -52,7 +53,6 @@ import {
 } from "@/services/modules/student-attendance/student-attendance-helper";
 import { useRecordColumns } from "./record-columns";
 import { RecordsFilters } from "./records-filters";
-import { useCursorStack } from "./use-cursor-stack";
 
 /**
  * `/attendance/records`: every attendance record the viewer may read, newest day first, over a
@@ -234,26 +234,18 @@ export function RecordsTable() {
             </ScrollArea>
           </div>
           <CardFooter className="justify-end gap-2 border-t-0">
-            <nav aria-label={t("records.pagination")} className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!stack.hasPrevious || query.isPlaceholderData}
-                onClick={stack.goPrevious}
-              >
-                {tCommon("previous")}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={nextCursor === null || query.isPlaceholderData}
-                onClick={() => {
-                  if (nextCursor !== null) stack.goNext(nextCursor);
-                }}
-              >
-                {tCommon("next")}
-              </Button>
-            </nav>
+            {/* While a new page loads, the shown rows are the old page's: hold both arrows. */}
+            <CursorPagination
+              label={t("records.pagination")}
+              previousLabel={tCommon("previous")}
+              nextLabel={tCommon("next")}
+              hasPrevious={stack.hasPrevious && !query.isPlaceholderData}
+              hasNext={nextCursor !== null && !query.isPlaceholderData}
+              onPrevious={stack.goPrevious}
+              onNext={() => {
+                if (nextCursor !== null) stack.goNext(nextCursor);
+              }}
+            />
           </CardFooter>
         </Card>
       </DataGrid>
