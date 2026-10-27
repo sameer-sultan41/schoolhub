@@ -17,9 +17,14 @@ from rest_framework import status
 from apps.attendance import reports, services
 from apps.attendance.models import (
     AttendanceStatus,
+    LeaveRequest,
+    LeaveType,
+    RequesterType,
+    StaffAttendance,
     StaffAttendanceStatus,
     StudentAttendance,
 )
+from apps.attendance.serializers import REPORT_ROW_SERIALIZERS
 from apps.attendance.tests.base import AttendanceAPITestCase
 from apps.attendance.tests.factories import (
     MARKING_DATE,
@@ -238,8 +243,6 @@ class StaffPunctualityTests(AttendanceAPITestCase):
     def setUp(self) -> None:
         super().setUp()
         self.allow_everything()
-        from apps.attendance.models import StaffAttendance
-
         with tenant_context(self.tenant.id):
             self.other_staff = StaffFactory(tenant=self.tenant, campus=self.campus)
             for offset, (staff, value, late) in enumerate(
@@ -262,8 +265,6 @@ class StaffPunctualityTests(AttendanceAPITestCase):
     def test_holidays_are_excluded_from_every_count(self) -> None:
         """The school was shut; counting a closure against a teacher's
         punctuality is the mistake `holiday` exists to prevent."""
-        from apps.attendance.models import StaffAttendance
-
         with tenant_context(self.tenant.id), self.assertNumQueries(1):
             rows = reports.staff_punctuality(
                 StaffAttendance.objects.alive(),
@@ -486,6 +487,102 @@ class DefaulterThresholdTests(AttendanceAPITestCase):
 
         self.assertEqual(inline, set())
         self.assertEqual(self.exported("70.0"), inline)
+
+
+class TypedReportRowTests(ReportDataTestCase):
+    """Every row carries its report's `kind`, and the schema names each row type (ADR-0022)."""
+
+    def test_each_student_report_row_carries_its_kind(self) -> None:
+        for kind in ("daily-register", "student-summary", "defaulters", "student-late-arrivals"):
+            with self.subTest(kind=kind):
+                response = self.client.get(
+                    f"{REPORTS}?kind={kind}&start_date={self.start}&end_date={self.end}"
+                )
+
+                self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+                rows = response.json()["data"]
+                self.assertTrue(rows)
+                self.assertEqual({row["kind"] for row in rows}, {kind})
+
+    def test_each_row_carries_exactly_its_serializers_fields(self) -> None:
+        """A key a report function forgot is skipped by DRF without a word, so compare whole sets.
+
+        Every kind, `leave` and `staff-punctuality` included, over a real inline response.
+        """
+        with tenant_context(self.tenant.id):
+            StaffAttendance.objects.create(
+                tenant=self.tenant,
+                staff=self.teacher,
+                attendance_date=self.end,
+                status=StaffAttendanceStatus.PRESENT,
+                marked_by=self.user.pk,
+            )
+            leave_type = LeaveType.objects.create(tenant=self.tenant, name="Sick", code="SICK")
+            LeaveRequest.objects.create(
+                tenant=self.tenant,
+                requester_type=RequesterType.STUDENT,
+                student=self.students[0],
+                submitted_by=self.user.pk,
+                leave_type=leave_type,
+                start_date=self.start,
+                end_date=self.start,
+                days_count=Decimal(1),
+                reason="Fever.",
+                created_by=self.user.pk,
+                updated_by=self.user.pk,
+            )
+
+        self.assertEqual(set(REPORT_ROW_SERIALIZERS), set(services.REPORT_KINDS))
+        for kind, row_serializer in REPORT_ROW_SERIALIZERS.items():
+            with self.subTest(kind=kind):
+                response = self.client.get(
+                    f"{REPORTS}?kind={kind}&start_date={self.start}&end_date={self.end}"
+                )
+
+                self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+                rows = response.json()["data"]
+                self.assertTrue(rows)
+                for row in rows:
+                    self.assertEqual(set(row), set(row_serializer().fields))
+
+    def test_a_rate_stays_a_json_number(self) -> None:
+        """As the report sent it before rows were typed: a number, not a decimal string."""
+        response = self.client.get(
+            f"{REPORTS}?kind=student-summary&start_date={self.start}&end_date={self.end}"
+        )
+
+        rates = {row["student_id"]: row["attendance_rate"] for row in response.json()["data"]}
+        rate = rates[str(self.students[1].pk)]
+        self.assertIsInstance(rate, float)
+        self.assertEqual(rate, 40.0)
+
+    def test_a_staff_row_carries_its_kind(self) -> None:
+        with tenant_context(self.tenant.id):
+            StaffAttendance.objects.create(
+                tenant=self.tenant,
+                staff=self.teacher,
+                attendance_date=self.end,
+                status=StaffAttendanceStatus.PRESENT,
+                marked_by=self.user.pk,
+            )
+
+        response = self.client.get(
+            f"{REPORTS}?kind=staff-punctuality&start_date={self.start}&end_date={self.end}"
+        )
+
+        (row,) = response.json()["data"]
+        self.assertEqual(row["kind"], "staff-punctuality")
+        self.assertEqual(row["employee_number"], self.teacher.employee_number)
+
+    def test_the_schema_names_one_row_type_per_kind(self) -> None:
+        from drf_spectacular.generators import SchemaGenerator
+
+        schema = SchemaGenerator().get_schema(request=None, public=True)
+        row = schema["components"]["schemas"]["AttendanceReportRow"]
+
+        self.assertEqual(row["discriminator"]["propertyName"], "kind")
+        self.assertEqual(set(row["discriminator"]["mapping"]), set(services.REPORT_KINDS))
+        self.assertEqual(len(row["oneOf"]), len(services.REPORT_KINDS))
 
 
 class ReportRowCapTests(ReportDataTestCase):

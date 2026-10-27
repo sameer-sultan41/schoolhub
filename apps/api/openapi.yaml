@@ -683,6 +683,11 @@ paths:
         schema:
           type: string
       - in: query
+        name: staff_attendance_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
         name: status
         schema:
           type: string
@@ -730,7 +735,7 @@ paths:
         Append-only from the API's point of view: §16 declares list, create and the
         two decisions, and nothing else. A correction is not edited after the fact —
         that is the whole reason it exists as a row rather than as a direct update.
-      summary: Request a correction to a locked attendance record
+      summary: Request a correction to a locked student or staff attendance record
       tags:
       - attendance-corrections
       requestBody:
@@ -8848,13 +8853,24 @@ paths:
           type: string
           format: decimal
           pattern: ^-?\d{0,3}(?:\.\d{0,1})?$
+        description: '`defaulters` only: list students whose rate is below this percentage
+          (default 75.0).'
       tags:
       - reports
       security:
       - jwtAuth: []
       responses:
         '200':
-          description: The report's rows, under `data`.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AttendanceReportRow'
+          description: The report's rows, each carrying the report's `kind`. `meta.kind`,
+            `meta.row_count` and `meta.attendance_mode` (how the rows were marked;
+            student reports count days in either mode). Over the inline ceiling, a
+            202 and a job instead, as `POST` returns.
     post:
       operationId: reports_attendance_summary_create
       description: |-
@@ -10154,6 +10170,42 @@ paths:
               schema:
                 $ref: '#/components/schemas/StaffAttendance'
           description: ''
+  /api/v1/staff-attendance/register:
+    get:
+      operationId: staff_attendance_register_retrieve
+      description: '`GET /staff-attendance/register?date=[&department_id=]`, unpaginated
+        by design.'
+      summary: 'The staff register for one date: active staff, with any marks merged'
+      parameters:
+      - in: query
+        name: date
+        schema:
+          type: string
+          format: date
+        required: true
+      - in: query
+        name: department_id
+        schema:
+          type: string
+          format: uuid
+          nullable: true
+      tags:
+      - staff-attendance
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StaffRegisterEntry'
+          description: Active staff who had joined by the date, by last then first
+            name, scoped as `/staff-attendance` is. `record` is null where the date
+            is unmarked; `on_leave` is true where approved leave covers the date or
+            the record says `on_leave`. `meta.date` echoes the date. An unknown `department_id`
+            is a 404.
   /api/v1/staff-documents/{id}:
     get:
       operationId: staff_documents_retrieve
@@ -14158,10 +14210,12 @@ components:
       description: |-
         `attendance_corrections` — the request half. Decisions are colon-actions.
 
-        `student_attendance_id` is a plain UUID, not a related field: the view resolves
-        it through the caller's scoped rows, so a row outside their scope (or another
-        tenant's) is a 404, not a 400 (AGENTS.md invariant 2). The target's fields are
-        read-only and null for a staff correction.
+        Exactly one target: `student_attendance_id` or `staff_attendance_id`, and
+        `subject_type` follows from which. Each is a plain UUID, not a related field:
+        the view resolves it through the caller's scoped rows, so a row outside their
+        scope (or another tenant's) is a 404, not a 400 (AGENTS.md invariant 2). The
+        student fields are null on a staff correction, and the staff fields on a
+        student one.
       properties:
         id:
           type: string
@@ -14174,6 +14228,11 @@ components:
         student_attendance_id:
           type: string
           format: uuid
+          nullable: true
+        staff_attendance_id:
+          type: string
+          format: uuid
+          nullable: true
         student_id:
           type: string
           format: uuid
@@ -14183,11 +14242,24 @@ components:
           type: string
           readOnly: true
           nullable: true
+        staff_name:
+          type: string
+          readOnly: true
+          nullable: true
+        employee_number:
+          type: string
+          readOnly: true
+          nullable: true
+        subject_user_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
         attendance_date:
           type: string
           format: date
-          readOnly: true
           nullable: true
+          readOnly: true
         period_name:
           type: string
           readOnly: true
@@ -14244,6 +14316,7 @@ components:
       required:
       - attendance_date
       - created_at
+      - employee_number
       - id
       - new_values
       - old_values
@@ -14255,11 +14328,12 @@ components:
       - reviewed_at
       - reviewed_by
       - reviewed_by_name
+      - staff_name
       - status
-      - student_attendance_id
       - student_id
       - student_name
       - subject_type
+      - subject_user_id
       - updated_at
     AttendanceCorrectionStatusEnum:
       enum:
@@ -14344,6 +14418,8 @@ components:
           type: string
           format: decimal
           pattern: ^-?\d{0,3}(?:\.\d{0,1})?$
+          description: '`defaulters` only: list students whose rate is below this
+            percentage (default 75.0).'
         format:
           allOf:
           - $ref: '#/components/schemas/FormatEnum'
@@ -14367,6 +14443,23 @@ components:
         * `student-late-arrivals` - student-late-arrivals
         * `staff-punctuality` - staff-punctuality
         * `leave` - leave
+    AttendanceReportRow:
+      oneOf:
+      - $ref: '#/components/schemas/DailyRegisterReportRow'
+      - $ref: '#/components/schemas/StudentSummaryReportRow'
+      - $ref: '#/components/schemas/DefaultersReportRow'
+      - $ref: '#/components/schemas/StudentLateArrivalsReportRow'
+      - $ref: '#/components/schemas/StaffPunctualityReportRow'
+      - $ref: '#/components/schemas/LeaveReportRow'
+      discriminator:
+        propertyName: kind
+        mapping:
+          daily-register: '#/components/schemas/DailyRegisterReportRow'
+          student-summary: '#/components/schemas/StudentSummaryReportRow'
+          defaulters: '#/components/schemas/DefaultersReportRow'
+          student-late-arrivals: '#/components/schemas/StudentLateArrivalsReportRow'
+          staff-punctuality: '#/components/schemas/StaffPunctualityReportRow'
+          leave: '#/components/schemas/LeaveReportRow'
     AttendanceSettings:
       type: object
       description: '`GET /attendance-settings` — the effective values, defaults applied
@@ -14907,6 +15000,78 @@ components:
       - subject_id
       - subject_name
       - updated_at
+    DailyRegisterReportRow:
+      type: object
+      description: |-
+        `reports.daily_register`: a daily row as marked, a derived day, or one period's row.
+
+        `id`, `remarks` and `period_name` are null on a derived day; `period_name` is
+        set only when the report names a `period_id`.
+      properties:
+        student_id:
+          type: string
+          format: uuid
+          readOnly: true
+        first_name:
+          type: string
+          readOnly: true
+        last_name:
+          type: string
+          readOnly: true
+        admission_number:
+          type: string
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/DailyRegisterReportRowKindEnum'
+          readOnly: true
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/AttendanceStatusEnum'
+          readOnly: true
+        check_in_time:
+          type: string
+          format: time
+          readOnly: true
+          nullable: true
+        late_minutes:
+          type: integer
+          readOnly: true
+          nullable: true
+        remarks:
+          type: string
+          readOnly: true
+          nullable: true
+        section_name:
+          type: string
+          readOnly: true
+        period_name:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - admission_number
+      - check_in_time
+      - first_name
+      - id
+      - kind
+      - last_name
+      - late_minutes
+      - period_name
+      - remarks
+      - section_name
+      - status
+      - student_id
+    DailyRegisterReportRowKindEnum:
+      enum:
+      - daily-register
+      type: string
+      description: '* `daily-register` - daily-register'
     DayPartEnum:
       enum:
       - full
@@ -14917,6 +15082,67 @@ components:
         * `full` - Full day
         * `first_half` - First half
         * `second_half` - Second half
+    DefaultersReportRow:
+      type: object
+      description: '`reports.defaulters`: a summary row whose rate is below the threshold.'
+      properties:
+        student_id:
+          type: string
+          format: uuid
+          readOnly: true
+        first_name:
+          type: string
+          readOnly: true
+        last_name:
+          type: string
+          readOnly: true
+        admission_number:
+          type: string
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/DefaultersReportRowKindEnum'
+          readOnly: true
+        present_days:
+          type: integer
+          readOnly: true
+        counted_days:
+          type: integer
+          readOnly: true
+        absent_days:
+          type: integer
+          readOnly: true
+        late_days:
+          type: integer
+          readOnly: true
+        leave_days:
+          type: integer
+          readOnly: true
+        attendance_rate:
+          type: number
+          format: double
+          maximum: 1000
+          minimum: -1000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+          readOnly: true
+      required:
+      - absent_days
+      - admission_number
+      - attendance_rate
+      - counted_days
+      - first_name
+      - kind
+      - last_name
+      - late_days
+      - leave_days
+      - present_days
+      - student_id
+    DefaultersReportRowKindEnum:
+      enum:
+      - defaulters
+      type: string
+      description: '* `defaulters` - defaulters'
     DeliveryLog:
       type: object
       description: Read-only. `DeliveryLog` rows are written only by `core.notifications`.
@@ -17036,6 +17262,73 @@ components:
           type: string
           nullable: true
           maxLength: 500
+    LeaveReportRow:
+      type: object
+      description: '`reports.leave_report`: one student leave request overlapping
+        the range.'
+      properties:
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/LeaveReportRowKindEnum'
+          readOnly: true
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/AttendanceCorrectionStatusEnum'
+          readOnly: true
+        start_date:
+          type: string
+          format: date
+          readOnly: true
+        end_date:
+          type: string
+          format: date
+          readOnly: true
+        days_count:
+          type: number
+          format: double
+          maximum: 10000
+          minimum: -10000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+          readOnly: true
+        day_part:
+          allOf:
+          - $ref: '#/components/schemas/DayPartEnum'
+          readOnly: true
+        student_id:
+          type: string
+          format: uuid
+          readOnly: true
+        first_name:
+          type: string
+          readOnly: true
+        last_name:
+          type: string
+          readOnly: true
+        leave_type_name:
+          type: string
+          readOnly: true
+      required:
+      - day_part
+      - days_count
+      - end_date
+      - first_name
+      - id
+      - kind
+      - last_name
+      - leave_type_name
+      - start_date
+      - status
+      - student_id
+    LeaveReportRowKindEnum:
+      enum:
+      - leave
+      type: string
+      description: '* `leave` - leave'
     LeaveRequest:
       type: object
       description: |-
@@ -23094,6 +23387,12 @@ components:
         staff_id:
           type: string
           format: uuid
+        staff_name:
+          type: string
+          readOnly: true
+        employee_number:
+          type: string
+          readOnly: true
         attendance_date:
           type: string
           format: date
@@ -23153,12 +23452,14 @@ components:
       - attendance_date
       - created_at
       - early_departure_minutes
+      - employee_number
       - id
       - is_locked
       - late_minutes
       - leave_request_id
       - marked_by
       - staff_id
+      - staff_name
       - status
       - updated_at
     StaffAttendanceSourceEnum:
@@ -23276,6 +23577,69 @@ components:
           format: uri
       required:
       - file
+    StaffPunctualityReportRow:
+      type: object
+      description: '`reports.staff_punctuality`: one staff member''s days and minutes,
+        holidays left out.'
+      properties:
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/StaffPunctualityReportRowKindEnum'
+          readOnly: true
+        staff_id:
+          type: string
+          format: uuid
+          readOnly: true
+        first_name:
+          type: string
+          readOnly: true
+        last_name:
+          type: string
+          readOnly: true
+        employee_number:
+          type: string
+          readOnly: true
+        working_days:
+          type: integer
+          readOnly: true
+        present_days:
+          type: integer
+          readOnly: true
+        absent_days:
+          type: integer
+          readOnly: true
+        leave_days:
+          type: integer
+          readOnly: true
+        late_count:
+          type: integer
+          readOnly: true
+        total_late_minutes:
+          type: integer
+          readOnly: true
+          nullable: true
+        total_early_departure_minutes:
+          type: integer
+          readOnly: true
+          nullable: true
+      required:
+      - absent_days
+      - employee_number
+      - first_name
+      - kind
+      - last_name
+      - late_count
+      - leave_days
+      - present_days
+      - staff_id
+      - total_early_departure_minutes
+      - total_late_minutes
+      - working_days
+    StaffPunctualityReportRowKindEnum:
+      enum:
+      - staff-punctuality
+      type: string
+      description: '* `staff-punctuality` - staff-punctuality'
     StaffQualification:
       type: object
       properties:
@@ -23346,6 +23710,41 @@ components:
       - verification_status
       - verified_at
       - verified_by
+    StaffRegisterEntry:
+      type: object
+      description: One active staff member on the staff register, with their record
+        for that date if marked.
+      properties:
+        staff_id:
+          type: string
+          format: uuid
+          readOnly: true
+        staff_name:
+          type: string
+          readOnly: true
+        employee_number:
+          type: string
+          readOnly: true
+        department_name:
+          type: string
+          readOnly: true
+          nullable: true
+        record:
+          allOf:
+          - $ref: '#/components/schemas/StaffAttendance'
+          readOnly: true
+          nullable: true
+        on_leave:
+          type: boolean
+          readOnly: true
+          description: Approved leave covers the date, or the record says `on_leave`.
+      required:
+      - department_name
+      - employee_number
+      - on_leave
+      - record
+      - staff_id
+      - staff_name
     StaffTypeEnum:
       enum:
       - teaching
@@ -23793,6 +24192,54 @@ components:
           format: uri
       required:
       - file
+    StudentLateArrivalsReportRow:
+      type: object
+      description: '`reports.student_late_arrivals`: late days and their minutes,
+        most late days first.'
+      properties:
+        student_id:
+          type: string
+          format: uuid
+          readOnly: true
+        first_name:
+          type: string
+          readOnly: true
+        last_name:
+          type: string
+          readOnly: true
+        admission_number:
+          type: string
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/StudentLateArrivalsReportRowKindEnum'
+          readOnly: true
+        late_count:
+          type: integer
+          readOnly: true
+        total_late_minutes:
+          type: integer
+          readOnly: true
+          nullable: true
+        average_late_minutes:
+          type: number
+          format: double
+          readOnly: true
+          nullable: true
+      required:
+      - admission_number
+      - average_late_minutes
+      - first_name
+      - kind
+      - last_name
+      - late_count
+      - student_id
+      - total_late_minutes
+    StudentLateArrivalsReportRowKindEnum:
+      enum:
+      - student-late-arrivals
+      type: string
+      description: '* `student-late-arrivals` - student-late-arrivals'
     StudentStatusEnum:
       enum:
       - active
@@ -23807,6 +24254,71 @@ components:
         * `transferred` - Transferred
         * `withdrawn` - Withdrawn
         * `graduated` - Graduated
+    StudentSummaryReportRow:
+      type: object
+      description: |-
+        `reports.student_summary`: day counts and the rate over the range.
+
+        `attendance_rate` is the percentage of counted days present, one decimal
+        place, rounded half up; `counted_days` leaves out leave and excused days.
+      properties:
+        student_id:
+          type: string
+          format: uuid
+          readOnly: true
+        first_name:
+          type: string
+          readOnly: true
+        last_name:
+          type: string
+          readOnly: true
+        admission_number:
+          type: string
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/StudentSummaryReportRowKindEnum'
+          readOnly: true
+        present_days:
+          type: integer
+          readOnly: true
+        counted_days:
+          type: integer
+          readOnly: true
+        absent_days:
+          type: integer
+          readOnly: true
+        late_days:
+          type: integer
+          readOnly: true
+        leave_days:
+          type: integer
+          readOnly: true
+        attendance_rate:
+          type: number
+          format: double
+          maximum: 1000
+          minimum: -1000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+          readOnly: true
+      required:
+      - absent_days
+      - admission_number
+      - attendance_rate
+      - counted_days
+      - first_name
+      - kind
+      - last_name
+      - late_days
+      - leave_days
+      - present_days
+      - student_id
+    StudentSummaryReportRowKindEnum:
+      enum:
+      - student-summary
+      type: string
+      description: '* `student-summary` - student-summary'
     StudentTransfer:
       type: object
       properties:

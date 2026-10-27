@@ -47,7 +47,7 @@ from django.db.models import prefetch_related_objects
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.utils import OpenApiResponse, PolymorphicProxySerializer, extend_schema
 from rest_framework import mixins, viewsets
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated
@@ -73,6 +73,7 @@ from apps.attendance.models import (
     StudentAttendance,
 )
 from apps.attendance.serializers import (
+    REPORT_ROW_SERIALIZERS,
     AttendanceCorrectionSerializer,
     AttendanceImportRequestSerializer,
     AttendanceReportQuerySerializer,
@@ -89,9 +90,11 @@ from apps.attendance.serializers import (
     RegisterQuerySerializer,
     StaffAttendanceSerializer,
     StaffCheckOutSerializer,
+    StaffRegisterEntrySerializer,
+    StaffRegisterQuerySerializer,
     StudentAttendanceSerializer,
 )
-from apps.school_organization.models import AcademicSession, Section
+from apps.school_organization.models import AcademicSession, Department, Section
 from apps.timetable.models import Period
 from core.api.exceptions import DomainRuleViolation
 from core.api.permissions import RequiresModuleFeature
@@ -462,7 +465,8 @@ class AttendanceCorrectionViewSet(
     serializer_class = AttendanceCorrectionSerializer
     filterset_class = AttendanceCorrectionFilterSet
     ordering_fields = ["created_at", "status"]
-    scope_campus_field = "student_attendance__section__campus_id"
+    # No `scope_campus_field`: campus scope covers both targets, so the model's
+    # `filter_by_campus` owns it, as `StudentTransfer`'s does.
     required_feature = FEATURE
     required_permission = "attendance.correction.create"
     # The queue has two callers: requesters tracking their own and approvers deciding
@@ -483,7 +487,11 @@ class AttendanceCorrectionViewSet(
         return (
             super()
             .get_queryset()
-            .select_related("student_attendance__student", "student_attendance__period")
+            .select_related(
+                "student_attendance__student",
+                "student_attendance__period",
+                "staff_attendance__staff",
+            )
         )
 
     def _correctable_rows(self):
@@ -502,15 +510,33 @@ class AttendanceCorrectionViewSet(
             campus_field=StudentAttendanceViewSet.scope_campus_field,
         )
 
+    def _correctable_staff_rows(self):
+        """The caller's own scoped `staff_attendance`, as `GET /staff-attendance` scopes it.
+
+        Outside it (another campus, another tenant, someone who does not report to
+        them) is a 404, as for a student row.
+        """
+        return scope_queryset(
+            StaffAttendance.objects.alive().select_related("staff"),
+            self.request.user,
+            own_field=StaffAttendanceViewSet.scope_own_field,
+            campus_field=StaffAttendanceViewSet.scope_campus_field,
+        )
+
     @extend_schema(
-        summary="Request a correction to a locked attendance record",
+        summary="Request a correction to a locked student or staff attendance record",
         responses={201: AttendanceCorrectionSerializer},
     )
     def create(self, request: Request, *args, **kwargs) -> Response:
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        target = get_object_or_404(
-            self._correctable_rows(), pk=serializer.validated_data["student_attendance_id"]
+        staff_attendance_id = serializer.validated_data.get("staff_attendance_id")
+        target = (
+            get_object_or_404(self._correctable_staff_rows(), pk=staff_attendance_id)
+            if staff_attendance_id is not None
+            else get_object_or_404(
+                self._correctable_rows(), pk=serializer.validated_data["student_attendance_id"]
+            )
         )
 
         correction = services.request_correction(
@@ -825,14 +851,54 @@ class StaffAttendanceViewSet(
     scope_campus_field = "staff__campus_id"
     required_feature = FEATURE
     required_permission = "attendance.staff-attendance.view"
+    # The register is the marking screen's read, so it takes the marking key.
     required_permission_map = {
         "create": "attendance.staff-attendance.mark",
         "check_out": "attendance.staff-attendance.mark",
+        "register": "attendance.staff-attendance.mark",
     }
     http_method_names = ["get", "post", "head", "options"]
 
     def get_queryset(self):
         return super().get_queryset().select_related("staff")
+
+    @extend_schema(
+        summary="The staff register for one date: active staff, with any marks merged",
+        parameters=[StaffRegisterQuerySerializer],
+        responses={
+            200: OpenApiResponse(
+                response=StaffRegisterEntrySerializer(many=True),
+                description=(
+                    "Active staff who had joined by the date, by last then first name, scoped "
+                    "as `/staff-attendance` is. `record` is null where the date is unmarked; "
+                    "`on_leave` is true where approved leave covers the date or the record "
+                    "says `on_leave`. `meta.date` echoes the date. An unknown "
+                    "`department_id` is a 404."
+                ),
+            )
+        },
+    )
+    def register(self, request: Request) -> Response:
+        """`GET /staff-attendance/register?date=[&department_id=]`, unpaginated by design."""
+        query = StaffRegisterQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        on_date = query.validated_data["date"]
+        department_id = query.validated_data.get("department_id")
+        department = (
+            get_object_or_404(Department.objects.alive(), pk=department_id)
+            if department_id
+            else None
+        )
+
+        entries = attendance_register.staff_register(
+            user=request.user, on_date=on_date, department=department
+        )
+        return Response(
+            {
+                "data": StaffRegisterEntrySerializer(entries, many=True).data,
+                "meta": {"date": on_date.isoformat()},
+            }
+        )
 
     @extend_schema(
         summary="Record a staff member's attendance for a date",
@@ -920,7 +986,22 @@ class AttendanceReportView(TenantScopedViewSetMixin, APIView):
     @extend_schema(
         summary="Run an attendance report",
         parameters=[AttendanceReportQuerySerializer],
-        responses={200: OpenApiResponse(description="The report's rows, under `data`.")},
+        responses={
+            200: OpenApiResponse(
+                response=PolymorphicProxySerializer(
+                    component_name="AttendanceReportRow",
+                    serializers=REPORT_ROW_SERIALIZERS,
+                    resource_type_field_name="kind",
+                    many=True,
+                ),
+                description=(
+                    "The report's rows, each carrying the report's `kind`. `meta.kind`, "
+                    "`meta.row_count` and `meta.attendance_mode` (how the rows were marked; "
+                    "student reports count days in either mode). Over the inline ceiling, a "
+                    "202 and a job instead, as `POST` returns."
+                ),
+            )
+        },
     )
     def get(self, request: Request) -> Response:
         query = AttendanceReportQuerySerializer(data=request.query_params)
@@ -934,11 +1015,14 @@ class AttendanceReportView(TenantScopedViewSetMixin, APIView):
         if len(rows) > services.SYNCHRONOUS_REPORT_ROW_LIMIT:
             return self._queue_export(request, params, reason="too many rows to return inline")
 
+        kind = params["kind"]
+        # PolymorphicProxySerializer documents the rows; this dict serializes them (ADR-0022).
+        typed = REPORT_ROW_SERIALIZERS[kind]([{**row, "kind": kind} for row in rows], many=True)
         return Response(
             {
-                "data": rows,
+                "data": typed.data,
                 "meta": {
-                    "kind": params["kind"],
+                    "kind": kind,
                     "row_count": len(rows),
                     # Student reports count days in either mode; this says how they were marked.
                     "attendance_mode": services.attendance_mode(),
@@ -990,7 +1074,6 @@ class AttendanceReportView(TenantScopedViewSetMixin, APIView):
         from core.jobs.services import create_job
 
         threshold = params.get("threshold")
-
         job = create_job(
             tenant_id=request.tenant.pk,
             job_type="attendance.report-export",

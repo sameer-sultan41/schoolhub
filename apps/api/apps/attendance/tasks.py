@@ -374,9 +374,15 @@ def import_attendance_task(self, *, tenant_id: str, job_id: str, actor_id: str) 
             if index % 100 == 0:
                 update_progress(job=job, progress=int(index / total * 100))
 
+        # The shape every importer reports (student and staff too); the shared dialog reads it.
         mark_succeeded(
             job=job,
-            result={"rows": len(rows), "succeeded": succeeded, "errors": errors},
+            result={
+                "total": len(rows),
+                "succeeded": succeeded,
+                "failed": len(errors),
+                "errors": errors,
+            },
         )
     except Exception as exc:  # noqa: BLE001
         # The job row is the only place a caller polling GET /jobs/{id} can learn

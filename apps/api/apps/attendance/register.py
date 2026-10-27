@@ -1,4 +1,4 @@
-"""The register: who may mark a section on a date, its roster, and the caller's own registers.
+"""The registers: who marks a section on a date, its roster, the caller's own, and the staff's.
 
 **One predicate, ``may_mark_register``**, answers "may this user mark this
 section's register for this date (and period)". The register read, `my-registers`
@@ -21,17 +21,25 @@ from typing import TYPE_CHECKING
 from django.db.models import Q
 
 from apps.attendance import services
-from apps.attendance.models import AttendanceStatus, StudentAttendance
+from apps.attendance.models import (
+    AttendanceStatus,
+    LeaveRequest,
+    LeaveStatus,
+    RequesterType,
+    StaffAttendance,
+    StaffAttendanceStatus,
+    StudentAttendance,
+)
 from apps.school_organization.models import Section
 from apps.school_organization.services import LOCKED_SESSION_STATES
 from apps.staff_management.models import EmploymentStatus, Staff
 from apps.student_management.models import EnrollmentStatus, StudentEnrollment
 from apps.timetable.slots.services import teacher_slots_for
 from core.rbac.models import RecordScope
-from core.rbac.permissions import user_scopes
+from core.rbac.permissions import scope_queryset, user_scopes
 
 if TYPE_CHECKING:
-    from apps.school_organization.models import AcademicSession
+    from apps.school_organization.models import AcademicSession, Department
     from apps.timetable.models import Period
 
 
@@ -260,6 +268,61 @@ def my_registers(*, user, session: AcademicSession, on_date: datetime.date) -> l
             entry["class_name"],
         )
     )
+    return entries
+
+
+def staff_register(
+    *, user, on_date: datetime.date, department: Department | None = None
+) -> list[dict]:
+    """The staff register for `on_date`: every active staff member the caller may see, by name.
+
+    Scoped the way `/staff-attendance` is (`all`, `campus` on the staff's campus,
+    `own` their own row, `assigned` their reports), so the register never lists
+    someone whose record the caller could not then read. Staff who had not joined
+    by `on_date` are left out. Each entry carries the date's record, if marked,
+    and `on_leave`: approved leave covers the date, or the record says so.
+
+    Three queries whatever the number of staff, plus the scope lookup.
+    """
+    staff_rows = Staff.objects.alive().filter(
+        employment_status=EmploymentStatus.ACTIVE, joining_date__lte=on_date
+    )
+    if department is not None:
+        staff_rows = staff_rows.filter(department=department)
+    staff = list(
+        scope_queryset(staff_rows, user, own_field="user_id", campus_field="campus_id")
+        .select_related("department")
+        .order_by("last_name", "first_name", "pk")
+    )
+    if not staff:
+        return []
+
+    staff_ids = [member.pk for member in staff]
+    records = {
+        row.staff_id: row
+        for row in StaffAttendance.objects.alive()
+        .filter(staff_id__in=staff_ids, attendance_date=on_date)
+        .select_related("staff")
+    }
+    on_approved_leave = set(
+        LeaveRequest.objects.alive()
+        .filter(
+            requester_type=RequesterType.STAFF,
+            status=LeaveStatus.APPROVED,
+            staff_id__in=staff_ids,
+            start_date__lte=on_date,
+            end_date__gte=on_date,
+        )
+        .values_list("staff_id", flat=True)
+    )
+
+    entries = []
+    for member in staff:
+        record = records.get(member.pk)
+        on_leave = member.pk in on_approved_leave or (
+            record is not None and record.status == StaffAttendanceStatus.ON_LEAVE
+        )
+        entries.append({"staff": member, "record": record, "on_leave": on_leave})
     return entries
 
 

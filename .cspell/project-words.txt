@@ -96,6 +96,7 @@ greppable
 healthcheck
 healthz
 hideable
+Hina
 Hira
 homeroom
 hotspots

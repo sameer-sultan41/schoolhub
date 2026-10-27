@@ -310,7 +310,7 @@ export interface paths {
         get: operations["attendance_corrections_list"];
         put?: never;
         /**
-         * Request a correction to a locked attendance record
+         * Request a correction to a locked student or staff attendance record
          * @description `attendance_corrections` — request a change to a locked row, and decide it (§5.5).
          *
          *     Append-only from the API's point of view: §16 declares list, create and the
@@ -4202,6 +4202,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/staff-attendance/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The staff register for one date: active staff, with any marks merged
+         * @description `GET /staff-attendance/register?date=[&department_id=]`, unpaginated by design.
+         */
+        get: operations["staff_attendance_register_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/staff-documents/{id}": {
         parameters: {
             query?: never;
@@ -6081,20 +6101,28 @@ export interface components {
         /**
          * @description `attendance_corrections` — the request half. Decisions are colon-actions.
          *
-         *     `student_attendance_id` is a plain UUID, not a related field: the view resolves
-         *     it through the caller's scoped rows, so a row outside their scope (or another
-         *     tenant's) is a 404, not a 400 (AGENTS.md invariant 2). The target's fields are
-         *     read-only and null for a staff correction.
+         *     Exactly one target: `student_attendance_id` or `staff_attendance_id`, and
+         *     `subject_type` follows from which. Each is a plain UUID, not a related field:
+         *     the view resolves it through the caller's scoped rows, so a row outside their
+         *     scope (or another tenant's) is a 404, not a 400 (AGENTS.md invariant 2). The
+         *     student fields are null on a staff correction, and the staff fields on a
+         *     student one.
          */
         AttendanceCorrection: {
             /** Format: uuid */
             readonly id: string;
             readonly subject_type: components["schemas"]["AttendanceCorrectionSubjectTypeEnum"];
             /** Format: uuid */
-            student_attendance_id: string;
+            student_attendance_id?: string | null;
+            /** Format: uuid */
+            staff_attendance_id?: string | null;
             /** Format: uuid */
             readonly student_id: string | null;
             readonly student_name: string | null;
+            readonly staff_name: string | null;
+            readonly employee_number: string | null;
+            /** Format: uuid */
+            readonly subject_user_id: string | null;
             /** Format: date */
             readonly attendance_date: string | null;
             readonly period_name: string | null;
@@ -6184,7 +6212,10 @@ export interface components {
              * @description `daily-register` only: one period's own rows instead of the derived day.
              */
             period_id?: string | null;
-            /** Format: decimal */
+            /**
+             * Format: decimal
+             * @description `defaulters` only: list students whose rate is below this percentage (default 75.0).
+             */
             threshold?: string;
             /** @default csv */
             format: components["schemas"]["FormatEnum"];
@@ -6199,6 +6230,7 @@ export interface components {
          * @enum {string}
          */
         AttendanceReportQueryKindEnum: "daily-register" | "student-summary" | "defaulters" | "student-late-arrivals" | "staff-punctuality" | "leave";
+        AttendanceReportRow: components["schemas"]["DailyRegisterReportRow"] | components["schemas"]["StudentSummaryReportRow"] | components["schemas"]["DefaultersReportRow"] | components["schemas"]["StudentLateArrivalsReportRow"] | components["schemas"]["StaffPunctualityReportRow"] | components["schemas"]["LeaveReportRow"];
         /** @description `GET /attendance-settings` — the effective values, defaults applied (§19). */
         AttendanceSettings: {
             readonly attendance_mode: components["schemas"]["AttendanceModeEnum"];
@@ -6455,12 +6487,69 @@ export interface components {
             readonly updated_at: string;
         };
         /**
+         * @description `reports.daily_register`: a daily row as marked, a derived day, or one period's row.
+         *
+         *     `id`, `remarks` and `period_name` are null on a derived day; `period_name` is
+         *     set only when the report names a `period_id`.
+         */
+        DailyRegisterReportRow: {
+            /** Format: uuid */
+            readonly student_id: string;
+            readonly first_name: string;
+            readonly last_name: string;
+            readonly admission_number: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "daily-register";
+            /** Format: uuid */
+            readonly id: string | null;
+            readonly status: components["schemas"]["AttendanceStatusEnum"];
+            /** Format: time */
+            readonly check_in_time: string | null;
+            readonly late_minutes: number | null;
+            readonly remarks: string | null;
+            readonly section_name: string;
+            readonly period_name: string | null;
+        };
+        /**
+         * @description * `daily-register` - daily-register
+         * @enum {string}
+         */
+        DailyRegisterReportRowKindEnum: "daily-register";
+        /**
          * @description * `full` - Full day
          *     * `first_half` - First half
          *     * `second_half` - Second half
          * @enum {string}
          */
         DayPartEnum: "full" | "first_half" | "second_half";
+        /** @description `reports.defaulters`: a summary row whose rate is below the threshold. */
+        DefaultersReportRow: {
+            /** Format: uuid */
+            readonly student_id: string;
+            readonly first_name: string;
+            readonly last_name: string;
+            readonly admission_number: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "defaulters";
+            readonly present_days: number;
+            readonly counted_days: number;
+            readonly absent_days: number;
+            readonly late_days: number;
+            readonly leave_days: number;
+            /** Format: double */
+            readonly attendance_rate: number;
+        };
+        /**
+         * @description * `defaulters` - defaulters
+         * @enum {string}
+         */
+        DefaultersReportRowKindEnum: "defaulters";
         /** @description Read-only. `DeliveryLog` rows are written only by `core.notifications`. */
         DeliveryLog: {
             /** Format: uuid */
@@ -7494,6 +7583,34 @@ export interface components {
         LeaveDecision: {
             note?: string | null;
         };
+        /** @description `reports.leave_report`: one student leave request overlapping the range. */
+        LeaveReportRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "leave";
+            /** Format: uuid */
+            readonly id: string;
+            readonly status: components["schemas"]["AttendanceCorrectionStatusEnum"];
+            /** Format: date */
+            readonly start_date: string;
+            /** Format: date */
+            readonly end_date: string;
+            /** Format: double */
+            readonly days_count: number;
+            readonly day_part: components["schemas"]["DayPartEnum"];
+            /** Format: uuid */
+            readonly student_id: string;
+            readonly first_name: string;
+            readonly last_name: string;
+            readonly leave_type_name: string;
+        };
+        /**
+         * @description * `leave` - leave
+         * @enum {string}
+         */
+        LeaveReportRowKindEnum: "leave";
         /**
          * @description `leave_requests` — the student half (§16).
          *
@@ -10516,6 +10633,8 @@ export interface components {
             readonly id: string;
             /** Format: uuid */
             staff_id: string;
+            readonly staff_name: string;
+            readonly employee_number: string;
             /**
              * Format: date
              * @description Calendar date in the tenant's timezone.
@@ -10611,6 +10730,31 @@ export interface components {
             /** Format: uri */
             file: string;
         };
+        /** @description `reports.staff_punctuality`: one staff member's days and minutes, holidays left out. */
+        StaffPunctualityReportRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "staff-punctuality";
+            /** Format: uuid */
+            readonly staff_id: string;
+            readonly first_name: string;
+            readonly last_name: string;
+            readonly employee_number: string;
+            readonly working_days: number;
+            readonly present_days: number;
+            readonly absent_days: number;
+            readonly leave_days: number;
+            readonly late_count: number;
+            readonly total_late_minutes: number | null;
+            readonly total_early_departure_minutes: number | null;
+        };
+        /**
+         * @description * `staff-punctuality` - staff-punctuality
+         * @enum {string}
+         */
+        StaffPunctualityReportRowKindEnum: "staff-punctuality";
         StaffQualification: {
             /** Format: uuid */
             readonly id: string;
@@ -10636,6 +10780,17 @@ export interface components {
             readonly created_at: string;
             /** Format: date-time */
             readonly updated_at: string;
+        };
+        /** @description One active staff member on the staff register, with their record for that date if marked. */
+        StaffRegisterEntry: {
+            /** Format: uuid */
+            readonly staff_id: string;
+            readonly staff_name: string;
+            readonly employee_number: string;
+            readonly department_name: string | null;
+            readonly record: components["schemas"]["StaffAttendance"] | null;
+            /** @description Approved leave covers the date, or the record says `on_leave`. */
+            readonly on_leave: boolean;
         };
         /**
          * @description * `teaching` - Teaching
@@ -10849,6 +11004,28 @@ export interface components {
             /** Format: uri */
             file: string;
         };
+        /** @description `reports.student_late_arrivals`: late days and their minutes, most late days first. */
+        StudentLateArrivalsReportRow: {
+            /** Format: uuid */
+            readonly student_id: string;
+            readonly first_name: string;
+            readonly last_name: string;
+            readonly admission_number: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "student-late-arrivals";
+            readonly late_count: number;
+            readonly total_late_minutes: number | null;
+            /** Format: double */
+            readonly average_late_minutes: number | null;
+        };
+        /**
+         * @description * `student-late-arrivals` - student-late-arrivals
+         * @enum {string}
+         */
+        StudentLateArrivalsReportRowKindEnum: "student-late-arrivals";
         /**
          * @description * `active` - Active
          *     * `suspended` - Suspended
@@ -10858,6 +11035,36 @@ export interface components {
          * @enum {string}
          */
         StudentStatusEnum: "active" | "suspended" | "transferred" | "withdrawn" | "graduated";
+        /**
+         * @description `reports.student_summary`: day counts and the rate over the range.
+         *
+         *     `attendance_rate` is the percentage of counted days present, one decimal
+         *     place, rounded half up; `counted_days` leaves out leave and excused days.
+         */
+        StudentSummaryReportRow: {
+            /** Format: uuid */
+            readonly student_id: string;
+            readonly first_name: string;
+            readonly last_name: string;
+            readonly admission_number: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "student-summary";
+            readonly present_days: number;
+            readonly counted_days: number;
+            readonly absent_days: number;
+            readonly late_days: number;
+            readonly leave_days: number;
+            /** Format: double */
+            readonly attendance_rate: number;
+        };
+        /**
+         * @description * `student-summary` - student-summary
+         * @enum {string}
+         */
+        StudentSummaryReportRowKindEnum: "student-summary";
         StudentTransfer: {
             /** Format: uuid */
             readonly id: string;
@@ -11778,6 +11985,7 @@ export interface operations {
                 page_size?: number;
                 /** @description A search term. */
                 search?: string;
+                staff_attendance_id?: string;
                 /**
                  * @description * `pending` - Pending
                  *     * `approved` - Approved
@@ -17542,6 +17750,7 @@ export interface operations {
                 period_id?: string | null;
                 section_id?: string | null;
                 start_date: string;
+                /** @description `defaulters` only: list students whose rate is below this percentage (default 75.0). */
                 threshold?: string;
             };
             header?: never;
@@ -17550,12 +17759,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The report's rows, under `data`. */
+            /** @description The report's rows, each carrying the report's `kind`. `meta.kind`, `meta.row_count` and `meta.attendance_mode` (how the rows were marked; student reports count days in either mode). Over the inline ceiling, a 202 and a job instead, as `POST` returns. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AttendanceReportRow"][];
+                };
             };
         };
     };
@@ -18433,6 +18644,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StaffAttendance"];
+                };
+            };
+        };
+    };
+    staff_attendance_register_retrieve: {
+        parameters: {
+            query: {
+                date: string;
+                department_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active staff who had joined by the date, by last then first name, scoped as `/staff-attendance` is. `record` is null where the date is unmarked; `on_leave` is true where approved leave covers the date or the record says `on_leave`. `meta.date` echoes the date. An unknown `department_id` is a 404. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffRegisterEntry"][];
                 };
             };
         };
