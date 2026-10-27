@@ -1,6 +1,6 @@
 import type { AuthenticatedUser } from "@schoolhub/types";
 
-import { FILTER_ALL } from "@/lib/constants";
+import { canDecidePending, isViewer, statusFilterValue } from "@/lib/approval-queue";
 import { copyMappedFields } from "@/lib/helpers";
 import { toShortTime } from "@/services/modules/periods/periods-helper";
 import { isMarkableStatus } from "@/services/modules/student-attendance/student-attendance-helper";
@@ -9,7 +9,6 @@ import type { CorrectionFormValues } from "./attendance-corrections.schema";
 import {
   CORRECTION_CHANGE_FIELDS,
   CORRECTION_QUERY_FIELDS,
-  CORRECTION_STATUS_PENDING,
   CORRECTIONS_MINE,
 } from "./attendance-corrections-constant";
 import type {
@@ -92,7 +91,6 @@ export function toCorrectionQueryParams(
   query: CorrectionPageQuery,
 ): Record<string, string | number | boolean | undefined> {
   const params: Record<string, unknown> = { page_size: query.pageSize };
-  // `mine: false` is a real filter (everyone else's), so only undefined or blank is left out.
   copyMappedFields(
     query,
     CORRECTION_QUERY_FIELDS,
@@ -104,18 +102,15 @@ export function toCorrectionQueryParams(
 
 /** The status filter -> `status`: `all` is no filter. */
 export function statusFilterToStatus(value: string): CorrectionStatus | undefined {
-  return value === FILTER_ALL ? undefined : (value as CorrectionStatus);
+  return statusFilterValue(value) as CorrectionStatus | undefined;
 }
 
-/** The Mine filter -> `mine`: off is no filter, so the queue shows everyone's requests. */
+/**
+ * The Mine checkbox -> `mine`: checked is the caller's own requests (`true`), unchecked is no
+ * filter (`undefined`). The UI has no "everyone else's" control, so `mine: false` is never sent.
+ */
 export function mineFilterToMine(value: string): true | undefined {
   return value === CORRECTIONS_MINE ? true : undefined;
-}
-
-/** The `:approve` / `:reject` body: the note when there is one, an empty body otherwise. */
-export function toDecisionBody(reviewNote?: string): Record<string, unknown> {
-  const note = reviewNote?.trim();
-  return note ? { review_note: note } : {};
 }
 
 /** Whether `user` was the one who asked: the server refuses their own request a decision. */
@@ -123,7 +118,7 @@ export function isOwnCorrection(
   correction: AttendanceCorrectionRecord,
   user: AuthenticatedUser | undefined,
 ): boolean {
-  return user !== undefined && correction.requested_by === user.id;
+  return isViewer(correction.requested_by, user);
 }
 
 /** Whether `user` is the staff member a correction is about: the server refuses them a decision. */
@@ -143,9 +138,7 @@ export function canDecideCorrection(
   canApprove: boolean,
 ): boolean {
   return (
-    user !== undefined &&
-    canApprove &&
-    correction.status === CORRECTION_STATUS_PENDING &&
+    canDecidePending(correction, user, canApprove) &&
     !isOwnCorrection(correction, user) &&
     !isOwnAttendanceCorrection(correction, user)
   );

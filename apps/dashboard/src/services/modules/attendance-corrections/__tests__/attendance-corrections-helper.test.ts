@@ -13,10 +13,8 @@ import {
   isOwnCorrection,
   mineFilterToMine,
   recordToCorrectionValues,
-  statusFilterToStatus,
   toCorrectionBody,
   toCorrectionQueryParams,
-  toDecisionBody,
 } from "../attendance-corrections-helper";
 import { correctionRecord, REQUESTER_ID } from "./attendance-corrections-fixtures";
 
@@ -88,11 +86,10 @@ describe("canDecideCorrection", () => {
     expect(canDecideCorrection(aboutOther, APPROVER, true)).toBe(true);
   });
 
-  it.each(["approved", "rejected", "cancelled"] as const)("refuses a %s request", (status) => {
-    expect(canDecideCorrection(correctionRecord({ status }), APPROVER, true)).toBe(false);
-  });
-
-  it("refuses without the approve key, and while the user is still loading", () => {
+  it("is the shared pending / key / user gate plus the requester rule", () => {
+    expect(canDecideCorrection(correctionRecord({ status: "approved" }), APPROVER, true)).toBe(
+      false,
+    );
     expect(canDecideCorrection(pending, APPROVER, false)).toBe(false);
     expect(canDecideCorrection(pending, undefined, true)).toBe(false);
     expect(isOwnCorrection(pending, undefined)).toBe(false);
@@ -100,38 +97,29 @@ describe("canDecideCorrection", () => {
 });
 
 describe("query mapping", () => {
-  it("maps the filters, keeping mine=false and dropping blanks", () => {
+  it("maps the filters and drops the ones that are not set", () => {
     expect(
       toCorrectionQueryParams({
         cursor: "c2",
         pageSize: 25,
         ordering: "-created_at",
         status: "pending",
-        mine: false,
+        mine: true,
       }),
     ).toEqual({
       page_size: 25,
       cursor: "c2",
       ordering: "-created_at",
       status: "pending",
-      mine: false,
+      mine: true,
     });
     expect(toCorrectionQueryParams({ pageSize: 25 })).toEqual({ page_size: 25 });
   });
 
-  it("reads 'all' as no status, and an off Mine as no filter", () => {
-    expect(statusFilterToStatus("all")).toBeUndefined();
-    expect(statusFilterToStatus("rejected")).toBe("rejected");
+  it("reads a checked Mine as mine=true and an unchecked one as no filter, never false", () => {
     expect(mineFilterToMine("true")).toBe(true);
     expect(mineFilterToMine("")).toBeUndefined();
-  });
-
-  it("sends the note when there is one and an empty body otherwise", () => {
-    expect(toDecisionBody("  Checked the gate log ")).toEqual({
-      review_note: "Checked the gate log",
-    });
-    expect(toDecisionBody("   ")).toEqual({});
-    expect(toDecisionBody()).toEqual({});
+    expect(mineFilterToMine("false")).toBeUndefined();
   });
 });
 

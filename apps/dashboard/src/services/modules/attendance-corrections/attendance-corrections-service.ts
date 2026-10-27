@@ -1,12 +1,9 @@
-import { fetchPage } from "@schoolhub/api-client";
 import type { Page } from "@schoolhub/types";
 import { apiClient } from "@/lib/auth";
+import { fetchApprovalPage, postApprovalDecision } from "@/services/approval-queue";
 import { endpoints } from "@/services/endpoints";
-import {
-  toCorrectionBody,
-  toCorrectionQueryParams,
-  toDecisionBody,
-} from "./attendance-corrections-helper";
+import { CORRECTION_NOTE_FIELD } from "./attendance-corrections-constant";
+import { toCorrectionBody, toCorrectionQueryParams } from "./attendance-corrections-helper";
 import type {
   AttendanceCorrectionRecord,
   CorrectionAction,
@@ -32,9 +29,10 @@ export async function requestCorrection(
 export async function fetchCorrectionPage(
   query: CorrectionPageQuery,
 ): Promise<Page<AttendanceCorrectionRecord>> {
-  return fetchPage<AttendanceCorrectionRecord>(apiClient, endpoints.attendanceCorrections.list, {
-    query: toCorrectionQueryParams(query),
-  });
+  return fetchApprovalPage<AttendanceCorrectionRecord>(
+    endpoints.attendanceCorrections.list,
+    toCorrectionQueryParams(query),
+  );
 }
 
 /** `:approve` or `:reject`, each with an optional note; answers with the correction as it now
@@ -44,9 +42,10 @@ export async function decideCorrection(
   action: CorrectionAction,
   reviewNote?: string,
 ): Promise<AttendanceCorrectionRecord> {
-  const { data } = await apiClient.post<AttendanceCorrectionRecord>(
+  const { data } = await postApprovalDecision<AttendanceCorrectionRecord>(
     endpoints.attendanceCorrections.action(id, action),
-    toDecisionBody(reviewNote),
+    CORRECTION_NOTE_FIELD,
+    reviewNote,
   );
   return data;
 }
