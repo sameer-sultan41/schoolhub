@@ -975,13 +975,21 @@ class AttendanceReportView(TenantScopedViewSetMixin, APIView):
             end_date=params["end_date"],
             section_id=str(params["section_id"]) if params.get("section_id") else None,
             period_id=str(params["period_id"]) if params.get("period_id") else None,
+            threshold=params.get("threshold"),
             limit=limit,
         )
 
     @staticmethod
     def _queue_export(request: Request, params: dict, *, reason: str) -> Response:
+        """Queue the export with every parameter the inline report used, so the two agree.
+
+        Root cause of the defaulters mismatch this closes: `threshold` was validated
+        and then dropped, inline and here, so every defaulters report used the default.
+        """
         from apps.attendance.tasks import export_attendance_report_task
         from core.jobs.services import create_job
+
+        threshold = params.get("threshold")
 
         job = create_job(
             tenant_id=request.tenant.pk,
@@ -992,6 +1000,10 @@ class AttendanceReportView(TenantScopedViewSetMixin, APIView):
                 "end_date": params["end_date"].isoformat(),
                 "section_id": str(params["section_id"]) if params.get("section_id") else None,
                 "period_id": str(params["period_id"]) if params.get("period_id") else None,
+                # A string: the payload is JSON, and a float would not round-trip a Decimal.
+                "threshold": str(threshold) if threshold is not None else None,
+                # The mode at request time, which the job's result reports as the inline meta does.
+                "attendance_mode": services.attendance_mode(),
                 "format": params.get("format", "csv"),
                 # The *requester*, so the job rebuilds the same record scope. Not
                 # the actor of the moment the worker runs, which is nobody.

@@ -15,6 +15,7 @@ from __future__ import annotations
 import datetime
 import logging
 import uuid
+from decimal import Decimal
 
 from celery import shared_task
 from django.utils import timezone
@@ -205,6 +206,9 @@ def export_attendance_report_task(self, *, tenant_id: str, job_id: str, actor_id
             requester = User.objects.get(pk=payload["requested_by"])
             # No `limit`: the job is the unbounded path, which is the whole
             # reason the endpoint hands it anything over the inline ceiling.
+            # Every parameter the inline report takes, so the file matches what the
+            # requester saw: a threshold dropped here listed a different set of defaulters.
+            threshold = payload.get("threshold")
             rows = build_report_rows(
                 kind=payload["kind"],
                 user=requester,
@@ -212,6 +216,7 @@ def export_attendance_report_task(self, *, tenant_id: str, job_id: str, actor_id
                 end_date=datetime.date.fromisoformat(payload["end_date"]),
                 section_id=payload.get("section_id"),
                 period_id=payload.get("period_id"),
+                threshold=Decimal(threshold) if threshold is not None else None,
             )
 
             fmt = payload.get("format", "csv")
@@ -228,7 +233,13 @@ def export_attendance_report_task(self, *, tenant_id: str, job_id: str, actor_id
             )
         mark_succeeded(
             job=job,
-            result={"result_file_id": str(file.pk), "rows": len(rows), "format": fmt},
+            result={
+                "result_file_id": str(file.pk),
+                "rows": len(rows),
+                "format": fmt,
+                # The mode at request time, as the inline report's `meta` gave it.
+                "attendance_mode": payload.get("attendance_mode"),
+            },
         )
     except Exception as exc:  # noqa: BLE001
         # Same shape as student-management's export task: the job row is the only
@@ -245,9 +256,13 @@ def build_report_rows(
     end_date: datetime.date,
     section_id: str | None = None,
     period_id: str | None = None,
+    threshold: Decimal | None = None,
     limit: int | None = None,
 ) -> list[dict]:
     """Build one §13 report's rows under `user`'s record scope.
+
+    `threshold` is the defaulters' cutoff (the report's default when None); the
+    other kinds ignore it.
 
     Shared by the endpoint and the export task so the two can never disagree —
     which matters more here than usual, because a principal reads the inline
@@ -299,7 +314,9 @@ def build_report_rows(
     if kind == "daily-register":
         return reports.daily_register(scoped, on_date=start_date, period_id=period_id, limit=limit)
     if kind == "defaulters":
-        return reports.defaulters(scoped, start_date=start_date, end_date=end_date, limit=limit)
+        return reports.defaulters(
+            scoped, start_date=start_date, end_date=end_date, threshold=threshold, limit=limit
+        )
     if kind == "student-late-arrivals":
         return reports.student_late_arrivals(
             scoped, start_date=start_date, end_date=end_date, limit=limit

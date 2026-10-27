@@ -401,6 +401,93 @@ class ReportExportTaskTests(ReportDataTestCase):
             self.assertIn("result_file_id", job.result)
 
 
+class DefaulterThresholdTests(AttendanceAPITestCase):
+    """The threshold reaches the defaulters inline and in the export, and both agree.
+
+    Root cause pinned here: `threshold` was validated and then dropped on both paths,
+    so every defaulters report used the 75% default whatever was asked for. One
+    student at 80% (four present of five) sits between the two thresholds.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        grant(
+            self.user, "attendance.report.view", "attendance.report.export", scope=RecordScope.ALL
+        )
+        self.start = MARKING_DATE - datetime.timedelta(days=4)
+        self.eighty = self.students[0]
+        with tenant_context(self.tenant.id):
+            for offset in range(5):
+                StudentAttendanceFactory(
+                    tenant=self.tenant,
+                    student=self.eighty,
+                    section=self.section,
+                    academic_session=self.session,
+                    attendance_date=self.start + datetime.timedelta(days=offset),
+                    status=AttendanceStatus.ABSENT if offset == 0 else AttendanceStatus.PRESENT,
+                    marked_by=self.user.pk,
+                )
+
+    def params(self, threshold: str) -> dict:
+        return {
+            "kind": "defaulters",
+            "start_date": self.start.isoformat(),
+            "end_date": MARKING_DATE.isoformat(),
+            "threshold": threshold,
+        }
+
+    def inline(self, threshold: str) -> set[str]:
+        query = "&".join(f"{key}={value}" for key, value in self.params(threshold).items())
+        response = self.client.get(f"{REPORTS}?{query}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        return {row["student_id"] for row in response.json()["data"]}
+
+    def exported(self, threshold: str) -> set[str]:
+        from unittest import mock
+
+        from apps.attendance.tasks import export_attendance_report_task
+        from core.exports import tabular
+        from core.jobs.models import BackgroundJob, JobStatus
+
+        response = self.client.post(REPORTS, self.params(threshold), format="json")
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        job_id = response.json()["data"]["job_id"]
+        with tenant_context(self.tenant.id):
+            payload = BackgroundJob.objects.get(pk=job_id).payload
+        self.assertEqual(payload["threshold"], threshold)
+        self.assertEqual(payload["attendance_mode"], services.ATTENDANCE_MODE_DAILY)
+
+        written: list[dict] = []
+        real_render = tabular.render
+
+        def capture(rows, **kwargs):
+            written.extend(rows)
+            return real_render(rows, **kwargs)
+
+        with mock.patch.object(tabular, "render", side_effect=capture):
+            export_attendance_report_task(
+                tenant_id=str(self.tenant.pk), job_id=job_id, actor_id=str(self.user.pk)
+            )
+        with tenant_context(self.tenant.id):
+            job = BackgroundJob.objects.get(pk=job_id)
+        self.assertEqual(job.status, JobStatus.SUCCEEDED, job.error)
+        self.assertEqual(job.result["attendance_mode"], services.ATTENDANCE_MODE_DAILY)
+        return {str(row["student_id"]) for row in written}
+
+    def test_at_ninety_an_eighty_percent_student_is_a_defaulter_inline_and_exported(self) -> None:
+        inline = self.inline("90.0")
+
+        self.assertEqual(inline, {str(self.eighty.pk)})
+        self.assertEqual(self.exported("90.0"), inline)
+
+    def test_at_seventy_they_are_not_inline_or_exported(self) -> None:
+        """The control only: the default 75 excludes 80% too, so the 90 case catches a drop."""
+        inline = self.inline("70.0")
+
+        self.assertEqual(inline, set())
+        self.assertEqual(self.exported("70.0"), inline)
+
+
 class ReportRowCapTests(ReportDataTestCase):
     """The inline/job decision must not cost the query it is deciding about."""
 
