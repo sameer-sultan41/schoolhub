@@ -21,6 +21,8 @@ export interface MockRequest {
   // false sense of safety — nothing here actually checks the parsed body against T. The
   // cast belongs at each call site instead, where it is visibly the caller's own claim.
   json(): unknown;
+  /** The raw body, for a stub that reads a multipart upload; `null` when there is none. */
+  text(): string | null;
 }
 
 export type MockHandler = (request: MockRequest) => MockResponse | Promise<MockResponse>;
@@ -216,6 +218,9 @@ function buildRequest(
       } catch {
         return null;
       }
+    },
+    text(): string | null {
+      return postData;
     },
   };
 }

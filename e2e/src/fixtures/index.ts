@@ -13,6 +13,7 @@ import {
   AttendanceLeavePage,
   AttendanceRecordsPage,
   AttendanceRegisterPage,
+  AttendanceReportsPage,
   AttendanceSettingsPage,
   CurriculumPage,
   DashboardPage,
@@ -20,6 +21,7 @@ import {
   PromotionBatchPage,
   PromotionsPage,
   PublicSitePage,
+  StaffAttendancePage,
   StaffPage,
   StudentDetailPage,
   StudentFormPage,
@@ -92,6 +94,8 @@ export interface E2EFixtures {
   attendanceSettingsPage: AttendanceSettingsPage;
   attendanceCorrectionsPage: AttendanceCorrectionsPage;
   attendanceLeavePage: AttendanceLeavePage;
+  staffAttendancePage: StaffAttendancePage;
+  attendanceReportsPage: AttendanceReportsPage;
   /**
    * Signs a **second** identity in, on its own browser context, and hands back that
    * context's page objects.
@@ -264,6 +268,14 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
 
   attendanceLeavePage: async ({ page }, use) => {
     await use(new AttendanceLeavePage(page));
+  },
+
+  staffAttendancePage: async ({ page }, use) => {
+    await use(new StaffAttendancePage(page));
+  },
+
+  attendanceReportsPage: async ({ page }, use) => {
+    await use(new AttendanceReportsPage(page));
   },
 
   signInAsSecondIdentity: async ({ browser }, use) => {

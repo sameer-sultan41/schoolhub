@@ -8,10 +8,11 @@ import {
   calendarDays,
   type LeaveRequestRecord,
 } from "./attendance-approvals-store";
+import { colonAction } from "./attendance-mock-utils";
 import { refusal } from "./attendance-register";
 
 /** `core/rbac/permissions.py`'s refusal, which runs before any lookup. */
-const PERMISSION_DENIED = "You do not have permission to perform this action.";
+export const PERMISSION_DENIED = "You do not have permission to perform this action.";
 /** `ActionResponse.ok`'s `meta.message` for each correction decision (`views.py`). */
 const CORRECTION_DECIDED_MESSAGE = {
   approve: "Correction applied.",
@@ -22,12 +23,6 @@ type Decision = "approve" | "reject";
 
 function isDecision(action: string | undefined): action is Decision {
   return action === "approve" || action === "reject";
-}
-
-/** `{id}:{action}` from a colon-action path segment. */
-function colonAction(segment: string | undefined): { id: string; action: string | undefined } {
-  const [id = "", action] = (segment ?? "").split(":");
-  return { id, action };
 }
 
 /** django-filter's `BooleanFilter` reads `true`/`True`/`1` as true. */
@@ -56,7 +51,8 @@ function autoMarkedDays(request: LeaveRequestRecord): number {
  *
  * Each route checks its permission key first (403), then the record scope (404), then the
  * service's rules in the service's order with its sentences (L5):
- * - a correction: already decided (409), then the caller's own request (422 on `reviewed_by`);
+ * - a correction: already decided (409), the caller's own request, then a staff correction
+ *   about the caller (both 422 on `reviewed_by`);
  * - a leave step: already decided (409), the caller submitted it (422 on `approver_id`), no
  *   pending step (409), the caller decided an earlier level (422), then level 2 needs a campus or
  *   school-wide scope (422).
@@ -80,11 +76,14 @@ export function attendanceApprovalsModule(store: AttendanceApprovalsStore): Mock
       const params = request.searchParams;
       const mine = params.get("mine");
       const target = params.get("student_attendance_id");
+      const staffTarget = params.get("staff_attendance_id");
       const rows = store.visibleCorrections().filter(
         (row) =>
           (!params.get("status") || row.status === params.get("status")) &&
+          // `subject_type` is `student` or `staff`, the target's kind (`filters.py`).
           (!params.get("subject_type") || row.subject_type === params.get("subject_type")) &&
           (!target || row.student_attendance_id === target) &&
+          (!staffTarget || row.staff_attendance_id === staffTarget) &&
           // `mine=false` is everyone else's: the approver's queue.
           (mine === null || isTrue(mine) === (row.requested_by === store.user.id)),
       );
@@ -103,6 +102,9 @@ export function attendanceApprovalsModule(store: AttendanceApprovalsStore): Mock
       }
       if (correction.requested_by === store.user.id) {
         return refusal("reviewed_by", APPROVAL_MESSAGES.ownCorrection);
+      }
+      if (correction.subject_user_id === store.user.id) {
+        return refusal("reviewed_by", APPROVAL_MESSAGES.ownAttendance);
       }
       const body = (request.json() as { review_note?: string } | null) ?? {};
       const now = new Date().toISOString();
