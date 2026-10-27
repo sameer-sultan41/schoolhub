@@ -901,7 +901,7 @@ def request_correction(
     if _to_json(old) == _to_json(proposed):
         raise DomainRuleViolation({"new_values": "The proposed values match the record (§11)."})
     is_staff = isinstance(target, StaffAttendance)
-    if is_staff:
+    if isinstance(target, StaffAttendance):
         # The table's CHECK would refuse it at `:approve` as a 500; refuse it here, by name.
         _assert_check_out_after_check_in(target, _to_json(proposed))
 
