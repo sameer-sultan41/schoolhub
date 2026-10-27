@@ -278,6 +278,7 @@ describe("StaffRegister", () => {
   it("shows approved leave read-only", async () => {
     stubStaffServices([staffRegisterEntry({ on_leave: true })]);
     await renderStaff();
+    await screen.findByText("Nadia Hussain");
 
     expect(await staffRow("Nadia Hussain").findByText("On leave")).toBeInTheDocument();
     expect(
