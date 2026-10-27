@@ -39,7 +39,7 @@ apps/<module>/     one app per module doc. Layout: models.py + permissions.py at
                    half-migrated. Cross-app rules: ADR-0013.
 tests/             cross-cutting contract suites: RLS coverage, append-only grants, endpoint and
                    inline permission keys, API contract, cross-app import boundaries (ADR-0013),
-                   .env.example drift
+                   .env.example drift, every Celery task routed to a queue the workers consume
 ```
 
 ## Skills To Load First

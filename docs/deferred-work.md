@@ -330,8 +330,14 @@ either this file or `project-status.md`.
     never showed it because its router answers every preflight with the header allowed.
     **Fixed** by allowing the header in `config/settings/base.py`. Run 40132416580 confirmed
     it: the register journey passes, and the promotion journey now gets past prepare and
-    approve but times out waiting for the batch to show "Executed" after `:execute`. That is
-    a separate failure (the execute job, or the screen's poll of it), not yet diagnosed.
+    approve but times out waiting for the batch to show "Executed" after `:execute`. **Diagnosed**
+    (e2e-live run 40454439946, PR #139): `PromotionBatchViewSet.execute`
+    (`apps/academics/promotions/viewset.py`) calls `execute_promotion_batch_task.delay()` inside
+    the request's transaction, so the worker can pick the task up before the job row commits.
+    It raised `DoesNotExist('BackgroundJob matching query')`, and the job stays queued.
+    `academics-promotions.spec.ts`'s API journey fails the same way when the timing loses. The
+    fix is to enqueue in `transaction.on_commit`, as attendance's `_queue_export` does. It is its
+    own academics PR, not bundled into the attendance dashboard.
   - Cross-origin responses don't expose `X-Request-ID` (no `CORS_EXPOSE_HEADERS`), so
     `ApiError.requestId` is always null in the dashboard. Nothing shows it today; exposing it
     is its own change with its own test.
