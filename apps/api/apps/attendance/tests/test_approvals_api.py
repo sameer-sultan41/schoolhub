@@ -546,13 +546,15 @@ class LeaveReviewRecordTests(ApprovalsTestCase):
         """The request rows and their nested steps reuse the list's one name pass."""
         approvers = {}
         for index, student in enumerate(self.students, start=1):
-            approver = UserFactory(tenant=self.tenant, first_name=f"Approver{index}")
+            approver = UserFactory(
+                tenant=self.tenant, first_name=f"Approver{index}", last_name="Malik"
+            )
             leave_request = self.leave(student, weeks_ahead=index)
             with tenant_context(self.tenant.id):
                 services.decide_leave_step(
                     request=leave_request, approve=False, approver_id=approver.pk
                 )
-            approvers[str(leave_request.pk)] = f"Approver{index}"
+            approvers[str(leave_request.pk)] = f"Approver{index} Malik"
 
         with mock.patch.object(
             serializers, "_load_user_names", wraps=serializers._load_user_names
