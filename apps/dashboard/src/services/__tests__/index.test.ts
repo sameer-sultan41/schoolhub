@@ -32,6 +32,7 @@ describe("Services", () => {
   it("aggregates every domain, each action a real function", () => {
     expect(Object.keys(Services).sort()).toEqual([
       "attendanceCorrections",
+      "attendanceReports",
       "attendanceSettings",
       "auth",
       "curriculum",
@@ -45,6 +46,7 @@ describe("Services", () => {
       "rooms",
       "schoolOrganization",
       "staff",
+      "staffAttendance",
       "studentAttendance",
       "studentTransfers",
       "students",
@@ -148,6 +150,12 @@ describe("Services", () => {
     expect(typeof Services.studentAttendance.fetchMyRegisters).toBe("function");
     expect(typeof Services.studentAttendance.fetchAttendancePage).toBe("function");
     expect(typeof Services.studentAttendance.bulkMark).toBe("function");
+    expect(typeof Services.studentAttendance.triggerAttendanceImport).toBe("function");
+
+    expect(typeof Services.staffAttendance.fetchStaffRegister).toBe("function");
+    expect(typeof Services.staffAttendance.fetchStaffAttendancePage).toBe("function");
+    expect(typeof Services.staffAttendance.markStaffAttendance).toBe("function");
+    expect(typeof Services.staffAttendance.checkOutStaff).toBe("function");
 
     expect(typeof Services.attendanceCorrections.requestCorrection).toBe("function");
     expect(typeof Services.attendanceCorrections.fetchCorrectionPage).toBe("function");
@@ -156,6 +164,9 @@ describe("Services", () => {
     expect(typeof Services.leaveRequests.fetchLeavePage).toBe("function");
     expect(typeof Services.leaveRequests.fetchLeaveTypes).toBe("function");
     expect(typeof Services.leaveRequests.decideLeave).toBe("function");
+
+    expect(typeof Services.attendanceReports.runReport).toBe("function");
+    expect(typeof Services.attendanceReports.exportReport).toBe("function");
 
     expect(typeof Services.periods.fetchPeriodPage).toBe("function");
     expect(typeof Services.periods.createPeriod).toBe("function");

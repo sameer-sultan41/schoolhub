@@ -8,6 +8,7 @@ import {
   registerEntry,
   registerMetaWire,
   SECTION_ID,
+  SESSION_ID,
   STUDENT_ID,
 } from "./student-attendance-fixtures";
 
@@ -155,5 +156,26 @@ describe("student-attendance-service", () => {
       records: [attendanceRecord()],
       meta: { marked: 1, updated: 0, alertsQueued: 2 },
     });
+  });
+
+  it("uploads a historical import with its session, answering with the job", async () => {
+    const { triggerAttendanceImport } = await import("../student-attendance-service");
+    mockPost.mockResolvedValue({
+      data: { job_id: "job-1", status: "queued" },
+      meta: { message: "Historical import queued." },
+      status: 202,
+    });
+    const file = new File(["admission_number,attendance_date,status"], "history.csv", {
+      type: "text/csv",
+    });
+
+    const accepted = await triggerAttendanceImport(file, SESSION_ID);
+
+    const [path, body] = mockPost.mock.calls[0] as [string, FormData];
+    expect(path).toBe("/student-attendance-imports");
+    const sent = body.get("file");
+    expect(sent instanceof File && sent.name).toBe("history.csv");
+    expect(body.get("academic_session_id")).toBe(SESSION_ID);
+    expect(accepted).toEqual({ jobId: "job-1" });
   });
 });

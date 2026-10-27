@@ -181,6 +181,11 @@ describe("formatLeaveDays", () => {
     expect(formatLeaveDays("12.0", "en")).toBe("12");
   });
 
+  it("formats a report's day count, a JSON number, the same way", () => {
+    expect(formatLeaveDays(1.5, "en")).toBe("1.5");
+    expect(formatLeaveDays(2, "en")).toBe("2");
+  });
+
   it("returns text that is not a number as it came", () => {
     expect(formatLeaveDays("n/a", "en")).toBe("n/a");
   });

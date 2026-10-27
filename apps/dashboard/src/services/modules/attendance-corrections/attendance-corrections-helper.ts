@@ -4,7 +4,7 @@ import { FILTER_ALL } from "@/lib/constants";
 import { copyMappedFields } from "@/lib/helpers";
 import { toShortTime } from "@/services/modules/periods/periods-helper";
 import { isMarkableStatus } from "@/services/modules/student-attendance/student-attendance-helper";
-import type { StudentAttendanceRecord } from "@/services/modules/student-attendance/student-attendance-type";
+import type { MarkableStatus } from "@/services/modules/student-attendance/student-attendance-type";
 import type { CorrectionFormValues } from "./attendance-corrections.schema";
 import {
   CORRECTION_CHANGE_FIELDS,
@@ -14,6 +14,7 @@ import {
 } from "./attendance-corrections-constant";
 import type {
   AttendanceCorrectionRecord,
+  CorrectableRecord,
   CorrectionChange,
   CorrectionNewValues,
   CorrectionPageQuery,
@@ -23,19 +24,27 @@ import type {
 
 /** The attendance-corrections module's pure helpers. */
 
+/** The request body: the one row it names, by the key of its kind. */
 export function toCorrectionBody(input: RequestCorrectionInput): Record<string, unknown> {
-  return {
-    student_attendance_id: input.studentAttendanceId,
-    new_values: input.newValues,
-    reason: input.reason,
-  };
+  const target =
+    input.staffAttendanceId !== undefined
+      ? { staff_attendance_id: input.staffAttendanceId }
+      : { student_attendance_id: input.studentAttendanceId };
+  return { ...target, new_values: input.newValues, reason: input.reason };
 }
 
-/** A record's correctable values as the form holds them: times as `HH:MM`, blanks as `""`. */
-export function recordToCorrectionValues(record: StudentAttendanceRecord): CorrectionFormValues {
+/**
+ * A record's correctable values as the form holds them: times as `HH:MM`, blanks as `""`.
+ * `isSettable` says which statuses the form may hold (a student's by default); any other
+ * status starts as `""`, so one is picked before it is sent.
+ */
+export function recordToCorrectionValues(
+  record: CorrectableRecord,
+  isSettable: (status: string) => status is MarkableStatus = isMarkableStatus,
+): CorrectionFormValues {
   return {
     new_values: {
-      status: isMarkableStatus(record.status) ? record.status : "",
+      status: isSettable(record.status) ? record.status : "",
       check_in_time: record.check_in_time ? toShortTime(record.check_in_time) : "",
       check_out_time: record.check_out_time ? toShortTime(record.check_out_time) : "",
       remarks: record.remarks ?? "",
@@ -45,26 +54,38 @@ export function recordToCorrectionValues(record: StudentAttendanceRecord): Corre
 }
 
 /**
- * Only the values that differ from the record, a cleared one as `null`. Empty means there is
- * nothing to request: the server refuses a proposal that matches the record (§11).
+ * Only the values that differ from the record, a cleared one as `null`, among `fields` (every
+ * correctable field by default; a staff row's leave out remarks). Empty means there is nothing
+ * to request: the server refuses a proposal that matches the record (§11).
  */
 export function buildCorrectionNewValues(
   values: CorrectionFormValues,
-  record: StudentAttendanceRecord,
+  record: CorrectableRecord,
+  fields: readonly (keyof CorrectionNewValues)[] = CORRECTION_CHANGE_FIELDS,
 ): CorrectionNewValues {
+  // A status the form can't hold reads as "", which no picked status equals.
   const current = recordToCorrectionValues(record).new_values;
   const next = values.new_values;
   const changes: CorrectionNewValues = {};
-  if (next.status !== "" && next.status !== current.status) changes.status = next.status;
-  if (next.check_in_time !== current.check_in_time) {
+  if (fields.includes("status") && next.status !== "" && next.status !== current.status) {
+    changes.status = next.status;
+  }
+  if (fields.includes("check_in_time") && next.check_in_time !== current.check_in_time) {
     changes.check_in_time = next.check_in_time || null;
   }
-  if (next.check_out_time !== current.check_out_time) {
+  if (fields.includes("check_out_time") && next.check_out_time !== current.check_out_time) {
     changes.check_out_time = next.check_out_time || null;
   }
   const remarks = next.remarks.trim();
-  if (remarks !== current.remarks.trim()) changes.remarks = remarks || null;
+  if (fields.includes("remarks") && remarks !== current.remarks.trim()) {
+    changes.remarks = remarks || null;
+  }
   return changes;
+}
+
+/** Whose row a correction is for: the student's name, else the staff member's. */
+export function correctionSubjectName(correction: AttendanceCorrectionRecord): string | null {
+  return correction.student_name ?? correction.staff_name ?? null;
 }
 
 export function toCorrectionQueryParams(
@@ -105,8 +126,17 @@ export function isOwnCorrection(
   return user !== undefined && correction.requested_by === user.id;
 }
 
-/** Whether Approve and Reject are offered: a pending request, from someone else, to a holder
- * of `attendance.correction.approve`. The server enforces each of these itself. */
+/** Whether `user` is the staff member a correction is about: the server refuses them a decision. */
+export function isOwnAttendanceCorrection(
+  correction: AttendanceCorrectionRecord,
+  user: AuthenticatedUser | undefined,
+): boolean {
+  return user !== undefined && correction.subject_user_id === user.id;
+}
+
+/** Whether Approve and Reject are offered: a pending request, from someone else and not about
+ * the viewer's own attendance, to a holder of `attendance.correction.approve`. The server
+ * enforces each of these itself. */
 export function canDecideCorrection(
   correction: AttendanceCorrectionRecord,
   user: AuthenticatedUser | undefined,
@@ -116,7 +146,8 @@ export function canDecideCorrection(
     user !== undefined &&
     canApprove &&
     correction.status === CORRECTION_STATUS_PENDING &&
-    !isOwnCorrection(correction, user)
+    !isOwnCorrection(correction, user) &&
+    !isOwnAttendanceCorrection(correction, user)
   );
 }
 

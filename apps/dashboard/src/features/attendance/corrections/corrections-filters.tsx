@@ -7,6 +7,7 @@ import { FilterSelect } from "@/components/filter-select";
 import { FILTER_ALL } from "@/lib/constants";
 import {
   CORRECTION_STATUSES,
+  CORRECTION_SUBJECT_TYPES,
   CORRECTIONS_MINE,
 } from "@/services/modules/attendance-corrections/attendance-corrections-constant";
 
@@ -14,6 +15,8 @@ import {
 export interface CorrectionsFilterValues {
   status: string;
   mine: string;
+  /** `student`, `staff`, or blank for both. */
+  subject: string;
 }
 
 export interface CorrectionsFiltersProps {
@@ -23,12 +26,17 @@ export interface CorrectionsFiltersProps {
 
 const MINE_ID = "corrections-mine";
 
-/** The queue's status filter and the Mine toggle (only the caller's own requests). */
+/** The queue's status filter, whose rows (a student's or staff's), and the Mine toggle (only the
+ * caller's own requests). */
 export function CorrectionsFilters({ values, onChange }: CorrectionsFiltersProps) {
   const t = useTranslations("attendance");
   const statusOptions = CORRECTION_STATUSES.map((status) => ({
     id: status,
     name: t(`requestStatus.${status}`),
+  }));
+  const subjectOptions = CORRECTION_SUBJECT_TYPES.map((subject) => ({
+    id: subject,
+    name: t(`corrections.subject.${subject}`),
   }));
 
   return (
@@ -40,6 +48,15 @@ export function CorrectionsFilters({ values, onChange }: CorrectionsFiltersProps
         options={statusOptions}
         onChange={(status) => {
           onChange({ status: status || FILTER_ALL });
+        }}
+      />
+      <FilterSelect
+        label={t("corrections.filters.subject")}
+        allLabel={t("corrections.filters.all")}
+        value={values.subject}
+        options={subjectOptions}
+        onChange={(subject) => {
+          onChange({ subject });
         }}
       />
       <div className="flex items-center gap-2">

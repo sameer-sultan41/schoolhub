@@ -3,10 +3,10 @@
 import { useMemo } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Button, Skeleton } from "@schoolhub/ui";
-import { Check, X } from "lucide-react";
+import { Skeleton } from "@schoolhub/ui";
 import type { AuthenticatedUser } from "@schoolhub/types";
 
+import { decisionActionsColumn } from "@/features/attendance/decision-actions-column";
 import { useLeaveDates } from "@/features/attendance/leave/use-leave-dates";
 import { RequestStatusBadge } from "@/features/attendance/request-status-badge";
 import { EMPTY_VALUE } from "@/lib/constants";
@@ -130,48 +130,19 @@ export function useLeaveColumns(
           skeleton: <Skeleton className="h-4 w-12" />,
         },
       },
-      {
+      decisionActionsColumn<LeaveRequestRecord>({
         id: LEAVE_ACTIONS_COLUMN_ID,
-        header: () => <span className="sr-only">{t("leave.columns.actions")}</span>,
-        enableSorting: false,
-        enableHiding: false,
-        cell: ({ row }) => {
-          const request = row.original;
-          if (!canDecideLeave(request, user, canApprove)) return null;
+        header: t("leave.columns.actions"),
+        canDecide: (request) => canDecideLeave(request, user, canApprove),
+        labels: (request) => {
           const name = { name: request.student_name };
-          return (
-            <div className="flex items-center gap-1">
-              <Button
-                variant="primary"
-                appearance="light"
-                mode="icon"
-                shape="circle"
-                size="sm"
-                aria-label={t("leave.actions.approveRow", name)}
-                onClick={() => {
-                  onDecide(request, "approve");
-                }}
-              >
-                <Check className="size-4" aria-hidden="true" />
-              </Button>
-              <Button
-                variant="destructive"
-                appearance="light"
-                mode="icon"
-                shape="circle"
-                size="sm"
-                aria-label={t("leave.actions.rejectRow", name)}
-                onClick={() => {
-                  onDecide(request, "reject");
-                }}
-              >
-                <X className="size-4" aria-hidden="true" />
-              </Button>
-            </div>
-          );
+          return {
+            approve: t("leave.actions.approveRow", name),
+            reject: t("leave.actions.rejectRow", name),
+          };
         },
-        meta: { skeleton: <Skeleton className="size-7 rounded-full" /> },
-      },
+        onDecide,
+      }),
     ],
     [t, locale, leaveDates, user, canApprove, onDecide],
   );

@@ -25,12 +25,19 @@ import { queryKeys } from "@/lib/query-client";
 import {
   Services,
   type AttendanceCorrectionRecord,
+  type CorrectionNewValues,
+  type MarkableStatus,
+  type RequestCorrectionInput,
+  type StaffAttendanceRecord,
   type StudentAttendanceRecord,
 } from "@/services";
 import {
+  CORRECTION_CHANGE_FIELDS,
   CORRECTION_ERROR_FIELDS,
   CORRECTION_REASON_MAX_LENGTH,
   CORRECTIONS_QUERY_MODULE,
+  STAFF_CORRECTION_CHANGE_FIELDS,
+  STAFF_CORRECTION_ERROR_FIELDS,
 } from "@/services/modules/attendance-corrections/attendance-corrections-constant";
 import {
   buildCorrectionNewValues,
@@ -41,15 +48,62 @@ import {
   type CorrectionFormValues,
 } from "@/services/modules/attendance-corrections/attendance-corrections.schema";
 import {
+  MARKABLE_STAFF_STATUSES,
+  STAFF_STATUS_ABSENT,
+} from "@/services/modules/staff-attendance/staff-attendance-constant";
+import { isMarkableStaffStatus } from "@/services/modules/staff-attendance/staff-attendance-helper";
+import {
   ATTENDANCE_REMARKS_MAX_LENGTH,
   MARKABLE_STATUSES,
 } from "@/services/modules/student-attendance/student-attendance-constant";
+import { isMarkableStatus } from "@/services/modules/student-attendance/student-attendance-helper";
 
-/**
- * The row a correction is asked for. Only a student row today; a staff row (PR C) joins as its
- * own `kind`, with its own record and service call.
- */
-export type CorrectionTarget = { kind: "student"; record: StudentAttendanceRecord };
+/** The row a correction is asked for: a student's, or a staff member's (which has no remarks
+ * to correct, and the staff register's statuses). */
+export type CorrectionTarget =
+  | { kind: "student"; record: StudentAttendanceRecord }
+  | { kind: "staff"; record: StaffAttendanceRecord };
+
+/** What differs between the two kinds of row. */
+interface TargetRules {
+  name: string;
+  statuses: readonly MarkableStatus[];
+  isSettable: (status: string) => status is MarkableStatus;
+  fields: readonly (keyof CorrectionNewValues)[];
+  errorFields: readonly string[];
+  toInput: (newValues: CorrectionNewValues, reason: string) => RequestCorrectionInput;
+}
+
+function targetRules(target: CorrectionTarget): TargetRules {
+  if (target.kind === "staff") {
+    const { record } = target;
+    return {
+      name: record.staff_name,
+      statuses: MARKABLE_STAFF_STATUSES,
+      isSettable: isMarkableStaffStatus,
+      fields: STAFF_CORRECTION_CHANGE_FIELDS,
+      errorFields: STAFF_CORRECTION_ERROR_FIELDS,
+      toInput: (newValues, reason) => ({
+        staffAttendanceId: record.id,
+        newValues,
+        reason,
+      }),
+    };
+  }
+  const { record } = target;
+  return {
+    name: record.student_name,
+    statuses: MARKABLE_STATUSES,
+    isSettable: isMarkableStatus,
+    fields: CORRECTION_CHANGE_FIELDS,
+    errorFields: CORRECTION_ERROR_FIELDS,
+    toInput: (newValues, reason) => ({
+      studentAttendanceId: record.id,
+      newValues,
+      reason,
+    }),
+  };
+}
 
 export interface RequestCorrectionDialogProps {
   open: boolean;
@@ -65,10 +119,10 @@ const TIME_FIELDS = [
 ] as const;
 
 /**
- * Asks for a locked row to change: a new status (never `on_leave`), times, remarks and a
- * mandatory reason. An approver makes the change. Submit waits until a value differs from the
- * record, as the server refuses a proposal that matches it (§11); only changed values are sent,
- * and a server error shows under the field it names.
+ * Asks for a locked row to change: a new status (never `on_leave`), times, remarks (a student's
+ * row only) and a mandatory reason. An approver makes the change. Submit waits until a value
+ * differs from the record, as the server refuses a proposal that matches it (§11); only changed
+ * values are sent, and a server error shows under the field it names.
  *
  * Mounting contract: the caller mounts this only while it is open, so every open starts from
  * the target's current values.
@@ -84,6 +138,8 @@ export function RequestCorrectionDialog({
   const locale = useLocale();
   const queryClient = useQueryClient();
   const { record } = target;
+  const rules = targetRules(target);
+  const hasRemarks = rules.fields.includes("remarks");
 
   const schema = useMemo(
     () =>
@@ -96,21 +152,27 @@ export function RequestCorrectionDialog({
   );
   const form = useForm<CorrectionFormValues>({
     resolver: zodResolver(schema),
-    defaultValues: recordToCorrectionValues(record),
+    defaultValues: recordToCorrectionValues(record, rules.isSettable),
   });
   const newValues = useWatch({ control: form.control, name: "new_values" });
+  // A staff day marked absent has no times, as on the register: the server counts no minutes.
+  const timesCleared = target.kind === "staff" && newValues.status === STAFF_STATUS_ABSENT;
+  const clearTimesIfAbsent = (status: string) => {
+    if (target.kind !== "staff" || status !== STAFF_STATUS_ABSENT) return;
+    for (const [name] of TIME_FIELDS) form.setValue(name, "", { shouldDirty: true });
+  };
   const hasChange =
-    Object.keys(buildCorrectionNewValues({ new_values: newValues, reason: "" }, record)).length > 0;
+    Object.keys(
+      buildCorrectionNewValues({ new_values: newValues, reason: "" }, record, rules.fields),
+    ).length > 0;
 
   const { handleSubmit, formError, isPending } = useFormDialogSubmit({
     form,
     mutationFn: (values: CorrectionFormValues) =>
-      Services.attendanceCorrections.requestCorrection({
-        studentAttendanceId: record.id,
-        newValues: buildCorrectionNewValues(values, record),
-        reason: values.reason.trim(),
-      }),
-    knownFields: CORRECTION_ERROR_FIELDS,
+      Services.attendanceCorrections.requestCorrection(
+        rules.toInput(buildCorrectionNewValues(values, record, rules.fields), values.reason.trim()),
+      ),
+    knownFields: rules.errorFields,
     onSuccess: (correction) => {
       // The request joins the Corrections queue.
       void queryClient.invalidateQueries({ queryKey: queryKeys.module(CORRECTIONS_QUERY_MODULE) });
@@ -121,7 +183,7 @@ export function RequestCorrectionDialog({
     fallbackMessage: tCommon("submitFailed"),
   });
 
-  const statusOptions = MARKABLE_STATUSES.map((status) => ({
+  const statusOptions = rules.statuses.map((status) => ({
     id: status,
     name: t(`status.${status}`),
   }));
@@ -132,7 +194,7 @@ export function RequestCorrectionDialog({
       onOpenChange={onOpenChange}
       title={t("correction.title")}
       description={t("correction.description", {
-        name: record.student_name,
+        name: rules.name,
         date: formatDate(record.attendance_date, locale),
       })}
       form={form}
@@ -149,6 +211,8 @@ export function RequestCorrectionDialog({
         label={t("correction.fields.status")}
         placeholder={t("correction.fields.statusPlaceholder")}
         options={statusOptions}
+        onPick={clearTimesIfAbsent}
+        description={timesCleared ? t("correction.absentClearsTimes") : undefined}
       />
       <div className="grid gap-4 sm:grid-cols-2">
         {TIME_FIELDS.map(([name, labelKey]) => (
@@ -160,7 +224,7 @@ export function RequestCorrectionDialog({
               <FormItem>
                 <FormLabel>{t(labelKey)}</FormLabel>
                 <FormControl>
-                  <Input type="time" {...field} />
+                  <Input type="time" {...field} disabled={timesCleared} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -168,19 +232,21 @@ export function RequestCorrectionDialog({
           />
         ))}
       </div>
-      <FormField
-        control={form.control}
-        name="new_values.remarks"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>{t("correction.fields.remarks")}</FormLabel>
-            <FormControl>
-              <Input maxLength={ATTENDANCE_REMARKS_MAX_LENGTH} {...field} />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
+      {hasRemarks && (
+        <FormField
+          control={form.control}
+          name="new_values.remarks"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>{t("correction.fields.remarks")}</FormLabel>
+              <FormControl>
+                <Input maxLength={ATTENDANCE_REMARKS_MAX_LENGTH} {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      )}
       <FormField
         control={form.control}
         name="reason"

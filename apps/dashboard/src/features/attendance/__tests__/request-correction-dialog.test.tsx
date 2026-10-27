@@ -6,9 +6,11 @@ import { toast } from "sonner";
 import {
   Services,
   type AttendanceCorrectionRecord,
+  type StaffAttendanceRecord,
   type StudentAttendanceRecord,
 } from "@/services";
 import { CORRECTIONS_QUERY_MODULE } from "@/services/modules/attendance-corrections/attendance-corrections-constant";
+import { staffRecord } from "@/services/modules/staff-attendance/__tests__/staff-attendance-fixtures";
 import { attendanceRecord } from "@/services/modules/student-attendance/__tests__/student-attendance-fixtures";
 import { mocked } from "@/test-fixtures/list-screen";
 import { renderWithClient } from "@/test-utils";
@@ -43,6 +45,10 @@ function correction(
     student_attendance_id: LOCKED_LATE.id,
     student_id: LOCKED_LATE.student_id,
     student_name: LOCKED_LATE.student_name,
+    staff_attendance_id: null,
+    staff_name: null,
+    employee_number: null,
+    subject_user_id: null,
     attendance_date: LOCKED_LATE.attendance_date,
     period_name: LOCKED_LATE.period_name,
     requested_by: "44444444-aaaa-4bbb-8ccc-000000000001",
@@ -225,6 +231,155 @@ describe("RequestCorrectionDialog", () => {
 
     fireEvent.change(screen.getByLabelText("Remarks"), { target: { value: "Bus late" } });
     await user.type(screen.getByLabelText("Reason"), "Context");
+    await user.click(submit());
+
+    expect(await within(dialog()).findByRole("alert")).toHaveTextContent(issue);
+  });
+});
+
+/** Nadia's locked late arrival, 08:40 to 12:30, as the staff register and history show it. */
+const LOCKED_STAFF = staffRecord({
+  status: "late",
+  check_in_time: "08:40:00",
+  check_out_time: "12:30:00",
+  late_minutes: 40,
+  early_departure_minutes: 90,
+  remarks: "Traffic",
+  is_locked: true,
+});
+
+function renderStaffDialog(record: StaffAttendanceRecord = LOCKED_STAFF) {
+  const onOpenChange = jest.fn();
+  renderWithClient(
+    <RequestCorrectionDialog open onOpenChange={onOpenChange} target={{ kind: "staff", record }} />,
+  );
+  return { user: userEvent.setup(), onOpenChange };
+}
+
+describe("RequestCorrectionDialog with a staff target", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("names the staff member and offers the staff statuses, with no remarks", async () => {
+    const { user } = renderStaffDialog();
+
+    expect(
+      within(dialog()).getByText(
+        "Nadia Hussain, October 23rd, 2026. An approver reviews the change before it is made.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Check-in time")).toHaveValue("08:40");
+    expect(screen.getByLabelText("Check-out time")).toHaveValue("12:30");
+    // `services.STAFF_CORRECTABLE_FIELDS` has no remarks.
+    expect(screen.queryByLabelText("Remarks")).not.toBeInTheDocument();
+
+    await user.click(within(dialog()).getByRole("combobox", { name: "Status" }));
+
+    const options = (await screen.findAllByRole("option")).map((option) => option.textContent);
+    expect(options).toEqual(["Present", "Absent", "Late", "Half day"]);
+  });
+
+  it("holds Submit on an ordinary staff row until a value differs", () => {
+    renderStaffDialog();
+
+    expect(within(dialog()).getByRole("combobox", { name: "Status" })).toHaveTextContent("Late");
+    expect(submit()).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Check-out time"), { target: { value: "13:00" } });
+    expect(submit()).toBeEnabled();
+  });
+
+  it("sends the staff row's id with only the values that changed", async () => {
+    requestCorrection.mockResolvedValue(
+      correction({
+        subject_type: "staff",
+        student_attendance_id: null,
+        student_id: null,
+        student_name: null,
+        staff_attendance_id: LOCKED_STAFF.id,
+        staff_name: "Nadia Hussain",
+        employee_number: "EMP-001",
+      }),
+    );
+    const { user, onOpenChange } = renderStaffDialog();
+
+    await user.click(within(dialog()).getByRole("combobox", { name: "Status" }));
+    await user.click(await screen.findByRole("option", { name: "Present" }));
+    fireEvent.change(screen.getByLabelText("Check-in time"), { target: { value: "08:05" } });
+    await user.type(screen.getByLabelText("Reason"), "Gate log shows 08:05");
+    await user.click(submit());
+
+    await waitFor(() => {
+      expect(requestCorrection).toHaveBeenCalledWith({
+        staffAttendanceId: LOCKED_STAFF.id,
+        newValues: { status: "present", check_in_time: "08:05" },
+        reason: "Gate log shows 08:05",
+      });
+    });
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("clears and disables the times when Absent is picked, as the register does", async () => {
+    requestCorrection.mockResolvedValue(correction({ subject_type: "staff" }));
+    const { user } = renderStaffDialog();
+
+    await user.click(within(dialog()).getByRole("combobox", { name: "Status" }));
+    await user.click(await screen.findByRole("option", { name: "Absent" }));
+
+    expect(screen.getByLabelText("Check-in time")).toHaveValue("");
+    expect(screen.getByLabelText("Check-in time")).toBeDisabled();
+    expect(screen.getByLabelText("Check-out time")).toHaveValue("");
+    expect(screen.getByLabelText("Check-out time")).toBeDisabled();
+    expect(
+      screen.getByText("Absent clears this day's check-in and check-out."),
+    ).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Reason"), "Was not in");
+    await user.click(submit());
+
+    await waitFor(() => {
+      expect(requestCorrection).toHaveBeenCalledWith({
+        staffAttendanceId: LOCKED_STAFF.id,
+        // The times go as cleared, so the approved day has no minutes.
+        newValues: { status: "absent", check_in_time: null, check_out_time: null },
+        reason: "Was not in",
+      });
+    });
+  });
+
+  it("leaves a student row's times alone when Absent is picked", async () => {
+    const { user } = renderDialog();
+
+    await user.click(within(dialog()).getByRole("combobox", { name: "Status" }));
+    await user.click(await screen.findByRole("option", { name: "Absent" }));
+
+    expect(screen.getByLabelText("Check-in time")).toHaveValue("08:20");
+    expect(screen.getByLabelText("Check-in time")).toBeEnabled();
+  });
+
+  it("starts a holiday row with no status picked, as the register can't set one", () => {
+    renderStaffDialog(staffRecord({ status: "holiday", check_in_time: null, is_locked: true }));
+
+    expect(within(dialog()).getByRole("combobox", { name: "Status" })).toHaveTextContent(
+      "Choose a status",
+    );
+    expect(submit()).toBeDisabled();
+  });
+
+  it("shows the server's refusal of a staff row as the dialog's message", async () => {
+    const issue = "This record is still within the marking window; edit the register instead.";
+    requestCorrection.mockRejectedValue(
+      new ApiError({
+        code: "domain_rule_violation",
+        message: issue,
+        status: 422,
+        url: "/attendance-corrections",
+        details: [{ field: "staff_attendance_id", issue }],
+      }),
+    );
+    const { user } = renderStaffDialog();
+
+    fireEvent.change(screen.getByLabelText("Check-out time"), { target: { value: "13:00" } });
+    await user.type(screen.getByLabelText("Reason"), "Left at one");
     await user.click(submit());
 
     expect(await within(dialog()).findByRole("alert")).toHaveTextContent(issue);

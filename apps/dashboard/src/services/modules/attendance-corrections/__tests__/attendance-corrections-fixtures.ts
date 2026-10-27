@@ -13,6 +13,8 @@ export const REQUESTER_ID = "77777777-aaaa-4bbb-8ccc-000000000001";
 /** The sentences `services.decide_correction` raises, as the envelope carries them. */
 export const ALREADY_APPROVED = "This correction was already approved.";
 export const OWN_REQUEST = "An approver cannot decide their own correction request (§11).";
+export const OWN_ATTENDANCE =
+  "An approver cannot decide a correction to their own attendance (§11).";
 
 /** A pending request from another user: Amna's late arrival becomes present, with a note. */
 export function correctionRecord(
@@ -24,6 +26,10 @@ export function correctionRecord(
     student_attendance_id: ATTENDANCE_ID,
     student_id: STUDENT_ID,
     student_name: "Amna Raza",
+    staff_attendance_id: null,
+    staff_name: null,
+    employee_number: null,
+    subject_user_id: null,
     attendance_date: "2026-10-10",
     period_name: null,
     requested_by: REQUESTER_ID,

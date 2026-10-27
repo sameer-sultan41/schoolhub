@@ -3,6 +3,7 @@ import {
   fetchAttendancePage,
   fetchMyRegisters,
   fetchRegister,
+  triggerAttendanceImport,
 } from "./student-attendance-service";
 
 export const StudentAttendanceService = {
@@ -10,6 +11,7 @@ export const StudentAttendanceService = {
   fetchMyRegisters,
   fetchAttendancePage,
   bulkMark,
+  triggerAttendanceImport,
 };
 export type {
   AttendancePageQuery,

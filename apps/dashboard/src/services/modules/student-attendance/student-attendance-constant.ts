@@ -134,3 +134,19 @@ export const BULK_MARK_ENTRY_FIELDS: ReadonlyArray<readonly [keyof BulkMarkEntry
   ["checkOutTime", "check_out_time"],
   ["remarks", "remarks"],
 ];
+
+/** Mirror `REQUIRED_IMPORT_COLUMNS`/`IMPORT_COLUMNS` (`apps/api/apps/attendance/services.py`)
+ * verbatim: the import template's exact header names. */
+export const ATTENDANCE_IMPORT_REQUIRED_COLUMNS = [
+  "admission_number",
+  "attendance_date",
+  "status",
+] as const;
+export const ATTENDANCE_IMPORT_OPTIONAL_COLUMNS = [
+  "check_in_time",
+  "check_out_time",
+  "remarks",
+] as const;
+
+/** Per user as well as per tab: a different sign-in never reconnects to someone else's import. */
+export const ATTENDANCE_IMPORT_JOB_STORAGE_PREFIX = "schoolhub:attendance-import-job:";

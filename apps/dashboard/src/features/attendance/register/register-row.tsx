@@ -1,8 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Button, cn, Input, ToggleGroup, ToggleGroupItem } from "@schoolhub/ui";
-import { FilePenLine, Lock } from "lucide-react";
+import { cn, Input, ToggleGroup, ToggleGroupItem } from "@schoolhub/ui";
 
 import type { StudentAttendanceRecord } from "@/services";
 import {
@@ -13,8 +12,8 @@ import { isMarkableStatus } from "@/services/modules/student-attendance/student-
 import {
   ATTENDANCE_STATUS_ICON,
   ATTENDANCE_STATUS_SELECTED_CLASS,
-  AttendanceStatusBadge,
 } from "@/features/attendance/attendance-status";
+import { ReadOnlyStatus } from "@/features/attendance/read-only-status";
 import type { RegisterRowState, RowDraft } from "./use-register-form";
 
 export interface RegisterRowProps {
@@ -87,7 +86,12 @@ export function RegisterRow({ row, onEdit, onRequestCorrection, disabled }: Regi
             })}
           </ToggleGroup>
         ) : (
-          <ReadOnlyStatus row={row} onRequestCorrection={onRequestCorrection} />
+          <ReadOnlyStatus
+            record={entry.record}
+            name={name}
+            mode={mode}
+            onRequestCorrection={onRequestCorrection}
+          />
         )}
       </div>
       {mode === "editable" && (
@@ -139,43 +143,5 @@ export function RegisterRow({ row, onEdit, onRequestCorrection, disabled }: Regi
         </p>
       )}
     </li>
-  );
-}
-
-function ReadOnlyStatus({
-  row,
-  onRequestCorrection,
-}: Pick<RegisterRowProps, "row" | "onRequestCorrection">) {
-  const t = useTranslations("attendance");
-  const { entry, mode } = row;
-  const record = entry.record;
-
-  if (mode === "leave") return <AttendanceStatusBadge status="on_leave" />;
-  if (!record) {
-    return <span className="text-sm text-muted-foreground">{t("register.notMarked")}</span>;
-  }
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <AttendanceStatusBadge status={record.status} />
-      {mode === "locked" && (
-        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-          <Lock className="size-3.5" aria-hidden="true" />
-          {t("register.locked")}
-        </span>
-      )}
-      {mode === "locked" && onRequestCorrection && (
-        <Button
-          size="sm"
-          variant="outline"
-          aria-label={t("register.requestCorrectionFor", { name: entry.student_name })}
-          onClick={() => {
-            onRequestCorrection(record);
-          }}
-        >
-          <FilePenLine aria-hidden="true" />
-          {t("register.requestCorrection")}
-        </Button>
-      )}
-    </div>
   );
 }

@@ -51,6 +51,23 @@ describe("attendance-corrections-service", () => {
     expect(created).toEqual({ id: "corr-1", status: "pending" });
   });
 
+  it("names a staff row by its own key", async () => {
+    const { requestCorrection } = await import("../attendance-corrections-service");
+    mockPost.mockResolvedValue({ data: { id: "corr-2", status: "pending" } });
+
+    await requestCorrection({
+      staffAttendanceId: ATTENDANCE_ID,
+      newValues: { check_out_time: "13:00" },
+      reason: "Left at one",
+    });
+
+    expect(mockPost).toHaveBeenCalledWith("/attendance-corrections", {
+      staff_attendance_id: ATTENDANCE_ID,
+      new_values: { check_out_time: "13:00" },
+      reason: "Left at one",
+    });
+  });
+
   it("pages the corrections by cursor with its filters", async () => {
     const { fetchCorrectionPage } = await import("../attendance-corrections-service");
     const page = correctionPage([correctionRecord()], { next: "n2" });
