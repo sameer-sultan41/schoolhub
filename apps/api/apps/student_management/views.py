@@ -76,7 +76,7 @@ from core.api.exceptions import DomainRuleViolation
 from core.api.pagination import PageNumberPagination
 from core.api.viewsets import ActionResponse, TenantModelViewSet, TenantScopedViewSetMixin
 from core.idempotency.services import replay_or_execute
-from core.jobs.services import attach_celery_task_id, create_job
+from core.jobs.services import create_job, enqueue_job
 from core.rbac.permissions import has_permission_key
 
 # PolymorphicProxySerializer is annotation-only (no real to_representation) —
@@ -883,10 +883,7 @@ class StudentImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
             },
             actor_id=request.user.pk,
         )
-        result = import_students_task.delay(
-            tenant_id=str(request.tenant.pk), job_id=str(job.pk), actor_id=str(request.user.pk)
-        )
-        attach_celery_task_id(job=job, celery_task_id=result.id)
+        enqueue_job(job=job, task=import_students_task)
         record_audit(request, "import", job, after={"job_id": str(job.pk), "filename": upload.name})
         return ActionResponse.accepted(str(job.pk), message="Import queued.")
 
@@ -916,10 +913,7 @@ class StudentExportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
             payload={},
             actor_id=request.user.pk,
         )
-        result = export_students_task.delay(
-            tenant_id=str(request.tenant.pk), job_id=str(job.pk), actor_id=str(request.user.pk)
-        )
-        attach_celery_task_id(job=job, celery_task_id=result.id)
+        enqueue_job(job=job, task=export_students_task)
         record_audit(request, "export", job, after={"job_id": str(job.pk)})
         return ActionResponse.accepted(str(job.pk), message="Export queued.")
 
@@ -948,8 +942,5 @@ class IdCardGenerateViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
             payload={"student_ids": [str(student_id) for student_id in student_ids]},
             actor_id=request.user.pk,
         )
-        result = generate_id_cards_task.delay(
-            tenant_id=str(request.tenant.pk), job_id=str(job.pk), actor_id=str(request.user.pk)
-        )
-        attach_celery_task_id(job=job, celery_task_id=result.id)
+        enqueue_job(job=job, task=generate_id_cards_task)
         return ActionResponse.accepted(str(job.pk), message="ID cards queued.")

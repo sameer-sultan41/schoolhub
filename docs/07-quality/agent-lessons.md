@@ -161,6 +161,11 @@
 - **Mistake.** Attendance corrections refused only an approver who had *raised* the request. Staff corrections added a target that is itself a user, so HR could raise a correction to the principal's locked day and the principal could approve their own payroll inputs (PR C, caught in the whole-branch review).
 - **Check.** When a workflow gains a target kind, list every party to it (requester, subject, approver) and decide for each segregation-of-duties rule whether it covers them; test the refusal for each party, and expose what the client needs to mirror it (`subject_user_id`).
 
+### L26. A job's task is sent after its row commits
+
+- **Mistake.** Seven `202` + job endpoints (promotion execute, the student, staff and attendance imports, the student and staff exports, ID cards) called `task.delay()` inside the request's transaction (`ATOMIC_REQUESTS`). A fast worker looked the job up before it committed, raised `DoesNotExist`, and the job stayed `queued`; the promotion journey timed out on it in e2e-live run 40454439946. Eager Celery in tests ran the task inside the request, so no backend test could see it. The September audit (C8) had already named the student jobs.
+- **Check.** Never send a task inside the transaction that writes the rows it reads. For a job, prefer `core.jobs.services.enqueue_job(job=..., task=...)`, which sends on commit and stores the task id, and cover the endpoint with `core.jobs.tests.base.assert_sent_on_commit`; anything else goes in `transaction.on_commit`.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.

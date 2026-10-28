@@ -45,7 +45,7 @@ from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
 from core.idempotency.services import replay_or_execute
-from core.jobs.services import attach_celery_task_id, create_job
+from core.jobs.services import create_job, enqueue_job
 from core.rbac.permissions import DenyRestrictedPrincipals, HasPermissionKey
 
 
@@ -349,12 +349,7 @@ class PromotionBatchViewSet(
                 payload={"batch_id": str(batch_id)},
                 actor_id=request.user.pk,
             )
-            result = execute_promotion_batch_task.delay(
-                tenant_id=str(request.tenant.pk),
-                job_id=str(job.pk),
-                actor_id=str(request.user.pk),
-            )
-            attach_celery_task_id(job=job, celery_task_id=result.id)
+            enqueue_job(job=job, task=execute_promotion_batch_task)
             record_audit(
                 request, "execute", job, after={"job_id": str(job.pk), "batch_id": str(batch_id)}
             )

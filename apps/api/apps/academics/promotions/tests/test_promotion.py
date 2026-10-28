@@ -44,6 +44,7 @@ from apps.student_management.tests.factories import (
 )
 from core.api.exceptions import Conflict, DomainRuleViolation
 from core.jobs.models import BackgroundJob, JobStatus
+from core.jobs.tests.base import assert_sent_on_commit, run_on_commit
 from core.notifications.models import Notification
 from core.tenancy.context import tenant_context
 
@@ -153,8 +154,11 @@ class PromotionTestCase(AcademicsAPITestCase):
         return batch_id
 
     def _execute(self, batch_id: str, **extra) -> BackgroundJob:
-        response = self.client.post(
-            f"/api/v1/student-promotions/{batch_id}:execute", {}, format="json", **extra
+        response = run_on_commit(
+            self,
+            lambda: self.client.post(
+                f"/api/v1/student-promotions/{batch_id}:execute", {}, format="json", **extra
+            ),
         )
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.json())
         with tenant_context(self.tenant.id):
@@ -569,11 +573,12 @@ class ApprovalTests(PromotionTestCase):
 class ExecutionTests(PromotionTestCase):
     """`:execute` is `202` + a job (§7.2).
 
-    `CELERY_TASK_ALWAYS_EAGER` (config/settings/test.py) runs the task inside the
-    request, so by the time the response comes back the job has already reached
-    its terminal state and `_execute` can just read the row instead of polling.
-    The one thing that hides is whether the *view* did the work rather than the
-    task, which is why the first test below stubs `.delay` out entirely.
+    `CELERY_TASK_ALWAYS_EAGER` (config/settings/test.py) runs the task when the
+    request's transaction commits, which `_execute` triggers, so by the time it
+    returns the job has already reached its terminal state and it can just read
+    the row instead of polling. The one thing that hides is whether the *view*
+    did the work rather than the task, which is why the first test below stubs
+    `apply_async` out entirely.
     """
 
     def test_execute_queues_the_work_instead_of_doing_it_in_the_request(self) -> None:
@@ -582,28 +587,25 @@ class ExecutionTests(PromotionTestCase):
         Run in the request, `execute_batch`'s per-student `tenant_atomic` is a
         savepoint under `ATOMIC_REQUESTS` rather than a committing transaction,
         so a class of hundreds holds every row lock it takes until the response
-        is rendered. With `.delay` stubbed the response must still come back
+        is rendered. With `apply_async` stubbed the response must still come back
         immediately, having written nothing.
         """
         batch_id = self._approved_batch()
 
-        with mock.patch.object(tasks.execute_promotion_batch_task, "delay") as delay:
-            delay.return_value = mock.Mock(id="celery-task-1")
-            response = self.client.post(
+        job = assert_sent_on_commit(
+            self,
+            tasks.execute_promotion_batch_task,
+            lambda: self.client.post(
                 f"/api/v1/student-promotions/{batch_id}:execute", {}, format="json"
-            )
-
-        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.json())
-        job_id = response.json()["data"]["job_id"]
-        delay.assert_called_once_with(
-            tenant_id=str(self.tenant.pk), job_id=job_id, actor_id=str(self.user.pk)
+            ),
+            tenant_id=self.tenant.pk,
+            actor_id=self.user.pk,
         )
+
         with tenant_context(self.tenant.id):
-            job = BackgroundJob.objects.get(pk=job_id)
             enrolled = StudentEnrollment.objects.alive().filter(academic_session=self.next_session)
         self.assertEqual(job.job_type, "promotion.execute")
         self.assertEqual(job.payload["batch_id"], batch_id)
-        self.assertEqual(job.celery_task_id, "celery-task-1")
         self.assertEqual(job.status, JobStatus.QUEUED)
         self.assertFalse(enrolled.exists(), "the request must not have executed the batch itself")
 

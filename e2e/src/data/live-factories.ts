@@ -1,3 +1,4 @@
+import { LIVE_WORKER_BANDS } from "@/data/live-worker-bands";
 import { env } from "@/env";
 
 /**
@@ -208,22 +209,30 @@ export function buildLiveEmergencyContact() {
  * with two workers and dozens of sessions a run, two windows overlapped (`Dates overlap
  * academic session`, `attendance-staff-reports`). Each worker now draws from its own band of
  * dates (`TEST_PARALLEL_INDEX`), so workers can't collide with each other, and `sequence`
- * steps (800 days) keep one worker's calls apart. Only a rerun against a database that kept an
- * earlier run's sessions can still land on one, within the worker's own band.
+ * steps (800 days) keep one worker's calls apart. Two cases can still land on one, both within
+ * a worker's own band: a rerun against a database that kept an earlier run's sessions, and a
+ * worker restarted after a failed test, which redraws its start in the same band.
  */
 let sequence = 0;
 /** Days in one worker's band: four bands end before year 9999, the API's last valid date. */
 const WORKER_BAND_DAYS = 700_000;
-const WORKER_BANDS = 4;
 /** The random part of a worker's start, well inside its band for ~500 sessions of 800 days. */
 const BAND_RANDOM_DAYS = 300_000;
+
+// A worker past the last band would share one; the config's cap is only a default (`--workers`
+// overrides it), so the bands enforce it here. Only in a live run: without one, the run's own
+// configuration error is the one worth seeing first.
+if (env.LIVE_RUN && env.WORKER_INDEX >= LIVE_WORKER_BANDS) {
+  throw new Error(
+    `Live specs need at most ${String(LIVE_WORKER_BANDS)} workers (one date band each); ` +
+      `this is worker ${String(env.WORKER_INDEX)}. Run with --workers=${String(LIVE_WORKER_BANDS)} or fewer.`,
+  );
+}
 
 // Drawn once per process: a fresh draw per call would put a worker's own sessions at random
 // spots in its band again, and they'd overlap (the birthday problem this band exists to avoid).
 const bandStartDays =
-  3650 +
-  (env.WORKER_INDEX % WORKER_BANDS) * WORKER_BAND_DAYS +
-  Math.floor(Math.random() * BAND_RANDOM_DAYS);
+  3650 + env.WORKER_INDEX * WORKER_BAND_DAYS + Math.floor(Math.random() * BAND_RANDOM_DAYS);
 
 export function farFutureSessionWindow(): { start_date: string; end_date: string } {
   sequence += 1;
