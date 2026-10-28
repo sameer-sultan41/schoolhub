@@ -195,9 +195,9 @@ class AttendanceCrossTenantTests(AttendanceAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_requesting_a_correction_against_another_tenants_row_is_refused(self) -> None:
-        """Through the serializer's tenant-scoped related field: a foreign id
-        does not resolve, so this is a 400 rather than a leak."""
+    def test_requesting_a_correction_against_another_tenants_row_is_a_404(self) -> None:
+        """The target resolves through the caller's scoped rows, so a foreign id is
+        a 404 like any other out-of-scope target, not a 400 from a related field."""
         response = self.client.post(
             CORRECTIONS,
             {
@@ -208,4 +208,4 @@ class AttendanceCrossTenantTests(AttendanceAPITestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

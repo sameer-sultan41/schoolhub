@@ -6078,18 +6078,32 @@ export interface components {
             title: string;
             sections: components["schemas"]["PaperSection"][];
         };
-        /** @description `attendance_corrections` — the request half. Decisions are colon-actions. */
+        /**
+         * @description `attendance_corrections` — the request half. Decisions are colon-actions.
+         *
+         *     `student_attendance_id` is a plain UUID, not a related field: the view resolves
+         *     it through the caller's scoped rows, so a row outside their scope (or another
+         *     tenant's) is a 404, not a 400 (AGENTS.md invariant 2). The target's fields are
+         *     read-only and null for a staff correction.
+         */
         AttendanceCorrection: {
             /** Format: uuid */
             readonly id: string;
             readonly subject_type: components["schemas"]["AttendanceCorrectionSubjectTypeEnum"];
             /** Format: uuid */
             student_attendance_id: string;
+            /** Format: uuid */
+            readonly student_id: string | null;
+            readonly student_name: string | null;
+            /** Format: date */
+            readonly attendance_date: string | null;
+            readonly period_name: string | null;
             /**
              * Format: uuid
              * @description users(id).
              */
             readonly requested_by: string;
+            readonly requested_by_name: string | null;
             /** @description Status and times before the change. */
             readonly old_values: unknown;
             /** @description Proposed status and times. */
@@ -6102,6 +6116,7 @@ export interface components {
              * @description users(id); must differ from requested_by (§11).
              */
             readonly reviewed_by: string | null;
+            readonly reviewed_by_name: string | null;
             /** Format: date-time */
             readonly reviewed_at: string | null;
             readonly review_note: string | null;
@@ -7455,6 +7470,7 @@ export interface components {
              * @description users(id); set on decision, differs from submitted_by.
              */
             readonly approver_id: string | null;
+            readonly approver_name: string | null;
             readonly decision: components["schemas"]["LeaveApprovalDecisionEnum"];
             /** Format: date-time */
             readonly decided_at: string | null;
@@ -7489,6 +7505,9 @@ export interface components {
          *     The chain is nested rather than fetched separately: a requester's first
          *     question is "how many people have to say yes", and §16 declares no
          *     `/leave-requests/{id}/approvals` sub-resource to ask it with.
+         *
+         *     `section_name` is the queryset's annotation (`LeaveRequest.with_section_name`):
+         *     the student's ACTIVE enrollment in the current session, null when there is none.
          */
         LeaveRequest: {
             /** Format: uuid */
@@ -7496,13 +7515,18 @@ export interface components {
             readonly requester_type: components["schemas"]["AttendanceCorrectionSubjectTypeEnum"];
             /** Format: uuid */
             student_id: string;
+            readonly student_name: string;
+            readonly admission_number: string;
+            readonly section_name: string | null;
             /**
              * Format: uuid
              * @description users(id); a guardian may submit for a student.
              */
             readonly submitted_by: string;
+            readonly submitted_by_name: string | null;
             /** Format: uuid */
             leave_type_id: string;
+            readonly leave_type_name: string;
             /** Format: date */
             start_date: string;
             /** Format: date */
@@ -11747,6 +11771,7 @@ export interface operations {
             query?: {
                 /** @description The pagination cursor value. */
                 cursor?: string;
+                mine?: boolean;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
                 /** @description Number of results to return per page. */
@@ -18999,7 +19024,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Rostered students in roll-number order. `meta.attendance_mode` is `daily` or `period`; `meta.markable` is false when no row can be marked that date, with `meta.unmarkable_reason` one of `future`, `holiday` (named in `meta.holiday_name`), `non_working_day` or `session_closed`; `meta.is_locked` says only that the date is past the lock window, since the lock is per row (`record.is_locked`); `meta.academic_session_id` is the session the date resolved to. `period_id` is required in period mode, where it must name a lesson the section has that date and `module.timetable` must be on, and refused in daily mode (422 on `period_id`). */
+            /** @description Rostered students in roll-number order. `meta.attendance_mode` is `daily` or `period`; `meta.markable` is false when no row can be marked that date, with `meta.unmarkable_reason` one of `future`, `holiday` (named in `meta.holiday_name`), `non_working_day` or `session_closed`; `meta.is_locked` says only that the date is past the lock window, since the lock is per row (`record.is_locked`); `meta.academic_session_id` is the session whose dates contain the date. A date no session contains is a 422 on `academic_session_id` in either mode. `period_id` is required in period mode, where it must name a lesson the section has that date and `module.timetable` must be on, and refused in daily mode (422 on `period_id`). */
             200: {
                 headers: {
                     [name: string]: unknown;

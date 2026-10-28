@@ -1,6 +1,6 @@
 import { uuid } from "@/data/factories";
 import { fail, ok, paginated, type MockResponse } from "../envelope";
-import { lockedSessionResponse } from "../list";
+import { invalidCursorResponse, lockedSessionResponse } from "../list";
 import type { MockModule } from "../router";
 import {
   ATTENDANCE_MESSAGES,
@@ -12,12 +12,11 @@ import {
 
 /** `services.ALERT_STATUSES`: a row that becomes one of these queues a guardian alert. */
 const ALERT_STATUSES: readonly AttendanceStatus[] = ["absent", "late"];
-/** DRF's `CursorPagination.invalid_cursor_message`, verbatim. */
-const INVALID_CURSOR = "Invalid cursor";
 /** `services.CORRECTABLE_FIELDS`. */
 const CORRECTABLE_FIELDS = ["status", "check_in_time", "check_out_time", "remarks"] as const;
 
-function refusal(field: string, issue: string): MockResponse {
+/** A `DomainRuleViolation` on one field: a 422 whose message is that field's issue. */
+export function refusal(field: string, issue: string): MockResponse {
   return fail(422, issue, { code: "domain_rule_violation", details: [{ field, issue }] });
 }
 
@@ -284,14 +283,8 @@ export function attendanceRegisterModule(store: AttendanceRegisterStore): MockMo
     api.get("/student-attendance", (request) => {
       const params = request.searchParams;
       // Every list here is one page (`next_cursor` is null), so no cursor this stub issued can
-      // come back: a request carrying one gets what `CursorPagination.decode_cursor` raises for
-      // a cursor it cannot decode (`invalid_cursor_message`, no full stop), as the envelope
-      // handler flattens a string detail.
-      if (params.get("cursor")) {
-        return fail(404, INVALID_CURSOR, {
-          details: [{ field: "non_field", issue: INVALID_CURSOR }],
-        });
-      }
+      // come back: a request carrying one gets the server's 404 "Invalid cursor".
+      if (params.get("cursor")) return invalidCursorResponse();
       const sectionsOfClass = store.sections
         .filter((s) => s.classId === params.get("class_id"))
         .map((s) => s.id);
@@ -352,12 +345,19 @@ export function attendanceRegisterModule(store: AttendanceRegisterStore): MockMo
           id: uuid(),
           subject_type: "student",
           student_attendance_id: target.id,
+          student_id: target.student_id,
+          student_name: target.student_name,
+          attendance_date: target.attendance_date,
+          period_name: target.period_name,
           requested_by: store.userId,
+          // The mock's signed-in user has no name; the server's is nullable.
+          requested_by_name: null,
           old_values: old,
           new_values: proposed,
           reason: body.reason ?? "",
           status: "pending",
           reviewed_by: null,
+          reviewed_by_name: null,
           reviewed_at: null,
           review_note: null,
           created_at: now,

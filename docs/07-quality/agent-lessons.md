@@ -135,19 +135,23 @@
 ### L21. Another session may be using the same checkout
 
 - **Mistake.** The branch and HEAD changed between my commands because a second session worked in the same repository, so a branch I thought was checked out was not.
-- **Check.** Run `git branch --show-current` and `git status` before every git write. Do parallel work in a separate `git worktree`, but commit there only if the hooks can run: Prettier's Tailwind plugin and mypy failed in a worktree with a linked `node_modules`, so hook-sensitive commits belong in the main checkout.
+- **Mistake (again, attendance dashboard).** A worktree's linked `node_modules` resolved workspace packages such as `@schoolhub/api-client` into the *main* checkout, so the worktree's pre-push typecheck checked one branch's code against another branch's generated types.
+- **Check.** Run `git branch --show-current` and `git status` before every git write. Do parallel work in a separate `git worktree`, but commit there only if the hooks can run: Prettier's Tailwind plugin and mypy failed in a worktree with a linked `node_modules`, so hook-sensitive commits belong in the main checkout. If you do push from a worktree, first point each workspace package whose generated output differs (`@schoolhub/api-client`) at the worktree's own copy, and check where its `node_modules` link resolves.
 
 ### L22. Compiling a queryset to SQL raises where iterating it returned nothing
 
 - **Mistake.** Attendance's derived-day reports wrap the scoped queryset's own SQL in a CTE (`queryset.query.sql_with_params()`, later `get_compiler(...).as_sql()`). For `.none()` — what `scope_queryset` returns to fail closed — or an empty `__in` (an exam whose results are all withheld), Django raises `EmptyResultSet` at compile time, where iterating the same queryset had returned `[]`. Every report over an empty scope, and the report-card job, would have been a 500. Caught in the change review of PR A's Task 2, not by a test.
 - **Check.** Wherever a queryset is compiled to raw SQL, catch `django.core.exceptions.EmptyResultSet` at the compile and return the empty result without running a query, as `reports._over_days` does. Test it with `.none()` and an empty `__in` under `assertNumQueries(0)`.
 
+### L23. A new custom request header needs the API's CORS allow-list
+
+- **Mistake.** The dashboard began sending `Idempotency-Key` on its writes, but the API never added it to `CORS_ALLOW_HEADERS`, so django-cors-headers' default list refused the browser's preflight and every such write failed as a network error. The mocked lane's router allows the header itself (`e2e/src/mocks/router.ts`), so only the live lane's register and promotion journeys showed it (fixed in #135).
+- **Check.** When a client starts sending a new header, grep `CORS_ALLOW_HEADERS` in `apps/api/config/settings/` and add it there, with a preflight test like `apps/api/tests/test_cors_headers.py`. A green mocked lane proves nothing about CORS.
+
 ### L26. A job's task is sent after its row commits
 
 - **Mistake.** Seven `202` + job endpoints (promotion execute, the student, staff and attendance imports, the student and staff exports, ID cards) called `task.delay()` inside the request's transaction (`ATOMIC_REQUESTS`). A fast worker looked the job up before it committed, raised `DoesNotExist`, and the job stayed `queued`; the promotion journey timed out on it in e2e-live run 40454439946. Eager Celery in tests ran the task inside the request, so no backend test could see it. The September audit (C8) had already named the student jobs.
 - **Check.** Never send a task inside the transaction that writes the rows it reads. For a job, prefer `core.jobs.services.enqueue_job(job=..., task=...)`, which sends on commit and stores the task id, and cover the endpoint with `core.jobs.tests.base.assert_sent_on_commit`; anything else goes in `transaction.on_commit`.
-
-
 
 ## 4. Adding a lesson
 

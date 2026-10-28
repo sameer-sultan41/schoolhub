@@ -6,6 +6,7 @@ import { DashboardService } from "./modules/dashboard";
 import { FilesService } from "./modules/files";
 import { GuardiansService } from "./modules/guardians";
 import { JobsService } from "./modules/jobs";
+import { LeaveRequestsService } from "./modules/leave-requests";
 import { PeriodsService } from "./modules/periods";
 import { PromotionsService } from "./modules/promotions";
 import { RoomsService } from "./modules/rooms";
@@ -67,9 +68,26 @@ export type {
 
 export type {
   AttendanceCorrectionRecord,
+  CorrectionAction,
+  CorrectionChange,
   CorrectionNewValues,
+  CorrectionPageQuery,
+  CorrectionStatus,
   RequestCorrectionInput,
 } from "./modules/attendance-corrections";
+
+export type {
+  LeaveAction,
+  LeaveApprovalDecision,
+  LeaveApprovalRecord,
+  LeaveDayPart,
+  LeaveDecisionResult,
+  LeavePageQuery,
+  LeaveRequestRecord,
+  LeaveStatus,
+  LeaveTypeOption,
+  LeaveTypeRecord,
+} from "./modules/leave-requests";
 
 export type {
   AttendancePageQuery,
@@ -168,6 +186,7 @@ export const Services = {
   attendanceSettings: AttendanceSettingsService,
   studentAttendance: StudentAttendanceService,
   attendanceCorrections: AttendanceCorrectionsService,
+  leaveRequests: LeaveRequestsService,
   guardians: GuardiansService,
   staff: StaffService,
   students: StudentsService,

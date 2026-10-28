@@ -53,10 +53,19 @@ class AttendanceCorrectionFilterSet(django_filters.FilterSet):
     """
 
     student_attendance_id = django_filters.UUIDFilter(field_name="student_attendance_id")
+    # `true`: the caller's own requests; `false`: everyone else's, an approver's queue.
+    mine = django_filters.BooleanFilter(method="filter_mine")
 
     class Meta:
         model = AttendanceCorrection
         fields = {"status": ["exact"], "subject_type": ["exact"]}
+
+    def filter_mine(self, queryset, name: str, value: bool):
+        user = getattr(self.request, "user", None)
+        if user is None or not user.is_authenticated:
+            return queryset.none()
+        own = AttendanceCorrection.filter_requested_by(queryset, user)
+        return own if value else queryset.exclude(requested_by=user.pk)
 
 
 class LeaveRequestFilterSet(django_filters.FilterSet):

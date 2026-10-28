@@ -660,6 +660,10 @@ paths:
         description: The pagination cursor value.
         schema:
           type: string
+      - in: query
+        name: mine
+        schema:
+          type: boolean
       - name: ordering
         required: false
         in: query
@@ -10906,8 +10910,9 @@ paths:
             that date, with `meta.unmarkable_reason` one of `future`, `holiday` (named
             in `meta.holiday_name`), `non_working_day` or `session_closed`; `meta.is_locked`
             says only that the date is past the lock window, since the lock is per
-            row (`record.is_locked`); `meta.academic_session_id` is the session the
-            date resolved to. `period_id` is required in period mode, where it must
+            row (`record.is_locked`); `meta.academic_session_id` is the session whose
+            dates contain the date. A date no session contains is a 422 on `academic_session_id`
+            in either mode. `period_id` is required in period mode, where it must
             name a lesson the section has that date and `module.timetable` must be
             on, and refused in daily mode (422 on `period_id`).
   /api/v1/student-attendance:bulk-mark:
@@ -14150,7 +14155,13 @@ components:
       - title
     AttendanceCorrection:
       type: object
-      description: '`attendance_corrections` — the request half. Decisions are colon-actions.'
+      description: |-
+        `attendance_corrections` — the request half. Decisions are colon-actions.
+
+        `student_attendance_id` is a plain UUID, not a related field: the view resolves
+        it through the caller's scoped rows, so a row outside their scope (or another
+        tenant's) is a 404, not a 400 (AGENTS.md invariant 2). The target's fields are
+        read-only and null for a staff correction.
       properties:
         id:
           type: string
@@ -14163,11 +14174,33 @@ components:
         student_attendance_id:
           type: string
           format: uuid
+        student_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        student_name:
+          type: string
+          readOnly: true
+          nullable: true
+        attendance_date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        period_name:
+          type: string
+          readOnly: true
+          nullable: true
         requested_by:
           type: string
           format: uuid
           readOnly: true
           description: users(id).
+        requested_by_name:
+          type: string
+          nullable: true
+          readOnly: true
         old_values:
           readOnly: true
           description: Status and times before the change.
@@ -14187,6 +14220,10 @@ components:
           readOnly: true
           nullable: true
           description: users(id); must differ from requested_by (§11).
+        reviewed_by_name:
+          type: string
+          nullable: true
+          readOnly: true
         reviewed_at:
           type: string
           format: date-time
@@ -14205,17 +14242,23 @@ components:
           format: date-time
           readOnly: true
       required:
+      - attendance_date
       - created_at
       - id
       - new_values
       - old_values
+      - period_name
       - reason
       - requested_by
+      - requested_by_name
       - review_note
       - reviewed_at
       - reviewed_by
+      - reviewed_by_name
       - status
       - student_attendance_id
+      - student_id
+      - student_name
       - subject_type
       - updated_at
     AttendanceCorrectionStatusEnum:
@@ -16942,6 +16985,10 @@ components:
           readOnly: true
           nullable: true
           description: users(id); set on decision, differs from submitted_by.
+        approver_name:
+          type: string
+          nullable: true
+          readOnly: true
         decision:
           allOf:
           - $ref: '#/components/schemas/LeaveApprovalDecisionEnum'
@@ -16957,6 +17004,7 @@ components:
           nullable: true
       required:
       - approver_id
+      - approver_name
       - decided_at
       - decision
       - id
@@ -17001,6 +17049,9 @@ components:
         The chain is nested rather than fetched separately: a requester's first
         question is "how many people have to say yes", and §16 declares no
         `/leave-requests/{id}/approvals` sub-resource to ask it with.
+
+        `section_name` is the queryset's annotation (`LeaveRequest.with_section_name`):
+        the student's ACTIVE enrollment in the current session, null when there is none.
       properties:
         id:
           type: string
@@ -17013,14 +17064,31 @@ components:
         student_id:
           type: string
           format: uuid
+        student_name:
+          type: string
+          readOnly: true
+        admission_number:
+          type: string
+          readOnly: true
+        section_name:
+          type: string
+          readOnly: true
+          nullable: true
         submitted_by:
           type: string
           format: uuid
           readOnly: true
           description: users(id); a guardian may submit for a student.
+        submitted_by_name:
+          type: string
+          nullable: true
+          readOnly: true
         leave_type_id:
           type: string
           format: uuid
+        leave_type_name:
+          type: string
+          readOnly: true
         start_date:
           type: string
           format: date
@@ -17069,6 +17137,7 @@ components:
           format: date-time
           readOnly: true
       required:
+      - admission_number
       - approvals
       - created_at
       - current_approval_level
@@ -17077,12 +17146,16 @@ components:
       - end_date
       - id
       - leave_type_id
+      - leave_type_name
       - reason
       - requester_type
+      - section_name
       - start_date
       - status
       - student_id
+      - student_name
       - submitted_by
+      - submitted_by_name
       - updated_at
     LeaveType:
       type: object

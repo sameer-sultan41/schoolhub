@@ -20,3 +20,5 @@ export * from "./domains/timetable-grid";
 export * from "./domains/timetable-cover";
 export * from "./domains/attendance-register-store";
 export * from "./domains/attendance-register";
+export * from "./domains/attendance-approvals-store";
+export * from "./domains/attendance-approvals";
