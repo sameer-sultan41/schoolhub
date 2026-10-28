@@ -20,6 +20,7 @@ from apps.attendance.models import (
     AttendanceStatus,
     StudentAttendance,
 )
+from apps.attendance.tasks import import_attendance_task
 from apps.attendance.tests.base import AttendanceAPITestCase
 from apps.attendance.tests.factories import (
     MARKING_DATE,
@@ -29,6 +30,7 @@ from apps.attendance.tests.factories import (
     configure_academic,
     grant,
 )
+from core.jobs.tests.base import assert_sent_on_commit, run_on_commit
 from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
@@ -264,6 +266,15 @@ class ImportEndpointTests(AttendanceAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
         self.assertIn("job_id", response.data["data"])
 
+    def test_the_import_is_sent_only_after_its_job_commits(self) -> None:
+        assert_sent_on_commit(
+            self,
+            import_attendance_task,
+            self.upload,
+            tenant_id=self.tenant.pk,
+            actor_id=self.it_admin.pk,
+        )
+
     def test_the_session_is_required_and_never_defaulted(self) -> None:
         """A historical register belongs to a *past* session by definition;
         falling back to "current" would file three years of history under this
@@ -308,8 +319,11 @@ class ImportEndpointTests(AttendanceAPITestCase):
     def test_a_misspelled_header_fails_the_job_with_one_readable_error(self) -> None:
         from core.jobs.models import BackgroundJob, JobStatus
 
-        response = self.upload(
-            content=b"Admission Number,attendance_date,status\nNOPE,2026-04-01,present\n"
+        response = run_on_commit(
+            self,
+            lambda: self.upload(
+                content=b"Admission Number,attendance_date,status\nNOPE,2026-04-01,present\n"
+            ),
         )
 
         with tenant_context(self.tenant.id):
@@ -320,8 +334,11 @@ class ImportEndpointTests(AttendanceAPITestCase):
     def test_row_numbers_in_the_error_report_survive_a_blank_line(self) -> None:
         from core.jobs.models import BackgroundJob
 
-        response = self.upload(
-            content=b"admission_number,attendance_date,status\n\nNOPE,2026-04-01,bogus\n"
+        response = run_on_commit(
+            self,
+            lambda: self.upload(
+                content=b"admission_number,attendance_date,status\n\nNOPE,2026-04-01,bogus\n"
+            ),
         )
 
         with tenant_context(self.tenant.id):

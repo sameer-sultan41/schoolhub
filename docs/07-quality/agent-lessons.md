@@ -148,6 +148,11 @@
 - **Mistake.** The dashboard began sending `Idempotency-Key` on its writes, but the API never added it to `CORS_ALLOW_HEADERS`, so django-cors-headers' default list refused the browser's preflight and every such write failed as a network error. The mocked lane's router allows the header itself (`e2e/src/mocks/router.ts`), so only the live lane's register and promotion journeys showed it (fixed in #135).
 - **Check.** When a client starts sending a new header, grep `CORS_ALLOW_HEADERS` in `apps/api/config/settings/` and add it there, with a preflight test like `apps/api/tests/test_cors_headers.py`. A green mocked lane proves nothing about CORS.
 
+### L26. A job's task is sent after its row commits
+
+- **Mistake.** Seven `202` + job endpoints (promotion execute, the student, staff and attendance imports, the student and staff exports, ID cards) called `task.delay()` inside the request's transaction (`ATOMIC_REQUESTS`). A fast worker looked the job up before it committed, raised `DoesNotExist`, and the job stayed `queued`; the promotion journey timed out on it in e2e-live run 40454439946. Eager Celery in tests ran the task inside the request, so no backend test could see it. The September audit (C8) had already named the student jobs.
+- **Check.** Never send a task inside the transaction that writes the rows it reads. For a job, prefer `core.jobs.services.enqueue_job(job=..., task=...)`, which sends on commit and stores the task id, and cover the endpoint with `core.jobs.tests.base.assert_sent_on_commit`; anything else goes in `transaction.on_commit`.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.

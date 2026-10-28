@@ -1,9 +1,9 @@
 """Tests for the staff-imports/-exports background jobs.
 
-CELERY_TASK_ALWAYS_EAGER (config/settings/test.py) means `.delay()` runs the
-task synchronously inside the request — by the time the HTTP response comes
-back, the job has already reached its terminal state, so these tests just
-refresh the job row from the database rather than polling. Mirrors
+CELERY_TASK_ALWAYS_EAGER (config/settings/test.py) runs the task synchronously
+when the request's transaction commits, which `self.post` triggers — by the time
+the HTTP response comes back, the job has already reached its terminal state, so
+these tests just refresh the job row from the database rather than polling. Mirrors
 student_management/tests/test_import_export_idcards.py's identical pattern.
 """
 
@@ -30,9 +30,11 @@ from apps.school_organization.tests.factories import (
 )
 from apps.staff_management.models import EmploymentStatus, Gender, Staff, StaffType
 from apps.staff_management.staff.services.export_staff import build_staff_export_csv
+from apps.staff_management.tasks import export_staff_task, import_staff_task
 from apps.staff_management.tests.factories import StaffFactory, enable_feature
 from core.files.models import File
 from core.jobs.models import BackgroundJob, JobStatus
+from core.jobs.tests.base import assert_sent_on_commit, run_on_commit
 from core.tenancy.context import tenant_atomic, tenant_context
 
 
@@ -49,12 +51,28 @@ class StaffManagementJobsAPITestCase(APITestCase):
     def allow(self, *keys: str) -> None:
         grant(self.user, *keys)
 
+    def post(self, path: str, data: dict | None = None, **extra):
+        return run_on_commit(self, lambda: self.client.post(path, data, **extra))
+
 
 class StaffImportTests(StaffManagementJobsAPITestCase):
     def _upload(self, content: str, filename: str = "staff.csv"):
         upload = io.BytesIO(content.encode())
         upload.name = filename
-        return self.client.post("/api/v1/staff-imports", {"file": upload}, format="multipart")
+        return self.post("/api/v1/staff-imports", {"file": upload}, format="multipart")
+
+    def test_the_import_is_sent_only_after_its_job_commits(self) -> None:
+        self.allow("staff.staff.import")
+        upload = io.BytesIO(b"first_name,last_name\n")
+        upload.name = "staff.csv"
+
+        assert_sent_on_commit(
+            self,
+            import_staff_task,
+            lambda: self.client.post("/api/v1/staff-imports", {"file": upload}, format="multipart"),
+            tenant_id=self.tenant.pk,
+            actor_id=self.user.pk,
+        )
 
     def test_imports_a_valid_row(self) -> None:
         self.allow("staff.staff.import")
@@ -211,12 +229,23 @@ class StaffImportTests(StaffManagementJobsAPITestCase):
 
 
 class StaffExportTests(StaffManagementJobsAPITestCase):
+    def test_the_export_is_sent_only_after_its_job_commits(self) -> None:
+        self.allow("staff.staff.export")
+
+        assert_sent_on_commit(
+            self,
+            export_staff_task,
+            lambda: self.client.post("/api/v1/staff-exports"),
+            tenant_id=self.tenant.pk,
+            actor_id=self.user.pk,
+        )
+
     def test_exports_staff_to_a_ready_file(self) -> None:
         self.allow("staff.staff.export")
         with tenant_context(self.tenant.id):
             StaffFactory(tenant=self.tenant, campus=self.campus)
 
-        response = self.client.post("/api/v1/staff-exports")
+        response = self.post("/api/v1/staff-exports")
 
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.json())
         job_id = response.json()["data"]["job_id"]
@@ -228,7 +257,7 @@ class StaffExportTests(StaffManagementJobsAPITestCase):
         self.assertEqual(file.purpose, "staff.export")
 
     def test_requires_the_export_permission(self) -> None:
-        response = self.client.post("/api/v1/staff-exports")
+        response = self.post("/api/v1/staff-exports")
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 

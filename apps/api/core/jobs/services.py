@@ -15,12 +15,20 @@ written durably recorded.
 
 from __future__ import annotations
 
+import logging
 import uuid
 
+from celery import Task
+from django.db import transaction
 from django.utils import timezone
+from kombu.exceptions import OperationalError
 
 from core.jobs.models import BackgroundJob, JobStatus
 from core.tenancy.context import tenant_atomic
+
+logger = logging.getLogger(__name__)
+
+QUEUE_FAILURE_MESSAGE = "The job could not be queued. Try again."
 
 
 def create_job(
@@ -41,9 +49,36 @@ def create_job(
     )
 
 
-def attach_celery_task_id(*, job: BackgroundJob, celery_task_id: str) -> None:
-    job.celery_task_id = celery_task_id
+def enqueue_job(*, job: BackgroundJob, task: Task) -> None:
+    """Send `task` for `job` once the caller's transaction commits.
+
+    Sent inside the transaction, a fast worker looks the job up before its row
+    commits, raises `DoesNotExist`, and the job stays `queued` forever. The task
+    id is chosen here, so it is stored on the job in that same transaction.
+
+    The send happens after the row is durable, so a broker that refuses it can no
+    longer roll the job back with the request: the job is marked failed instead,
+    which the caller's poll shows, rather than left `queued` with nothing behind it.
+    """
+    if job.created_by is None:
+        raise ValueError("A queued job needs the actor its task runs for.")
+    task_id = str(uuid.uuid4())
+    job.celery_task_id = task_id
     job.save(update_fields=["celery_task_id", "updated_at"])
+    kwargs = {
+        "tenant_id": str(job.tenant_id),
+        "job_id": str(job.pk),
+        "actor_id": str(job.created_by),
+    }
+
+    def send() -> None:
+        try:
+            task.apply_async(kwargs=kwargs, task_id=task_id)
+        except OperationalError:
+            logger.exception("Could not queue job %s", job.pk)
+            mark_failed(job=job, error=QUEUE_FAILURE_MESSAGE)
+
+    transaction.on_commit(send)
 
 
 def mark_running(*, job: BackgroundJob) -> BackgroundJob:

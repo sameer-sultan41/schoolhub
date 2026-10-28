@@ -1,9 +1,9 @@
 """Tests for the student-imports/-exports/id-cards:generate background jobs.
 
-CELERY_TASK_ALWAYS_EAGER (config/settings/test.py) means `.delay()` runs the
-task synchronously inside the request — by the time the HTTP response comes
-back, the job has already reached its terminal state, so these tests just
-refresh the job row from the database rather than polling.
+CELERY_TASK_ALWAYS_EAGER (config/settings/test.py) runs the task synchronously
+when the request's transaction commits, which `self.post` triggers — by the time
+the HTTP response comes back, the job has already reached its terminal state, so
+these tests just refresh the job row from the database rather than polling.
 """
 
 from __future__ import annotations
@@ -30,9 +30,15 @@ from apps.school_organization.tests.factories import (
 )
 from apps.student_management import services
 from apps.student_management.models import Gender, Student, StudentStatus
+from apps.student_management.tasks import (
+    export_students_task,
+    generate_id_cards_task,
+    import_students_task,
+)
 from apps.student_management.tests.factories import StudentFactory, enable_feature
 from core.files.models import File
 from core.jobs.models import BackgroundJob, JobStatus
+from core.jobs.tests.base import assert_sent_on_commit, run_on_commit
 from core.tenancy.context import tenant_atomic, tenant_context
 
 
@@ -49,6 +55,9 @@ class StudentManagementJobsAPITestCase(APITestCase):
     def allow(self, *keys: str) -> None:
         grant(self.user, *keys)
 
+    def post(self, path: str, data: dict | None = None, **extra):
+        return run_on_commit(self, lambda: self.client.post(path, data, **extra))
+
 
 class StudentImportTests(StudentManagementJobsAPITestCase):
     HEADER = "first_name,last_name,date_of_birth,gender,campus_code,admission_date\n"
@@ -56,7 +65,7 @@ class StudentImportTests(StudentManagementJobsAPITestCase):
     def _upload(self, content: str | bytes, filename: str = "students.csv"):
         upload = io.BytesIO(content.encode() if isinstance(content, str) else content)
         upload.name = filename
-        return self.client.post("/api/v1/student-imports", {"file": upload}, format="multipart")
+        return self.post("/api/v1/student-imports", {"file": upload}, format="multipart")
 
     def _job(self, content: str | bytes, filename: str = "students.csv") -> BackgroundJob:
         response = self._upload(content, filename)
@@ -68,6 +77,21 @@ class StudentImportTests(StudentManagementJobsAPITestCase):
         job = self._job(content, filename)
         self.assertEqual(job.status, JobStatus.SUCCEEDED, job.error)
         return job.result
+
+    def test_the_import_is_sent_only_after_its_job_commits(self) -> None:
+        self.allow("students.student.import")
+        upload = io.BytesIO(self.HEADER.encode())
+        upload.name = "students.csv"
+
+        assert_sent_on_commit(
+            self,
+            import_students_task,
+            lambda: self.client.post(
+                "/api/v1/student-imports", {"file": upload}, format="multipart"
+            ),
+            tenant_id=self.tenant.pk,
+            actor_id=self.user.pk,
+        )
 
     def test_imports_a_valid_row(self) -> None:
         self.allow("students.student.import")
@@ -229,12 +253,23 @@ class StudentImportTests(StudentManagementJobsAPITestCase):
 
 
 class StudentExportTests(StudentManagementJobsAPITestCase):
+    def test_the_export_is_sent_only_after_its_job_commits(self) -> None:
+        self.allow("students.student.export")
+
+        assert_sent_on_commit(
+            self,
+            export_students_task,
+            lambda: self.client.post("/api/v1/student-exports"),
+            tenant_id=self.tenant.pk,
+            actor_id=self.user.pk,
+        )
+
     def test_exports_students_to_a_ready_file(self) -> None:
         self.allow("students.student.export")
         with tenant_context(self.tenant.id):
             StudentFactory(tenant=self.tenant, campus=self.campus)
 
-        response = self.client.post("/api/v1/student-exports")
+        response = self.post("/api/v1/student-exports")
 
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.json())
         job_id = response.json()["data"]["job_id"]
@@ -246,7 +281,7 @@ class StudentExportTests(StudentManagementJobsAPITestCase):
         self.assertEqual(file.purpose, "student.export")
 
     def test_requires_the_export_permission(self) -> None:
-        response = self.client.post("/api/v1/student-exports")
+        response = self.post("/api/v1/student-exports")
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -380,12 +415,27 @@ class StudentExportStandaloneTests(TransactionTestCase):
 
 
 class IdCardGenerateTests(StudentManagementJobsAPITestCase):
+    def test_the_generation_is_sent_only_after_its_job_commits(self) -> None:
+        self.allow("students.id-card.generate")
+        with tenant_context(self.tenant.id):
+            student = StudentFactory(tenant=self.tenant, campus=self.campus)
+
+        assert_sent_on_commit(
+            self,
+            generate_id_cards_task,
+            lambda: self.client.post(
+                "/api/v1/id-cards:generate", {"student_ids": [str(student.pk)]}, format="json"
+            ),
+            tenant_id=self.tenant.pk,
+            actor_id=self.user.pk,
+        )
+
     def test_generates_a_merged_pdf_for_the_selected_students(self) -> None:
         self.allow("students.id-card.generate")
         with tenant_context(self.tenant.id):
             student = StudentFactory(tenant=self.tenant, campus=self.campus)
 
-        response = self.client.post(
+        response = self.post(
             "/api/v1/id-cards:generate", {"student_ids": [str(student.pk)]}, format="json"
         )
 
@@ -404,7 +454,7 @@ class IdCardGenerateTests(StudentManagementJobsAPITestCase):
             student = StudentFactory(tenant=self.tenant, campus=self.campus)
         missing_id = "00000000-0000-0000-0000-000000000000"
 
-        response = self.client.post(
+        response = self.post(
             "/api/v1/id-cards:generate",
             {"student_ids": [str(student.pk), missing_id]},
             format="json",
@@ -422,12 +472,12 @@ class IdCardGenerateTests(StudentManagementJobsAPITestCase):
     def test_requires_at_least_one_student_id(self) -> None:
         self.allow("students.id-card.generate")
 
-        response = self.client.post("/api/v1/id-cards:generate", {"student_ids": []}, format="json")
+        response = self.post("/api/v1/id-cards:generate", {"student_ids": []}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_requires_the_generate_permission(self) -> None:
-        response = self.client.post("/api/v1/id-cards:generate", {"student_ids": []}, format="json")
+        response = self.post("/api/v1/id-cards:generate", {"student_ids": []}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 

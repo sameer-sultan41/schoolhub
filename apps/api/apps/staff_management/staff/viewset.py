@@ -40,7 +40,7 @@ from core.api.pagination import PageNumberPagination
 from core.api.viewsets import ActionResponse
 from core.audit.services import record_audit
 from core.idempotency.services import replay_or_execute
-from core.jobs.services import attach_celery_task_id, create_job
+from core.jobs.services import create_job, enqueue_job
 
 _MAX_IMPORT_FILE_BYTES = 5 * 1024 * 1024
 
@@ -247,10 +247,7 @@ class StaffImportViewSet(_StaffModuleViewSetMixin, viewsets.GenericViewSet):
             },
             actor_id=request.user.pk,
         )
-        result = import_staff_task.delay(
-            tenant_id=str(request.tenant.pk), job_id=str(job.pk), actor_id=str(request.user.pk)
-        )
-        attach_celery_task_id(job=job, celery_task_id=result.id)
+        enqueue_job(job=job, task=import_staff_task)
         record_audit(request, "import", job, after={"job_id": str(job.pk), "filename": upload.name})
         return ActionResponse.accepted(str(job.pk), message="Import queued.")
 
@@ -275,9 +272,6 @@ class StaffExportViewSet(_StaffModuleViewSetMixin, viewsets.GenericViewSet):
             payload={},
             actor_id=request.user.pk,
         )
-        result = export_staff_task.delay(
-            tenant_id=str(request.tenant.pk), job_id=str(job.pk), actor_id=str(request.user.pk)
-        )
-        attach_celery_task_id(job=job, celery_task_id=result.id)
+        enqueue_job(job=job, task=export_staff_task)
         record_audit(request, "export", job, after={"job_id": str(job.pk)})
         return ActionResponse.accepted(str(job.pk), message="Export queued.")
