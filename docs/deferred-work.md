@@ -328,8 +328,12 @@ either this file or `project-status.md`.
 - **Live E2E specs that failed on CI.** The lane now brings the
   stack up and runs (ADR-0025, ADR-0026), and the timetable journeys pass. The first full runs
   also showed the rest of the lane had drifted while it could not run:
-  - `dashboard-summary.spec.ts` asserts a "Today's schedule" list. The `scheduleLabel` message
-    still exists, but nothing renders it, so the spec is stale against today's home page.
+  - `dashboard-summary.spec.ts` asserted a "Today's schedule" list. The `scheduleLabel` message
+    still exists, but nothing renders it: the rebuilt home (`032d8280`: now band, teaching
+    load, places by class, quick actions) never reached `main`, whose `/dashboard` is the
+    Metronic Demo1 layout with real widgets. **Fixed** by asserting the home that ships.
+    Still open: re-landing the rebuild means restoring that commit's panels and the spec's
+    old assertions; the `dashboard.nowBand`/`teacherLoad` messages are unused until then.
   - `academics-promotion-journey.spec.ts` (and the attendance register journey, the first time
     it ran) failed in the browser with "We could not reach the server": their writes send
     `Idempotency-Key`, which the API's CORS preflight did not allow (django-cors-headers'
@@ -349,11 +353,12 @@ either this file or `project-status.md`.
   - Cross-origin responses don't expose `X-Request-ID` (no `CORS_EXPOSE_HEADERS`), so
     `ApiError.requestId` is always null in the dashboard. Nothing shows it today; exposing it
     is its own change with its own test.
-  - `students-admission-enrollment.spec.ts` was already known broken (project-status).
-  - `attendance-leave.spec.ts` submits leave as the admin, and the API (correctly, §11) accepts
-    it only from the student or a guardian linked to a portal account
-    (`assert_may_request_for_student`). The spec needs a student or guardian identity to sign in
-    as, as the promotion journey needed a second one.
+  - `students-admission-enrollment.spec.ts` was already known broken (project-status). **Fixed**:
+    it now drives the creation stepper and re-opens the student from the directory row.
+  - `attendance-leave.spec.ts` submitted leave as the owner, and the API (correctly, §11)
+    accepts it only from the student or a guardian linked to a portal account
+    (`assert_may_request_for_student`). **Fixed** with a seeded `guardian` identity
+    (`e2e-guardian@schoolhub.test`) that each test links to its own run-unique students.
   The attendance specs' missing guardian, the session-date overlaps and the weekend ("today is
   not a working day") were fixed with `createStudentReadyToEnrol`, per-worker date bands drawn
   once per process, and a seven-day working week in the e2e seed. There are four bands
@@ -975,54 +980,6 @@ either this file or `project-status.md`.
   - mypy `disallow_untyped_defs` covers only `core.common`, `core.documents` and `core.money`; the
     other nine `core` packages join the override as they are typed (generate-baselines reports which).
   - Coverage floors to raise toward the 90% target: `apps/fees_finance` 85, `core/rbac` 80.
-
-- **The "Closed by students Phase 3" note this entry used to carry was itself stale, and
-  the real scope is bigger than that note implied — found while wiring the student
-  creation stepper's Task 7 ("drive the live admission journey through the creation
-  stepper"), left unfixed here because fixing it is a rewrite of its own, not a stepper
-  task.** `e2e/tests/live/students-admission-enrollment.spec.ts` is broken from its very
-  first step, not just at the detail-page navigation the old note called out:
-  - `openNewStudentForm()` clicks `page.getByRole("link", { name: "New student" })` — but
-    "New student" is a **button** that opens an in-page dialog (`StudentToolbar`,
-    confirmed against `apps/dashboard/src/features/students/student-toolbar.tsx` and
-    against `e2e/tests/dashboard/students.spec.ts`'s own working
-    `studentsPage.addStudentButton.click()`), not a link to a `/students/new` route. The
-    role query won't match anything.
-  - Even past that, the spec asserts `await expect(page).toHaveURL(/\/students\/
-    [0-9a-f-]{36}$/)` right after submitting, and its second identity reaches the same
-    record via `approver.studentDetailPage.goto({ path: new URL(page.url()).pathname })`
-    — both assume a routed `/students/{id}` page. That route does not exist:
-    `apps/dashboard/src/app/(app)/students/` has only a flat `page.tsx`, no `[id]`
-    segment, and nothing in `features/students/` ever calls `router.push`/renders an
-    `href` to such a path. The create dialog's (now `StudentCreateStepper`'s) success
-    handler just closes itself — it never navigates. The detail view
-    (`student-detail-sheet.tsx`) is a client-side `ResponsiveSheet` opened by clicking a
-    directory row, with no URL of its own.
-
-  `e2e/src/pages/dashboard/students.page.ts`'s own header comment already flags the
-  second half of this ("those two stay only for the live-lane
-  `students-admission-enrollment.spec.ts`, pending its own rewrite") — the deferred-work
-  entry was simply never updated to match when the dashboard moved off routed student
-  pages, so it read as closed when the underlying UI had already moved on, and nobody
-  had re-run this nightly-only spec since to notice.
-
-  Because the spec can't even open the creation form today, the student creation
-  stepper plan's Task 7 did **not** edit it — doing so would have meant rewriting the
-  whole journey (entry point, every `studentDetailPage.tab()` call, the second
-  identity's record access) with no live stack to verify any of it against, which is a
-  dedicated rewrite project of its own, not a one-task edit. What a rewrite needs: (1)
-  `openNewStudentForm()` replaced with a button click (`studentsPage.addStudentButton`,
-  same pattern the mocked lane already uses); (2) the post-create assertion pointed at
-  the stepper's `stepper.studentCreated` banner instead of a URL; (3) every
-  `studentDetailPage.tab("X").click()` that happens while the wizard is still open
-  (Guardians, Emergency Contacts, the Documents step the wizard always inserts before
-  Enrollment) replaced with the wizard's own Next button — change-section and
-  request-transfer need no extra navigation, since the wizard's Enrollment step renders
-  the same `StudentEnrollmentTab` the sheet does; (4) `StudentDetailPage`'s
-  `goto({path})` retired in favor of `StudentsPage.row(name).click()` for any
-  re-access after the wizard closes, including the second identity's — which needs
-  `SecondIdentity` (`src/fixtures/index.ts`) extended with a `studentsPage` of its own,
-  since it currently has none.
 
 - **A 422 duplicate-admission create response has no field for the override reason its own
   message promises.** `student_management`'s duplicate-admission check (same name + DOB)

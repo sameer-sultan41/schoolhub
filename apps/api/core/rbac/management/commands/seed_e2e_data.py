@@ -32,7 +32,7 @@ from apps.school_organization.models import (
     Term,
 )
 from apps.staff_management.models import EmploymentStatus, Staff, StaffType
-from apps.student_management.models import Gender, Student
+from apps.student_management.models import Gender, Guardian, Student
 from apps.timetable.models import (
     Period,
     Room,
@@ -177,6 +177,7 @@ E2E_SCHOOL_ADMIN_EMAIL = "e2e-school-admin@schoolhub.test"
 E2E_PRINCIPAL_EMAIL = "e2e-principal@schoolhub.test"
 E2E_STUDENT_EMAIL = "e2e-student@schoolhub.test"
 E2E_CLASS_TEACHER_EMAIL = "e2e-class-teacher@schoolhub.test"
+E2E_GUARDIAN_EMAIL = "e2e-guardian@schoolhub.test"
 # The exact keys apps/student_management/permissions.py grants `school_admin` for this
 # journey — not the full registry. Plus the school_organization *.view keys `school_admin`
 # also holds via ALL_STAFF there (apps/school_organization/permissions.py) — confirmed
@@ -259,14 +260,15 @@ E2E_SCHOOL_ADMIN_PERMISSIONS = [
     # marking spec runs as this identity and *does* need it — which is why it is
     # granted below on the teacher identity instead, not widened here.
     #
-    # Deliberately NOT `attendance.leave-request.approve` either: the submitter is
-    # a guardian identity and the approver must differ (§11), so the two keys are
-    # deliberately held by two different seeded users.
+    # Deliberately NOT `attendance.leave-request.create` or `.approve` either: §4 grants
+    # `create` to `student`/`guardian` only (own scope), and the requester must be the
+    # student or a linked guardian (§11), so a school admin may not submit leave at all.
+    # The live lane submits as the seeded guardian below and decides as the class
+    # teacher and principal.
     "attendance.student-attendance.view",
     "attendance.correction.create",
     "attendance.correction.approve",
     "attendance.leave-request.view",
-    "attendance.leave-request.create",
     "attendance.report.view",
     "attendance.report.export",
     # Staff attendance is `hr_staff`/`school_admin` in §4, and the live lane's
@@ -322,8 +324,8 @@ E2E_PRINCIPAL_PERMISSIONS = [
 E2E_CLASS_TEACHER_PERMISSIONS = [
     "attendance.student-attendance.view",
     "attendance.student-attendance.mark",
-    # §7.2's level-1 approver. It must not be the school admin: that identity
-    # submits the request in the live lane and §11 forbids deciding your own.
+    # §7.2's level-1 approver. A different identity from the requester, the seeded
+    # guardian below: §11 forbids deciding your own request.
     "attendance.leave-request.view",
     "attendance.leave-request.approve",
     # The register resolves its roster and section from these two.
@@ -333,9 +335,23 @@ E2E_CLASS_TEACHER_PERMISSIONS = [
     # journey (`attendance-register-journey.spec.ts`) has no class to pick.
     "school.class.view",
 ]
-# The one key restricted principals (student, guardian) may hold at all — auth-and-rbac.md
-# §6 rule 4 — scope-narrowed via RecordScope.OWN rather than the grant itself being unsafe.
+# A restricted principal (student, guardian) holds only own-scoped keys, narrowed via
+# RecordScope.OWN rather than the grant itself being unsafe.
 E2E_STUDENT_PERMISSIONS = ["students.student.view"]
+# The guardian half of attendance.md §4's leave rows (create + view, own children). It exists
+# because §11 makes the requester the student or a linked guardian, and
+# `services.assert_may_request_for_student` checks that link, not the key: the seeded owner
+# and school admin cannot submit leave for anyone. A live spec links this guardian to its own
+# run-unique students (e2e/src/lib/live-guardian.ts). No `approve`: guardians never decide.
+E2E_GUARDIAN_PERMISSIONS = [
+    "attendance.leave-request.create",
+    "attendance.leave-request.view",
+]
+# The `Guardian` person row's first name, last name and phone. The phone is the addressable
+# part, mirrored in e2e/src/lib/seed-constants.ts: ids are generated per seed run, and
+# `GET /guardians?search=` matches phone.
+E2E_GUARDIAN_NAME = ("E2E", "Guardian")
+E2E_GUARDIAN_PHONE = "+15550000010"
 
 E2E_STUDENT_A_NAME = ("E2E", "Student A")
 E2E_STUDENT_B_NAME = ("E2E", "Student B")
@@ -425,6 +441,23 @@ class Command(BaseCommand):
             scope=RecordScope.OWN,
         )
 
+        guardian_role = ensure_role_with_permissions(
+            tenant,
+            "guardian",
+            "Guardian",
+            E2E_GUARDIAN_PERMISSIONS,
+            is_restricted_principal=True,
+        )
+        guardian_user = ensure_seed_user(
+            tenant,
+            guardian_role,
+            email=E2E_GUARDIAN_EMAIL,
+            password=E2E_ADMIN_PASSWORD,
+            first_name=E2E_GUARDIAN_NAME[0],
+            last_name=E2E_GUARDIAN_NAME[1],
+            scope=RecordScope.OWN,
+        )
+
         with tenant_context(tenant.id):
             self._ensure_seven_day_week(tenant)
             campus = self._ensure_campus(tenant)
@@ -433,6 +466,7 @@ class Command(BaseCommand):
             session = self._ensure_baseline_session(tenant)
             self._ensure_students_module_enabled(tenant)
             self._ensure_students(tenant, campus, student_user_id=student_user.id)
+            self._ensure_guardian(tenant, guardian_user_id=guardian_user.id)
             self._ensure_academics_enabled(tenant)
             self._ensure_staff_module_enabled(tenant)
             subject = self._ensure_subject(tenant)
@@ -515,9 +549,9 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"Seeded tenant '{tenant.slug}' with admin {E2E_ADMIN_EMAIL}, school admin "
-                f"{E2E_SCHOOL_ADMIN_EMAIL}, principal {E2E_PRINCIPAL_EMAIL}, and student "
-                f"{E2E_STUDENT_EMAIL}; tenant '{E2E_OTHER_TENANT_SLUG}' with admin "
-                f"{E2E_OTHER_ADMIN_EMAIL}"
+                f"{E2E_SCHOOL_ADMIN_EMAIL}, principal {E2E_PRINCIPAL_EMAIL}, student "
+                f"{E2E_STUDENT_EMAIL}, and guardian {E2E_GUARDIAN_EMAIL}; tenant "
+                f"'{E2E_OTHER_TENANT_SLUG}' with admin {E2E_OTHER_ADMIN_EMAIL}"
             )
         )
 
@@ -736,6 +770,24 @@ class Command(BaseCommand):
             admission_number="E2E-STUDENT-B",
             name=E2E_STUDENT_B_NAME,
             date_of_birth="2016-06-01",
+        )
+
+    def _ensure_guardian(self, tenant: Tenant, *, guardian_user_id: uuid.UUID) -> None:
+        """The `Guardian` person row behind the seeded guardian login, linked to no student.
+
+        A student link is what makes the login useful, and each live spec makes its own
+        against its own run-unique students. `user_id` is the lookup key, as for the
+        baseline student: `guardians_unique_user_per_tenant` makes it unique, so a rerun
+        finds this row rather than adding a second.
+        """
+        Guardian.objects.get_or_create(
+            tenant=tenant,
+            user_id=guardian_user_id,
+            defaults={
+                "first_name": E2E_GUARDIAN_NAME[0],
+                "last_name": E2E_GUARDIAN_NAME[1],
+                "phone": E2E_GUARDIAN_PHONE,
+            },
         )
 
     def _ensure_baseline_student(

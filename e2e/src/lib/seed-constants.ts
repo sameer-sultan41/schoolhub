@@ -13,6 +13,9 @@ export const E2E_OTHER_ADMIN_EMAIL = "e2e-admin-other@schoolhub.test";
  * the all-permissions `school_owner` admin. */
 export const E2E_SCHOOL_ADMIN_EMAIL = "e2e-school-admin@schoolhub.test";
 
+/** Mirrors the school admin's first + last name in seed_e2e_data.py ("E2E", "School Admin"). */
+export const E2E_SCHOOL_ADMIN_NAME = "E2E School Admin";
+
 /** Mirrors seed_e2e_data.py's E2E_STUDENT_EMAIL — a `student`-role user with
  * `RecordScope.OWN`, seeded with a real `Student` row linked via `user_id`. */
 export const E2E_STUDENT_EMAIL = "e2e-student@schoolhub.test";
@@ -26,6 +29,20 @@ export const E2E_STUDENT_EMAIL = "e2e-student@schoolhub.test";
  * approver.
  */
 export const E2E_CLASS_TEACHER_EMAIL = "e2e-class-teacher@schoolhub.test";
+
+/**
+ * Mirrors seed_e2e_data.py's E2E_GUARDIAN_EMAIL — a restricted `guardian` login holding only
+ * `attendance.leave-request.create`/`.view` at `RecordScope.OWN`. §11 makes the requester the
+ * student or a linked guardian, so this is the only seeded identity that can submit leave;
+ * it sees a child only once `linkSeededGuardian` links it.
+ */
+export const E2E_GUARDIAN_EMAIL = "e2e-guardian@schoolhub.test";
+
+/**
+ * Mirrors seed_e2e_data.py's E2E_GUARDIAN_PHONE — the seeded `Guardian` row's addressable
+ * attribute (ids are generated per seed run); `GET /guardians?search=` matches phone.
+ */
+export const E2E_GUARDIAN_PHONE = "+15550000010";
 
 /**
  * Mirrors seed_e2e_data.py's E2E_PRINCIPAL_EMAIL — a `principal` identity holding

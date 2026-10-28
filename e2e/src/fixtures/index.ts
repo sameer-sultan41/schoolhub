@@ -23,8 +23,8 @@ import {
   PublicSitePage,
   StaffAttendancePage,
   StaffPage,
+  StudentCreateStepperPage,
   StudentDetailPage,
-  StudentFormPage,
   StudentsPage,
   MyTimetablePage,
   TimetablePeriodsPage,
@@ -61,7 +61,9 @@ export interface SecondIdentity {
   dashboardPage: DashboardPage;
   promotionBatchPage: PromotionBatchPage;
   /** Phase 3's own two-actor journey: a `principal` identity approving/rejecting a
-   * transfer the `school_admin` requested — same shape as `promotionBatchPage` above. */
+   * transfer the `school_admin` requested — same shape as `promotionBatchPage` above.
+   * The sheet has no URL, so the approver reaches it through its own directory. */
+  studentsPage: StudentsPage;
   studentDetailPage: StudentDetailPage;
 }
 
@@ -78,7 +80,7 @@ export interface E2EFixtures {
   staffPage: StaffPage;
   publicSitePage: PublicSitePage;
   studentsPage: StudentsPage;
-  studentFormPage: StudentFormPage;
+  studentCreateStepperPage: StudentCreateStepperPage;
   studentDetailPage: StudentDetailPage;
   promotionBatchPage: PromotionBatchPage;
   promotionsPage: PromotionsPage;
@@ -206,8 +208,8 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
     await use(new StudentsPage(page));
   },
 
-  studentFormPage: async ({ page }, use) => {
-    await use(new StudentFormPage(page));
+  studentCreateStepperPage: async ({ page }, use) => {
+    await use(new StudentCreateStepperPage(page));
   },
 
   studentDetailPage: async ({ page }, use) => {
@@ -299,6 +301,7 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
         page,
         dashboardPage: new DashboardPage(page),
         promotionBatchPage: new PromotionBatchPage(page),
+        studentsPage: new StudentsPage(page),
         studentDetailPage: new StudentDetailPage(page),
       };
     });

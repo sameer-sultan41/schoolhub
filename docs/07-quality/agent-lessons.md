@@ -119,6 +119,7 @@
 
 - **Mistake.** `f7511d7` created the frontend `Dockerfile`s with `deps`/`builder`/`runner`, while compose kept building `target: dev`; the API `Dockerfile`'s own comment records the same break once before. `e2e-live` then failed all 50 recorded runs, and its first fix (MinIO, ADR-0025) only uncovered the next break: no PgBouncer userlist, migrations as the app role, env names the apps don't read, and then a `0600` userlist that a Linux bind mount hides from PgBouncer's uid 70 (macOS's Docker Desktop never showed it). The first plan said "no other change needed for CI", from a workflow that had never got past building images.
 - **Check.** When a `Dockerfile`'s stages or build args change, check every compose `target:` and `args:` that names them (`infra-compose`'s `images` job now builds them all). Before claiming a never-green workflow needs only one fix, read every step after the first failure as untested.
+- **Same trap, one spec at a time.** The first plan to fix three never-green live specs (leave, dashboard home, admission) proved each spec's first failure and assumed the steps after it worked. They did not: the leave auto-mark needed a current-session enrolment, its self-approve test could not reach its rule, and the admission journey's later steps used `/students/{id}` pages that no longer exist. For a never-green spec, trace every assertion after the first failure against the code before calling it fixed.
 
 ### L18. A check added to an update path must name the transitions it guards
 

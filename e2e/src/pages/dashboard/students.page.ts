@@ -7,11 +7,8 @@ import { BasePage } from "../base.page";
  * (`WithdrawStudentDialog`, behind each row's "Withdraw" action) and the shared bulk
  * import dialog (`BulkImportDialog`). See `apps/dashboard/src/features/students/`.
  *
- * Distinct from `StudentFormPage`/`StudentDetailPage` (`./students/`), which still drive
- * the earlier `/students/new` and `/students/{id}` routes this phase replaced with
- * in-page dialogs — those two stay only for the live-lane
- * `students-admission-enrollment.spec.ts`, pending its own rewrite (see
- * docs/deferred-work.md).
+ * The wizard and the detail sheet a row opens have page objects of their own under
+ * `./students/` (`StudentCreateStepperPage`, `StudentDetailPage`); neither has a route.
  */
 export class StudentsPage extends BasePage {
   readonly path = "/students";
@@ -32,6 +29,20 @@ export class StudentsPage extends BasePage {
 
   get addStudentButton(): Locator {
     return this.page.getByRole("button", { name: "New student", exact: true });
+  }
+
+  /**
+   * Searches the directory for `name`, then opens that row's detail sheet. Searching
+   * first keeps the row on page one however many students the tenant has.
+   */
+  async openStudent(name: string): Promise<void> {
+    await this.searchInput.fill(name);
+    await this.row(name).click();
+  }
+
+  /** The directory's academic-session filter (`student-directory-filters.tsx`). */
+  get sessionFilter(): Locator {
+    return this.page.getByRole("combobox", { name: "Academic session", exact: true });
   }
 
   /**

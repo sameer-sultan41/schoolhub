@@ -101,4 +101,59 @@ export class DashboardPage extends BasePage {
   get impersonationNotice(): Locator {
     return this.page.getByRole("status", { name: /impersonation/i });
   }
+
+  /**
+   * The welcome banner's `h2`, e.g. `welcomeHeading("E2E School Admin")`.
+   *
+   * The name half only exists once `/auth/me` resolved: while pending the banner is a
+   * skeleton and on a failed fetch it reads a bare "Welcome back" (`entry-callout.tsx`),
+   * so matching the full text proves the user loaded.
+   */
+  welcomeHeading(fullName: string): Locator {
+    return this.page.getByRole("heading", {
+      level: 2,
+      name: `Welcome back, ${fullName}`,
+      exact: true,
+    });
+  }
+
+  /**
+   * The headline stat card (`ChannelStats`) for a label, matched only while it shows a number.
+   *
+   * Scoped to the element that wraps the value and the label, and only when that text is
+   * `<number><label>`: "Enrolled students", "Classes" and "Campuses" also appear in
+   * `Highlights`, where the label comes first or stands alone, so they never match. The `—`
+   * placeholder, a skeleton and the error branch do not match either — a stat that has not
+   * loaded is a count of 0, not a wrong match.
+   */
+  statWithNumber(label: string): Locator {
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return this.page
+      .getByText(label, { exact: true })
+      .locator("..")
+      .filter({ hasText: new RegExp(`^[\\d,]+${escaped}$`) });
+  }
+
+  /** The search box of the home's staff grid (`Teams`), which filters the loaded rows client-side. */
+  get staffSearch(): Locator {
+    return this.page.getByPlaceholder("Search Staff...");
+  }
+
+  /**
+   * A row of the home's staff grid by the staff member's name. Search first with
+   * `staffSearch`: the grid shows five rows a page, newest first, so a seeded row is not
+   * guaranteed to be on page one.
+   */
+  staffRow(name: string): Locator {
+    return this.page.getByRole("row").filter({ hasText: name });
+  }
+
+  /**
+   * The text `QueryErrorMessage` falls back to for an error that is not an `Error`
+   * (`query-error-message.tsx`). A real API failure renders the server's own message
+   * instead, so this proves little alone: pair it with assertions on loaded content.
+   */
+  get queryFallbackError(): Locator {
+    return this.page.getByText("Something went wrong.", { exact: true });
+  }
 }
