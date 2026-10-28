@@ -99,7 +99,13 @@ from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
 from core.idempotency.services import replay_or_execute
 from core.rbac.models import RecordScope
-from core.rbac.permissions import DenyRestrictedPrincipals, HasPermissionKey, user_scopes
+from core.rbac.permissions import (
+    AnyOf,
+    DenyRestrictedPrincipals,
+    HasPermissionKey,
+    scope_queryset,
+    user_scopes,
+)
 
 if TYPE_CHECKING:
     import datetime
@@ -303,7 +309,9 @@ class StudentAttendanceViewSet(
                     "(named in `meta.holiday_name`), `non_working_day` or `session_closed`; "
                     "`meta.is_locked` says only that the date is past the lock window, since "
                     "the lock is per row (`record.is_locked`); `meta.academic_session_id` is "
-                    "the session the date resolved to. `period_id` is required in period mode, "
+                    "the session whose dates contain the date. A date no session contains is "
+                    "a 422 on `academic_session_id` in either mode. `period_id` is required "
+                    "in period mode, "
                     "where it must name a lesson the section has that date and "
                     "`module.timetable` must be on, and refused in daily mode (422 on "
                     "`period_id`)."
@@ -457,9 +465,14 @@ class AttendanceCorrectionViewSet(
     scope_campus_field = "student_attendance__section__campus_id"
     required_feature = FEATURE
     required_permission = "attendance.correction.create"
+    # The queue has two callers: requesters tracking their own and approvers deciding
+    # (ADR-0027). What each sees is their record scope, which belongs to their role
+    # assignments, not to whichever key matched (`user_scopes`,
+    # core/rbac/permissions.py:37-61): `assigned` is their own requests
+    # (`AttendanceCorrection.filter_assigned_to_user`), `campus`/`all` the queue.
     required_permission_map = {
-        "list": "attendance.correction.create",
-        "retrieve": "attendance.correction.create",
+        "list": AnyOf("attendance.correction.create", "attendance.correction.approve"),
+        "retrieve": AnyOf("attendance.correction.create", "attendance.correction.approve"),
         "create": "attendance.correction.create",
         "approve": "attendance.correction.approve",
         "reject": "attendance.correction.approve",
@@ -467,7 +480,27 @@ class AttendanceCorrectionViewSet(
     http_method_names = ["get", "post", "head", "options"]
 
     def get_queryset(self):
-        return super().get_queryset().select_related("student_attendance")
+        return (
+            super()
+            .get_queryset()
+            .select_related("student_attendance__student", "student_attendance__period")
+        )
+
+    def _correctable_rows(self):
+        """The caller's own scoped `student_attendance`, as `GET /student-attendance` scopes it.
+
+        A target outside it (another campus, another tenant, a section they neither
+        teach nor marked) is a 404, never a 400 or a 403 (AGENTS.md invariant 2).
+        `assigned` includes rows the caller marked (`StudentAttendance.filter_assigned_to_user`),
+        so a period or substitute teacher can correct their own register.
+        """
+        rows = StudentAttendance.objects.alive().select_related("student", "period", "section")
+        return scope_queryset(
+            rows,
+            self.request.user,
+            own_field=StudentAttendanceViewSet.scope_own_field,
+            campus_field=StudentAttendanceViewSet.scope_campus_field,
+        )
 
     @extend_schema(
         summary="Request a correction to a locked attendance record",
@@ -476,9 +509,12 @@ class AttendanceCorrectionViewSet(
     def create(self, request: Request, *args, **kwargs) -> Response:
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        target = get_object_or_404(
+            self._correctable_rows(), pk=serializer.validated_data["student_attendance_id"]
+        )
 
         correction = services.request_correction(
-            target=serializer.validated_data["student_attendance"],
+            target=target,
             new_values=serializer.validated_data["new_values"],
             reason=serializer.validated_data["reason"],
             actor_id=request.user.pk,
@@ -516,6 +552,8 @@ class AttendanceCorrectionViewSet(
             reviewer_id=request.user.pk,
             note=body.validated_data.get("review_note"),
         )
+        # Re-read with the target's relations; the service returns its locked bare row.
+        decided = self.get_queryset().get(pk=decided.pk)
         after = self.get_serializer(decided).data
         record_audit(
             request, "approve" if approve else "reject", decided, before=before, after=after
@@ -643,13 +681,27 @@ class LeaveRequestViewSet(
     http_method_names = ["get", "post", "head", "options"]
 
     def get_queryset(self):
-        return (
-            super()
-            .get_queryset()
-            .filter(requester_type=RequesterType.STUDENT)
+        return self._served(super().get_queryset())
+
+    @staticmethod
+    def _served(queryset):
+        """The student half, with its relations, chain and `section_name` loaded."""
+        return LeaveRequest.with_section_name(
+            queryset.filter(requester_type=RequesterType.STUDENT)
             .select_related("student", "leave_type")
             .prefetch_related("approvals")
         )
+
+    def _reread(self, leave_request: LeaveRequest, *, scoped: bool = True) -> LeaveRequest:
+        """The row as the list serves it: the section annotation and the chain prefetched.
+
+        A service returns a bare row, which would render `section_name` null.
+        `scoped=False` for a row the caller just created: the submission rule
+        (`assert_may_request_for_student`) already admitted them, and their record
+        scope may not (a campus role on another campus than their own child's).
+        """
+        queryset = self.get_queryset() if scoped else self._served(LeaveRequest.objects.alive())
+        return queryset.get(pk=leave_request.pk)
 
     @extend_schema(
         summary="Submit a student leave request",
@@ -671,7 +723,7 @@ class LeaveRequestViewSet(
             submitted_by=request.user.pk,
             requesting_user=request.user,
         )
-        body = self.get_serializer(leave_request).data
+        body = self.get_serializer(self._reread(leave_request, scoped=False)).data
         record_audit(request, "create", leave_request, after=body)
         return Response({"data": body}, status=201)
 
@@ -701,7 +753,7 @@ class LeaveRequestViewSet(
         before = self.get_serializer(leave_request).data
 
         cancelled = services.cancel_leave_request(request=leave_request, actor_id=request.user.pk)
-        after = self.get_serializer(cancelled).data
+        after = self.get_serializer(self._reread(cancelled)).data
         record_audit(request, "update", cancelled, before=before, after=after)
         return ActionResponse.ok(after, message="Leave request cancelled.")
 
@@ -725,7 +777,7 @@ class LeaveRequestViewSet(
             approver_id=request.user.pk,
             note=body.validated_data.get("note"),
         )
-        after = self.get_serializer(decided).data
+        after = self.get_serializer(self._reread(decided)).data
         record_audit(
             request, "approve" if approve else "reject", decided, before=before, after=after
         )

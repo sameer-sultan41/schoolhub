@@ -133,8 +133,19 @@ export const endpoints = {
     myRegisters: "/student-attendance/my-registers",
     bulkMark: "/student-attendance:bulk-mark",
   },
+  /** `apps/api/apps/attendance/urls.py`: approve and reject are colon-actions on the row. */
   attendanceCorrections: {
     list: "/attendance-corrections",
+    action: (id: string, action: "approve" | "reject") => `/attendance-corrections/${id}:${action}`,
+  },
+  /** `apps/api/apps/attendance/urls.py`: approve and reject are colon-actions on the row. */
+  leaveRequests: {
+    list: "/leave-requests",
+    action: (id: string, action: "approve" | "reject") => `/leave-requests/${id}:${action}`,
+  },
+  /** `GET /leave-types`: the read-only catalogue, keyed `attendance.leave-request.view`. */
+  leaveTypes: {
+    list: "/leave-types",
   },
   /** `apps/api/apps/timetable/rooms/urls.py`. */
   rooms: {

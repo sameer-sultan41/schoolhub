@@ -30,18 +30,67 @@ const mockFetchCurrentUser = Services.auth.fetchCurrentUser as jest.MockedFuncti
 const MARK: PermissionKey = "attendance.student-attendance.mark";
 const VIEW: PermissionKey = "attendance.student-attendance.view";
 const SETTINGS_UPDATE: PermissionKey = "school.settings.update";
+const CORRECTION_CREATE: PermissionKey = "attendance.correction.create";
+const CORRECTION_APPROVE: PermissionKey = "attendance.correction.approve";
+const LEAVE_VIEW: PermissionKey = "attendance.leave-request.view";
 
 describe("attendance sections", () => {
   beforeEach(() => {
     mockReplace.mockReset();
   });
 
-  it("lists Register, Records and Settings, in that order, each on its §4 key", () => {
+  it("lists Register, Records, Corrections, Leave, Settings in order, each on its §4 key", () => {
     expect(ATTENDANCE_SECTIONS.map((section) => [section.href, section.permission])).toEqual([
       ["/attendance/register", MARK],
       ["/attendance/records", VIEW],
+      ["/attendance/corrections", [CORRECTION_CREATE, CORRECTION_APPROVE]],
+      ["/attendance/leave", LEAVE_VIEW],
       ["/attendance/settings", SETTINGS_UPDATE],
     ]);
+  });
+
+  it.each([CORRECTION_CREATE, CORRECTION_APPROVE])(
+    "shows the Corrections tab to a holder of %s alone",
+    async (key) => {
+      mockFetchCurrentUser.mockResolvedValue(buildUser([key]));
+
+      renderWithProviders(
+        <ModuleSectionNav sections={ATTENDANCE_SECTIONS} namespace="attendance" />,
+      );
+
+      expect(await screen.findByRole("link", { name: "Corrections" })).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "Records" })).not.toBeInTheDocument();
+    },
+  );
+
+  it("shows the Leave tab to a holder of leave-request.view alone", async () => {
+    mockFetchCurrentUser.mockResolvedValue(buildUser([LEAVE_VIEW]));
+
+    renderWithProviders(<ModuleSectionNav sections={ATTENDANCE_SECTIONS} namespace="attendance" />);
+
+    expect(await screen.findByRole("link", { name: "Leave" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Corrections" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Records" })).not.toBeInTheDocument();
+  });
+
+  it("sends a leave reviewer with no other attendance key to Leave", async () => {
+    mockFetchCurrentUser.mockResolvedValue(buildUser([LEAVE_VIEW]));
+
+    renderWithProviders(<ModuleLanding sections={ATTENDANCE_SECTIONS} />);
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/attendance/leave");
+    });
+  });
+
+  it("sends an approver with no other attendance key to Corrections", async () => {
+    mockFetchCurrentUser.mockResolvedValue(buildUser([CORRECTION_APPROVE]));
+
+    renderWithProviders(<ModuleLanding sections={ATTENDANCE_SECTIONS} />);
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/attendance/corrections");
+    });
   });
 
   it("sends a marker to the Register", async () => {
@@ -91,6 +140,8 @@ describe("attendance sections", () => {
     expect(sectionMenuItems(ATTENDANCE_SECTIONS).map((item) => item.title)).toEqual([
       "Register",
       "Records",
+      "Corrections",
+      "Leave",
       "Settings",
     ]);
 

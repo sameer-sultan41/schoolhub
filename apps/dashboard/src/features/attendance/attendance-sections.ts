@@ -22,6 +22,20 @@ export const ATTENDANCE_SECTIONS = [
     permission: "attendance.student-attendance.view",
   },
   {
+    href: Paths.ATTENDANCE_CORRECTIONS,
+    labelKey: "nav.corrections",
+    menuTitle: "Corrections",
+    // A requester sees their own requests and an approver the queue; the API scopes each.
+    permission: ["attendance.correction.create", "attendance.correction.approve"],
+  },
+  {
+    href: Paths.ATTENDANCE_LEAVE,
+    labelKey: "nav.leave",
+    menuTitle: "Leave",
+    // The leave catalogue and the queue share this key; approving needs `.approve` as well.
+    permission: "attendance.leave-request.view",
+  },
+  {
     href: Paths.ATTENDANCE_SETTINGS,
     labelKey: "nav.settings",
     menuTitle: "Settings",

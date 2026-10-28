@@ -1,10 +1,20 @@
-import { requestCorrection } from "./attendance-corrections-service";
+import {
+  decideCorrection,
+  fetchCorrectionPage,
+  requestCorrection,
+} from "./attendance-corrections-service";
 
 export const AttendanceCorrectionsService = {
   requestCorrection,
+  fetchCorrectionPage,
+  decideCorrection,
 };
 export type {
   AttendanceCorrectionRecord,
+  CorrectionAction,
+  CorrectionChange,
   CorrectionNewValues,
+  CorrectionPageQuery,
+  CorrectionStatus,
   RequestCorrectionInput,
 } from "./attendance-corrections-type";

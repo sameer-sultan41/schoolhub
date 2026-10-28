@@ -9,6 +9,8 @@ import { E2E_OTHER_ADMIN_EMAIL } from "@/lib/seed-constants";
 import { MockApi, authModule, dashboardHomeModule, tenantModule } from "@/mocks";
 import {
   AllocationsPage,
+  AttendanceCorrectionsPage,
+  AttendanceLeavePage,
   AttendanceRecordsPage,
   AttendanceRegisterPage,
   AttendanceSettingsPage,
@@ -88,6 +90,8 @@ export interface E2EFixtures {
   attendanceRegisterPage: AttendanceRegisterPage;
   attendanceRecordsPage: AttendanceRecordsPage;
   attendanceSettingsPage: AttendanceSettingsPage;
+  attendanceCorrectionsPage: AttendanceCorrectionsPage;
+  attendanceLeavePage: AttendanceLeavePage;
   /**
    * Signs a **second** identity in, on its own browser context, and hands back that
    * context's page objects.
@@ -252,6 +256,14 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
 
   attendanceSettingsPage: async ({ page }, use) => {
     await use(new AttendanceSettingsPage(page));
+  },
+
+  attendanceCorrectionsPage: async ({ page }, use) => {
+    await use(new AttendanceCorrectionsPage(page));
+  },
+
+  attendanceLeavePage: async ({ page }, use) => {
+    await use(new AttendanceLeavePage(page));
   },
 
   signInAsSecondIdentity: async ({ browser }, use) => {

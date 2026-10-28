@@ -1358,6 +1358,8 @@
       "label": "Attendance sections",
       "register": "Register",
       "records": "Records",
+      "corrections": "Corrections",
+      "leave": "Leave",
       "settings": "Settings"
     },
     "settings": {
@@ -1515,6 +1517,160 @@
         "system": "System",
         "import": "Import",
         "device": "Device"
+      }
+    },
+    "requestStatus": {
+      "pending": "Pending",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "cancelled": "Cancelled",
+      "skipped": "Skipped"
+    },
+    "corrections": {
+      "title": "Corrections",
+      "summary": "Requests to change attendance records past the lock window. An approver reviews each one before the record changes.",
+      "caption": "Attendance correction requests",
+      "emptyTitle": "No correction requests",
+      "emptyDescription": "Nothing is waiting for review.",
+      "noMatches": "No requests match these filters",
+      "noMatchesDescription": "Try a different status, or clear a filter.",
+      "loadError": "The correction requests couldn't be loaded.",
+      "pagination": "Correction pages",
+      "filters": {
+        "status": "Status",
+        "all": "All",
+        "mine": "Mine"
+      },
+      "columns": {
+        "student": "Student",
+        "date": "Date",
+        "period": "Period",
+        "change": "Change",
+        "reason": "Reason",
+        "requestedBy": "Requested by",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "diff": {
+        "to": "changes to"
+      },
+      "reviewedBy": "Reviewed by {name}",
+      "actions": {
+        "approveRow": "Approve the correction for {name}",
+        "rejectRow": "Reject the correction for {name}"
+      },
+      "decision": {
+        "approve": {
+          "title": "Approve correction",
+          "description": "{name}, {date}. The record changes as soon as you approve.",
+          "submit": "Approve",
+          "submitting": "Approving the correction…",
+          "done": "Correction approved."
+        },
+        "reject": {
+          "title": "Reject correction",
+          "description": "{name}, {date}. The record stays as it is.",
+          "submit": "Reject",
+          "submitting": "Rejecting the correction…",
+          "done": "Correction rejected."
+        },
+        "note": "Note (optional)",
+        "noteHint": "The requester can read this.",
+        "noteTooLong": "Keep the note to 500 characters or fewer."
+      }
+    },
+    "leave": {
+      "title": "Leave",
+      "summary": "Student leave requests. Each request is reviewed at its level of the approval chain; once the last level approves, its days are marked as on leave.",
+      "caption": "Student leave requests",
+      "emptyTitle": "No leave requests",
+      "emptyDescription": "Nothing is waiting for review.",
+      "noMatches": "No requests match these filters",
+      "noMatchesDescription": "Try a different status, or clear a filter.",
+      "loadError": "The leave requests couldn't be loaded.",
+      "pagination": "Leave pages",
+      "filters": {
+        "status": "Status",
+        "type": "Leave type",
+        "all": "All",
+        "from": "Starts from",
+        "to": "Ends by"
+      },
+      "columns": {
+        "student": "Student",
+        "section": "Section",
+        "type": "Type",
+        "dates": "Dates",
+        "dayPart": "Day part",
+        "days": "Days",
+        "status": "Status",
+        "level": "Level",
+        "actions": "Actions"
+      },
+      "dateRange": "{from} to {to}",
+      "levelOf": "{level} of {total}",
+      "dayPart": {
+        "full": "Full day",
+        "first_half": "First half",
+        "second_half": "Second half"
+      },
+      "actions": {
+        "approveRow": "Approve the leave request for {name}",
+        "rejectRow": "Reject the leave request for {name}"
+      },
+      "detail": {
+        "title": "Leave request for {name}",
+        "admissionNumber": "Admission number {number}",
+        "fields": {
+          "section": "Section",
+          "type": "Leave type",
+          "dates": "Dates",
+          "dayPart": "Day part",
+          "days": "Days",
+          "submittedBy": "Submitted by"
+        },
+        "reason": "Reason",
+        "attachment": {
+          "title": "Attachment",
+          "none": "No attachment.",
+          "onFile": "A file is attached.",
+          "download": "Download attachment",
+          "downloading": "Preparing the download…",
+          "failed": "The attachment couldn't be downloaded."
+        },
+        "chain": {
+          "title": "Approval chain",
+          "level": "Level {level}",
+          "requires": "Needs {key}",
+          "permission": {
+            "leaveApprove": "the leave approval permission"
+          },
+          "waiting": "Waiting for a decision",
+          "notReached": "Not reached",
+          "decidedOn": "Decided on {date}"
+        }
+      },
+      "decision": {
+        "approve": {
+          "title": "Approve leave request",
+          "description": "{name}, {dates}. You are deciding level {level} of {total}.",
+          "submit": "Approve",
+          "submitting": "Approving the leave request…",
+          "done": "Leave approved.",
+          "doneMarked": "Leave approved. {count, plural, one {# day} other {# days}} marked as on leave.",
+          "doneNoneMarked": "Leave approved. No attendance days were marked.",
+          "doneNextLevel": "Approved. The request now waits for level {level}."
+        },
+        "reject": {
+          "title": "Reject leave request",
+          "description": "{name}, {dates}. A rejection ends the request at any level.",
+          "submit": "Reject",
+          "submitting": "Rejecting the leave request…",
+          "done": "Leave request rejected."
+        },
+        "note": "Note (optional)",
+        "noteHint": "The family can read this.",
+        "noteTooLong": "Keep the note to 500 characters or fewer."
       }
     }
   },

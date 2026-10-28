@@ -8,8 +8,10 @@ import {
   type AttendanceCorrectionRecord,
   type StudentAttendanceRecord,
 } from "@/services";
+import { CORRECTIONS_QUERY_MODULE } from "@/services/modules/attendance-corrections/attendance-corrections-constant";
 import { attendanceRecord } from "@/services/modules/student-attendance/__tests__/student-attendance-fixtures";
-import { renderWithProviders } from "@/test-utils";
+import { mocked } from "@/test-fixtures/list-screen";
+import { renderWithClient } from "@/test-utils";
 
 import { RequestCorrectionDialog } from "../request-correction-dialog";
 
@@ -22,7 +24,6 @@ jest.mock("@/services", () => ({
   Services: { attendanceCorrections: { requestCorrection: jest.fn() } },
 }));
 
-const mocked = <T extends (...args: never[]) => unknown>(fn: T) => fn as jest.MockedFunction<T>;
 const requestCorrection = mocked(Services.attendanceCorrections.requestCorrection);
 
 /** A locked late arrival at 08:20, as the register and Records show it. */
@@ -40,12 +41,18 @@ function correction(
     id: "99999999-aaaa-4bbb-8ccc-000000000001",
     subject_type: "student",
     student_attendance_id: LOCKED_LATE.id,
+    student_id: LOCKED_LATE.student_id,
+    student_name: LOCKED_LATE.student_name,
+    attendance_date: LOCKED_LATE.attendance_date,
+    period_name: LOCKED_LATE.period_name,
     requested_by: "44444444-aaaa-4bbb-8ccc-000000000001",
+    requested_by_name: "Amna Raza",
     old_values: { check_in_time: "08:20:00" },
     new_values: { check_in_time: "08:10:00" },
     reason: "Gate log shows 08:10",
     status: "pending",
     reviewed_by: null,
+    reviewed_by_name: null,
     reviewed_at: null,
     review_note: null,
     created_at: "2026-10-23T09:00:00Z",
@@ -57,7 +64,7 @@ function correction(
 function renderDialog(record: StudentAttendanceRecord = LOCKED_LATE) {
   const onOpenChange = jest.fn();
   const onRequested = jest.fn();
-  renderWithProviders(
+  const { queryClient } = renderWithClient(
     <RequestCorrectionDialog
       open
       onOpenChange={onOpenChange}
@@ -65,7 +72,7 @@ function renderDialog(record: StudentAttendanceRecord = LOCKED_LATE) {
       onRequested={onRequested}
     />,
   );
-  return { user: userEvent.setup(), onOpenChange, onRequested };
+  return { user: userEvent.setup(), onOpenChange, onRequested, queryClient };
 }
 
 const dialog = () => screen.getByRole("dialog", { name: "Request a correction" });
@@ -109,6 +116,34 @@ describe("RequestCorrectionDialog", () => {
     );
     expect(onRequested).toHaveBeenCalledWith(correction());
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("refreshes the Corrections queue on a request, not on a refusal", async () => {
+    requestCorrection.mockRejectedValueOnce(
+      new ApiError({
+        code: "domain_rule_violation",
+        message: "The proposed values match the record (§11).",
+        status: 422,
+        url: "/attendance-corrections",
+        details: [{ field: "new_values", issue: "The proposed values match the record (§11)." }],
+      }),
+    );
+    requestCorrection.mockResolvedValue(correction());
+    const { user, queryClient } = renderDialog();
+    const invalidate = jest.spyOn(queryClient, "invalidateQueries");
+    fireEvent.change(screen.getByLabelText("Check-in time"), { target: { value: "08:10" } });
+    await user.type(screen.getByLabelText("Reason"), "Gate log shows 08:10");
+
+    await user.click(submit());
+    await screen.findByText("The proposed values match the record (§11).");
+    expect(invalidate).not.toHaveBeenCalled();
+
+    await user.click(submit());
+
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: [CORRECTIONS_QUERY_MODULE] });
+    });
+    expect(invalidate).toHaveBeenCalledTimes(1);
   });
 
   it("offers every register status but on_leave", async () => {
