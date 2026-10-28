@@ -3,11 +3,13 @@
 import { useTranslations } from "next-intl";
 import { ArrowRight } from "lucide-react";
 
-import { AttendanceStatusBadge } from "@/features/attendance/attendance-status";
+import {
+  AttendanceStatusBadge,
+  isAnyAttendanceStatus,
+} from "@/features/attendance/attendance-status";
 import { EMPTY_VALUE } from "@/lib/constants";
-import type { AttendanceCorrectionRecord, AttendanceStatus, CorrectionChange } from "@/services";
+import type { AttendanceCorrectionRecord, CorrectionChange } from "@/services";
 import { correctionChanges } from "@/services/modules/attendance-corrections/attendance-corrections-helper";
-import { ATTENDANCE_STATUSES } from "@/services/modules/student-attendance/student-attendance-constant";
 
 /** Each field's label, reusing the request dialog's. */
 const FIELD_LABEL: Record<CorrectionChange["field"], string> = {
@@ -17,13 +19,12 @@ const FIELD_LABEL: Record<CorrectionChange["field"], string> = {
   remarks: "correction.fields.remarks",
 };
 
-function isStatus(value: string | null): value is AttendanceStatus {
-  return ATTENDANCE_STATUSES.some((status) => status === value);
-}
-
-/** A status as its badge, any other value as text, and a blank as a dash. */
+/** A status (a student's or a staff member's) as its badge, any other value as text, and a blank
+ * as a dash. */
 function ChangeValue({ field, value }: { field: CorrectionChange["field"]; value: string | null }) {
-  if (field === "status" && isStatus(value)) return <AttendanceStatusBadge status={value} />;
+  if (field === "status" && isAnyAttendanceStatus(value)) {
+    return <AttendanceStatusBadge status={value} />;
+  }
   return <span>{value ?? EMPTY_VALUE}</span>;
 }
 

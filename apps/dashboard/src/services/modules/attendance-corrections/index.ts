@@ -16,5 +16,6 @@ export type {
   CorrectionNewValues,
   CorrectionPageQuery,
   CorrectionStatus,
+  CorrectionSubjectType,
   RequestCorrectionInput,
 } from "./attendance-corrections-type";

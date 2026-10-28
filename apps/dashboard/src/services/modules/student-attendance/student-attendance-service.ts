@@ -2,6 +2,7 @@ import { fetchPage } from "@schoolhub/api-client";
 import type { Page } from "@schoolhub/types";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
+import type { JobAccepted } from "@/services/modules/jobs/jobs-service";
 import {
   toAttendanceMode,
   toAttendanceQueryParams,
@@ -72,4 +73,18 @@ export async function bulkMark(
     { idempotencyKey },
   );
   return { records: data, meta: toBulkMarkMeta(meta) };
+}
+
+/** `POST /student-attendance-imports` (multipart) -> `202` + job: §9's historical import into
+ * `academicSessionId` (required; never defaulted to the current session). A file over the size
+ * cap is an `ApiError` from this call; bad rows come back in the job's `ImportJobResult`. */
+export async function triggerAttendanceImport(
+  file: File,
+  academicSessionId: string,
+): Promise<{ jobId: string }> {
+  const body = new FormData();
+  body.append("file", file);
+  body.append("academic_session_id", academicSessionId);
+  const { data } = await apiClient.post<JobAccepted>(endpoints.studentAttendance.imports, body);
+  return { jobId: data.job_id };
 }

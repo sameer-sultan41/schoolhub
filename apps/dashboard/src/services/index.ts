@@ -1,4 +1,5 @@
 import { AttendanceCorrectionsService } from "./modules/attendance-corrections";
+import { AttendanceReportsService } from "./modules/attendance-reports";
 import { AttendanceSettingsService } from "./modules/attendance-settings";
 import { AuthService } from "./modules/auth";
 import { CurriculumService } from "./modules/curriculum";
@@ -12,6 +13,7 @@ import { PromotionsService } from "./modules/promotions";
 import { RoomsService } from "./modules/rooms";
 import { SchoolOrganizationService } from "./modules/school-organization";
 import { StaffService } from "./modules/staff";
+import { StaffAttendanceService } from "./modules/staff-attendance";
 import { StudentAttendanceService } from "./modules/student-attendance";
 import { StudentsService } from "./modules/students";
 import { StudentTransfersService } from "./modules/student-transfers";
@@ -73,8 +75,22 @@ export type {
   CorrectionNewValues,
   CorrectionPageQuery,
   CorrectionStatus,
+  CorrectionSubjectType,
   RequestCorrectionInput,
 } from "./modules/attendance-corrections";
+
+export type {
+  AttendanceReportRow,
+  InlineReport,
+  QueuedReport,
+  ReportFormat,
+  ReportFormValues,
+  ReportKind,
+  ReportKindFields,
+  ReportQuery,
+  ReportRowOf,
+  ReportRun,
+} from "./modules/attendance-reports";
 
 export type {
   LeaveAction,
@@ -107,6 +123,17 @@ export type {
   StudentAttendanceRecord,
   UnmarkableReason,
 } from "./modules/student-attendance";
+
+export type {
+  MarkableStaffStatus,
+  MarkStaffAttendanceInput,
+  StaffAttendancePageQuery,
+  StaffAttendanceRecord,
+  StaffAttendanceStatus,
+  StaffRegisterEntry,
+  StaffRegisterQuery,
+  StaffRowDraft,
+} from "./modules/staff-attendance";
 
 export type { PeriodInput, PeriodPageQuery, PeriodRecord } from "./modules/periods";
 
@@ -185,8 +212,10 @@ export const Services = {
   teacherSubstitutions: TeacherSubstitutionsService,
   attendanceSettings: AttendanceSettingsService,
   studentAttendance: StudentAttendanceService,
+  staffAttendance: StaffAttendanceService,
   attendanceCorrections: AttendanceCorrectionsService,
   leaveRequests: LeaveRequestsService,
+  attendanceReports: AttendanceReportsService,
   guardians: GuardiansService,
   staff: StaffService,
   students: StudentsService,

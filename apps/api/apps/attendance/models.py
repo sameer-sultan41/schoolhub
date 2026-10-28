@@ -345,6 +345,18 @@ class AttendanceCorrection(TenantOwnedModel):
             return queryset.none()
         return queryset.filter(requested_by=user.pk)
 
+    @classmethod
+    def filter_by_campus(cls, queryset, campus_ids):
+        """Record scope `campus` over both targets: a student row's section, a staff row's staff.
+
+        One column cannot say it: a campus approver's queue holds both kinds, and
+        scoping on the student path alone hid every staff correction from them.
+        """
+        return queryset.filter(
+            models.Q(student_attendance__section__campus_id__in=campus_ids)
+            | models.Q(staff_attendance__staff__campus_id__in=campus_ids)
+        )
+
 
 class LeaveAppliesTo(models.TextChoices):
     STAFF = "staff", "Staff"

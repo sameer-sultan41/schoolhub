@@ -106,3 +106,10 @@ export async function seedAttendanceRegister(
 export function today(): string {
   return new Date().toISOString().slice(0, ISO_DATE_LENGTH);
 }
+
+const DAY_MS = 86_400_000;
+
+/** `today()` moved by `offset` days on the same UTC calendar (negative is the past). */
+export function daysFromToday(offset: number): string {
+  return new Date(Date.now() + offset * DAY_MS).toISOString().slice(0, ISO_DATE_LENGTH);
+}

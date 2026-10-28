@@ -14,13 +14,28 @@ export interface CorrectionNewValues {
   remarks?: string | null;
 }
 
-export interface RequestCorrectionInput {
-  studentAttendanceId: string;
+/** A request names exactly one row, a student's or a staff member's (the server refuses both or
+ * neither). A staff proposal names no `remarks`. */
+export type RequestCorrectionInput = {
   newValues: CorrectionNewValues;
   reason: string;
+} & (
+  | { studentAttendanceId: string; staffAttendanceId?: never }
+  | { staffAttendanceId: string; studentAttendanceId?: never }
+);
+
+/** The values a correction starts from: a student's or a staff member's row. */
+export interface CorrectableRecord {
+  status: string;
+  check_in_time?: string | null;
+  check_out_time?: string | null;
+  remarks?: string | null;
 }
 
 export type CorrectionStatus = AttendanceCorrectionRecord["status"];
+
+/** Whose row a correction names: a student's or a staff member's. */
+export type CorrectionSubjectType = AttendanceCorrectionRecord["subject_type"];
 
 /** The two decisions, each its own route (`:approve`, `:reject`). */
 export type CorrectionAction = "approve" | "reject";
@@ -33,6 +48,7 @@ export interface CorrectionPageQuery {
   ordering?: string;
   status?: CorrectionStatus;
   mine?: true;
+  subjectType?: CorrectionSubjectType;
 }
 
 /** A correctable field and its value before and after, as the diff shows it. */

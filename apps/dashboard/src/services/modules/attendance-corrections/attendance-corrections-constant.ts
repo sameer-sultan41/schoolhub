@@ -4,6 +4,7 @@ import type {
   CorrectionNewValues,
   CorrectionPageQuery,
   CorrectionStatus,
+  CorrectionSubjectType,
 } from "./attendance-corrections-type";
 
 /** The attendance-corrections module's constants. */
@@ -41,6 +42,11 @@ export const CORRECTIONS_MINE = "true";
 
 const STATUS_FILTER_VALUES: readonly string[] = [FILTER_ALL, ...CORRECTION_STATUSES];
 
+/** Both kinds of row, keyed so the compiler checks the set against the generated enum. */
+const SUBJECT_TYPE_SET: Record<CorrectionSubjectType, true> = { student: true, staff: true };
+export const CORRECTION_SUBJECT_TYPES = Object.keys(SUBJECT_TYPE_SET) as CorrectionSubjectType[];
+const SUBJECT_FILTER_VALUES: readonly string[] = ["", ...CORRECTION_SUBJECT_TYPES];
+
 /** The queue's URL filters (`useDataGridUrlState`): the approver's work, pending, by default. */
 export const CORRECTIONS_URL_FILTERS = {
   status: {
@@ -48,6 +54,8 @@ export const CORRECTIONS_URL_FILTERS = {
     isValid: (value: string) => STATUS_FILTER_VALUES.includes(value),
   },
   mine: { default: "", isValid: (value: string) => value === "" || value === CORRECTIONS_MINE },
+  // Blank is both kinds of row.
+  subject: { default: "", isValid: (value: string) => SUBJECT_FILTER_VALUES.includes(value) },
 };
 
 /** The corrections list has no sortable column; the sort is fixed (`CORRECTIONS_ORDERING`). */
@@ -62,6 +70,7 @@ export const CORRECTION_QUERY_FIELDS: ReadonlyArray<readonly [keyof CorrectionPa
     ["ordering", "ordering"],
     ["status", "status"],
     ["mine", "mine"],
+    ["subjectType", "subject_type"],
   ];
 
 /** The fields a correction may change, in the diff's display order (`CORRECTABLE_FIELDS`). */
@@ -70,6 +79,13 @@ export const CORRECTION_CHANGE_FIELDS: readonly (keyof CorrectionNewValues)[] = 
   "check_in_time",
   "check_out_time",
   "remarks",
+];
+
+/** The fields a staff correction may change (`services.STAFF_CORRECTABLE_FIELDS`): no remarks. */
+export const STAFF_CORRECTION_CHANGE_FIELDS: readonly (keyof CorrectionNewValues)[] = [
+  "status",
+  "check_in_time",
+  "check_out_time",
 ];
 
 /** The decision dialog's one input: a server error on any other field is its own message. */
@@ -88,5 +104,13 @@ export const CORRECTION_ERROR_FIELDS = [
   "new_values.check_in_time",
   "new_values.check_out_time",
   "new_values.remarks",
+  "reason",
+] as const;
+
+/** `CORRECTION_ERROR_FIELDS` for a staff row, whose form has no remarks input. */
+export const STAFF_CORRECTION_ERROR_FIELDS = [
+  "new_values.status",
+  "new_values.check_in_time",
+  "new_values.check_out_time",
   "reason",
 ] as const;

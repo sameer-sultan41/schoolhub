@@ -1,16 +1,10 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import {
-  Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@schoolhub/ui";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@schoolhub/ui";
 
 import { FilterSelect } from "@/components/filter-select";
+import { DateRangeInputs } from "@/features/attendance/date-range-inputs";
 import { useClasses } from "@/hooks/use-reference-data";
 import { FILTER_ALL } from "@/lib/constants";
 import {
@@ -44,25 +38,12 @@ export function RecordsFilters({ values, sections, onChange }: RecordsFiltersPro
 
   return (
     <>
-      <Input
-        type="date"
-        className="w-full sm:w-40"
-        aria-label={t("records.filters.from")}
-        value={values.from}
-        max={values.to || undefined}
-        onChange={(event) => {
-          onChange({ from: event.target.value });
-        }}
-      />
-      <Input
-        type="date"
-        className="w-full sm:w-40"
-        aria-label={t("records.filters.to")}
-        value={values.to}
-        min={values.from || undefined}
-        onChange={(event) => {
-          onChange({ to: event.target.value });
-        }}
+      <DateRangeInputs
+        from={values.from}
+        to={values.to}
+        fromLabel={t("records.filters.from")}
+        toLabel={t("records.filters.to")}
+        onChange={onChange}
       />
       <FilterSelect
         label={t("register.fields.class")}

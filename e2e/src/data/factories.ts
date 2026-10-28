@@ -214,6 +214,38 @@ export const ATTENDANCE_LEAVE_APPROVER_PERMISSIONS: PermissionKey[] = [
   "platform.file.view",
 ];
 
+/**
+ * HR at the staff register (attendance.md §4: `hr_staff`, `school_admin`): reading and marking
+ * staff attendance, and asking for a locked staff row's correction.
+ */
+export const ATTENDANCE_HR_PERMISSIONS: PermissionKey[] = [
+  "attendance.staff-attendance.view",
+  "attendance.staff-attendance.mark",
+  "attendance.correction.create",
+];
+
+/** A staff member reading their own attendance: the view key alone (every staff role, own). */
+export const ATTENDANCE_STAFF_SELF_PERMISSIONS: PermissionKey[] = [
+  "attendance.staff-attendance.view",
+];
+
+/** A report reader who may export (attendance.md §4), with the class and section pickers. */
+export const ATTENDANCE_REPORT_PERMISSIONS: PermissionKey[] = [
+  "attendance.report.view",
+  "attendance.report.export",
+  "school.class.view",
+  "school.section.view",
+];
+
+/** `it_admin`'s historical import (§9), from the Records toolbar, and the session it files under.
+ * No `.view`: the role holds the import key alone, so it never sees the records table. */
+export const ATTENDANCE_IMPORT_PERMISSIONS: PermissionKey[] = [
+  "attendance.student-attendance.import",
+  "school.academic-session.view",
+  "school.class.view",
+  "school.section.view",
+];
+
 /** A module this user must *not* see, for the negative half of a filtering assertion. */
 export const MODULE_WITHOUT_PERMISSION = "Fees & Finance";
 

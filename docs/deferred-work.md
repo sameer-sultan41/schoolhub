@@ -213,10 +213,32 @@ either this file or `project-status.md`.
     `period_id`), not in `my-registers`, which builds its list from the frozen grid; each
     listed lesson then refuses when opened. Checking the flag there too is a small
     backend change for its own PR.
-- **Phase 2 Tier 2 is backend-complete.** `academics`, `timetable` and
-  `attendance` have all shipped their APIs. The tier's dashboard screens are the
-  outstanding half, and are deliberately the other agent's — see the module-screens
-  note above.
+- **The attendance dashboard's PR C (staff attendance, reports, the import) closed two gaps
+  and left these out.** Closed: **staff corrections** (`attendance_corrections` had a
+  `staff_attendance_id` column since the backend's PR 3, but the API took only a student target
+  and the campus scope read only a student row's section; a correction now names exactly one
+  target, and `AttendanceCorrection.filter_by_campus` covers both) and **the defaulters
+  threshold** (validated, then dropped inline and in the export job, so every defaulters report
+  used 75%; it now reaches the query on both paths, with the tenant's mode carried into the job).
+  Left out:
+  - **No department filter on the staff register.** `GET /staff-attendance/register` and
+    `Services.staffAttendance.fetchStaffRegister` take `department_id`, but the dashboard has no
+    departments reference hook (`src/hooks/use-reference-data.ts` lists campuses, classes,
+    subjects and sections), so the Staff tab lists every staff member the viewer may mark.
+    Adding a `useDepartments` hook and a filter is a small follow-up.
+  - **A report viewer learns the tenant's mode only from a report's response.** The Reports
+    tab hides the Period picker once a response says the tenant marks daily (inline
+    `meta.attendance_mode`, or a job's `result.attendance_mode`); before the first response it
+    shows. There is no mode read a report viewer can make: `/attendance-settings` needs
+    `school.settings.view` and `my-registers` the mark key. So the first run on a daily tenant
+    can still carry a `period` from a shared link; the stale-options hint then says the table
+    shows that run. A mode field on a read every report viewer holds would close it.
+  - **A staff correction cannot propose `holiday`.** The dialog offers the four statuses the
+    staff register marks (Present, Absent, Late, Half day), though the server accepts every
+    staff status but `on_leave`. Neither the register nor a correction can record a staff day
+    as a holiday from the dashboard; the school calendar's holidays refuse marking instead.
+- **Phase 2 Tier 2 is backend-complete, and its dashboards are academics (shipped),
+  timetable (in flight) and attendance (complete once its PR C merges).**
 - **Two dangling UUID columns became real foreign keys**:
   `student_attendance.leave_request_id` and
   `timetable.TeacherSubstitution.leave_request_id`, the latter carrying a comment
@@ -276,16 +298,16 @@ either this file or `project-status.md`.
 - **No `node_modules` locally.** Nothing is installed, built, linted, or tested
   locally — CI is the source of truth.
 - **No module screens beyond the dashboard home + student-management +
-  staff-management + academics + timetable's setup screens (periods, rooms).** Fees,
-  attendance, examinations,
+  staff-management + academics + timetable's setup screens (periods, rooms) + attendance.**
+  Fees, examinations,
   communication, parent-portal, … are untouched — the gap against
   [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.md) tier 2+.
-  Attendance is **deliberately** backend-only for now: its three PRs ship the API
-  while the dashboard redesign is in flight, so screens follow rather than being
-  written against a shell that is changing underneath them.
-- **Tier 2 is two and a half modules in.** `apps/api/apps/` now also has
-  `academics`, `timetable` and `attendance`; attendance's marking half has
-  landed and its leave and staff/reports halves have not (see above).
+  Attendance's screens followed its API as three dashboard PRs (register, Records and
+  Settings; the corrections and leave queues; staff attendance, reports and the import),
+  once the dashboard shell had settled.
+- **Tier 2's three modules are all in.** `apps/api/apps/` now also has
+  `academics`, `timetable` and `attendance`, attendance with all three of its
+  halves: marking, leave, and staff attendance with reports (see above).
 - **`e2e`'s `live` project is opt-in only** — needs the real docker-compose
   stack, not part of the PR gate. Trigger it via `.github/workflows/e2e-live.yml`
   (`workflow_dispatch` or the nightly schedule).

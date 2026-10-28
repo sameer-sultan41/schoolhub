@@ -20,17 +20,25 @@ export interface SessionPickerProps {
   /** Called with the picked session's id, or `""` for the current session (the URL default). */
   onChange: (sessionId: string) => void;
   className?: string;
+  disabled?: boolean;
 }
 
 /** Picks the academic session a session-scoped screen (Academics, Timetable) works on. Marks the current session, and
  * any whose records are read-only (closed or archived). */
-export function SessionPicker({ sessions, value, onChange, className }: SessionPickerProps) {
+export function SessionPicker({
+  sessions,
+  value,
+  onChange,
+  className,
+  disabled,
+}: SessionPickerProps) {
   const t = useTranslations("academicSession");
   const tCommon = useTranslations("common");
 
   return (
     <Select
       value={value}
+      disabled={disabled}
       onValueChange={(sessionId) => {
         const picked = sessions?.find((session) => session.id === sessionId);
         onChange(picked?.is_current ? "" : sessionId);

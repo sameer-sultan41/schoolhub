@@ -1,6 +1,7 @@
 import type { ApiSchemas } from "@schoolhub/api-client";
 import type { AuthenticatedUser } from "@schoolhub/types";
 import { uuid } from "@/data/factories";
+import { hasWideScope } from "./attendance-mock-utils";
 import { shiftIsoDate, todayUtc } from "./attendance-register-store";
 
 /**
@@ -24,6 +25,7 @@ export type LeaveTypeRecord = Mutable<ApiSchemas["LeaveType"]>;
 export const APPROVAL_MESSAGES = {
   correctionDecided: (status: string) => `This correction was already ${status}.`,
   ownCorrection: "An approver cannot decide their own correction request (§11).",
+  ownAttendance: "An approver cannot decide a correction to their own attendance (§11).",
   leaveDecided: (status: string) => `This request was already ${status}.`,
   noPendingStep: "This request has no pending approval step.",
   ownLeave: "An approver cannot decide a request they submitted (§11).",
@@ -46,6 +48,10 @@ export function buildCorrection(overrides: Partial<CorrectionRecord> = {}): Corr
     student_attendance_id: uuid(),
     student_id: uuid(),
     student_name: "Amna Raza",
+    staff_attendance_id: null,
+    staff_name: null,
+    employee_number: null,
+    subject_user_id: null,
     attendance_date: shiftIsoDate(todayUtc(), -3),
     period_name: null,
     requested_by: uuid(),
@@ -162,15 +168,9 @@ export class AttendanceApprovalsStore {
     this.leaveTypes = [...(options.leaveTypes ?? [])];
   }
 
-  /**
-   * Any role holds `all` or `campus` scope. Record reads take the broadest scope
-   * (`scope_queryset`: all > campus > own > assigned), not a union; only the level-2
-   * escalation check reads every role like a union.
-   */
+  /** Any role holds `all` or `campus` scope (`hasWideScope`, shared with the other stores). */
   hasWideScope(): boolean {
-    return this.user.roles.some(
-      (role) => role.scope === "all" || (role.scope?.startsWith("campus:") ?? false),
-    );
+    return hasWideScope(this.user);
   }
 
   /**

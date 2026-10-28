@@ -19,7 +19,8 @@ export const ATTENDANCE_SECTIONS = [
     href: Paths.ATTENDANCE_RECORDS,
     labelKey: "nav.records",
     menuTitle: "Records",
-    permission: "attendance.student-attendance.view",
+    // A viewer gets the records; an importer (`it_admin` holds only `.import`) gets Import.
+    permission: ["attendance.student-attendance.view", "attendance.student-attendance.import"],
   },
   {
     href: Paths.ATTENDANCE_CORRECTIONS,
@@ -34,6 +35,20 @@ export const ATTENDANCE_SECTIONS = [
     menuTitle: "Leave",
     // The leave catalogue and the queue share this key; approving needs `.approve` as well.
     permission: "attendance.leave-request.view",
+  },
+  {
+    href: Paths.ATTENDANCE_STAFF,
+    labelKey: "nav.staff",
+    menuTitle: "Staff",
+    // A marker gets the register; every other holder their own history (the API scopes it).
+    permission: "attendance.staff-attendance.view",
+  },
+  {
+    href: Paths.ATTENDANCE_REPORTS,
+    labelKey: "nav.reports",
+    menuTitle: "Reports",
+    // Running a report; exporting one needs `attendance.report.export` as well.
+    permission: "attendance.report.view",
   },
   {
     href: Paths.ATTENDANCE_SETTINGS,

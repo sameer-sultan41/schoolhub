@@ -10,12 +10,13 @@ from __future__ import annotations
 
 import datetime
 from decimal import Decimal
+from unittest import mock
 
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 
-from apps.attendance import services
+from apps.attendance import serializers, services
 from apps.attendance.models import (
     AttendanceCorrection,
     AttendanceStatus,
@@ -540,6 +541,50 @@ class LeaveReviewRecordTests(ApprovalsTestCase):
                 )
 
         self.assertEqual(self.count(LEAVE_REQUESTS), before)
+
+    def test_a_page_loads_its_names_in_one_pass(self) -> None:
+        """The request rows and their nested steps reuse the list's one name pass."""
+        approvers = {}
+        for index, student in enumerate(self.students, start=1):
+            approver = UserFactory(
+                tenant=self.tenant, first_name=f"Approver{index}", last_name="Malik"
+            )
+            leave_request = self.leave(student, weeks_ahead=index)
+            with tenant_context(self.tenant.id):
+                services.decide_leave_step(
+                    request=leave_request, approve=False, approver_id=approver.pk
+                )
+            approvers[str(leave_request.pk)] = f"Approver{index} Malik"
+
+        with mock.patch.object(
+            serializers, "_load_user_names", wraps=serializers._load_user_names
+        ) as load:
+            response = self.client.get(LEAVE_REQUESTS)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        load.assert_called_once()
+        rows = response.json()["data"]
+        self.assertEqual(len(rows), len(self.students))
+        for row in rows:
+            self.assertEqual(row["submitted_by_name"], "Noor Usman")
+            self.assertEqual(row["approvals"][0]["approver_name"], approvers[row["id"]])
+
+    def test_a_single_request_loads_its_names_in_one_pass(self) -> None:
+        approver = UserFactory(tenant=self.tenant, first_name="Hina", last_name="Malik")
+        leave_request = self.leave(self.students[0])
+        with tenant_context(self.tenant.id):
+            services.decide_leave_step(
+                request=leave_request, approve=False, approver_id=approver.pk
+            )
+
+        with mock.patch.object(
+            serializers, "_load_user_names", wraps=serializers._load_user_names
+        ) as load:
+            record = self.record(leave_request)
+
+        load.assert_called_once()
+        self.assertEqual(record["submitted_by_name"], "Noor Usman")
+        self.assertEqual(record["approvals"][0]["approver_name"], "Hina Malik")
 
 
 class ApprovalsCrossTenantTests(ApprovalsTestCase):

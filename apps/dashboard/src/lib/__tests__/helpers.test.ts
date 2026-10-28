@@ -1,4 +1,5 @@
 import {
+  decimalFormat,
   downloadFile,
   formatDate,
   isIsoDate,
@@ -206,5 +207,15 @@ describe("todayIsoDate", () => {
     jest.useFakeTimers().setSystemTime(new Date("2026-03-04T23:59:59Z"));
 
     expect(todayIsoDate()).toBe("2026-03-04");
+  });
+});
+
+describe("decimalFormat", () => {
+  it("caps the decimals, or fixes them, and builds one formatter per locale and shape", () => {
+    expect(decimalFormat("en", 1).format(2)).toBe("2");
+    expect(decimalFormat("en", 1).format(1.55)).toBe("1.6");
+    expect(decimalFormat("en", 1, { fixed: true }).format(40)).toBe("40.0");
+    expect(decimalFormat("en", 1)).toBe(decimalFormat("en", 1));
+    expect(decimalFormat("en", 1)).not.toBe(decimalFormat("en", 1, { fixed: true }));
   });
 });

@@ -20,14 +20,17 @@ from django.db import models
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from apps.attendance import services
+from apps.attendance import reports, services
 from apps.attendance.models import (
     AttendanceCorrection,
     AttendanceStatus,
+    DayPart,
     LeaveApproval,
     LeaveRequest,
+    LeaveStatus,
     LeaveType,
     StaffAttendance,
+    StaffAttendanceStatus,
     StudentAttendance,
 )
 from apps.school_organization.models import AcademicSession, Section
@@ -39,10 +42,14 @@ from core.files.models import File
 from core.rbac.models import User
 
 if TYPE_CHECKING:
+    import datetime
     import uuid
     from collections.abc import Iterable
 
 READ_ONLY_FIELDS = ("id", "created_at", "updated_at")
+
+# The 400 for a correction naming no target, or both.
+CORRECTION_TARGET_REQUIRED = "Name exactly one of student_attendance_id or staff_attendance_id."
 
 # The serializer context key that carries one response's `users(id) -> name` map.
 USER_NAMES_CONTEXT_KEY = "attendance_user_names"
@@ -67,12 +74,25 @@ def _load_user_names(context: dict, user_ids: Iterable[uuid.UUID | None]) -> dic
     return names
 
 
+def _names_preloaded(serializer: serializers.BaseSerializer) -> bool:
+    """Whether an enclosing serializer already loaded this one's names.
+
+    A row of a `UserNamesListSerializer` was covered by that list's pass, and a
+    serializer nested in a `UserNamesModelSerializer` by that row's `user_ids`, so
+    each skips its own pass over ids that are already in the context.
+    """
+    return isinstance(serializer.parent, UserNamesListSerializer | UserNamesModelSerializer)
+
+
 class UserNamesListSerializer(serializers.ListSerializer):
     """Loads every row's user names in one query before the rows render."""
 
     def to_representation(self, data):
         rows = list(data.all() if isinstance(data, models.manager.BaseManager) else data)
-        _load_user_names(self.context, (uid for row in rows for uid in self.child.user_ids(row)))
+        if not _names_preloaded(self):
+            _load_user_names(
+                self.context, (uid for row in rows for uid in self.child.user_ids(row))
+            )
         return super().to_representation(rows)
 
 
@@ -81,16 +101,24 @@ class UserNamesModelSerializer(serializers.ModelSerializer):
 
     A subclass lists its ids in `user_ids` and sets `UserNamesListSerializer` as its
     `Meta.list_serializer_class`, so a page costs one user query, not one per row.
+    A parent nesting another of these lists the nested rows' ids in its own
+    `user_ids` too (`LeaveRequestSerializer`): the nested pass is skipped.
     """
 
     def user_ids(self, instance) -> Iterable[uuid.UUID | None]:
         raise NotImplementedError
 
     def user_name(self, user_id: uuid.UUID | None) -> str | None:
-        return _load_user_names(self.context, [user_id]).get(user_id) if user_id else None
+        if user_id is None:
+            return None
+        names = self.context.get(USER_NAMES_CONTEXT_KEY, {})
+        if user_id not in names:
+            names = _load_user_names(self.context, [user_id])
+        return names[user_id]
 
     def to_representation(self, instance):
-        _load_user_names(self.context, self.user_ids(instance))
+        if not _names_preloaded(self):
+            _load_user_names(self.context, self.user_ids(instance))
         return super().to_representation(instance)
 
 
@@ -105,6 +133,19 @@ def _fk(model, **kwargs) -> serializers.PrimaryKeyRelatedField:
 
 # The serializer context key that carries the lock window across one response's rows.
 LOCK_WINDOW_CONTEXT_KEY = "attendance_lock_window_days"
+
+
+def _effective_lock(context: dict, row: StudentAttendance | StaffAttendance) -> bool:
+    """The row's column, or its date past the lock window — what every write path checks.
+
+    The window is read once per response and kept in the root's context, or every
+    row would re-read the tenant's settings.
+    """
+    window = context.get(LOCK_WINDOW_CONTEXT_KEY)
+    if window is None:
+        window = services.lock_window_days()
+        context[LOCK_WINDOW_CONTEXT_KEY] = window
+    return bool(row.is_locked or services.is_locked(row.attendance_date, window_days=window))
 
 
 class StudentAttendanceSerializer(serializers.ModelSerializer):
@@ -170,13 +211,7 @@ class StudentAttendanceSerializer(serializers.ModelSerializer):
         rendering the column alone offered an edit that could not succeed. Same
         expression, one source.
         """
-        # Read once per response and kept in the root's context, or every row
-        # would re-read the tenant's settings.
-        window = self.context.get(LOCK_WINDOW_CONTEXT_KEY)
-        if window is None:
-            window = services.lock_window_days()
-            self.context[LOCK_WINDOW_CONTEXT_KEY] = window
-        return bool(row.is_locked or services.is_locked(row.attendance_date, window_days=window))
+        return _effective_lock(self.context, row)
 
 
 class BulkMarkEntrySerializer(serializers.Serializer):
@@ -268,22 +303,33 @@ class MyRegisterSerializer(serializers.Serializer):
 class AttendanceCorrectionSerializer(UserNamesModelSerializer):
     """`attendance_corrections` — the request half. Decisions are colon-actions.
 
-    `student_attendance_id` is a plain UUID, not a related field: the view resolves
-    it through the caller's scoped rows, so a row outside their scope (or another
-    tenant's) is a 404, not a 400 (AGENTS.md invariant 2). The target's fields are
-    read-only and null for a staff correction.
+    Exactly one target: `student_attendance_id` or `staff_attendance_id`, and
+    `subject_type` follows from which. Each is a plain UUID, not a related field:
+    the view resolves it through the caller's scoped rows, so a row outside their
+    scope (or another tenant's) is a 404, not a 400 (AGENTS.md invariant 2). The
+    student fields are null on a staff correction, and the staff fields on a
+    student one.
     """
 
-    student_attendance_id = serializers.UUIDField()
+    student_attendance_id = serializers.UUIDField(required=False, allow_null=True)
+    staff_attendance_id = serializers.UUIDField(required=False, allow_null=True)
     student_id = serializers.UUIDField(
         source="student_attendance.student_id", read_only=True, allow_null=True
     )
     student_name = serializers.CharField(
         source="student_attendance.student.full_name", read_only=True, allow_null=True
     )
-    attendance_date = serializers.DateField(
-        source="student_attendance.attendance_date", read_only=True, allow_null=True
+    staff_name = serializers.CharField(
+        source="staff_attendance.staff.full_name", read_only=True, allow_null=True
     )
+    employee_number = serializers.CharField(
+        source="staff_attendance.staff.employee_number", read_only=True, allow_null=True
+    )
+    # The staff member's user: a client hides the decision from them (§11). Null for a student.
+    subject_user_id = serializers.UUIDField(
+        source="staff_attendance.staff.user_id", read_only=True, allow_null=True
+    )
+    attendance_date = serializers.SerializerMethodField()
     period_name = serializers.CharField(
         source="student_attendance.period.name", read_only=True, allow_null=True
     )
@@ -297,8 +343,12 @@ class AttendanceCorrectionSerializer(UserNamesModelSerializer):
             "id",
             "subject_type",
             "student_attendance_id",
+            "staff_attendance_id",
             "student_id",
             "student_name",
+            "staff_name",
+            "employee_number",
+            "subject_user_id",
             "attendance_date",
             "period_name",
             "requested_by",
@@ -339,34 +389,22 @@ class AttendanceCorrectionSerializer(UserNamesModelSerializer):
     def get_reviewed_by_name(self, correction: AttendanceCorrection) -> str | None:
         return self.user_name(correction.reviewed_by)
 
+    @extend_schema_field(serializers.DateField(allow_null=True))
+    def get_attendance_date(self, correction: AttendanceCorrection) -> datetime.date | None:
+        target = correction.student_attendance or correction.staff_attendance
+        return target.attendance_date if target is not None else None
+
     def validate_new_values(self, value: dict) -> dict:
-        """Validate the proposal at the point it is *raised*, not when applied.
+        """Validate the proposal's shape and times at the point it is *raised*, not when applied.
 
         These values sit in JSONB until an approver acts, which can be days
         later, so anything not checked here fails at `:approve` — far from the
         request that introduced it, and to a person who did not write it. That is
-        how a malformed `check_in_time` became a 500 on approval.
+        how a malformed `check_in_time` became a 500 on approval. Which fields and
+        statuses are allowed depends on the target, so `validate` checks those.
         """
         if not isinstance(value, dict):
             raise serializers.ValidationError("Expected an object of field → new value.")
-        unknown = set(value) - set(services.CORRECTABLE_FIELDS)
-        if unknown:
-            raise serializers.ValidationError(
-                f"Not correctable: {', '.join(sorted(unknown))}. "
-                f"Allowed: {', '.join(services.CORRECTABLE_FIELDS)}."
-            )
-
-        if "status" in value:
-            if value["status"] not in AttendanceStatus.values:
-                raise serializers.ValidationError({"status": "Not a known attendance status."})
-            if value["status"] in services.SYSTEM_ONLY_STATUSES:
-                raise serializers.ValidationError(
-                    {
-                        "status": (
-                            "'on_leave' is set by an approved leave request, not by a correction."
-                        )
-                    }
-                )
 
         # Round-tripped through the same field the register uses, so "what is a
         # valid time" is answered in one place. `to_internal_value` raises the
@@ -378,6 +416,48 @@ class AttendanceCorrectionSerializer(UserNamesModelSerializer):
                 value[field] = time_field.to_internal_value(value[field]).isoformat()
 
         return value
+
+    def validate(self, attrs: dict) -> dict:
+        """Exactly one target, then the fields and statuses that target's kind of row allows."""
+        targets = [
+            field
+            for field in ("student_attendance_id", "staff_attendance_id")
+            if attrs.get(field) is not None
+        ]
+        if len(targets) != 1:
+            raise serializers.ValidationError(CORRECTION_TARGET_REQUIRED)
+        is_staff = targets == ["staff_attendance_id"]
+        fields = services.STAFF_CORRECTABLE_FIELDS if is_staff else services.CORRECTABLE_FIELDS
+        statuses = StaffAttendanceStatus.values if is_staff else AttendanceStatus.values
+
+        proposal = attrs["new_values"]
+        unknown = set(proposal) - set(fields)
+        if unknown:
+            raise serializers.ValidationError(
+                {
+                    "new_values": (
+                        f"Not correctable: {', '.join(sorted(unknown))}. "
+                        f"Allowed: {', '.join(fields)}."
+                    )
+                }
+            )
+        if "status" in proposal:
+            if proposal["status"] not in statuses:
+                raise serializers.ValidationError(
+                    {"new_values": {"status": "Not a known attendance status."}}
+                )
+            if proposal["status"] in services.SYSTEM_ONLY_STATUSES:
+                raise serializers.ValidationError(
+                    {
+                        "new_values": {
+                            "status": (
+                                "'on_leave' is set by an approved leave request, "
+                                "not by a correction."
+                            )
+                        }
+                    }
+                )
+        return attrs
 
 
 class CorrectionDecisionSerializer(serializers.Serializer):
@@ -533,6 +613,9 @@ class StaffAttendanceSerializer(serializers.ModelSerializer):
     """
 
     staff_id = _fk(Staff, source="staff")
+    # Read-only; every caller loads `staff` up front, so they cost no query per row.
+    staff_name = serializers.CharField(source="staff.full_name", read_only=True)
+    employee_number = serializers.CharField(source="staff.employee_number", read_only=True)
     is_locked = serializers.SerializerMethodField()
 
     class Meta:
@@ -540,6 +623,8 @@ class StaffAttendanceSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "staff_id",
+            "staff_name",
+            "employee_number",
             "attendance_date",
             "status",
             "check_in_time",
@@ -564,7 +649,7 @@ class StaffAttendanceSerializer(serializers.ModelSerializer):
         )
 
     def get_is_locked(self, row: StaffAttendance) -> bool:
-        return bool(row.is_locked or services.is_locked(row.attendance_date))
+        return _effective_lock(self.context, row)
 
     def validate(self, attrs: dict) -> dict:
         check_in, check_out = attrs.get("check_in_time"), attrs.get("check_out_time")
@@ -579,6 +664,152 @@ class StaffCheckOutSerializer(serializers.Serializer):
     """Body for `POST /staff-attendance/{id}:check-out` (§16)."""
 
     check_out_time = serializers.TimeField()
+
+
+class StaffRegisterQuerySerializer(serializers.Serializer):
+    """Query parameters of `GET /staff-attendance/register`.
+
+    `department_id` is a plain UUID so an unknown or foreign department is the
+    view's 404, not a 400 (AGENTS.md invariant 2).
+    """
+
+    date = serializers.DateField()
+    department_id = serializers.UUIDField(required=False, allow_null=True)
+
+
+class StaffRegisterEntrySerializer(serializers.Serializer):
+    """One active staff member on the staff register, with their record for that date if marked."""
+
+    staff_id = serializers.UUIDField(source="staff.pk", read_only=True)
+    staff_name = serializers.CharField(source="staff.full_name", read_only=True)
+    employee_number = serializers.CharField(source="staff.employee_number", read_only=True)
+    department_name = serializers.CharField(
+        source="staff.department.name", read_only=True, allow_null=True
+    )
+    record = StaffAttendanceSerializer(read_only=True, allow_null=True)
+    on_leave = serializers.BooleanField(
+        read_only=True,
+        help_text="Approved leave covers the date, or the record says `on_leave`.",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Report rows: one shape per `kind` (ADR-0022)
+# ---------------------------------------------------------------------------
+#
+# Each mirrors its `reports` function's row field for field. `kind` is the
+# discriminator; the view adds it and dispatches through `REPORT_ROW_SERIALIZERS`.
+
+
+def _report_kind(kind: str) -> serializers.ChoiceField:
+    """The discriminator: a one-value choice, so the schema names each row type's `kind`."""
+    return serializers.ChoiceField(choices=[(kind, kind)], read_only=True)
+
+
+class _StudentRowSerializer(serializers.Serializer):
+    """The student columns every student report row starts with."""
+
+    student_id = serializers.UUIDField(read_only=True)
+    first_name = serializers.CharField(read_only=True)
+    last_name = serializers.CharField(read_only=True)
+    admission_number = serializers.CharField(read_only=True)
+
+
+class DailyRegisterReportRowSerializer(_StudentRowSerializer):
+    """`reports.daily_register`: a daily row as marked, a derived day, or one period's row.
+
+    `id`, `remarks` and `period_name` are null on a derived day; `period_name` is
+    set only when the report names a `period_id`.
+    """
+
+    kind = _report_kind("daily-register")
+    id = serializers.UUIDField(read_only=True, allow_null=True)
+    status = serializers.ChoiceField(choices=AttendanceStatus.choices, read_only=True)
+    check_in_time = serializers.TimeField(read_only=True, allow_null=True)
+    late_minutes = serializers.IntegerField(read_only=True, allow_null=True)
+    remarks = serializers.CharField(read_only=True, allow_null=True)
+    section_name = serializers.CharField(read_only=True)
+    period_name = serializers.CharField(read_only=True, allow_null=True)
+
+
+class StudentSummaryReportRowSerializer(_StudentRowSerializer):
+    """`reports.student_summary`: day counts and the rate over the range.
+
+    `attendance_rate` is the percentage of counted days present, one decimal
+    place, rounded half up; `counted_days` leaves out leave and excused days.
+    """
+
+    kind = _report_kind("student-summary")
+    present_days = serializers.IntegerField(read_only=True)
+    counted_days = serializers.IntegerField(read_only=True)
+    absent_days = serializers.IntegerField(read_only=True)
+    late_days = serializers.IntegerField(read_only=True)
+    leave_days = serializers.IntegerField(read_only=True)
+    # A JSON number, as the report has always sent it (a raw Decimal encodes as a float).
+    attendance_rate = serializers.DecimalField(
+        max_digits=4, decimal_places=1, coerce_to_string=False, read_only=True
+    )
+
+
+class DefaultersReportRowSerializer(StudentSummaryReportRowSerializer):
+    """`reports.defaulters`: a summary row whose rate is below the threshold."""
+
+    kind = _report_kind("defaulters")
+
+
+class StudentLateArrivalsReportRowSerializer(_StudentRowSerializer):
+    """`reports.student_late_arrivals`: late days and their minutes, most late days first."""
+
+    kind = _report_kind("student-late-arrivals")
+    late_count = serializers.IntegerField(read_only=True)
+    total_late_minutes = serializers.IntegerField(read_only=True, allow_null=True)
+    average_late_minutes = serializers.FloatField(read_only=True, allow_null=True)
+
+
+class StaffPunctualityReportRowSerializer(serializers.Serializer):
+    """`reports.staff_punctuality`: one staff member's days and minutes, holidays left out."""
+
+    kind = _report_kind("staff-punctuality")
+    staff_id = serializers.UUIDField(read_only=True)
+    first_name = serializers.CharField(read_only=True)
+    last_name = serializers.CharField(read_only=True)
+    employee_number = serializers.CharField(read_only=True)
+    working_days = serializers.IntegerField(read_only=True)
+    present_days = serializers.IntegerField(read_only=True)
+    absent_days = serializers.IntegerField(read_only=True)
+    leave_days = serializers.IntegerField(read_only=True)
+    late_count = serializers.IntegerField(read_only=True)
+    total_late_minutes = serializers.IntegerField(read_only=True, allow_null=True)
+    total_early_departure_minutes = serializers.IntegerField(read_only=True, allow_null=True)
+
+
+class LeaveReportRowSerializer(serializers.Serializer):
+    """`reports.leave_report`: one student leave request overlapping the range."""
+
+    kind = _report_kind("leave")
+    id = serializers.UUIDField(read_only=True)
+    status = serializers.ChoiceField(choices=LeaveStatus.choices, read_only=True)
+    start_date = serializers.DateField(read_only=True)
+    end_date = serializers.DateField(read_only=True)
+    days_count = serializers.DecimalField(
+        max_digits=5, decimal_places=1, coerce_to_string=False, read_only=True
+    )
+    day_part = serializers.ChoiceField(choices=DayPart.choices, read_only=True)
+    student_id = serializers.UUIDField(read_only=True)
+    first_name = serializers.CharField(read_only=True)
+    last_name = serializers.CharField(read_only=True)
+    leave_type_name = serializers.CharField(read_only=True)
+
+
+# The runtime dispatch, by `kind`; `PolymorphicProxySerializer` only documents it (ADR-0022).
+REPORT_ROW_SERIALIZERS: dict[str, type[serializers.Serializer]] = {
+    "daily-register": DailyRegisterReportRowSerializer,
+    "student-summary": StudentSummaryReportRowSerializer,
+    "defaulters": DefaultersReportRowSerializer,
+    "student-late-arrivals": StudentLateArrivalsReportRowSerializer,
+    "staff-punctuality": StaffPunctualityReportRowSerializer,
+    "leave": LeaveReportRowSerializer,
+}
 
 
 class AttendanceReportQuerySerializer(serializers.Serializer):
@@ -599,7 +830,15 @@ class AttendanceReportQuerySerializer(serializers.Serializer):
         help_text="`daily-register` only: one period's own rows instead of the derived day.",
     )
     threshold = serializers.DecimalField(
-        max_digits=4, decimal_places=1, required=False, min_value=0, max_value=100
+        max_digits=4,
+        decimal_places=1,
+        required=False,
+        min_value=0,
+        max_value=100,
+        help_text=(
+            "`defaulters` only: list students whose rate is below this percentage "
+            f"(default {reports.DEFAULT_DEFAULTER_THRESHOLD})."
+        ),
     )
     # Only meaningful on the export (`POST`); a `GET` returns JSON rows. Declared
     # on the shared serializer rather than a second one because the six other

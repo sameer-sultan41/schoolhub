@@ -1,9 +1,9 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Input } from "@schoolhub/ui";
 
 import { FilterSelect } from "@/components/filter-select";
+import { DateRangeInputs } from "@/features/attendance/date-range-inputs";
 import { FILTER_ALL } from "@/lib/constants";
 import { LEAVE_STATUSES } from "@/services/modules/leave-requests/leave-requests-constant";
 import { useLeaveTypes } from "./use-leave-types";
@@ -51,25 +51,12 @@ export function LeaveFilters({ values, onChange }: LeaveFiltersProps) {
           onChange({ type });
         }}
       />
-      <Input
-        type="date"
-        className="w-full sm:w-40"
-        aria-label={t("leave.filters.from")}
-        value={values.from}
-        max={values.to || undefined}
-        onChange={(event) => {
-          onChange({ from: event.target.value });
-        }}
-      />
-      <Input
-        type="date"
-        className="w-full sm:w-40"
-        aria-label={t("leave.filters.to")}
-        value={values.to}
-        min={values.from || undefined}
-        onChange={(event) => {
-          onChange({ to: event.target.value });
-        }}
+      <DateRangeInputs
+        from={values.from}
+        to={values.to}
+        fromLabel={t("leave.filters.from")}
+        toLabel={t("leave.filters.to")}
+        onChange={onChange}
       />
     </>
   );

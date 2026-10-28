@@ -1,12 +1,26 @@
+import type { ApiErrorDetail } from "@schoolhub/types";
 import { uuid } from "@/data/factories";
 import { fail, ok, paginated, type MockResponse } from "../envelope";
 import { invalidCursorResponse, lockedSessionResponse } from "../list";
 import type { MockModule } from "../router";
+import type { CorrectionRecord } from "./attendance-approvals-store";
+import {
+  fieldError,
+  fieldErrors,
+  INVALID_UUID,
+  isUuid,
+  NOT_BLANK,
+  NOT_NULL,
+  REQUIRED,
+} from "./attendance-mock-utils";
 import {
   ATTENDANCE_MESSAGES,
   type AttendanceRecord,
   type AttendanceRegisterStore,
   type AttendanceStatus,
+  lateAfter,
+  STAFF_ATTENDANCE_STATUSES,
+  STUDENT_ATTENDANCE_STATUSES,
   todayUtc,
 } from "./attendance-register-store";
 
@@ -14,6 +28,40 @@ import {
 const ALERT_STATUSES: readonly AttendanceStatus[] = ["absent", "late"];
 /** `services.CORRECTABLE_FIELDS`. */
 const CORRECTABLE_FIELDS = ["status", "check_in_time", "check_out_time", "remarks"] as const;
+
+/** A student row as a correction's target: what `raiseCorrection` needs to know about it. */
+export function studentCorrectionTarget(
+  store: AttendanceRegisterStore,
+  id: string,
+): CorrectionTarget | undefined {
+  const row = store.records.find((candidate) => candidate.id === id);
+  if (!row) return undefined;
+  return {
+    field: "student_attendance_id",
+    locked: store.isLocked(row),
+    current: Object.fromEntries(CORRECTABLE_FIELDS.map((field) => [field, row[field]])),
+    subject: {
+      subject_type: "student",
+      student_attendance_id: row.id,
+      staff_attendance_id: null,
+      student_id: row.student_id,
+      student_name: row.student_name,
+      staff_name: null,
+      employee_number: null,
+      subject_user_id: null,
+      attendance_date: row.attendance_date,
+      period_name: row.period_name,
+    },
+  };
+}
+
+/** The correction serializer's and `request_correction`'s sentences, copied verbatim (L5). */
+export const CORRECTION_MESSAGES = {
+  oneTarget: "Name exactly one of student_attendance_id or staff_attendance_id.",
+  unknownStatus: "Not a known attendance status.",
+  onLeave: "'on_leave' is set by an approved leave request, not by a correction.",
+  checkOutBeforeCheckIn: "Check-out must be later than check-in (§11).",
+} as const;
 
 /** A `DomainRuleViolation` on one field: a 422 whose message is that field's issue. */
 export function refusal(field: string, issue: string): MockResponse {
@@ -51,10 +99,13 @@ function modeRefusal(
   return undefined;
 }
 
-interface DateIssue {
+export interface DateIssue {
   reason: "future" | "holiday" | "non_working_day";
   holidayName: string | null;
 }
+
+/** The school calendar a date is checked against: holidays by date, Monday = 0 working days. */
+export type SchoolCalendar = Pick<AttendanceRegisterStore, "holidays" | "workingDays">;
 
 /** Python's `date.weekday()`: Monday = 0, where JavaScript's `getUTCDay()` has Sunday = 0. */
 function pythonWeekday(isoDate: string): number {
@@ -62,18 +113,18 @@ function pythonWeekday(isoDate: string): number {
 }
 
 /** `unmarkable_date_issue`, in the server's order: future, holiday, then a non-working day. */
-function dateIssue(store: AttendanceRegisterStore, date: string): DateIssue | null {
+export function dateIssue(calendar: SchoolCalendar, date: string): DateIssue | null {
   if (date > todayUtc()) return { reason: "future", holidayName: null };
-  const holidayName = store.holidays[date];
+  const holidayName = calendar.holidays[date];
   if (holidayName) return { reason: "holiday", holidayName };
-  if (!store.workingDays.includes(pythonWeekday(date))) {
+  if (!calendar.workingDays.includes(pythonWeekday(date))) {
     return { reason: "non_working_day", holidayName: null };
   }
   return null;
 }
 
 /** `assert_markable_date`'s sentence for each reason. */
-function dateRefusal(date: string, issue: DateIssue): MockResponse {
+export function dateRefusal(date: string, issue: DateIssue): MockResponse {
   const messages: Record<DateIssue["reason"], string> = {
     future: ATTENDANCE_MESSAGES.future,
     holiday: `${date} is ${issue.holidayName}; the school is closed.`,
@@ -82,26 +133,208 @@ function dateRefusal(date: string, issue: DateIssue): MockResponse {
   return refusal("attendance_date", messages[issue.reason]);
 }
 
-/**
- * `calendar.late_minutes`: minutes after the day's start, never client-supplied. Measured from
- * the start, not from the end of the grace window; within the grace it is 0 (`_late_after`).
- */
+/** `calendar.late_minutes`: minutes after the day's start (`lateAfter`). */
 function lateMinutes(store: AttendanceRegisterStore, checkIn: string): number {
-  const minutes = (time: string) => {
-    const [hours = 0, mins = 0] = time.split(":").map(Number);
-    return hours * 60 + mins;
-  };
-  const late = minutes(checkIn) - minutes(store.dayStart);
-  return late <= store.graceMinutes ? 0 : late;
+  return lateAfter(store.dayStart, checkIn, store.graceMinutes);
 }
 
 /** `HH:MM`, what a `<input type="time">` sends. */
 const SHORT_TIME_LENGTH = 5;
 
 /** DRF's `TimeField` answers `HH:MM:SS`. */
-function asTime(value: unknown): string | null {
+export function asTime(value: unknown): string | null {
   if (typeof value !== "string" || value === "") return null;
   return value.length === SHORT_TIME_LENGTH ? `${value}:00` : value;
+}
+
+/** A time DRF's `TimeField` parses: `HH:MM` or `HH:MM:SS`. */
+export function isTime(value: unknown): boolean {
+  return typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(value);
+}
+
+/** DRF's `TimeField.default_error_messages["invalid"]` for the formats this API accepts; the
+ * microseconds placeholder is DRF's own six `u`s, built so the spell check reads no word. */
+export const TIME_FORMAT_ISSUE =
+  "Time has wrong format. Use one of these formats instead: " + `hh:mm[:ss[.${"u".repeat(6)}]].`;
+
+/** `services.CORRECTABLE_FIELDS` (student rows) and `STAFF_CORRECTABLE_FIELDS` (staff rows). */
+const STUDENT_CORRECTABLE = CORRECTABLE_FIELDS;
+const STAFF_CORRECTABLE = ["status", "check_in_time", "check_out_time"] as const;
+/** `AttendanceCorrection.reason`'s `max_length`. */
+const REASON_MAX_LENGTH = 500;
+const TARGET_FIELDS = ["student_attendance_id", "staff_attendance_id"] as const;
+
+/** The row a correction names, as the view resolves it through the caller's scope. */
+export interface CorrectionTarget {
+  field: "student_attendance_id" | "staff_attendance_id";
+  locked: boolean;
+  /** The row's current values, keyed by correctable field, times as `HH:MM:SS`. */
+  current: Record<string, unknown>;
+  /** The read fields the correction carries for its target (the other kind's are null). */
+  subject: Pick<
+    CorrectionRecord,
+    | "subject_type"
+    | "student_attendance_id"
+    | "staff_attendance_id"
+    | "student_id"
+    | "student_name"
+    | "staff_name"
+    | "employee_number"
+    | "subject_user_id"
+    | "attendance_date"
+    | "period_name"
+  >;
+}
+
+export interface CorrectionRequester {
+  id: string;
+  name: string | null;
+}
+
+/**
+ * `AttendanceCorrectionSerializer`'s field stage: every field's error together, in the
+ * serializer's field order (the two target ids, `new_values`, `reason`). Answers the normalised
+ * proposal and reason, or the 400.
+ */
+function correctionFields(
+  body: CorrectionBody,
+): { values: Record<string, unknown>; reason: string } | MockResponse {
+  const details: ApiErrorDetail[] = [];
+  for (const field of TARGET_FIELDS) {
+    const id = body[field];
+    if (id !== undefined && id !== null && !isUuid(id)) {
+      details.push({ field, issue: INVALID_UUID });
+    }
+  }
+
+  const raw = body.new_values;
+  const values: Record<string, unknown> = {};
+  if (raw === undefined) details.push({ field: "new_values", issue: REQUIRED });
+  else if (raw === null) details.push({ field: "new_values", issue: NOT_NULL });
+  else if (typeof raw !== "object" || Array.isArray(raw)) {
+    details.push({ field: "new_values", issue: "Expected an object of field → new value." });
+  } else {
+    Object.assign(values, raw);
+    // `validate_new_values` round-trips each time through a `TimeField`: the first bad one
+    // raises.
+    const badTime = ["check_in_time", "check_out_time"].find((field) => {
+      const value = values[field];
+      if (value === undefined || value === null) return false;
+      if (!isTime(value)) return true;
+      values[field] = asTime(value);
+      return false;
+    });
+    if (badTime) details.push({ field: "new_values", issue: TIME_FORMAT_ISSUE });
+  }
+
+  // A `CharField`: required, not null, trimmed, then not blank and at most 500 characters.
+  const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+  if (body.reason === undefined) details.push({ field: "reason", issue: REQUIRED });
+  else if (body.reason === null) details.push({ field: "reason", issue: NOT_NULL });
+  else if (reason === "") details.push({ field: "reason", issue: NOT_BLANK });
+  else if (reason.length > REASON_MAX_LENGTH) {
+    details.push({
+      field: "reason",
+      issue: `Ensure this field has no more than ${REASON_MAX_LENGTH} characters.`,
+    });
+  }
+
+  return details.length > 0 ? fieldErrors(details) : { values, reason };
+}
+
+/**
+ * `POST /attendance-corrections` in the server's order: the serializer's fields (well-formed
+ * target ids, `new_values` an object with valid times, a `reason`; 400s together), its
+ * `validate` (exactly one target, then only the fields and statuses that target's kind allows;
+ * 400s), the view's scoped lookup (404), then `request_correction` (still editable, no field
+ * named, unchanged values, and for a staff row check-out after check-in; 422s), each with the
+ * server's sentence. `resolve` answers for the targets the calling stub holds.
+ */
+export function raiseCorrection(
+  body: CorrectionBody,
+  resolve: (field: CorrectionTarget["field"], id: string) => CorrectionTarget | undefined,
+  requester: CorrectionRequester,
+  onCreate?: (correction: CorrectionRecord) => void,
+): MockResponse {
+  const accepted = correctionFields(body);
+  if (!("values" in accepted)) return accepted;
+  const { values, reason } = accepted;
+
+  const named = TARGET_FIELDS.filter((field) => body[field] !== undefined && body[field] !== null);
+  const [targetField] = named;
+  if (named.length !== 1 || !targetField) {
+    return fieldError("non_field_errors", CORRECTION_MESSAGES.oneTarget);
+  }
+  const isStaff = targetField === "staff_attendance_id";
+  const fields: readonly string[] = isStaff ? STAFF_CORRECTABLE : STUDENT_CORRECTABLE;
+  const statuses: readonly string[] = isStaff
+    ? STAFF_ATTENDANCE_STATUSES
+    : STUDENT_ATTENDANCE_STATUSES;
+  const unknown = Object.keys(values)
+    .filter((field) => !fields.includes(field))
+    .sort();
+  if (unknown.length > 0) {
+    return fieldError(
+      "new_values",
+      `Not correctable: ${unknown.join(", ")}. Allowed: ${fields.join(", ")}.`,
+    );
+  }
+  if ("status" in values) {
+    if (!statuses.includes(String(values["status"]))) {
+      return fieldError("new_values.status", CORRECTION_MESSAGES.unknownStatus);
+    }
+    if (values["status"] === "on_leave") {
+      return fieldError("new_values.status", CORRECTION_MESSAGES.onLeave);
+    }
+  }
+
+  // A string by now: the field stage refused any id that is not a UUID.
+  const targetId = body[targetField];
+  const target = typeof targetId === "string" ? resolve(targetField, targetId) : undefined;
+  if (!target) return fail(404, "Not found.");
+  if (!target.locked) return refusal(target.field, ATTENDANCE_MESSAGES.correctionNotLocked);
+  const proposed = Object.fromEntries(
+    fields.filter((field) => field in values).map((field) => [field, values[field]]),
+  );
+  if (Object.keys(proposed).length === 0) {
+    return refusal("new_values", `Name at least one of: ${fields.join(", ")}.`);
+  }
+  const old = Object.fromEntries(
+    Object.keys(proposed).map((field) => [field, target.current[field] ?? null]),
+  );
+  if (JSON.stringify(old) === JSON.stringify(proposed)) {
+    return refusal("new_values", ATTENDANCE_MESSAGES.correctionUnchanged);
+  }
+  if (isStaff) {
+    // `proposed.get(field, row's value)`: a time proposed as null stays null.
+    const asEnded = (field: string) =>
+      (field in proposed ? proposed[field] : target.current[field]) as string | null;
+    const checkIn = asEnded("check_in_time");
+    const checkOut = asEnded("check_out_time");
+    if (checkIn && checkOut && checkOut <= checkIn) {
+      return refusal("new_values", CORRECTION_MESSAGES.checkOutBeforeCheckIn);
+    }
+  }
+
+  const now = new Date().toISOString();
+  const correction: CorrectionRecord = {
+    id: uuid(),
+    ...target.subject,
+    requested_by: requester.id,
+    requested_by_name: requester.name,
+    old_values: old,
+    new_values: proposed,
+    reason,
+    status: "pending",
+    reviewed_by: null,
+    reviewed_by_name: null,
+    reviewed_at: null,
+    review_note: null,
+    created_at: now,
+    updated_at: now,
+  };
+  onCreate?.(correction);
+  return ok(structuredClone(correction), { status: 201 });
 }
 
 interface BulkMarkEntry {
@@ -112,10 +345,11 @@ interface BulkMarkEntry {
   remarks?: string;
 }
 
-interface CorrectionBody {
-  student_attendance_id?: string;
-  new_values?: Record<string, unknown>;
-  reason?: string;
+export interface CorrectionBody {
+  student_attendance_id?: unknown;
+  staff_attendance_id?: unknown;
+  new_values?: unknown;
+  reason?: unknown;
 }
 
 interface BulkMarkBody {
@@ -317,55 +551,15 @@ export function attendanceRegisterModule(store: AttendanceRegisterStore): MockMo
       return paginated(rows, { page_size: Number(params.get("page_size") ?? rows.length) });
     });
 
-    api.post("/attendance-corrections", (request) => {
-      const body = (request.json() as CorrectionBody | null) ?? {};
-      const target = store.records.find((row) => row.id === body.student_attendance_id);
-      if (!target) return fail(404, "Not found.");
-      if (!store.isLocked(target)) {
-        return refusal("student_attendance_id", ATTENDANCE_MESSAGES.correctionNotLocked);
-      }
-      const proposed = Object.fromEntries(
-        CORRECTABLE_FIELDS.filter((field) => field in (body.new_values ?? {})).map((field) => [
-          field,
-          body.new_values?.[field],
-        ]),
-      );
-      if (Object.keys(proposed).length === 0) {
-        return refusal("new_values", `Name at least one of: ${CORRECTABLE_FIELDS.join(", ")}.`);
-      }
-      const old = Object.fromEntries(
-        Object.keys(proposed).map((field) => [field, target[field as keyof AttendanceRecord]]),
-      );
-      if (JSON.stringify(old) === JSON.stringify(proposed)) {
-        return refusal("new_values", ATTENDANCE_MESSAGES.correctionUnchanged);
-      }
-      const now = new Date().toISOString();
-      return ok(
-        {
-          id: uuid(),
-          subject_type: "student",
-          student_attendance_id: target.id,
-          student_id: target.student_id,
-          student_name: target.student_name,
-          attendance_date: target.attendance_date,
-          period_name: target.period_name,
-          requested_by: store.userId,
-          // The mock's signed-in user has no name; the server's is nullable.
-          requested_by_name: null,
-          old_values: old,
-          new_values: proposed,
-          reason: body.reason ?? "",
-          status: "pending",
-          reviewed_by: null,
-          reviewed_by_name: null,
-          reviewed_at: null,
-          review_note: null,
-          created_at: now,
-          updated_at: now,
-        },
-        { status: 201 },
-      );
-    });
+    api.post("/attendance-corrections", (request) =>
+      raiseCorrection(
+        (request.json() as CorrectionBody | null) ?? {},
+        (field, id) =>
+          field === "student_attendance_id" ? studentCorrectionTarget(store, id) : undefined,
+        // The mock's signed-in user has no name here; the server's is nullable.
+        { id: store.userId, name: null },
+      ),
+    );
 
     const settings = () => ({
       attendance_mode: store.mode,

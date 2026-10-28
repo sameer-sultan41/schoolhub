@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState, type ChangeEvent } from "react";
+import { useEffect, useId, useState, type ChangeEvent, type ReactNode } from "react";
 import {
   Alert,
   AlertDescription,
@@ -49,6 +49,11 @@ export interface BulkImportDialogProps {
   /** Per-module sessionStorage prefix; the signed-in user's id is appended. */
   storageKeyPrefix: string;
   start: (file: File) => Promise<{ jobId: string }>;
+  /** Inputs the import needs besides the file (attendance's session), above the file picker;
+   * `disabled` while an upload or a job is under way, as the file picker is. */
+  renderFields?: (disabled: boolean) => ReactNode;
+  /** False holds Upload back while a required extra field is still empty. Defaults to true. */
+  canUpload?: boolean;
 }
 
 /**
@@ -67,6 +72,8 @@ export function BulkImportDialog({
   optionalColumns,
   storageKeyPrefix,
   start,
+  renderFields,
+  canUpload = true,
 }: BulkImportDialogProps) {
   const t = useTranslations("bulkImport");
   const tCommon = useTranslations("common");
@@ -213,6 +220,8 @@ export function BulkImportDialog({
             </div>
           </div>
 
+          {renderFields?.(isBusy)}
+
           <div className="space-y-1.5">
             <Label htmlFor={fileInputId}>{t("fields.file")}</Label>
             <Input
@@ -317,7 +326,7 @@ export function BulkImportDialog({
             {jobId === null ? tCommon("cancel") : canReconnect ? t("runInBackground") : t("close")}
           </Button>
           {jobId === null ? (
-            <Button onClick={handleImportClick} disabled={!file || trigger.isPending}>
+            <Button onClick={handleImportClick} disabled={!file || !canUpload || trigger.isPending}>
               {t("upload")}
             </Button>
           ) : null}

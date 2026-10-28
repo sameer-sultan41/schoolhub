@@ -3,6 +3,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import { toast } from "sonner";
 
 import { CORRECTIONS_QUERY_MODULE } from "@/services/modules/attendance-corrections/attendance-corrections-constant";
+import { STAFF_ATTENDANCE_QUERY_MODULE } from "@/services/modules/staff-attendance/staff-attendance-constant";
 import { STUDENT_ATTENDANCE_QUERY_MODULE } from "@/services/modules/student-attendance/student-attendance-constant";
 
 import {
@@ -12,6 +13,7 @@ import {
   CORRECTION_ID,
   OWN_REQUEST,
 } from "@/services/modules/attendance-corrections/__tests__/attendance-corrections-fixtures";
+import { STAFF_ROW_ID } from "@/services/modules/staff-attendance/__tests__/staff-attendance-fixtures";
 
 import {
   amnaPending,
@@ -19,6 +21,7 @@ import {
   bilalOwn,
   decide,
   fetchPage,
+  MY_USER_ID,
   renderCorrections,
   renderCorrectionsWithClient,
   saraApproved,
@@ -95,6 +98,27 @@ describe("CorrectionsTable decisions", () => {
 
     await screen.findByText("Bilal Khan");
     expect(screen.queryByRole("button", { name: /^(Approve|Reject) the correction/ })).toBeNull();
+  });
+
+  it("offers no decision on a correction to the approver's own attendance", async () => {
+    // Raised by someone else, but the staff member it is about is the signed-in user.
+    const aboutMe = correctionRecord({
+      subject_type: "staff",
+      student_attendance_id: null,
+      student_id: null,
+      student_name: null,
+      staff_attendance_id: STAFF_ROW_ID,
+      staff_name: "Nadia Hussain",
+      subject_user_id: MY_USER_ID,
+    });
+    fetchPage.mockResolvedValue(correctionPage([amnaPending, aboutMe]));
+    await renderCorrections();
+
+    await screen.findByText("Nadia Hussain");
+    expect(screen.getByRole("button", { name: APPROVE_AMNA })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^(Approve|Reject) the correction for Nadia Hussain/ }),
+    ).toBeNull();
   });
 
   it("offers no decision without attendance.correction.approve", async () => {
@@ -202,6 +226,38 @@ describe("CorrectionsTable decisions", () => {
       expect(invalidated(invalidate)).toEqual([
         CORRECTIONS_QUERY_MODULE,
         STUDENT_ATTENDANCE_QUERY_MODULE,
+      ]);
+    });
+  });
+
+  it("names a staff correction, and its approval refreshes staff attendance", async () => {
+    // A staff row's correction as the server sends it: the student fields null.
+    const nadiaPending = correctionRecord({
+      subject_type: "staff",
+      student_attendance_id: null,
+      student_id: null,
+      student_name: null,
+      staff_attendance_id: STAFF_ROW_ID,
+      staff_name: "Nadia Hussain",
+      employee_number: "EMP-001",
+      old_values: { status: "late", check_in_time: "08:40:00", check_out_time: null },
+      new_values: { check_in_time: "08:05" },
+    });
+    fetchPage.mockResolvedValue(correctionPage([nadiaPending]));
+    decide.mockResolvedValue({ ...nadiaPending, status: "approved" });
+    const { user, invalidate } = await renderSpyingOnCache();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Approve the correction for Nadia Hussain" }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "Approve correction" });
+    expect(within(dialog).getByText(/^Nadia Hussain,/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Approve" }));
+
+    await waitFor(() => {
+      expect(invalidated(invalidate)).toEqual([
+        CORRECTIONS_QUERY_MODULE,
+        STAFF_ATTENDANCE_QUERY_MODULE,
       ]);
     });
   });

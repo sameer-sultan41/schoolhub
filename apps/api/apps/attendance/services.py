@@ -31,6 +31,7 @@ from apps.attendance.models import (
     AttendanceSource,
     AttendanceStatus,
     CorrectionStatus,
+    CorrectionSubjectType,
     DayPart,
     LeaveApproval,
     LeaveRequest,
@@ -838,28 +839,46 @@ def _queue_alerts(*, tenant_id: uuid.UUID, rows: list[StudentAttendance]) -> Non
 # ---------------------------------------------------------------------------
 
 CORRECTABLE_FIELDS = ("status", "check_in_time", "check_out_time", "remarks")
+# A staff day's correctable values: its status and its times (the times feed payroll).
+STAFF_CORRECTABLE_FIELDS = ("status", "check_in_time", "check_out_time")
+
+CORRECTION_STILL_EDITABLE = (
+    "This record is still within the marking window; edit the register instead."
+)
+CHECK_OUT_BEFORE_CHECK_IN = "Check-out must be later than check-in (§11)."
+OWN_ATTENDANCE_CORRECTION = "An approver cannot decide a correction to their own attendance (§11)."
+
+
+def correction_target_field(target: StudentAttendance | StaffAttendance) -> str:
+    """The request field that names `target`: `student_attendance_id` or `staff_attendance_id`."""
+    return "staff_attendance_id" if isinstance(target, StaffAttendance) else "student_attendance_id"
+
+
+def correctable_fields(target: StudentAttendance | StaffAttendance) -> tuple[str, ...]:
+    """The fields a correction may propose for `target`'s kind of row."""
+    return STAFF_CORRECTABLE_FIELDS if isinstance(target, StaffAttendance) else CORRECTABLE_FIELDS
 
 
 def request_correction(
-    *, target: StudentAttendance, new_values: dict, reason: str, actor_id: uuid.UUID
+    *,
+    target: StudentAttendance | StaffAttendance,
+    new_values: dict,
+    reason: str,
+    actor_id: uuid.UUID,
 ) -> AttendanceCorrection:
     """§5.5 — a locked row is changed only through an approved correction.
 
     Refuses an *unlocked* row deliberately: while a row is still editable the
     teacher can simply re-mark it, and a correction raised against it would sit
     in an approver's queue asking them to authorise something the requester
-    could already do.
+    could already do. The target is a student row or a staff row; `subject_type`
+    follows from which.
     """
     if not (target.is_locked or is_locked(target.attendance_date)):
-        raise DomainRuleViolation(
-            {
-                "student_attendance_id": (
-                    "This record is still within the marking window; edit the register instead."
-                )
-            }
-        )
+        raise DomainRuleViolation({correction_target_field(target): CORRECTION_STILL_EDITABLE})
 
-    proposed = {field: new_values[field] for field in CORRECTABLE_FIELDS if field in new_values}
+    fields = correctable_fields(target)
+    proposed = {field: new_values[field] for field in fields if field in new_values}
     if proposed.get("status") in SYSTEM_ONLY_STATUSES:
         # The same rule the register enforces, and it has to hold here too: a
         # correction is the *other* write path onto an attendance row, and
@@ -871,9 +890,7 @@ def request_correction(
             {"new_values": ("'on_leave' is set by an approved leave request, not by a correction.")}
         )
     if not proposed:
-        raise DomainRuleViolation(
-            {"new_values": f"Name at least one of: {', '.join(CORRECTABLE_FIELDS)}."}
-        )
+        raise DomainRuleViolation({"new_values": f"Name at least one of: {', '.join(fields)}."})
 
     # Compared *after* normalisation, not before. The serializer stores times as
     # ISO strings (so `_from_json` reads back exactly what a TimeField wrote),
@@ -883,11 +900,16 @@ def request_correction(
     old = {field: getattr(target, field) for field in proposed}
     if _to_json(old) == _to_json(proposed):
         raise DomainRuleViolation({"new_values": "The proposed values match the record (§11)."})
+    is_staff = isinstance(target, StaffAttendance)
+    if isinstance(target, StaffAttendance):
+        # The table's CHECK would refuse it at `:approve` as a 500; refuse it here, by name.
+        _assert_check_out_after_check_in(target, _to_json(proposed))
 
     return AttendanceCorrection.objects.create(
         tenant_id=target.tenant_id,
-        subject_type="student",
-        student_attendance=target,
+        subject_type=CorrectionSubjectType.STAFF if is_staff else CorrectionSubjectType.STUDENT,
+        student_attendance=None if is_staff else target,
+        staff_attendance=target if is_staff else None,
         requested_by=actor_id,
         old_values=_to_json(old),
         new_values=_to_json(proposed),
@@ -905,11 +927,12 @@ def decide_correction(
     reviewer_id: uuid.UUID,
     note: str | None = None,
 ) -> AttendanceCorrection:
-    """§11 — approver ≠ requester. Segregation of duties (auth-and-rbac §2.4).
+    """§11 — the approver is neither the requester nor a staff correction's subject.
 
-    Checked here rather than in the viewset because the rule is the module's, not
-    HTTP's: the same check has to hold when hr-leave later approves through its
-    own endpoint, and when a bulk approval screen calls this in a loop.
+    Segregation of duties (auth-and-rbac §2.4). Checked here rather than in the
+    viewset because the rule is the module's, not HTTP's: the same check has to
+    hold when hr-leave later approves through its own endpoint, and when a bulk
+    approval screen calls this in a loop.
 
     An approved correction applies ``new_values`` to the target **and the
     correction row stays**: §6 makes the row itself the audit trail, so it is
@@ -934,6 +957,15 @@ def decide_correction(
         raise DomainRuleViolation(
             {"reviewed_by": "An approver cannot decide their own correction request (§11)."}
         )
+    # The same rule from the other side: a second person raising it does not let the
+    # staff member approve a change to their own payroll inputs.
+    if (
+        correction.staff_attendance_id is not None
+        and StaffAttendance.objects.filter(
+            pk=correction.staff_attendance_id, staff__user_id=reviewer_id
+        ).exists()
+    ):
+        raise DomainRuleViolation({"reviewed_by": OWN_ATTENDANCE_CORRECTION})
 
     correction.status = CorrectionStatus.APPROVED if approve else CorrectionStatus.REJECTED
     correction.reviewed_by = reviewer_id
@@ -966,7 +998,13 @@ def _apply_correction(*, correction: AttendanceCorrection, reviewer_id: uuid.UUI
     corrected from absent to late reported zero minutes late, and §13's
     punctuality report summed those zeros. Recomputing here is the same call the
     register makes, so both write paths agree — a period row from its period's start.
+    A staff row recomputes both its late and early-departure minutes from the
+    staff day window, as ``mark_staff_attendance`` does.
     """
+    if correction.staff_attendance_id is not None:
+        _apply_staff_correction(correction=correction, reviewer_id=reviewer_id)
+        return
+
     target = StudentAttendance.objects.select_for_update().get(pk=correction.student_attendance_id)
     for field, value in correction.new_values.items():
         setattr(target, field, _from_json(field, value))
@@ -980,6 +1018,42 @@ def _apply_correction(*, correction: AttendanceCorrection, reviewer_id: uuid.UUI
     )
     target.updated_by = reviewer_id
     target.save(update_fields=[*correction.new_values, "late_minutes", "updated_by", "updated_at"])
+
+
+def _apply_staff_correction(*, correction: AttendanceCorrection, reviewer_id: uuid.UUID) -> None:
+    """Write an approved staff correction, recomputing both minutes from the staff day window.
+
+    The times are re-checked against the row as it is now: another correction
+    approved since this one was raised may have moved the other time.
+    """
+    target = (
+        # Locks the attendance row only; the joined staff row is read, not written.
+        StaffAttendance.objects.select_for_update(of=("self",))
+        .select_related("staff")
+        .get(pk=correction.staff_attendance_id)
+    )
+    _assert_check_out_after_check_in(target, correction.new_values)
+    for field, value in correction.new_values.items():
+        setattr(target, field, _from_json(field, value))
+
+    minutes = staff_minutes(
+        status=target.status,
+        check_in_time=target.check_in_time,
+        check_out_time=target.check_out_time,
+        campus_id=_staff_campus_id(target.staff),
+    )
+    for field, value in minutes.items():
+        setattr(target, field, value)
+    target.updated_by = reviewer_id
+    target.save(update_fields=[*correction.new_values, *minutes, "updated_by", "updated_at"])
+
+
+def _assert_check_out_after_check_in(target: StaffAttendance, proposed: dict) -> None:
+    """§11 over the row as a correction would leave it: check-out after check-in."""
+    check_in = _from_json("check_in_time", proposed.get("check_in_time", target.check_in_time))
+    check_out = _from_json("check_out_time", proposed.get("check_out_time", target.check_out_time))
+    if check_in is not None and check_out is not None and check_out <= check_in:
+        raise DomainRuleViolation({"new_values": CHECK_OUT_BEFORE_CHECK_IN})
 
 
 def _to_json(values: dict) -> dict:
@@ -1503,6 +1577,41 @@ def _staff_campus_id(staff: Staff) -> uuid.UUID | None:
     return staff.campus_id
 
 
+# The statuses of a day the person worked, so the only ones with late or early minutes.
+STAFF_TIMED_STATUSES = frozenset(
+    {StaffAttendanceStatus.PRESENT, StaffAttendanceStatus.LATE, StaffAttendanceStatus.HALF_DAY}
+)
+
+
+def staff_minutes(
+    *,
+    status: str,
+    check_in_time: datetime.time | None,
+    check_out_time: datetime.time | None,
+    campus_id: uuid.UUID | None,
+) -> dict[str, int | None]:
+    """A staff day's computed minutes (§11): late from the day's start, early from its end.
+
+    One computation for marking, check-out and an approved correction, so every
+    write path measures a payroll input the same way. Only a day the person
+    worked has minutes: an absent day that kept its times counts no early leave.
+    """
+    if status not in STAFF_TIMED_STATUSES:
+        return {"late_minutes": None, "early_departure_minutes": None}
+    return {
+        "late_minutes": (
+            calendar.late_minutes(check_in_time, campus_id=campus_id)
+            if status == StaffAttendanceStatus.LATE and check_in_time is not None
+            else None
+        ),
+        "early_departure_minutes": (
+            calendar.early_departure_minutes(check_out_time, campus_id=campus_id)
+            if check_out_time is not None
+            else None
+        ),
+    }
+
+
 @transaction.atomic
 def mark_staff_attendance(
     *,
@@ -1554,15 +1663,11 @@ def mark_staff_attendance(
         "status": status,
         "check_in_time": check_in_time,
         "check_out_time": check_out_time,
-        "late_minutes": (
-            calendar.late_minutes(check_in_time, campus_id=campus_id)
-            if status == StaffAttendanceStatus.LATE and check_in_time is not None
-            else None
-        ),
-        "early_departure_minutes": (
-            calendar.early_departure_minutes(check_out_time, campus_id=campus_id)
-            if check_out_time is not None
-            else None
+        **staff_minutes(
+            status=status,
+            check_in_time=check_in_time,
+            check_out_time=check_out_time,
+            campus_id=campus_id,
         ),
         "remarks": remarks,
         "source": source,
@@ -1640,9 +1745,12 @@ def check_out_staff(
         raise Conflict("This record is locked and must be changed through a correction.")
 
     row.check_out_time = check_out_time
-    row.early_departure_minutes = calendar.early_departure_minutes(
-        check_out_time, campus_id=_staff_campus_id(row.staff)
-    )
+    row.early_departure_minutes = staff_minutes(
+        status=row.status,
+        check_in_time=row.check_in_time,
+        check_out_time=check_out_time,
+        campus_id=_staff_campus_id(row.staff),
+    )["early_departure_minutes"]
     row.updated_by = actor_id
     row.save(
         update_fields=[

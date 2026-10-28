@@ -1360,6 +1360,8 @@
       "records": "Records",
       "corrections": "Corrections",
       "leave": "Leave",
+      "staff": "Staff",
+      "reports": "Reports",
       "settings": "Settings"
     },
     "settings": {
@@ -1396,7 +1398,8 @@
       "late": "Late",
       "half_day": "Half day",
       "excused": "Excused",
-      "on_leave": "On leave"
+      "on_leave": "On leave",
+      "holiday": "Holiday"
     },
     "register": {
       "title": "Register",
@@ -1476,6 +1479,7 @@
       "submitting": "Requesting the correction…",
       "requested": "Correction requested. It takes effect once it is approved.",
       "unchanged": "Change at least one value to request a correction.",
+      "absentClearsTimes": "Absent clears this day's check-in and check-out.",
       "reasonRequired": "Give a reason for the correction.",
       "reasonTooLong": "Keep the reason to 500 characters or fewer.",
       "remarksTooLong": "Keep the remarks to 255 characters or fewer."
@@ -1489,6 +1493,8 @@
       "noMatches": "No records match these filters",
       "noMatchesDescription": "Try a different date range, or clear a filter.",
       "loadError": "The attendance records couldn't be loaded.",
+      "importOnlyTitle": "Attendance import",
+      "importOnlyDescription": "Use Import above to load a previous system's attendance. Viewing the records needs permission to view attendance.",
       "pagination": "Records pages",
       "filters": {
         "from": "From date",
@@ -1514,9 +1520,16 @@
       },
       "source": {
         "manual": "Manual",
+        "self": "Self check-in",
         "system": "System",
         "import": "Import",
         "device": "Device"
+      },
+      "import": {
+        "button": "Import",
+        "title": "Import attendance history",
+        "description": "Load a previous system's register from a CSV or .xlsx file. Rows are filed under the session you pick, land locked, and alert no one.",
+        "sessionHint": "The session these rows belong to."
       }
     },
     "requestStatus": {
@@ -1539,10 +1552,16 @@
       "filters": {
         "status": "Status",
         "all": "All",
-        "mine": "Mine"
+        "mine": "Mine",
+        "subject": "Student or staff"
       },
-      "columns": {
+      "subject": {
         "student": "Student",
+        "staff": "Staff"
+      },
+      "staffDay": "Whole day (staff)",
+      "columns": {
+        "student": "Student or staff",
         "date": "Date",
         "period": "Period",
         "change": "Change",
@@ -1671,6 +1690,142 @@
         "note": "Note (optional)",
         "noteHint": "The family can read this.",
         "noteTooLong": "Keep the note to 500 characters or fewer."
+      }
+    },
+    "staff": {
+      "title": "Staff attendance",
+      "summaryMark": "Mark each staff member's day for a date, saving one row at a time, or look back at the history.",
+      "summaryView": "The staff attendance records you may see, newest day first: your own, unless your role covers more. A record past the lock window can only be changed through a correction.",
+      "views": {
+        "label": "Staff attendance views",
+        "register": "Register",
+        "history": "History"
+      },
+      "register": {
+        "label": "Staff register for {date}",
+        "loading": "Loading the staff register…",
+        "loadError": "The staff register couldn't be loaded.",
+        "emptyTitle": "No staff",
+        "empty": "No active staff member had joined by this date.",
+        "listLabel": "Staff",
+        "saveFor": "Save attendance for {name}",
+        "saved": "Attendance saved for {name}.",
+        "checkOut": "Check out",
+        "checkOutFor": "Check out {name}",
+        "checkedOut": "Out at {time}",
+        "absentClearsTimes": "Absent clears this day's check-in and check-out when saved."
+      },
+      "checkOut": {
+        "title": "Check out",
+        "description": "{name} checked in at {time} on {date}.",
+        "time": "Check-out time",
+        "submit": "Record check-out",
+        "submitting": "Recording the check-out…",
+        "done": "Check-out recorded for {name}.",
+        "required": "Enter the check-out time.",
+        "notAfterCheckIn": "Check-out must be later than check-in."
+      },
+      "history": {
+        "caption": "Staff attendance records",
+        "pagination": "Staff attendance pages",
+        "loadError": "The staff attendance records couldn't be loaded.",
+        "columns": {
+          "staff": "Staff member",
+          "checkIn": "Check-in",
+          "checkOut": "Check-out",
+          "earlyMinutes": "Early leave (min)"
+        }
+      }
+    },
+    "reports": {
+      "title": "Attendance reports",
+      "summary": "Run a report over a date range. Up to 1,000 rows show here; a larger report is built as a file to download.",
+      "form": {
+        "label": "Report options",
+        "kind": "Report",
+        "allClasses": "All classes",
+        "allSections": "All sections",
+        "wholeDay": "Whole day",
+        "threshold": "Below (%)",
+        "thresholdHint": "Lists the students whose attendance rate is below this percentage.",
+        "thresholdInvalid": "Enter a percentage from 0 to 100, with at most one decimal place.",
+        "run": "Run report",
+        "running": "Running the report…"
+      },
+      "kinds": {
+        "daily-register": "Daily register",
+        "student-summary": "Student summary",
+        "defaulters": "Defaulters",
+        "student-late-arrivals": "Late arrivals",
+        "staff-punctuality": "Staff punctuality",
+        "leave": "Leave"
+      },
+      "caption": "{report} report",
+      "rowCount": "{count, plural, one {# row} other {# rows}}",
+      "notRunTitle": "Pick a report and run it",
+      "notRunDescription": "Choose the report, its dates and any filters, then select Run report.",
+      "emptyTitle": "No rows",
+      "emptyDescription": "Nothing matches this report's dates and filters.",
+      "loadError": "The report couldn't be run.",
+      "stale": "The options changed. Run the report to update it; the table below and its exports still show the last run.",
+      "pagination": "Report pages",
+      "fullName": "{first} {last}",
+      "rate": "{rate}%",
+      "columns": {
+        "student": "Student",
+        "staff": "Staff member",
+        "section": "Section",
+        "period": "Period",
+        "status": "Status",
+        "checkIn": "Check-in",
+        "lateMinutes": "Late (min)",
+        "remarks": "Remarks",
+        "presentDays": "Present",
+        "countedDays": "Counted days",
+        "absentDays": "Absent",
+        "lateDays": "Late",
+        "leaveDays": "Leave",
+        "rate": "Rate",
+        "lateCount": "Late days",
+        "totalLateMinutes": "Total late (min)",
+        "averageLateMinutes": "Average late (min)",
+        "workingDays": "Working days",
+        "earlyDepartureMinutes": "Left early (min)",
+        "leaveType": "Leave type",
+        "dates": "Dates",
+        "days": "Days",
+        "dayPart": "Day part"
+      },
+      "queued": {
+        "title": "This report is being built as a file",
+        "description": "It has more than 1,000 rows, too many to show here, so the server is building it as a CSV file.",
+        "progress": "Building the file — {progress}%",
+        "ready": "The file is ready.",
+        "download": "Download CSV",
+        "downloading": "Preparing the download…",
+        "downloadFailed": "The file couldn't be downloaded.",
+        "failed": "The report file couldn't be built.",
+        "pollFailed": "The report's progress couldn't be checked.",
+        "timedOut": "Still building in the background. Check again in a moment.",
+        "checkAgain": "Check again",
+        "runAgain": "Run the report again"
+      },
+      "export": {
+        "label": "Export the report",
+        "button": "Export {format}",
+        "exporting": "Exporting {format}…",
+        "checkStatus": "Check {format} export",
+        "permissionTitle": "You don't have permission to export reports.",
+        "success": "Report exported.",
+        "startFailed": "The export could not be started.",
+        "downloadFailed": "The export file could not be downloaded.",
+        "timedOut": "The export is taking longer than expected. Try again in a moment.",
+        "failed": "The export failed."
+      },
+      "formats": {
+        "csv": "CSV",
+        "xlsx": "XLSX",
+        "pdf": "PDF"
       }
     }
   },

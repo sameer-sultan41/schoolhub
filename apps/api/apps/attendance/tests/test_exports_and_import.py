@@ -345,6 +345,39 @@ class ImportEndpointTests(AttendanceAPITestCase):
             job = BackgroundJob.objects.get(pk=response.data["data"]["job_id"])
         self.assertEqual(job.result["errors"][0]["row"], "3")
 
+    def test_the_result_has_the_shape_every_importer_reports(self) -> None:
+        """`{total, succeeded, failed, errors}`, as the student and staff importers send: the
+        dashboard's shared import dialog reads `failed` for its summary badge."""
+        from core.jobs.models import BackgroundJob
+
+        day = (timezone.localdate() - datetime.timedelta(days=200)).isoformat()
+        lines = [
+            "admission_number,attendance_date,status",
+            f"{self.students[0].admission_number},{day},absent",
+            f"NOPE,{day},present",
+        ]
+        response = run_on_commit(
+            self, lambda: self.upload(content=("\n".join(lines) + "\n").encode())
+        )
+
+        with tenant_context(self.tenant.id):
+            job = BackgroundJob.objects.get(pk=response.data["data"]["job_id"])
+        self.assertEqual(
+            job.result,
+            {
+                "total": 2,
+                "succeeded": 1,
+                "failed": 1,
+                "errors": [
+                    {
+                        "row": "3",
+                        "field": "admission_number",
+                        "issue": "No live student has this admission number.",
+                    }
+                ],
+            },
+        )
+
 
 class ImportOverwriteGuardTests(HistoricalImportTests):
     """The import upserts, so it can land on a row a human has already settled."""
