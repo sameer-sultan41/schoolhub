@@ -78,8 +78,8 @@ async function approverSession(): Promise<ApiClient> {
 let guardianLogin: Promise<ApiClient> | undefined;
 
 /**
- * The seeded guardian's session, one login per worker rather than per test: five tests here
- * would otherwise spend five of `AuthEndpointThrottle`'s 10 a minute (e2e/AGENTS.md). The same
+ * The seeded guardian's session, one login per worker rather than per test: four tests here
+ * would otherwise spend four of `AuthEndpointThrottle`'s 10 a minute (e2e/AGENTS.md). The same
  * pattern as `attendance-marking.spec.ts`'s `markerSession`.
  */
 async function guardianSession(): Promise<ApiClient> {

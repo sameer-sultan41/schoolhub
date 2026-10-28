@@ -199,9 +199,10 @@ test.describe("admission -> enrollment (real API, school_admin)", () => {
     // by the baseline session the student was enrolled in before transferring still
     // finds them (a past, no-longer-current enrollment row is still a real match — the
     // filter-correctness fix's own scope decision), proving the fix end to end against
-    // the real database, not a stub. The search from step 8 stays applied, and the
-    // row is checked only after the filtered list has come back, since it was already
-    // on screen before the filter.
+    // the real database, not a stub. The search from step 8 stays applied. The proof is
+    // the filtered response's own body: the table keeps the previous rows on screen while
+    // a filtered page loads (`keepPreviousData`), so the row alone would match the stale
+    // list before the filtered one renders.
     await studentDetailPage.close();
     const filteredList = page.waitForResponse((response) => {
       const url = new URL(response.url());
@@ -213,7 +214,10 @@ test.describe("admission -> enrollment (real API, school_admin)", () => {
     });
     await studentsPage.sessionFilter.click();
     await page.getByRole("option", { name: E2E_BASELINE_SESSION_NAME, exact: true }).click();
-    expect((await filteredList).ok()).toBe(true);
+    const filtered = await filteredList;
+    expect(filtered.ok()).toBe(true);
+    const { data } = (await filtered.json()) as { data: { last_name: string }[] };
+    expect(data.map((student) => student.last_name)).toContain(lastName);
     await expect(studentsPage.row(lastName)).toBeVisible();
   });
 

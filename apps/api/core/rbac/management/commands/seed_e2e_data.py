@@ -300,6 +300,9 @@ E2E_PRINCIPAL_PERMISSIONS = [
     "school.academic-session.view",
     "school.class.view",
     "school.section.view",
+    # The student directory's house filter (`GET /houses`), which the admission journey's
+    # approver loads to reach the student; the real principal holds it through ALL_STAFF.
+    "school.house.view",
     # §7.2's escalation target. Two approver identities, not one, because a
     # request past the threshold needs two *different* people — one person
     # deciding both levels is refused (services.decide_leave_step), which is what

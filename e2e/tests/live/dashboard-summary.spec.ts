@@ -70,9 +70,5 @@ test.describe("dashboard home", () => {
     for (const label of HEADLINE_STATS) {
       await expect(dashboardPage.statWithNumber(label), `${label} stat`).toBeVisible();
     }
-
-    // A failed widget renders its error text in place of its data; the assertions above are
-    // the proof of loading, this only catches the fallback copy next to them.
-    await expect(dashboardPage.queryFallbackError).toHaveCount(0);
   });
 });

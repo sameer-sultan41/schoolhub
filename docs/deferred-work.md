@@ -334,6 +334,11 @@ either this file or `project-status.md`.
     Metronic Demo1 layout with real widgets. **Fixed** by asserting the home that ships.
     Still open: re-landing the rebuild means restoring that commit's panels and the spec's
     old assertions; the `dashboard.nowBand`/`teacherLoad` messages are unused until then.
+    The live spec proves the greeting, the staff grid and the four headline counts loaded;
+    `TeamMeeting` and `EarningsChart` have no live assertion, because their error branch
+    (`QueryErrorMessage`, a bare `<p>` with the API's message) has no role to assert absent
+    and their loaded state has nothing seeded to look for. Giving the error branch a role, and
+    the stat cards a labelled group instead of the spec's DOM-parent hop, closes both.
   - `academics-promotion-journey.spec.ts` (and the attendance register journey, the first time
     it ran) failed in the browser with "We could not reach the server": their writes send
     `Idempotency-Key`, which the API's CORS preflight did not allow (django-cors-headers'

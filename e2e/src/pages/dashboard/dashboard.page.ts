@@ -142,18 +142,11 @@ export class DashboardPage extends BasePage {
   /**
    * A row of the home's staff grid by the staff member's name. Search first with
    * `staffSearch`: the grid shows five rows a page, newest first, so a seeded row is not
-   * guaranteed to be on page one.
+   * guaranteed to be on page one. The search covers one server page (`page_size: 100`,
+   * ordered by last name), which a fresh nightly stack never fills; a local stack that has
+   * collected 100+ live-created "E2E Cover" teachers can push the seeded row off it.
    */
   staffRow(name: string): Locator {
     return this.page.getByRole("row").filter({ hasText: name });
-  }
-
-  /**
-   * The text `QueryErrorMessage` falls back to for an error that is not an `Error`
-   * (`query-error-message.tsx`). A real API failure renders the server's own message
-   * instead, so this proves little alone: pair it with assertions on loaded content.
-   */
-  get queryFallbackError(): Locator {
-    return this.page.getByText("Something went wrong.", { exact: true });
   }
 }

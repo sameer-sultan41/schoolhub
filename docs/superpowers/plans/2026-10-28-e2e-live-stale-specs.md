@@ -83,8 +83,11 @@ endpoints) and its one real login. Its assertions:
 - `ChannelStats`: each stat card shows a number, not the `—` placeholder. The locator is
   scoped to the card that holds the label, and is count-aware where a label also appears in
   `Highlights` (Playwright locators are strict).
-- No `QueryErrorMessage` text on the page, matched by its exact copy. The spec does **not**
-  use `role="alert"`, which also matches Next's route announcer.
+- ~~No `QueryErrorMessage` text on the page~~ — dropped in review (amended): the widget
+  prints the API's own error message, so no fixed copy can detect a failure, and the
+  error branch has no role. The loaded-content assertions above are the proof; a widget
+  not covered by one (`TeamMeeting`, `EarningsChart`) is recorded in `deferred-work.md`.
+  The spec does **not** use `role="alert"`, which also matches Next's route announcer.
 
 Locators live in `DashboardPage` (`e2e/src/pages/dashboard/dashboard.page.ts`), with no
 `expect` there. There is no product change: if a stat card has no unique locator without an
