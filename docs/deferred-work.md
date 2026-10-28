@@ -321,7 +321,9 @@ either this file or `project-status.md`.
     stayed queued. **Fixed** for the seven job endpoints that sent this way (promotion execute,
     the student, staff and attendance imports, the student and staff exports, ID cards) by
     `enqueue_job` in `core/jobs/services.py`, which sends the task in `transaction.on_commit`
-    and marks the job failed if the broker refuses it.
+    and marks the job failed if the broker refuses it. The next run (40659453170) then showed the
+    journey's last failure: the e2e seed's `school_admin` lacked `platform.job.view`, so the
+    screen's `GET /jobs/{id}` was a 403 and read as a failed job. **Fixed** in the seed.
   - Cross-origin responses don't expose `X-Request-ID` (no `CORS_EXPOSE_HEADERS`), so
     `ApiError.requestId` is always null in the dashboard. Nothing shows it today; exposing it
     is its own change with its own test.

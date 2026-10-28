@@ -220,6 +220,11 @@ E2E_SCHOOL_ADMIN_PERMISSIONS = [
     "academics.promotion.create",
     "academics.promotion.update",
     "academics.promotion.execute",
+    # `:execute` (and every other `202` + job this identity starts) is polled at
+    # `GET /jobs/{id}`, which needs this key; the real `school_admin` holds it through
+    # core/jobs/permissions.py's ALL_STAFF. Without it the poll is a 403 and the batch
+    # screen reports a job that succeeded as one that failed.
+    "platform.job.view",
     # Timetable (apps/timetable/permissions.py) — again exactly the keys that file grants
     # `school_admin`, and no more. It is in BUILDERS (the four slot keys), GRID_ADMINS
     # (period and room writes) and PUBLISHERS (`timetable.timetable.publish`), and
