@@ -1047,7 +1047,7 @@ class AttendanceImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet)
 
         from apps.attendance import uploads
         from apps.attendance.tasks import import_attendance_task
-        from core.jobs.services import attach_celery_task_id, create_job
+        from core.jobs.services import create_job, enqueue_job
 
         payload = AttendanceImportRequestSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
@@ -1072,11 +1072,6 @@ class AttendanceImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet)
             },
             actor_id=request.user.pk,
         )
-        result = import_attendance_task.delay(
-            tenant_id=str(request.tenant.pk),
-            job_id=str(job.pk),
-            actor_id=str(request.user.pk),
-        )
-        attach_celery_task_id(job=job, celery_task_id=result.id)
+        enqueue_job(job=job, task=import_attendance_task)
         record_audit(request, "import", job, after={"job_id": str(job.pk), "filename": upload.name})
         return ActionResponse.accepted(str(job.pk), message="Historical import queued.")

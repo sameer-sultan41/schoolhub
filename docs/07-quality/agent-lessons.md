@@ -142,6 +142,11 @@
 - **Mistake.** Attendance's derived-day reports wrap the scoped queryset's own SQL in a CTE (`queryset.query.sql_with_params()`, later `get_compiler(...).as_sql()`). For `.none()` — what `scope_queryset` returns to fail closed — or an empty `__in` (an exam whose results are all withheld), Django raises `EmptyResultSet` at compile time, where iterating the same queryset had returned `[]`. Every report over an empty scope, and the report-card job, would have been a 500. Caught in the change review of PR A's Task 2, not by a test.
 - **Check.** Wherever a queryset is compiled to raw SQL, catch `django.core.exceptions.EmptyResultSet` at the compile and return the empty result without running a query, as `reports._over_days` does. Test it with `.none()` and an empty `__in` under `assertNumQueries(0)`.
 
+### L26. A job's task is sent after its row commits
+
+- **Mistake.** Seven `202` + job endpoints (promotion execute, the student, staff and attendance imports, the student and staff exports, ID cards) called `task.delay()` inside the request's transaction (`ATOMIC_REQUESTS`). A fast worker looked the job up before it committed, raised `DoesNotExist`, and the job stayed `queued`; the promotion journey timed out on it in e2e-live run 40454439946. Eager Celery in tests ran the task inside the request, so no backend test could see it. The September audit (C8) had already named the student jobs.
+- **Check.** Never send a task inside the transaction that writes the rows it reads. For a job, prefer `core.jobs.services.enqueue_job(job=..., task=...)`, which sends on commit and stores the task id, and cover the endpoint with `core.jobs.tests.base.assert_sent_on_commit`; anything else goes in `transaction.on_commit`.
+
 
 
 ## 4. Adding a lesson

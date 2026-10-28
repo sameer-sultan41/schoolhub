@@ -19,6 +19,13 @@ either this file or `project-status.md`.
   pick it up the next time one of them is touched for an unrelated reason, or as a
   standalone pass.
 
+- **About a dozen job endpoints still queue with `transaction.on_commit(lambda: task.delay(...))`**
+  rather than `core.jobs.services.enqueue_job` (the attendance export; fees invoice
+  generation, settlement import and report export; the examinations admit cards, marks
+  import, result processing, report cards and paper assembly). They are race-free, but their
+  jobs carry no `celery_task_id` and a refused send leaves the job `queued`. Moving each onto
+  `enqueue_job` is mechanical; it was kept out of the fix PR for the seven that raced.
+
 - **Staff's wire types are hand-written structs, not generated `ApiSchemas["Staff"]`
   aliases.** `services/modules/staff/staff-type.ts`'s `StaffDirectoryRecord`,
   `StaffDetailRecord`, `CreateStaffInput`, etc. are hand-declared — a pre-existing
@@ -250,8 +257,13 @@ either this file or `project-status.md`.
     never showed it because its router answers every preflight with the header allowed.
     **Fixed** by allowing the header in `config/settings/base.py`. Run 40132416580 confirmed
     it: the register journey passes, and the promotion journey now gets past prepare and
-    approve but times out waiting for the batch to show "Executed" after `:execute`. That is
-    a separate failure (the execute job, or the screen's poll of it), not yet diagnosed.
+    approve but times out waiting for the batch to show "Executed" after `:execute`. e2e-live
+    run 40454439946 showed why: the view sent the task inside the request's transaction, the
+    worker looked the job up before it committed (`BackgroundJob.DoesNotExist`), and the job
+    stayed queued. **Fixed** for the seven job endpoints that sent this way (promotion execute,
+    the student, staff and attendance imports, the student and staff exports, ID cards) by
+    `enqueue_job` in `core/jobs/services.py`, which sends the task in `transaction.on_commit`
+    and marks the job failed if the broker refuses it.
   - Cross-origin responses don't expose `X-Request-ID` (no `CORS_EXPOSE_HEADERS`), so
     `ApiError.requestId` is always null in the dashboard. Nothing shows it today; exposing it
     is its own change with its own test.
