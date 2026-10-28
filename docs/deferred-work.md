@@ -331,7 +331,8 @@ either this file or `project-status.md`.
   - `dashboard-summary.spec.ts` asserted a "Today's schedule" list. The `scheduleLabel` message
     still exists, but nothing renders it: the rebuilt home (`032d8280`: now band, teaching
     load, places by class, quick actions) never reached `main`, whose `/dashboard` is the
-    Metronic Demo1 layout with real widgets. **Fixed** by asserting the home that ships.
+    Metronic Demo1 layout with real widgets. **Fixed** by asserting the home that ships; run
+    40757778787 confirmed it (the whole lane, 59 passed).
     Still open: re-landing the rebuild means restoring that commit's panels and the spec's
     old assertions; the `dashboard.nowBand`/`teacherLoad` messages are unused until then.
     The live spec proves the greeting, the staff grid and the four headline counts loaded;
@@ -359,11 +360,13 @@ either this file or `project-status.md`.
     `ApiError.requestId` is always null in the dashboard. Nothing shows it today; exposing it
     is its own change with its own test.
   - `students-admission-enrollment.spec.ts` was already known broken (project-status). **Fixed**:
-    it now drives the creation stepper and re-opens the student from the directory row.
+    it now drives the creation stepper and re-opens the student from the directory row. Run
+    40757778787 confirmed it.
   - `attendance-leave.spec.ts` submitted leave as the owner, and the API (correctly, §11)
     accepts it only from the student or a guardian linked to a portal account
     (`assert_may_request_for_student`). **Fixed** with a seeded `guardian` identity
-    (`e2e-guardian@schoolhub.test`) that each test links to its own run-unique students.
+    (`e2e-guardian@schoolhub.test`) that each test links to its own run-unique students. Run
+    40757778787 confirmed it.
   The attendance specs' missing guardian, the session-date overlaps and the weekend ("today is
   not a working day") were fixed with `createStudentReadyToEnrol`, per-worker date bands drawn
   once per process, and a seven-day working week in the e2e seed. There are four bands
