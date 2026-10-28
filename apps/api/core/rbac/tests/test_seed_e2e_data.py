@@ -23,6 +23,7 @@ from core.rbac.management.commands.seed_e2e_data import (
     E2E_ADMIN_PASSWORD,
     E2E_OTHER_ADMIN_EMAIL,
     E2E_OTHER_TENANT_SLUG,
+    E2E_SCHOOL_ADMIN_PERMISSIONS,
     E2E_TENANT_SLUG,
 )
 from core.rbac.models import Role, User, UserRole
@@ -47,6 +48,11 @@ class SeedE2EDataTests(TestCase):
             user = User.objects.get(tenant=row, email=email)
             self.assertTrue(user.check_password(E2E_ADMIN_PASSWORD))
             self.assertTrue(UserRole.objects.filter(user=user, role=role).exists())
+
+    def test_the_school_admin_can_poll_the_jobs_it_starts(self) -> None:
+        """It starts promotion execute; a 403 on `GET /jobs/{id}` reads as a failed job."""
+        self.assertIn("academics.promotion.execute", E2E_SCHOOL_ADMIN_PERMISSIONS)
+        self.assertIn("platform.job.view", E2E_SCHOOL_ADMIN_PERMISSIONS)
 
     def test_the_e2e_tenant_works_every_day_so_today_can_always_be_marked(self) -> None:
         call_command("seed_e2e_data")
