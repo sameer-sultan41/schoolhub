@@ -35,6 +35,7 @@ from apps.attendance.tests.factories import (
     configure_academic,
     grant,
 )
+from core.jobs.tests.base import assert_sent_on_commit
 from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
@@ -324,6 +325,25 @@ class ReportEndpointTests(ReportDataTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
         self.assertIn("job_id", response.data["data"])
+
+    def test_the_export_is_sent_only_after_its_job_commits(self) -> None:
+        from apps.attendance.tasks import export_attendance_report_task
+
+        assert_sent_on_commit(
+            self,
+            export_attendance_report_task,
+            lambda: self.client.post(
+                REPORTS,
+                {
+                    "kind": "student-summary",
+                    "start_date": self.start.isoformat(),
+                    "end_date": self.end.isoformat(),
+                },
+                format="json",
+            ),
+            tenant_id=self.tenant.pk,
+            actor_id=self.user.pk,
+        )
 
     def test_the_view_key_alone_cannot_export(self) -> None:
         reader = UserFactory(tenant=self.tenant)

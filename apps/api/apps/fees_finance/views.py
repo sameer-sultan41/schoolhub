@@ -136,7 +136,7 @@ from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
 from core.files.services import create_ready_file
 from core.idempotency.services import replay_or_execute
-from core.jobs.services import create_job
+from core.jobs.services import create_job, enqueue_job
 from core.money import ZERO
 from core.rbac.permissions import (
     DenyRestrictedPrincipals,
@@ -546,13 +546,7 @@ class FeeInvoiceViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
                 idempotency_key=request.headers.get("Idempotency-Key"),
             )
             record_audit(request, "create", job, after={"job_type": job.job_type})
-            transaction.on_commit(
-                lambda: generate_invoices_task.delay(
-                    tenant_id=str(request.tenant.pk),
-                    job_id=str(job.pk),
-                    actor_id=str(request.user.pk),
-                )
-            )
+            enqueue_job(job=job, task=generate_invoices_task)
             return ActionResponse.accepted(str(job.pk), message="Invoice generation queued.")
 
         return replay_or_execute(
@@ -1208,13 +1202,7 @@ class VoucherCollectionImportViewSet(
                     idempotency_key=key,
                 )
                 record_audit(request, "import", voucher_import, after={"provider": provider})
-                transaction.on_commit(
-                    lambda: import_settlement_file_task.delay(
-                        tenant_id=str(request.tenant.pk),
-                        job_id=str(job.pk),
-                        actor_id=str(request.user.pk),
-                    )
-                )
+                enqueue_job(job=job, task=import_settlement_file_task)
             return ActionResponse.accepted(str(job.pk), message="Settlement import queued.")
 
         return replay_or_execute(
@@ -1497,13 +1485,7 @@ class FinanceReportView(APIView):
             actor_id=request.user.pk,
             idempotency_key=request.headers.get("Idempotency-Key"),
         )
-        transaction.on_commit(
-            lambda: export_finance_report_task.delay(
-                tenant_id=str(request.tenant.pk),
-                job_id=str(job.pk),
-                actor_id=str(request.user.pk),
-            )
-        )
+        enqueue_job(job=job, task=export_finance_report_task)
         return ActionResponse.accepted(str(job.pk), message="Report export queued.")
 
 

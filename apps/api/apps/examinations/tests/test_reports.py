@@ -21,7 +21,7 @@ from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.examinations import reports, services
+from apps.examinations import reports, services, tasks
 from apps.examinations.models import (
     Marks,
     QuestionBank,
@@ -37,6 +37,7 @@ from apps.examinations.tests.factories import (
     grant,
 )
 from apps.examinations.tests.test_processing import ProcessingTestCase
+from core.jobs.tests.base import assert_sent_on_commit
 from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
@@ -238,6 +239,19 @@ class ReportEndpointTests(ReportDataTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.json())
         self.assertIn("job_id", response.json()["data"])
+
+    def test_the_export_is_sent_only_after_its_job_commits(self) -> None:
+        assert_sent_on_commit(
+            self,
+            tasks.export_exam_report_task,
+            lambda: self.client.post(
+                SUMMARY,
+                {"kind": "result-register", "exam_id": str(self.exam.pk), "format": "xlsx"},
+                format="json",
+            ),
+            tenant_id=self.tenant.pk,
+            actor_id=self.user.pk,
+        )
 
     def test_exporting_needs_the_export_key_not_the_view_key(self) -> None:
         """§4 lists `exams.result.export` separately from `.view`."""

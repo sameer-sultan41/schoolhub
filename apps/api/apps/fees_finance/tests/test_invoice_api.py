@@ -19,6 +19,7 @@ from apps.fees_finance.models import (
     InvoiceStatus,
     ScholarshipStatus,
 )
+from apps.fees_finance.tasks import generate_invoices_task
 from apps.fees_finance.tests.base import FeesFinanceAPITestCase
 from apps.fees_finance.tests.factories import (
     DiscountFactory,
@@ -30,6 +31,7 @@ from apps.fees_finance.tests.factories import (
     fine_head,
     grant,
 )
+from core.jobs.tests.base import assert_sent_on_commit
 from core.tenancy.context import tenant_context
 
 
@@ -47,6 +49,21 @@ class GenerateEndpointTests(FeesFinanceAPITestCase):
 
         self.assertEqual(response.status_code, 202)
         self.assertIn("job_id", response.json()["data"])
+
+    def test_the_generation_is_sent_only_after_its_job_commits(self) -> None:
+        structure, _, _ = self.active_structure()
+
+        assert_sent_on_commit(
+            self,
+            generate_invoices_task,
+            lambda: self.client.post(
+                "/api/v1/fee-invoices:generate",
+                {"fee_structure": str(structure.pk), "period_start": "2026-09-01"},
+                format="json",
+            ),
+            tenant_id=self.tenant.pk,
+            actor_id=self.user.pk,
+        )
 
     def test_naming_both_a_month_and_a_term_is_refused(self) -> None:
         """A per-term run takes its whole window from the term, so accepting

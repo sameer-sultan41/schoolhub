@@ -12,7 +12,7 @@ from __future__ import annotations
 from django.db import IntegrityError, transaction
 from rest_framework import status
 
-from apps.examinations import services
+from apps.examinations import services, tasks
 from apps.examinations.models import AdmitCard, AdmitCardStatus, ExamStatus
 from apps.examinations.tests.base import ExaminationsAPITestCase
 from apps.examinations.tests.factories import (
@@ -25,6 +25,7 @@ from apps.examinations.tests.factories import (
     StudentFactory,
     exam_week,
 )
+from core.jobs.tests.base import assert_sent_on_commit
 from core.tenancy.context import tenant_context
 
 ADMIT_CARDS = "/api/v1/admit-cards"
@@ -208,6 +209,15 @@ class IssueEndpointTests(AdmitCardTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.json())
         self.assertIn("job_id", response.json()["data"])
+
+    def test_the_render_is_sent_only_after_its_job_commits(self) -> None:
+        assert_sent_on_commit(
+            self,
+            tasks.render_admit_cards_task,
+            lambda: self.client.post(f"/api/v1/exams/{self.exam.pk}:issue-admit-cards"),
+            tenant_id=self.tenant.pk,
+            actor_id=self.user.pk,
+        )
 
     def test_the_rows_exist_before_the_job_runs(self) -> None:
         """Rows synchronously, documents deferred: the caller learns immediately

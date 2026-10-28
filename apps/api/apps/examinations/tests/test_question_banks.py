@@ -22,7 +22,7 @@ from django.db import IntegrityError, transaction
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.examinations import documents, services
+from apps.examinations import documents, services, tasks
 from apps.examinations.models import (
     Question,
     QuestionDifficulty,
@@ -39,6 +39,7 @@ from apps.examinations.tests.factories import (
     grant,
 )
 from core.api.exceptions import Conflict, DomainRuleViolation
+from core.jobs.tests.base import assert_sent_on_commit
 from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
@@ -250,6 +251,19 @@ class BlueprintTests(QuestionBankTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.json())
         self.assertIn("job_id", response.json()["data"])
+
+    def test_the_assembly_is_sent_only_after_its_job_commits(self) -> None:
+        self.stock(easy=3)
+
+        assert_sent_on_commit(
+            self,
+            tasks.assemble_paper_task,
+            lambda: self.client.post(
+                f"{BANKS}/{self.bank.pk}:assemble-paper", self.blueprint(), format="json"
+            ),
+            tenant_id=self.tenant.pk,
+            actor_id=self.user.pk,
+        )
 
     def test_every_shortfall_is_reported_at_once(self) -> None:
         """A teacher whose blueprint asks for eight hard questions from a bank
@@ -722,7 +736,6 @@ class AssemblyShortfallTests(QuestionBankTestCase):
     def test_the_job_records_the_shortfall_as_a_failure(self) -> None:
         """A short paper marked succeeded is the outcome this exists to
         prevent, so the job has to carry the error a teacher can act on."""
-        from apps.examinations import tasks
         from core.jobs.models import JobStatus
         from core.jobs.services import create_job
 

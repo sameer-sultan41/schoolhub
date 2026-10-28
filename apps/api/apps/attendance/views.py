@@ -1071,7 +1071,7 @@ class AttendanceReportView(TenantScopedViewSetMixin, APIView):
         and then dropped, inline and here, so every defaulters report used the default.
         """
         from apps.attendance.tasks import export_attendance_report_task
-        from core.jobs.services import create_job
+        from core.jobs.services import create_job, enqueue_job
 
         threshold = params.get("threshold")
         job = create_job(
@@ -1094,13 +1094,7 @@ class AttendanceReportView(TenantScopedViewSetMixin, APIView):
             },
             actor_id=request.user.pk,
         )
-        transaction.on_commit(
-            lambda: export_attendance_report_task.delay(
-                tenant_id=str(request.tenant.pk),
-                job_id=str(job.pk),
-                actor_id=str(request.user.pk),
-            )
-        )
+        enqueue_job(job=job, task=export_attendance_report_task)
         record_audit(request, "export", job)
         return ActionResponse.accepted(str(job.pk), message=f"Report queued: {reason}.")
 
