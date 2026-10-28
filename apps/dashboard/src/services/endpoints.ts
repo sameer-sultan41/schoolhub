@@ -132,6 +132,19 @@ export const endpoints = {
     register: "/student-attendance/register",
     myRegisters: "/student-attendance/my-registers",
     bulkMark: "/student-attendance:bulk-mark",
+    /** `POST` (multipart) -> `202` + job: §9's historical import. */
+    imports: "/student-attendance-imports",
+  },
+  /** `GET` runs a report (rows inline, or `202` + job when large); `POST` exports it as a job. */
+  attendanceReports: {
+    summary: "/reports/attendance-summary",
+  },
+  /** `apps/api/apps/attendance/urls.py`: the register is routed before the router; check-out
+   * is a colon-action on the row. */
+  staffAttendance: {
+    list: "/staff-attendance",
+    register: "/staff-attendance/register",
+    checkOut: (id: string) => `/staff-attendance/${id}:check-out`,
   },
   /** `apps/api/apps/attendance/urls.py`: approve and reject are colon-actions on the row. */
   attendanceCorrections: {

@@ -39,7 +39,8 @@
 ### L3. Do not defer a defect that an accepted decision depends on
 
 - **Mistake.** The execute report showed a raw Python dictionary dump for a missing section, and it was deferred as a minor. The decision to make the section rule advisory relied on the report naming each failed student legibly. The whole-PR review reversed the deferral.
-- **Check.** For each ruling or decision, write down the premise it rests on, and verify that premise on the real path before ruling a related defect minor.
+- **Mistake (again, attendance dashboard PR C).** Import was put on the Records toolbar, and Records was gated on `attendance.student-attendance.view`. §4 grants the import key to `it_admin` alone, and `it_admin` does not hold `.view`, so the only role meant to import could not reach the button. The premise "an importer can open Records" was never checked against `permissions.py`.
+- **Check.** For each ruling or decision, write down the premise it rests on, and verify that premise on the real path before ruling a related defect minor. When an action lives on a screen, check that every role §4 grants the action can open that screen.
 
 ### L4. Trace what the user can do after a failure
 
@@ -50,7 +51,9 @@
 
 - **Mistake.** Tests faked a failure message the server never sends ("No target section set."), so the screen the PR gate approved was not the screen users saw. A stateful mock that skipped the override-reason rule would have let "edit, then submit" pass where the real server refuses.
 - **Mistake (again, attendance dashboard PR A).** The register's on-leave test paired the generic banner "Some rows could not be marked; the register was not saved." with the on-leave issue, but the server sends that issue only in a later, separate refusal with its own sentence ("Some students are on approved leave; the register was not saved."). Other fixtures mixed a not-enrolled row and an on-leave row in one error, which the server cannot send. Each sentence was real; the pairing was not.
-- **Check.** Copy messages, field names and status codes from the server source or its tests. A mocked-lane stub enforces the same rules as the endpoint it stands for. A refusal fixture pairs each issue with the sentence the server sends for that kind of issue, in the order the server checks them, and never combines issues one response cannot carry. A stubbed API proves nothing about the server.
+- **Mistake (again, attendance dashboard PR C).** The attendance import job returned `{rows, succeeded, errors}` while the shared import dialog reads every importer's `{total, succeeded, failed, errors}`, so its "N failed" badge never showed. No fixture carried the attendance job's result, so nothing compared the consumer's shape with the producer's; the e2e stub written from `tasks.py` exposed it.
+- **Mistake (again, attendance dashboard PR C).** The e2e `it_admin` fixture (`ATTENDANCE_IMPORT_PERMISSIONS`) also granted `.view`, which the real role lacks, so the mocked import spec passed on a screen the real `it_admin` could not open.
+- **Check.** Copy messages, field names and status codes from the server source or its tests. A fixture named for a role holds that role's keys from the module's `permissions.py`, no more. A mocked-lane stub enforces the same rules as the endpoint it stands for. A refusal fixture pairs each issue with the sentence the server sends for that kind of issue, in the order the server checks them, and never combines issues one response cannot carry. A stubbed API proves nothing about the server.
 
 ### L6. Size waits from the real path
 
@@ -147,6 +150,16 @@
 
 - **Mistake.** The dashboard began sending `Idempotency-Key` on its writes, but the API never added it to `CORS_ALLOW_HEADERS`, so django-cors-headers' default list refused the browser's preflight and every such write failed as a network error. The mocked lane's router allows the header itself (`e2e/src/mocks/router.ts`), so only the live lane's register and promotion journeys showed it (fixed in #135).
 - **Check.** When a client starts sending a new header, grep `CORS_ALLOW_HEADERS` in `apps/api/config/settings/` and add it there, with a preflight test like `apps/api/tests/test_cors_headers.py`. A green mocked lane proves nothing about CORS.
+
+### L24. Behaviour a list serializer or a mixin supplies needs a single-object test too
+
+- **Mistake.** `LeaveRequestSerializer` extended plain `ModelSerializer`, not the names mixin (`UserNamesModelSerializer`), yet called `self.user_name`. Its `list_serializer_class` loaded the names for every list, so each list test passed and hid the bug; only a single-object read, the create's re-read of the new request, raised `AttributeError` and answered 500 (#137, fixed in `8b9f45e5`).
+- **Check.** When a serializer's behaviour comes from its `list_serializer_class` or a mixin, test the single-object paths (create, retrieve, an action's response) as well as the list, and confirm the class's bases provide every method it calls.
+
+### L25. A new kind of subject re-opens every identity rule
+
+- **Mistake.** Attendance corrections refused only an approver who had *raised* the request. Staff corrections added a target that is itself a user, so HR could raise a correction to the principal's locked day and the principal could approve their own payroll inputs (PR C, caught in the whole-branch review).
+- **Check.** When a workflow gains a target kind, list every party to it (requester, subject, approver) and decide for each segregation-of-duties rule whether it covers them; test the refusal for each party, and expose what the client needs to mirror it (`subject_user_id`).
 
 ## 4. Adding a lesson
 

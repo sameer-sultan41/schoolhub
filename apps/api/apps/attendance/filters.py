@@ -53,6 +53,7 @@ class AttendanceCorrectionFilterSet(django_filters.FilterSet):
     """
 
     student_attendance_id = django_filters.UUIDFilter(field_name="student_attendance_id")
+    staff_attendance_id = django_filters.UUIDFilter(field_name="staff_attendance_id")
     # `true`: the caller's own requests; `false`: everyone else's, an approver's queue.
     mine = django_filters.BooleanFilter(method="filter_mine")
 

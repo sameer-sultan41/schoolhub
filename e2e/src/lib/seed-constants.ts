@@ -102,3 +102,11 @@ export const E2E_BASELINE_BREAK_PERIOD_NAME = "Recess";
  * anything needing a decidable proposal of its own builds one through the API.
  */
 export const E2E_BASELINE_SUBSTITUTION_REASON = "e2e live-lane fixture";
+
+/**
+ * Mirrors `apps/api/apps/attendance/services.py`'s MAX_LOCK_WINDOW_DAYS: the lock window is
+ * clamped to at most this many days, so a date further back is locked whatever the tenant
+ * configured. The staff correction spec (`attendance-staff-reports.spec.ts`) marks a row past
+ * it and asserts `is_locked`, so drift fails a test.
+ */
+export const MAX_LOCK_WINDOW_DAYS = 7;

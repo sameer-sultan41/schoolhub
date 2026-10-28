@@ -175,6 +175,30 @@ export function todayIsoDate(): string {
   return new Date().toISOString().slice(0, ISO_DATE_LENGTH);
 }
 
+const decimalFormats = new Map<string, Intl.NumberFormat>();
+
+/**
+ * A number formatter for `locale` with at most `fractionDigits` decimals, or exactly that many
+ * when `fixed` (a rate: "40.0"). Built once per locale and shape and then reused, so a table
+ * formatting a column cell by cell doesn't construct one per cell.
+ */
+export function decimalFormat(
+  locale: string,
+  fractionDigits: number,
+  { fixed = false }: { fixed?: boolean } = {},
+): Intl.NumberFormat {
+  const key = `${locale}|${String(fractionDigits)}|${String(fixed)}`;
+  let formatter = decimalFormats.get(key);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, {
+      minimumFractionDigits: fixed ? fractionDigits : 0,
+      maximumFractionDigits: fractionDigits,
+    });
+    decimalFormats.set(key, formatter);
+  }
+  return formatter;
+}
+
 /**
  * Copies `from[camelKey]` to `to[snakeKey]` for each pair in `fields`, when
  * `include(value)` says to — the shape a module's `to<Domain>Body`/

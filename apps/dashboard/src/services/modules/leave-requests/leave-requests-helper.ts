@@ -1,7 +1,7 @@
 import type { AuthenticatedUser } from "@schoolhub/types";
 
 import { canDecidePending, isViewer, statusFilterValue } from "@/lib/approval-queue";
-import { copyMappedFields } from "@/lib/helpers";
+import { copyMappedFields, decimalFormat } from "@/lib/helpers";
 import {
   AUTO_MARKED_DAYS_KEY,
   LEAVE_DAYS_FRACTION_DIGITS,
@@ -89,13 +89,12 @@ export function toLeaveTypeOptions(types: readonly LeaveTypeRecord[]): LeaveType
     .map((type) => ({ id: type.id, name: type.name }));
 }
 
-/** `days_count` ("1.0", "0.5") as a locale number with at most one decimal; the raw text if it
- * is not a number. */
-export function formatLeaveDays(value: string, locale: string): string {
+/** A day count as a locale number with at most one decimal: a leave request's `days_count`
+ * ("1.0", "0.5") or a report's (`1.5`); the raw text if it is not a number. */
+export function formatLeaveDays(value: number | string, locale: string): string {
   const days = Number(value);
-  if (Number.isNaN(days)) return value;
-  const options = { maximumFractionDigits: LEAVE_DAYS_FRACTION_DIGITS };
-  return new Intl.NumberFormat(locale, options).format(days);
+  if (Number.isNaN(days)) return String(value);
+  return decimalFormat(locale, LEAVE_DAYS_FRACTION_DIGITS).format(days);
 }
 
 /** A decision's toast: a `decision.*` message key under `attendance.leave`, and its values. */

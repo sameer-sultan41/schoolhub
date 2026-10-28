@@ -39,6 +39,8 @@ export const Paths = {
   ATTENDANCE_RECORDS: "/attendance/records",
   ATTENDANCE_CORRECTIONS: "/attendance/corrections",
   ATTENDANCE_LEAVE: "/attendance/leave",
+  ATTENDANCE_STAFF: "/attendance/staff",
+  ATTENDANCE_REPORTS: "/attendance/reports",
   ATTENDANCE_SETTINGS: "/attendance/settings",
   LOGIN: "/login",
   FORGOT_PASSWORD: "/forgot-password",

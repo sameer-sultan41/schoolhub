@@ -367,6 +367,9 @@ CELERY_TASK_ROUTES = {
     "apps.attendance.tasks.send_attendance_alerts": {"queue": "transactional"},
     # The nightly lock sweep is the opposite: nobody is waiting on it.
     "apps.attendance.tasks.lock_expired_attendance": {"queue": "bulk"},
+    # Exports and the history import are bulk, as every other module's are.
+    "apps.attendance.tasks.export_attendance_report_task": {"queue": "bulk"},
+    "apps.attendance.tasks.import_attendance_task": {"queue": "bulk"},
     # Rendering a hall's worth of admit-card PDFs is the heaviest thing this
     # platform does; nobody is waiting on it in real time.
     "apps.examinations.tasks.render_admit_cards_task": {"queue": "bulk"},
@@ -410,6 +413,9 @@ CELERY_TASK_ROUTES = {
     # both of which arrive with the communication module.
     "core.notifications.tasks.*": {"queue": "transactional"},
 }
+# An unrouted task goes to a queue the workers consume. Celery's own default, "celery",
+# is consumed by nothing here, so an unrouted task would wait on it forever.
+CELERY_TASK_DEFAULT_QUEUE = "default"
 
 # The `celery-beat` service (infra/compose/docker-compose.yml, and its
 # singleton-guarded Terraform counterpart) has been running against an empty

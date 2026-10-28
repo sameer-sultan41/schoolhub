@@ -10,6 +10,26 @@ import type { AcademicSession } from "./school-organization";
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
 export type AttendanceStatus = ApiSchemas["AttendanceStatusEnum"];
+export type StaffAttendanceStatus = ApiSchemas["StaffAttendanceStatusEnum"];
+
+/** `AttendanceStatus.values` and `StaffAttendanceStatus.values`, in the enums' order: what the
+ * serializers accept. */
+export const STUDENT_ATTENDANCE_STATUSES: readonly AttendanceStatus[] = [
+  "present",
+  "absent",
+  "late",
+  "half_day",
+  "excused",
+  "on_leave",
+];
+export const STAFF_ATTENDANCE_STATUSES: readonly StaffAttendanceStatus[] = [
+  "present",
+  "absent",
+  "late",
+  "half_day",
+  "on_leave",
+  "holiday",
+];
 export type AttendanceMode = ApiSchemas["AttendanceModeEnum"];
 /** The generated `StudentAttendance`, writable here because this stub plays the server. */
 export type AttendanceRecord = Mutable<ApiSchemas["StudentAttendance"]>;
@@ -122,10 +142,29 @@ export interface AttendanceRegisterOptions {
  */
 export const E2E_WORKING_DAYS: readonly number[] = [0, 1, 2, 3, 4, 5, 6];
 
-/** `calendar.DEFAULT_DAY_WINDOW`, which the e2e seed leaves unconfigured: the day starts at
- * 08:00, and a check-in up to 10 minutes after it is on time. */
+/** `calendar.DEFAULT_DAY_WINDOW`, which the e2e seed leaves unconfigured: the day runs 08:00
+ * to 14:00, and a check-in up to 10 minutes after the start is on time. */
 export const DEFAULT_DAY_START = "08:00:00";
+export const DEFAULT_DAY_END = "14:00:00";
 export const DEFAULT_GRACE_MINUTES = 10;
+
+/** `calendar._minutes_between`: whole minutes from one wall-clock time to a later one. */
+export function minutesBetween(earlier: string, later: string): number {
+  const minutes = (time: string) => {
+    const [hours = 0, mins = 0] = time.split(":").map(Number);
+    return hours * 60 + mins;
+  };
+  return minutes(later) - minutes(earlier);
+}
+
+/**
+ * `calendar._late_after`: minutes after `start`, never client-supplied. Measured from the start,
+ * not from the end of the grace window; within the grace it is 0.
+ */
+export function lateAfter(start: string, checkIn: string, graceMinutes: number): number {
+  const late = minutesBetween(start, checkIn);
+  return late <= graceMinutes ? 0 : late;
+}
 
 /**
  * The attendance server's state for one spec. Its fields are the spec's to change between

@@ -1,7 +1,12 @@
 import { ApiError } from "@schoolhub/api-client";
 import { screen, waitFor, within } from "@testing-library/react";
 
-import { correctionPage } from "@/services/modules/attendance-corrections/__tests__/attendance-corrections-fixtures";
+import {
+  correctionPage,
+  correctionRecord,
+  OTHER_CORRECTION_ID,
+} from "@/services/modules/attendance-corrections/__tests__/attendance-corrections-fixtures";
+import { STAFF_ROW_ID } from "@/services/modules/staff-attendance/__tests__/staff-attendance-fixtures";
 import { setUrl } from "@/test-utils";
 
 import {
@@ -194,5 +199,73 @@ describe("CorrectionsTable", () => {
     await user.click(screen.getByRole("button", { name: "Try again" }));
 
     expect(await screen.findByText("Amna Raza")).toBeInTheDocument();
+  });
+
+  describe("student and staff rows", () => {
+    /** Nadia's staff row, as the server sends a staff correction: the student fields null. */
+    const nadiaStaff = correctionRecord({
+      id: OTHER_CORRECTION_ID,
+      subject_type: "staff",
+      student_attendance_id: null,
+      student_id: null,
+      student_name: null,
+      staff_attendance_id: STAFF_ROW_ID,
+      staff_name: "Nadia Hussain",
+      employee_number: "EMP-001",
+      old_values: { status: "late", check_in_time: "08:40:00", check_out_time: null },
+      new_values: { check_in_time: "08:05" },
+    });
+
+    it("names a staff row's staff member, and its period as the whole day", async () => {
+      fetchPage.mockResolvedValue(correctionPage([correctionRecord(), nadiaStaff]));
+      await renderCorrections();
+
+      await screen.findByText("Nadia Hussain");
+      const staff = rowOf("Nadia Hussain");
+      expect(staff.getByText("Staff · EMP-001")).toBeInTheDocument();
+      expect(staff.getByText("Whole day (staff)")).toBeInTheDocument();
+      // A student's daily row keeps a blank period and no staff line.
+      expect(rowOf("Amna Raza").queryByText("Whole day (staff)")).not.toBeInTheDocument();
+      expect(screen.getByRole("columnheader", { name: "Student or staff" })).toBeInTheDocument();
+    });
+
+    it("narrows to staff rows through the address, and back to both", async () => {
+      const user = await renderCorrections();
+      await screen.findByText("Amna Raza");
+
+      await pick(user, "Student or staff", "Staff");
+
+      await waitFor(() => {
+        expect(lastQuery()).toEqual(
+          expect.objectContaining({ subjectType: "staff", cursor: undefined }),
+        );
+      });
+      expect(urlParam("subject")).toBe("staff");
+
+      await pick(user, "Student or staff", "All");
+
+      await waitFor(() => {
+        expect(lastQuery()).toEqual(expect.objectContaining({ subjectType: undefined }));
+      });
+      expect(urlParam("subject")).toBeNull();
+    });
+
+    it("reads the subject from the address", async () => {
+      setUrl("/attendance/corrections?subject=student");
+      await renderCorrections();
+      await screen.findByText("Amna Raza");
+      expect(lastQuery()).toEqual(expect.objectContaining({ subjectType: "student" }));
+      expect(screen.getByRole("combobox", { name: "Student or staff" })).toHaveTextContent(
+        "Student",
+      );
+    });
+
+    it("ignores a subject it does not know", async () => {
+      setUrl("/attendance/corrections?subject=teacher");
+      await renderCorrections();
+      await screen.findByText("Amna Raza");
+
+      expect(lastQuery()).toEqual(expect.objectContaining({ subjectType: undefined }));
+    });
   });
 });

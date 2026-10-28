@@ -70,6 +70,14 @@ urlpatterns = [
         ),
         name="student-attendance-my-registers",
     ),
+    # Before the router's `staff-attendance/<pk>` detail route, for the same reason.
+    path(
+        "staff-attendance/register",
+        StaffAttendanceViewSet.as_view(
+            {"get": "register"}, pagination_class=None, filter_backends=[]
+        ),
+        name="staff-attendance-register",
+    ),
     path(
         "attendance-corrections/<uuid:pk>:approve",
         AttendanceCorrectionViewSet.as_view({"post": "approve"}),

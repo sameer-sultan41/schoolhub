@@ -22,3 +22,6 @@ export * from "./domains/attendance-register-store";
 export * from "./domains/attendance-register";
 export * from "./domains/attendance-approvals-store";
 export * from "./domains/attendance-approvals";
+export * from "./domains/attendance-staff-reports-store";
+export * from "./domains/attendance-staff-reports";
+export * from "./domains/attendance-reports-import";

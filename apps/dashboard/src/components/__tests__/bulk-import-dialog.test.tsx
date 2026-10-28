@@ -1,5 +1,6 @@
 import { ApiError } from "@schoolhub/api-client";
 import type { AuthenticatedUser } from "@schoolhub/types";
+import { Input } from "@schoolhub/ui";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -509,5 +510,34 @@ describe("BulkImportDialog", () => {
     expect(await screen.findByRole("button", { name: "Upload" })).toBeInTheDocument();
     expect(screen.getByLabelText("File")).toBeEnabled();
     expect(window.sessionStorage.length).toBe(0);
+  });
+
+  it("renders the extra fields above the file, enabled, and locks them while the import runs", async () => {
+    mockStart.mockResolvedValue({ jobId: "job-import-1" });
+    mockFetchJob.mockResolvedValue(importJob("job-import-1", "running"));
+    renderWithProviders(
+      importDialog({
+        renderFields: (disabled) => <Input aria-label="Session" disabled={disabled} />,
+      }),
+    );
+    const user = userEvent.setup();
+
+    expect(screen.getByLabelText("Session")).toBeEnabled();
+    await uploadCsv(user);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Session")).toBeDisabled();
+    });
+    expect(screen.getByLabelText("File")).toBeDisabled();
+  });
+
+  it("holds Upload back while canUpload is false, a file chosen or not", async () => {
+    renderWithProviders(importDialog({ canUpload: false }));
+    const user = userEvent.setup();
+
+    await user.upload(screen.getByLabelText("File"), csvFile());
+
+    expect(screen.getByRole("button", { name: "Upload" })).toBeDisabled();
+    expect(mockStart).not.toHaveBeenCalled();
   });
 });
