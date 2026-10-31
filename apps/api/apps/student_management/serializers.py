@@ -31,6 +31,7 @@ from apps.student_management.models import (
 )
 from core.files.models import File
 from core.files.serializers import SignedFileURLField
+from core.files.services import assert_file_usable
 from core.rbac.models import RecordScope
 from core.rbac.permissions import has_permission_key, user_scopes
 
@@ -120,7 +121,7 @@ class StudentSerializer(serializers.ModelSerializer):
         # point the photo at any ready file and photo_url would sign it for every viewer.
         # The current photo passes unchecked: edits re-send it unchanged.
         if value is not None and value.pk != getattr(self.instance, "photo_file_id", None):
-            services.assert_file_usable(file=value, purpose=uploads.STUDENT_PHOTO.key)
+            assert_file_usable(file=value, purpose=uploads.STUDENT_PHOTO.key)
         return value
 
     def validate_user_id(self, value: uuid.UUID | None) -> uuid.UUID | None:
@@ -208,7 +209,7 @@ class GuardianSerializer(serializers.ModelSerializer):
         # re-sends it unchanged must not be blocked by a purpose check that only
         # matters for a *new* file.
         if value is not None and value.pk != getattr(self.instance, "photo_file_id", None):
-            services.assert_file_usable(file=value, purpose=uploads.GUARDIAN_PHOTO.key)
+            assert_file_usable(file=value, purpose=uploads.GUARDIAN_PHOTO.key)
         return value
 
 

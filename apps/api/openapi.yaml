@@ -6947,6 +6947,273 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/message-threads:
+    get:
+      operationId: message_threads_list
+      description: |-
+        `/message-threads` — the caller's own inbox.
+
+        No `campus_id` column on this table, so `scope_campus_field = None`. It is
+        unused in any case: `get_queryset` does not call `scope_queryset` at all.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: status
+        schema:
+          type: string
+      - in: query
+        name: student_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: thread_type
+        schema:
+          type: string
+      tags:
+      - message-threads
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMessageThreadList'
+          description: ''
+    post:
+      operationId: message_threads_create
+      description: '`POST /message-threads` — a thread and its first message, together.'
+      tags:
+      - message-threads
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageThreadCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MessageThreadCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MessageThreadCreate'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageThread'
+          description: ''
+  /api/v1/message-threads/{id}:
+    get:
+      operationId: message_threads_retrieve
+      description: |-
+        `/message-threads` — the caller's own inbox.
+
+        No `campus_id` column on this table, so `scope_campus_field = None`. It is
+        unused in any case: `get_queryset` does not call `scope_queryset` at all.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this message thread.
+        required: true
+      tags:
+      - message-threads
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageThread'
+          description: ''
+  /api/v1/message-threads/{id}:close:
+    post:
+      operationId: message_threads_:close_create
+      description: '`POST /message-threads/{id}:close` — open -> closed.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - message-threads
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageThread'
+          description: ''
+  /api/v1/message-threads/{id}:mark-read:
+    post:
+      operationId: message_threads_:mark_read_create
+      description: |-
+        `POST /message-threads/{id}:mark-read` — stamp every unread message as read.
+
+        Not audited: a read receipt is the caller's own state, not a change to
+        the conversation.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - message-threads
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarkReadResult'
+          description: ''
+  /api/v1/message-threads/{id}:reopen:
+    post:
+      operationId: message_threads_:reopen_create
+      description: '`POST /message-threads/{id}:reopen` — closed -> open.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - message-threads
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageThread'
+          description: ''
+  /api/v1/message-threads/{thread_pk}/messages:
+    get:
+      operationId: message_threads_messages_list
+      description: |-
+        `GET/POST /message-threads/{thread_pk}/messages` — one thread's conversation.
+
+        The thread resolves through `visible_threads`, so a thread the caller does
+        not take part in — or no longer owns the child of — is a 404 here exactly
+        as on retrieve. Every post goes through `post_message`, which holds the same
+        rules again for callers that never reach this view.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: path
+        name: thread_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - message-threads
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMessageList'
+          description: ''
+    post:
+      operationId: message_threads_messages_create
+      description: |-
+        `POST /message-threads/{thread_pk}/messages` — a reply.
+
+        Not audited: the message is itself an immutable, attributed record
+        (append-only `messages`), so an audit row would only copy it.
+      parameters:
+      - in: path
+        name: thread_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - message-threads
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MessageCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MessageCreate'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+          description: ''
+  /api/v1/message-threads/recipients:
+    get:
+      operationId: message_threads_recipients_retrieve
+      description: '`GET /message-threads/recipients?search=` — staff for an internal
+        or group thread.'
+      parameters:
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Matches first name, last name or email.
+      tags:
+      - message-threads
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreadRecipientListResponse'
+          description: ''
   /api/v1/notices:
     get:
       operationId: notices_list
@@ -17728,6 +17995,14 @@ components:
       - entry_date
       - lines
       - memo
+    MarkReadResult:
+      type: object
+      description: '`:mark-read`''s result — how many messages it stamped.'
+      properties:
+        marked:
+          type: integer
+      required:
+      - marked
     Marks:
       type: object
       description: |-
@@ -17874,6 +18149,189 @@ components:
         * `draft` - Draft
         * `submitted` - Submitted
         * `locked` - Locked
+    Message:
+      type: object
+      description: One message in a thread, as its participants read it.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        thread_id:
+          type: string
+          format: uuid
+          readOnly: true
+        sender_id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: users(id); must be a thread participant.
+        body:
+          type: string
+          readOnly: true
+        attachments:
+          type: array
+          items:
+            type: string
+            format: uuid
+          readOnly: true
+          nullable: true
+        is_internal_note:
+          type: boolean
+          readOnly: true
+          description: 'Staff-only: hidden from guardians and students.'
+        read_by:
+          type: object
+          additionalProperties:
+            type: string
+          readOnly: true
+          nullable: true
+          description: User id -> ISO 8601 time that participant read the message.
+        sent_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - attachments
+      - body
+      - id
+      - is_internal_note
+      - read_by
+      - sender_id
+      - sent_at
+      - thread_id
+    MessageCreate:
+      type: object
+      description: Shape only. Who may post, and what, is `services.post_message`'s
+        rule.
+      properties:
+        body:
+          type: string
+        attachments:
+          type: array
+          items:
+            type: string
+            format: uuid
+          nullable: true
+        is_internal_note:
+          type: boolean
+          default: false
+      required:
+      - body
+    MessageThread:
+      type: object
+      description: One inbox row. `unread_count` is the viewset's per-caller annotation.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        subject:
+          type: string
+          readOnly: true
+        thread_type:
+          allOf:
+          - $ref: '#/components/schemas/ThreadTypeEnum'
+          readOnly: true
+        student_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        participant_user_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          readOnly: true
+        assigned_to_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: users(id); staff member currently responsible.
+        status:
+          allOf:
+          - $ref: '#/components/schemas/MessageThreadStatusEnum'
+          readOnly: true
+        last_message_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Denormalized for inbox sorting.
+        closed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        unread_count:
+          type: integer
+          readOnly: true
+        created_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - assigned_to_id
+      - closed_at
+      - created_at
+      - created_by
+      - id
+      - last_message_at
+      - participant_user_ids
+      - status
+      - student_id
+      - subject
+      - thread_type
+      - unread_count
+    MessageThreadCreate:
+      type: object
+      description: |-
+        Shape only. Who may start which thread, with whom, is `services.create`'s rule.
+
+        `student_id` and `participant_user_ids` are plain UUIDs, not related fields:
+        a related field answers an unknown id with a 400 naming it, and whether a
+        student or user exists outside the caller's reach must stay a 404.
+      properties:
+        subject:
+          type: string
+          maxLength: 200
+        thread_type:
+          $ref: '#/components/schemas/ThreadTypeEnum'
+        student_id:
+          type: string
+          format: uuid
+          nullable: true
+        participant_user_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        body:
+          type: string
+        attachments:
+          type: array
+          items:
+            type: string
+            format: uuid
+          nullable: true
+      required:
+      - body
+      - subject
+      - thread_type
+    MessageThreadStatusEnum:
+      enum:
+      - open
+      - closed
+      type: string
+      description: |-
+        * `open` - Open
+        * `closed` - Closed
     MyRegister:
       type: object
       description: One register the caller marks on a date. The period fields are
@@ -18851,6 +19309,48 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Marks'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedMessageList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedMessageThreadList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageThread'
         meta:
           type: object
           properties:
@@ -24731,6 +25231,43 @@ components:
       - sequence
       - start_date
       - updated_at
+    ThreadRecipient:
+      type: object
+      description: A staff member a caller can add to an internal or group thread.
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        role:
+          type: string
+          nullable: true
+      required:
+      - name
+      - role
+      - user_id
+    ThreadRecipientListResponse:
+      type: object
+      description: '`GET /message-threads/recipients`''s real response shape — a capped,
+        unpaginated list.'
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ThreadRecipient'
+      required:
+      - data
+    ThreadTypeEnum:
+      enum:
+      - guardian_school
+      - internal
+      - group
+      type: string
+      description: |-
+        * `guardian_school` - Guardian-school
+        * `internal` - Internal
+        * `group` - Group
     TimetableConflict:
       type: object
       description: |-

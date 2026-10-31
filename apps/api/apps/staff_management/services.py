@@ -16,9 +16,6 @@ by more than one of those packages, or by another app entirely:
 - ``_tenant_settings`` — read by ``staff/services/numbering.py`` (the
   employee-number pattern) and ``staff_documents/services.py`` (the extra
   document-type allowlist).
-- ``assert_file_usable`` — called by all three of ``staff/`` (the staff
-  photo), ``staff_qualifications/`` (the qualification's evidence file) and
-  ``staff_documents/`` (the document's own file).
 - ``_verify_record`` — the generic verify-with-lock helper shared by
   ``staff_qualifications.verify_qualification`` and
   ``staff_documents.verify_document``, which both act on the same four
@@ -71,20 +68,6 @@ def _tenant_settings(tenant_id: uuid.UUID) -> dict:
 
     row = TenantSettings.all_tenants.filter(tenant_id=tenant_id).first()
     return (row.hr or {}) if row else {}
-
-
-def assert_file_usable(*, file, purpose: str):
-    """Check a resolved File instance matches the caller's intended purpose and
-
-    is ready — mirrors student_management.services.assert_file_usable exactly.
-    """
-    if file.purpose != purpose:
-        raise DomainRuleViolation(
-            {"non_field": f"This file was uploaded for '{file.purpose}', not '{purpose}'."}
-        )
-    if file.status != "ready":
-        raise DomainRuleViolation({"non_field": "This file's upload has not been confirmed yet."})
-    return file
 
 
 @transaction.atomic

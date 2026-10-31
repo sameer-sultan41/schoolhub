@@ -1,16 +1,20 @@
 """Permission keys for the communication module — docs/03-modules/communication.md §4.
 
-Mirrors that table, with two additions §4 needs and does not have — the same
+Mirrors that table, with additions §4 needs and did not have — the same
 class of gap fees-finance's `fee-structure.view` and `ledger.create` were:
 `communication.announcement.view` and `communication.notice.view` are granted
 in prose (§7's publication workflow, §8's user journeys — staff reading a draft
 before it is published) but §4 lists only create/update/delete/publish for
-each. Registered here, in the same PR that ships the endpoints, per the
-established resolution — never invent a key the doc does not mention anywhere.
+each. PR C adds three thread gap-fills the same way: `communication.thread.view`
+(reading an inbox §8 describes but §4 never keys), `communication.thread.close`
+(§7's close/reopen, staff-side only) and `communication.thread.oversee`
+(read-only safeguarding access to every thread). Each is registered in the same
+PR that ships its endpoints and added to §4's table, per the established
+resolution — never invent a key the doc does not mention anywhere.
 
-**No RBAC registry change ships with this module.** §4's module verbs `send`,
-`broadcast` and `acknowledge` are already in `core/rbac/registry.py`'s
-`EXTRA_ACTIONS`.
+§4's module verbs `send`, `broadcast` and `acknowledge` were already in
+`core/rbac/registry.py`'s `EXTRA_ACTIONS`; `oversee` is the one verb this module
+added there.
 
 Guardians and students hold no key for browsing announcements/notices directly
 in this plan — they consume via the existing `GET /notifications` inbox
@@ -68,6 +72,12 @@ THREAD_PARTICIPANTS = (
     "guardian",
     "student",
 )
+# Closing/reopening is a staff decision about a conversation — a guardian or
+# student cannot close a thread on the school.
+THREAD_CLOSERS = tuple(role for role in THREAD_PARTICIPANTS if role not in ("guardian", "student"))
+# Read-only access to every thread, not just one's own — the safeguarding
+# oversight the user asked for, held by the school's leadership only.
+THREAD_OVERSEERS = ("school_owner", "principal")
 
 # §4 — "communication.template.view/update … school_admin, it_admin".
 TEMPLATE_MANAGERS = ("school_admin", "it_admin")
@@ -134,9 +144,24 @@ registry.register(
 )
 
 registry.register(
+    "communication.thread.view",
+    "Read the message threads one takes part in.",
+    THREAD_PARTICIPANTS,
+)
+registry.register(
     "communication.thread.create",
     "Start a message thread.",
     THREAD_PARTICIPANTS,
+)
+registry.register(
+    "communication.thread.close",
+    "Close or reopen a message thread one takes part in.",
+    THREAD_CLOSERS,
+)
+registry.register(
+    "communication.thread.oversee",
+    "Read every message thread in the school, audited, without taking part.",
+    THREAD_OVERSEERS,
 )
 registry.register(
     "communication.message.create",

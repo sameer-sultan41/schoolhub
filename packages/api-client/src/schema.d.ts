@@ -2901,6 +2901,154 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/message-threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/message-threads` — the caller's own inbox.
+         *
+         *     No `campus_id` column on this table, so `scope_campus_field = None`. It is
+         *     unused in any case: `get_queryset` does not call `scope_queryset` at all.
+         */
+        get: operations["message_threads_list"];
+        put?: never;
+        /** @description `POST /message-threads` — a thread and its first message, together. */
+        post: operations["message_threads_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-threads/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/message-threads` — the caller's own inbox.
+         *
+         *     No `campus_id` column on this table, so `scope_campus_field = None`. It is
+         *     unused in any case: `get_queryset` does not call `scope_queryset` at all.
+         */
+        get: operations["message_threads_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-threads/{id}:close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `POST /message-threads/{id}:close` — open -> closed. */
+        post: operations["message_threads_:close_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-threads/{id}:mark-read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /message-threads/{id}:mark-read` — stamp every unread message as read.
+         *
+         *     Not audited: a read receipt is the caller's own state, not a change to
+         *     the conversation.
+         */
+        post: operations["message_threads_:mark_read_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-threads/{id}:reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `POST /message-threads/{id}:reopen` — closed -> open. */
+        post: operations["message_threads_:reopen_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-threads/{thread_pk}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET/POST /message-threads/{thread_pk}/messages` — one thread's conversation.
+         *
+         *     The thread resolves through `visible_threads`, so a thread the caller does
+         *     not take part in — or no longer owns the child of — is a 404 here exactly
+         *     as on retrieve. Every post goes through `post_message`, which holds the same
+         *     rules again for callers that never reach this view.
+         */
+        get: operations["message_threads_messages_list"];
+        put?: never;
+        /**
+         * @description `POST /message-threads/{thread_pk}/messages` — a reply.
+         *
+         *     Not audited: the message is itself an immutable, attributed record
+         *     (append-only `messages`), so an audit row would only copy it.
+         */
+        post: operations["message_threads_messages_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-threads/recipients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET /message-threads/recipients?search=` — staff for an internal or group thread. */
+        get: operations["message_threads_recipients_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notices": {
         parameters: {
             query?: never;
@@ -7804,6 +7952,10 @@ export interface components {
             memo: string;
             lines: components["schemas"]["LedgerLine"][];
         };
+        /** @description `:mark-read`'s result — how many messages it stamped. */
+        MarkReadResult: {
+            marked: number;
+        };
         /**
          * @description `marks` — read shape for `GET /marks` (§16).
          *
@@ -7885,6 +8037,85 @@ export interface components {
          * @enum {string}
          */
         MarksStatusEnum: "draft" | "submitted" | "locked";
+        /** @description One message in a thread, as its participants read it. */
+        Message: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly thread_id: string;
+            /**
+             * Format: uuid
+             * @description users(id); must be a thread participant.
+             */
+            readonly sender_id: string;
+            readonly body: string;
+            readonly attachments: string[] | null;
+            /** @description Staff-only: hidden from guardians and students. */
+            readonly is_internal_note: boolean;
+            /** @description User id -> ISO 8601 time that participant read the message. */
+            readonly read_by: {
+                [key: string]: string;
+            } | null;
+            /** Format: date-time */
+            readonly sent_at: string;
+        };
+        /** @description Shape only. Who may post, and what, is `services.post_message`'s rule. */
+        MessageCreate: {
+            body: string;
+            attachments?: string[] | null;
+            /** @default false */
+            is_internal_note: boolean;
+        };
+        /** @description One inbox row. `unread_count` is the viewset's per-caller annotation. */
+        MessageThread: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly subject: string;
+            readonly thread_type: components["schemas"]["ThreadTypeEnum"];
+            /** Format: uuid */
+            readonly student_id: string | null;
+            readonly participant_user_ids: string[];
+            /**
+             * Format: uuid
+             * @description users(id); staff member currently responsible.
+             */
+            readonly assigned_to_id: string | null;
+            readonly status: components["schemas"]["MessageThreadStatusEnum"];
+            /**
+             * Format: date-time
+             * @description Denormalized for inbox sorting.
+             */
+            readonly last_message_at: string;
+            /** Format: date-time */
+            readonly closed_at: string | null;
+            readonly unread_count: number;
+            /** Format: uuid */
+            readonly created_by: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description Shape only. Who may start which thread, with whom, is `services.create`'s rule.
+         *
+         *     `student_id` and `participant_user_ids` are plain UUIDs, not related fields:
+         *     a related field answers an unknown id with a 400 naming it, and whether a
+         *     student or user exists outside the caller's reach must stay a 404.
+         */
+        MessageThreadCreate: {
+            subject: string;
+            thread_type: components["schemas"]["ThreadTypeEnum"];
+            /** Format: uuid */
+            student_id?: string | null;
+            participant_user_ids?: string[];
+            body: string;
+            attachments?: string[] | null;
+        };
+        /**
+         * @description * `open` - Open
+         *     * `closed` - Closed
+         * @enum {string}
+         */
+        MessageThreadStatusEnum: "open" | "closed";
         /** @description One register the caller marks on a date. The period fields are null in daily mode. */
         MyRegister: {
             /** Format: uuid */
@@ -8346,6 +8577,26 @@ export interface components {
         };
         PaginatedMarksList: {
             data?: components["schemas"]["Marks"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedMessageList: {
+            data?: components["schemas"]["Message"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedMessageThreadList: {
+            data?: components["schemas"]["MessageThread"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -11256,6 +11507,24 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /** @description A staff member a caller can add to an internal or group thread. */
+        ThreadRecipient: {
+            /** Format: uuid */
+            user_id: string;
+            name: string;
+            role: string | null;
+        };
+        /** @description `GET /message-threads/recipients`'s real response shape — a capped, unpaginated list. */
+        ThreadRecipientListResponse: {
+            data: components["schemas"]["ThreadRecipient"][];
+        };
+        /**
+         * @description * `guardian_school` - Guardian-school
+         *     * `internal` - Internal
+         *     * `group` - Group
+         * @enum {string}
+         */
+        ThreadTypeEnum: "guardian_school" | "internal" | "group";
         /**
          * @description One finding of the conflict engine (§6): what `slots.conflicts.detect_conflicts`
          *     returns, typed so the client reads `:validate`, `:publish` and every slot write's
@@ -16462,6 +16731,218 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    message_threads_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                status?: string;
+                student_id?: string;
+                thread_type?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedMessageThreadList"];
+                };
+            };
+        };
+    };
+    message_threads_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageThreadCreate"];
+                "application/x-www-form-urlencoded": components["schemas"]["MessageThreadCreate"];
+                "multipart/form-data": components["schemas"]["MessageThreadCreate"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageThread"];
+                };
+            };
+        };
+    };
+    message_threads_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this message thread. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageThread"];
+                };
+            };
+        };
+    };
+    "message_threads_:close_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageThread"];
+                };
+            };
+        };
+    };
+    "message_threads_:mark_read_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkReadResult"];
+                };
+            };
+        };
+    };
+    "message_threads_:reopen_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageThread"];
+                };
+            };
+        };
+    };
+    message_threads_messages_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                thread_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedMessageList"];
+                };
+            };
+        };
+    };
+    message_threads_messages_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageCreate"];
+                "application/x-www-form-urlencoded": components["schemas"]["MessageCreate"];
+                "multipart/form-data": components["schemas"]["MessageCreate"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+        };
+    };
+    message_threads_recipients_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Matches first name, last name or email. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadRecipientListResponse"];
+                };
             };
         };
     };

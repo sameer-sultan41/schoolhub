@@ -31,7 +31,7 @@ Channel adapters, queues, retries, and provider failover are infrastructure and 
 
 ## 4. Permissions
 
-Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/auth-and-rbac.md). Module-specific action verbs declared here: `send`, `broadcast`, `acknowledge`.
+Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/auth-and-rbac.md). Module-specific action verbs declared here: `send`, `broadcast`, `acknowledge`, `close`, `oversee`.
 
 | Permission key | Description | Default roles |
 | -------------- | ----------- | ------------- |
@@ -42,6 +42,9 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 | `communication.notice.acknowledge` | Acknowledge a notice requiring it | `guardian`, `student`, staff roles |
 | `communication.broadcast.send` | Emergency multi-channel broadcast (audited, MFA-recommended) | `school_owner`, `principal`, `school_admin` |
 | `communication.thread.create` / `communication.message.create` | Start/reply to threads | all tenant roles (guardian/student scope `own`) |
+| `communication.thread.view` | Read the threads one takes part in (membership is the record scope) | all tenant roles |
+| `communication.thread.close` | Close or reopen a thread one takes part in | all staff roles (not `guardian`/`student`) |
+| `communication.thread.oversee` | Audited, read-only access to every thread (safeguarding) | `school_owner`, `principal` |
 | `communication.template.view/update` | Manage tenant notification templates | `school_admin`, `it_admin` |
 | `communication.notification-preference.update` | Own channel preferences | all roles (scope `own`) |
 | `communication.delivery-log.view/export` | Delivery status dashboards | `school_admin`, `it_admin` |
@@ -176,7 +179,7 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md);
 - `GET/POST /api/v1/announcements` · `PATCH/DELETE /api/v1/announcements/{id}` · `POST /api/v1/announcements/{id}:publish`
 - `GET/POST /api/v1/notices` · `POST /api/v1/notices/{id}:submit` · `POST /api/v1/notices/{id}:publish` · `POST /api/v1/notices/{id}:return-to-draft` · `POST /api/v1/notices/{id}:acknowledge` · `GET /api/v1/notices/{id}/download`
 - `POST /api/v1/broadcasts:emergency` — 202 + job resource (fan-out is a background job per §2.7)
-- `GET/POST /api/v1/message-threads` · `POST /api/v1/message-threads/{id}/messages` · `POST /api/v1/message-threads/{id}:close`
+- `GET/POST /api/v1/message-threads` · `GET/POST /api/v1/message-threads/{id}/messages` (newest first; internal notes hidden from guardians/students) · `POST /api/v1/message-threads/{id}:mark-read` (stamps `read_by`, returns `{marked}`) · `POST /api/v1/message-threads/{id}:close`
 - `GET/POST/PATCH /api/v1/notification-templates` · `POST /api/v1/notification-templates/{id}:preview`
 - `GET /api/v1/notifications?read=false` · `POST /api/v1/notifications/{id}:mark-read` (SSE badge stream per api-architecture §3) · `GET/PATCH /api/v1/notification-preferences`
 - `GET /api/v1/delivery-logs?channel=sms&status=failed&created_at__gte=…` — filters whitelisted: `channel`, `status`, `notification_id`, date range

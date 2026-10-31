@@ -1,11 +1,12 @@
-"""§12's notification triggers this PR wires: an announcement or a notice
-being published. The remaining §12 rows (acknowledgment reminder, thread
-reply, emergency broadcast, delivery-failure alert, birthday) arrive with
-the PRs that produce those events.
+"""§12's notification triggers wired so far: an announcement or a notice
+being published, and a reply in a message thread. The remaining §12 rows
+(acknowledgment reminder, emergency broadcast, delivery-failure alert,
+birthday) arrive with the PRs that produce those events.
 
 Every trigger registered here is called from exactly the one `services/`
 function that fires it — `announcements.services.publish.publish_announcement`/
-`notices.services.publish.publish_notice` — matching the rule examinations'
+`notices.services.publish.publish_notice`/
+`threads.services.post_message.post_message` — matching the rule examinations'
 PR B review established: a registration with no caller persists no rows and
 is worse than not registering it at all.
 """
@@ -16,9 +17,11 @@ from core.notifications.templates import registry as templates
 
 ANNOUNCEMENT_PUBLISHED = "communication.announcement-published"
 NOTICE_PUBLISHED = "communication.notice-published"
+THREAD_REPLY = "communication.thread-reply"
 
 _ANNOUNCEMENT_VARS = {"announcement.title", "announcement.body"}
 _NOTICE_VARS = {"notice.notice_no", "notice.title", "notice.body"}
+_THREAD_REPLY_VARS = {"thread.subject", "message.sender_name", "message.preview"}
 
 catalog.register(
     ANNOUNCEMENT_PUBLISHED,
@@ -72,3 +75,20 @@ templates.register(
     body="Notice {{ notice.notice_no }}: {{ notice.title }}",
     variables=_NOTICE_VARS,
 )
+
+catalog.register(
+    THREAD_REPLY,
+    template_code=THREAD_REPLY,
+    category=NotificationCategory.GENERAL,
+    channels={NotificationChannel.IN_APP, NotificationChannel.PUSH},
+    variables=_THREAD_REPLY_VARS,
+    description="A new message in a thread one takes part in.",
+)
+for _channel in (NotificationChannel.IN_APP, NotificationChannel.PUSH):
+    templates.register(
+        THREAD_REPLY,
+        channel=_channel,
+        subject="{{ thread.subject }}",
+        body="{{ message.sender_name }}: {{ message.preview }}",
+        variables=_THREAD_REPLY_VARS,
+    )

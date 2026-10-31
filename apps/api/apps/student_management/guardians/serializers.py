@@ -13,8 +13,8 @@ from rest_framework import serializers
 from apps.student_management import uploads
 from apps.student_management.models import Guardian
 from apps.student_management.serializers import READ_ONLY_FIELDS, _fk
-from apps.student_management.services import assert_file_usable
 from core.files.models import File
+from core.files.services import assert_file_usable
 
 
 class GuardianSerializer(serializers.ModelSerializer):
