@@ -13,6 +13,10 @@ from apps.communication.audience import assert_audience_is_nonempty, resolve_aud
 from apps.communication.notifications import EMERGENCY_BROADCAST_TRIGGER
 from core.notifications.adapters import available_channels
 
+EMPTY_BROADCAST_AUDIENCE_MESSAGE = (
+    "This audience resolves to zero recipients. Broaden the targeting before broadcasting."
+)
+
 
 def resolve_recipients(
     *,
@@ -28,7 +32,7 @@ def resolve_recipients(
         tenant_id=tenant_id,
         campus_id=campus_id,
     )
-    assert_audience_is_nonempty(recipients)
+    assert_audience_is_nonempty(recipients, message=EMPTY_BROADCAST_AUDIENCE_MESSAGE)
     return sorted(set(recipients), key=str)
 
 

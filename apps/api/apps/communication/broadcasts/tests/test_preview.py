@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from rest_framework import status
 
+from apps.communication.broadcasts.services.preview import EMPTY_BROADCAST_AUDIENCE_MESSAGE
 from apps.communication.broadcasts.tests.base import (
     PREVIEW_URL,
     SEND_URL,
@@ -43,6 +44,7 @@ class BroadcastPreviewTests(BroadcastAPITestCase):
         response = self.preview(self.audience())
 
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(response.json()["error"]["message"], EMPTY_BROADCAST_AUDIENCE_MESSAGE)
 
     def test_preview_rejects_a_message_over_the_limit(self) -> None:
         body = {**self.audience(self.alice), "message": "x" * 1001}
