@@ -5,6 +5,7 @@ from __future__ import annotations
 from django.db import connection
 
 from apps.communication.models import MessageThread
+from apps.communication.threads.services.access import assert_thread_participant
 from core.rbac.permissions import is_restricted_principal
 
 
@@ -23,7 +24,13 @@ def mark_thread_read(*, thread: MessageThread, user) -> int:
 
     A guardian or student never sees an internal note, so they never stamp one:
     that keeps the receipt honest and matches the inbox's `unread_count`.
+
+    A non-participant, or a guardian or student who no longer owns the thread's
+    child, gets 404 here as on every thread route, so a caller other than the
+    view cannot stamp a receipt on a thread it cannot open.
     """
+    restricted = is_restricted_principal(user)
+    assert_thread_participant(thread, user, restricted=restricted)
     user_key = str(user.pk)
     sql = (
         "UPDATE messages"
@@ -40,7 +47,7 @@ def mark_thread_read(*, thread: MessageThread, user) -> int:
         user_key,
         user_key,
     ]
-    if is_restricted_principal(user):
+    if restricted:
         sql += " AND is_internal_note = false"
     with connection.cursor() as cursor:
         cursor.execute(sql, params)

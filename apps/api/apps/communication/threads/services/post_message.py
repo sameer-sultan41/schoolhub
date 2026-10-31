@@ -17,8 +17,11 @@ from django.utils.text import Truncator
 from apps.communication import uploads
 from apps.communication.models import Message, MessageThread, ThreadStatus
 from apps.communication.notifications import THREAD_REPLY
+from apps.communication.threads.services.access import (
+    assert_thread_participant,
+    owns_thread_student,
+)
 from apps.communication.threads.services.locking import locked_thread
-from apps.student_management.models import Student
 from core.api.exceptions import Conflict, DomainRuleViolation
 from core.files.models import File
 from core.files.services import assert_file_usable
@@ -54,10 +57,7 @@ def post_message(
 
     with transaction.atomic():
         locked = locked_thread(thread)
-        if not locked.is_participant(sender.pk) or (
-            restricted and not _owns_thread_student(locked, sender)
-        ):
-            raise Http404("No such thread.")
+        assert_thread_participant(locked, sender, restricted=restricted)
         if locked.status == ThreadStatus.CLOSED:
             raise Conflict("Reopen the thread to reply.")
 
@@ -101,14 +101,6 @@ def _assert_attachments_usable(attachments: list | None) -> None:
         assert_file_usable(file=file, purpose=uploads.THREAD_ATTACHMENT.key)
 
 
-def _owns_thread_student(thread: MessageThread, user) -> bool:
-    """Whether a guardian or student still owns the child the thread is about."""
-    if thread.student_id is None:
-        return False
-    owned = Student.filter_owned_by_user(Student.objects.alive(), user)
-    return owned.filter(pk=thread.student_id).exists()
-
-
 def _notify_participants(*, thread: MessageThread, message: Message, sender) -> None:
     """One `THREAD_REPLY` fan-out to everyone who can read the new message.
 
@@ -130,7 +122,7 @@ def _notify_participants(*, thread: MessageThread, message: Message, sender) -> 
     excluded = {
         str(user.pk)
         for user in restricted_users
-        if message.is_internal_note or not _owns_thread_student(thread, user)
+        if message.is_internal_note or not owns_thread_student(thread, user)
     }
     # The JSON column holds strings; `notify` keys addresses by `uuid.UUID`.
     recipients = [Recipient(user_id=uuid.UUID(uid)) for uid in others if uid not in excluded]

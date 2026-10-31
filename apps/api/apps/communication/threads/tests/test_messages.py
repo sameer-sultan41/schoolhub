@@ -20,6 +20,7 @@ from apps.communication.tests.factories import (
     grant,
 )
 from apps.communication.threads.serializers import MESSAGE_BODY_MAX_LENGTH
+from apps.communication.threads.services.mark_read import mark_thread_read
 from apps.communication.threads.services.post_message import post_message
 from apps.communication.threads.tests.base import STAFF_THREAD_KEYS, ThreadAPITestCase
 from core.files.models import FileStatus
@@ -515,3 +516,23 @@ class MarkReadTests(MessageTestCase):
         response = self.mark_read(thread)
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_mark_read_service_refuses_a_non_participant(self) -> None:
+        """The service holds the rule too, for callers that never reach the view."""
+        with tenant_context(self.tenant.id):
+            stranger = UserFactory(tenant=self.tenant)
+        thread = self.make_thread(self.colleague, self.user)
+
+        with tenant_context(self.tenant.id), self.assertRaises(Http404):
+            mark_thread_read(thread=thread, user=stranger)
+
+        self.assertEqual(self.read_by(thread), [None])
+
+    def test_mark_read_service_refuses_a_revoked_guardian(self) -> None:
+        thread = self.guardian_thread(self.user)
+        self.revoke_guardian()
+
+        with tenant_context(self.tenant.id), self.assertRaises(Http404):
+            mark_thread_read(thread=thread, user=self.guardian_user)
+
+        self.assertEqual(self.read_by(thread), [None])
