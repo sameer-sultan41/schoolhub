@@ -146,7 +146,8 @@ class MessageThreadViewSet(
         "close": "communication.thread.close",
         "reopen": "communication.thread.close",
         "recipients": "communication.thread.create",
-        # A write (it stamps `read_by`), so a write key; every participant holds it.
+        # A write key by choice: a receipt stamps `read_by`. The contract test would
+        # accept an explicit read key too; every participant holds this one.
         "mark_read": "communication.message.create",
         # A read over POST, as `files:download` is: signing a short-lived link changes
         # nothing. Mapped explicitly so it is a decision, not the fallback.

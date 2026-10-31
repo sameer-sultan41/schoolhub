@@ -216,7 +216,7 @@ User decisions (2026-10-31):
 - **Endpoints:**
   - `GET /message-threads/{id}/messages`: cursor `("-sent_at", "-id")`; internal notes filtered out for restricted principals.
   - `POST /message-threads/{id}/messages`: key `message.create`; returns 201.
-  - `POST /message-threads/{id}:mark-read`: key `thread.view`; returns `{marked: n}`.
+  - `POST /message-threads/{id}:mark-read`: key `communication.message.create` (amended, Ruling 11: a receipt is a write, so a write key by choice; the contract test would also accept an explicit read-key mapping); returns `{marked: n}`.
 - **`THREAD_REPLY`** is registered in `notifications.py` with in-app and push templates (push has a subject).
 
 - [ ] **Step 1: Failing tests:**
@@ -372,7 +372,7 @@ Load `schoolhub-dashboard-screen`, `schoolhub-api-services` and `schoolhub-testi
 **Behaviour:**
 - **Inbox layout:** two panes. `?thread=<id>` and the status filter live in the URL (`useDataGridUrlState`). The thread list uses `useCursorList`, with an `unread_count` badge.
 - **Message list:** pages newest-first and renders reversed, with "Load earlier".
-- **Opening a thread:** calls `markRead` once, then invalidates `queryKeys.module("communication")`.
+- **Opening a thread:** calls `markRead` once, then invalidates `queryKeys.module("communication")`. Only when the user holds `communication.message.create` (amended, Ruling 11): `:mark-read` is keyed on it, so a reader without it would get a 403.
 - **Composer:** an "Internal note" checkbox. A closed thread disables send and shows Reopen (gated on `thread.close`).
 - **New thread:**
   - Type select.
@@ -401,7 +401,7 @@ Load `schoolhub-dashboard-screen`, `schoolhub-api-services` and `schoolhub-testi
 3. **Confirm:**
    - Calls `preview` and shows the recipient count, the deliverable channel badges, and the unavailable channels muted as "not delivered — no provider".
    - The user must type the exact count to enable **Send emergency broadcast** (destructive variant).
-   - The idempotency key is minted per preview result and reused on retry.
+   - The idempotency key is minted per (preview result, message, audience) and reused on retry (amended, Ruling 10): the server binds a key to its request body, so a corrected message under the old key is `422 idempotency_key_reused`, not a replay.
    - A 409 `audience_changed` shows `meta.recipient_count`, clears the typed value, re-previews, and stays on this step.
 4. **Status:** `useJobPolling("communication", jobId)`, following `ReportJobPanel`.
 
@@ -495,3 +495,60 @@ Load `schoolhub-dashboard-screen`, `schoolhub-api-services` and `schoolhub-testi
     - Fallback-role slug handled.
     - `receives_communications` respected.
 - **Unresolved:** none. The user chose an oversight key (2026-10-31). Unavailable channels are shown as "not delivered". Message soft delete is deferred. A digest was added to the confirmation. A recipients endpoint was added.
+
+## Execution rulings
+
+Recorded during subagent-driven execution of PR C (stop rule 3: the plan is amended rather than
+silently deviated from). Each ruling names what changed and why.
+
+1. **`post_message` is the single write path.** C2 created `threads/services/post_message.py`
+   with the core (participant 404, closed 409, create, bump `last_message_at`) and
+   `create_thread` calls it; C3 extended it with notify, internal-note and attachment rules.
+2. **The two Review Focus tests split across C2 and C3.** C2 tests the list and retrieve halves
+   (`test_assigned_scope_class_teacher_sees_routed_thread`,
+   `test_revoked_guardian_loses_thread_on_list_and_retrieve`); C3 adds the reply and post halves.
+3. **Review Focus items 3 and 4 (broadcast) belong to C5**, not C4 (a renumbering slip).
+4. **No local test runs.** Implementers write tests and CI runs them; generators
+   (`makemigrations`, the OpenAPI and schema regeneration) still run, since they produce
+   committed files.
+5. **A revoked guardian is cut off everywhere.** `post_message` also 404s a restricted sender
+   who no longer owns the thread's child, and the reply notification leaves such guardians out.
+6. **The oversight audit stays fail-open**, as `record_audit` is everywhere; the messages-page
+   audit row records its cursor (ADR-0030).
+7. **`:mark-read` is keyed `communication.message.create`** (superseded in wording by 11).
+8. **Broadcast senders are held to their campus scope**, custom-audience users included
+   (`broadcasts/services/scope.py`, ADR-0029); a sender whose scope reaches no campus is a 404.
+9. **Thread attachments are module-gated.** `core/files/purposes.py` gains
+   `module_gated`; `communication.thread-attachment` files are off the generic `GET /files`,
+   retrieve and `:download`, and download through
+   `POST /message-threads/{id}/attachments/{file_id}:download` (participants; a guardian or
+   student never gets a file only an internal note carries) or the audited oversight twin.
+   Guardian upload stays deferred to parent-portal.
+10. **`Idempotency-Key` is bound to the request body.** `IdempotencyRecord.request_fingerprint`
+    (sha256 of the canonical JSON body, empty on older rows) and `replay_or_execute(...,
+    request_data=...)` at every caller; the same key with a different body is
+    `422 idempotency_key_reused`. D3 mints the key per (preview result, message, audience).
+11. **Ruling 7's premise was false.** `WritePermissionContractTests` rejects only an action
+    missing from `required_permission_map`; an explicit read-key mapping passes. `:mark-read`
+    keeps `communication.message.create` as a choice (a receipt is a write), and D2 calls it only
+    when the user holds that key.
+
+Other deviations from the tasks above:
+
+- **`core/api/pagination` ordering is a tuple.** The cursor classes declare
+  `ordering = ("-last_message_at", "-id")` and `("-sent_at", "-id")`, matching the base class's
+  type (a list override failed mypy).
+- **`MessageThreadStatusEnum` is pinned** in `ENUM_NAME_OVERRIDES`, so the thread status enum
+  keeps one stable name in the contract.
+- **`assert_audience_is_nonempty(message=)`.** The broadcast passes its own empty-audience
+  message instead of the announcement's "broaden the targeting before publishing".
+- **`create_job(idempotency_key=...)` is a concurrency backstop** behind `replay_or_execute`:
+  the jobs table's partial unique index refuses a second job from two racing sends.
+- **The live spec reads `/delivery-logs`**, because `GET /notifications` is not built
+  (`docs/deferred-work.md`).
+- **`logger.exception`, not a `noqa`,** in the broadcast task's failure path: the exception is
+  logged with its traceback and the job marked failed, without a suppressor.
+- **The final review's minors** were fixed in the same wave: an internal note no longer moves
+  `last_message_at`; a message body is capped at `MESSAGE_BODY_MAX_LENGTH` (5000);
+  `mark_thread_read` checks the caller can open the thread; the broadcast task runs only a
+  `queued` job; `unread_count` is a correlated subquery.

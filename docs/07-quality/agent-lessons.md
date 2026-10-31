@@ -188,8 +188,19 @@
   authorised by a read key (fixed in `8db9e2a2`). Both were only caught by CI.
 - **Check.** For every new viewset, declare `ordering_fields` (even when the cursor's ordering
   is the only one, as a one-column allowlist), and put every non-GET action, colon actions
-  included, in `required_permission_map` with a write key. Read the `ordering_fields` and
+  included, in `required_permission_map`. The test rejects a *missing* entry, not a read key: a
+  write gets a write key by choice, and a read over POST (a signed download) may map its read
+  key explicitly, as `files:download` does. Read the `ordering_fields` and
   `required_permission_map` of `threads/viewset.py` as the pattern.
+
+### L29. A file attached to a private record is not served by the generic `/files` routes
+
+- **Mistake.** Communication PR C returned thread attachments as bare file ids, so the generic
+  `GET /files` and `:download` (every `platform.file.view` holder, every staff role) listed and
+  signed a private thread's attachments, unaudited (fixed in `12e0641d`).
+- **Check.** When a module stores file ids on a record whose readers are narrower than "all
+  staff", register its purpose with `module_gated=True` (`core/files/purposes.py`) and serve the
+  download from the record's own route, resolved through the same rule that hides the record.
 
 ## 4. Adding a lesson
 
