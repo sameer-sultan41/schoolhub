@@ -1,21 +1,26 @@
-"""`MessageThreadViewSet` — request handling for `/message-threads`.
+"""`MessageThreadViewSet` and `ThreadMessageViewSet` — request handling for
+`/message-threads` and `/message-threads/{thread_pk}/messages`.
 
-Thin: who may start which thread is `services/create.py`, the open/closed
-transitions are `services/close.py` and `services/reopen.py`, and who a thread
-can be addressed to is `routing.py`. See `notices/viewset.py`'s own docstring
-for why actions stay plain methods on one class.
+Thin: who may start which thread is `services/create.py`, who may post what is
+`services/post_message.py`, the open/closed transitions are `services/close.py`
+and `services/reopen.py`, read receipts are `services/mark_read.py`, and who a
+thread can be addressed to is `routing.py`. See `notices/viewset.py`'s own
+docstring for why actions stay plain methods on one class.
 """
 
 from __future__ import annotations
 
-from django.db.models import Count, Q
+from functools import cached_property
+
+from django.db.models import Count, Q, QuerySet
+from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import mixins, viewsets
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from apps.communication.models import MessageThread
+from apps.communication.models import Message, MessageThread
 from apps.communication.permission_classes import (
     FEATURE,
     OWN_PREFERENCE_PERMISSIONS,
@@ -24,6 +29,9 @@ from apps.communication.permission_classes import (
 from apps.communication.threads.filters import MessageThreadFilterSet
 from apps.communication.threads.routing import search_recipients
 from apps.communication.threads.serializers import (
+    MarkReadResultSerializer,
+    MessageCreateSerializer,
+    MessageSerializer,
     MessageThreadCreateSerializer,
     MessageThreadSerializer,
     ThreadRecipientListResponseSerializer,
@@ -31,6 +39,8 @@ from apps.communication.threads.serializers import (
 )
 from apps.communication.threads.services.close import close_thread
 from apps.communication.threads.services.create import create_thread
+from apps.communication.threads.services.mark_read import mark_thread_read
+from apps.communication.threads.services.post_message import post_message
 from apps.communication.threads.services.reopen import reopen_thread
 from apps.student_management.models import Student
 from core.api.pagination import CursorPagination
@@ -44,6 +54,37 @@ class MessageThreadCursorPagination(CursorPagination):
     between two threads with the same `last_message_at` never skips or repeats one."""
 
     ordering = ("-last_message_at", "-id")
+
+
+class MessageCursorPagination(CursorPagination):
+    """Newest first; `-id` breaks ties as on the inbox, so a page boundary between
+    two messages sent in the same instant never skips or repeats one."""
+
+    ordering = ("-sent_at", "-id")
+
+
+def visible_threads(user, *, restricted: bool) -> QuerySet[MessageThread]:
+    """Threads the caller takes part in — and only those, whatever their role scope.
+
+    Deliberately not `scope_queryset`: membership *is* the authorization
+    (ADR-0030). Record scope would show a scope-`all` admin every conversation
+    in the school, and hand an `assigned`-scope class teacher nothing, since a
+    thread has no section to be assigned through — while the class teacher a
+    guardian's thread was routed to must see it. Reading threads one is not part
+    of is `communication.thread.oversee`'s separate, audited endpoint.
+
+    A guardian or student must also still own the thread's student: revoking a
+    guardian's portal access cuts them off from the conversations about that
+    child, not just from the child's record.
+
+    Both viewsets resolve a thread through this one definition, so the inbox, a
+    thread's messages and posting into it never disagree about who sees what.
+    """
+    queryset = MessageThread.participant_filter(MessageThread.objects.alive(), user)
+    if restricted:
+        owned = Student.filter_owned_by_user(Student.objects.alive(), user)
+        queryset = queryset.filter(student__in=owned)
+    return queryset
 
 
 def unread_count(user, *, restricted: bool) -> Count:
@@ -94,6 +135,7 @@ class MessageThreadViewSet(
         "reopen": "communication.thread.close",
         "recipients": "communication.thread.create",
     }
+    # `mark_read` keeps the default `thread.view`: stamping a receipt is reading.
     http_method_names = ["get", "post", "head", "options"]
 
     # Guardians and students hold `thread.view`/`thread.create` for their own
@@ -113,27 +155,12 @@ class MessageThreadViewSet(
         return MessageThreadSerializer
 
     def get_queryset(self):
-        """Threads the caller takes part in — and only those, whatever their role scope.
-
-        Deliberately not `scope_queryset`: membership *is* the authorization
-        (ADR-0030). Record scope would show a scope-`all` admin every
-        conversation in the school, and hand an `assigned`-scope class teacher
-        nothing, since a thread has no section to be assigned through — while the
-        class teacher a guardian's thread was routed to must see it. Reading
-        threads one is not part of is `communication.thread.oversee`'s separate,
-        audited endpoint.
-
-        A guardian or student must also still own the thread's student: revoking
-        a guardian's portal access cuts them off from the conversations about
-        that child, not just from the child's record.
-        """
+        """The caller's `visible_threads`, each with its per-caller `unread_count`."""
         user = self.request.user
         restricted = is_restricted_principal(user)
-        queryset = MessageThread.participant_filter(MessageThread.objects.alive(), user)
-        if restricted:
-            owned = Student.filter_owned_by_user(Student.objects.alive(), user)
-            queryset = queryset.filter(student__in=owned)
-        return queryset.annotate(unread_count=unread_count(user, restricted=restricted))
+        return visible_threads(user, restricted=restricted).annotate(
+            unread_count=unread_count(user, restricted=restricted)
+        )
 
     def _reread(self, thread: MessageThread) -> dict:
         """The thread as the inbox shows it, `unread_count` included."""
@@ -182,6 +209,16 @@ class MessageThreadViewSet(
         record_audit(request, "reopen", reopened, before=before, after=after)
         return ActionResponse.ok(after, message="Thread reopened.")
 
+    @extend_schema(request=None, responses={200: MarkReadResultSerializer})
+    def mark_read(self, request: Request, pk: str | None = None) -> Response:
+        """`POST /message-threads/{id}:mark-read` — stamp every unread message as read.
+
+        Not audited: a read receipt is the caller's own state, not a change to
+        the conversation.
+        """
+        marked = mark_thread_read(thread=self.get_object(), user=request.user)
+        return ActionResponse.ok({"marked": marked})
+
     @extend_schema(
         parameters=[
             OpenApiParameter("search", str, description="Matches first name, last name or email.")
@@ -196,3 +233,77 @@ class MessageThreadViewSet(
             search=request.query_params.get("search", ""),
         )
         return Response({"data": self.get_serializer(rows, many=True).data})
+
+
+class ThreadMessageViewSet(
+    TenantScopedViewSetMixin,
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    viewsets.GenericViewSet,
+):
+    """`GET/POST /message-threads/{thread_pk}/messages` — one thread's conversation.
+
+    The thread resolves through `visible_threads`, so a thread the caller does
+    not take part in — or no longer owns the child of — is a 404 here exactly
+    as on retrieve. Every post goes through `post_message`, which holds the same
+    rules again for callers that never reach this view.
+    """
+
+    permission_classes = OWN_PREFERENCE_PERMISSIONS
+    queryset = Message.objects
+    serializer_class = MessageSerializer
+    pagination_class = MessageCursorPagination
+    # The cursor order is the conversation order; nothing to filter or search.
+    filter_backends = []
+    # Only the cursor's own indexed, non-null column — see `MessageThreadViewSet`.
+    ordering_fields = ["sent_at"]
+    scope_campus_field = None
+    required_feature = FEATURE
+    required_permission = "communication.thread.view"
+    required_permission_map = {"create": "communication.message.create"}
+    http_method_names = ["get", "post", "head", "options"]
+
+    @cached_property
+    def restricted(self) -> bool:
+        return is_restricted_principal(self.request.user)
+
+    @cached_property
+    def thread(self) -> MessageThread:
+        return get_object_or_404(
+            visible_threads(self.request.user, restricted=self.restricted),
+            pk=self.kwargs["thread_pk"],
+        )
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return MessageCreateSerializer
+        return MessageSerializer
+
+    def get_queryset(self):
+        """The thread's messages; a guardian or student never sees an internal note."""
+        queryset = Message.objects.filter(thread=self.thread)
+        if self.restricted:
+            queryset = queryset.filter(is_internal_note=False)
+        return queryset
+
+    @extend_schema(request=MessageCreateSerializer, responses={201: MessageSerializer})
+    def create(self, request: Request, *args, **kwargs) -> Response:
+        """`POST /message-threads/{thread_pk}/messages` — a reply.
+
+        Not audited: the message is itself an immutable, attributed record
+        (append-only `messages`), so an audit row would only copy it.
+        """
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        attachments = data["attachments"]
+
+        message = post_message(
+            thread=self.thread,
+            sender=request.user,
+            body=data["body"],
+            # The JSON column stores ids as strings, as `participant_user_ids` does.
+            attachments=[str(file_id) for file_id in attachments] if attachments else None,
+            is_internal_note=data["is_internal_note"],
+        )
+        return Response({"data": MessageSerializer(message).data}, status=201)

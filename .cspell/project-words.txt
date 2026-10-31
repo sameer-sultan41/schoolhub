@@ -257,6 +257,7 @@ touchpoints
 transpiles
 trgm
 triaging
+Truncator
 tsvector
 TTFB
 Turbopack

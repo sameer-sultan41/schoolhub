@@ -7067,6 +7067,32 @@ paths:
               schema:
                 $ref: '#/components/schemas/MessageThread'
           description: ''
+  /api/v1/message-threads/{id}:mark-read:
+    post:
+      operationId: message_threads_:mark_read_create
+      description: |-
+        `POST /message-threads/{id}:mark-read` — stamp every unread message as read.
+
+        Not audited: a read receipt is the caller's own state, not a change to
+        the conversation.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - message-threads
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarkReadResult'
+          description: ''
   /api/v1/message-threads/{id}:reopen:
     post:
       operationId: message_threads_:reopen_create
@@ -7088,6 +7114,83 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MessageThread'
+          description: ''
+  /api/v1/message-threads/{thread_pk}/messages:
+    get:
+      operationId: message_threads_messages_list
+      description: |-
+        `GET/POST /message-threads/{thread_pk}/messages` — one thread's conversation.
+
+        The thread resolves through `visible_threads`, so a thread the caller does
+        not take part in — or no longer owns the child of — is a 404 here exactly
+        as on retrieve. Every post goes through `post_message`, which holds the same
+        rules again for callers that never reach this view.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: path
+        name: thread_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - message-threads
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMessageList'
+          description: ''
+    post:
+      operationId: message_threads_messages_create
+      description: |-
+        `POST /message-threads/{thread_pk}/messages` — a reply.
+
+        Not audited: the message is itself an immutable, attributed record
+        (append-only `messages`), so an audit row would only copy it.
+      parameters:
+      - in: path
+        name: thread_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - message-threads
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MessageCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MessageCreate'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
           description: ''
   /api/v1/message-threads/recipients:
     get:
@@ -17892,6 +17995,14 @@ components:
       - entry_date
       - lines
       - memo
+    MarkReadResult:
+      type: object
+      description: '`:mark-read`''s result — how many messages it stamped.'
+      properties:
+        marked:
+          type: integer
+      required:
+      - marked
     Marks:
       type: object
       description: |-
@@ -18038,6 +18149,75 @@ components:
         * `draft` - Draft
         * `submitted` - Submitted
         * `locked` - Locked
+    Message:
+      type: object
+      description: One message in a thread, as its participants read it.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        thread_id:
+          type: string
+          format: uuid
+          readOnly: true
+        sender_id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: users(id); must be a thread participant.
+        body:
+          type: string
+          readOnly: true
+        attachments:
+          type: array
+          items:
+            type: string
+            format: uuid
+          readOnly: true
+          nullable: true
+        is_internal_note:
+          type: boolean
+          readOnly: true
+          description: 'Staff-only: hidden from guardians and students.'
+        read_by:
+          type: object
+          additionalProperties:
+            type: string
+          readOnly: true
+          nullable: true
+          description: User id -> ISO 8601 time that participant read the message.
+        sent_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - attachments
+      - body
+      - id
+      - is_internal_note
+      - read_by
+      - sender_id
+      - sent_at
+      - thread_id
+    MessageCreate:
+      type: object
+      description: Shape only. Who may post, and what, is `services.post_message`'s
+        rule.
+      properties:
+        body:
+          type: string
+        attachments:
+          type: array
+          items:
+            type: string
+            format: uuid
+          nullable: true
+        is_internal_note:
+          type: boolean
+          default: false
+      required:
+      - body
     MessageThread:
       type: object
       description: One inbox row. `unread_count` is the viewset's per-caller annotation.
@@ -19129,6 +19309,27 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Marks'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedMessageList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
         meta:
           type: object
           properties:

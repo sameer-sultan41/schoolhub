@@ -179,7 +179,7 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md);
 - `GET/POST /api/v1/announcements` · `PATCH/DELETE /api/v1/announcements/{id}` · `POST /api/v1/announcements/{id}:publish`
 - `GET/POST /api/v1/notices` · `POST /api/v1/notices/{id}:submit` · `POST /api/v1/notices/{id}:publish` · `POST /api/v1/notices/{id}:return-to-draft` · `POST /api/v1/notices/{id}:acknowledge` · `GET /api/v1/notices/{id}/download`
 - `POST /api/v1/broadcasts:emergency` — 202 + job resource (fan-out is a background job per §2.7)
-- `GET/POST /api/v1/message-threads` · `POST /api/v1/message-threads/{id}/messages` · `POST /api/v1/message-threads/{id}:close`
+- `GET/POST /api/v1/message-threads` · `GET/POST /api/v1/message-threads/{id}/messages` (newest first; internal notes hidden from guardians/students) · `POST /api/v1/message-threads/{id}:mark-read` (stamps `read_by`, returns `{marked}`) · `POST /api/v1/message-threads/{id}:close`
 - `GET/POST/PATCH /api/v1/notification-templates` · `POST /api/v1/notification-templates/{id}:preview`
 - `GET /api/v1/notifications?read=false` · `POST /api/v1/notifications/{id}:mark-read` (SSE badge stream per api-architecture §3) · `GET/PATCH /api/v1/notification-preferences`
 - `GET /api/v1/delivery-logs?channel=sms&status=failed&created_at__gte=…` — filters whitelisted: `channel`, `status`, `notification_id`, date range

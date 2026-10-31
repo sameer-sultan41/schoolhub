@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from apps.communication.models import MessageThread, ThreadType
+from apps.communication.models import Message, MessageThread, ThreadType
 
 
 class MessageThreadSerializer(serializers.ModelSerializer):
@@ -53,6 +53,52 @@ class MessageThreadCreateSerializer(serializers.Serializer):
     attachments = serializers.ListField(
         child=serializers.UUIDField(), required=False, allow_null=True, default=None
     )
+
+
+class MessageSerializer(serializers.ModelSerializer):
+    """One message in a thread, as its participants read it."""
+
+    thread_id = serializers.UUIDField(read_only=True)
+    # Typed explicitly, for the same reason as `participant_user_ids` above.
+    attachments = serializers.ListField(
+        child=serializers.UUIDField(), read_only=True, allow_null=True
+    )
+    read_by = serializers.DictField(
+        child=serializers.CharField(),
+        read_only=True,
+        allow_null=True,
+        help_text="User id -> ISO 8601 time that participant read the message.",
+    )
+
+    class Meta:
+        model = Message
+        fields = [
+            "id",
+            "thread_id",
+            "sender_id",
+            "body",
+            "attachments",
+            "is_internal_note",
+            "read_by",
+            "sent_at",
+        ]
+        read_only_fields = fields
+
+
+class MessageCreateSerializer(serializers.Serializer):
+    """Shape only. Who may post, and what, is `services.post_message`'s rule."""
+
+    body = serializers.CharField()
+    attachments = serializers.ListField(
+        child=serializers.UUIDField(), required=False, allow_null=True, default=None
+    )
+    is_internal_note = serializers.BooleanField(required=False, default=False)
+
+
+class MarkReadResultSerializer(serializers.Serializer):
+    """`:mark-read`'s result — how many messages it stamped."""
+
+    marked = serializers.IntegerField()
 
 
 class ThreadRecipientSerializer(serializers.Serializer):

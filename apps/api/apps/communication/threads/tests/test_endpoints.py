@@ -5,7 +5,8 @@ from __future__ import annotations
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
 
-from apps.communication.models import ThreadStatus, ThreadType
+from apps.communication.models import Message, ThreadStatus, ThreadType
+from apps.communication.notifications import THREAD_REPLY
 from apps.communication.tests.factories import (
     MessageFactory,
     StudentFactory,
@@ -19,6 +20,7 @@ from apps.communication.threads.tests.base import (
     STAFF_THREAD_KEYS,
     ThreadAPITestCase,
 )
+from core.notifications.models import Notification
 from core.tenancy.context import tenant_context
 
 URL = "/api/v1/message-threads"
@@ -161,6 +163,36 @@ class RoutedThreadVisibilityTests(ThreadAPITestCase):
 
         self.assertEqual(listed.data["data"], [])
         self.assertEqual(opened.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_assigned_scope_class_teacher_replies(self) -> None:
+        """The post half: the routed class teacher answers, and the guardian hears of it."""
+        authenticate(self.client, self.teacher)
+
+        response = self.client.post(
+            f"{URL}/{self.thread_id}/messages", {"body": "Yes — on the portal."}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        with tenant_context(self.tenant.id):
+            notified = list(
+                Notification.objects.filter(
+                    event_key=THREAD_REPLY, user_id=self.guardian_user.pk
+                ).values_list("source_id", flat=True)
+            )
+        self.assertEqual([str(source_id) for source_id in notified], [self.thread_id])
+
+    def test_revoked_guardian_cannot_post(self) -> None:
+        with tenant_context(self.tenant.id):
+            self.guardian_link.has_portal_access = False
+            self.guardian_link.save(update_fields=["has_portal_access"])
+
+        response = self.client.post(
+            f"{URL}/{self.thread_id}/messages", {"body": "Still there?"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        with tenant_context(self.tenant.id):
+            self.assertEqual(Message.objects.filter(thread_id=self.thread_id).count(), 1)
 
     def test_guardian_sees_only_threads_about_their_own_child(self) -> None:
         """A thread naming a child the guardian does not own stays hidden, even if

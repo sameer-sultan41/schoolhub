@@ -10,7 +10,7 @@ import uuid
 
 from rest_framework import status
 
-from apps.communication.models import MessageThread, ThreadStatus, ThreadType
+from apps.communication.models import Message, MessageThread, ThreadStatus, ThreadType
 from apps.communication.tests.base import CommunicationAPITestCase
 from apps.communication.tests.factories import (
     AnnouncementFactory,
@@ -157,6 +157,27 @@ class CommunicationCrossTenantTests(CommunicationAPITestCase):
 
     def test_reopening_another_tenants_thread_is_404(self) -> None:
         response = self.client.post(f"/api/v1/message-threads/{self.other_closed_thread.pk}:reopen")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_listing_another_tenants_thread_messages_is_404(self) -> None:
+        response = self.client.get(f"/api/v1/message-threads/{self.other_thread.pk}/messages")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_posting_into_another_tenants_thread_is_404(self) -> None:
+        response = self.client.post(
+            f"/api/v1/message-threads/{self.other_thread.pk}/messages",
+            {"body": "Hello."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        with tenant_context(self.other_tenant.id):
+            self.assertFalse(Message.objects.filter(thread=self.other_thread).exists())
+
+    def test_marking_another_tenants_thread_read_is_404(self) -> None:
+        response = self.client.post(f"/api/v1/message-threads/{self.other_thread.pk}:mark-read")
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
