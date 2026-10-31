@@ -10,12 +10,18 @@ import uuid
 
 from rest_framework import status
 
+from apps.communication.models import MessageThread, ThreadStatus, ThreadType
 from apps.communication.tests.base import CommunicationAPITestCase
 from apps.communication.tests.factories import (
     AnnouncementFactory,
+    CampusFactory,
+    MessageThreadFactory,
     NoticeFactory,
     NotificationTemplateOverrideFactory,
+    StudentFactory,
     TenantFactory,
+    UserFactory,
+    grant,
 )
 from core.notifications.models import DeliveryLog, Notification, NotificationChannel
 from core.notifications.templates import registry as platform_templates
@@ -51,6 +57,22 @@ class CommunicationCrossTenantTests(CommunicationAPITestCase):
             )
             self.other_announcement = AnnouncementFactory(tenant=self.other_tenant)
             self.other_notice = NoticeFactory(tenant=self.other_tenant)
+            self.other_user = UserFactory(tenant=self.other_tenant, first_name="Foreign")
+            grant(self.other_user, "communication.thread.view")
+            self.other_student = StudentFactory(
+                tenant=self.other_tenant, campus=CampusFactory(tenant=self.other_tenant)
+            )
+            # Lists *this* tenant's caller as a participant: only tenancy, not
+            # membership, can keep it out of their inbox.
+            self.other_thread = MessageThreadFactory(
+                tenant=self.other_tenant,
+                participant_user_ids=[str(self.user.pk), str(self.other_user.pk)],
+            )
+            self.other_closed_thread = MessageThreadFactory(
+                tenant=self.other_tenant,
+                participant_user_ids=[str(self.user.pk), str(self.other_user.pk)],
+                status=ThreadStatus.CLOSED,
+            )
 
     def tearDown(self) -> None:
         platform_templates._templates = self._saved_templates
@@ -116,3 +138,62 @@ class CommunicationCrossTenantTests(CommunicationAPITestCase):
         response = self.client.get(f"/api/v1/notices/{self.other_notice.pk}/download")
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_listing_threads_never_shows_another_tenants_thread(self) -> None:
+        response = self.client.get("/api/v1/message-threads")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"], [])
+
+    def test_reading_another_tenants_thread_is_404(self) -> None:
+        response = self.client.get(f"/api/v1/message-threads/{self.other_thread.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_closing_another_tenants_thread_is_404(self) -> None:
+        response = self.client.post(f"/api/v1/message-threads/{self.other_thread.pk}:close")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_reopening_another_tenants_thread_is_404(self) -> None:
+        response = self.client.post(f"/api/v1/message-threads/{self.other_closed_thread.pk}:reopen")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_recipients_never_lists_another_tenants_user(self) -> None:
+        response = self.client.get("/api/v1/message-threads/recipients", {"search": "Foreign"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"], [])
+
+    def test_starting_a_thread_about_another_tenants_student_is_404(self) -> None:
+        response = self.client.post(
+            "/api/v1/message-threads",
+            {
+                "subject": "Hello",
+                "thread_type": ThreadType.GUARDIAN_SCHOOL,
+                "student_id": str(self.other_student.pk),
+                "body": "Hi.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        with tenant_context(self.tenant.id):
+            self.assertFalse(MessageThread.objects.exists())
+
+    def test_starting_a_thread_with_another_tenants_user_is_404(self) -> None:
+        response = self.client.post(
+            "/api/v1/message-threads",
+            {
+                "subject": "Hello",
+                "thread_type": ThreadType.INTERNAL,
+                "participant_user_ids": [str(self.other_user.pk)],
+                "body": "Hi.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        with tenant_context(self.tenant.id):
+            self.assertFalse(MessageThread.objects.exists())
