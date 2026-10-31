@@ -20,7 +20,6 @@ from apps.school_organization.models import Campus, Department
 from apps.staff_management import uploads
 from apps.staff_management.models import Designation, EmploymentStatus, Staff
 from apps.staff_management.serializers import READ_ONLY_FIELDS, _fk
-from apps.staff_management.services import assert_file_usable
 from apps.staff_management.staff.services.create import (
     assert_department_active,
     assert_designation_active,
@@ -31,6 +30,7 @@ from apps.staff_management.staff.services.create import (
 )
 from core.files.models import File
 from core.files.serializers import SignedFileURLField
+from core.files.services import assert_file_usable
 
 
 class StaffSerializer(serializers.ModelSerializer):

@@ -17,9 +17,9 @@ from rest_framework import serializers
 from apps.staff_management import uploads
 from apps.staff_management.models import StaffQualification
 from apps.staff_management.serializers import READ_ONLY_FIELDS, _fk
-from apps.staff_management.services import assert_file_usable
 from apps.staff_management.staff_qualifications.services import assert_year_not_future
 from core.files.models import File
+from core.files.services import assert_file_usable
 
 
 class StaffQualificationSerializer(serializers.ModelSerializer):

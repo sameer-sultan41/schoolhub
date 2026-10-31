@@ -38,6 +38,7 @@ from apps.student_management.models import (
 )
 from core.api.exceptions import Conflict, DomainRuleViolation
 from core.exports.tabular import spreadsheet_safe_row
+from core.files.services import assert_file_usable
 from core.imports.tabular import ROW_NUMBER_KEY
 from core.tenancy.context import tenant_atomic
 from core.tenancy.sequences import allocate_number
@@ -338,23 +339,6 @@ def create_student(
         created_by=actor_id,
         updated_by=actor_id,
     )
-
-
-def assert_file_usable(*, file, purpose: str):
-    """Check a resolved File instance matches the caller's intended purpose and is ready.
-
-    Tenant scoping and existence are already handled by the serializer's `_fk()`
-    field (a `PrimaryKeyRelatedField` bound to the tenant-scoped manager) before
-    this ever runs — what that field cannot express is "and it's the right kind
-    of file, and the upload actually finished".
-    """
-    if file.purpose != purpose:
-        raise DomainRuleViolation(
-            {"non_field": f"This file was uploaded for '{file.purpose}', not '{purpose}'."}
-        )
-    if file.status != "ready":
-        raise DomainRuleViolation({"non_field": "This file's upload has not been confirmed yet."})
-    return file
 
 
 @transaction.atomic

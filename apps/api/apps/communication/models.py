@@ -24,9 +24,10 @@ suppression.
 from __future__ import annotations
 
 from django.db import models
+from django.utils import timezone
 
 from core.notifications.models import NotificationCategory, NotificationChannel
-from core.tenancy.models import TenantOwnedModel
+from core.tenancy.models import AppendOnlyTenantModel, TenantOwnedModel
 
 
 class AudienceType(models.TextChoices):
@@ -286,3 +287,128 @@ class Notice(TenantOwnedModel):
             tenant_id=user.tenant_id, user_id=user.pk, source_type="notice"
         ).values_list("source_id", flat=True)
         return queryset.filter(pk__in=notice_ids)
+
+
+class ThreadType(models.TextChoices):
+    GUARDIAN_SCHOOL = "guardian_school", "Guardian-school"
+    INTERNAL = "internal", "Internal"
+    GROUP = "group", "Group"
+
+
+class ThreadStatus(models.TextChoices):
+    OPEN = "open", "Open"
+    CLOSED = "closed", "Closed"
+
+
+class MessageThread(TenantOwnedModel):
+    """A conversation container: guardian-school, internal staff, or group.
+
+    `participant_user_ids` is a JSON array of user-id strings rather than a join
+    table (entities/communication.md; the join-table promotion is the module
+    doc's §19 recommendation). The GIN index (see `Meta`) is what keeps "threads I am
+    in" a lookup. Because it is not a foreign key, `participant_filter` is the
+    single place that reads it — never filter on the column elsewhere.
+
+    `last_message_at` is NOT NULL, tighter than the entity doc's nullable column:
+    a thread is created together with its first message, so there is no state a
+    NULL would describe, and the inbox sort (`status`, `last_message_at DESC`)
+    never has to place a NULL.
+    """
+
+    subject = models.CharField(max_length=200)
+    thread_type = models.CharField(
+        max_length=20, choices=ThreadType.choices, default=ThreadType.GUARDIAN_SCHOOL
+    )
+    student = models.ForeignKey(
+        "student_management.Student",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="message_threads",
+        help_text="Child context for a guardian thread.",
+    )
+    participant_user_ids = models.JSONField(
+        default=list, help_text="Array of users(id) strings; read through participant_filter."
+    )
+    assigned_to_id = models.UUIDField(
+        null=True, blank=True, help_text="users(id); staff member currently responsible."
+    )
+    status = models.CharField(
+        max_length=10, choices=ThreadStatus.choices, default=ThreadStatus.OPEN
+    )
+    last_message_at = models.DateTimeField(
+        default=timezone.now, help_text="Denormalized for inbox sorting."
+    )
+    closed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "message_threads"
+        indexes = [
+            models.Index(
+                fields=["tenant", "status", "-last_message_at"], name="message_threads_inbox_idx"
+            ),
+            models.Index(fields=["tenant", "student"], name="message_threads_student_idx"),
+        ]
+        # The GIN index on `participant_user_ids` (msg_threads_participants_idx) is
+        # created by `RunSQL` in migration 0006, not declared here: `GinIndex` needs
+        # `django.contrib.postgres` in INSTALLED_APPS, which registers type handlers
+        # on every connection — the same reason student_management declined a GIN
+        # index on `custom_fields`. Revisit if a second GIN index appears.
+
+    def __str__(self) -> str:
+        return self.subject
+
+    @classmethod
+    def participant_filter(cls, queryset, user):
+        """Threads `user` is a participant of — JSON containment, served by the GIN index."""
+        return queryset.filter(participant_user_ids__contains=[str(user.pk)])
+
+    @classmethod
+    def filter_owned_by_user(cls, queryset, user):
+        """Record scope `own`: a thread the user takes part in."""
+        return cls.participant_filter(queryset, user)
+
+    @classmethod
+    def filter_assigned_to_user(cls, queryset, user):
+        """Record scope `assigned`: a thread routed to the user is one they are a participant of."""
+        return cls.participant_filter(queryset, user)
+
+    def is_participant(self, user_id) -> bool:
+        return str(user_id) in self.participant_user_ids
+
+
+class Message(AppendOnlyTenantModel):
+    """One post in a thread. Immutable once sent, bar the `read_by` receipt map.
+
+    No `updated_*` columns (the entity doc: "edits disallowed") and no soft
+    delete, which the entity doc lists but an append-only table cannot carry —
+    soft delete is an UPDATE (`AppendOnlyTenantModel`). Recorded in
+    docs/deferred-work.md.
+
+    `MUTABLE_FIELDS` must stay in step with `append_only_operations(
+    mutable_columns=...)` in migration 0007; `tests/test_append_only_coverage.py`
+    asserts that.
+    """
+
+    MUTABLE_FIELDS = frozenset({"read_by"})
+
+    thread = models.ForeignKey(MessageThread, on_delete=models.PROTECT, related_name="messages")
+    sender_id = models.UUIDField(help_text="users(id); must be a thread participant.")
+    body = models.TextField()
+    attachments = models.JSONField(null=True, blank=True, help_text="Array of files.id.")
+    is_internal_note = models.BooleanField(
+        default=False, help_text="Staff-only: hidden from guardians and students."
+    )
+    read_by = models.JSONField(
+        null=True, blank=True, help_text="Map users(id) -> read timestamp (ISO 8601)."
+    )
+    sent_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = "messages"
+        indexes = [
+            models.Index(fields=["tenant", "thread", "sent_at"], name="messages_thread_sent_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.thread_id}:{self.sent_at:%Y-%m-%d %H:%M}"

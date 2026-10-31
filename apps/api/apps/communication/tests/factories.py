@@ -15,6 +15,8 @@ import factory
 from apps.communication.models import (
     Announcement,
     AudienceType,
+    Message,
+    MessageThread,
     Notice,
     NotificationPreference,
     NotificationTemplateOverride,
@@ -99,3 +101,22 @@ class NoticeFactory(factory.django.DjangoModelFactory):
     title = factory.Sequence(lambda n: f"Notice {n}")
     body = "Body text."
     audience_type = AudienceType.ALL
+
+
+class MessageThreadFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = MessageThread
+
+    tenant = factory.SubFactory(TenantFactory)
+    subject = factory.Sequence(lambda n: f"Thread {n}")
+    participant_user_ids = factory.LazyFunction(list)
+
+
+class MessageFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Message
+
+    tenant = factory.SelfAttribute("thread.tenant")
+    thread = factory.SubFactory(MessageThreadFactory)
+    sender_id = factory.LazyFunction(uuid.uuid4)
+    body = "Message body."

@@ -47,9 +47,9 @@ from apps.school_organization import calendar
 from apps.school_organization.models import AcademicSession
 from apps.school_organization.services import assert_session_writable
 from apps.student_management.models import EnrollmentStatus, Student, StudentEnrollment
-from apps.student_management.services import assert_file_usable
 from apps.timetable.slots.services import effective_slots_for
 from core.api.exceptions import Conflict, DomainRuleViolation
+from core.files.services import assert_file_usable
 from core.imports.tabular import parse_rows
 from core.rbac.models import RecordScope
 from core.rbac.permissions import user_scopes

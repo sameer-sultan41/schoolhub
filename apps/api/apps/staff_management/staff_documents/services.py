@@ -2,8 +2,9 @@
 
 Document-exclusive rules split out of the app-root ``services.py`` — see
 docs/03-modules/staff-management.md §20's file-per-action package layout.
-Shared helpers (``_tenant_settings``, ``assert_file_usable``, ``_verify_record``)
-stay in the app root and are imported from there.
+Shared helpers (``_tenant_settings``, ``_verify_record``) stay in the app root and
+are imported from there; ``assert_file_usable`` is the platform's, in
+``core.files.services``.
 """
 
 from __future__ import annotations
@@ -14,8 +15,9 @@ from django.db import transaction
 
 from apps.staff_management import uploads
 from apps.staff_management.models import DEFAULT_DOCUMENT_TYPES, Staff, StaffDocument
-from apps.staff_management.services import _tenant_settings, _verify_record, assert_file_usable
+from apps.staff_management.services import _tenant_settings, _verify_record
 from core.api.exceptions import DomainRuleViolation
+from core.files.services import assert_file_usable
 
 
 def _document_type_allowed(*, document_type: str, tenant_id: uuid.UUID) -> bool:

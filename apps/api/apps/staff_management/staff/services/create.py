@@ -14,9 +14,9 @@ from django.db import transaction
 
 from apps.staff_management import uploads
 from apps.staff_management.models import Designation, Gender, Staff
-from apps.staff_management.services import assert_file_usable
 from apps.staff_management.staff.services.numbering import allocate_employee_number
 from core.api.exceptions import DomainRuleViolation
+from core.files.services import assert_file_usable
 
 
 def resolve_tenant_user_id(*, user_id: uuid.UUID | None, tenant_id: uuid.UUID) -> uuid.UUID | None:
