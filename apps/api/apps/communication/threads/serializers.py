@@ -107,6 +107,12 @@ class MessageCreateSerializer(serializers.Serializer):
     is_internal_note = serializers.BooleanField(required=False, default=False)
 
 
+class AttachmentDownloadSerializer(serializers.Serializer):
+    """An attachment's short-lived signed link, as `POST /files/{id}:download` returns one."""
+
+    download_url = serializers.CharField()
+
+
 class MarkReadResultSerializer(serializers.Serializer):
     """`:mark-read`'s result — how many messages it stamped."""
 

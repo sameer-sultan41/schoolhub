@@ -36,6 +36,11 @@ urlpatterns = [
         name="message-threads-mark-read",
     ),
     path(
+        "message-threads/<uuid:pk>/attachments/<uuid:file_id>:download",
+        MessageThreadViewSet.as_view({"post": "download_attachment"}),
+        name="message-threads-attachment-download",
+    ),
+    path(
         "message-threads/<uuid:thread_pk>/messages",
         # No filters: the cursor order is the conversation order, nothing to search.
         ThreadMessageViewSet.as_view({"get": "list", "post": "create"}, filter_backends=[]),

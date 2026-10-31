@@ -7095,6 +7095,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/ThreadOversight'
           description: ''
+  /api/v1/message-thread-oversight/{id}/attachments/{file_id}:download:
+    post:
+      operationId: message_thread_oversight_attachments_:download_create
+      description: |-
+        `POST /message-thread-oversight/{id}/attachments/{file_id}:download`.
+
+        Internal-note attachments included, as on the messages list. Audited
+        once the link is signed, so a miss writes no row.
+      summary: Get a signed download URL for a thread attachment, audited
+      parameters:
+      - in: path
+        name: file_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - message-thread-oversight
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttachmentDownload'
+          description: ''
+        '404':
+          description: No such thread, or the file is not attached to one of its messages.
   /api/v1/message-thread-oversight/{thread_pk}/messages:
     get:
       operationId: message_thread_oversight_messages_list
@@ -7231,6 +7266,44 @@ paths:
               schema:
                 $ref: '#/components/schemas/MessageThread'
           description: ''
+  /api/v1/message-threads/{id}/attachments/{file_id}:download:
+    post:
+      operationId: message_threads_attachments_:download_create
+      description: |-
+        `POST /message-threads/{id}/attachments/{file_id}:download`.
+
+        The only way a participant fetches a thread attachment: the purpose is
+        module-gated, so the generic `/files` routes never reach it. Not audited,
+        as reading the thread's messages is not.
+      summary: Get a signed download URL for a thread attachment
+      parameters:
+      - in: path
+        name: file_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - message-threads
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttachmentDownload'
+          description: ''
+        '404':
+          description: Not a thread the caller takes part in, or the file is not attached
+            to one of its messages the caller can read (a guardian or student never
+            reaches a file only an internal note carries).
   /api/v1/message-threads/{id}:close:
     post:
       operationId: message_threads_:close_create
@@ -14658,6 +14731,15 @@ components:
       required:
       - sections
       - title
+    AttachmentDownload:
+      type: object
+      description: An attachment's short-lived signed link, as `POST /files/{id}:download`
+        returns one.
+      properties:
+        download_url:
+          type: string
+      required:
+      - download_url
     AttendanceCorrection:
       type: object
       description: |-

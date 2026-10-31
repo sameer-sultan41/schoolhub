@@ -2979,6 +2979,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/message-thread-oversight/{id}/attachments/{file_id}:download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get a signed download URL for a thread attachment, audited
+         * @description `POST /message-thread-oversight/{id}/attachments/{file_id}:download`.
+         *
+         *     Internal-note attachments included, as on the messages list. Audited
+         *     once the link is signed, so a miss writes no row.
+         */
+        post: operations["message_thread_oversight_attachments_:download_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/message-thread-oversight/{thread_pk}/messages": {
         parameters: {
             query?: never;
@@ -3040,6 +3063,30 @@ export interface paths {
         get: operations["message_threads_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-threads/{id}/attachments/{file_id}:download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get a signed download URL for a thread attachment
+         * @description `POST /message-threads/{id}/attachments/{file_id}:download`.
+         *
+         *     The only way a participant fetches a thread attachment: the purpose is
+         *     module-gated, so the generic `/files` routes never reach it. Not audited,
+         *     as reading the thread's messages is not.
+         */
+        post: operations["message_threads_attachments_:download_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6345,6 +6392,10 @@ export interface components {
         AssemblePaper: {
             title: string;
             sections: components["schemas"]["PaperSection"][];
+        };
+        /** @description An attachment's short-lived signed link, as `POST /files/{id}:download` returns one. */
+        AttachmentDownload: {
+            download_url: string;
         };
         /**
          * @description `attendance_corrections` — the request half. Decisions are colon-actions.
@@ -17068,6 +17119,35 @@ export interface operations {
             };
         };
     };
+    "message_thread_oversight_attachments_:download_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_id: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttachmentDownload"];
+                };
+            };
+            /** @description No such thread, or the file is not attached to one of its messages. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     message_thread_oversight_messages_list: {
         parameters: {
             query?: {
@@ -17165,6 +17245,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MessageThread"];
                 };
+            };
+        };
+    };
+    "message_threads_attachments_:download_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_id: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttachmentDownload"];
+                };
+            };
+            /** @description Not a thread the caller takes part in, or the file is not attached to one of its messages the caller can read (a guardian or student never reaches a file only an internal note carries). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

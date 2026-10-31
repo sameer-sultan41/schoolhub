@@ -22,6 +22,7 @@ from apps.communication.tests.base import CommunicationAPITestCase
 from apps.communication.tests.factories import (
     AnnouncementFactory,
     CampusFactory,
+    MessageFactory,
     MessageThreadFactory,
     NoticeFactory,
     NotificationTemplateOverrideFactory,
@@ -206,6 +207,46 @@ class CommunicationCrossTenantTests(CommunicationAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         with tenant_context(self.tenant.id):
             self.assertFalse(Message.objects.filter(thread=mine).exists())
+
+    def test_downloading_another_tenants_thread_attachment_is_404(self) -> None:
+        with tenant_context(self.other_tenant.id):
+            foreign_file = FileFactory(
+                tenant=self.other_tenant, purpose=uploads.THREAD_ATTACHMENT.key
+            )
+            MessageFactory(
+                thread=self.other_thread,
+                sender_id=self.other_user.pk,
+                attachments=[str(foreign_file.pk)],
+            )
+        tail = f"{self.other_thread.pk}/attachments/{foreign_file.pk}:download"
+
+        for url in (
+            f"/api/v1/message-threads/{tail}",
+            f"/api/v1/message-thread-oversight/{tail}",
+        ):
+            with self.subTest(url=url):
+                response = self.client.post(url)
+                self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_another_tenants_file_id_on_own_thread_is_404(self) -> None:
+        """Even were a foreign id on one of the caller's messages, RLS hides the file."""
+        with tenant_context(self.other_tenant.id):
+            foreign_file = FileFactory(
+                tenant=self.other_tenant, purpose=uploads.THREAD_ATTACHMENT.key
+            )
+        with tenant_context(self.tenant.id):
+            colleague = UserFactory(tenant=self.tenant)
+            mine = MessageThreadFactory(
+                tenant=self.tenant,
+                participant_user_ids=[str(self.user.pk), str(colleague.pk)],
+            )
+            MessageFactory(thread=mine, sender_id=colleague.pk, attachments=[str(foreign_file.pk)])
+
+        response = self.client.post(
+            f"/api/v1/message-threads/{mine.pk}/attachments/{foreign_file.pk}:download"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_marking_another_tenants_thread_read_is_404(self) -> None:
         response = self.client.post(f"/api/v1/message-threads/{self.other_thread.pk}:mark-read")

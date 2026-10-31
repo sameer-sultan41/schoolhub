@@ -10,12 +10,13 @@ docstring for why actions stay plain methods on one class.
 
 from __future__ import annotations
 
+import uuid
 from functools import cached_property
 
 from django.db.models import Count, Q, QuerySet
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import OpenApiParameter, extend_schema
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import mixins, viewsets
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -29,6 +30,7 @@ from apps.communication.permission_classes import (
 from apps.communication.threads.filters import MessageThreadFilterSet
 from apps.communication.threads.routing import search_recipients
 from apps.communication.threads.serializers import (
+    AttachmentDownloadSerializer,
     MarkReadResultSerializer,
     MessageCreateSerializer,
     MessageSerializer,
@@ -37,6 +39,7 @@ from apps.communication.threads.serializers import (
     ThreadRecipientListResponseSerializer,
     ThreadRecipientSerializer,
 )
+from apps.communication.threads.services.attachments import attachment_download_url
 from apps.communication.threads.services.close import close_thread
 from apps.communication.threads.services.create import create_thread
 from apps.communication.threads.services.mark_read import mark_thread_read
@@ -136,6 +139,9 @@ class MessageThreadViewSet(
         "recipients": "communication.thread.create",
         # A write (it stamps `read_by`), so a write key; every participant holds it.
         "mark_read": "communication.message.create",
+        # A read over POST, as `files:download` is: signing a short-lived link changes
+        # nothing. Mapped explicitly so it is a decision, not the fallback.
+        "download_attachment": "communication.thread.view",
     }
     http_method_names = ["get", "post", "head", "options"]
 
@@ -219,6 +225,36 @@ class MessageThreadViewSet(
         """
         marked = mark_thread_read(thread=self.get_object(), user=request.user)
         return ActionResponse.ok({"marked": marked})
+
+    @extend_schema(
+        summary="Get a signed download URL for a thread attachment",
+        request=None,
+        responses={
+            200: AttachmentDownloadSerializer,
+            404: OpenApiResponse(
+                description=(
+                    "Not a thread the caller takes part in, or the file is not attached to "
+                    "one of its messages the caller can read (a guardian or student never "
+                    "reaches a file only an internal note carries)."
+                )
+            ),
+        },
+    )
+    def download_attachment(
+        self, request: Request, pk: str | None = None, *, file_id: uuid.UUID
+    ) -> Response:
+        """`POST /message-threads/{id}/attachments/{file_id}:download`.
+
+        The only way a participant fetches a thread attachment: the purpose is
+        module-gated, so the generic `/files` routes never reach it. Not audited,
+        as reading the thread's messages is not.
+        """
+        url = attachment_download_url(
+            thread=self.get_object(),
+            file_id=file_id,
+            include_internal_notes=not is_restricted_principal(request.user),
+        )
+        return ActionResponse.ok({"download_url": url})
 
     @extend_schema(
         parameters=[

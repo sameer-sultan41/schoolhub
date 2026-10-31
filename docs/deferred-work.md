@@ -942,9 +942,15 @@ either this file or `project-status.md`.
     campus's threads.
   - **Thread attachments are not checked against the uploader.** `post_message` requires a
     ready `communication.thread-attachment` file of the tenant, but not one the sender uploaded,
-    so a participant could attach another user's upload if they had its id. Low risk (ids are
-    unguessable UUIDs, and a file id is never listed to another user), but `created_by ==
-    sender` is the full check.
+    so a participant could attach another user's upload if they had its id. The id is an
+    unguessable UUID, and the purpose is module-gated, so `GET /files` does not list it to other
+    staff; but every participant of a thread it was sent in sees the id, and could re-send it
+    into another thread. `created_by == sender` is the full check.
+  - **A guardian or student cannot attach a file to a thread.** `platform.file.create` is
+    staff-only (`core/files/permissions.py`), so they can download what staff send them (through
+    `/message-threads/{id}/attachments/{file_id}:download`) but not upload. Parent-portal must
+    grant the upload, scoped to the `communication.thread-attachment` purpose, as it must for
+    leave attachments.
   - **Messages carry `sender_id` only**, no sender name. The dashboard resolves names from the
     thread's participants; a name field on `MessageSerializer` (as `UserNamesModelSerializer`
     gives attendance) would save it the lookup.
@@ -1197,7 +1203,12 @@ either this file or `project-status.md`.
   for every document-bearing endpoint to carry its own permission key — `core/files`'
   generic routes do not yet). Closing this means adding an owning-permission check to
   `FileViewSet`'s list and download, keyed by each file's `purpose` — not something to
-  improvise inside one module's PR. The same gap covers whole-roster files: any staff role
+  improvise inside one module's PR. The mechanism now exists: a purpose registered with
+  `module_gated=True` (`core/files/purposes.py`) is left out of `FileViewSet`'s list and is a
+  404 on its retrieve and `:download`, and its module serves its own gated download.
+  `communication.thread-attachment` is the first such purpose (communication PR C);
+  `student.document` and the roster exports below can opt in once each has its module-owned
+  download for every caller that needs one. The same gap covers whole-roster files: any staff role
   holding `platform.file.view` can also list and download the `student.export`,
   `student.id-card-batch` and `staff.export` purposes, which are whole-roster PII (every
   student's or staff member's record in one file). Students Phase 4 adds the first dashboard

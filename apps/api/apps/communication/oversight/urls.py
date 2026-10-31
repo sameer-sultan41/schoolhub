@@ -17,6 +17,11 @@ router.register(
 
 urlpatterns = [
     path(
+        "message-thread-oversight/<uuid:pk>/attachments/<uuid:file_id>:download",
+        ThreadOversightViewSet.as_view({"post": "download_attachment"}),
+        name="message-thread-oversight-attachment-download",
+    ),
+    path(
         "message-thread-oversight/<uuid:thread_pk>/messages",
         # No filters: the cursor order is the conversation order, nothing to search.
         ThreadOversightMessageViewSet.as_view({"get": "list"}, filter_backends=[]),

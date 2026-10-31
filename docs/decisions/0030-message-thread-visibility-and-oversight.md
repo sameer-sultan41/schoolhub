@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-01
-- **Enforced by:** `apps/api/apps/communication/threads/tests/test_endpoints.py` (`test_assigned_scope_class_teacher_sees_routed_thread`, `test_assigned_scope_class_teacher_replies`, `test_revoked_guardian_loses_thread_on_list_and_retrieve`, `test_revoked_guardian_cannot_post`) and `test_messages.py` (`test_internal_note_hidden_from_and_not_notified_to_guardian`) (an `assigned`-scope class teacher sees and answers a routed thread; a scope-`all` admin who is no participant gets 404; a guardian whose portal access is revoked loses the thread on list, retrieve and post; an internal note is neither shown nor notified to a guardian), `apps/api/apps/communication/oversight/tests/test_oversight.py` (every retrieve and messages read writes an audit row, nothing stamps `read_by`); `e2e/tests/live/api/communication-threads-broadcast.spec.ts`; that a new thread endpoint resolves through `visible_threads` is review only
+- **Enforced by:** `apps/api/apps/communication/threads/tests/test_endpoints.py` (`test_assigned_scope_class_teacher_sees_routed_thread`, `test_assigned_scope_class_teacher_replies`, `test_revoked_guardian_loses_thread_on_list_and_retrieve`, `test_revoked_guardian_cannot_post`) and `test_messages.py` (`test_internal_note_hidden_from_and_not_notified_to_guardian`) (an `assigned`-scope class teacher sees and answers a routed thread; a scope-`all` admin who is no participant gets 404; a guardian whose portal access is revoked loses the thread on list, retrieve and post; an internal note is neither shown nor notified to a guardian), `apps/api/apps/communication/oversight/tests/test_oversight.py` (every retrieve and messages read writes an audit row, nothing stamps `read_by`), `apps/api/apps/communication/threads/tests/test_attachments.py` (a thread attachment is off the generic `/files` routes, a guardian never downloads an internal note's file, an oversight download is audited); `e2e/tests/live/api/communication-threads-broadcast.spec.ts`; that a new thread endpoint resolves through `visible_threads` is review only
 
 ## Context
 
@@ -64,5 +64,11 @@ not part of, for safeguarding. Decided in plan
   Campus-narrowed oversight is deferred (`docs/deferred-work.md`).
 - `participant_user_ids` is a JSON array, so a thread's membership is fixed at creation; adding
   or removing a participant, and the §19 `message_participants` join table, are deferred.
+- A thread attachment is as private as its thread. `communication.thread-attachment` is a
+  module-gated upload purpose (`core/files/purposes.py`), so the generic `GET /files` and
+  `:download`, open to every `platform.file.view` holder, never reach it. Participants download
+  through `/message-threads/{id}/attachments/{file_id}:download` under the same membership rule
+  (a guardian or student never gets a file only an internal note carries); an overseer through
+  the oversight twin, audited as `oversight_download_attachment`.
 - Replies and `:mark-read` are not audited (a message is itself an immutable, attributed record;
   a read receipt is the caller's own state). Thread create, close and reopen are.
