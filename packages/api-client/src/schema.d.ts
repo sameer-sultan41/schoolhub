@@ -542,9 +542,10 @@ export interface paths {
          * Send an emergency broadcast
          * @description `POST /broadcasts:emergency` — 202 + job; poll `GET /jobs/{id}`.
          *
-         *     Accepts `Idempotency-Key`: a repeat within 24 hours replays the first 202
-         *     and its `job_id`. A 409 is raised, not returned, so it is never stored and
-         *     a retry with the same key re-checks the audience.
+         *     Accepts `Idempotency-Key`: a repeat with the same body within 24 hours
+         *     replays the first 202 and its `job_id`; the same key with a different body
+         *     (a corrected message) is a 422. A 409 is raised, not returned, so it is
+         *     never stored and a retry with the same key re-checks the audience.
          */
         post: operations["broadcasts:emergency_create"];
         delete?: never;
@@ -12822,7 +12823,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description The audience resolves to nobody, or a campus-scoped sender gave no `campus_id`. */
+            /** @description The audience resolves to nobody, or a campus-scoped sender gave no `campus_id`; or `idempotency_key_reused`: the `Idempotency-Key` was already used with a different body. */
             422: {
                 headers: {
                     [name: string]: unknown;

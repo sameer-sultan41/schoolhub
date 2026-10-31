@@ -174,6 +174,7 @@ class StaffViewSet(_StaffModuleViewSetMixin, viewsets.ModelViewSet):
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="staff:invite",
+            request_data=request.data,
             execute=execute,
         )
 
@@ -209,6 +210,7 @@ class StaffViewSet(_StaffModuleViewSetMixin, viewsets.ModelViewSet):
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="staff:exit",
+            request_data=request.data,
             execute=execute,
         )
 

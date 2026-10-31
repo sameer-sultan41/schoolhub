@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import base64
 import datetime
+import hashlib
 import uuid
 
 from django.db import models, transaction
@@ -314,6 +315,7 @@ class LedgerEntryViewSet(
             tenant_id=request.tenant.pk,
             key=key,
             endpoint="ledger-entries:post-journal",
+            request_data=request.data,
             execute=execute,
         )
 
@@ -553,6 +555,7 @@ class FeeInvoiceViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="fee-invoices:generate",
+            request_data=request.data,
             execute=execute,
         )
 
@@ -847,6 +850,7 @@ class PaymentViewSet(
             tenant_id=request.tenant.pk,
             key=key,
             endpoint="payments:record",
+            request_data=request.data,
             execute=execute,
         )
 
@@ -977,7 +981,11 @@ class RefundViewSet(
             )
 
         return replay_or_execute(
-            tenant_id=request.tenant.pk, key=key, endpoint="refunds:create", execute=execute
+            tenant_id=request.tenant.pk,
+            key=key,
+            endpoint="refunds:create",
+            request_data=request.data,
+            execute=execute,
         )
 
     @extend_schema(request=RefundDecisionSerializer, responses={200: RefundSerializer})
@@ -1032,7 +1040,11 @@ class RefundViewSet(
             return ActionResponse.ok(RefundSerializer(processed).data, message="Refund processed.")
 
         return replay_or_execute(
-            tenant_id=request.tenant.pk, key=key, endpoint="refunds:process", execute=execute
+            tenant_id=request.tenant.pk,
+            key=key,
+            endpoint="refunds:process",
+            request_data=request.data,
+            execute=execute,
         )
 
 
@@ -1209,6 +1221,8 @@ class VoucherCollectionImportViewSet(
             tenant_id=request.tenant.pk,
             key=key,
             endpoint="voucher-collection-imports:create",
+            # Multipart: the uploaded file is bound by its digest, not its bytes.
+            request_data={"provider": provider, "file_sha256": hashlib.sha256(data).hexdigest()},
             execute=execute,
         )
 

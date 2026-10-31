@@ -101,7 +101,8 @@ class BroadcastViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
             422: OpenApiResponse(
                 description=(
                     "The audience resolves to nobody, or a campus-scoped sender gave no "
-                    "`campus_id`."
+                    "`campus_id`; or `idempotency_key_reused`: the `Idempotency-Key` was "
+                    "already used with a different body."
                 )
             ),
         },
@@ -109,9 +110,10 @@ class BroadcastViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
     def emergency(self, request: Request) -> Response:
         """`POST /broadcasts:emergency` — 202 + job; poll `GET /jobs/{id}`.
 
-        Accepts `Idempotency-Key`: a repeat within 24 hours replays the first 202
-        and its `job_id`. A 409 is raised, not returned, so it is never stored and
-        a retry with the same key re-checks the audience.
+        Accepts `Idempotency-Key`: a repeat with the same body within 24 hours
+        replays the first 202 and its `job_id`; the same key with a different body
+        (a corrected message) is a 422. A 409 is raised, not returned, so it is
+        never stored and a retry with the same key re-checks the audience.
         """
         serializer = BroadcastSendSerializer(
             data=request.data, context={"tenant_id": request.tenant.pk}
@@ -128,6 +130,7 @@ class BroadcastViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint=EMERGENCY_IDEMPOTENCY_ENDPOINT,
+            request_data=request.data,
             execute=execute,
         )
 

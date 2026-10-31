@@ -364,6 +364,7 @@ class PromotionBatchViewSet(
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="student-promotions:execute",
+            request_data=request.data,
             execute=run,
         )
 

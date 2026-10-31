@@ -522,6 +522,7 @@ class AdmitCardViewSet(
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="exams:issue-admit-cards",
+            request_data=request.data,
             execute=execute,
         )
 
@@ -620,6 +621,7 @@ class MarksViewSet(
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="marks:bulk-entry",
+            request_data=request.data,
             execute=execute,
         )
 
@@ -801,6 +803,7 @@ class ResultViewSet(
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="exams:process-results",
+            request_data=request.data,
             execute=execute,
         )
 
@@ -984,6 +987,7 @@ class ReportCardViewSet(
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="exams:generate-report-cards",
+            request_data=request.data,
             execute=execute,
         )
 

@@ -95,6 +95,19 @@ class BroadcastSendTests(BroadcastAPITestCase):
         with tenant_context(self.tenant.id):
             self.assertEqual(Notification.objects.filter(event_key=EMERGENCY_BROADCAST).count(), 2)
 
+    def test_same_key_with_a_corrected_message_is_422_not_a_replay(self) -> None:
+        """The audience is unchanged, so only the body tells the corrected send apart."""
+        body = self.confirmed(self.alice)
+        corrected = {**body, "message": "Correction: school closes at one."}
+
+        first = run_on_commit(self, lambda: self.send(body, HTTP_IDEMPOTENCY_KEY="click-3"))
+        second = self.send(corrected, HTTP_IDEMPOTENCY_KEY="click-3")
+
+        self.assertEqual(first.status_code, status.HTTP_202_ACCEPTED, first.json())
+        self.assertEqual(second.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(second.json()["error"]["code"], "idempotency_key_reused")
+        self.assertEqual(len(self.jobs()), 1)
+
     def test_a_409_is_not_replayed_for_the_same_key(self) -> None:
         """The 409 is raised, never stored, so a corrected retry with the key goes through."""
         body = self.confirmed(self.alice)

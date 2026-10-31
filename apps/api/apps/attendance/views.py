@@ -296,6 +296,7 @@ class StudentAttendanceViewSet(
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="student-attendance:bulk-mark",
+            request_data=request.data,
             execute=execute,
         )
 

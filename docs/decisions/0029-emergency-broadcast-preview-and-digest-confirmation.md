@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-01
-- **Enforced by:** `apps/api/apps/communication/broadcasts/tests/test_dispatch.py` (a stale count, and the same count with a different audience, are each a 409 that creates no job; a repeated `Idempotency-Key` replays one job), `test_scope.py` (campus-scoped senders), `test_task.py` (frozen recipients, the `emergency` queue, preferences bypassed, a failed fan-out leaves nothing); `e2e/tests/live/api/communication-threads-broadcast.spec.ts` (preview, a tampered digest refused, send, replay, the job)
+- **Enforced by:** `apps/api/apps/communication/broadcasts/tests/test_dispatch.py` (a stale count, and the same count with a different audience, are each a 409 that creates no job; a repeated `Idempotency-Key` replays one job, and the same key with a corrected message is a 422), `test_scope.py` (campus-scoped senders), `test_task.py` (frozen recipients, the `emergency` queue, preferences bypassed, a failed fan-out leaves nothing), `apps/api/core/idempotency/tests/test_replay.py` (the same body replays, a different body is refused, a legacy row replays); `e2e/tests/live/api/communication-threads-broadcast.spec.ts` (preview, a tampered digest refused, send, replay, the job)
 
 ## Context
 
@@ -31,7 +31,11 @@ changed between preview and send, would still go out. Decided in plan
 4. **One fan-out per click.** `Idempotency-Key` replays the first `202` and `job_id`
    (`replay_or_execute`), and the jobs table's partial unique index on `(tenant, idempotency_key)` (live rows with a key;
    `core/jobs/models.py`) refuses a second job from two racing requests. A 409 is raised, not returned, so it is never stored and a retry
-   with the same key re-checks the audience.
+   with the same key re-checks the audience. The key is bound to the request body: the stored
+   record carries a sha256 fingerprint of the canonical body, and the same key with a different
+   body (a corrected message to an unchanged audience) is `422 idempotency_key_reused`, not a
+   silent replay of the first broadcast's `202`. A client mints a key per (preview result,
+   message, audience), not per preview alone.
 5. **The sender's record scope binds the audience** (`broadcasts/services/scope.py`). An
    `all`-scoped sender is unrestricted. A campus-scoped sender must give one of their campuses
    as `campus_id` (none is 422, another is 404), and a `custom` audience may name only users
@@ -55,6 +59,10 @@ changed between preview and send, would still go out. Decided in plan
 
 ## Consequences
 
+- `replay_or_execute` now takes the request body for every caller (fees, attendance,
+  examinations, students, staff, academics too): a key reused with a different body is refused
+  platform-wide. Records stored before the fingerprint column existed (empty) still replay for
+  their remaining window.
 - **The remaining limit: the digest proves the recipient set, not that a human read it.** A
   client can call preview and send back to back without showing anything. The dashboard must
   show the count and channels and ask for confirmation; the server cannot tell whether it did.
