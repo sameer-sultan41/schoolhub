@@ -10,6 +10,7 @@ from __future__ import annotations
 from django.core.management import call_command
 from django.test import TestCase
 
+from apps.communication.threads.routing import route_guardian_thread
 from apps.school_organization.models import (
     AcademicSession,
     Campus,
@@ -18,22 +19,28 @@ from apps.school_organization.models import (
     SessionStatus,
     Term,
 )
-from apps.student_management.models import Guardian
+from apps.staff_management.models import Staff
+from apps.student_management.models import Guardian, Student, StudentGuardian
 from core.rbac.management.commands.seed_e2e_data import (
     E2E_ADMIN_EMAIL,
     E2E_ADMIN_PASSWORD,
+    E2E_COMMS_CLASS_TEACHER_EMAIL,
+    E2E_COMMS_CLASS_TEACHER_EMPLOYEE_NUMBER,
+    E2E_COMMS_GUARDIAN_EMAIL,
+    E2E_COMMS_STUDENT_ADMISSION_NUMBER,
     E2E_GUARDIAN_EMAIL,
     E2E_GUARDIAN_NAME,
     E2E_GUARDIAN_PERMISSIONS,
     E2E_GUARDIAN_PHONE,
     E2E_OTHER_ADMIN_EMAIL,
     E2E_OTHER_TENANT_SLUG,
+    E2E_PRINCIPAL_PERMISSIONS,
     E2E_SCHOOL_ADMIN_PERMISSIONS,
     E2E_TENANT_SLUG,
 )
 from core.rbac.models import RecordScope, Role, RolePermission, User, UserRole
 from core.tenancy.context import tenant_context
-from core.tenancy.models import Tenant, TenantSettings, TenantStatus
+from core.tenancy.models import Tenant, TenantFeatureOverride, TenantSettings, TenantStatus
 
 
 class SeedE2EDataTests(TestCase):
@@ -59,11 +66,61 @@ class SeedE2EDataTests(TestCase):
         self.assertIn("academics.promotion.execute", E2E_SCHOOL_ADMIN_PERMISSIONS)
         self.assertIn("platform.job.view", E2E_SCHOOL_ADMIN_PERMISSIONS)
 
+    def test_the_principal_can_oversee_threads_and_poll_its_broadcast(self) -> None:
+        """§4 gives oversight and broadcast to the principal; the broadcast is a polled job."""
+        for key in (
+            "communication.thread.oversee",
+            "communication.broadcast.send",
+            "platform.job.view",
+        ):
+            self.assertIn(key, E2E_PRINCIPAL_PERMISSIONS)
+
+    def test_communication_is_enabled_on_both_tenants(self) -> None:
+        """The other tenant too: a disabled module answers 403 before the 404 under test."""
+        call_command("seed_e2e_data")
+
+        for slug in (E2E_TENANT_SLUG, E2E_OTHER_TENANT_SLUG):
+            tenant = Tenant.objects.get(slug=slug)
+            override = TenantFeatureOverride.objects.get(
+                tenant=tenant, feature_flag__key="module.communication"
+            )
+            self.assertTrue(override.enabled, slug)
+
+    def test_a_comms_guardian_thread_routes_to_the_assigned_class_teacher(self) -> None:
+        """The routing chain is seeded whole: the class teacher gets it, not the fallback role."""
+        call_command("seed_e2e_data")
+        call_command("seed_e2e_data")
+        tenant = Tenant.objects.get(slug=E2E_TENANT_SLUG)
+        teacher = User.objects.get(tenant=tenant, email=E2E_COMMS_CLASS_TEACHER_EMAIL)
+        guardian = User.objects.get(tenant=tenant, email=E2E_COMMS_GUARDIAN_EMAIL)
+
+        # `assigned`, the production default, and nothing wider.
+        self.assertEqual(
+            set(UserRole.objects.filter(user=teacher).values_list("scope", flat=True)),
+            {RecordScope.ASSIGNED},
+        )
+        with tenant_context(tenant.id):
+            student = Student.objects.get(admission_number=E2E_COMMS_STUDENT_ADMISSION_NUMBER)
+            staff = Staff.objects.get(employee_number=E2E_COMMS_CLASS_TEACHER_EMPLOYEE_NUMBER)
+            self.assertEqual(staff.user_id, teacher.id)
+
+            link = StudentGuardian.objects.get(student=student, guardian__user_id=guardian.id)
+            self.assertTrue(link.has_portal_access)
+            self.assertTrue(link.receives_communications)
+            self.assertEqual(
+                list(Student.filter_owned_by_user(Student.objects.alive(), guardian)), [student]
+            )
+
+            staff_ids, assigned_to = route_guardian_thread(student=student, tenant_id=tenant.id)
+
+        self.assertEqual(staff_ids, [teacher.id])
+        self.assertEqual(assigned_to, teacher.id)
+
     def test_the_school_admin_does_not_hold_leave_request_create(self) -> None:
         """§4 grants it to `student` and `guardian` only, so the seed must not widen it."""
         self.assertNotIn("attendance.leave-request.create", E2E_SCHOOL_ADMIN_PERMISSIONS)
 
-    def test_seeds_a_restricted_guardian_holding_exactly_the_leave_keys(self) -> None:
+    def test_seeds_a_restricted_guardian_holding_exactly_its_listed_keys(self) -> None:
         call_command("seed_e2e_data")
         tenant = Tenant.objects.get(slug=E2E_TENANT_SLUG)
 
