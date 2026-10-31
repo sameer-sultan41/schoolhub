@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
 
@@ -120,6 +122,35 @@ class InboxTests(ThreadAPITestCase):
 
         # The opening message and the reply; never the internal note.
         self.assertEqual(response.data["data"][0]["unread_count"], 2)
+
+    def test_unread_count_is_counted_per_thread(self) -> None:
+        busy = self.make_thread(self.colleague, self.user)  # opening message: unread
+        quiet = self.make_thread(self.user, self.colleague)  # opening message: mine
+        with tenant_context(self.tenant.id):
+            MessageFactory.create_batch(2, thread=busy, sender_id=self.colleague.pk)
+
+        response = self.client.get(URL)
+
+        counts = {row["id"]: row["unread_count"] for row in response.data["data"]}
+        self.assertEqual(counts, {str(busy.pk): 3, str(quiet.pk): 0})
+
+    def test_inbox_query_count_does_not_grow_with_threads(self) -> None:
+        self.make_thread(self.colleague, self.user)
+        # Warm any per-process caches (feature flags, permissions) before counting.
+        self.client.get(URL)
+
+        with CaptureQueriesContext(connection) as few:
+            self.client.get(URL)
+        for _ in range(9):
+            thread = self.make_thread(self.colleague, self.user)
+            with tenant_context(self.tenant.id):
+                MessageFactory.create_batch(2, thread=thread, sender_id=self.colleague.pk)
+        with CaptureQueriesContext(connection) as many:
+            response = self.client.get(URL)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(len(response.data["data"]), 10)
+        self.assertEqual(len(many.captured_queries), len(few.captured_queries))
 
 
 class RoutedThreadVisibilityTests(ThreadAPITestCase):

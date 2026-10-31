@@ -13,7 +13,8 @@ from __future__ import annotations
 import uuid
 from functools import cached_property
 
-from django.db.models import Count, Q, QuerySet
+from django.db.models import Count, IntegerField, OuterRef, Q, QuerySet, Subquery
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
@@ -90,18 +91,26 @@ def visible_threads(user, *, restricted: bool) -> QuerySet[MessageThread]:
     return queryset
 
 
-def unread_count(user, *, restricted: bool) -> Count:
+def unread_count(user, *, restricted: bool) -> Coalesce:
     """Messages in the thread the caller neither sent nor has a `read_by` stamp on.
 
     A guardian or student never sees an internal note, so one cannot be unread
     for them either.
+
+    A correlated subquery, not a `Count` over a join: the join groups every
+    visible thread's messages before the page's `LIMIT` applies, while this
+    counts only for the rows the page returns, each through the
+    `(tenant_id, thread_id, sent_at)` index. No messages to count is 0, not null.
     """
-    unread = ~Q(messages__sender_id=user.pk) & (
-        Q(messages__read_by__isnull=True) | ~Q(messages__read_by__has_key=str(user.pk))
+    unread = (
+        Message.objects.filter(thread=OuterRef("pk"))
+        .exclude(sender_id=user.pk)
+        .filter(Q(read_by__isnull=True) | ~Q(read_by__has_key=str(user.pk)))
     )
     if restricted:
-        unread &= Q(messages__is_internal_note=False)
-    return Count("messages", filter=unread)
+        unread = unread.filter(is_internal_note=False)
+    per_thread = unread.order_by().values("thread").annotate(unread=Count("pk")).values("unread")
+    return Coalesce(Subquery(per_thread, output_field=IntegerField()), 0)
 
 
 class MessageThreadViewSet(
