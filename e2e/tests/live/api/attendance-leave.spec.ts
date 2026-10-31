@@ -2,18 +2,31 @@ import { ApiError, type ApiClient } from "@schoolhub/api-client";
 import { env } from "@/env";
 import { expect, test } from "@/fixtures";
 import { createLiveSession } from "@/lib/live-api";
-import { seedAttendanceRegister } from "@/lib/live-attendance-register";
-import { E2E_CLASS_TEACHER_EMAIL } from "@/lib/seed-constants";
+import { seedAttendanceRegister, todaysSession } from "@/lib/live-attendance-register";
+import { linkSeededGuardian } from "@/lib/live-guardian";
+import { E2E_CLASS_TEACHER_EMAIL, E2E_GUARDIAN_EMAIL } from "@/lib/seed-constants";
 
 /**
  * Live API lane — no browser. See campuses.spec.ts's header for the shared rationale.
  *
- * **Three identities, and the split is the point.** §11 forbids deciding a request you
- * submitted, and `services.decide_leave_step` additionally forbids one person deciding
- * two levels of the same request — without which the escalation threshold would be
- * theatre. So the submitter is the seeded school admin, level 1 is the class teacher and
- * level 2 the principal, exactly as §7.2 describes. A lane that ran all three as one
- * identity could not tell a working chain from a broken one.
+ * **Three identities, and the split is the point.** The requester is the seeded
+ * **guardian**, linked to each test's own run-unique student (`linkSeededGuardian`): §11
+ * allows only the student or a linked guardian, and `services.assert_may_request_for_student`
+ * checks that link rather than any key, so even the all-permissions admin that builds the
+ * fixtures is refused. §11 also forbids deciding a request you submitted, and
+ * `services.decide_leave_step` forbids one person deciding two levels of the same request,
+ * without which the escalation threshold would be theatre. So level 1 is the class teacher
+ * and level 2 the principal, as §7.2 describes. A lane that ran them as one identity could
+ * not tell a working chain from a broken one. The 422 self-decision rule itself is
+ * unreachable here, since a guardian never holds `approve`; it is covered by
+ * `test_the_submitter_cannot_approve_their_own_request` in
+ * `apps/api/apps/attendance/tests/test_leave.py`, and the live lane pins the 403 instead.
+ *
+ * **The auto-mark test enrols in today's session.** `apply_approved_leave` marks only an
+ * active enrolment in the `is_current` session, so the approve test uses `todaysSession`
+ * (the seeded baseline) where the others keep the scaffold's far-future session. That makes
+ * it sensitive to `academic-sessions.spec.ts`, which briefly activates another session. If it
+ * ever flakes, serialise the two specs or check the current session first, never retry it.
  *
  * **Leave types come from the seed, not from a POST.** No endpoint can create one:
  * attendance.md §4 keys no leave-type permission and the writes belong to hr-leave's
@@ -62,6 +75,21 @@ async function approverSession(): Promise<ApiClient> {
   });
 }
 
+let guardianLogin: Promise<ApiClient> | undefined;
+
+/**
+ * The seeded guardian's session, one login per worker rather than per test: four tests here
+ * would otherwise spend four of `AuthEndpointThrottle`'s 10 a minute (e2e/AGENTS.md). The same
+ * pattern as `attendance-marking.spec.ts`'s `markerSession`.
+ */
+async function guardianSession(): Promise<ApiClient> {
+  guardianLogin ??= createLiveSession({
+    identifier: E2E_GUARDIAN_EMAIL,
+    password: env.LIVE_ADMIN_PASSWORD,
+  });
+  return guardianLogin;
+}
+
 async function sickLeaveTypeId(client: ApiClient): Promise<string> {
   const response = await client.get("/leave-types?is_active=true");
   const types = response.data as LeaveType[];
@@ -72,13 +100,19 @@ async function sickLeaveTypeId(client: ApiClient): Promise<string> {
 
 test.describe("student leave (live API)", () => {
   test("a request is submitted, approved, and auto-marks the dates", async ({ liveApiClient }) => {
-    const register = await seedAttendanceRegister(liveApiClient);
+    // Today's session: only an active enrolment in the current one is auto-marked.
+    const register = await seedAttendanceRegister(
+      liveApiClient,
+      await todaysSession(liveApiClient),
+    );
     const [studentId] = register.studentIds;
     if (!studentId) throw new Error("expected the register to have a roster");
+    await linkSeededGuardian(liveApiClient, studentId);
+    const guardian = await guardianSession();
     const leaveTypeId = await sickLeaveTypeId(liveApiClient);
     const start = nextMonday();
 
-    const created = await liveApiClient.post("/leave-requests", {
+    const created = await guardian.post("/leave-requests", {
       student_id: studentId,
       leave_type_id: leaveTypeId,
       start_date: start,
@@ -104,13 +138,15 @@ test.describe("student leave (live API)", () => {
     expect(rows[0]?.status).toBe("on_leave");
   });
 
-  test("the submitter cannot approve their own request", async ({ liveApiClient }) => {
+  test("a requester cannot decide leave", async ({ liveApiClient }) => {
     const register = await seedAttendanceRegister(liveApiClient);
     const [studentId] = register.studentIds;
     if (!studentId) throw new Error("expected the register to have a roster");
+    await linkSeededGuardian(liveApiClient, studentId);
+    const guardian = await guardianSession();
     const start = nextMonday(2);
 
-    const created = await liveApiClient.post("/leave-requests", {
+    const created = await guardian.post("/leave-requests", {
       student_id: studentId,
       leave_type_id: await sickLeaveTypeId(liveApiClient),
       start_date: start,
@@ -119,25 +155,26 @@ test.describe("student leave (live API)", () => {
     });
     const request = created.data as LeaveRequest;
 
-    const error = await liveApiClient.post(`/leave-requests/${request.id}:approve`, {}).then(
+    const error = await guardian.post(`/leave-requests/${request.id}:approve`, {}).then(
       () => null,
       (caught: unknown) => caught,
     );
 
-    // Either the segregation rule (422) or the missing approve key (403) — both are
-    // the system refusing, and which one arrives depends on the seeded grants rather
-    // than on anything this spec controls.
+    // A 403, not the 422 segregation rule: §4 never grants `approve` to a guardian, so the
+    // permission gate answers first. The 422 is pinned at the Django level (see the header).
     expect(error).toBeInstanceOf(ApiError);
-    expect([403, 422]).toContain((error as ApiError).status);
+    expect((error as ApiError).status).toBe(403);
   });
 
   test("a request can be cancelled before it starts", async ({ liveApiClient }) => {
     const register = await seedAttendanceRegister(liveApiClient);
     const [studentId] = register.studentIds;
     if (!studentId) throw new Error("expected the register to have a roster");
+    await linkSeededGuardian(liveApiClient, studentId);
+    const guardian = await guardianSession();
     const start = nextMonday(3);
 
-    const created = await liveApiClient.post("/leave-requests", {
+    const created = await guardian.post("/leave-requests", {
       student_id: studentId,
       leave_type_id: await sickLeaveTypeId(liveApiClient),
       start_date: start,
@@ -145,7 +182,8 @@ test.describe("student leave (live API)", () => {
       reason: "Wedding.",
     });
 
-    const cancelled = await liveApiClient.post(
+    // The requester withdraws their own ask: `:cancel` is keyed on `leave-request.create`.
+    const cancelled = await guardian.post(
       `/leave-requests/${(created.data as LeaveRequest).id}:cancel`,
       {},
     );
@@ -157,10 +195,12 @@ test.describe("student leave (live API)", () => {
     const register = await seedAttendanceRegister(liveApiClient);
     const [studentId] = register.studentIds;
     if (!studentId) throw new Error("expected the register to have a roster");
+    await linkSeededGuardian(liveApiClient, studentId);
+    const guardian = await guardianSession();
     const leaveTypeId = await sickLeaveTypeId(liveApiClient);
     const start = nextMonday(4);
 
-    await liveApiClient.post("/leave-requests", {
+    await guardian.post("/leave-requests", {
       student_id: studentId,
       leave_type_id: leaveTypeId,
       start_date: start,
@@ -168,7 +208,7 @@ test.describe("student leave (live API)", () => {
       reason: "First.",
     });
 
-    const error = await liveApiClient
+    const error = await guardian
       .post("/leave-requests", {
         student_id: studentId,
         leave_type_id: leaveTypeId,

@@ -1,6 +1,10 @@
 import { env } from "@/env";
 import { expect, test } from "@/fixtures";
-import { E2E_SCHOOL_ADMIN_EMAIL } from "@/lib/seed-constants";
+import {
+  E2E_BASELINE_TEACHER_NAME,
+  E2E_SCHOOL_ADMIN_EMAIL,
+  E2E_SCHOOL_ADMIN_NAME,
+} from "@/lib/seed-constants";
 
 /**
  * Live lane — requires the real stack, seeded (see `tests/live/tenant-isolation.spec.ts`'s
@@ -15,25 +19,32 @@ import { E2E_SCHOOL_ADMIN_EMAIL } from "@/lib/seed-constants";
  * reliable — so this test owns its session end to end instead. See
  * `tests/live/session.spec.ts`'s header for the same reasoning in more detail.
  *
- * **This file used to pin a broken screen.** The home page fetched
- * `GET /reports/dashboard-summary`, which does not exist — `apps/api/config/api_v1.py`
- * routes no reporting app — so against a real API it 404'd and the whole tile grid was
- * replaced by a red error alert, and this test asserted that alert was visible. The
- * screen has been rebuilt on endpoints that actually ship, so the assertions below are
- * the inverse: the panels render, and there is no alert on the page at all.
+ * **History.** This file first pinned a broken screen: the home fetched
+ * `GET /reports/dashboard-summary`, which does not exist, so against a real API the tile
+ * grid was replaced by a red error alert and the test asserted that alert. A later rebuild
+ * (commit `032d8280`: a now band, quick actions, a "Teaching load this week" panel) was
+ * meant to fix that and this file was rewritten for it, but that rebuild never reached
+ * `main`. `main`'s `/dashboard` is `shell/dashboard/dashboard-page-content.tsx` (the
+ * Metronic Demo1 layout wired to real endpoints), so this spec asserts that screen.
  *
- * `school_admin`, not the all-permissions `school_owner` this file used to sign in as.
- * Every panel on this screen is permission-gated, and a role that holds every key can
- * only ever prove that they all render — it cannot prove that the ones a role does *not*
- * hold stay hidden. `seed_e2e_data.py` gives this identity `students.student.create` and
- * `timetable.slot.create` but deliberately neither `staff.staff.create` nor
- * `students.student.import`, which is exactly the asymmetry the quick-action assertions
- * below rest on.
+ * Every assertion below is content only loaded data produces, because a widget that fails
+ * to load still renders its card and its heading: the greeting needs `/auth/me`, the staff
+ * row needs `/staff`, and a headline stat needs a number from the overview counts, never the
+ * `—` placeholder. There is deliberately no `role="alert"` count: Next's route announcer
+ * carries that role too, so it is never zero.
+ *
+ * `school_admin`, not the all-permissions `school_owner`: a role that holds every key can
+ * only prove that everything renders. `seed_e2e_data.py` gives this identity the read keys
+ * these widgets call (students, staff, classes, campuses), so a missing key would surface
+ * here as a widget showing an error instead of data.
  */
 test.use({ storageState: { cookies: [], origins: [] } });
 
+/** Headline stat labels, as `ChannelStats` prints them. */
+const HEADLINE_STATS = ["Enrolled students", "Staff members", "Classes", "Campuses"] as const;
+
 test.describe("dashboard home", () => {
-  test("renders the panels a school_admin can answer for, and no error alert", async ({
+  test("renders loaded data from the real endpoints for a school_admin", async ({
     page,
     loginPage,
     dashboardPage,
@@ -45,36 +56,19 @@ test.describe("dashboard home", () => {
     });
     await expect(page).toHaveURL("/dashboard");
 
-    await expect(dashboardPage.heading).toBeVisible();
     await expect(dashboardPage.heading).toHaveText("Dashboard");
 
-    // The band: the one bold element, and the greeting that identifies whose day it is.
-    // The seeded tenant has a bell schedule, so the strip has blocks to draw even for an
-    // identity with no teaching slots of its own.
-    await expect(page.getByText("Welcome back,")).toBeVisible();
-    await expect(page.getByRole("list", { name: "Today's schedule" })).toBeVisible();
+    // `/auth/me` loaded: the greeting carries the user's full name only on success.
+    await expect(dashboardPage.welcomeHeading(E2E_SCHOOL_ADMIN_NAME)).toBeVisible();
 
-    // The permission-gated panels this identity holds the keys for.
-    await expect(page.getByText("Teaching load this week")).toBeVisible();
-    await expect(page.getByText("Places by class")).toBeVisible();
-    await expect(page.getByText("Waiting on you")).toBeVisible();
-    await expect(page.getByText("Your school at a glance")).toBeVisible();
+    // `/staff` loaded and rendered a row for the seeded teacher. Searched for, because the
+    // grid pages five rows at a time and the seeded row need not be on page one.
+    await dashboardPage.staffSearch.fill(E2E_BASELINE_TEACHER_NAME);
+    await expect(dashboardPage.staffRow(E2E_BASELINE_TEACHER_NAME)).toBeVisible();
 
-    // Quick actions are filtered by what this role can actually finish — the two it
-    // cannot are the point of asserting the two it can.
-    await expect(page.getByRole("link", { name: "New student" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Build timetable" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "New staff member" })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Import students" })).toHaveCount(0);
-
-    // Real counts from real endpoints. `Classes` drains a bounded list; `Students` reads
-    // `meta.pagination.total_count`, which `CountedCursorPagination` now emits.
-    await expect(page.getByText("Classes", { exact: true })).toBeVisible();
-    await expect(page.getByText("Students", { exact: true })).toBeVisible();
-
-    // The regression this file exists for: nothing on this screen 404s any more, so
-    // nothing announces itself as an error. `Alert` takes `role="alert"` only for
-    // `variant="danger"`, so this is exactly "no failure is being reported".
-    await expect(page.getByRole("alert")).toHaveCount(0);
+    // The overview counts loaded: each headline card shows a number, not the `—` placeholder.
+    for (const label of HEADLINE_STATS) {
+      await expect(dashboardPage.statWithNumber(label), `${label} stat`).toBeVisible();
+    }
   });
 });

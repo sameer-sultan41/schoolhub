@@ -11,7 +11,7 @@ import {
   E2E_SECOND_CAMPUS_NAME,
   E2E_SECOND_CAMPUS_SECTION_NAME,
 } from "@/lib/seed-constants";
-import type { DashboardPage, LoginPage } from "@/pages";
+import type { DashboardPage, LoginPage, StudentsPage } from "@/pages";
 
 /**
  * Live lane — requires the real stack, seeded (`seed_e2e_data`; see
@@ -33,23 +33,22 @@ import type { DashboardPage, LoginPage } from "@/pages";
  * four plain calls (create student, create+link guardian, add emergency contact,
  * enroll), each gated by its own permission and its own domain rule
  * (`assert_enrollment_prerequisites` requires at least one guardian and one emergency
- * contact before `:enroll` succeeds) — so the journey below exercises exactly that
- * sequence through the real UI, not a shortcut around it.
+ * contact before `:enroll` succeeds). The journey below makes exactly those calls
+ * through the shipped UI: the creation wizard (`StudentCreateStepper`, opened by the
+ * directory's "New student" button), whose Profile step creates the student and whose
+ * later steps render the same relation panels as the detail sheet. Neither the wizard
+ * nor the sheet has a URL, so a later visit to the student goes through its directory
+ * row.
  *
  * Every navigation after the one real sign-in is client-side (`nav` link clicks, not
  * `page.goto`) deliberately: a full page load re-boots the app with an empty in-memory
- * access token, forcing an eager refresh off the rotating `sh_refresh` cookie. This
- * journey visits `/students/new` twice (create, then re-create for the duplicate case),
- * and an earlier `page.goto("/students/new")` version of this spec was observed getting
- * bounced to `/login` mid-run on the second visit. The precise trigger wasn't pinned down
- * (a genuinely throttled `AuthEndpointThrottle` 429 from concurrent local runs was live at
- * the time), but it exposed a real, separate conflation worth fixing on its own footing:
- * `packages/api-client/src/token-store.ts`'s `refreshAccessToken()` and
- * `client.ts`'s `refreshOnce()` both collapse *any* non-2xx refresh response — a rate
- * limit or a transient 5xx included, not just an actually-expired/invalid refresh token —
- * into the same "session is over" signal that clears the access token and bounces to
- * `/login`. Avoiding a second cold refresh here sidesteps the symptom; the conflation
- * itself is unfixed and tracked in `docs/project-status.md`.
+ * access token, forcing an eager refresh off the rotating `sh_refresh` cookie (one
+ * request of `AuthEndpointThrottle`'s budget, e2e/AGENTS.md). The one exception is
+ * step 8's reload, which that step explains. A refresh that fails for any reason —
+ * a rate limit or a transient 5xx included, not just an expired token — is treated as
+ * "session over" by `packages/api-client`'s `refreshAccessToken()`/`refreshOnce()` and
+ * bounces to `/login`; that conflation is unfixed and tracked in
+ * `docs/project-status.md`.
  */
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -57,40 +56,12 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-/**
- * Lands on `/students/new` and, if a `GET /campuses` fires, waits for it to resolve
- * before handing back control — `Promise.all` registers the response listener in the
- * same tick as the navigating click, so it cannot miss a response that fires faster than
- * we could react to afterward (the exact race `page.waitForLoadState("networkidle")` was
- * tried for first: it hung for the full 20s timeout instead, confirmed against the real
- * app — this dashboard build keeps *some* connection open continuously, so "no network
- * activity for 500ms" never becomes true).
- *
- * A *second* visit within the same test (the duplicate-rejection case re-opens this form)
- * hits `useCampuses()`'s 10-minute `staleTime` and serves from cache with no new request
- * at all — confirmed against the real app, which is why this tolerates the wait timing
- * out rather than requiring the response. Either way, by the time this returns, the
- * Campus select's data is settled and `StudentFormPage.fillRequired` needs no
- * special-cased wait or extended click timeout for its data-driven re-render.
- */
-async function openNewStudentForm(page: Page): Promise<void> {
-  const campusesLoaded = page
-    .waitForResponse(
-      (response) => response.url().includes("/campuses") && response.request().method() === "GET",
-      { timeout: 3_000 },
-    )
-    .catch(() => null);
-  await Promise.all([
-    campusesLoaded,
-    page.getByRole("link", { name: "New student", exact: true }).click(),
-  ]);
-}
-
-/** Shared by both tests below: real sign-in, then land on the create-student form. */
-async function signInAndOpenNewStudentForm(
+/** Shared by both tests below: real sign-in, then land on the students directory. */
+async function signInToStudents(
   page: Page,
   loginPage: LoginPage,
   dashboardPage: DashboardPage,
+  studentsPage: StudentsPage,
 ): Promise<void> {
   await loginPage.goto();
   await loginPage.signIn({
@@ -104,7 +75,7 @@ async function signInAndOpenNewStudentForm(
   await expect(dashboardPage.heading).toBeVisible();
 
   await dashboardPage.navLink("Students").click();
-  await openNewStudentForm(page);
+  await expect(studentsPage.addStudentButton).toBeVisible();
 }
 
 test.describe("admission -> enrollment (real API, school_admin)", () => {
@@ -112,7 +83,8 @@ test.describe("admission -> enrollment (real API, school_admin)", () => {
     page,
     loginPage,
     dashboardPage,
-    studentFormPage,
+    studentsPage,
+    studentCreateStepperPage: stepper,
     studentDetailPage,
     signInAsSecondIdentity,
   }) => {
@@ -120,69 +92,78 @@ test.describe("admission -> enrollment (real API, school_admin)", () => {
     const firstName = "E2E";
     const lastName = `Journey ${tag}`;
 
-    // 1. Create the student.
-    await signInAndOpenNewStudentForm(page, loginPage, dashboardPage);
-    await studentFormPage.fillRequired({
+    // 1. Create the student: Profile's Next submits it and moves to Guardians.
+    await signInToStudents(page, loginPage, dashboardPage, studentsPage);
+    await studentsPage.addStudentButton.click();
+    await stepper.fillProfile({
       firstName,
       lastName,
       dateOfBirth: "2015-05-05",
       admissionDate: "2026-01-01",
       campusName: E2E_BASELINE_CAMPUS_NAME,
     });
-    await studentFormPage.submit.click();
-    await expect(page).toHaveURL(/\/students\/[0-9a-f-]{36}$/);
-    // Server-generated `{year}-{seq}` — confirmed against the real API, not assumed.
-    await expect(page.getByText(/^\d{4}-\d{4}$/)).toBeVisible();
+    await stepper.next.click();
+    await expect(stepper.createdBanner(`${firstName} ${lastName}`)).toBeVisible();
 
-    // 2. Link a guardian (create new).
-    await studentDetailPage.tab("Guardians").click();
-    await studentDetailPage.createAndLinkGuardian({
+    // 2. Guardians: create a guardian and link it.
+    await stepper.relations.createAndLinkGuardian({
       firstName: "Gina",
       lastName: "Guardian",
       phone: "+15551234567",
+      relationship: "Mother",
     });
-    await expect(studentDetailPage.linkGuardianTrigger).toBeVisible();
-    await expect(page.getByText("Gina Guardian")).toBeVisible();
+    await expect(stepper.relations.entry("Gina Guardian")).toBeVisible();
 
-    // 3. Add an emergency contact — needs `students.student.update`, only school_admin
+    // 3. Emergency contacts — needs `students.student.update`, only school_admin
     // holds it (see header comment).
-    await studentDetailPage.tab("Emergency contacts").click();
-    await studentDetailPage.addEmergencyContact({
+    await stepper.next.click();
+    await stepper.relations.addEmergencyContact({
       name: "Gina Guardian",
       relationship: "Mother",
       phone: "+15551234567",
     });
-    await expect(studentDetailPage.addContactTrigger).toBeVisible();
+    await expect(stepper.relations.entry("Gina Guardian")).toBeVisible();
 
-    // 4. Enroll into the seeded baseline session/class/section.
-    await studentDetailPage.tab("History").click();
-    await studentDetailPage.enroll({
+    // 4. Documents is optional and skipped; then enroll into the seeded baseline
+    // session/class/section on the History step.
+    await stepper.next.click();
+    await stepper.next.click();
+    await stepper.relations.enroll({
       sessionName: E2E_BASELINE_SESSION_NAME,
       className: E2E_BASELINE_CLASS_NAME,
       sectionName: E2E_BASELINE_SECTION_NAME,
       enrollmentDate: today(),
     });
-    await expect(studentDetailPage.notEnrolledMessage).not.toBeVisible();
+    await expect(stepper.relations.notEnrolledMessage).not.toBeVisible();
 
     // 5. Change section — same baseline section is the only one seeded, but the action
     // itself (not a real reallocation) is what this proves: the request round-trips and
     // the dialog closes on success.
-    await studentDetailPage.changeSection({ sectionName: E2E_BASELINE_SECTION_NAME });
+    await stepper.relations.changeSection({ sectionName: E2E_BASELINE_SECTION_NAME });
 
     // 6. Request an inter-campus transfer to the seeded second campus. `incoming` is
     // never offered — Phase 3's own scope decision — confirmed structurally by this
     // dialog's radio group having exactly two options (`request-transfer-dialog.tsx`),
     // not asserted again here to avoid a third, redundant locator query in the live lane.
-    await studentDetailPage.requestInterCampusTransfer({
+    await stepper.relations.requestInterCampusTransfer({
       toCampusName: E2E_SECOND_CAMPUS_NAME,
       reason: "E2E transfer journey",
       effectiveDate: today(),
     });
-    await expect(page.getByText(/requested/i)).toBeVisible();
+    await expect(stepper.relations.transferStatus("Requested")).toBeVisible();
+
+    // History is the last step, so its forward button reads "Finish" and closes the
+    // wizard. The directory row shows the server-generated `{year}-{seq:04d}` admission
+    // number, the year taken from the admission date — confirmed against
+    // `services.py`'s default pattern, not assumed.
+    await stepper.finish.click();
+    await expect(stepper.dialog).toBeHidden();
+    await studentsPage.searchInput.fill(lastName);
+    await expect(studentsPage.row(lastName).getByText(/^2026-\d{4,}$/)).toBeVisible();
 
     // 7. The approver: `principal`, a different person — segregation of duties
     // (services.approve_transfer refuses a self-decision), same two-actor shape as the
-    // academics promotion journey.
+    // academics promotion journey. Reaches the student through its own directory.
     const approver = await signInAsSecondIdentity({
       identifier: E2E_PRINCIPAL_EMAIL,
       password: env.LIVE_ADMIN_PASSWORD,
@@ -190,29 +171,54 @@ test.describe("admission -> enrollment (real API, school_admin)", () => {
     await expect(approver.page).toHaveURL("/dashboard");
     await expect(approver.dashboardPage.heading).toBeVisible();
 
-    await approver.studentDetailPage.goto({ path: new URL(page.url()).pathname });
-    await approver.studentDetailPage.tab("History").click();
-    await approver.studentDetailPage.decideTransfer("Approve");
-    await expect(approver.page.getByText(/^approved$/i)).toBeVisible();
+    await approver.dashboardPage.navLink("Students").click();
+    await approver.studentsPage.openStudent(lastName);
+    await approver.studentDetailPage.openTab("History");
+    await approver.studentDetailPage.relations.decideTransfer("Approve");
+    await expect(approver.studentDetailPage.relations.transferStatus("Approved")).toBeVisible();
 
     // 8. Back in the original session: the request is now decided, and this identity
     // (not the approver) completes it — `complete` reuses `students.transfer.create`,
     // the requester's own key, confirmed against the real permission map.
+    //
+    // A reload, not just re-opening the row: the wizard's History step already cached
+    // this student's transfers, and that cache is fresh for 30s
+    // (`DEFAULT_QUERY_STALE_TIME_MS`), so a sheet opened sooner would show the stale
+    // "Requested" with no Complete button. The approval happens in another browser, so
+    // nothing in this one invalidates it; the reload costs one refresh.
     await page.reload();
-    await studentDetailPage.tab("History").click();
-    await expect(page.getByText(/^approved$/i)).toBeVisible();
-    await studentDetailPage.completeTransfer({ sectionName: E2E_SECOND_CAMPUS_SECTION_NAME });
-    await expect(page.getByText(/^completed$/i)).toBeVisible();
+    await studentsPage.openStudent(lastName);
+    await studentDetailPage.openTab("History");
+    await expect(studentDetailPage.relations.transferStatus("Approved")).toBeVisible();
+    await studentDetailPage.relations.completeTransfer({
+      sectionName: E2E_SECOND_CAMPUS_SECTION_NAME,
+    });
+    await expect(studentDetailPage.relations.transferStatus("Completed")).toBeVisible();
 
     // 9. The directory's own class/section/session filters, against real data: filtering
     // by the baseline session the student was enrolled in before transferring still
     // finds them (a past, no-longer-current enrollment row is still a real match — the
     // filter-correctness fix's own scope decision), proving the fix end to end against
-    // the real database, not a stub.
-    await dashboardPage.navLink("Students").click();
-    await page.getByRole("combobox", { name: /academic session/i }).click();
-    await page.getByRole("option", { name: E2E_BASELINE_SESSION_NAME }).click();
-    await expect(page.getByText(lastName)).toBeVisible();
+    // the real database, not a stub. The search from step 8 stays applied. The proof is
+    // the filtered response's own body: the table keeps the previous rows on screen while
+    // a filtered page loads (`keepPreviousData`), so the row alone would match the stale
+    // list before the filtered one renders.
+    await studentDetailPage.close();
+    const filteredList = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        url.pathname.endsWith("/students") &&
+        url.searchParams.has("academic_session_id") &&
+        response.request().method() === "GET"
+      );
+    });
+    await studentsPage.sessionFilter.click();
+    await page.getByRole("option", { name: E2E_BASELINE_SESSION_NAME, exact: true }).click();
+    const filtered = await filteredList;
+    expect(filtered.ok()).toBe(true);
+    const { data } = (await filtered.json()) as { data: { last_name: string }[] };
+    expect(data.map((student) => student.last_name)).toContain(lastName);
+    await expect(studentsPage.row(lastName)).toBeVisible();
   });
 
   /**
@@ -226,7 +232,8 @@ test.describe("admission -> enrollment (real API, school_admin)", () => {
     page,
     loginPage,
     dashboardPage,
-    studentFormPage,
+    studentsPage,
+    studentCreateStepperPage: stepper,
   }) => {
     const tag = Date.now().toString(36);
     const values = {
@@ -237,17 +244,21 @@ test.describe("admission -> enrollment (real API, school_admin)", () => {
       campusName: E2E_BASELINE_CAMPUS_NAME,
     };
 
-    await signInAndOpenNewStudentForm(page, loginPage, dashboardPage);
-    await studentFormPage.fillRequired(values);
-    await studentFormPage.submit.click();
-    await expect(page).toHaveURL(/\/students\/[0-9a-f-]{36}$/);
+    // Profile's Finish creates the student and closes the wizard.
+    await signInToStudents(page, loginPage, dashboardPage, studentsPage);
+    await studentsPage.addStudentButton.click();
+    await stepper.fillProfile(values);
+    await stepper.finish.click();
+    await expect(stepper.dialog).toBeHidden();
+    await studentsPage.searchInput.fill(values.lastName);
+    await expect(studentsPage.row(values.lastName)).toBeVisible();
 
-    await dashboardPage.navLink("Students").click();
-    await openNewStudentForm(page);
-    await studentFormPage.fillRequired(values);
-    await studentFormPage.submit.click();
+    // A fresh wizard, the same Profile: the server's non-field 422 stays in the dialog.
+    await studentsPage.addStudentButton.click();
+    await stepper.fillProfile(values);
+    await stepper.next.click();
     // `role="alert"` also matches Next.js's own route announcer — scope by text, same
     // reasoning as `login.page.ts`'s `error()` helper.
-    await expect(studentFormPage.alert.filter({ hasText: /already exists/i })).toBeVisible();
+    await expect(stepper.formError.filter({ hasText: /already exists/i })).toBeVisible();
   });
 });
