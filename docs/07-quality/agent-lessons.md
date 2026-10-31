@@ -80,6 +80,12 @@
 
 - **Mistake.** Hand-formatted code failed Prettier on several files; an old `noqa` was reported unused by ruff; cspell rejected two coined words in a comment and a doc.
 - **Mistake (again, attendance PR A).** `eslint --fix` dropped a type assertion it called unnecessary on a test fixture, which widened `subject_type`/`status` to `string`; the pre-push typecheck failed. The fixture needed a return type, not the assertion.
+- **Mistake (again, communication PR C).** Pre-push mypy rejected DRF attribute overrides twice:
+  an unannotated `filter_backends = []` on `ThreadMessageViewSet` (`[var-annotated]`; moved to
+  the route's `as_view(filter_backends=[])`, `4a49e127`) and a serializer re-declaring
+  `unread_count` with a different field type (`[assignment]`), first silenced with a
+  `type: ignore` and then fixed properly by a shared `ThreadBaseSerializer` (`523c453d`).
+  Read the mypy error, then restructure; a suppressor is not the fix (AGENTS.md stop rule 2).
 - **Check.** Apply the fix the hook prints, on exactly the files it lists. Delete an unused `noqa` rather than re-adding it, reword a flagged word rather than growing `.cspell/project-words.txt`, and never use `--no-verify`. Keep the reason a removed `noqa` carried as a plain comment. When a hook prints no detail (the pre-push mypy check), run the command it names once and read the error before editing; two guessed fixes in a row failed before the real cause (a class variable overridden by an annotated attribute) was read.
 
 ### L11. Briefs to subagents must carry this repository's overrides
@@ -171,6 +177,19 @@
 
 - **Mistake.** `seed_e2e_data.py` gives its `school_admin` an exact list of module keys, not the role's registry grants. It left out `platform.job.view`, which every real staff role holds through `core/jobs/permissions.py`, so the promotion journey's job poll was a 403 and the screen reported a job that had succeeded as failed (e2e-live run 40659453170).
 - **Check.** When a live journey starts a `202` + job, opens a file or reads any other platform resource, add the matching `platform.*` key to that identity's list in `seed_e2e_data.py`, and confirm with the trace's network log that no request in the journey is a 403.
+
+### L28. A new viewset must declare what the endpoint contract tests read
+
+- **Mistake.** Communication PR C added viewsets twice without the declarations
+  `apps/api/tests/test_endpoint_contracts.py` checks: `MessageThreadViewSet` set no
+  `ordering_fields`, so `OrderingContractTests` flagged an open `?ordering=` surface
+  (fixed in `fa71eaef`); and the `:mark-read` POST was missing from `required_permission_map`, so
+  it fell back to `communication.thread.view` and `WritePermissionContractTests` rejected a write
+  authorised by a read key (fixed in `8db9e2a2`). Both were only caught by CI.
+- **Check.** For every new viewset, declare `ordering_fields` (even when the cursor's ordering
+  is the only one, as a one-column allowlist), and put every non-GET action, colon actions
+  included, in `required_permission_map` with a write key. Read the `ordering_fields` and
+  `required_permission_map` of `threads/viewset.py` as the pattern.
 
 ## 4. Adding a lesson
 

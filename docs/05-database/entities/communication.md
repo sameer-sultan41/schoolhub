@@ -61,13 +61,13 @@ Conversation containers: guardian ↔ school (child-contextual), internal staff,
 | thread_type | varchar(20) | NO | `'guardian_school'` | Enum: `guardian_school`, `internal`, `group` |
 | student_id | uuid | YES | — | FK → `students.id`; child context for guardian threads |
 | participant_user_ids | jsonb | NO | — | Array of `users.id`; see module doc §19 (join-table promotion is a flagged recommendation) |
-| assigned_to | uuid | YES | — | FK → `users.id`; staff member currently responsible |
+| assigned_to_id | uuid | YES | — | `users.id`, staff member currently responsible. Shipped as a plain UUID column with no FK, like the other cross-module user references |
 | status | varchar(10) | NO | `'open'` | Enum: `open`, `closed` |
-| last_message_at | timestamptz | YES | — | Denormalized for inbox sorting |
+| last_message_at | timestamptz | NO | `now()` | Denormalized for inbox sorting. NOT NULL: a thread is created with its first message, so there is no state a NULL would describe |
 | closed_at | timestamptz | YES | — | |
 
-Indexes: `(tenant_id, status, last_message_at DESC)`; `(tenant_id, student_id)`; GIN `(participant_user_ids)`.
-Relationships: N:1 `students`; N:1 `users` (assigned_to); 1:N `messages`.
+Indexes: `(tenant_id, status, last_message_at DESC)`; `(tenant_id, student_id)`; GIN `(participant_user_ids)`. The GIN index is created by `RunSQL` in migration `0006_message_threads`, not declared on the model (it would need `django.contrib.postgres`).
+Relationships: N:1 `students`; soft reference to `users` (assigned_to_id); 1:N `messages`.
 
 ### messages
 
@@ -76,14 +76,14 @@ Individual posts within a thread.
 | Column | Type | Null | Default | Notes |
 | ------ | ---- | ---- | ------- | ----- |
 | thread_id | uuid | NO | — | FK → `message_threads.id` |
-| sender_id | uuid | NO | — | FK → `users.id`; must be a thread participant |
+| sender_id | uuid | NO | — | `users.id` (plain UUID, no FK); must be a thread participant |
 | body | text | NO | — | |
 | attachments | jsonb | YES | — | Array of `files.id` |
 | is_internal_note | boolean | NO | `false` | Staff-only visibility (recommendation) |
 | read_by | jsonb | YES | — | Map `user_id → read timestamp` |
 | sent_at | timestamptz | NO | `now()` | |
 
-Exceptions to standard columns: rows are immutable after send — `updated_at/updated_by` unused (edits disallowed; deletes are soft).
+Exceptions to standard columns: **append-only** — no `updated_at`/`updated_by` (edits disallowed) and no `deleted_at`: the table is an `AppendOnlyTenantModel`, so a soft delete, which is an UPDATE, is refused. `read_by` is the only mutable column (the app role holds UPDATE on it alone, migration `0007_rls_and_grants`). Soft delete is deferred (`docs/deferred-work.md`).
 Indexes: `(tenant_id, thread_id, sent_at)`.
 Relationships: N:1 `message_threads`; N:1 `users` (sender).
 

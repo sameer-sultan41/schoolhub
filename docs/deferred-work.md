@@ -909,6 +909,58 @@ either this file or `project-status.md`.
   Deliberately absent, all communication scope: preferences, quiet hours,
   suppression lists, SMS quotas, provider status webhooks, the SSE badge stream,
   and §6's full five-stage retry schedule.
+- **Communication PR C left these out** (`docs/03-modules/communication.md` §20, "Built (PR C)"):
+  - **No `GET /notifications` inbox or `:mark-read`.** §16 lists both (and the SSE badge
+    stream); `core.notifications` persists the rows but serves no endpoint, so a guardian has no
+    API to read a thread reply or a broadcast in-app yet. Earlier docs called it "the existing
+    inbox"; it is not. The live lane reads delivery from `/delivery-logs` instead. Parent-portal
+    needs it first.
+  - **A per-broadcast live delivery board** (§7). The delivery dashboard can filter by
+    `notification_id` and date, not by broadcast; the job's result carries only the counts.
+  - **MFA step-up on `:emergency`** (§4's "MFA-recommended"). There is no MFA yet. The digest
+    proves the audience, not that a person read the confirmation (ADR-0029).
+  - **Quiet hours.** No quiet-hours setting exists, so there is nothing for the emergency
+    category to bypass yet.
+  - **Broadcast fan-out in batches.** One `notify()` call and one `deliver_notifications` task
+    carry the whole audience; notifications.md §5 asks for ~500-recipient batches so one
+    school's blast cannot starve the lane, against a "seconds" latency target.
+  - **A read-receipt tenant toggle** (§19: on by default, tenant-disableable). Receipts are
+    always on.
+  - **Message soft delete.** The entity doc lists it, but `messages` is append-only
+    (`AppendOnlyTenantModel`), so a soft delete (an UPDATE) is refused and the table has no
+    `updated_at`/`updated_by`/`deleted_at`. Retracting a message needs a design (a tombstone
+    message, or a granted `deleted_at` column) and a decision on what guardians see.
+  - **The `message_participants` join table** (§19). Participants are a JSON array fixed at
+    creation; adding or removing someone, or per-participant state beyond `read_by`, needs it.
+  - **§10's webhook events** (`broadcast.sent`, `message.created`). No webhook machinery exists.
+  - **`AI-COM-03`** emergency drafting (§14). No AI gateway yet.
+  - **Parent-portal §7's topic category** when a guardian starts a thread. Threads carry a
+    subject only; routing does not vary by topic.
+  - **§13's thread SLA report** (first-response and resolution times).
+  - **Campus-narrowed oversight.** `communication.thread.oversee` reads every thread in the
+    tenant whatever the overseer's scope (ADR-0030); a campus-scoped principal sees every
+    campus's threads.
+  - **Thread attachments are not checked against the uploader.** `post_message` requires a
+    ready `communication.thread-attachment` file of the tenant, but not one the sender uploaded,
+    so a participant could attach another user's upload if they had its id. Low risk (ids are
+    unguessable UUIDs, and a file id is never listed to another user), but `created_by ==
+    sender` is the full check.
+  - **Messages carry `sender_id` only**, no sender name. The dashboard resolves names from the
+    thread's participants; a name field on `MessageSerializer` (as `UserNamesModelSerializer`
+    gives attendance) would save it the lookup.
+  - **Replies and `:mark-read` are not audited.** A message is itself an immutable, attributed
+    record, and a receipt is the caller's own state; thread create, close and reopen, oversight
+    reads and broadcasts are audited.
+  - **An `Idempotency-Key` longer than 64 characters is a 500.** `BackgroundJob.idempotency_key`
+    is `max_length=64` and nothing checks the header's length first; shared with
+    `fee-invoices:generate`. Reusing a key after its 24-hour replay window is a generic 409 from
+    the job's unique index rather than a replay. A length check in `core.idempotency` closes the
+    first for every endpoint.
+  - **`thread_staff_users` excludes anyone who ever held a restricted role**, soft-deleted
+    `UserRole` rows included, because it reads the same rows `is_restricted_principal` does (no
+    `deleted_at` filter). The two cannot disagree, which is the point, but a staff member whose
+    guardian role was removed (soft-deleted) still cannot be routed a thread or picked as a
+    recipient until the row is purged. Fixing it means changing `is_restricted_principal` too.
 
 - **`eslint-plugin-playwright` for `e2e/`** (planned in the engineering-standards spec, PR 4) was
   deferred: adding a dependency means `pnpm install`, which runs PR 3's `prepare` script and
