@@ -20,7 +20,7 @@ from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.examinations import processing, services
+from apps.examinations import processing, services, tasks
 from apps.examinations.models import (
     ExamStatus,
     MarksStatus,
@@ -40,6 +40,7 @@ from apps.examinations.tests.factories import (
     grant,
 )
 from core.api.exceptions import Conflict, DomainRuleViolation
+from core.jobs.tests.base import assert_sent_on_commit
 from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
@@ -316,6 +317,19 @@ class ComputationTests(ProcessingTestCase):
             processing.compute(scope)
 
         self.assertLessEqual(len(captured.captured_queries), 5)
+
+
+class ProcessEndpointTests(ProcessingTestCase):
+    def test_processing_is_sent_only_after_its_job_commits(self) -> None:
+        self.mark_all("60.00", "70.00", "80.00")
+
+        assert_sent_on_commit(
+            self,
+            tasks.process_results_task,
+            lambda: self.client.post(f"/api/v1/exams/{self.exam.pk}:process-results"),
+            tenant_id=self.tenant.pk,
+            actor_id=self.user.pk,
+        )
 
 
 class RecomputeTests(ProcessingTestCase):

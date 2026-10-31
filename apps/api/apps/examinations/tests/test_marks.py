@@ -23,7 +23,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.examinations import services
+from apps.examinations import services, tasks
 from apps.examinations.models import ExamStatus, Marks, MarksStatus
 from apps.examinations.tests.base import ExaminationsAPITestCase
 from apps.examinations.tests.factories import (
@@ -36,6 +36,7 @@ from apps.examinations.tests.factories import (
     grant,
     open_marks_entry,
 )
+from core.jobs.tests.base import assert_sent_on_commit
 from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
@@ -559,6 +560,16 @@ class MarksImportTests(MarksTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.json())
         self.assertIn("job_id", response.json()["data"])
+
+    def test_the_import_is_sent_only_after_its_job_commits(self) -> None:
+        sheet = self._sheet([f"{self.students[0].admission_number},60,,,,"])
+        assert_sent_on_commit(
+            self,
+            tasks.import_marks_task,
+            lambda: self.upload(sheet),
+            tenant_id=self.tenant.pk,
+            actor_id=self.user.pk,
+        )
 
     def test_a_misspelled_header_fails_the_job_with_one_readable_error(self) -> None:
         from core.jobs.models import BackgroundJob, JobStatus

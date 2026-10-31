@@ -27,6 +27,7 @@ from apps.fees_finance.models import (
     Refund,
     Scholarship,
 )
+from apps.fees_finance.tasks import export_finance_report_task
 from apps.fees_finance.tests.base import FeesFinanceAPITestCase
 from apps.fees_finance.tests.factories import (
     DiscountFactory,
@@ -40,6 +41,7 @@ from apps.fees_finance.tests.factories import (
     fine_head,
 )
 from core.api.exceptions import DomainRuleViolation
+from core.jobs.tests.base import assert_sent_on_commit
 from core.money import ZERO
 from core.tenancy.context import tenant_context
 
@@ -573,6 +575,24 @@ class ReportEndpointTests(ReportTestCase):
 
         self.assertEqual(response.status_code, 202)
         self.assertIn("job_id", response.json()["data"])
+
+    def test_the_export_is_sent_only_after_its_job_commits(self) -> None:
+        assert_sent_on_commit(
+            self,
+            export_finance_report_task,
+            lambda: self.client.post(
+                "/api/v1/reports/finance-summary",
+                {
+                    "kind": "outstanding-aging",
+                    "date_from": "2026-01-01",
+                    "date_to": "2027-01-01",
+                    "format": "csv",
+                },
+                format="json",
+            ),
+            tenant_id=self.tenant.pk,
+            actor_id=self.user.pk,
+        )
 
     def test_the_export_job_carries_the_requester_for_scope_recomputation(self) -> None:
         """An export must not widen what its requester could see inline, which

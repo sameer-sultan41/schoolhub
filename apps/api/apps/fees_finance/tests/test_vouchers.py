@@ -15,6 +15,7 @@ from __future__ import annotations
 import datetime
 from decimal import Decimal
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
@@ -31,6 +32,7 @@ from apps.fees_finance.models import (
     VoucherProvider,
     VoucherStatus,
 )
+from apps.fees_finance.tasks import import_settlement_file_task
 from apps.fees_finance.tests.base import FeesFinanceAPITestCase
 from apps.fees_finance.tests.factories import (
     FeeHeadFactory,
@@ -40,6 +42,7 @@ from apps.fees_finance.tests.factories import (
 )
 from core.api.exceptions import DomainRuleViolation
 from core.files.services import create_ready_file
+from core.jobs.tests.base import assert_sent_on_commit
 from core.money import ZERO
 from core.tenancy.context import tenant_context
 
@@ -238,6 +241,27 @@ class AdapterTests(FeesFinanceAPITestCase):
     def test_an_unknown_provider_raises_rather_than_returning_nothing(self) -> None:
         with self.assertRaises(LookupError):
             adapter_for("not-a-provider")
+
+
+class SettlementImportEndpointTests(VoucherTestCase):
+    def test_the_import_is_sent_only_after_its_job_commits(self) -> None:
+        voucher = self._issue()
+        data = settlement_csv([(voucher.consumer_number, "TRX-1", "1000.00", "2026-09-05")])
+
+        assert_sent_on_commit(
+            self,
+            import_settlement_file_task,
+            lambda: self.client.post(
+                "/api/v1/voucher-collection-imports",
+                {
+                    "provider": VoucherProvider.BANK_BRANCH,
+                    "file": SimpleUploadedFile("settlement.csv", data, content_type="text/csv"),
+                },
+                format="multipart",
+            ),
+            tenant_id=self.tenant.pk,
+            actor_id=self.user.pk,
+        )
 
 
 class SettlementTests(VoucherTestCase):

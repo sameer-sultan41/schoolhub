@@ -25,7 +25,7 @@ from django.db import IntegrityError, transaction
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.examinations import documents, services
+from apps.examinations import documents, services, tasks
 from apps.examinations.models import (
     ExamStatus,
     ReportCardStatus,
@@ -42,6 +42,7 @@ from apps.examinations.tests.factories import (
 )
 from apps.examinations.tests.test_processing import ProcessingTestCase
 from core.api.exceptions import Conflict
+from core.jobs.tests.base import assert_sent_on_commit
 from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
@@ -156,6 +157,15 @@ class GenerationGateTests(PublishedResultsTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.json())
         self.assertIn("job_id", response.json()["data"])
+
+    def test_generation_is_sent_only_after_its_job_commits(self) -> None:
+        assert_sent_on_commit(
+            self,
+            tasks.generate_report_cards_task,
+            lambda: self.client.post(f"/api/v1/exams/{self.exam.pk}:generate-report-cards"),
+            tenant_id=self.tenant.pk,
+            actor_id=self.user.pk,
+        )
 
     def test_generation_needs_the_create_key(self) -> None:
         with tenant_context(self.tenant.id):

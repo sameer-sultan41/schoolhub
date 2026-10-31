@@ -101,7 +101,7 @@ from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
 from core.idempotency.services import replay_or_execute
-from core.jobs.services import create_job
+from core.jobs.services import create_job, enqueue_job
 from core.rbac.permissions import (
     DenyRestrictedPrincipals,
     HasPermissionKey,
@@ -508,13 +508,7 @@ class AdmitCardViewSet(
                 payload={"exam_id": str(exam.pk), "requested_by": str(request.user.pk)},
                 actor_id=request.user.pk,
             )
-            transaction.on_commit(
-                lambda: tasks.render_admit_cards_task.delay(
-                    tenant_id=str(request.tenant.pk),
-                    job_id=str(job.pk),
-                    actor_id=str(request.user.pk),
-                )
-            )
+            enqueue_job(job=job, task=tasks.render_admit_cards_task)
             record_audit(request, "issue", exam, after=outcome)
             return ActionResponse.accepted(
                 str(job.pk),
@@ -717,13 +711,7 @@ class MarksImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
             },
             actor_id=request.user.pk,
         )
-        transaction.on_commit(
-            lambda: tasks.import_marks_task.delay(
-                tenant_id=str(request.tenant.pk),
-                job_id=str(job.pk),
-                actor_id=str(request.user.pk),
-            )
-        )
+        enqueue_job(job=job, task=tasks.import_marks_task)
         record_audit(request, "import", exam_subject, after={"job_id": str(job.pk)})
         return ActionResponse.accepted(
             str(job.pk), message="Marks sheet queued. Poll the job for the row-level report."
@@ -805,13 +793,7 @@ class ResultViewSet(
                 payload={"exam_id": str(exam.pk), "requested_by": str(request.user.pk)},
                 actor_id=request.user.pk,
             )
-            transaction.on_commit(
-                lambda: tasks.process_results_task.delay(
-                    tenant_id=str(request.tenant.pk),
-                    job_id=str(job.pk),
-                    actor_id=str(request.user.pk),
-                )
-            )
+            enqueue_job(job=job, task=tasks.process_results_task)
             record_audit(request, "create", exam, after={"job_id": str(job.pk)})
             return ActionResponse.accepted(str(job.pk), message="Result processing queued.")
 
@@ -994,13 +976,7 @@ class ReportCardViewSet(
                 payload={"exam_id": str(exam.pk), "requested_by": str(request.user.pk)},
                 actor_id=request.user.pk,
             )
-            transaction.on_commit(
-                lambda: tasks.generate_report_cards_task.delay(
-                    tenant_id=str(request.tenant.pk),
-                    job_id=str(job.pk),
-                    actor_id=str(request.user.pk),
-                )
-            )
+            enqueue_job(job=job, task=tasks.generate_report_cards_task)
             record_audit(request, "create", exam, after={"job_id": str(job.pk)})
             return ActionResponse.accepted(str(job.pk), message="Report card generation queued.")
 
@@ -1116,13 +1092,7 @@ class QuestionBankViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
             },
             actor_id=request.user.pk,
         )
-        transaction.on_commit(
-            lambda: tasks.assemble_paper_task.delay(
-                tenant_id=str(request.tenant.pk),
-                job_id=str(job.pk),
-                actor_id=str(request.user.pk),
-            )
-        )
+        enqueue_job(job=job, task=tasks.assemble_paper_task)
         record_audit(request, "generate", bank, after={"job_id": str(job.pk)})
         return ActionResponse.accepted(str(job.pk), message="Paper assembly queued.")
 
@@ -1277,12 +1247,6 @@ class ExamReportView(TenantScopedViewSetMixin, APIView):
             },
             actor_id=request.user.pk,
         )
-        transaction.on_commit(
-            lambda: tasks.export_exam_report_task.delay(
-                tenant_id=str(request.tenant.pk),
-                job_id=str(job.pk),
-                actor_id=str(request.user.pk),
-            )
-        )
+        enqueue_job(job=job, task=tasks.export_exam_report_task)
         record_audit(request, "export", job)
         return ActionResponse.accepted(str(job.pk), message=message)

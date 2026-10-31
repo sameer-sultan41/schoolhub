@@ -19,13 +19,6 @@ either this file or `project-status.md`.
   pick it up the next time one of them is touched for an unrelated reason, or as a
   standalone pass.
 
-- **About a dozen job endpoints still queue with `transaction.on_commit(lambda: task.delay(...))`**
-  rather than `core.jobs.services.enqueue_job` (the attendance export; fees invoice
-  generation, settlement import and report export; the examinations admit cards, marks
-  import, result processing, report cards and paper assembly). They are race-free, but their
-  jobs carry no `celery_task_id` and a refused send leaves the job `queued`. Moving each onto
-  `enqueue_job` is mechanical; it was kept out of the fix PR for the seven that raced.
-
 - **Staff's wire types are hand-written structs, not generated `ApiSchemas["Staff"]`
   aliases.** `services/modules/staff/staff-type.ts`'s `StaffDirectoryRecord`,
   `StaffDetailRecord`, `CreateStaffInput`, etc. are hand-declared — a pre-existing
