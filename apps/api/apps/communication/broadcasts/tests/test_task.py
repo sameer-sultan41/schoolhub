@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from unittest import mock
 
-from apps.communication import tasks
 from apps.communication.broadcasts.services.dispatch import BROADCAST_JOB_TYPE
 from apps.communication.broadcasts.tests.base import MESSAGE, BroadcastAPITestCase
 from apps.communication.models import AudienceType
@@ -89,12 +88,16 @@ class EmergencyBroadcastTaskTests(BroadcastAPITestCase):
         self.assertEqual(email.status, DeliveryStatus.QUEUED, email.error_message)
 
     def test_task_failure_marks_job_failed(self) -> None:
-        job = self.make_job(self.alice)
+        """Fails after the notifications are inserted, so leaked rows would show."""
+        job = self.make_job(self.alice, self.bob)
 
-        with mock.patch.object(tasks, "notify", side_effect=RuntimeError("provider down")):
+        with mock.patch.object(
+            DeliveryLog.objects, "bulk_create", side_effect=RuntimeError("delivery rows failed")
+        ) as bulk_create:
             job = self.run_task(job)
 
+        bulk_create.assert_called_once()
         self.assertEqual(job.status, JobStatus.FAILED)
-        self.assertEqual(job.error, "provider down")
+        self.assertEqual(job.error, "delivery rows failed")
         with tenant_context(self.tenant.id):
             self.assertFalse(Notification.objects.filter(event_key=EMERGENCY_BROADCAST).exists())
