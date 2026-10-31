@@ -1027,6 +1027,79 @@ paths:
               schema:
                 $ref: '#/components/schemas/RefreshResponse'
           description: ''
+  /api/v1/broadcasts:emergency:
+    post:
+      operationId: broadcasts:emergency_create
+      description: |-
+        `POST /broadcasts:emergency` — 202 + job; poll `GET /jobs/{id}`.
+
+        Accepts `Idempotency-Key`: a repeat within 24 hours replays the first 202
+        and its `job_id`. A 409 is raised, not returned, so it is never stored and
+        a retry with the same key re-checks the audience.
+      summary: Send an emergency broadcast
+      tags:
+      - broadcasts:emergency
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BroadcastSend'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BroadcastSend'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BroadcastSend'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BroadcastQueuedResponse'
+          description: ''
+        '404':
+          description: A targeting id is not this school's.
+        '409':
+          description: '`audience_changed`: the count or digest no longer matches;
+            `error.meta` carries the current `recipient_count` and `audience_digest`.'
+        '422':
+          description: The audience resolves to nobody.
+  /api/v1/broadcasts:preview:
+    post:
+      operationId: broadcasts:preview_create
+      description: '`POST /broadcasts:preview` — the count, digest and channels a
+        send must repeat back.'
+      summary: Preview an emergency broadcast's audience and channels
+      tags:
+      - broadcasts:preview
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BroadcastRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BroadcastRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BroadcastRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BroadcastPreviewResponse'
+          description: ''
+        '404':
+          description: A targeting id is not this school's.
+        '422':
+          description: The audience resolves to nobody.
   /api/v1/budgets:
     get:
       operationId: budgets_list
@@ -14950,6 +15023,142 @@ components:
         * `running` - Running
         * `succeeded` - Succeeded
         * `failed` - Failed
+    BroadcastAudienceFilter:
+      type: object
+      description: The `audience_filter` keys `audience.resolve_audience` reads.
+      properties:
+        class_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        section_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        house_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        campus_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        user_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        role_slugs:
+          type: array
+          items:
+            type: string
+    BroadcastPreview:
+      type: object
+      description: What a send would do right now.
+      properties:
+        recipient_count:
+          type: integer
+        audience_digest:
+          type: string
+          description: sha256 hex of the sorted recipient ids joined by ','; send
+            repeats it back.
+        channels:
+          type: array
+          items:
+            type: string
+        unavailable_channels:
+          type: array
+          items:
+            type: string
+          description: Channels the trigger declares that have no adapter yet; recorded
+            as skipped.
+      required:
+      - audience_digest
+      - channels
+      - recipient_count
+      - unavailable_channels
+    BroadcastPreviewResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/BroadcastPreview'
+      required:
+      - data
+    BroadcastQueued:
+      type: object
+      properties:
+        job_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+      required:
+      - job_id
+      - status
+    BroadcastQueuedResponse:
+      type: object
+      description: '`ActionResponse.accepted`''s body; poll `GET /jobs/{job_id}`.'
+      properties:
+        data:
+          $ref: '#/components/schemas/BroadcastQueued'
+      required:
+      - data
+    BroadcastRequest:
+      type: object
+      description: |-
+        Who the broadcast goes to and what it says.
+
+        Every targeting id must be a live row of the caller's tenant, else **404**
+        (§11): plain UUIDs, not related fields, because a related field answers an
+        unknown id with a 400 naming it. Needs `tenant_id` in the context.
+
+        `validated_data["audience_filter"]` comes back JSON-ready (ids as strings),
+        since it is stored on the job and in the audit row as is.
+      properties:
+        audience_type:
+          $ref: '#/components/schemas/CommunicationAudienceTypeEnum'
+        audience_filter:
+          $ref: '#/components/schemas/BroadcastAudienceFilter'
+        campus_id:
+          type: string
+          format: uuid
+          nullable: true
+        message:
+          type: string
+          maxLength: 1000
+      required:
+      - audience_type
+      - message
+    BroadcastSend:
+      type: object
+      description: 'The preview''s answer, repeated back: a mismatch on either is
+        a 409.'
+      properties:
+        audience_type:
+          $ref: '#/components/schemas/CommunicationAudienceTypeEnum'
+        audience_filter:
+          $ref: '#/components/schemas/BroadcastAudienceFilter'
+        campus_id:
+          type: string
+          format: uuid
+          nullable: true
+        message:
+          type: string
+          maxLength: 1000
+        confirm_recipient_count:
+          type: integer
+          minimum: 1
+        audience_digest:
+          type: string
+      required:
+      - audience_digest
+      - audience_type
+      - confirm_recipient_count
+      - message
     Budget:
       type: object
       properties:

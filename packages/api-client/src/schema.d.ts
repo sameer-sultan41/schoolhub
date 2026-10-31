@@ -529,6 +529,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/broadcasts:emergency": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send an emergency broadcast
+         * @description `POST /broadcasts:emergency` — 202 + job; poll `GET /jobs/{id}`.
+         *
+         *     Accepts `Idempotency-Key`: a repeat within 24 hours replays the first 202
+         *     and its `job_id`. A 409 is raised, not returned, so it is never stored and
+         *     a retry with the same key re-checks the audience.
+         */
+        post: operations["broadcasts:emergency_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/broadcasts:preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview an emergency broadcast's audience and channels
+         * @description `POST /broadcasts:preview` — the count, digest and channels a send must repeat back.
+         */
+        post: operations["broadcasts:preview_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/budgets": {
         parameters: {
             query?: never;
@@ -6486,6 +6530,63 @@ export interface components {
          * @enum {string}
          */
         BackgroundJobStatusEnum: "queued" | "running" | "succeeded" | "failed";
+        /** @description The `audience_filter` keys `audience.resolve_audience` reads. */
+        BroadcastAudienceFilter: {
+            class_ids?: string[];
+            section_ids?: string[];
+            house_ids?: string[];
+            campus_ids?: string[];
+            user_ids?: string[];
+            role_slugs?: string[];
+        };
+        /** @description What a send would do right now. */
+        BroadcastPreview: {
+            recipient_count: number;
+            /** @description sha256 hex of the sorted recipient ids joined by ','; send repeats it back. */
+            audience_digest: string;
+            channels: string[];
+            /** @description Channels the trigger declares that have no adapter yet; recorded as skipped. */
+            unavailable_channels: string[];
+        };
+        BroadcastPreviewResponse: {
+            data: components["schemas"]["BroadcastPreview"];
+        };
+        BroadcastQueued: {
+            /** Format: uuid */
+            job_id: string;
+            status: string;
+        };
+        /** @description `ActionResponse.accepted`'s body; poll `GET /jobs/{job_id}`. */
+        BroadcastQueuedResponse: {
+            data: components["schemas"]["BroadcastQueued"];
+        };
+        /**
+         * @description Who the broadcast goes to and what it says.
+         *
+         *     Every targeting id must be a live row of the caller's tenant, else **404**
+         *     (§11): plain UUIDs, not related fields, because a related field answers an
+         *     unknown id with a 400 naming it. Needs `tenant_id` in the context.
+         *
+         *     `validated_data["audience_filter"]` comes back JSON-ready (ids as strings),
+         *     since it is stored on the job and in the audit row as is.
+         */
+        BroadcastRequest: {
+            audience_type: components["schemas"]["CommunicationAudienceTypeEnum"];
+            audience_filter?: components["schemas"]["BroadcastAudienceFilter"];
+            /** Format: uuid */
+            campus_id?: string | null;
+            message: string;
+        };
+        /** @description The preview's answer, repeated back: a mismatch on either is a 409. */
+        BroadcastSend: {
+            audience_type: components["schemas"]["CommunicationAudienceTypeEnum"];
+            audience_filter?: components["schemas"]["BroadcastAudienceFilter"];
+            /** Format: uuid */
+            campus_id?: string | null;
+            message: string;
+            confirm_recipient_count: number;
+            audience_digest: string;
+        };
         Budget: {
             /** Format: uuid */
             readonly id: string;
@@ -12630,6 +12731,91 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RefreshResponse"];
                 };
+            };
+        };
+    };
+    "broadcasts:emergency_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BroadcastSend"];
+                "application/x-www-form-urlencoded": components["schemas"]["BroadcastSend"];
+                "multipart/form-data": components["schemas"]["BroadcastSend"];
+            };
+        };
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BroadcastQueuedResponse"];
+                };
+            };
+            /** @description A targeting id is not this school's. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `audience_changed`: the count or digest no longer matches; `error.meta` carries the current `recipient_count` and `audience_digest`. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The audience resolves to nobody. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "broadcasts:preview_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BroadcastRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["BroadcastRequest"];
+                "multipart/form-data": components["schemas"]["BroadcastRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BroadcastPreviewResponse"];
+                };
+            };
+            /** @description A targeting id is not this school's. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The audience resolves to nobody. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

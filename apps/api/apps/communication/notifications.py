@@ -1,27 +1,34 @@
 """§12's notification triggers wired so far: an announcement or a notice
-being published, and a reply in a message thread. The remaining §12 rows
-(acknowledgment reminder, emergency broadcast, delivery-failure alert,
-birthday) arrive with the PRs that produce those events.
+being published, a reply in a message thread, and an emergency broadcast. The
+remaining §12 rows (acknowledgment reminder, delivery-failure alert, birthday)
+arrive with the PRs that produce those events.
 
 Every trigger registered here is called from exactly the one `services/`
 function that fires it — `announcements.services.publish.publish_announcement`/
 `notices.services.publish.publish_notice`/
-`threads.services.post_message.post_message` — matching the rule examinations'
+`threads.services.post_message.post_message`/
+`tasks.send_emergency_broadcast_task` — matching the rule examinations'
 PR B review established: a registration with no caller persists no rows and
 is worse than not registering it at all.
 """
 
 from core.notifications.catalog import registry as catalog
-from core.notifications.models import NotificationCategory, NotificationChannel
+from core.notifications.models import (
+    NotificationCategory,
+    NotificationChannel,
+    NotificationPriority,
+)
 from core.notifications.templates import registry as templates
 
 ANNOUNCEMENT_PUBLISHED = "communication.announcement-published"
 NOTICE_PUBLISHED = "communication.notice-published"
 THREAD_REPLY = "communication.thread-reply"
+EMERGENCY_BROADCAST = "communication.emergency-broadcast"
 
 _ANNOUNCEMENT_VARS = {"announcement.title", "announcement.body"}
 _NOTICE_VARS = {"notice.notice_no", "notice.title", "notice.body"}
 _THREAD_REPLY_VARS = {"thread.subject", "message.sender_name", "message.preview"}
+_EMERGENCY_BROADCAST_VARS = {"broadcast.message"}
 
 catalog.register(
     ANNOUNCEMENT_PUBLISHED,
@@ -91,4 +98,41 @@ for _channel in (NotificationChannel.IN_APP, NotificationChannel.PUSH):
         subject="{{ thread.subject }}",
         body="{{ message.sender_name }}: {{ message.preview }}",
         variables=_THREAD_REPLY_VARS,
+    )
+
+# §12: "all channels", preferences bypassed. The bypass is the `emergency`
+# category itself — `core.notifications.services.notify` never consults the
+# preference resolver for it — so nothing here, or in the task, re-implements it.
+# SMS, push and WhatsApp have no adapter yet; the preview reports them as
+# `unavailable_channels` and their deliveries are recorded `skipped`.
+EMERGENCY_BROADCAST_TRIGGER = catalog.register(
+    EMERGENCY_BROADCAST,
+    template_code=EMERGENCY_BROADCAST,
+    category=NotificationCategory.EMERGENCY,
+    priority=NotificationPriority.EMERGENCY,
+    channels={
+        NotificationChannel.IN_APP,
+        NotificationChannel.EMAIL,
+        NotificationChannel.SMS,
+        NotificationChannel.PUSH,
+        NotificationChannel.WHATSAPP,
+    },
+    variables=_EMERGENCY_BROADCAST_VARS,
+    description="An emergency broadcast from the school.",
+)
+for _channel in (NotificationChannel.IN_APP, NotificationChannel.EMAIL, NotificationChannel.PUSH):
+    templates.register(
+        EMERGENCY_BROADCAST,
+        channel=_channel,
+        subject="Emergency alert",
+        body="{{ broadcast.message }}",
+        variables=_EMERGENCY_BROADCAST_VARS,
+    )
+# Subjectless, so the body itself says what it is.
+for _channel in (NotificationChannel.SMS, NotificationChannel.WHATSAPP):
+    templates.register(
+        EMERGENCY_BROADCAST,
+        channel=_channel,
+        body="Emergency: {{ broadcast.message }}",
+        variables=_EMERGENCY_BROADCAST_VARS,
     )

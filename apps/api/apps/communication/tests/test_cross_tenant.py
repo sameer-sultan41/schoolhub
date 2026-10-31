@@ -11,7 +11,13 @@ import uuid
 from rest_framework import status
 
 from apps.communication import uploads
-from apps.communication.models import Message, MessageThread, ThreadStatus, ThreadType
+from apps.communication.models import (
+    AudienceType,
+    Message,
+    MessageThread,
+    ThreadStatus,
+    ThreadType,
+)
 from apps.communication.tests.base import CommunicationAPITestCase
 from apps.communication.tests.factories import (
     AnnouncementFactory,
@@ -25,6 +31,7 @@ from apps.communication.tests.factories import (
     grant,
 )
 from core.files.tests.factories import FileFactory
+from core.jobs.models import BackgroundJob
 from core.notifications.models import DeliveryLog, Notification, NotificationChannel
 from core.notifications.templates import registry as platform_templates
 from core.tenancy.context import tenant_context
@@ -254,3 +261,38 @@ class CommunicationCrossTenantTests(CommunicationAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         with tenant_context(self.tenant.id):
             self.assertFalse(MessageThread.objects.exists())
+
+    def test_previewing_a_broadcast_to_another_tenants_targets_is_404(self) -> None:
+        for audience_filter in (
+            {"user_ids": [str(self.other_user.pk)]},
+            {"campus_ids": [str(self.other_student.campus_id)]},
+        ):
+            with self.subTest(audience_filter=audience_filter):
+                response = self.client.post(
+                    "/api/v1/broadcasts:preview",
+                    {
+                        "audience_type": AudienceType.CUSTOM,
+                        "audience_filter": audience_filter,
+                        "message": "Hi.",
+                    },
+                    format="json",
+                )
+
+                self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_sending_a_broadcast_to_another_tenants_targets_is_404(self) -> None:
+        response = self.client.post(
+            "/api/v1/broadcasts:emergency",
+            {
+                "audience_type": AudienceType.ALL,
+                "campus_id": str(self.other_student.campus_id),
+                "message": "Hi.",
+                "confirm_recipient_count": 1,
+                "audience_digest": "0" * 64,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        with tenant_context(self.tenant.id):
+            self.assertFalse(BackgroundJob.objects.exists())

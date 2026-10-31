@@ -17,4 +17,5 @@ urlpatterns = [
     path("", include("apps.communication.notices.urls")),
     path("", include("apps.communication.threads.urls")),
     path("", include("apps.communication.oversight.urls")),
+    path("", include("apps.communication.broadcasts.urls")),
 ]

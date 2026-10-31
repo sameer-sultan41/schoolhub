@@ -415,6 +415,9 @@ CELERY_TASK_ROUTES = {
     # once each has its own worker pool and per-tenant rate shaping to protect,
     # both of which arrive with the communication module.
     "core.notifications.tasks.*": {"queue": "transactional"},
+    # notifications.md §5's always-warm lane: a school-closure broadcast must not
+    # queue behind a term's invoice run or a morning of absence alerts.
+    "apps.communication.tasks.send_emergency_broadcast_task": {"queue": "emergency"},
 }
 # An unrouted task goes to a queue the workers consume. Celery's own default, "celery",
 # is consumed by nothing here, so an unrouted task would wait on it forever.

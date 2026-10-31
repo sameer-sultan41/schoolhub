@@ -20,8 +20,7 @@ from apps.communication.tests.factories import (
 )
 from core.notifications.templates import registry as platform_templates
 
-# Every key registered so far. §4's remaining key (broadcast) joins as
-# PR C's later endpoints ship.
+# Every key this module registers.
 ALL_KEYS = (
     "communication.announcement.view",
     "communication.announcement.create",
@@ -43,6 +42,7 @@ ALL_KEYS = (
     "communication.thread.close",
     "communication.message.create",
     "communication.thread.oversee",
+    "communication.broadcast.send",
 )
 
 
