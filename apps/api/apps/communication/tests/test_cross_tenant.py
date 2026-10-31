@@ -205,6 +205,18 @@ class CommunicationCrossTenantTests(CommunicationAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_oversight_retrieve_of_another_tenants_thread_is_404(self) -> None:
+        response = self.client.get(f"/api/v1/message-thread-oversight/{self.other_thread.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_oversight_messages_of_another_tenants_thread_is_404(self) -> None:
+        response = self.client.get(
+            f"/api/v1/message-thread-oversight/{self.other_thread.pk}/messages"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
     def test_recipients_never_lists_another_tenants_user(self) -> None:
         response = self.client.get("/api/v1/message-threads/recipients", {"search": "Foreign"})
 

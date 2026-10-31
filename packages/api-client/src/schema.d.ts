@@ -2901,6 +2901,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/message-thread-oversight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `/message-thread-oversight` — every alive thread in the tenant, read-only. */
+        get: operations["message_thread_oversight_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-thread-oversight/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET /message-thread-oversight/{id}` — one thread; writes an audit row. */
+        get: operations["message_thread_oversight_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-thread-oversight/{thread_pk}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET /message-thread-oversight/{thread_pk}/messages` — the whole conversation.
+         *
+         *     Internal notes included; each request writes an audit row. Never stamps
+         *     `read_by`.
+         */
+        get: operations["message_thread_oversight_messages_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/message-threads": {
         parameters: {
             query?: never;
@@ -8884,6 +8940,16 @@ export interface components {
                 };
             };
         };
+        PaginatedThreadOversightList: {
+            data?: components["schemas"]["ThreadOversight"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
         PaginatedTimetableSlotList: {
             data?: components["schemas"]["TimetableSlot"][];
             meta?: {
@@ -11506,6 +11572,40 @@ export interface components {
             readonly created_at: string;
             /** Format: date-time */
             readonly updated_at: string;
+        };
+        /**
+         * @description A thread as an overseer reads it.
+         *
+         *     The inbox row minus `unread_count`: an overseer is never a participant, so
+         *     there is no per-caller unread state to report. Messages reuse
+         *     `MessageSerializer` — an overseer sees the same fields, internal notes
+         *     included.
+         */
+        ThreadOversight: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly subject: string;
+            readonly thread_type: components["schemas"]["ThreadTypeEnum"];
+            /** Format: uuid */
+            readonly student_id: string | null;
+            readonly participant_user_ids: string[];
+            /**
+             * Format: uuid
+             * @description users(id); staff member currently responsible.
+             */
+            readonly assigned_to_id: string | null;
+            readonly status: components["schemas"]["MessageThreadStatusEnum"];
+            /**
+             * Format: date-time
+             * @description Denormalized for inbox sorting.
+             */
+            readonly last_message_at: string;
+            /** Format: date-time */
+            readonly closed_at: string | null;
+            /** Format: uuid */
+            readonly created_by: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
         };
         /** @description A staff member a caller can add to an internal or group thread. */
         ThreadRecipient: {
@@ -16731,6 +16831,82 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    message_thread_oversight_list: {
+        parameters: {
+            query?: {
+                assigned_to?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                status?: string;
+                student_id?: string;
+                thread_type?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedThreadOversightList"];
+                };
+            };
+        };
+    };
+    message_thread_oversight_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this message thread. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadOversight"];
+                };
+            };
+        };
+    };
+    message_thread_oversight_messages_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                thread_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedMessageList"];
+                };
             };
         };
     };

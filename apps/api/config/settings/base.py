@@ -330,6 +330,9 @@ SPECTACULAR_SETTINGS = {
         "AnnouncementStatusEnum": "apps.communication.models.AnnouncementStatus",
         "NoticeTypeEnum": "apps.communication.models.NoticeType",
         "NoticeStatusEnum": "apps.communication.models.NoticeStatus",
+        # The thread read serializer and its oversight subclass both expose `status`;
+        # pinned so the name stays `MessageThreadStatusEnum` and the client does not churn.
+        "MessageThreadStatusEnum": "apps.communication.models.ThreadStatus",
     },
 }
 

@@ -6947,6 +6947,115 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/message-thread-oversight:
+    get:
+      operationId: message_thread_oversight_list
+      description: '`/message-thread-oversight` — every alive thread in the tenant,
+        read-only.'
+      parameters:
+      - in: query
+        name: assigned_to
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: status
+        schema:
+          type: string
+      - in: query
+        name: student_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: thread_type
+        schema:
+          type: string
+      tags:
+      - message-thread-oversight
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedThreadOversightList'
+          description: ''
+  /api/v1/message-thread-oversight/{id}:
+    get:
+      operationId: message_thread_oversight_retrieve
+      description: '`GET /message-thread-oversight/{id}` — one thread; writes an audit
+        row.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this message thread.
+        required: true
+      tags:
+      - message-thread-oversight
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreadOversight'
+          description: ''
+  /api/v1/message-thread-oversight/{thread_pk}/messages:
+    get:
+      operationId: message_thread_oversight_messages_list
+      description: |-
+        `GET /message-thread-oversight/{thread_pk}/messages` — the whole conversation.
+
+        Internal notes included; each request writes an audit row. Never stamps
+        `read_by`.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: path
+        name: thread_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - message-thread-oversight
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMessageList'
+          description: ''
   /api/v1/message-threads:
     get:
       operationId: message_threads_list
@@ -19932,6 +20041,27 @@ components:
                   nullable: true
                 page_size:
                   type: integer
+    PaginatedThreadOversightList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ThreadOversight'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
     PaginatedTimetableSlotList:
       type: object
       properties:
@@ -25231,6 +25361,79 @@ components:
       - sequence
       - start_date
       - updated_at
+    ThreadOversight:
+      type: object
+      description: |-
+        A thread as an overseer reads it.
+
+        The inbox row minus `unread_count`: an overseer is never a participant, so
+        there is no per-caller unread state to report. Messages reuse
+        `MessageSerializer` — an overseer sees the same fields, internal notes
+        included.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        subject:
+          type: string
+          readOnly: true
+        thread_type:
+          allOf:
+          - $ref: '#/components/schemas/ThreadTypeEnum'
+          readOnly: true
+        student_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        participant_user_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          readOnly: true
+        assigned_to_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: users(id); staff member currently responsible.
+        status:
+          allOf:
+          - $ref: '#/components/schemas/MessageThreadStatusEnum'
+          readOnly: true
+        last_message_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Denormalized for inbox sorting.
+        closed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - assigned_to_id
+      - closed_at
+      - created_at
+      - created_by
+      - id
+      - last_message_at
+      - participant_user_ids
+      - status
+      - student_id
+      - subject
+      - thread_type
     ThreadRecipient:
       type: object
       description: A staff member a caller can add to an internal or group thread.
