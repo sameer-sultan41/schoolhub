@@ -37,7 +37,8 @@ urlpatterns = [
     ),
     path(
         "message-threads/<uuid:thread_pk>/messages",
-        ThreadMessageViewSet.as_view({"get": "list", "post": "create"}),
+        # No filters: the cursor order is the conversation order, nothing to search.
+        ThreadMessageViewSet.as_view({"get": "list", "post": "create"}, filter_backends=[]),
         name="message-threads-messages",
     ),
     *router.urls,

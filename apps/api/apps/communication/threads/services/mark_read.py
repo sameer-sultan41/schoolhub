@@ -27,12 +27,14 @@ def mark_thread_read(*, thread: MessageThread, user) -> int:
     user_key = str(user.pk)
     sql = (
         "UPDATE messages"
-        " SET read_by = jsonb_set(COALESCE(read_by, '{}'::jsonb), %s::text[], to_jsonb(now()))"
+        " SET read_by = jsonb_set(COALESCE(read_by, '{}'::jsonb), ARRAY[%s::text],"
+        " to_jsonb(now()))"
         " WHERE tenant_id = %s::uuid AND thread_id = %s::uuid AND sender_id <> %s::uuid"
         " AND NOT (COALESCE(read_by, '{}'::jsonb) ? %s)"
     )
-    params: list[object] = [
-        [user_key],
+    # All text: the path is built in SQL (`ARRAY[%s]`) so no param is a nested list.
+    params: list[str] = [
+        user_key,
         str(thread.tenant_id),
         str(thread.pk),
         user_key,

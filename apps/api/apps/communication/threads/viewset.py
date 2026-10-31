@@ -253,8 +253,9 @@ class ThreadMessageViewSet(
     queryset = Message.objects
     serializer_class = MessageSerializer
     pagination_class = MessageCursorPagination
-    # The cursor order is the conversation order; nothing to filter or search.
-    filter_backends = []
+    # No filter backends: the route passes `filter_backends=[]` (threads/urls.py),
+    # as `recipients` does — the cursor order is the conversation order, and there
+    # is nothing to filter or search.
     # Only the cursor's own indexed, non-null column — see `MessageThreadViewSet`.
     ordering_fields = ["sent_at"]
     scope_campus_field = None
