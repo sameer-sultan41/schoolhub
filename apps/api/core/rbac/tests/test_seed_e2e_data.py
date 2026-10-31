@@ -81,9 +81,11 @@ class SeedE2EDataTests(TestCase):
 
         for slug in (E2E_TENANT_SLUG, E2E_OTHER_TENANT_SLUG):
             tenant = Tenant.objects.get(slug=slug)
-            override = TenantFeatureOverride.objects.get(
-                tenant=tenant, feature_flag__key="module.communication"
-            )
+            # RLS hides the row outside the tenant's own context.
+            with tenant_context(tenant.id):
+                override = TenantFeatureOverride.objects.get(
+                    tenant=tenant, feature_flag__key="module.communication"
+                )
             self.assertTrue(override.enabled, slug)
 
     def test_a_comms_guardian_thread_routes_to_the_assigned_class_teacher(self) -> None:
