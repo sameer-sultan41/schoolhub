@@ -12,7 +12,7 @@ import uuid
 from celery import shared_task
 
 from apps.communication.notifications import EMERGENCY_BROADCAST
-from core.jobs.models import BackgroundJob
+from core.jobs.models import BackgroundJob, JobStatus
 from core.jobs.services import mark_failed, mark_running, mark_succeeded
 from core.notifications.services import Recipient, notify
 from core.tenancy.context import tenant_atomic
@@ -29,10 +29,16 @@ def send_emergency_broadcast_task(self, *, tenant_id: str, job_id: str, actor_id
 
     Preferences are not consulted: `notify()` never gates an `emergency`-category
     trigger. One transaction for the whole fan-out, so a failure leaves no
-    half-sent broadcast behind it.
+    half-sent broadcast behind it. Only a `queued` job runs, so a second delivery
+    of the task is a no-op.
     """
     with tenant_atomic(uuid.UUID(tenant_id)):
         job = BackgroundJob.objects.get(pk=job_id)
+    # A redelivered or re-enqueued task finds the job already running or done: an
+    # emergency fan-out must reach each recipient once, so only a queued job runs.
+    if job.status != JobStatus.QUEUED:
+        logger.warning("Emergency broadcast job %s is %s, not queued; skipped.", job.pk, job.status)
+        return
     mark_running(job=job)
     try:
         recipient_ids: list[str] = job.payload["recipient_ids"]

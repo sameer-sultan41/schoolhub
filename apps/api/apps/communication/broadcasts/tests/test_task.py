@@ -101,3 +101,17 @@ class EmergencyBroadcastTaskTests(BroadcastAPITestCase):
         self.assertEqual(job.error, "delivery rows failed")
         with tenant_context(self.tenant.id):
             self.assertFalse(Notification.objects.filter(event_key=EMERGENCY_BROADCAST).exists())
+
+    def test_a_job_already_running_or_done_is_not_sent_again(self) -> None:
+        """A redelivered task must not fan an emergency broadcast out a second time."""
+        for already in (JobStatus.RUNNING, JobStatus.SUCCEEDED, JobStatus.FAILED):
+            with self.subTest(status=already):
+                job = self.make_job(self.alice)
+                with tenant_context(self.tenant.id):
+                    BackgroundJob.objects.filter(pk=job.pk).update(status=already)
+
+                with mock.patch("apps.communication.tasks.notify") as notify:
+                    job = self.run_task(job)
+
+                notify.assert_not_called()
+                self.assertEqual(job.status, already)
