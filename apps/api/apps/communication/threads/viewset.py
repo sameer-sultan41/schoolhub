@@ -81,6 +81,10 @@ class MessageThreadViewSet(
     # Filters only: the cursor order is the inbox order, so no `?ordering=` may
     # replace it, and there is no free-text `?search=` over threads to offer.
     filter_backends = [DjangoFilterBackend]
+    # The allowlist the ordering contract asks every list for: only the cursor's
+    # own indexed, NOT NULL column. With no `OrderingFilter` above it widens
+    # nothing; it records that nothing else is sortable.
+    ordering_fields = ["last_message_at"]
     scope_campus_field = None
     required_feature = FEATURE
     required_permission = "communication.thread.view"
