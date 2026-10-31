@@ -6,6 +6,10 @@ from rest_framework import serializers
 
 from apps.communication.models import Message, MessageThread, ThreadType
 
+# A message is a conversational reply, not a document (attach a file for that); the
+# cap keeps one request from storing, notifying and paging an unbounded body.
+MESSAGE_BODY_MAX_LENGTH = 5000
+
 
 class ThreadBaseSerializer(serializers.ModelSerializer):
     """Every thread field that does not depend on who is reading.
@@ -61,7 +65,7 @@ class MessageThreadCreateSerializer(serializers.Serializer):
     participant_user_ids = serializers.ListField(
         child=serializers.UUIDField(), required=False, default=list
     )
-    body = serializers.CharField()
+    body = serializers.CharField(max_length=MESSAGE_BODY_MAX_LENGTH)
     attachments = serializers.ListField(
         child=serializers.UUIDField(), required=False, allow_null=True, default=None
     )
@@ -100,7 +104,7 @@ class MessageSerializer(serializers.ModelSerializer):
 class MessageCreateSerializer(serializers.Serializer):
     """Shape only. Who may post, and what, is `services.post_message`'s rule."""
 
-    body = serializers.CharField()
+    body = serializers.CharField(max_length=MESSAGE_BODY_MAX_LENGTH)
     attachments = serializers.ListField(
         child=serializers.UUIDField(), required=False, allow_null=True, default=None
     )

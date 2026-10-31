@@ -19,6 +19,7 @@ from apps.communication.tests.factories import (
     authenticate,
     grant,
 )
+from apps.communication.threads.serializers import MESSAGE_BODY_MAX_LENGTH
 from apps.communication.threads.services.post_message import post_message
 from apps.communication.threads.tests.base import STAFF_THREAD_KEYS, ThreadAPITestCase
 from core.files.models import FileStatus
@@ -232,6 +233,32 @@ class PostMessageTests(MessageTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         self.assertEqual(response.data["data"]["attachments"], [str(attachment.pk)])
+
+    def test_body_over_the_limit_is_400(self) -> None:
+        thread = self.make_thread(self.user, self.colleague)
+
+        at_limit = self.post(thread, body="x" * MESSAGE_BODY_MAX_LENGTH)
+        over = self.post(thread, body="x" * (MESSAGE_BODY_MAX_LENGTH + 1))
+
+        self.assertEqual(at_limit.status_code, status.HTTP_201_CREATED, at_limit.data)
+        self.assertEqual(over.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self.message_count(thread), 2)
+
+    def test_opening_body_over_the_limit_is_400(self) -> None:
+        response = self.client.post(
+            URL,
+            {
+                "subject": "Too long",
+                "thread_type": ThreadType.INTERNAL,
+                "participant_user_ids": [str(self.colleague.pk)],
+                "body": "x" * (MESSAGE_BODY_MAX_LENGTH + 1),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        with tenant_context(self.tenant.id):
+            self.assertFalse(MessageThread.objects.filter(subject="Too long").exists())
 
     def test_staff_without_message_create_cannot_post(self) -> None:
         with tenant_context(self.tenant.id):

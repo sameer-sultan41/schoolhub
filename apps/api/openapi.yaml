@@ -18613,6 +18613,7 @@ components:
       properties:
         body:
           type: string
+          maxLength: 5000
         attachments:
           type: array
           items:
@@ -18720,6 +18721,7 @@ components:
             format: uuid
         body:
           type: string
+          maxLength: 5000
         attachments:
           type: array
           items:
