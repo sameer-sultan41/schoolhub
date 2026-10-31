@@ -1062,8 +1062,9 @@ paths:
                 $ref: '#/components/schemas/BroadcastQueuedResponse'
           description: ''
         '404':
-          description: A targeting id is not this school's, or `campus_id` (or a named
-            user) is outside a campus-scoped sender's campuses.
+          description: A targeting id is not this school's, `campus_id` (or a named
+            user) is outside a campus-scoped sender's campuses, or the sender's scope
+            reaches no campus at all.
         '409':
           description: '`audience_changed`: the count or digest no longer matches;
             `error.meta` carries the current `recipient_count` and `audience_digest`.'
@@ -1101,8 +1102,9 @@ paths:
                 $ref: '#/components/schemas/BroadcastPreviewResponse'
           description: ''
         '404':
-          description: A targeting id is not this school's, or `campus_id` (or a named
-            user) is outside a campus-scoped sender's campuses.
+          description: A targeting id is not this school's, `campus_id` (or a named
+            user) is outside a campus-scoped sender's campuses, or the sender's scope
+            reaches no campus at all.
         '422':
           description: The audience resolves to nobody, or a campus-scoped sender
             gave no `campus_id`.

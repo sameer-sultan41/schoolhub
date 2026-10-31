@@ -40,7 +40,7 @@ changed between preview and send, would still go out. Decided in plan
    `all`-scoped sender is unrestricted. A campus-scoped sender must give one of their campuses
    as `campus_id` (none is 422, another is 404), and a `custom` audience may name only users
    that campus's audience contains (else 404). A sender with only `own` or `assigned` scope
-   reaches nothing.
+   reaches nothing: 404, not the "choose a campus" 422, since there is no campus to choose.
 6. **Audited.** Each send writes a `broadcast` audit row with the message, count, channels,
    unavailable channels and audience.
 

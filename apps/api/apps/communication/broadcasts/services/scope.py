@@ -5,7 +5,7 @@ Without this check a campus-scoped holder of `communication.broadcast.send`
 could broadcast to the whole school or to another campus. The scope is read the
 way `scope_queryset` reads it: `all` is unrestricted; otherwise only the
 campuses of the sender's `campus`-scoped roles are reachable. An `own` or
-`assigned` scope has no campus, so it reaches nothing and fails closed.
+`assigned` scope has no campus, so it reaches nothing and fails closed with a 404.
 """
 
 from __future__ import annotations
@@ -41,7 +41,11 @@ def assert_sender_may_target(
     audience_filter: dict,
     campus_id: uuid.UUID | None,
 ) -> None:
-    """422 if a restricted sender names no campus; 404 if it is not one of theirs.
+    """404 if the sender's scope reaches no campus at all, or ``campus_id`` is not
+    one of theirs; 422 if a campus-scoped sender names no campus.
+
+    An `own`- or `assigned`-only sender has no campus to choose, so telling them
+    to choose one would be a dead end: nothing is reachable, which is a 404.
 
     `campus_id` narrows every audience branch except `custom`, which is never
     narrowed by campus (`resolve_audience`). So for a restricted sender, each
@@ -50,6 +54,8 @@ def assert_sender_may_target(
     allowed = sender_campus_ids(user)
     if allowed is None:
         return
+    if not allowed:
+        raise NotFound()
     if campus_id is None:
         raise DomainRuleViolation({"campus_id": CAMPUS_REQUIRED_MESSAGE})
     if campus_id not in allowed:

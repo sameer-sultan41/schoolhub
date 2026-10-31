@@ -53,8 +53,9 @@ class BroadcastViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
             200: BroadcastPreviewResponseSerializer,
             404: OpenApiResponse(
                 description=(
-                    "A targeting id is not this school's, or `campus_id` (or a named user) "
-                    "is outside a campus-scoped sender's campuses."
+                    "A targeting id is not this school's, `campus_id` (or a named user) "
+                    "is outside a campus-scoped sender's campuses, or the sender's scope "
+                    "reaches no campus at all."
                 )
             ),
             422: OpenApiResponse(
@@ -88,8 +89,9 @@ class BroadcastViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
             202: BroadcastQueuedResponseSerializer,
             404: OpenApiResponse(
                 description=(
-                    "A targeting id is not this school's, or `campus_id` (or a named user) "
-                    "is outside a campus-scoped sender's campuses."
+                    "A targeting id is not this school's, `campus_id` (or a named user) "
+                    "is outside a campus-scoped sender's campuses, or the sender's scope "
+                    "reaches no campus at all."
                 )
             ),
             409: OpenApiResponse(

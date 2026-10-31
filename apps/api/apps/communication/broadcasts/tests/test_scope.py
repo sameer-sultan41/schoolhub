@@ -87,6 +87,23 @@ class CampusScopedSenderTests(BroadcastAPITestCase):
         self.assertEqual(send.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
         self.assertEqual(self.jobs(), [])
 
+    def test_a_sender_whose_scope_reaches_no_campus_is_404(self) -> None:
+        """`own`/`assigned` only: there is no campus to choose, so not the "choose one" 422."""
+        with tenant_context(self.tenant.id):
+            assigned = UserFactory(tenant=self.tenant)
+            grant(assigned, "communication.broadcast.send", scope=RecordScope.ASSIGNED)
+        authenticate(self.client, assigned)
+        confirm = {"confirm_recipient_count": 1, "audience_digest": "0" * 64}
+
+        for body in (self.staff_audience(), self.staff_audience(self.campus)):
+            with self.subTest(campus_id=body.get("campus_id")):
+                preview = self.client.post(PREVIEW_URL, body, format="json")
+                send = self.client.post(SEND_URL, {**body, **confirm}, format="json")
+
+                self.assertEqual(preview.status_code, status.HTTP_404_NOT_FOUND)
+                self.assertEqual(send.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(self.jobs(), [])
+
     def test_custom_audience_cannot_name_a_user_off_the_campus(self) -> None:
         # Alice holds no role and no student or guardian link: she is on no campus.
         body = {**self.audience(self.alice), "campus_id": str(self.campus.pk)}

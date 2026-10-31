@@ -12809,7 +12809,7 @@ export interface operations {
                     "application/json": components["schemas"]["BroadcastQueuedResponse"];
                 };
             };
-            /** @description A targeting id is not this school's, or `campus_id` (or a named user) is outside a campus-scoped sender's campuses. */
+            /** @description A targeting id is not this school's, `campus_id` (or a named user) is outside a campus-scoped sender's campuses, or the sender's scope reaches no campus at all. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -12855,7 +12855,7 @@ export interface operations {
                     "application/json": components["schemas"]["BroadcastPreviewResponse"];
                 };
             };
-            /** @description A targeting id is not this school's, or `campus_id` (or a named user) is outside a campus-scoped sender's campuses. */
+            /** @description A targeting id is not this school's, `campus_id` (or a named user) is outside a campus-scoped sender's campuses, or the sender's scope reaches no campus at all. */
             404: {
                 headers: {
                     [name: string]: unknown;
