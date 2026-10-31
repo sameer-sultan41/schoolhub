@@ -10,6 +10,7 @@ import uuid
 
 from rest_framework import status
 
+from apps.communication import uploads
 from apps.communication.models import Message, MessageThread, ThreadStatus, ThreadType
 from apps.communication.tests.base import CommunicationAPITestCase
 from apps.communication.tests.factories import (
@@ -23,6 +24,7 @@ from apps.communication.tests.factories import (
     UserFactory,
     grant,
 )
+from core.files.tests.factories import FileFactory
 from core.notifications.models import DeliveryLog, Notification, NotificationChannel
 from core.notifications.templates import registry as platform_templates
 from core.tenancy.context import tenant_context
@@ -175,6 +177,28 @@ class CommunicationCrossTenantTests(CommunicationAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         with tenant_context(self.other_tenant.id):
             self.assertFalse(Message.objects.filter(thread=self.other_thread).exists())
+
+    def test_attaching_another_tenants_file_is_404(self) -> None:
+        with tenant_context(self.tenant.id):
+            colleague = UserFactory(tenant=self.tenant)
+            mine = MessageThreadFactory(
+                tenant=self.tenant,
+                participant_user_ids=[str(self.user.pk), str(colleague.pk)],
+            )
+        with tenant_context(self.other_tenant.id):
+            foreign_file = FileFactory(
+                tenant=self.other_tenant, purpose=uploads.THREAD_ATTACHMENT.key
+            )
+
+        response = self.client.post(
+            f"/api/v1/message-threads/{mine.pk}/messages",
+            {"body": "Hello.", "attachments": [str(foreign_file.pk)]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        with tenant_context(self.tenant.id):
+            self.assertFalse(Message.objects.filter(thread=mine).exists())
 
     def test_marking_another_tenants_thread_read_is_404(self) -> None:
         response = self.client.post(f"/api/v1/message-threads/{self.other_thread.pk}:mark-read")

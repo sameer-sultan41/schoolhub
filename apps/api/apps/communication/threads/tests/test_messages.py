@@ -10,9 +10,15 @@ from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 
 from apps.communication import uploads
-from apps.communication.models import Message, ThreadStatus, ThreadType
+from apps.communication.models import Message, MessageThread, ThreadStatus, ThreadType
 from apps.communication.notifications import THREAD_REPLY
-from apps.communication.tests.factories import MessageFactory, UserFactory, authenticate, grant
+from apps.communication.tests.factories import (
+    MessageFactory,
+    TenantFactory,
+    UserFactory,
+    authenticate,
+    grant,
+)
 from apps.communication.threads.services.post_message import post_message
 from apps.communication.threads.tests.base import STAFF_THREAD_KEYS, ThreadAPITestCase
 from core.files.models import FileStatus
@@ -25,6 +31,13 @@ URL = "/api/v1/message-threads"
 
 def messages_url(thread) -> str:
     return f"{URL}/{thread.pk}/messages"
+
+
+def foreign_thread_attachment():
+    """A ready, correctly-purposed thread attachment belonging to another tenant."""
+    other_tenant = TenantFactory()
+    with tenant_context(other_tenant.id):
+        return FileFactory(tenant=other_tenant, purpose=uploads.THREAD_ATTACHMENT.key)
 
 
 class MessageTestCase(ThreadAPITestCase):
@@ -181,6 +194,16 @@ class PostMessageTests(MessageTestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(self.message_count(thread), 1)
 
+    def test_another_tenants_attachment_is_404(self) -> None:
+        """A ready thread attachment, but another school's: as unknown as no file at all."""
+        thread = self.make_thread(self.user, self.colleague)
+        foreign = foreign_thread_attachment()
+
+        response = self.post(thread, attachments=[str(foreign.pk)])
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(self.message_count(thread), 1)
+
     def test_thread_attachment_is_stored(self) -> None:
         thread = self.make_thread(self.user, self.colleague)
         with tenant_context(self.tenant.id):
@@ -201,6 +224,55 @@ class PostMessageTests(MessageTestCase):
         response = self.post(thread)
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class OpeningMessageAttachmentTests(MessageTestCase):
+    """`create_thread` posts its first message through `post_message`, so the
+    attachment checks guard `POST /message-threads` too."""
+
+    def start_thread(self, attachments: list[str]):
+        return self.client.post(
+            URL,
+            {
+                "subject": "Timetable",
+                "thread_type": ThreadType.INTERNAL,
+                "participant_user_ids": [str(self.colleague.pk)],
+                "body": "See attached.",
+                "attachments": attachments,
+            },
+            format="json",
+        )
+
+    def test_another_tenants_attachment_on_create_is_404(self) -> None:
+        foreign = foreign_thread_attachment()
+
+        response = self.start_thread([str(foreign.pk)])
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        with tenant_context(self.tenant.id):
+            self.assertFalse(MessageThread.objects.exists())
+            self.assertFalse(Message.objects.exists())
+
+    def test_wrong_purpose_attachment_on_create_is_422(self) -> None:
+        with tenant_context(self.tenant.id):
+            document = FileFactory(tenant=self.tenant, purpose="student.document")
+
+        response = self.start_thread([str(document.pk)])
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        with tenant_context(self.tenant.id):
+            self.assertFalse(MessageThread.objects.exists())
+
+    def test_thread_attachment_on_create_is_stored(self) -> None:
+        with tenant_context(self.tenant.id):
+            attachment = FileFactory(tenant=self.tenant, purpose=uploads.THREAD_ATTACHMENT.key)
+
+        response = self.start_thread([str(attachment.pk)])
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        with tenant_context(self.tenant.id):
+            opening = Message.objects.get(thread_id=response.data["data"]["id"])
+        self.assertEqual(opening.attachments, [str(attachment.pk)])
 
 
 class RevokedGuardianTests(MessageTestCase):
