@@ -757,6 +757,12 @@ either this file or `project-status.md`.
   per `(tenant, key, endpoint)` and replays it on a repeat `Idempotency-Key`
   within 24h. Expired rows are pruned hourly by
   `core.idempotency.tasks.prune_idempotency_records` (PR 0).
+- **The idempotency fingerprint ignores the URL and record id.** `core.idempotency`
+  fingerprints the request body only, so a reused `Idempotency-Key` with the same
+  body against a *different* record, on an endpoint whose caller-chosen `endpoint`
+  string carries no record id (e.g. `students:enroll`), replays the first record's
+  response instead of acting on the second. Follow-up: include the resolved path
+  or record id in the fingerprint, or in the `endpoint` string.
 - **Withdrawal is a single audited action**, not initiate/approve — no
   `student_withdrawals` entity exists. Clearance checks (fees/library/
   transport) always return "clear" since none of those modules exist yet.
