@@ -115,6 +115,25 @@ class PostMessageTests(MessageTestCase):
         self.assertEqual(thread.last_message_at, message.sent_at)
         self.assertEqual(response.data["data"]["sender_id"], str(self.user.pk))
 
+    def test_internal_note_leaves_the_guardians_thread_timestamp_alone(self) -> None:
+        """A bumped `last_message_at` with no message the guardian can see would leak the note."""
+        thread = self.guardian_thread(self.user)
+        earlier = datetime.datetime(2020, 1, 1, tzinfo=datetime.UTC)
+        with tenant_context(self.tenant.id):
+            thread.last_message_at = earlier
+            thread.save(update_fields=["last_message_at"])
+
+        response = self.post(thread, body="Staff only.", is_internal_note=True)
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        authenticate(self.client, self.guardian_user)
+        guardian_view = self.client.get(f"{URL}/{thread.pk}")
+        self.assertEqual(guardian_view.status_code, status.HTTP_200_OK, guardian_view.data)
+        self.assertEqual(
+            datetime.datetime.fromisoformat(guardian_view.data["last_message_at"]),
+            earlier,
+        )
+
     def test_reply_notifies_other_participants_once(self) -> None:
         with tenant_context(self.tenant.id):
             third = UserFactory(tenant=self.tenant)

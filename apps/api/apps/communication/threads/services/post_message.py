@@ -71,9 +71,13 @@ def post_message(
             sent_at=timezone.now(),
             created_by=sender.pk,
         )
-        locked.last_message_at = message.sent_at
-        locked.updated_by = sender.pk
-        locked.save(update_fields=["last_message_at", "updated_by", "updated_at"])
+        # An internal note leaves the thread's activity time alone: a guardian
+        # reads `last_message_at` in their inbox, and a jump with no new message
+        # they can see would tell them staff wrote something about them.
+        if not is_internal_note:
+            locked.last_message_at = message.sent_at
+            locked.updated_by = sender.pk
+            locked.save(update_fields=["last_message_at", "updated_by", "updated_at"])
 
         _notify_participants(thread=locked, message=message, sender=sender)
 

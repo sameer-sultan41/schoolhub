@@ -63,7 +63,7 @@ Conversation containers: guardian ↔ school (child-contextual), internal staff,
 | participant_user_ids | jsonb | NO | — | Array of `users.id`; see module doc §19 (join-table promotion is a flagged recommendation) |
 | assigned_to_id | uuid | YES | — | `users.id`, staff member currently responsible. Shipped as a plain UUID column with no FK, like the other cross-module user references |
 | status | varchar(10) | NO | `'open'` | Enum: `open`, `closed` |
-| last_message_at | timestamptz | NO | `now()` | Denormalized for inbox sorting. NOT NULL: a thread is created with its first message, so there is no state a NULL would describe |
+| last_message_at | timestamptz | NO | `now()` | Denormalized for inbox sorting. NOT NULL: a thread is created with its first message, so there is no state a NULL would describe. An internal note does not move it: guardians see this column, and must not learn of a note they cannot read |
 | closed_at | timestamptz | YES | — | |
 
 Indexes: `(tenant_id, status, last_message_at DESC)`; `(tenant_id, student_id)`; GIN `(participant_user_ids)`. The GIN index is created by `RunSQL` in migration `0006_message_threads`, not declared on the model (it would need `django.contrib.postgres`).
