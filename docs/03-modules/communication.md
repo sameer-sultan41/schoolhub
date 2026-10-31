@@ -41,7 +41,7 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 | `communication.notice.publish` | Publish a notice (approval gate) | `principal`, `school_owner` |
 | `communication.notice.acknowledge` | Acknowledge a notice requiring it | `guardian`, `student`, staff roles |
 | `communication.broadcast.send` | Emergency multi-channel broadcast (audited, MFA-recommended) | `school_owner`, `principal`, `school_admin` |
-| `communication.thread.create` / `communication.message.create` | Start/reply to threads | all tenant roles (guardian/student scope `own`) |
+| `communication.thread.create` / `communication.message.create` | Start/reply to threads; `message.create` also gates `:mark-read`, which writes `read_by` | all tenant roles (guardian/student scope `own`) |
 | `communication.thread.view` | Read the threads one takes part in (membership is the record scope) | all tenant roles |
 | `communication.thread.close` | Close or reopen a thread one takes part in | all staff roles (not `guardian`/`student`) |
 | `communication.thread.oversee` | Audited, read-only access to every thread (safeguarding) | `school_owner`, `principal` |

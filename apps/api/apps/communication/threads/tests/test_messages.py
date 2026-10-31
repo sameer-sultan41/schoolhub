@@ -410,6 +410,18 @@ class MarkReadTests(MessageTestCase):
         self.assertIsNone(own.read_by)
         self.assertEqual(self.client.get(URL).data["data"][0]["unread_count"], 0)
 
+    def test_reader_without_message_create_cannot_mark_read(self) -> None:
+        with tenant_context(self.tenant.id):
+            reader = UserFactory(tenant=self.tenant)
+            grant(reader, "communication.thread.view")
+        thread = self.make_thread(self.user, reader)
+        authenticate(self.client, reader)
+
+        response = self.mark_read(thread)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.read_by(thread), [None])
+
     def test_mark_read_is_idempotent(self) -> None:
         thread = self.make_thread(self.colleague, self.user)
         self.mark_read(thread)

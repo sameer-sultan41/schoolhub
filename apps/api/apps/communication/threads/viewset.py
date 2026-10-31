@@ -134,8 +134,9 @@ class MessageThreadViewSet(
         "close": "communication.thread.close",
         "reopen": "communication.thread.close",
         "recipients": "communication.thread.create",
+        # A write (it stamps `read_by`), so a write key; every participant holds it.
+        "mark_read": "communication.message.create",
     }
-    # `mark_read` keeps the default `thread.view`: stamping a receipt is reading.
     http_method_names = ["get", "post", "head", "options"]
 
     # Guardians and students hold `thread.view`/`thread.create` for their own
