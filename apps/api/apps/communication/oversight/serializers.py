@@ -2,20 +2,12 @@
 
 from __future__ import annotations
 
-from apps.communication.threads.serializers import MessageThreadSerializer
+from apps.communication.threads.serializers import ThreadBaseSerializer
 
 
-class ThreadOversightSerializer(MessageThreadSerializer):
-    """A thread as an overseer reads it.
+class ThreadOversightSerializer(ThreadBaseSerializer):
+    """A thread as an overseer reads it: the inbox row minus `unread_count`.
 
-    The inbox row minus `unread_count`: an overseer is never a participant, so
-    there is no per-caller unread state to report. Messages reuse
-    `MessageSerializer` — an overseer sees the same fields, internal notes
-    included.
+    An overseer is never a participant, so there is no per-caller unread state.
+    Messages reuse `MessageSerializer` — the same fields, internal notes included.
     """
-
-    class Meta(MessageThreadSerializer.Meta):
-        fields = [name for name in MessageThreadSerializer.Meta.fields if name != "unread_count"]
-        read_only_fields = fields
-
-    unread_count = None  # type: ignore[assignment]

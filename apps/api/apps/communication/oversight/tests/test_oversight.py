@@ -114,7 +114,37 @@ class ThreadOversightTests(ThreadAPITestCase):
         self.assertTrue(stamps)
         for read_by in stamps:
             self.assertFalse(read_by)
-            self.assertNotIn(str(self.user.pk), read_by or {})
+
+    def test_messages_audit_row_records_the_cursor(self) -> None:
+        self.client.get(f"{URL}/{self.first.pk}/messages")
+
+        row = AuditLog.objects.get(action="oversight_view_messages", resource_id=self.first.pk)
+        self.assertEqual(row.after, {"cursor": None})
+
+    def test_list_writes_no_audit_row(self) -> None:
+        self.client.get(URL)
+
+        self.assertFalse(AuditLog.objects.filter(action__startswith="oversight_").exists())
+
+    def test_denied_and_missing_reads_write_no_audit_row(self) -> None:
+        unknown = "00000000-0000-4000-8000-000000000000"
+        self.assertEqual(self.client.get(f"{URL}/{unknown}").status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(
+            self.client.get(f"{URL}/{unknown}/messages").status_code, status.HTTP_404_NOT_FOUND
+        )
+        with tenant_context(self.tenant.id):
+            teacher = UserFactory(tenant=self.tenant)
+            grant(teacher, *STAFF_THREAD_KEYS, scope=RecordScope.ASSIGNED)
+        authenticate(self.client, teacher)
+        self.assertEqual(
+            self.client.get(f"{URL}/{self.first.pk}").status_code, status.HTTP_403_FORBIDDEN
+        )
+        self.assertEqual(
+            self.client.get(f"{URL}/{self.first.pk}/messages").status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+        self.assertFalse(AuditLog.objects.filter(action__startswith="oversight_").exists())
 
     def test_oversight_is_read_only(self) -> None:
         response = self.client.post(f"{URL}/{self.first.pk}/messages", {"body": "x"}, format="json")

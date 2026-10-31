@@ -18373,9 +18373,6 @@ components:
           format: date-time
           readOnly: true
           nullable: true
-        unread_count:
-          type: integer
-          readOnly: true
         created_by:
           type: string
           format: uuid
@@ -18384,6 +18381,9 @@ components:
         created_at:
           type: string
           format: date-time
+          readOnly: true
+        unread_count:
+          type: integer
           readOnly: true
       required:
       - assigned_to_id
@@ -25364,12 +25364,10 @@ components:
     ThreadOversight:
       type: object
       description: |-
-        A thread as an overseer reads it.
+        A thread as an overseer reads it: the inbox row minus `unread_count`.
 
-        The inbox row minus `unread_count`: an overseer is never a participant, so
-        there is no per-caller unread state to report. Messages reuse
-        `MessageSerializer` — an overseer sees the same fields, internal notes
-        included.
+        An overseer is never a participant, so there is no per-caller unread state.
+        Messages reuse `MessageSerializer` — the same fields, internal notes included.
       properties:
         id:
           type: string

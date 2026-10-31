@@ -7,14 +7,17 @@ from rest_framework import serializers
 from apps.communication.models import Message, MessageThread, ThreadType
 
 
-class MessageThreadSerializer(serializers.ModelSerializer):
-    """One inbox row. `unread_count` is the viewset's per-caller annotation."""
+class ThreadBaseSerializer(serializers.ModelSerializer):
+    """Every thread field that does not depend on who is reading.
+
+    `MessageThreadSerializer` adds the per-caller `unread_count`; the oversight
+    serializer uses this as is, since an overseer is never a participant.
+    """
 
     student_id = serializers.UUIDField(read_only=True, allow_null=True)
     # Typed explicitly: the model column is a bare JSONField, which the contract
     # would otherwise publish as an untyped value.
     participant_user_ids = serializers.ListField(child=serializers.UUIDField(), read_only=True)
-    unread_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = MessageThread
@@ -28,10 +31,19 @@ class MessageThreadSerializer(serializers.ModelSerializer):
             "status",
             "last_message_at",
             "closed_at",
-            "unread_count",
             "created_by",
             "created_at",
         ]
+        read_only_fields = fields
+
+
+class MessageThreadSerializer(ThreadBaseSerializer):
+    """One inbox row. `unread_count` is the viewset's per-caller annotation."""
+
+    unread_count = serializers.IntegerField(read_only=True)
+
+    class Meta(ThreadBaseSerializer.Meta):
+        fields = [*ThreadBaseSerializer.Meta.fields, "unread_count"]
         read_only_fields = fields
 
 

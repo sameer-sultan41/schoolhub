@@ -4,8 +4,9 @@ audited access to every thread in the school for `communication.thread.oversee`.
 Deliberately not `visible_threads`: an overseer reads conversations they take
 no part in. That is exactly why every read of a thread or its messages writes an
 audit row, and why nothing here stamps `read_by` or notifies anyone — the
-overseer is never a participant. The list is not audited (it exposes subjects
-and ids, not conversation content).
+overseer is never a participant. The audit is fail-open, like `record_audit`'s
+never-raise contract: a logging failure does not block the read. The list is not
+audited (it exposes subjects and ids, not conversation content).
 """
 
 from __future__ import annotations
@@ -99,5 +100,11 @@ class ThreadOversightMessageViewSet(
         return Message.objects.filter(thread=self.thread)
 
     def list(self, request: Request, *args, **kwargs) -> Response:
-        record_audit(request, AUDIT_OVERSIGHT_VIEW_MESSAGES, self.thread)
+        # The cursor says which page was read; null for the first.
+        record_audit(
+            request,
+            AUDIT_OVERSIGHT_VIEW_MESSAGES,
+            self.thread,
+            after={"cursor": request.query_params.get("cursor")},
+        )
         return super().list(request, *args, **kwargs)

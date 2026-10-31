@@ -8144,11 +8144,11 @@ export interface components {
             readonly last_message_at: string;
             /** Format: date-time */
             readonly closed_at: string | null;
-            readonly unread_count: number;
             /** Format: uuid */
             readonly created_by: string | null;
             /** Format: date-time */
             readonly created_at: string;
+            readonly unread_count: number;
         };
         /**
          * @description Shape only. Who may start which thread, with whom, is `services.create`'s rule.
@@ -11574,12 +11574,10 @@ export interface components {
             readonly updated_at: string;
         };
         /**
-         * @description A thread as an overseer reads it.
+         * @description A thread as an overseer reads it: the inbox row minus `unread_count`.
          *
-         *     The inbox row minus `unread_count`: an overseer is never a participant, so
-         *     there is no per-caller unread state to report. Messages reuse
-         *     `MessageSerializer` — an overseer sees the same fields, internal notes
-         *     included.
+         *     An overseer is never a participant, so there is no per-caller unread state.
+         *     Messages reuse `MessageSerializer` — the same fields, internal notes included.
          */
         ThreadOversight: {
             /** Format: uuid */
