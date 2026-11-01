@@ -20,6 +20,7 @@ import { useFormDialogSubmit } from "@/hooks/use-form-dialog-submit";
 import { Services } from "@/services";
 import {
   MESSAGE_BODY_MAX_LENGTH,
+  NEW_THREAD_TYPES,
   THREAD_SUBJECT_MAX_LENGTH,
 } from "@/services/modules/message-threads/message-threads-constant";
 
@@ -27,7 +28,6 @@ import {
   buildNewThreadInput,
   createNewThreadSchema,
   NEW_THREAD_DEFAULTS,
-  NEW_THREAD_TYPES,
   type NewThreadFormValues,
 } from "./new-thread-form-schema";
 import { RecipientPicker } from "./recipient-picker";

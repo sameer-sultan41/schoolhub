@@ -1,6 +1,5 @@
 "use client";
 
-import { formatDistanceToNow } from "date-fns";
 import { MessageSquare } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Badge, Button, cn, EmptyState, Skeleton } from "@schoolhub/ui";
@@ -9,6 +8,7 @@ import { FilterSelect } from "@/components/filter-select";
 import { LoadErrorCard } from "@/components/load-error-card";
 import { useCursorList } from "@/hooks/use-cursor-list";
 import { resolveErrorMessage } from "@/lib/error-message";
+import { formatLastUpdated } from "@/lib/helpers";
 import { queryKeys } from "@/lib/query-client";
 import { THREADS_PAGE_SIZE } from "@/services/modules/message-threads/message-threads-constant";
 import type { MessageThreadStatus } from "@/services/modules/message-threads/message-threads-type";
@@ -108,9 +108,7 @@ export function ThreadList({
                 <span className="flex flex-wrap items-center gap-2 text-xs font-normal text-muted-foreground">
                   <ThreadStatusBadge status={thread.status} />
                   <span>{t(`type.${thread.thread_type}`)}</span>
-                  <span>
-                    {formatDistanceToNow(new Date(thread.last_message_at), { addSuffix: true })}
-                  </span>
+                  <span>{formatLastUpdated(thread.last_message_at)}</span>
                 </span>
               </Button>
             </li>

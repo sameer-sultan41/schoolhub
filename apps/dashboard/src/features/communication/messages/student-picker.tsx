@@ -2,18 +2,18 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { X } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { Badge, Button } from "@schoolhub/ui";
 
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { SEARCH_DEBOUNCE_MS } from "@/lib/constants";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
+import { PICKER_RESULTS_PAGE_SIZE } from "@/services/modules/message-threads/message-threads-constant";
 import { STUDENTS_QUERY_MODULE } from "@/services/modules/students/students-constant";
 
 import { PickerPopover } from "./picker-popover";
+import { RemovableChip } from "./removable-chip";
 
 /** The student a guardian thread is about; `name` is kept for the chip, `id` is what is sent. */
 export interface PickedStudent {
@@ -26,8 +26,6 @@ export interface StudentPickerProps {
   onChange: (value: PickedStudent | null) => void;
 }
 
-const RESULTS_PAGE_SIZE = 10;
-
 /** One student, searched through the students list (`?search=`), for a guardian thread. */
 export function StudentPicker({ value, onChange }: StudentPickerProps) {
   const t = useTranslations("communication.messages.picker");
@@ -39,7 +37,7 @@ export function StudentPicker({ value, onChange }: StudentPickerProps) {
   const students = useQuery({
     queryKey: queryKeys.list(STUDENTS_QUERY_MODULE, "search", { search }),
     queryFn: () =>
-      Services.students.fetchStudentsPage({ page: 1, pageSize: RESULTS_PAGE_SIZE, search }),
+      Services.students.fetchStudentsPage({ page: 1, pageSize: PICKER_RESULTS_PAGE_SIZE, search }),
     enabled: open,
   });
 
@@ -69,22 +67,13 @@ export function StudentPicker({ value, onChange }: StudentPickerProps) {
       closeOnPick
     >
       {value && (
-        <Badge variant="secondary" appearance="light" size="lg" className="w-fit">
-          {value.name}
-          <Button
-            type="button"
-            variant="ghost"
-            mode="icon"
-            size="sm"
-            className="size-4"
-            aria-label={t("remove", { name: value.name })}
-            onClick={() => {
-              onChange(null);
-            }}
-          >
-            <X aria-hidden="true" />
-          </Button>
-        </Badge>
+        <RemovableChip
+          label={value.name}
+          className="w-fit"
+          onRemove={() => {
+            onChange(null);
+          }}
+        />
       )}
     </PickerPopover>
   );

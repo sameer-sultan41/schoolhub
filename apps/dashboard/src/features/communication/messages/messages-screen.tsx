@@ -8,10 +8,11 @@ import { Button } from "@schoolhub/ui";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useUrlParams } from "@/hooks/use-url-params";
 import { hasPermission } from "@/lib/permissions";
+import { THREAD_PARAM } from "@/services/modules/message-threads/message-threads-constant";
 
 import { NewThreadDialog } from "./new-thread-dialog";
 import { INBOX_SOURCE } from "./thread-source";
-import { THREAD_PARAM, ThreadPanes } from "./thread-panes";
+import { ThreadPanes } from "./thread-panes";
 
 /** The Messages inbox: the caller's conversations and the open one, and Start a conversation. */
 export function MessagesScreen() {

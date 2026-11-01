@@ -20,6 +20,7 @@ import {
   BROADCAST_DEFAULTS,
   buildBroadcastRequest,
   createBroadcastSchema,
+  isBroadcastField,
   type BroadcastFormValues,
 } from "./broadcast-form-schema";
 import { ConfirmStep } from "./confirm-step";
@@ -72,8 +73,8 @@ export function BroadcastScreen() {
     const found: StepErrors = {};
     if (!result.success) {
       for (const issue of result.error.issues) {
-        const field = issue.path[0] as keyof BroadcastFormValues;
-        if (fields.includes(field)) found[field] ??= issue.message;
+        const field = issue.path[0];
+        if (isBroadcastField(field) && fields.includes(field)) found[field] ??= issue.message;
       }
     }
     setErrors(found);

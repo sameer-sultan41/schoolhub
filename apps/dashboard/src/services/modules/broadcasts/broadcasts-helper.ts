@@ -1,9 +1,9 @@
 /** The broadcasts module's pure helpers. */
 
 /** Grouping separators a typed count may carry: `,`, the Arabic thousands separator and spaces. */
-const GROUPING_SEPARATORS = /[,٬\s]/g;
+const GROUPING_SEPARATORS = /[,\u066C\s]/g;
 /** Arabic-Indic (U+0660-U+0669) and Extended Arabic-Indic (U+06F0-U+06F9, Urdu's) digits. */
-const ARABIC_INDIC_DIGITS = /[٠-٩۰-۹]/g;
+const ARABIC_INDIC_DIGITS = /[\u0660-\u0669\u06F0-\u06F9]/g;
 const ARABIC_ZERO = 0x0660;
 const EXTENDED_ZERO = 0x06f0;
 

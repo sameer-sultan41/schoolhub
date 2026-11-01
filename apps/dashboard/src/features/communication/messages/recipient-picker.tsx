@@ -2,9 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { X } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { Badge, Button } from "@schoolhub/ui";
 
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { SEARCH_DEBOUNCE_MS } from "@/lib/constants";
@@ -15,6 +13,7 @@ import { MESSAGE_THREADS_QUERY_MODULE } from "@/services/modules/message-threads
 import type { ThreadRecipient } from "@/services/modules/message-threads/message-threads-type";
 
 import { PickerPopover } from "./picker-popover";
+import { RemovableChip } from "./removable-chip";
 
 export interface RecipientPickerProps {
   value: ThreadRecipient[];
@@ -67,22 +66,12 @@ export function RecipientPicker({ value, onChange, multiple }: RecipientPickerPr
         <ul className="flex flex-wrap gap-2">
           {value.map((recipient) => (
             <li key={recipient.user_id}>
-              <Badge variant="secondary" appearance="light" size="lg">
-                {recipient.name}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  mode="icon"
-                  size="sm"
-                  className="size-4"
-                  aria-label={t("remove", { name: recipient.name })}
-                  onClick={() => {
-                    onChange(value.filter((other) => other.user_id !== recipient.user_id));
-                  }}
-                >
-                  <X aria-hidden="true" />
-                </Button>
-              </Badge>
+              <RemovableChip
+                label={recipient.name}
+                onRemove={() => {
+                  onChange(value.filter((other) => other.user_id !== recipient.user_id));
+                }}
+              />
             </li>
           ))}
         </ul>

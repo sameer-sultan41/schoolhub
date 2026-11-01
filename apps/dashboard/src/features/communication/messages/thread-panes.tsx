@@ -7,15 +7,15 @@ import { Button, EmptyState } from "@schoolhub/ui";
 
 import { useUrlParams } from "@/hooks/use-url-params";
 import { isUuid } from "@/lib/helpers";
+import {
+  STATUS_PARAM,
+  THREAD_PARAM,
+} from "@/services/modules/message-threads/message-threads-constant";
 import type { MessageThreadStatus } from "@/services/modules/message-threads/message-threads-type";
 
 import { ThreadList } from "./thread-list";
 import type { ThreadSource } from "./thread-source";
 import { ThreadView } from "./thread-view";
-
-/** The open thread's URL key. */
-export const THREAD_PARAM = "thread";
-const STATUS_PARAM = "status";
 
 function toStatus(value: string | null): MessageThreadStatus | "" {
   return value === "open" || value === "closed" ? value : "";
