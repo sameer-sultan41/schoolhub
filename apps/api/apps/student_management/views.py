@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 
     from apps.school_organization.models import Section
 
+from apps.school_organization.services import SECTION_SCOPE
 from apps.student_management.filters import StudentFilterSet, StudentTransferFilterSet
 from apps.student_management.models import (
     EmergencyContact,
@@ -82,6 +83,9 @@ from core.api.viewsets import ActionResponse, TenantModelViewSet, TenantScopedVi
 from core.idempotency.services import replay_or_execute
 from core.jobs.services import create_job, enqueue_job
 from core.rbac.permissions import holds_key_for
+
+# The key that lets a withdrawal waive outstanding clearance (`withdraw`).
+WITHDRAWAL_APPROVE = "students.withdrawal.approve"
 
 # PolymorphicProxySerializer is annotation-only (no real to_representation) —
 # the actual runtime dispatch for `history` below is this plain dict lookup. Explicitly
@@ -177,10 +181,10 @@ class StudentViewSet(TenantModelViewSet):
         The student is the row being written, and the section is the one whose capacity
         is exceeded, so the key's own scope must reach both. Neither the route's action
         key nor the key held for another campus lends it (auth-and-rbac.md §2.3). The
-        section is read under `SectionViewSet`'s scope settings, the defaults.
+        section is read under `SectionViewSet`'s scope settings (`SECTION_SCOPE`).
         """
         return self.holds_key_for_row(user, STUDENT_UPDATE, student) and holds_key_for(
-            user, STUDENT_UPDATE, section
+            user, STUDENT_UPDATE, section, **SECTION_SCOPE
         )
 
     def perform_create(self, serializer) -> None:
@@ -331,7 +335,7 @@ class StudentViewSet(TenantModelViewSet):
                 waive_clearance=data.get("waive_clearance", False),
                 # Held for this student, and read only when a waiver is asked for.
                 actor_has_withdrawal_approval=data.get("waive_clearance", False)
-                and self.holds_key_for_row(request.user, "students.withdrawal.approve", student),
+                and self.holds_key_for_row(request.user, WITHDRAWAL_APPROVE, student),
                 actor_id=request.user.pk,
             )
             after = self.get_serializer(withdrawn).data
@@ -586,8 +590,8 @@ class EmergencyContactLinkViewSet(
     queryset = EmergencyContact.objects
     serializer_class = EmergencyContactSerializer
     required_feature = "module.students"
-    required_permission = "students.student.view"
-    required_permission_map = {"create": "students.student.update"}
+    required_permission = STUDENT_VIEW
+    required_permission_map = {"create": STUDENT_UPDATE}
     scope_campus_field = "student__campus_id"
     ordering_fields = ["priority"]
 
@@ -745,7 +749,7 @@ class StudentTransferViewSet(
     # one sorts by. No related-field sorts: nothing renders the student's name here yet.
     ordering_fields = ["status", "created_at"]
     ordering = ["-created_at"]
-    required_permission = "students.student.view"
+    required_permission = STUDENT_VIEW
     required_permission_map = {
         "create": "students.transfer.create",
         "approve": "students.transfer.approve",

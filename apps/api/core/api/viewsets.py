@@ -19,6 +19,7 @@ from core.rbac.permissions import (
     AnyOf,
     HasPermissionKey,
     RbacUser,
+    ScopeKwargs,
     holds_key_for,
     required_declaration,
     scope_queryset,
@@ -129,26 +130,28 @@ class TenantScopedViewSetMixin:
             # `HasPermissionKey` refuses such a route; never read one under no key.
             return queryset.none()
         return scope_queryset(
-            queryset,
-            self.request.user,
-            permission=declared,
-            own_field=self.scope_own_field,
-            campus_field=self.scope_campus_field,
-            campus_allows_null=self.scope_campus_allows_null,
+            queryset, self.request.user, permission=declared, **self.scope_kwargs()
         )
+
+    @classmethod
+    def scope_kwargs(cls) -> ScopeKwargs:
+        """This viewset's record-scope settings, the one source every scope check reads.
+
+        `get_queryset`, `holds_key_for_row` and any check on a row this viewset
+        serves (``holds_key_for(..., **SomeViewSet.scope_kwargs())``) read the same
+        settings, so a privilege check cannot drift from what reading the row means.
+        """
+        return {
+            "own_field": cls.scope_own_field,
+            "campus_field": cls.scope_campus_field,
+            "campus_allows_null": cls.scope_campus_allows_null,
+        }
 
     def holds_key_for_row(
         self, user: RbacUser, permission: str | AnyOf, instance: models.Model
     ) -> bool:
         """`holds_key_for` under this viewset's own scope settings, for a row it serves."""
-        return holds_key_for(
-            user,
-            permission,
-            instance,
-            own_field=self.scope_own_field,
-            campus_field=self.scope_campus_field,
-            campus_allows_null=self.scope_campus_allows_null,
-        )
+        return holds_key_for(user, permission, instance, **self.scope_kwargs())
 
     def perform_create(self, serializer):
         instance = serializer.save(

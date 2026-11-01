@@ -357,13 +357,11 @@ class PrivilegeKeyScopeTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.json())
 
-    def test_change_section_override_needs_the_update_key_on_the_students_campus(self) -> None:
+    def _change_section_with_override(self):
+        """Move the campus-B student from a section with room into the full one."""
         with tenant_context(self.tenant.id):
             self._enroll(self.student, self._section(self.campus_b, capacity=5))
-        grant(self.user, UPDATE_KEY, scope=RecordScope.CAMPUS, scope_ref=self.campus_a.pk)
-        grant(self.user, "students.enrollment.update", scope=RecordScope.ALL)
-
-        response = self.client.post(
+        return self.client.post(
             f"/api/v1/students/{self.student.pk}:change-section",
             {
                 "section_id": str(self.full_section.pk),
@@ -372,10 +370,26 @@ class PrivilegeKeyScopeTests(APITestCase):
             format="json",
         )
 
+    def test_change_section_override_needs_the_update_key_on_the_students_campus(self) -> None:
+        grant(self.user, UPDATE_KEY, scope=RecordScope.CAMPUS, scope_ref=self.campus_a.pk)
+        grant(self.user, "students.enrollment.update", scope=RecordScope.ALL)
+
+        response = self._change_section_with_override()
+
         self.assertEqual(
             response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY, response.json()
         )
         self.assertEqual(self._fields(response), {"capacity_override_reason"})
+
+    def test_change_section_override_is_granted_when_the_update_key_reaches_both(self) -> None:
+        """The positive control: the same request passes once the key reaches campus B."""
+        grant(self.user, UPDATE_KEY, scope=RecordScope.CAMPUS, scope_ref=self.campus_b.pk)
+        grant(self.user, "students.enrollment.update", scope=RecordScope.ALL)
+
+        response = self._change_section_with_override()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json()["data"]["section_id"], str(self.full_section.pk))
 
     def _withdraw_waiving_clearance(self):
         # `clearance_blockers` finds nothing until the owning modules ship, so the

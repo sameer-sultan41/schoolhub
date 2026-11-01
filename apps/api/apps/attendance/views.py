@@ -517,8 +517,7 @@ class AttendanceCorrectionViewSet(
                 rows,
                 self.request.user,
                 permission=permission,
-                own_field=StudentAttendanceViewSet.scope_own_field,
-                campus_field=StudentAttendanceViewSet.scope_campus_field,
+                **StudentAttendanceViewSet.scope_kwargs(),
             )
         return rows
 
@@ -538,8 +537,7 @@ class AttendanceCorrectionViewSet(
                 rows,
                 self.request.user,
                 permission=permission,
-                own_field=StaffAttendanceViewSet.scope_own_field,
-                campus_field=StaffAttendanceViewSet.scope_campus_field,
+                **StaffAttendanceViewSet.scope_kwargs(),
             )
         return rows
 

@@ -36,6 +36,8 @@ from core.rbac.permissions import AnyOf, route_permission, scope_queryset
 
 # `StaffViewSet`'s read key: what `candidates` may offer is scoped by it.
 STAFF_VIEW = "staff.staff.view"
+# Approves, rejects and cancels any cover its scope reaches.
+SUBSTITUTION_APPROVE = "timetable.substitution.approve"
 
 
 class TeacherSubstitutionViewSet(
@@ -92,12 +94,12 @@ class TeacherSubstitutionViewSet(
     required_permission = SCAFFOLDING_VIEW_KEY
     required_permission_map = {
         "create": "timetable.substitution.create",
-        "approve": "timetable.substitution.approve",
-        "reject": "timetable.substitution.approve",
+        "approve": SUBSTITUTION_APPROVE,
+        "reject": SUBSTITUTION_APPROVE,
         "candidates": "timetable.substitution.create",
         # An approver cancels any open cover, a proposer their own proposal: either key
         # passes the class (ADR-0027), and `cancel` applies the row-level rule.
-        "cancel": AnyOf("timetable.substitution.approve", "timetable.substitution.create"),
+        "cancel": AnyOf(SUBSTITUTION_APPROVE, "timetable.substitution.create"),
     }
     http_method_names = ["get", "post", "head", "options"]
 
@@ -190,7 +192,7 @@ class TeacherSubstitutionViewSet(
         # An approver is one whose approve key reaches *this* cover, not one holding it
         # for another campus while the proposer key's scope found the row.
         own_proposal_only = not self.holds_key_for_row(
-            request.user, "timetable.substitution.approve", substitution
+            request.user, SUBSTITUTION_APPROVE, substitution
         )
         if own_proposal_only and substitution.created_by != request.user.pk:
             raise PermissionDenied("Only an approver, or whoever proposed it, can cancel cover.")

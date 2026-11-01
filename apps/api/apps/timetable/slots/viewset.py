@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from rest_framework.request import Request
 
 from apps.school_organization.models import AcademicSession, Section
+from apps.school_organization.services import SECTION_SCOPE
 from apps.staff_management.models import Staff
 from apps.student_management.models import EnrollmentStatus, Student, StudentEnrollment
 from apps.timetable.models import TimetableSlot
@@ -88,16 +89,15 @@ def _scoped_section(request: Request, view: object, pk) -> Section:
 
     Through ``scope_queryset`` rather than a bare manager lookup: a campus-scoped
     vice principal must not be able to publish another campus's grid, and the
-    tenant-scoped manager alone would let them. Scoped twice, by `/sections`' view
-    key and then by ``view``'s own declaration for this action, so the section is one
-    the caller may both read and act on, and neither key's roles widen the other. A
-    section they cannot reach is a 404, never a 403 (AGENTS.md invariant 4).
+    tenant-scoped manager alone would let them. Scoped twice, under `/sections`' own
+    settings (`SECTION_SCOPE`), by its view key and then by ``view``'s own declaration
+    for this action, so the section is one the caller may both read and act on, and
+    neither key's roles widen the other. A section they cannot reach is a 404, never a
+    403 (AGENTS.md invariant 4).
     """
     sections = Section.objects.alive()
     for permission in ("school.section.view", route_permission(request, view)):
-        sections = scope_queryset(
-            sections, request.user, permission=permission, campus_field="campus_id"
-        )
+        sections = scope_queryset(sections, request.user, permission=permission, **SECTION_SCOPE)
     return get_object_or_404(sections, pk=pk)
 
 

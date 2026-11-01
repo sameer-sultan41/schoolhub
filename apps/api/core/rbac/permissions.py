@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Mapping
+from typing import TypedDict
 
 from django.contrib.auth.models import AbstractBaseUser, AnonymousUser
 from django.core.cache import cache
@@ -21,6 +22,18 @@ _CACHE_TTL = 300
 type RbacUser = AbstractBaseUser | AnonymousUser | None
 # permission key -> scope type -> the scope refs of the live assignments granting that key.
 type ScopeGrants = Mapping[str, Mapping[str, tuple[uuid.UUID | None, ...]]]
+
+
+class ScopeKwargs(TypedDict):
+    """A table's record-scope settings, as `scope_queryset` and `holds_key_for` take them.
+
+    `TenantScopedViewSetMixin.scope_kwargs()` builds one from a viewset's `scope_*`
+    attributes, so a check on a row reads it exactly as that row's viewset does.
+    """
+
+    own_field: str | None
+    campus_field: str | None
+    campus_allows_null: bool
 
 
 def scope_grants(user: RbacUser) -> ScopeGrants:
@@ -87,11 +100,6 @@ def scopes_for(user: RbacUser, declared: str | AnyOf) -> dict[str, list[uuid.UUI
                 if ref not in merged:
                     merged.append(ref)
     return scopes
-
-
-def has_permission_key(user: RbacUser, key: str) -> bool:
-    """Whether ``key`` is held anywhere. A privilege applied to one row needs `holds_key_for`."""
-    return key in effective_permission_keys(user)
 
 
 class AnyOf:
@@ -376,16 +384,16 @@ def holds_key_for(
 ) -> bool:
     """Whether ``user`` holds ``permission`` for this one row, not merely somewhere.
 
-    `has_permission_key` answers "is the key held at all", which is the wrong
-    question for a privilege applied to a row: a user holding the key on campus A
-    and an action key at `all` would get the privilege on campus B. This is
-    `scope_queryset` over the single row, so the key's own scope must reach it.
-    Fails closed: a key not held gives False.
+    "Is the key held at all" is the wrong question for a privilege applied to a
+    row: a user holding the key on campus A and an action key at `all` would get
+    the privilege on campus B. This is `scope_queryset` over the single row, so the
+    key's own scope must reach it. Fails closed: a key not held gives False.
 
-    Pass the scope settings the row's own viewset declares, so "for this row"
-    means what reading it means. The model's default manager is the
-    tenant-scoped one (`TenantOwnedModel.objects`), so a row outside the active
-    tenant is never found.
+    Pass the scope settings the row's own viewset declares
+    (``**SomeViewSet.scope_kwargs()``), so "for this row" means what reading it
+    means. The model's default manager is the tenant-scoped one
+    (`TenantOwnedModel.objects`), so a row of another tenant, or any row with no
+    tenant bound, is never found.
     """
     row = type(instance)._default_manager.filter(pk=instance.pk)
     return bool(

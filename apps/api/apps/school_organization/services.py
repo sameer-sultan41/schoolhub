@@ -14,6 +14,9 @@ that app), several functions here are imported directly by other apps:
   `assert_capacity_not_below_occupancy`, kept alongside it rather than split
   across files for the same capacity concern) — `apps/student_management/
   services.py`
+- `SECTION_SCOPE` — `SectionViewSet`'s record-scope settings, read by
+  `apps/student_management/views.py` for a check on a section row (ADR-0013
+  keeps another app out of `sections/viewset.py`)
 
 Moving them into a resource package would mean editing import lines in
 other apps for a purely internal reorganization — a bigger, riskier blast
@@ -59,6 +62,7 @@ from apps.school_organization.models import (
     Subject,
 )
 from core.api.exceptions import Conflict, DomainRuleViolation
+from core.rbac.permissions import ScopeKwargs
 from core.tenancy.context import tenant_atomic
 
 # Sessions in these states reject every write from transactional modules (§11).
@@ -67,6 +71,15 @@ from core.tenancy.context import tenant_atomic
 # outside this module. `close.py` checks `status != ACTIVE` directly instead,
 # since closing only ever applies to an active session.
 LOCKED_SESSION_STATES = frozenset({SessionStatus.CLOSED, SessionStatus.ARCHIVED})
+
+# `SectionViewSet`'s record-scope settings, declared once: the viewset sets its
+# `scope_*` attributes from these, and a check on a section row in another app
+# passes them to `holds_key_for`.
+SECTION_SCOPE: ScopeKwargs = {
+    "own_field": None,
+    "campus_field": "campus_id",
+    "campus_allows_null": False,
+}
 
 
 @functools.cache

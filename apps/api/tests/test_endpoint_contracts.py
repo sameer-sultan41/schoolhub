@@ -174,16 +174,38 @@ class AnyOfContractTests(TestCase):
         self.assertEqual(offenders, [], f"AnyOf lists a read key: {offenders}")
 
 
+def _module_string_constants() -> dict[str, dict[str, str]]:
+    """Each module's top-level `NAME = "<str>"` assignments, by dotted module name."""
+    constants: dict[str, dict[str, str]] = {}
+    for module in source_modules():
+        names = constants.setdefault(module.name, {})
+        for node in module.tree.body:
+            target = node.target if isinstance(node, ast.AnnAssign) else None
+            if isinstance(node, ast.Assign) and len(node.targets) == 1:
+                target = node.targets[0]
+            value = getattr(node, "value", None)
+            if (
+                isinstance(target, ast.Name)
+                and isinstance(value, ast.Constant)
+                and isinstance(value.value, str)
+            ):
+                names[target.id] = value.value
+    return constants
+
+
 def _inline_permission_keys() -> list[tuple[str, int, str]]:
-    """Every permission-key string literal checked inline in app code.
+    """Every permission key checked inline in app code, spelled as a literal or a constant.
 
     `required_permission` / `required_permission_map` are validated through the URLconf above;
     keys checked inside a method body, serializer or task never reach it, so they are found by
-    reading the source. Three forms: `has_permission_key(user, "<key>")` (or `key="<key>"`),
-    `holds_key_for(user, "<key>", row)` and the viewset's `holds_key_for_row(user, "<key>", row)`
-    (or `permission="<key>"`), and `"<key>" in effective_permission_keys(user)`.
+    reading the source. Three forms: `holds_key_for(user, "<key>", row)`, the viewset's
+    `holds_key_for_row(user, "<key>", row)` (or `permission="<key>"`), and
+    `"<key>" in effective_permission_keys(user)`. The key may be a module-level constant, of
+    this module or imported by name from another (`from x import KEY`); it is resolved to its
+    string, so naming a key once does not hide it from this check.
     """
     found: list[tuple[str, int, str]] = []
+    constants = _module_string_constants()
 
     def called(node: ast.AST, name: str) -> bool:
         if not isinstance(node, ast.Call):
@@ -191,18 +213,24 @@ def _inline_permission_keys() -> list[tuple[str, int, str]]:
         func = node.func
         return (func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)) == name
 
-    def literal(node: ast.AST | None) -> str | None:
-        is_str = isinstance(node, ast.Constant) and isinstance(node.value, str)
-        return node.value if is_str else None
-
     for module in source_modules():
+        # This module's own constants, then every `from x import NAME` that names one.
+        visible = dict(constants.get(module.name, {}))
+        for node in ast.walk(module.tree):
+            if isinstance(node, ast.ImportFrom) and node.module and not node.level:
+                for alias in node.names:
+                    value = constants.get(node.module, {}).get(alias.name)
+                    if value is not None:
+                        visible[alias.asname or alias.name] = value
+
+        def literal(node: ast.AST | None, visible: dict[str, str] = visible) -> str | None:
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                return node.value
+            return visible.get(node.id) if isinstance(node, ast.Name) else None
+
         for node in ast.walk(module.tree):
             key = None
-            if called(node, "has_permission_key"):
-                positional = node.args[1] if len(node.args) > 1 else None
-                keyword = next((kw.value for kw in node.keywords if kw.arg == "key"), None)
-                key = literal(positional or keyword)
-            elif called(node, "holds_key_for") or called(node, "holds_key_for_row"):
+            if called(node, "holds_key_for") or called(node, "holds_key_for_row"):
                 positional = node.args[1] if len(node.args) > 1 else None
                 keyword = next((kw.value for kw in node.keywords if kw.arg == "permission"), None)
                 key = literal(positional or keyword)

@@ -1,12 +1,12 @@
 """`holds_key_for`: a privilege key must reach the row, not merely be held somewhere.
 
-`has_permission_key` answers "held at all", so a key held on campus A read as held
+A presence check ("is the key held at all") read a key held on campus A as held
 for a campus-B row. These pin the one-row check against the key's own scope.
 """
 
 from __future__ import annotations
 
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 
 from apps.school_organization.tests.factories import (
     CampusFactory,
@@ -16,6 +16,7 @@ from apps.school_organization.tests.factories import (
     UserFactory,
     grant,
 )
+from core.api.viewsets import TenantScopedViewSetMixin
 from core.rbac.models import RecordScope
 from core.rbac.permissions import holds_key_for
 from core.tenancy.context import tenant_context
@@ -73,3 +74,44 @@ class HoldsKeyForTests(TestCase):
 
         self.assertTrue(self.holds(self.row_a))
         self.assertFalse(self.holds(self.row_b))
+
+    def test_a_row_of_another_tenant_gives_false(self) -> None:
+        """Even an `all` grant: the tenant-scoped manager never finds the other tenant's row."""
+        grant(self.user, KEY, scope=RecordScope.ALL)
+        other_tenant = TenantFactory()
+        with tenant_context(other_tenant.id):
+            other_campus = CampusFactory(tenant=other_tenant)
+            foreign_row = SectionFactory(
+                tenant=other_tenant,
+                school_class=ClassFactory(tenant=other_tenant),
+                campus=other_campus,
+            )
+
+        self.assertFalse(self.holds(foreign_row))
+
+    def test_no_tenant_bound_gives_false(self) -> None:
+        grant(self.user, KEY, scope=RecordScope.ALL)
+        # Warm the grants cache inside the tenant, so the False below comes from the
+        # row lookup finding nothing, not from an empty grant set.
+        self.assertTrue(self.holds(self.row_a))
+
+        self.assertFalse(holds_key_for(self.user, KEY, self.row_a))
+
+
+class ScopeKwargsTests(SimpleTestCase):
+    def test_scope_kwargs_reads_the_subclass_settings(self) -> None:
+        class Viewset(TenantScopedViewSetMixin):
+            scope_own_field = "user_id"
+            scope_campus_field = None
+            scope_campus_allows_null = True
+
+        self.assertEqual(
+            Viewset.scope_kwargs(),
+            {"own_field": "user_id", "campus_field": None, "campus_allows_null": True},
+        )
+
+    def test_scope_kwargs_defaults_are_the_mixins(self) -> None:
+        self.assertEqual(
+            TenantScopedViewSetMixin.scope_kwargs(),
+            {"own_field": None, "campus_field": "campus_id", "campus_allows_null": False},
+        )
