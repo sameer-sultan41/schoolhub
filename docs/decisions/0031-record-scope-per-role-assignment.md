@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-02
-- **Enforced by:** `scope_queryset`'s required `permission` keyword (a caller that names no key is a `TypeError`); `apps/api/core/rbac/tests/test_scope_grants.py` (only the roles granting a key count, `AnyOf` unions, a soft-deleted role and an on-commit eviction drop a warm cache); `apps/api/tests/test_per_role_scope.py` (`test_unrelated_all_role_does_not_widen_campus_scope`, `test_nested_route_needs_the_parents_view_scope`, the attendance, finance and exam report cases, `test_get_overflow_export_uses_the_view_scope`, `test_legacy_export_job_without_key_fails_closed`, `DetailWriteScopeTests`: a PATCH or colon action outside the view scope is a 404, and `MixedScopeDetailWriteTests`: a detail write whose read and action scopes are each a union); `test_staff_correction_target_needs_the_staff_attendance_view_scope` in `attendance/tests/test_staff_corrections.py`; `test_a_student_outside_the_generate_keys_scope_is_dropped` in `student_management/tests/test_import_export_idcards.py`; `apps/api/core/rbac/tests/test_holds_key_for.py`; `test_unrelated_all_role_*` in `attendance/tests/test_leave.py`, `attendance/tests/test_marking.py` and `examinations/tests/test_marks.py`; `student_management/tests/test_record_scope.py` (medical notes, capacity override, clearance waiver); `apps/api/tests/test_endpoint_contracts.py` (every key passed to `holds_key_for`, `scope_queryset` or `scopes_for` is readable and registered, and so is every `scope_read_permission`; `DefaultRoleReadKeyTests` fails when a default role holds an action key without its read key); the seeded-owner tests `test_the_seeded_school_owner_sees_and_approves_a_batch` (`academics/promotions/tests/test_promotion.py`) and `test_the_seeded_school_owner_publishes_a_notice` (`communication/notices/tests/test_endpoints.py`); `BatchRecordScopeTests` in `academics/promotions/tests/test_promotion.py` (a promotion batch action or creation with any student out of scope is a 404 or a 422); for decision 7, `test_any_of_route_unions_scopes_of_matching_roles`, `test_an_empty_member_does_not_fall_through_and_the_union_runs_in_report_cte` and `test_single_scope_type_sql_is_unchanged` in `apps/api/tests/test_per_role_scope.py`, `test_campus_a_plus_assigned_reads_the_section_they_class_teach_on_campus_b` in `attendance/tests/test_register_api.py` and `test_campus_staff_guardian_reads_leave_for_child_on_another_campus` and `test_a_campus_role_elsewhere_cannot_decide_level_two` in `attendance/tests/test_approvals_api.py`. Naming the right key at a new call site is review only
+- **Enforced by:** `scope_queryset`'s required `permission` keyword (a caller that names no key is a `TypeError`); `apps/api/core/rbac/tests/test_scope_grants.py` (only the roles granting a key count, `AnyOf` unions, a soft-deleted role and an on-commit eviction drop a warm cache); `apps/api/tests/test_per_role_scope.py` (`test_unrelated_all_role_does_not_widen_campus_scope`, `test_nested_route_needs_the_parents_view_scope`, the attendance, finance and exam report cases, `test_get_overflow_export_uses_the_view_scope`, `test_legacy_export_job_without_key_fails_closed`, `DetailWriteScopeTests`: a PATCH or colon action outside the view scope is a 404, and `MixedScopeDetailWriteTests`: a detail write whose read and action scopes are each a union); `test_staff_correction_target_needs_the_staff_attendance_view_scope` in `attendance/tests/test_staff_corrections.py`; `test_a_student_outside_the_generate_keys_scope_is_dropped` in `student_management/tests/test_import_export_idcards.py`; `apps/api/core/rbac/tests/test_holds_key_for.py`; `test_unrelated_all_role_*` in `attendance/tests/test_leave.py`, `attendance/tests/test_marking.py` and `examinations/tests/test_marks.py`; `student_management/tests/test_record_scope.py` (medical notes, capacity override, clearance waiver); `apps/api/tests/test_endpoint_contracts.py` (every key passed to `holds_key_for`, `scope_queryset` or `scopes_for` is readable and registered, and so is every `scope_read_permission`; `DefaultRoleReadKeyTests` fails when a default role holds an action key without its read key); the seeded-owner tests `test_the_seeded_school_owner_sees_and_approves_a_batch` (`academics/promotions/tests/test_promotion.py`) and `test_the_seeded_school_owner_publishes_a_notice` (`communication/notices/tests/test_endpoints.py`); `BatchRecordScopeTests` in `academics/promotions/tests/test_promotion.py` (a promotion batch action or creation with any student out of scope is a 404 or a 422, and an unknown batch id is a 404); `EntryRecordScopeTests` in `examinations/tests/test_marks.py` (a marks grid row outside `exams.marks.create`'s scope is rejected); for decision 7, `test_any_of_route_unions_scopes_of_matching_roles`, `test_an_empty_member_does_not_fall_through_and_the_union_runs_in_report_cte` and `test_single_scope_type_sql_is_unchanged` in `apps/api/tests/test_per_role_scope.py`, `test_campus_a_plus_assigned_reads_the_section_they_class_teach_on_campus_b` in `attendance/tests/test_register_api.py` and `test_campus_staff_guardian_reads_leave_for_child_on_another_campus` and `test_a_campus_role_elsewhere_cannot_decide_level_two` in `attendance/tests/test_approvals_api.py`. Naming the right key at a new call site is review only
 
 ## Context
 
@@ -42,9 +42,11 @@ PR B appended decision 7, the mixed-scope-type union.
    and `:publish`. A promotion batch action moves every row of a batch, and a batch can span
    campuses, so it chains the same two calls over every row
    (`promotions.services.assert_batch_in_scope`, plan execution ruling 10): one student out
-   of scope fails the action, as a 404 when no row is readable and a 422 otherwise. Batch
-   creation checks the rows it has just written the same way, in the same transaction, always
-   as a 422. Substitution `candidates` is the exception (plan, execution ruling 4): the
+   of scope fails the action, as a 404 when no row is readable (or the id is unknown) and a
+   422 otherwise. Batch creation checks the rows it has just written the same way, in the same
+   transaction, always as a 422. `:execute` is authorised at request time and its job does not
+   re-scope, because batch membership is fixed at creation and the request checked that exact
+   set (plan, ruling 12); export jobs differ on purpose, since their rows are read by the job. Substitution `candidates` is the exception (plan, execution ruling 4): the
    slot is scoped by the substitution key alone, and the staff list it returns by
    `staff.staff.view`, because the answer is a list of staff and discloses nothing of the
    slot. A target outside either scope is a 404.
@@ -80,11 +82,18 @@ PR B appended decision 7, the mixed-scope-type union.
      `queryset.filter(Q(Exists(a.filter(pk=OuterRef("pk")))) | Q(Exists(b.filter(...))) | ...)`.
    - The guardian case closes **only when the user also holds the `own`-scoped guardian role**.
      The guardian link is a data relation, not a scope, so a campus-A staff member with the link
-     and no such role still gets a 404 on a campus-B child's leave.
+     and no such role still gets a 404 on a campus-B child's leave. That role is a restricted
+     principal, and holding it shuts the user out of every staff endpoint
+     (`DenyRestrictedPrincipals`), so for a working staff member the 404 stays
+     (`deferred-work.md`).
    - A check that treats a `campus` scope as "wide" must now check the row's campus too, since
      the union lets a user reach a row through one type and hold the key at another elsewhere.
      Leave escalation's level 2 does (`_assert_escalation_reaches_wider`): it passes on `all`,
-     or on a `campus` scope naming the request's own campus.
+     or on a `campus` scope naming the request's own campus. Marks bulk entry does it per
+     student: `assert_marker_may_enter` still passes a `campus` holder for the subject, but
+     `_entry_students` keeps only the students `exams.marks.create`'s scope reaches over
+     `STUDENT_SCOPE`, with `assigned` meaning the sections the caller is allocated the subject
+     in (plan, ruling 13).
 
    **Why correlated `EXISTS`** (plan, execution ruling 9). Each member becomes
    `EXISTS (SELECT 1 FROM <table> U0 ... WHERE U0.id = <outer>.id AND <member's filter>)`, ORed.
@@ -93,10 +102,12 @@ PR B appended decision 7, the mixed-scope-type union.
    probes only the rows the outer filters leave. It cannot duplicate rows. The rejected
    `pk__in` form compiles to uncorrelated subqueries, which PostgreSQL evaluates in full, and
    which may not be hashed on a large table, even when the outer query wants one row. **Not measured:** no
-   `EXPLAIN` was captured for this change. A mixed user is rare (production writes only
-   `all`-scoped assignments today), and single-type users keep their plan. If the mixed path
-   shows up slow, capture its plan before tuning; the `marked_by` index in `deferred-work.md` is
-   the first candidate for `student_attendance`.
+   `EXPLAIN` was captured for this change (plan, ruling 9; `deferred-work.md` records the
+   capture still owed). A mixed user is rare (production writes only `all`-scoped assignments today), and
+   single-type users keep their plan. Each `EXISTS` probe is served by the primary-key index,
+   so if the mixed path shows up slow the tuning candidates are the outer scan and the number
+   of `EXISTS` subqueries. The `marked_by` index in `deferred-work.md` helps only the single-type
+   `assigned` read of `student_attendance`, not this path.
 
 ## Alternatives considered
 
@@ -134,6 +145,11 @@ PR B appended decision 7, the mixed-scope-type union.
   creation, passed the batch id or class to the service without `get_queryset`, so they
   applied no record scope. PR B brings them under decision 3: every student a batch covers
   must be in scope for the action's key. A pre-existing gap, now closed.
+- `POST /marks:bulk-entry` resolved its exam subject unscoped and accepted every student
+  enrolled in the class, so a campus-A marker wrote campus-B marks and an allocated teacher
+  wrote marks for sections they do not teach. PR B narrows the grid's students by
+  `exams.marks.create`'s scope (decision 7's last bullet). A pre-existing gap, now closed for
+  the grid; the marks import is still unscoped (`deferred-work.md`).
 - Left for a follow-up (`deferred-work.md`): promotion approver notifications and
   `notify_result_approval_pending` (`apps/examinations/tasks.py`) reach every holder of the
   approve key, whatever its scope.

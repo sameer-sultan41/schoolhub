@@ -21,12 +21,23 @@ either this file or `project-status.md`.
     (`assert_batch_in_scope`, PR B), so the notification asks for something they cannot do.
     Narrowing it means checking each holder's scope for that key (`scopes_for`) against the
     batch's students' campuses before sending.
-  - **Marks entry skips the allocation check on any `campus` scope.** `assert_marker_may_enter`
-    (`apps/examinations/services.py`) returns early on `RecordScope.CAMPUS in scopes` for
-    `MARKS_CREATE`, without checking which campus the exam subject's students are on. A marker
-    holding the key at `campus:A` and at `assigned` therefore skips the allocation check on a
-    campus-B subject that `assigned` lets them reach. The fix is the leave escalation one: pass
-    `all`, or a `campus` scope only when it names the row's campus.
+  - **The marks import is not record-scoped.** PR B scoped `POST /marks:bulk-entry` by
+    `exams.marks.create` over each student (plan, ruling 13). `POST /marks-imports` still
+    matches admission numbers against the whole class roll
+    (`import_candidates_by_admission_number`, `apps/examinations/services.py`): the job carries
+    no user, so a campus-scoped holder of `exams.marks.import` (`exam_staff` only) can import
+    marks for another campus's students. The fix is the export one: store the request's key in
+    the job beside `requested_by`, and scope the roll by it with `STUDENT_SCOPE`.
+  - **A staff member who is also a guardian still gets a 404 on their child's leave on
+    another campus.** ADR-0031 decision 7 reaches the child only through the `own`-scoped
+    guardian role, and that role is a restricted principal: holding it shuts the user out of
+    every staff endpoint (`DenyRestrictedPrincipals`), so a working staff member cannot take
+    it. Closing this needs a guardian grant that is not restricted, or the guardian link read
+    as a scope for staff; role management decides which.
+  - **The mixed-scope `EXISTS` path has never been measured.** Execution ruling 9 dropped the
+    plan's `EXPLAIN` step (no local runs, and no invented output). Capture `EXPLAIN ANALYZE`
+    of a mixed-scope user's `GET /student-attendance` and `GET /students` on real volumes
+    before role management ships, since it is what will first write mixed assignments.
   - **Result-approval notifications ignore scope too.** `notify_result_approval_pending`
     (`apps/examinations/tasks.py`) notifies every active user holding `exams.result.approve`,
     checked by key presence alone, whatever that key's scope. The fix is the promotions one:
