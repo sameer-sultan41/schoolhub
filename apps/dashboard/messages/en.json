@@ -1463,7 +1463,66 @@
     },
     "broadcast": {
       "title": "Emergency broadcast",
-      "summary": "Send an urgent message to a chosen audience, after previewing who will receive it."
+      "summary": "Send an urgent message to a chosen audience, after previewing who will receive it.",
+      "steps": {
+        "audience": "Audience",
+        "message": "Message",
+        "confirm": "Confirm",
+        "status": "Status"
+      },
+      "back": "Back",
+      "next": "Next",
+      "audience": {
+        "label": "Audience",
+        "types": {
+          "all": "Everyone",
+          "staff": "All staff",
+          "students": "All students",
+          "guardians": "All guardians",
+          "class": "Specific classes",
+          "section": "Specific sections"
+        },
+        "campus": "Campus",
+        "allCampuses": "All campuses",
+        "classes": "Classes",
+        "classForSections": "Class",
+        "sections": "Sections",
+        "sectionsFailed": "The sections couldn't be loaded."
+      },
+      "message": {
+        "label": "Message",
+        "placeholder": "Write the urgent message",
+        "counter": "{count} / {max}"
+      },
+      "confirm": {
+        "previewFailed": "The audience couldn't be previewed.",
+        "recipients": "{count, plural, one {# recipient} other {# recipients}}",
+        "channels": "Delivered by",
+        "notDelivered": "{channel}: not delivered, no provider",
+        "nobody": "This audience has no recipients. Go back and change it.",
+        "typeCount": "Type {count} to confirm you want to send this to everyone listed.",
+        "audienceChanged": "The audience changed and now has {count, plural, one {# recipient} other {# recipients}}. Check it, then type the new number.",
+        "send": "Send emergency broadcast",
+        "sending": "Sending",
+        "sendFailed": "The broadcast couldn't be sent."
+      },
+      "status": {
+        "title": "Emergency broadcast",
+        "progress": "{progress}% complete",
+        "succeeded": "The broadcast was sent.",
+        "succeededCount": "The broadcast was sent to {count, plural, one {# recipient} other {# recipients}}.",
+        "another": "Send another",
+        "failed": "The broadcast failed.",
+        "pollFailed": "The broadcast's status couldn't be checked.",
+        "timedOut": "The broadcast is taking longer than expected.",
+        "checkAgain": "Check again"
+      },
+      "errors": {
+        "classRequired": "Choose at least one class.",
+        "sectionRequired": "Choose at least one section.",
+        "messageRequired": "Write a message.",
+        "messageTooLong": "The message can be at most {max} characters."
+      }
     }
   },
   "attendance": {

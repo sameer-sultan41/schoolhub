@@ -1463,7 +1463,66 @@
     },
     "broadcast": {
       "title": "ہنگامی نشریہ",
-      "summary": "پہلے دیکھ لیں کہ کس کو پیغام ملے گا، پھر منتخب افراد کو فوری پیغام بھیجیں۔"
+      "summary": "پہلے دیکھ لیں کہ کس کو پیغام ملے گا، پھر منتخب افراد کو فوری پیغام بھیجیں۔",
+      "steps": {
+        "audience": "مخاطبین",
+        "message": "پیغام",
+        "confirm": "تصدیق",
+        "status": "صورتحال"
+      },
+      "back": "پیچھے",
+      "next": "آگے",
+      "audience": {
+        "label": "مخاطبین",
+        "types": {
+          "all": "سب",
+          "staff": "تمام عملہ",
+          "students": "تمام طلبہ",
+          "guardians": "تمام سرپرست",
+          "class": "منتخب جماعتیں",
+          "section": "منتخب سیکشن"
+        },
+        "campus": "کیمپس",
+        "allCampuses": "تمام کیمپس",
+        "classes": "جماعتیں",
+        "classForSections": "جماعت",
+        "sections": "سیکشن",
+        "sectionsFailed": "سیکشن لوڈ نہیں ہو سکے۔"
+      },
+      "message": {
+        "label": "پیغام",
+        "placeholder": "فوری پیغام لکھیں",
+        "counter": "{count} / {max}"
+      },
+      "confirm": {
+        "previewFailed": "مخاطبین کا جائزہ نہیں لیا جا سکا۔",
+        "recipients": "{count, plural, one {# وصول کنندہ} other {# وصول کنندگان}}",
+        "channels": "ترسیل کے ذرائع",
+        "notDelivered": "{channel}: ترسیل نہیں ہوگی، کوئی فراہم کنندہ نہیں",
+        "nobody": "اس گروہ میں کوئی وصول کنندہ نہیں۔ واپس جا کر اسے بدلیں۔",
+        "typeCount": "اس فہرست کے سب افراد کو بھیجنے کی تصدیق کے لیے {count} لکھیں۔",
+        "audienceChanged": "مخاطبین بدل گئے ہیں اور اب {count, plural, one {# وصول کنندہ} other {# وصول کنندگان}} ہیں۔ جانچ لیں، پھر نئی تعداد لکھیں۔",
+        "send": "ہنگامی نشریہ بھیجیں",
+        "sending": "بھیجا جا رہا ہے",
+        "sendFailed": "نشریہ بھیجا نہیں جا سکا۔"
+      },
+      "status": {
+        "title": "ہنگامی نشریہ",
+        "progress": "{progress}% مکمل",
+        "succeeded": "نشریہ بھیج دیا گیا۔",
+        "succeededCount": "نشریہ {count, plural, one {# وصول کنندہ} other {# وصول کنندگان}} کو بھیج دیا گیا۔",
+        "another": "ایک اور بھیجیں",
+        "failed": "نشریہ ناکام ہو گیا۔",
+        "pollFailed": "نشریے کی صورتحال معلوم نہیں ہو سکی۔",
+        "timedOut": "نشریے میں توقع سے زیادہ وقت لگ رہا ہے۔",
+        "checkAgain": "دوبارہ دیکھیں"
+      },
+      "errors": {
+        "classRequired": "کم از کم ایک جماعت منتخب کریں۔",
+        "sectionRequired": "کم از کم ایک سیکشن منتخب کریں۔",
+        "messageRequired": "پیغام لکھیں۔",
+        "messageTooLong": "پیغام زیادہ سے زیادہ {max} حروف کا ہو سکتا ہے۔"
+      }
     }
   },
   "attendance": {
