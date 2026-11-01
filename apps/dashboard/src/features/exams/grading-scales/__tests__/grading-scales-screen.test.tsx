@@ -147,8 +147,9 @@ describe("grading scales screen", () => {
   it("offers New, Edit and Make default to a holder of create and update, but not on the default scale", async () => {
     renderScreen();
 
-    expect(await screen.findByRole("button", { name: "New grading scale" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Edit Honours GPA" })).toBeInTheDocument();
+    // The rows and the viewer's keys load separately; wait for both before asserting on either.
+    expect(await screen.findByRole("button", { name: "Edit Honours GPA" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "New grading scale" })).toBeEnabled();
     expect(
       screen.getByRole("button", { name: "Make Honours GPA the default" }),
     ).toBeInTheDocument();
