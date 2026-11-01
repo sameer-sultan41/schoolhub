@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured
-from django.db.models import Q
+from django.db.models import Q, QuerySet
 from rest_framework import permissions
 
-from core.rbac.models import RecordScope
+from core.rbac.models import RecordScope, UserRole
 
 _CACHE_TTL = 300
 
@@ -163,8 +163,23 @@ class IsPlatformPrincipal(permissions.BasePermission):
         return bool(user and user.is_authenticated and user.is_platform)
 
 
+def live_restricted_role_assignments() -> QuerySet[UserRole]:
+    """Every live assignment of a restricted-principal (student or guardian) role.
+
+    The one definition of "holds a restricted role": `is_restricted_principal`
+    asks it of one user, and a queryset that must leave students and guardians
+    out (`.values("user_id")`) asks it of many, so the two cannot disagree.
+
+    A removed assignment (``deleted_at`` set) does not count, matching
+    `effective_permission_keys` and `user_scopes`: a staff member whose guardian
+    role was removed is staff again. A soft-deleted *role* still counts, because
+    `effective_permission_keys` still grants its keys too.
+    """
+    return UserRole.objects.filter(deleted_at__isnull=True, role__is_restricted_principal=True)
+
+
 def is_restricted_principal(user) -> bool:
-    """True for a student or guardian — anyone holding a restricted-principal role.
+    """True for a student or guardian — anyone holding a live restricted-principal role.
 
     Extracted from `DenyRestrictedPrincipals` so a *queryset* can ask the same
     question the permission class asks. `examinations` needs it because §5.6
@@ -173,12 +188,12 @@ def is_restricted_principal(user) -> bool:
     Those are different narrowings, and only one of them belongs in a model's
     record-scope hook.
 
-    Reads the same rows the permission class does, so the two can never
-    disagree about who counts as restricted.
+    Reads `live_restricted_role_assignments`, as every restricted-principal
+    check does.
     """
     if not user or not getattr(user, "is_authenticated", False):
         return False
-    return user.user_roles.filter(role__is_restricted_principal=True).exists()
+    return live_restricted_role_assignments().filter(user_id=user.pk).exists()
 
 
 class DenyRestrictedPrincipals(permissions.BasePermission):

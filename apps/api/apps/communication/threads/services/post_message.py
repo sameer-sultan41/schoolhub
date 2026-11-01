@@ -26,7 +26,7 @@ from core.api.exceptions import Conflict, DomainRuleViolation
 from core.files.models import File
 from core.files.services import assert_file_usable
 from core.notifications.services import Recipient, notify
-from core.rbac.permissions import is_restricted_principal
+from core.rbac.permissions import is_restricted_principal, live_restricted_role_assignments
 
 # How much of the body a push or inbox row shows; the thread holds the rest.
 MESSAGE_PREVIEW_LENGTH = 140
@@ -115,9 +115,9 @@ def _notify_participants(*, thread: MessageThread, message: Message, sender) -> 
 
     others = [uid for uid in thread.participant_user_ids if uid != str(sender.pk)]
     restricted_users = list(
-        User.objects.filter(
-            pk__in=others, user_roles__role__is_restricted_principal=True
-        ).distinct()
+        User.objects.filter(pk__in=others).filter(
+            pk__in=live_restricted_role_assignments().values("user_id")
+        )
     )
     excluded = {
         str(user.pk)

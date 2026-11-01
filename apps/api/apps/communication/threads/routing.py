@@ -32,20 +32,20 @@ RECIPIENTS_LIMIT = 20
 def thread_staff_users(*, tenant_id: uuid.UUID) -> QuerySet:
     """Active users of this tenant holding a staff role and no restricted one.
 
-    The restricted-role exclusion reads the same rows `is_restricted_principal`
-    does (no `deleted_at` filter), so this pool and the permission class can
-    never disagree about who is a guardian or student.
+    The restricted-role exclusion reads `live_restricted_role_assignments`, as
+    `is_restricted_principal` does, so this pool and the permission class can
+    never disagree about who is a guardian or student. A removed guardian role
+    does not count.
     """
     from core.rbac.models import User, UserRole
+    from core.rbac.permissions import live_restricted_role_assignments
 
     staff_role_holders = UserRole.objects.filter(
         deleted_at__isnull=True,
         role__deleted_at__isnull=True,
         role__is_restricted_principal=False,
     ).values("user_id")
-    restricted_role_holders = UserRole.objects.filter(role__is_restricted_principal=True).values(
-        "user_id"
-    )
+    restricted_role_holders = live_restricted_role_assignments().values("user_id")
     return (
         User.objects.filter(tenant_id=tenant_id, is_active=True, deleted_at__isnull=True)
         .filter(pk__in=staff_role_holders)

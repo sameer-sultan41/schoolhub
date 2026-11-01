@@ -336,6 +336,19 @@ class RecipientsTests(ThreadAPITestCase):
         self.assertEqual(response.data["data"][0]["name"], colleague.get_full_name())
         self.assertEqual(response.data["data"][0]["role"], "Test role")
 
+    def test_recipients_ignores_a_removed_guardian_role(self) -> None:
+        """`thread_staff_users` leaves out live restricted roles only."""
+        with tenant_context(self.tenant.id):
+            colleague = UserFactory(tenant=self.tenant)
+            grant(colleague, *STAFF_THREAD_KEYS)
+        self.give_removed_guardian_role(colleague)
+
+        response = self.client.get(f"{URL}/recipients")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        ids = [row["user_id"] for row in response.data["data"]]
+        self.assertEqual(ids, [str(colleague.pk)])
+
     def test_recipients_search_narrows_by_name(self) -> None:
         with tenant_context(self.tenant.id):
             match = UserFactory(tenant=self.tenant, first_name="Zainab")

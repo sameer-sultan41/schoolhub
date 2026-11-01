@@ -968,11 +968,6 @@ either this file or `project-status.md`.
     `fee-invoices:generate`. Reusing a key after its 24-hour replay window is a generic 409 from
     the job's unique index rather than a replay. A length check in `core.idempotency` closes the
     first for every endpoint.
-  - **`thread_staff_users` excludes anyone who ever held a restricted role**, soft-deleted
-    `UserRole` rows included, because it reads the same rows `is_restricted_principal` does (no
-    `deleted_at` filter). The two cannot disagree, which is the point, but a staff member whose
-    guardian role was removed (soft-deleted) still cannot be routed a thread or picked as a
-    recipient until the row is purged. Fixing it means changing `is_restricted_principal` too.
 
 - **`eslint-plugin-playwright` for `e2e/`** (planned in the engineering-standards spec, PR 4) was
   deferred: adding a dependency means `pnpm install`, which runs PR 3's `prepare` script and

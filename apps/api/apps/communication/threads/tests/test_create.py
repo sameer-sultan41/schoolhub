@@ -74,6 +74,17 @@ class GuardianRoutingTests(ThreadCreateTestCase):
         self.assertNotIn(str(admin.pk), thread.participant_user_ids)
         self.assertIsNone(thread.assigned_to_id)
 
+    def test_fallback_routing_ignores_a_removed_guardian_role(self) -> None:
+        """A staff member whose guardian role was removed is routable staff again."""
+        self.set_fallback_role("reception")
+        reception = self.make_staff_with_role("reception")
+        self.give_removed_guardian_role(reception)
+
+        response = self.guardian_thread()
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertIn(str(reception.pk), self.stored_thread(response).participant_user_ids)
+
     def test_unknown_fallback_role_uses_default(self) -> None:
         self.set_fallback_role("no-such-role")
         admin = self.make_staff_with_role(THREAD_FALLBACK_ROLE_DEFAULT)
