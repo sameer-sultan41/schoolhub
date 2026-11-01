@@ -49,6 +49,12 @@ BATCH_OUT_OF_SCOPE_MESSAGE = (
     "This batch includes students outside your record scope for this action. "
     "Someone whose scope covers every student in it must do this."
 )
+# Creation's answer when the actor can read none of the students: no view key at all, or
+# one scoped elsewhere. Unlike the message above, it does not claim a partial reach.
+BATCH_UNREADABLE_MESSAGE = (
+    "You cannot view the students this batch covers, so you cannot act on it. "
+    "Someone who can view and act on every student in it must do this."
+)
 
 
 def next_class_for(*, from_class: Class, tenant_id: uuid.UUID) -> Class | None:
@@ -89,8 +95,15 @@ def create_promotion_batch(
         )
     assert_session_writable(to_session)
 
-    covered = active_enrollments(from_session=from_session, school_class=school_class)
-    enrollments = list(covered.select_related("student"))
+    enrollments = list(
+        StudentEnrollment.objects.alive()
+        .filter(
+            academic_session=from_session,
+            school_class=school_class,
+            status=EnrollmentStatus.ACTIVE,
+        )
+        .select_related("student")
+    )
     if not enrollments:
         raise DomainRuleViolation(
             {"class_id": "No actively enrolled students in this class for that session."}
@@ -155,17 +168,6 @@ def create_promotion_batch(
     return batch_id, rows
 
 
-def active_enrollments(
-    *, from_session: AcademicSession, school_class: Class
-) -> QuerySet[StudentEnrollment]:
-    """The enrollments a batch for `school_class` would cover: one per student it proposes."""
-    return StudentEnrollment.objects.alive().filter(
-        academic_session=from_session,
-        school_class=school_class,
-        status=EnrollmentStatus.ACTIVE,
-    )
-
-
 def assert_batch_in_scope(
     rows: QuerySet[Any],
     *,
@@ -183,23 +185,25 @@ def assert_batch_in_scope(
     over `PROMOTION_SCOPE`. `read_permission` is the viewset's `scope_read_declaration()`,
     None only for an action that class exempts.
 
-    `rows` is the batch's promotion rows, or, before a batch exists, the `active_enrollments`
-    it would cover; both reach the student's campus the same way.
-
-    A batch of which no row is readable is a 404, like an unknown id (`hide_unreadable`).
-    Creation passes False: it names a class, which every campus may read. A batch that is
-    readable but not wholly in scope is a 422. One student out of scope fails the action.
+    All in scope costs two counts. Otherwise a batch of which no row is readable is a 404,
+    like an unknown id (`hide_unreadable`), and one that is readable but not wholly in scope
+    is a 422. Creation passes `hide_unreadable=False` over the rows it has just written: it
+    names a class, which every campus may read, so an unreadable batch is a 422 there too.
+    An empty `rows` passes, and the service's own lookup answers the unknown id.
     """
     readable = (
         rows
         if read_permission is None
         else scope_queryset(rows, user, permission=read_permission, **PROMOTION_SCOPE)
     )
-    if hide_unreadable and not readable.exists():
-        raise Http404("No such promotion batch.")
     reachable = scope_queryset(readable, user, permission=permission, **PROMOTION_SCOPE)
-    if reachable.count() != rows.count():
+    if reachable.count() == rows.count():
+        return
+    if readable.exists():
         raise DomainRuleViolation({"non_field": BATCH_OUT_OF_SCOPE_MESSAGE})
+    if hide_unreadable:
+        raise Http404("No such promotion batch.")
+    raise DomainRuleViolation({"non_field": BATCH_UNREADABLE_MESSAGE})
 
 
 def batch_queryset(batch_id: uuid.UUID, *, for_update: bool = False):

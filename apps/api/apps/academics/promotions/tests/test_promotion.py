@@ -1476,6 +1476,43 @@ class BatchRecordScopeTests(PromotionTestCase):
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
         self.assertEqual(self.statuses(batch_id), {PromotionStatus.PENDING_APPROVAL})
 
+    def test_an_approver_without_the_view_key_gets_a_404(self) -> None:
+        """The as-built rule: an actor must read a batch to act on it (rulings 8 and 10),
+        so `approve` at `all` with no view key reads no row."""
+        batch_id = self.submitted(self.mixed_batch())
+        approver = UserFactory(tenant=self.tenant)
+        grant(approver, APPROVE)
+        authenticate(self.client, approver)
+
+        response = self.transition(batch_id, "approve")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(self.statuses(batch_id), {PromotionStatus.PENDING_APPROVAL})
+
+    def test_a_creator_without_the_view_key_is_told_they_cannot_view_the_students(
+        self,
+    ) -> None:
+        """The class is wholly on campus A and the create key is `all`, so the refusal is
+        the missing view key, and the 422 says so rather than "outside your scope"."""
+        creator = UserFactory(tenant=self.tenant)
+        grant(creator, "academics.promotion.create")
+        authenticate(self.client, creator)
+
+        response = self.client.post(
+            "/api/v1/student-promotions",
+            {
+                "from_academic_session_id": str(self.session.pk),
+                "to_academic_session_id": str(self.next_session.pk),
+                "class_id": str(self.school_class.pk),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertIn("cannot view the students", response.content.decode())
+        with tenant_context(self.tenant.id):
+            self.assertFalse(StudentPromotion.objects.alive().exists())
+
     def test_an_all_approver_can_act_on_a_mixed_campus_batch(self) -> None:
         """The control: the check refuses on scope, not on a batch spanning campuses."""
         batch_id = self.submitted(self.mixed_batch())

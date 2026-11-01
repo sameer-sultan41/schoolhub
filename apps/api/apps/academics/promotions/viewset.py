@@ -257,25 +257,26 @@ class PromotionBatchViewSet(
         serializer = CreatePromotionBatchSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        # The class is readable on every campus, so a class with students out of scope is
-        # a 422, not a 404.
-        services.assert_batch_in_scope(
-            services.active_enrollments(
-                from_session=data["from_session"], school_class=data["school_class"]
-            ),
-            user=request.user,
-            read_permission=self.scope_read_declaration(),
-            permission=route_permission(request, self),
-            hide_unreadable=False,
-        )
 
-        batch_id, rows = services.create_promotion_batch(
-            from_session=data["from_session"],
-            to_session=data["to_session"],
-            school_class=data["school_class"],
-            tenant_id=request.tenant.pk,
-            actor_id=request.user.pk,
-        )
+        # The scope check reads the rows just written, so it covers exactly what was
+        # inserted, and its 422 leaves this block and rolls the insert back with it,
+        # whatever the request's own transaction does. The class is readable on every
+        # campus, so out of scope is a 422 here, never a 404.
+        with transaction.atomic():
+            batch_id, rows = services.create_promotion_batch(
+                from_session=data["from_session"],
+                to_session=data["to_session"],
+                school_class=data["school_class"],
+                tenant_id=request.tenant.pk,
+                actor_id=request.user.pk,
+            )
+            services.assert_batch_in_scope(
+                services.batch_queryset(batch_id),
+                user=request.user,
+                read_permission=self.scope_read_declaration(),
+                permission=route_permission(request, self),
+                hide_unreadable=False,
+            )
         return ActionResponse.ok(
             PromotionBatchCreatedSerializer({"batch_id": batch_id, "students": len(rows)}).data,
             message="Promotion batch created.",
