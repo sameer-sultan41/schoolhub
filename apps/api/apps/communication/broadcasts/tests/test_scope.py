@@ -152,6 +152,18 @@ class CampusScopedSenderTests(BroadcastAPITestCase):
         self.assertEqual(other_campus.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(own_campus.status_code, status.HTTP_200_OK, own_campus.json())
 
+        confirm = {"confirm_recipient_count": 1, "audience_digest": "0" * 64}
+        send_no_campus = self.client.post(
+            SEND_URL, {**self.staff_audience(), **confirm}, format="json"
+        )
+        send_other_campus = self.client.post(
+            SEND_URL, {**self.staff_audience(self.other_campus), **confirm}, format="json"
+        )
+
+        self.assertEqual(send_no_campus.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(send_other_campus.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(self.jobs(), [])
+
     def test_an_all_scope_role_that_grants_the_key_is_unrestricted(self) -> None:
         with tenant_context(self.tenant.id):
             grant(self.sender, "communication.broadcast.send", scope=RecordScope.ALL)
