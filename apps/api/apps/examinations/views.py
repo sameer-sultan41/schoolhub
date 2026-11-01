@@ -588,6 +588,9 @@ class MarksViewSet(
         "lock": "exams.marks.lock",
         "unlock": "exams.marks.lock",
     }
+    # `:lock-marks` and `:unlock-marks` act on an exam subject, never on a marks row, and
+    # school_admin locks without holding `exams.marks.create`.
+    scope_read_exempt_actions = frozenset({"lock", "unlock"})
     http_method_names = ["get", "post", "head", "options"]
 
     def get_queryset(self):

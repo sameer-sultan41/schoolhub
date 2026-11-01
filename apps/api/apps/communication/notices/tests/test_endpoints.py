@@ -8,16 +8,38 @@ from apps.communication.models import AudienceType, NoticeStatus
 from apps.communication.notices.services.publish import publish_notice
 from apps.communication.tests.base import CommunicationAPITestCase
 from apps.communication.tests.factories import NoticeFactory, UserFactory, authenticate, grant
+from apps.school_organization.tests.factories import grant_default_role
 from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
 
 class NoticeEndpointTests(CommunicationAPITestCase):
+    def test_the_seeded_school_owner_publishes_a_notice(self) -> None:
+        """An approver must see what it approves (ADR-0031 decision 3): the seeded
+        `school_owner` holds `communication.notice.publish`, so it holds the view key
+        `:publish` now also resolves the notice under."""
+        with tenant_context(self.tenant.id):
+            notice = NoticeFactory(
+                tenant=self.tenant,
+                created_by=self.user.pk,
+                status=NoticeStatus.PENDING_APPROVAL,
+                audience_type=AudienceType.CUSTOM,
+                audience_filter={"user_ids": [str(self.user.pk)]},
+            )
+            owner = UserFactory(tenant=self.tenant)
+        grant_default_role(owner, "school_owner")
+        authenticate(self.client, owner)
+
+        response = self.client.post(f"/api/v1/notices/{notice.pk}:publish")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["data"]["status"], NoticeStatus.PUBLISHED)
+
     def test_draft_submit_publish_round_trip(self) -> None:
         with tenant_context(self.tenant.id):
             recipient = UserFactory(tenant=self.tenant)
             approver = UserFactory(tenant=self.tenant)
-            grant(approver, "communication.notice.publish")
+            grant(approver, "communication.notice.view", "communication.notice.publish")
 
         response = self.client.post(
             "/api/v1/notices",
@@ -55,7 +77,7 @@ class NoticeEndpointTests(CommunicationAPITestCase):
         with tenant_context(self.tenant.id):
             recipient = UserFactory(tenant=self.tenant)
             approver = UserFactory(tenant=self.tenant)
-            grant(approver, "communication.notice.publish")
+            grant(approver, "communication.notice.view", "communication.notice.publish")
 
         response = self.client.post(
             "/api/v1/notices",
@@ -102,7 +124,7 @@ class NoticeEndpointTests(CommunicationAPITestCase):
         with tenant_context(self.tenant.id):
             recipient = UserFactory(tenant=self.tenant)
             approver = UserFactory(tenant=self.tenant)
-            grant(approver, "communication.notice.publish")
+            grant(approver, "communication.notice.view", "communication.notice.publish")
 
         response = self.client.post(
             "/api/v1/notices",
@@ -138,7 +160,7 @@ class NoticeEndpointTests(CommunicationAPITestCase):
                 is_restricted_principal=True,
             )
             approver = UserFactory(tenant=self.tenant)
-            grant(approver, "communication.notice.publish")
+            grant(approver, "communication.notice.view", "communication.notice.publish")
 
         with tenant_context(self.tenant.id), self.captureOnCommitCallbacks(execute=True):
             notice = NoticeFactory(
@@ -166,7 +188,7 @@ class NoticeEndpointTests(CommunicationAPITestCase):
             )
             other_recipient = UserFactory(tenant=self.tenant)
             approver = UserFactory(tenant=self.tenant)
-            grant(approver, "communication.notice.publish")
+            grant(approver, "communication.notice.view", "communication.notice.publish")
 
         with tenant_context(self.tenant.id), self.captureOnCommitCallbacks(execute=True):
             notice = NoticeFactory(

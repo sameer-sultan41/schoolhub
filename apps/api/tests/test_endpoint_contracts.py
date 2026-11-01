@@ -11,6 +11,7 @@ from django.test import SimpleTestCase, TestCase
 from django.urls import get_resolver
 from rest_framework.permissions import AllowAny
 
+from core.api.viewsets import TenantScopedViewSetMixin
 from core.rbac.permissions import AnyOf, HasPermissionKey, declared_keys
 from core.rbac.registry import registry
 from tests.source_tree import source_modules
@@ -175,6 +176,42 @@ class AnyOfContractTests(TestCase):
                         if key.rpartition(".")[2] == "view"
                     )
         self.assertEqual(offenders, [], f"AnyOf lists a read key: {offenders}")
+
+
+class DefaultRoleReadKeyTests(SimpleTestCase):
+    """A default role that may act on a row may also read it (ADR-0031 decision 3).
+
+    The viewset mixin resolves an action's target under the read key and the action's
+    own key, so a default role holding the action key without the read key gets a 404
+    on every row. That is a gap in the role's grants, not in the route: an approver
+    must be able to see what it approves.
+    """
+
+    def test_a_default_role_holding_an_action_key_holds_its_read_key(self):
+        held: dict[str, set[str]] = {}
+        for spec in registry.all():
+            for role in spec.default_roles:
+                held.setdefault(role, set()).add(spec.key)
+        offenders: set[str] = set()
+        for route, view in _api_views():
+            if not issubclass(view, TenantScopedViewSetMixin):
+                continue
+            read = view.scope_read_permission or getattr(view, "required_permission", None)
+            if not read:
+                continue
+            read_keys = set(declared_keys(read))
+            for action, declared in (getattr(view, "required_permission_map", None) or {}).items():
+                if not declared or action in view.scope_read_exempt_actions:
+                    continue
+                action_keys = set(declared_keys(declared))
+                if action_keys == read_keys:
+                    continue
+                offenders.update(
+                    f"{role}: {view.__name__}.{action} ({route}) lacks {sorted(read_keys)}"
+                    for role, keys in held.items()
+                    if keys & action_keys and not keys & read_keys
+                )
+        self.assertEqual(sorted(offenders), [], "\n".join(sorted(offenders)))
 
 
 def _module_string_constants() -> dict[str, dict[str, str]]:

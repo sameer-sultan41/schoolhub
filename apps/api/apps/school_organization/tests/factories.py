@@ -27,6 +27,8 @@ from apps.school_organization.models import (
 )
 from core.rbac.cache import evict_rbac_caches
 from core.rbac.models import Permission, RecordScope, Role, RolePermission, User, UserRole
+from core.rbac.registry import registry
+from core.rbac.seeding import ensure_role_with_permissions
 from core.tenancy.context import tenant_context
 from core.tenancy.models import Tenant, TenantSettings, TenantStatus
 
@@ -187,6 +189,20 @@ def grant(
     UserRole.objects.create(
         user=user, role=role, tenant=user.tenant, scope=scope, scope_ref=scope_ref
     )
+    evict_rbac_caches([user.pk])
+    return role
+
+
+def grant_default_role(user: User, slug: str, *, scope: str = RecordScope.ALL) -> Role:
+    """Give ``user`` the default role ``slug`` with exactly the keys the registry gives it.
+
+    Built as `seed_all_roles` builds a role login, from every key whose `default_roles`
+    names ``slug``, so a test proves what a seeded role can do rather than what a
+    hand-picked key list can.
+    """
+    keys = [spec.key for spec in registry.all() if slug in spec.default_roles]
+    role = ensure_role_with_permissions(user.tenant, slug, slug.replace("_", " ").title(), keys)
+    UserRole.objects.create(user=user, role=role, tenant=user.tenant, scope=scope)
     evict_rbac_caches([user.pk])
     return role
 

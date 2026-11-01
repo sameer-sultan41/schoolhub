@@ -35,8 +35,10 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 
 | Permission key | Description | Default roles |
 | -------------- | ----------- | ------------- |
+| `communication.announcement.view` | Read announcements, drafts included | `school_admin`, `principal`, `teacher`, `reception` |
 | `communication.announcement.create/update/delete` | Draft and manage announcements | `school_admin`, `teacher` (scope `assigned`) |
 | `communication.announcement.publish` | Publish/schedule an announcement | `school_admin`, `principal` |
+| `communication.notice.view` | Read notices, drafts and those pending approval included | `school_admin`, `principal`, `teacher`, `reception`, `school_owner` (an approver sees what it approves) |
 | `communication.notice.create/update` | Draft formal notices | `school_admin` |
 | `communication.notice.publish` | Publish a notice (approval gate) | `principal`, `school_owner` |
 | `communication.notice.acknowledge` | Acknowledge a notice requiring it | `guardian`, `student`, staff roles |

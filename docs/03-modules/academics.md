@@ -42,7 +42,7 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 | `academics.curriculum.approve` | Sign off session curriculum before activation *(recommendation)* | `principal` |
 | `academics.teacher-allocation.view` | View allocations (scope `own` for teachers) | all staff |
 | `academics.teacher-allocation.create` / `.update` / `.delete` | Assign/reassign teachers to (section, subject) | `school_admin`, `vice_principal`, `principal` |
-| `academics.promotion.view` | View promotion batches & decisions | `principal`, `vice_principal`, `school_admin`, `class_teacher` (own section) |
+| `academics.promotion.view` | View promotion batches & decisions | `principal`, `vice_principal`, `school_admin`, `class_teacher` (own section), `school_owner` (an approver sees what it approves) |
 | `academics.promotion.create` / `.update` | Create batches, edit draft decisions | `school_admin`, `vice_principal` |
 | `academics.promotion.approve` | Approve a promotion batch (approver ≠ preparer) | `principal`, `school_owner` |
 | `academics.promotion.execute` | Execute approved batch (creates enrollments via student-management) | `school_admin` |

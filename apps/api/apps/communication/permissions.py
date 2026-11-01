@@ -41,12 +41,13 @@ ANNOUNCEMENT_PUBLISHERS = ("school_admin", "principal")
 
 # §4 — "communication.notice.create/update … school_admin".
 NOTICE_AUTHORS = ("school_admin",)
-NOTICE_VIEWERS = COMMS_STAFF
 # §4 — "communication.notice.publish … principal, school_owner". The approval
 # gate: §7's workflow requires the approver differ from the drafter, enforced
 # in services, not by this key alone (holding the key is necessary, not
 # sufficient — the same shape fees_finance's refund-approval key uses).
 NOTICE_PUBLISHERS = ("principal", "school_owner")
+# Every publisher reads notices too: an approver must be able to see what it approves.
+NOTICE_VIEWERS = tuple(dict.fromkeys((*COMMS_STAFF, *NOTICE_PUBLISHERS)))
 # §4 — "communication.notice.acknowledge … guardian, student, staff roles".
 NOTICE_ACKNOWLEDGERS = ("guardian", "student", "school_admin", "principal", "teacher", "reception")
 

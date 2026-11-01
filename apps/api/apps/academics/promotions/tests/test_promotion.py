@@ -35,6 +35,7 @@ from apps.academics.tests.factories import (
     grant,
 )
 from apps.school_organization.models import Class, SessionStatus
+from apps.school_organization.tests.factories import grant_default_role
 from apps.student_management.models import EnrollmentStatus, StudentEnrollment
 from apps.student_management.tests.factories import (
     EmergencyContactFactory,
@@ -421,6 +422,22 @@ class BatchResourceTests(PromotionTestCase):
 
 
 class ApprovalTests(PromotionTestCase):
+    def test_the_seeded_school_owner_sees_and_approves_a_batch(self) -> None:
+        """An approver must see what it approves: the seeded `school_owner` holds
+        `academics.promotion.approve`, so it holds the batch's view key too."""
+        self.allow(*PREPARE_KEYS)
+        batch_id = self.create_batch()
+        self.transition(batch_id, "submit")
+        owner = UserFactory(tenant=self.tenant)
+        grant_default_role(owner, "school_owner")
+        authenticate(self.client, owner)
+
+        seen = self.client.get(f"/api/v1/student-promotions/{batch_id}")
+        approved = self.transition(batch_id, "approve")
+
+        self.assertEqual(seen.status_code, status.HTTP_200_OK, seen.json())
+        self.assertEqual(approved.status_code, status.HTTP_200_OK, approved.json())
+
     def test_the_preparer_cannot_approve_their_own_batch(self) -> None:
         """RBAC §2.4 segregation of duties — the rule this workflow exists for."""
         self.allow(*PREPARE_KEYS, "academics.promotion.approve")
