@@ -33,14 +33,14 @@ def send_emergency_broadcast_task(self, *, tenant_id: str, job_id: str, actor_id
     The job is claimed with `claim_queued_job`, a conditional UPDATE from `queued`
     to `running`, before anything is sent. A redelivered or re-enqueued task, even
     one running at the same moment as the first, finds the row already claimed and
-    returns: an emergency fan-out must reach each recipient once.
+    returns. So the fan-out runs at most once; a crash after the claim leaves the
+    job `running`, and nothing re-sends it.
     """
     job = claim_queued_job(tenant_id=uuid.UUID(tenant_id), job_id=job_id)
     if job is None:
-        logger.warning(
-            "Emergency broadcast job %s is not queued (already claimed or finished); skipped.",
-            job_id,
-        )
+        # The claim cannot tell the two apart without a second read, and either way
+        # there is nothing to send.
+        logger.warning("Emergency broadcast job %s not found or not queued; skipped.", job_id)
         return
     try:
         recipient_ids: list[str] = job.payload["recipient_ids"]

@@ -202,6 +202,17 @@
   staff", register its purpose with `module_gated=True` (`core/files/purposes.py`) and serve the
   download from the record's own route, resolved through the same rule that hides the record.
 
+### L30. A race fix needs a test that fails against the racy version
+
+- **Mistake.** Communication PR C's emergency-broadcast claim (`17f02c5e`) shipped with task
+  tests that ran the task twice in sequence, or after the row was already `running`. Both pass
+  against the read-check-`mark_running` code it replaced, so they proved nothing about the race.
+- **Check.** Before calling a race fixed, name the interleaving that broke and write a test that
+  fails on the old code: hold one side's transaction open and make the other wait on it (a
+  `TransactionTestCase`, two connections, `pg_locks` to know it is waiting), or stub the
+  atomic step to report the loss while a read would still say "go". Running it twice proves only
+  idempotence.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.

@@ -133,13 +133,28 @@ class EmergencyBroadcastTaskTests(BroadcastAPITestCase):
         with tenant_context(self.tenant.id):
             self.assertEqual(Notification.objects.filter(event_key=EMERGENCY_BROADCAST).count(), 1)
 
-    def test_a_job_claimed_by_another_worker_is_not_sent(self) -> None:
-        """A delivery that read the job as queued still loses to a claim made since.
+    def test_a_delivery_that_loses_the_claim_sends_nothing(self) -> None:
+        """The loser of the race: its claim is refused while the row still reads `queued`.
 
-        The old guard read `status`, then saved `running` unconditionally, so two
-        deliveries that both read `queued` both sent. The claim is one conditional
-        UPDATE, so the loser is told at write time, not by a read that can be stale.
+        A concurrent winner has updated the row but not committed, so a read would
+        still see `queued`. The task must act on the claim's answer, not on a read:
+        the old read-check-`mark_running` guard sent here. (`core/jobs/tests/test_claim.py`
+        races the claim itself on two connections.)
         """
+        job = self.make_job(self.alice)
+
+        with (
+            mock.patch("apps.communication.tasks.claim_queued_job", return_value=None),
+            mock.patch("apps.communication.tasks.notify") as notify,
+        ):
+            job = self.run_task(job)
+
+        notify.assert_not_called()
+        self.assertEqual(job.status, JobStatus.QUEUED)
+        self.assertIsNone(job.started_at)
+
+    def test_a_job_claimed_by_another_worker_is_not_sent(self) -> None:
+        """A delivery that finds the job already claimed sends nothing and leaves the claim be."""
         job = self.make_job(self.alice)
         claimed = claim_queued_job(tenant_id=self.tenant.pk, job_id=job.pk)
         assert claimed is not None
