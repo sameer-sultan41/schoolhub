@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from django.contrib.auth.models import AbstractBaseUser, AnonymousUser
 from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured
+from django.db import models
 from django.db.models import Q, QuerySet
 from rest_framework import exceptions, permissions
 from rest_framework.request import Request
@@ -89,6 +90,7 @@ def scopes_for(user: RbacUser, declared: str | AnyOf) -> dict[str, list[uuid.UUI
 
 
 def has_permission_key(user: RbacUser, key: str) -> bool:
+    """Whether ``key`` is held anywhere. A privilege applied to one row needs `holds_key_for`."""
     return key in effective_permission_keys(user)
 
 
@@ -361,3 +363,38 @@ def scope_queryset(
         if callable(assigned):
             return assigned(queryset, user)
     return queryset.none()
+
+
+def holds_key_for(
+    user: RbacUser,
+    permission: str | AnyOf,
+    instance: models.Model,
+    *,
+    own_field: str | None = None,
+    campus_field: str | None = "campus_id",
+    campus_allows_null: bool = False,
+) -> bool:
+    """Whether ``user`` holds ``permission`` for this one row, not merely somewhere.
+
+    `has_permission_key` answers "is the key held at all", which is the wrong
+    question for a privilege applied to a row: a user holding the key on campus A
+    and an action key at `all` would get the privilege on campus B. This is
+    `scope_queryset` over the single row, so the key's own scope must reach it.
+    Fails closed: a key not held gives False.
+
+    Pass the scope settings the row's own viewset declares, so "for this row"
+    means what reading it means. The model's default manager is the
+    tenant-scoped one (`TenantOwnedModel.objects`), so a row outside the active
+    tenant is never found.
+    """
+    row = type(instance)._default_manager.filter(pk=instance.pk)
+    return bool(
+        scope_queryset(
+            row,
+            user,
+            permission=permission,
+            own_field=own_field,
+            campus_field=campus_field,
+            campus_allows_null=campus_allows_null,
+        ).exists()
+    )

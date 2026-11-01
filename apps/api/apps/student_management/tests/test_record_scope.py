@@ -9,6 +9,8 @@ the hook that fixes it; these are the assertions that keep it fixed.
 
 from __future__ import annotations
 
+from unittest import mock
+
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from rest_framework import status
@@ -26,6 +28,7 @@ from apps.school_organization.tests.factories import (
 )
 from apps.staff_management.tests.factories import StaffFactory
 from apps.student_management.tests.factories import (
+    EmergencyContactFactory,
     GuardianFactory,
     StudentEnrollmentFactory,
     StudentFactory,
@@ -37,6 +40,7 @@ from core.tenancy.context import tenant_context
 
 VIEW_KEY = "students.student.view"
 UPDATE_KEY = "students.student.update"
+APPROVE_WITHDRAWAL = "students.withdrawal.approve"
 # A key no student route declares: the unrelated `all` role a mixed user holds.
 UNRELATED = "exams.exam.view"
 NOTES = "Penicillin allergy"
@@ -237,3 +241,175 @@ class MedicalNotesScopeTests(APITestCase):
 
         self.assertEqual(list(shown.values()), [True] * 30)
         self.assertEqual(len(thirty_rows), len(three_rows))
+
+    def test_an_own_scoped_reader_sees_their_record_without_medical_notes(self) -> None:
+        """A student or guardian under `own` reads the row, never the notes on it."""
+        student_user = UserFactory(tenant=self.tenant)
+        own_record = self._student(self.campus_a)
+        with tenant_context(self.tenant.id):
+            own_record.user_id = student_user.pk
+            own_record.save(update_fields=["user_id"])
+        authenticate(self.client, student_user)
+        grant(student_user, VIEW_KEY, scope=RecordScope.OWN, is_restricted_principal=True)
+
+        response = self.client.get(f"/api/v1/students/{own_record.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertNotIn("medical_notes", response.json()["data"])
+
+
+class PrivilegeKeyScopeTests(APITestCase):
+    """A privilege key applied to a student must reach that student (auth-and-rbac.md §2.3).
+
+    The capacity override (`students.student.update`) and the clearance waiver
+    (`students.withdrawal.approve`) used to ask whether the key was held anywhere. A
+    user holding it for campus A, and the route's action key at `all`, got the
+    privilege on a campus-B student. Every test here gives the caller that mixed
+    pair, so each fails against the key-blind check.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.tenant = TenantFactory()
+        enable_feature(self.tenant, "module.students")
+        self.user = UserFactory(tenant=self.tenant)
+        authenticate(self.client, self.user)
+        with tenant_context(self.tenant.id):
+            self.campus_a = CampusFactory(tenant=self.tenant)
+            self.campus_b = CampusFactory(tenant=self.tenant)
+            self.session = AcademicSessionFactory(tenant=self.tenant)
+            self.school_class = ClassFactory(tenant=self.tenant)
+            # Campus B's section is full, so only the override admits anyone.
+            self.full_section = self._section(self.campus_b, capacity=1)
+            occupant = StudentFactory(tenant=self.tenant, campus=self.campus_b)
+            self._enroll(occupant, self.full_section)
+            self.student = self._ready_student(self.campus_b)
+
+    def _section(self, campus, *, capacity: int):
+        return SectionFactory(
+            tenant=self.tenant, school_class=self.school_class, campus=campus, capacity=capacity
+        )
+
+    def _enroll(self, student, section):
+        return StudentEnrollmentFactory(
+            tenant=self.tenant,
+            student=student,
+            academic_session=self.session,
+            school_class=self.school_class,
+            section=section,
+        )
+
+    def _ready_student(self, campus):
+        """A student who meets enrolment's guardian and emergency-contact prerequisites."""
+        student = StudentFactory(tenant=self.tenant, campus=campus)
+        StudentGuardianFactory(
+            tenant=self.tenant, student=student, guardian=GuardianFactory(tenant=self.tenant)
+        )
+        EmergencyContactFactory(tenant=self.tenant, student=student)
+        return student
+
+    def _fields(self, response) -> set[str]:
+        return {detail["field"] for detail in response.json()["error"]["details"]}
+
+    def _enroll_with_override(self, student):
+        return self.client.post(
+            f"/api/v1/students/{student.pk}:enroll",
+            {
+                "academic_session_id": str(self.session.pk),
+                "class_id": str(self.school_class.pk),
+                "section_id": str(self.full_section.pk),
+                "enrollment_date": "2026-04-05",
+                "capacity_override_reason": "Sibling priority admission",
+            },
+            format="json",
+        )
+
+    def test_enroll_override_needs_the_update_key_on_the_students_campus(self) -> None:
+        grant(self.user, UPDATE_KEY, scope=RecordScope.CAMPUS, scope_ref=self.campus_a.pk)
+        grant(self.user, "students.enrollment.enroll", scope=RecordScope.ALL)
+
+        response = self._enroll_with_override(self.student)
+
+        self.assertEqual(
+            response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY, response.json()
+        )
+        self.assertEqual(self._fields(response), {"capacity_override_reason"})
+
+    def test_enroll_override_needs_the_update_key_on_the_sections_campus(self) -> None:
+        """The student is in scope; the section whose capacity is exceeded is not."""
+        with tenant_context(self.tenant.id):
+            student = self._ready_student(self.campus_a)
+        grant(self.user, UPDATE_KEY, scope=RecordScope.CAMPUS, scope_ref=self.campus_a.pk)
+        grant(self.user, "students.enrollment.enroll", scope=RecordScope.ALL)
+
+        response = self._enroll_with_override(student)
+
+        self.assertEqual(
+            response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY, response.json()
+        )
+        self.assertEqual(self._fields(response), {"capacity_override_reason"})
+
+    def test_enroll_override_is_granted_when_the_update_key_reaches_both(self) -> None:
+        grant(self.user, UPDATE_KEY, scope=RecordScope.CAMPUS, scope_ref=self.campus_b.pk)
+        grant(self.user, "students.enrollment.enroll", scope=RecordScope.ALL)
+
+        response = self._enroll_with_override(self.student)
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.json())
+
+    def test_change_section_override_needs_the_update_key_on_the_students_campus(self) -> None:
+        with tenant_context(self.tenant.id):
+            self._enroll(self.student, self._section(self.campus_b, capacity=5))
+        grant(self.user, UPDATE_KEY, scope=RecordScope.CAMPUS, scope_ref=self.campus_a.pk)
+        grant(self.user, "students.enrollment.update", scope=RecordScope.ALL)
+
+        response = self.client.post(
+            f"/api/v1/students/{self.student.pk}:change-section",
+            {
+                "section_id": str(self.full_section.pk),
+                "capacity_override_reason": "Sibling priority admission",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY, response.json()
+        )
+        self.assertEqual(self._fields(response), {"capacity_override_reason"})
+
+    def _withdraw_waiving_clearance(self):
+        # `clearance_blockers` finds nothing until the owning modules ship, so the
+        # waiver branch is reached only with a blocker stubbed in.
+        with mock.patch(
+            "apps.student_management.services.clearance_blockers",
+            return_value=["Outstanding fee dues"],
+        ):
+            return self.client.post(
+                f"/api/v1/students/{self.student.pk}:withdraw",
+                {
+                    "reason": "Family relocation",
+                    "effective_date": "2026-06-01",
+                    "waive_clearance": True,
+                },
+                format="json",
+            )
+
+    def test_withdraw_waiver_needs_the_approve_key_on_the_students_campus(self) -> None:
+        grant(self.user, APPROVE_WITHDRAWAL, scope=RecordScope.CAMPUS, scope_ref=self.campus_a.pk)
+        grant(self.user, "students.student.withdraw", scope=RecordScope.ALL)
+
+        response = self._withdraw_waiving_clearance()
+
+        self.assertEqual(
+            response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY, response.json()
+        )
+        self.assertEqual(self._fields(response), {"waive_clearance"})
+
+    def test_withdraw_waiver_is_granted_on_the_students_campus(self) -> None:
+        grant(self.user, APPROVE_WITHDRAWAL, scope=RecordScope.CAMPUS, scope_ref=self.campus_b.pk)
+        grant(self.user, "students.student.withdraw", scope=RecordScope.ALL)
+
+        response = self._withdraw_waiving_clearance()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json()["data"]["status"], "withdrawn")

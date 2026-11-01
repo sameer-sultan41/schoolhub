@@ -32,7 +32,7 @@ from core.api.exceptions import DomainRuleViolation
 from core.api.pagination import PageNumberPagination
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
-from core.rbac.permissions import AnyOf, has_permission_key, route_permission, scope_queryset
+from core.rbac.permissions import AnyOf, route_permission, scope_queryset
 
 # `StaffViewSet`'s read key: what `candidates` may offer is scoped by it.
 STAFF_VIEW = "staff.staff.view"
@@ -187,7 +187,11 @@ class TeacherSubstitutionViewSet(
     def cancel(self, request: Request, pk) -> Response:
         substitution = get_object_or_404(self.get_queryset(), pk=pk)
         # The class has admitted an approver or a proposer; what is left is whose row.
-        own_proposal_only = not has_permission_key(request.user, "timetable.substitution.approve")
+        # An approver is one whose approve key reaches *this* cover, not one holding it
+        # for another campus while the proposer key's scope found the row.
+        own_proposal_only = not self.holds_key_for_row(
+            request.user, "timetable.substitution.approve", substitution
+        )
         if own_proposal_only and substitution.created_by != request.user.pk:
             raise PermissionDenied("Only an approver, or whoever proposed it, can cancel cover.")
 

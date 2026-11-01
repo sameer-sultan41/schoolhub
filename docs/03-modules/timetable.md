@@ -99,7 +99,8 @@ flowchart TD
 The absence signal arrives from [`attendance.md`](attendance.md); a substitution overrides the published slot for specific dates only — the base timetable is untouched.
 
 Cover that is no longer wanted is cancelled (`:cancel`), which is distinct from an approver
-declining it (`:reject`): an approver cancels any proposed or confirmed cover, the proposer may
+declining it (`:reject`): an approver cancels any proposed or confirmed cover their approve key's
+record scope reaches (an approver for another campus is treated as a proposer here), the proposer may
 withdraw their own while it is still proposed, and past cover cannot be cancelled. The
 substitute is told. A slot holds at most one *open* (proposed or confirmed) substitution per
 date, so once one is declined or cancelled the same period can be proposed again.

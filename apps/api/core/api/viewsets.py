@@ -7,6 +7,7 @@ is explicit and reviewable.
 
 from __future__ import annotations
 
+from django.db import models
 from django.utils import timezone
 from rest_framework import mixins, viewsets
 from rest_framework.permissions import IsAuthenticated
@@ -14,7 +15,14 @@ from rest_framework.response import Response
 
 from core.api.permissions import RequiresModuleFeature
 from core.audit.services import record_audit
-from core.rbac.permissions import HasPermissionKey, required_declaration, scope_queryset
+from core.rbac.permissions import (
+    AnyOf,
+    HasPermissionKey,
+    RbacUser,
+    holds_key_for,
+    required_declaration,
+    scope_queryset,
+)
 from core.tenancy.context import bind_tenant, unbind_tenant
 from core.tenancy.models import Tenant
 
@@ -124,6 +132,19 @@ class TenantScopedViewSetMixin:
             queryset,
             self.request.user,
             permission=declared,
+            own_field=self.scope_own_field,
+            campus_field=self.scope_campus_field,
+            campus_allows_null=self.scope_campus_allows_null,
+        )
+
+    def holds_key_for_row(
+        self, user: RbacUser, permission: str | AnyOf, instance: models.Model
+    ) -> bool:
+        """`holds_key_for` under this viewset's own scope settings, for a row it serves."""
+        return holds_key_for(
+            user,
+            permission,
+            instance,
             own_field=self.scope_own_field,
             campus_field=self.scope_campus_field,
             campus_allows_null=self.scope_campus_allows_null,

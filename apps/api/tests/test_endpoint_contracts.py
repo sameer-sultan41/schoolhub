@@ -179,8 +179,9 @@ def _inline_permission_keys() -> list[tuple[str, int, str]]:
 
     `required_permission` / `required_permission_map` are validated through the URLconf above;
     keys checked inside a method body, serializer or task never reach it, so they are found by
-    reading the source. Two forms: `has_permission_key(user, "<key>")` (or `key="<key>"`) and
-    `"<key>" in effective_permission_keys(user)`.
+    reading the source. Three forms: `has_permission_key(user, "<key>")` (or `key="<key>"`),
+    `holds_key_for(user, "<key>", row)` and the viewset's `holds_key_for_row(user, "<key>", row)`
+    (or `permission="<key>"`), and `"<key>" in effective_permission_keys(user)`.
     """
     found: list[tuple[str, int, str]] = []
 
@@ -200,6 +201,10 @@ def _inline_permission_keys() -> list[tuple[str, int, str]]:
             if called(node, "has_permission_key"):
                 positional = node.args[1] if len(node.args) > 1 else None
                 keyword = next((kw.value for kw in node.keywords if kw.arg == "key"), None)
+                key = literal(positional or keyword)
+            elif called(node, "holds_key_for") or called(node, "holds_key_for_row"):
+                positional = node.args[1] if len(node.args) > 1 else None
+                keyword = next((kw.value for kw in node.keywords if kw.arg == "permission"), None)
                 key = literal(positional or keyword)
             elif (
                 isinstance(node, ast.Compare)

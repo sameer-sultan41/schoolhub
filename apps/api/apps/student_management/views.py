@@ -22,6 +22,8 @@ from rest_framework.response import Response
 if TYPE_CHECKING:
     from rest_framework.request import Request
 
+    from apps.school_organization.models import Section
+
 from apps.student_management.filters import StudentFilterSet, StudentTransferFilterSet
 from apps.student_management.models import (
     EmergencyContact,
@@ -79,7 +81,7 @@ from core.api.pagination import PageNumberPagination
 from core.api.viewsets import ActionResponse, TenantModelViewSet, TenantScopedViewSetMixin
 from core.idempotency.services import replay_or_execute
 from core.jobs.services import create_job, enqueue_job
-from core.rbac.permissions import has_permission_key
+from core.rbac.permissions import holds_key_for
 
 # PolymorphicProxySerializer is annotation-only (no real to_representation) —
 # the actual runtime dispatch for `history` below is this plain dict lookup. Explicitly
@@ -169,6 +171,18 @@ class StudentViewSet(TenantModelViewSet):
             .annotate(campus_name=F("campus__name"), house_name=F("house__name"))
         )
 
+    def _may_override_capacity(self, user, student: Student, section: Section) -> bool:
+        """§11's capacity override: `students.student.update`, held for both rows it touches.
+
+        The student is the row being written, and the section is the one whose capacity
+        is exceeded, so the key's own scope must reach both. Neither the route's action
+        key nor the key held for another campus lends it (auth-and-rbac.md §2.3). The
+        section is read under `SectionViewSet`'s scope settings, the defaults.
+        """
+        return self.holds_key_for_row(user, STUDENT_UPDATE, student) and holds_key_for(
+            user, STUDENT_UPDATE, section
+        )
+
     def perform_create(self, serializer) -> None:
         """Delegate to the service so the API, the importer and Celery jobs agree.
 
@@ -225,9 +239,9 @@ class StudentViewSet(TenantModelViewSet):
                 enrollment_date=data["enrollment_date"],
                 roll_number=data.get("roll_number"),
                 capacity_override_reason=data.get("capacity_override_reason"),
-                actor_has_capacity_override=has_permission_key(
-                    request.user, "students.student.update"
-                ),
+                # Read only when an override is asked for, as the service reads it.
+                actor_has_capacity_override=bool(data.get("capacity_override_reason"))
+                and self._may_override_capacity(request.user, student, data["section"]),
                 actor_id=request.user.pk,
                 tenant_id=request.tenant.pk,
             )
@@ -272,9 +286,8 @@ class StudentViewSet(TenantModelViewSet):
                 section=data["section"],
                 roll_number=data.get("roll_number"),
                 capacity_override_reason=data.get("capacity_override_reason"),
-                actor_has_capacity_override=has_permission_key(
-                    request.user, "students.student.update"
-                ),
+                actor_has_capacity_override=bool(data.get("capacity_override_reason"))
+                and self._may_override_capacity(request.user, student, data["section"]),
                 actor_id=request.user.pk,
             )
             after = StudentEnrollmentSerializer(updated).data
@@ -316,9 +329,9 @@ class StudentViewSet(TenantModelViewSet):
                 reason=data["reason"],
                 effective_date=data["effective_date"],
                 waive_clearance=data.get("waive_clearance", False),
-                actor_has_withdrawal_approval=has_permission_key(
-                    request.user, "students.withdrawal.approve"
-                ),
+                # Held for this student, and read only when a waiver is asked for.
+                actor_has_withdrawal_approval=data.get("waive_clearance", False)
+                and self.holds_key_for_row(request.user, "students.withdrawal.approve", student),
                 actor_id=request.user.pk,
             )
             after = self.get_serializer(withdrawn).data

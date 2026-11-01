@@ -107,7 +107,7 @@ flowchart TD
 
 Transfers follow the same shape (`requested → approved/rejected → completed`), with inter-campus transfers additionally re-allocating section and outbound transfers ending in status `transferred` plus certificate issuance.
 
-**Implementation note (as shipped):** no `student_withdrawals` entity exists — withdrawal is a single audited `POST /api/v1/students/{id}:withdraw` (`students.student.withdraw`), not a separate initiate/approve pair. It is blocked while clearance blockers are non-empty; a caller who both passes `waive_clearance` and holds `students.withdrawal.approve` may override. Clearance checks (fees, library, transport) always return "clear" today, since none of those owning modules exist yet — this is a documented gap, not a false all-clear. `:cancel` is not implemented for transfers (only `:approve`/`:reject`/`:complete`), and `incoming` transfers have no defined execution workflow — completing one is a status-only change.
+**Implementation note (as shipped):** no `student_withdrawals` entity exists — withdrawal is a single audited `POST /api/v1/students/{id}:withdraw` (`students.student.withdraw`), not a separate initiate/approve pair. It is blocked while clearance blockers are non-empty; a caller who both passes `waive_clearance` and holds `students.withdrawal.approve` with a record scope reaching that student may override. Clearance checks (fees, library, transport) always return "clear" today, since none of those owning modules exist yet — this is a documented gap, not a false all-clear. `:cancel` is not implemented for transfers (only `:approve`/`:reject`/`:complete`), and `incoming` transfers have no defined execution workflow — completing one is a status-only change.
 
 ## 8. User Journeys
 
@@ -134,7 +134,7 @@ Transfers follow the same shape (`requested → approved/rejected → completed`
 ## 11. Validations
 
 - `admission_number` unique per tenant; auto-generated per pattern; immutable after creation.
-- One active enrollment per (student, academic_session); roll number unique within section; section capacity enforced (override requires `school_admin` + reason, audited); age-vs-class policy check (tenant-configurable) as a warning, hard block optional *(recommendation)*.
+- One active enrollment per (student, academic_session); roll number unique within section; section capacity enforced (override requires `school_admin` + reason, audited; the override key `students.student.update` must be held with a record scope reaching both the student and the target section, not merely held for some other campus); age-vs-class policy check (tenant-configurable) as a warning, hard block optional *(recommendation)*.
 - At least one guardian link and one emergency contact required to complete enrollment; exactly one `is_primary` guardian per student.
 - Transfers/withdrawals: only `active` students; effective date within the active session; approver ≠ initiator (RBAC §2.4); withdrawal blocked until cross-module clearance passes unless owner explicitly waives (audited).
 - Document uploads: type/size whitelist, AV scan; verification only by users holding `students.document.verify`.
