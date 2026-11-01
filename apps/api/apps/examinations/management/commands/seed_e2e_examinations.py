@@ -88,10 +88,10 @@ class Command(BaseCommand):
     help = "Seed the e2e tenant's complete default grading scale (E2E Percentage)."
 
     def add_arguments(self, parser) -> None:
-        parser.add_argument("--tenant", dest="tenant_slug", required=True, help="Tenant slug.")
+        parser.add_argument("--tenant", required=True, help="Tenant slug.")
 
     def handle(self, *args, **options) -> None:
-        slug = options["tenant_slug"]
+        slug = options["tenant"]
         if slug not in E2E_TENANT_SLUGS:
             raise CommandError(
                 f"Refusing {slug!r}: this seeds e2e data and only runs against "
