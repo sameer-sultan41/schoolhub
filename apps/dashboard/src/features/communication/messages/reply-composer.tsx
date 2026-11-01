@@ -5,35 +5,23 @@ import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { Alert, Button, Checkbox, Label, Textarea } from "@schoolhub/ui";
 
-import { useInvalidateModule } from "@/hooks/use-invalidate-module";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { Services } from "@/services";
-import {
-  MESSAGE_BODY_MAX_LENGTH,
-  MESSAGE_THREADS_QUERY_MODULE,
-} from "@/services/modules/message-threads/message-threads-constant";
+import { MESSAGE_BODY_MAX_LENGTH } from "@/services/modules/message-threads/message-threads-constant";
+
+import { useRefreshThreads } from "./use-refresh-threads";
 
 export interface ReplyComposerProps {
   threadId: string;
-  /** A closed thread takes no reply: sending is disabled and Reopen is offered. */
+  /** A closed thread takes no reply: sending is disabled (the thread view offers Reopen). */
   isClosed: boolean;
-  /** Whether the viewer may reopen (`communication.thread.close`). */
-  canReopen: boolean;
-  isReopening: boolean;
-  onReopen: () => void;
 }
 
 /** The reply box under a conversation, with an "Internal note" flag only staff see. */
-export function ReplyComposer({
-  threadId,
-  isClosed,
-  canReopen,
-  isReopening,
-  onReopen,
-}: ReplyComposerProps) {
+export function ReplyComposer({ threadId, isClosed }: ReplyComposerProps) {
   const t = useTranslations("communication.messages.composer");
   const tErrors = useTranslations("errors");
-  const invalidate = useInvalidateModule(MESSAGE_THREADS_QUERY_MODULE);
+  const invalidate = useRefreshThreads();
   const [body, setBody] = useState("");
   const [isInternalNote, setIsInternalNote] = useState(false);
 
@@ -59,23 +47,6 @@ export function ReplyComposer({
 
   return (
     <form noValidate onSubmit={handleSubmit} className="flex flex-col gap-3">
-      {isClosed && (
-        <Alert variant="info" className="flex items-center justify-between gap-3">
-          <span>{t("closed")}</span>
-          {canReopen && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              isLoading={isReopening}
-              loadingLabel={t("reopening")}
-              onClick={onReopen}
-            >
-              {t("reopen")}
-            </Button>
-          )}
-        </Alert>
-      )}
       {send.isError && (
         <Alert variant="destructive">{resolveErrorMessage(send.error, tErrors, t("failed"))}</Alert>
       )}

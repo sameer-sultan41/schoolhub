@@ -109,7 +109,7 @@ describe("MessagesScreen", () => {
     stubInbox([VIEW]);
     listMessages.mockImplementation((_threadId, query) =>
       Promise.resolve(
-        query.cursor === "c2"
+        query?.cursor === "c2"
           ? cursorPage([messageRecord({ id: "m1", body: "older" })])
           : cursorPage([messageRecord({ id: "m2", body: "newer" })], "c2"),
       ),
@@ -129,6 +129,39 @@ describe("MessagesScreen", () => {
     expect(items[1]).toHaveTextContent("newer");
   });
 
+  it("reads only the first page again after a post, losing no message", async () => {
+    stubInbox([VIEW, CREATE_MESSAGE]);
+    listMessages.mockImplementation((_threadId, query) =>
+      Promise.resolve(
+        query?.cursor === "c2"
+          ? cursorPage([messageRecord({ id: "m1", body: "oldest" })])
+          : cursorPage([messageRecord({ id: "m2", body: "older" })], "c2"),
+      ),
+    );
+    postMessage.mockResolvedValue(messageRecord());
+    const { user } = await renderMessages();
+    await user.click(await screen.findByRole("button", { name: "Load earlier messages" }));
+    await screen.findByText("oldest");
+    listMessages.mockClear();
+    // The server now has a newer message, which pushes "older" out of page one's cursor window.
+    const newest = messageRecord({ id: "m3", body: "newest" });
+    const older = messageRecord({ id: "m2", body: "older" });
+    listMessages.mockImplementation(() => Promise.resolve(cursorPage([newest, older], "c3")));
+
+    await user.type(await screen.findByLabelText("Reply"), "Thanks");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    await screen.findByText("newest");
+    await waitFor(() => {
+      expect(screen.getByText("older")).toBeInTheDocument();
+    });
+    // Only the first page is read again: the stale "c2" cursor is not replayed.
+    expect(listMessages).toHaveBeenCalled();
+    for (const [, query] of listMessages.mock.calls) expect(query?.cursor).toBeUndefined();
+    expect(screen.queryByText("oldest")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Load earlier messages" })).toBeInTheDocument();
+  });
+
   it("closed thread disables send and shows reopen for permitted user", async () => {
     stubInbox([VIEW, CREATE_MESSAGE, CLOSE_THREAD]);
     fetchThread.mockResolvedValue(threadRecord({ status: "closed" }));
@@ -142,6 +175,18 @@ describe("MessagesScreen", () => {
     await user.click(screen.getByRole("button", { name: "Reopen" }));
 
     expect(reopenThread).toHaveBeenCalledWith(THREAD_ID);
+  });
+
+  it("offers reopen to a viewer who may close but not post", async () => {
+    stubInbox([VIEW, CLOSE_THREAD]);
+    fetchThread.mockResolvedValue(threadRecord({ status: "closed" }));
+    reopenThread.mockResolvedValue(threadRecord());
+    const { user } = await renderMessages();
+
+    await user.click(await screen.findByRole("button", { name: "Reopen" }));
+
+    expect(reopenThread).toHaveBeenCalledWith(THREAD_ID);
+    expect(screen.queryByLabelText("Reply")).not.toBeInTheDocument();
   });
 
   it("offers no reopen to a viewer without the close key", async () => {

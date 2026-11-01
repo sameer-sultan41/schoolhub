@@ -8,17 +8,16 @@ import { Alert, Button, EmptyState, Skeleton } from "@schoolhub/ui";
 
 import { LoadErrorCard } from "@/components/load-error-card";
 import { useCurrentUser } from "@/hooks/use-current-user";
-import { useInvalidateModule } from "@/hooks/use-invalidate-module";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { hasPermission } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-client";
 import { ApiError, Services } from "@/services";
-import { MESSAGE_THREADS_QUERY_MODULE } from "@/services/modules/message-threads/message-threads-constant";
 
 import { MessageList } from "./message-list";
 import { ReplyComposer } from "./reply-composer";
 import type { ThreadSource } from "./thread-source";
 import { ThreadStatusBadge } from "./thread-status-badge";
+import { useRefreshThreads } from "./use-refresh-threads";
 
 export interface ThreadViewProps {
   source: ThreadSource;
@@ -32,7 +31,7 @@ export function ThreadView({ source, threadId, readOnly }: ThreadViewProps) {
   const t = useTranslations("communication.messages");
   const tErrors = useTranslations("errors");
   const { data: user } = useCurrentUser();
-  const invalidate = useInvalidateModule(MESSAGE_THREADS_QUERY_MODULE);
+  const invalidate = useRefreshThreads();
   const [transitionError, setTransitionError] = useState<string | null>(null);
 
   // `:mark-read` is keyed `communication.message.create` on the server, so a reader without it
@@ -118,17 +117,26 @@ export function ThreadView({ source, threadId, readOnly }: ThreadViewProps) {
       </header>
       {transitionError && <Alert variant="destructive">{transitionError}</Alert>}
       <MessageList source={source} threadId={threadId} currentUserId={user?.id} />
-      {canPost && (
-        <ReplyComposer
-          threadId={threadId}
-          isClosed={isClosed}
-          canReopen={canClose}
-          isReopening={transition.isPending}
-          onReopen={() => {
-            transition.mutate("reopen");
-          }}
-        />
+      {isClosed && !readOnly && (
+        <Alert variant="info" className="flex items-center justify-between gap-3">
+          <span>{t("thread.closedNotice")}</span>
+          {canClose && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              isLoading={transition.isPending}
+              loadingLabel={t("thread.reopening")}
+              onClick={() => {
+                transition.mutate("reopen");
+              }}
+            >
+              {t("thread.reopen")}
+            </Button>
+          )}
+        </Alert>
       )}
+      {canPost && <ReplyComposer threadId={threadId} isClosed={isClosed} />}
     </article>
   );
 }

@@ -1392,7 +1392,10 @@
         "loadError": "The conversation couldn't be loaded.",
         "close": "Close conversation",
         "closing": "Closing",
-        "transitionFailed": "The conversation couldn't be updated."
+        "transitionFailed": "The conversation couldn't be updated.",
+        "closedNotice": "This conversation is closed.",
+        "reopen": "Reopen",
+        "reopening": "Reopening"
       },
       "message": {
         "you": "You",
@@ -1412,10 +1415,7 @@
         "internalNote": "Internal note",
         "send": "Send",
         "sending": "Sending",
-        "failed": "Your message couldn't be sent.",
-        "closed": "This conversation is closed.",
-        "reopen": "Reopen",
-        "reopening": "Reopening"
+        "failed": "Your message couldn't be sent."
       },
       "picker": {
         "search": "Search",
