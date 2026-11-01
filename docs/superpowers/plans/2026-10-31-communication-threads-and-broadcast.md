@@ -538,14 +538,18 @@ recorded on `feat/communication-dashboard`.
 
 16. **The emergency task claims its job with a conditional UPDATE**
     (`core.jobs.services.claim_queued_job`). Reading `status` and then calling `mark_running`
-    left a window in which two deliveries both read `queued` and both fanned out.
+    left a window in which two deliveries both read `queued` and both fanned out. The send is at
+    most once: a crash after the claim leaves the job `running`, and nothing re-sends it.
 17. **The broadcast campus check uses `user_scopes_for_key`**, the scopes of only the roles that
     grant `communication.broadcast.send` (auth-and-rbac §2.3), so an unrelated `all`-scoped role
     no longer lifts a campus limit. `scope_queryset` has the same union platform-wide; adopting
     the per-key resolver there is deferred (`docs/deferred-work.md`, high priority).
 18. **Restricted-principal checks ignore removed roles**, through one helper,
     `core.rbac.permissions.live_restricted_role_assignments`, read by `is_restricted_principal`,
-    the thread notification fan-out and `thread_staff_users`.
+    the thread notification fan-out and `thread_staff_users`. The fan-out is an allowlist (staff
+    in `thread_staff_users`; guardians and students with a live restricted role who own the
+    child, for a non-internal message), so a participant with no live role is notified of
+    nothing.
 19. **Declined findings, with reasons:**
     - Internal notes not reordering staff inboxes is deliberate. The staff unread count still
       surfaces them, and a staff-only activity column is deferred (`docs/deferred-work.md`).

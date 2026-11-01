@@ -43,6 +43,11 @@ changed between preview and send, would still go out. Decided in plan
    reaches nothing: 404, not the "choose a campus" 422, since there is no campus to choose.
    The scope is read from the roles that grant `communication.broadcast.send` only
    (`core.rbac.permissions.user_scopes_for_key`), since a scope belongs to its `user_role`.
+   The recipient side deliberately reads differently: a campus-narrowed `staff` audience
+   (`audience._resolve_staff`) includes anyone holding an `all`-scoped role, whatever that role
+   grants, because a tenant-wide staff member works at every campus and an emergency there
+   must reach them. The sender's limit is about what they may do; the audience is about who is
+   on the campus.
 6. **Audited.** Each send writes a `broadcast` audit row with the message, count, channels,
    unavailable channels and audience.
 
