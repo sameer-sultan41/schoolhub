@@ -293,6 +293,9 @@ class MixedScopeDetailWriteTests(APITestCase):
     def test_a_patch_through_two_chained_unions_reaches_each_members_rows(self) -> None:
         with CaptureQueriesContext(connection) as captured:
             taught = self.patch(self.taught_on_b)
+        # Read now: `captured_queries` slices the live query log, which the next request's
+        # `request_started` signal clears.
+        sql = [query["sql"] for query in captured.captured_queries]
         on_campus_a = self.patch(self.on_campus_a)
         untaught = self.patch(self.untaught_on_b)
 
@@ -303,8 +306,8 @@ class MixedScopeDetailWriteTests(APITestCase):
         self.assertEqual(self.first_name(self.untaught_on_b), self.untaught_on_b.first_name)
         # Two members per call, so one query carries both unions: the read key's two
         # `EXISTS`, and the action key's two built over them.
-        most = max(query["sql"].count("EXISTS") for query in captured.captured_queries)
-        self.assertGreaterEqual(most, 4)
+        self.assertTrue(sql, "the PATCH's queries were not captured")
+        self.assertGreaterEqual(max(statement.count("EXISTS") for statement in sql), 4)
 
 
 class AttendanceScopeTests(ApprovalsTestCase):

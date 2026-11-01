@@ -229,6 +229,16 @@
   must reach it under the read key as well as its own. Test it with a mixed user: the key on
   campus A, an unrelated or action key at `all`, and a campus-B row.
 
+### L32. Read `captured_queries` before the next request
+
+- **Mistake.** `MixedScopeDetailWriteTests` (`apps/api/tests/test_per_role_scope.py`) captured
+  one PATCH, made two more requests, then read `captured.captured_queries`. That property
+  slices the live `connection.queries` log, and each later request's `request_started` signal
+  runs `reset_queries`, so CI saw an empty list and `max()` raised.
+- **Check.** Copy the SQL out (`[q["sql"] for q in captured.captured_queries]`) right after the
+  `with CaptureQueriesContext(...)` block, before any other client request, and assert the
+  list is non-empty before asserting on its contents.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.
