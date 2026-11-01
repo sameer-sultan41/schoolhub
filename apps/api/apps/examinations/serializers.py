@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import uuid
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 from rest_framework import serializers
 
@@ -486,9 +486,9 @@ class AdmitCardSerializer(serializers.ModelSerializer):
         one query of its own (lesson L24), cached on the instance so the two
         section fields share it.
         """
-        cached = getattr(card, "_exam_enrollment", _UNSET)
+        cached = card.__dict__.get("_exam_enrollment", _UNSET)
         if cached is not _UNSET:
-            return cached
+            return cast("StudentEnrollment | None", cached)
         session_id = card.exam.academic_session_id
         prefetched = getattr(card.student, ADMIT_CARD_ENROLLMENTS, None)
         if prefetched is None:
@@ -505,7 +505,7 @@ class AdmitCardSerializer(serializers.ModelSerializer):
             enrollment = next(
                 (row for row in prefetched if row.academic_session_id == session_id), None
             )
-        card._exam_enrollment = enrollment
+        card.__dict__["_exam_enrollment"] = enrollment
         return enrollment
 
     def get_section_id(self, card: AdmitCard) -> uuid.UUID | None:
