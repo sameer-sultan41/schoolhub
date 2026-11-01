@@ -39,27 +39,43 @@ def evict_on_role_permission_change(instance: RolePermission, **kwargs: Any) -> 
     evict_rbac_caches(_holders([instance.role_id]))
 
 
+# One eviction per operation: after an add or a remove, and before a clear, while the
+# cleared links can still be read.
+_EVICTING_M2M_ACTIONS = frozenset({"post_add", "post_remove", "pre_clear"})
+
+
 @receiver(m2m_changed, sender=Role.permissions.through)
 def evict_on_role_permissions_m2m(
     instance: Role | Permission,
+    action: str,
     reverse: bool,
     pk_set: set[uuid.UUID] | None,
     **kwargs: Any,
 ) -> None:
-    if not reverse:
-        role_ids: Iterable[uuid.UUID] = [instance.pk]
-    elif pk_set:
-        role_ids = pk_set  # permission.roles.add/remove(...): pk_set holds the roles
+    if action not in _EVICTING_M2M_ACTIONS:
+        return
+    role_ids: Iterable[uuid.UUID]
+    if action == "pre_clear":
+        if reverse:  # permission.roles.clear(): every role linked to the permission
+            role_ids = Role.objects.filter(permissions=instance).values_list("pk", flat=True)
+        else:
+            role_ids = [instance.pk]
+    elif not pk_set:
+        # Adding links that already exist, or removing ones that do not: nothing changed.
+        return
+    elif reverse:  # permission.roles.add/remove(...): pk_set holds the roles
+        role_ids = pk_set
     else:
-        # permission.roles.clear(): at pre_clear the roles are still linked.
-        role_ids = Role.objects.filter(permissions=instance).values_list("pk", flat=True)
+        role_ids = [instance.pk]
     evict_rbac_caches(_holders(role_ids))
 
 
 @receiver(post_save, sender=Role)
-def evict_on_role_save(instance: Role, **kwargs: Any) -> None:
+def evict_on_role_save(instance: Role, created: bool, **kwargs: Any) -> None:
     # A soft delete is a save (`deleted_at` set): every holder loses the role's keys,
-    # scopes and restricted-principal status at once.
+    # scopes and restricted-principal status at once. A new role has no holders yet.
+    if created:
+        return
     evict_rbac_caches(_holders([instance.pk]))
 
 

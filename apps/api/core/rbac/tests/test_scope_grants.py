@@ -23,6 +23,7 @@ from core.rbac.permissions import (
     is_restricted_principal,
     scope_grants,
     scopes_for,
+    user_scopes,
 )
 from core.rbac.seeding import ensure_role_with_permissions
 
@@ -108,12 +109,15 @@ class ScopeGrantsTests(TestCase):
         self.assertIn(OTHER, effective_permission_keys(self.user))
         self.assertEqual(scopes_for(self.user, OTHER), {RecordScope.ALL: [None]})
         self.assertTrue(is_restricted_principal(self.user))
+        self.assertIn(RecordScope.ALL, user_scopes(self.user))
 
         self.soft_delete(guardian)
 
         self.assertEqual(effective_permission_keys(self.user), frozenset({SEND}))
         self.assertEqual(scopes_for(self.user, OTHER), {})
         self.assertFalse(is_restricted_principal(self.user))
+        # `scope_queryset` still reads the key-blind `user_scopes` until its callers move.
+        self.assertEqual(user_scopes(self.user), {RecordScope.CAMPUS: [self.campus_a]})
         self.assertEqual(scopes_for(self.user, SEND), {RecordScope.CAMPUS: [self.campus_a]})
 
     def test_role_permission_change_evicts_scope_grants(self) -> None:
@@ -132,6 +136,37 @@ class ScopeGrantsTests(TestCase):
 
         RolePermission.objects.get(role=role, permission__key=SEND).delete()  # post_delete
         self.assertEqual(scope_grants(self.user), {OTHER: {RecordScope.CAMPUS: (self.campus_a,)}})
+
+    def test_reverse_permission_roles_change_evicts_scope_grants(self) -> None:
+        role = grant(self.user, SEND, scope=RecordScope.CAMPUS, scope_ref=self.campus_a)
+        other = permission(OTHER)
+        # Warm the cache.
+        self.assertEqual(scope_grants(self.user), {SEND: {RecordScope.CAMPUS: (self.campus_a,)}})
+
+        other.roles.add(role)  # reverse m2m_changed: instance is the permission
+        self.assertEqual(
+            scope_grants(self.user),
+            {
+                SEND: {RecordScope.CAMPUS: (self.campus_a,)},
+                OTHER: {RecordScope.CAMPUS: (self.campus_a,)},
+            },
+        )
+
+        other.roles.clear()
+        self.assertEqual(scope_grants(self.user), {SEND: {RecordScope.CAMPUS: (self.campus_a,)}})
+
+    def test_a_no_op_reverse_add_evicts_nobody(self) -> None:
+        role = grant(self.user, SEND)
+        bystander = UserFactory(tenant=self.tenant)
+        UserRole.objects.create(user=bystander, role=role, tenant=self.tenant)
+        scope_grants(bystander)  # warm
+        cache_key = f"scope-grants:{bystander.pk}"
+        self.assertIsNotNone(cache.get(cache_key))
+
+        # The link exists already, so Django sends post_add with an empty pk_set.
+        permission(SEND).roles.add(role)
+
+        self.assertIsNotNone(cache.get(cache_key))
 
     def test_seeding_a_role_evicts_its_holders(self) -> None:
         # `bulk_create` sends no post_save, so the seed helper must evict by itself.
