@@ -322,7 +322,10 @@ with its reasoning. Read the entry for the area you are about to touch before re
    as `scope_permission`. **PR B** (`fix/record-scope-type-union`, stacked on PR A) is built: one
    key held at several scope types reads the union of what each type reaches (ADR-0031 decision
    7), which closed attendance's two mixed-scope entries in [`deferred-work.md`](deferred-work.md);
-   a single-type user's SQL is unchanged. The follow-ups PR A left are that file's first entry.
+   a single-type user's SQL is unchanged. It also holds promotion batch actions and batch
+   creation to record scope: every student a batch covers must be in the actor's scope for the
+   action's key (a 404 when the batch is unreadable, a 422 when it is only partly in scope).
+   The follow-ups PR A left are that file's first entry.
 12. **`student-management`'s dashboard Phases 1-4 have shipped.** Phase 1
    (`docs/superpowers/plans/2026-09-30-students-dashboard-phase-1.md`): `/students`
    replaces the "Coming soon" placeholder with a directory, create/edit, profile

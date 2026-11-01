@@ -125,7 +125,7 @@ Batch states: `draft → pending_approval → approved → executed` (plus `reve
 - `class_subjects` unique per (session, class, subject) — per campus where overrides are enabled; subjects/classes must be active tenant records.
 - Weekly period targets ≥ 1; elective groups require ≥ 2 options; term plans must reference terms of the same session.
 - Teacher allocation: teacher must be active teaching staff; duplicate (session, section, subject, teacher) rejected; load warnings at tenant-configured norm, hard cap optional; allocation to a section requires the subject to exist in that class's curriculum.
-- Promotion: batch only for the active session with published final results (cross-check with examinations); one decision per enrolled student per batch; target class must be the next `level`, and a decision or target class that differs from the proposal recorded at batch creation needs an override reason, checked when the batch is submitted (a skipped level, a cleared target and a flip between graduated and promoted all count; `retained` and `promoted_on_trial` always do — see the implementation notes in §16); execution only from `approved`; approver ≠ preparer; re-execution attempts are no-ops (idempotent).
+- Promotion: batch only for the active session with published final results (cross-check with examinations); one decision per enrolled student per batch; target class must be the next `level`, and a decision or target class that differs from the proposal recorded at batch creation needs an override reason, checked when the batch is submitted (a skipped level, a cleared target and a flip between graduated and promoted all count; `retained` and `promoted_on_trial` always do — see the implementation notes in §16); execution only from `approved`; approver ≠ preparer; re-execution attempts are no-ops (idempotent); every student a batch covers must be within the actor's record scope for the action's key (and readable under `academics.promotion.view`), and creating a batch needs the same of the class's actively enrolled students in the source session (see the implementation notes in §16).
 - Session lock: curriculum and allocations in closed sessions are read-only.
 
 ## 12. Notifications
@@ -271,6 +271,21 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 >   `:approve`, `:reject` and `:revert` ignore it, so a transition retried after a lost response
 >   runs against the state machine again and answers `409`, and the dashboard reloads the batch
 >   to show its real status instead of treating that as a failure.
+> - **A batch action needs every student in the batch in the actor's scope.** A batch
+>   belongs to a class, and classes have no campus, so one batch can hold students from
+>   several campuses. `:submit`, `:approve`, `:reject`, `:revert` and `:execute` used to call
+>   their services with the batch id alone, so a campus-A holder of the key could act on a
+>   campus-B batch. Each now runs `services.assert_batch_in_scope` first: every row must be
+>   readable under `academics.promotion.view` and reachable under the route's own key, the
+>   two chained scopes the viewset mixin applies to a detail write
+>   ([ADR-0031](../decisions/0031-record-scope-per-role-assignment.md) decision 3), over
+>   `PROMOTION_SCOPE` (`student__campus_id`). A batch with no readable row is a `404`, like an
+>   unknown id; a batch readable but not wholly in scope is a `422`. One out-of-scope student
+>   fails the action, so a mixed-campus batch needs an actor whose scope covers every campus
+>   in it. `POST /student-promotions` runs the same check over the class's actively enrolled
+>   students in the source session, always as a `422`, since the class itself is readable on
+>   every campus. `:execute` is checked at request time, so no job is queued for a refused
+>   batch. Approver notifications still ignore scope (`deferred-work.md`).
 > - **Two §12 notifications are deferred**, and say so in
 >   `apps/academics/notifications.py`: `promotion-input-request` needs a
 >   task/inbox surface for class teachers, and `coverage-gap` is a scheduled T-7
@@ -281,7 +296,7 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - `GET/POST /api/v1/teacher-subject-allocations` · `PATCH/DELETE /api/v1/teacher-subject-allocations/{id}` — filters: `academic_session_id`, `class_id`, `campus_id`, `section_id`, `subject_id`, `staff_id`, `current` (`true`: no end date, `false`: ended, absent: both); `search` over the teacher's first and last name, the subject's name and the section's name. POST and PATCH answer `{data, meta: {warnings}}` (the over-norm warning rides in `meta`, never a `422`); a PATCH that changes the teacher of a current primary answers the **new** row, whose `id` differs from the one patched (§20). `effective_to` is the UTC date: the server runs on UTC, so the dashboard sends the UTC date. The rules behind PATCH, End and Reinstate are in §20.
 - `GET /api/v1/teacher-subject-allocations/load-summary` — per-teacher aggregates; `academic_session_id` is required and returns typed rows `{staff_id, name, weekly_periods, allocations, norm, over_norm}`.
 - `GET/POST /api/v1/student-promotions` (batches) · `GET /api/v1/student-promotions/{id}` (batch with per-student decisions, unpaginated) · `PATCH /api/v1/student-promotions/{id}/decisions/{student_id}` — the list is page-number paginated, newest batch first, with filters `status`, `decision`, `batch_id`, `student_id`, `from_academic_session_id`, `to_academic_session_id` and `from_class_id` and ordering by `status`, `students` or `started_at`. `GET …/{id}` ignores them: a batch is returned whole, or is a `404`. Typed responses: `PromotionBatch` (a list row), `PromotionBatchDetail`, `PromotionBatchCreated` (`201`) and the decision row's `PromotionDecision`, with the name fields and the `PromotionStatusEnum` status described in the implementation notes above.
-- `POST /api/v1/student-promotions/{id}:submit` · `:approve` · `:reject` · `:revert` (colon-actions answering `PromotionTransitionResult` `{updated}`; they ignore `Idempotency-Key`, so a retry is a `409`) · `:execute` (`202` + job; the one that honours `Idempotency-Key`). `:submit`, `:approve` and `:execute` answer `422` when the target session is closed or archived (`:reject` and `:revert` only release or undo rows, so they do not); the job reports a student whose source enrollment ended after approval as failed, by name, and does not enrol them onward. A failure of the whole batch puts only an API error's own message in the job's `error`; anything else is logged and shows a generic line.
+- `POST /api/v1/student-promotions/{id}:submit` · `:approve` · `:reject` · `:revert` (colon-actions answering `PromotionTransitionResult` `{updated}`; they ignore `Idempotency-Key`, so a retry is a `409`) · `:execute` (`202` + job; the one that honours `Idempotency-Key`). `:submit`, `:approve` and `:execute` answer `422` when the target session is closed or archived (`:reject` and `:revert` only release or undo rows, so they do not); the job reports a student whose source enrollment ended after approval as failed, by name, and does not enrol them onward. A failure of the whole batch puts only an API error's own message in the job's `error`; anything else is logged and shows a generic line. Every one of these, and `POST /student-promotions`, needs every student the batch covers in the caller's scope for the route's key: a batch the caller cannot read is a `404`, one they can read but not wholly reach a `422` (§11).
 - `POST /api/v1/curriculum-imports` → `202` + job.
 
 ## 17. Integration Requirements

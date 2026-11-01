@@ -17,17 +17,10 @@ either this file or `project-status.md`.
     (`apps/academics/promotions/services.py`) notifies every holder of
     `academics.promotion.approve`, whatever that key's scope. A campus-A approver is told about a
     batch of campus-B students they cannot open (promotion rows are scoped by
-    `student__campus_id`). Narrowing it means checking each holder's scope for that key
-    (`scopes_for`) against the batch's students' campuses before sending.
-  - **High priority, for PR B: promotion batch actions apply no record scope.**
-    `PromotionBatchViewSet`'s `:approve`, `:reject` and `:execute`
-    (`apps/academics/promotions/viewset.py`) pass the batch id straight to the service, which
-    finds the batch by id within the tenant. They never go through `get_queryset`, so the
-    mixin's read-key and action-key scoping (ADR-0031 decision 3) does not reach them, and a
-    campus-A approver can approve, reject or execute a campus-B batch. This predates PR A.
-    The fix is to resolve the batch through the scoped queryset (`get_object`-style, over the
-    batch's `student__campus_id` rows) or to check the action key with `holds_key_for`
-    against the batch's campus before calling the service, so a batch out of scope is a 404.
+    `student__campus_id`). The batch actions themselves now refuse such an approver
+    (`assert_batch_in_scope`, PR B), so the notification asks for something they cannot do.
+    Narrowing it means checking each holder's scope for that key (`scopes_for`) against the
+    batch's students' campuses before sending.
   - **Marks entry skips the allocation check on any `campus` scope.** `assert_marker_may_enter`
     (`apps/examinations/services.py`) returns early on `RecordScope.CAMPUS in scopes` for
     `MARKS_CREATE`, without checking which campus the exam subject's students are on. A marker
