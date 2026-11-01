@@ -39,18 +39,29 @@ describe("NewThreadDialog", () => {
     fetchStudentsPage.mockResolvedValue(cursorPage([studentRecord()]));
   });
 
-  it("searches students and colleagues only once their picker opens", async () => {
+  it("searches students only once their picker opens", async () => {
     const { user } = renderDialog();
     expect(await screen.findByRole("button", { name: "Choose a student" })).toBeInTheDocument();
     expect(fetchStudentsPage).not.toHaveBeenCalled();
-    expect(searchRecipients).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("button", { name: "Choose a student" }));
 
     await waitFor(() => {
       expect(fetchStudentsPage).toHaveBeenCalledWith({ page: 1, pageSize: 10, search: "" });
     });
+  });
+
+  it("searches colleagues only once their picker opens", async () => {
+    const { user } = renderDialog();
+    await pick(user, "Conversation type", GROUP);
+    expect(await screen.findByRole("button", { name: "Add recipients" })).toBeInTheDocument();
     expect(searchRecipients).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Add recipients" }));
+
+    await waitFor(() => {
+      expect(searchRecipients).toHaveBeenCalledWith("");
+    });
   });
 
   it("group thread requires two participants", async () => {
