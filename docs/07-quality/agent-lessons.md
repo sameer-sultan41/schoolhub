@@ -187,6 +187,11 @@
 - **Mistake.** `seed_e2e_examinations --tenant <slug>` would rewrite *any* tenant's default grading scale; nothing restricted it to the e2e tenants `seed_e2e_data` creates (PR A final review).
 - **Check.** A command that seeds e2e data checks `--tenant` against `E2E_TENANT_SLUG`/`E2E_OTHER_TENANT_SLUG` (`core/rbac/management/commands/seed_e2e_data.py`) before touching the database, raises `CommandError` otherwise, and has a test that a non-e2e tenant is refused and left untouched.
 
+### L31. An e2e file imports only types from `@schoolhub/types`
+
+- **Mistake.** `e2e/tests/live/api/exams-setup.spec.ts` imported the function `isOffsetPagination` from `@schoolhub/types`. Playwright loads that package as CommonJS, so the named import threw at load, every live spec went with it, and `e2e-live` reported zero tests (PR #147). The mocked lane never loads that spec, so the PR's CI stayed green.
+- **Check.** In `e2e/`, import from `@schoolhub/types` with `import type` only; check a runtime value inline (e.g. `toHaveProperty("total_pages")`). Dispatch `e2e-live` on the branch before calling a PR that touches `e2e/tests/live/` done.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.

@@ -1,5 +1,4 @@
 import { ApiError, type ApiClient } from "@schoolhub/api-client";
-import { isOffsetPagination } from "@schoolhub/types";
 import { expect, test } from "@/fixtures";
 import {
   allocateTeacher,
@@ -105,7 +104,8 @@ test.describe("examinations setup (live API)", () => {
     const listed = await examStaff.get<Exam[]>("/exams", { query: { search: examName } });
     expect(listed.data.map((row) => row.id)).toEqual([examId]);
     const pagination = listed.meta?.pagination;
-    expect(pagination && isOffsetPagination(pagination)).toBe(true);
+    // Page-number meta: only a counted page carries `total_pages`.
+    expect(pagination).toHaveProperty("total_pages");
     expect(pagination).toMatchObject({ page: 1, total_count: 1 });
 
     const subjects = await examStaff.get<ExamSubject[]>("/exam-subjects", {
@@ -151,7 +151,8 @@ test.describe("examinations setup (live API)", () => {
     const scale = scales.data.find((row) => row.name === E2E_GRADING_SCALE_NAME);
     expect(scale).toMatchObject({ is_default: true });
     const pagination = scales.meta?.pagination;
-    expect(pagination && isOffsetPagination(pagination)).toBe(true);
+    // Page-number meta: only a counted page carries `total_pages`.
+    expect(pagination).toHaveProperty("total_pages");
     if (!scale) throw new Error("expected the seeded default scale");
 
     const bands = await teacher.get<GradeBand[]>(`/grading-scales/${scale.id}/grade-bands`);
