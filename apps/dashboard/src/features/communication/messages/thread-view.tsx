@@ -45,18 +45,27 @@ export function ThreadView({ source, threadId, readOnly }: ThreadViewProps) {
     queryFn: () => source.fetchThread(threadId),
   });
 
-  const { mutate: markRead } = useMutation({
+  const { mutate: markRead, isPending: isMarkingRead } = useMutation({
     mutationFn: () => Services.messageThreads.markRead(threadId),
     onSuccess: invalidate,
   });
   // Once per opened thread, and only when it has something unread (Ruling 11 keeps the key gate).
+  // A failed call releases the thread, to be tried again on its next load, not in a loop.
   const markedRef = useRef<string | null>(null);
+  const failedLoadRef = useRef<number | null>(null);
+  const loadedAt = thread.dataUpdatedAt;
   const canMarkRead = canPost && (thread.data?.unread_count ?? 0) > 0;
   useEffect(() => {
-    if (!canMarkRead || markedRef.current === threadId) return;
+    if (!canMarkRead || isMarkingRead || markedRef.current === threadId) return;
+    if (failedLoadRef.current === loadedAt) return;
     markedRef.current = threadId;
-    markRead();
-  }, [canMarkRead, threadId, markRead]);
+    markRead(undefined, {
+      onError: () => {
+        markedRef.current = null;
+        failedLoadRef.current = loadedAt;
+      },
+    });
+  }, [canMarkRead, isMarkingRead, threadId, loadedAt, markRead]);
 
   const transition = useMutation({
     mutationFn: (action: "close" | "reopen") =>

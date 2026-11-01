@@ -224,6 +224,11 @@
 - **Mistake.** The broadcast preview listed channels by their API ids (`in_app`, `sms`), which reached the screen as written (fixed in `a7e49cb5`).
 - **Check.** Every enum a user can see (channel, status, type, role) goes through an i18n label map in both locale files, with a fallback for a value the map lacks, and a spec asserts the label, not the id.
 
+### L33. A "do it once" guard must be released when the call fails
+
+- **Mistake.** PR #146's `thread-view.tsx` set its `markedRef` before `:mark-read` resolved and nothing reset it, so a failed mark-read was never tried again while the thread stayed open.
+- **Check.** A ref or flag that stops an async call repeating is released in `onError`, the retry has a trigger (the data's next load, not the error itself, which would loop), and the mutation's `isPending` blocks a second call in flight. Test it: the first call rejects, the data refetches, the call runs exactly once more.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.

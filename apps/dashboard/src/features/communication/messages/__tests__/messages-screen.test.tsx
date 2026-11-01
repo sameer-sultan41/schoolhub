@@ -1,9 +1,10 @@
 import { ApiError } from "@schoolhub/api-client";
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 
 import type * as HelpersModule from "@/lib/helpers";
 import { downloadFile } from "@/lib/helpers";
 import { queryKeys } from "@/lib/query-client";
+import { MESSAGE_THREADS_QUERY_MODULE } from "@/services/modules/message-threads/message-threads-constant";
 import { THREAD_OVERSIGHT_QUERY_MODULE } from "@/services/modules/thread-oversight/thread-oversight-constant";
 import {
   cursorPage,
@@ -82,6 +83,40 @@ describe("MessagesScreen", () => {
     });
     // ...and the refetch does not mark it read a second time.
     expect(markRead).toHaveBeenCalledTimes(1);
+  });
+
+  it("marks a thread read again on its next load after a failed call, once", async () => {
+    stubInbox([VIEW, CREATE_MESSAGE]);
+    fetchThread.mockResolvedValue(threadRecord({ unread_count: 2 }));
+    markRead.mockRejectedValueOnce(
+      new ApiError({
+        code: "network_error",
+        message: "Timed out.",
+        status: 0,
+        url: "/message-threads",
+      }),
+    );
+    const { queryClient } = await renderMessages();
+
+    expect(await screen.findByRole("heading", { name: "Fee query" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(markRead).toHaveBeenCalledTimes(1);
+    });
+    await messagesList();
+    // The failure alone does not loop: it waits for the thread's next load.
+    expect(markRead).toHaveBeenCalledTimes(1);
+
+    await act(() =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.module(MESSAGE_THREADS_QUERY_MODULE) }),
+    );
+    await waitFor(() => {
+      expect(markRead).toHaveBeenCalledTimes(2);
+    });
+    // The retry succeeded, and its own refetch does not mark the thread read a third time.
+    await waitFor(() => {
+      expect(fetchThread).toHaveBeenCalledTimes(3);
+    });
+    expect(markRead).toHaveBeenCalledTimes(2);
   });
 
   it("does not mark a thread with nothing unread as read", async () => {
