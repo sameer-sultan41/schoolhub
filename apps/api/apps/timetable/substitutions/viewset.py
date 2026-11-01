@@ -34,6 +34,9 @@ from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
 from core.rbac.permissions import AnyOf, has_permission_key, route_permission, scope_queryset
 
+# `StaffViewSet`'s read key: what `candidates` may offer is scoped by it.
+STAFF_VIEW = "staff.staff.view"
+
 
 class TeacherSubstitutionViewSet(
     TenantScopedViewSetMixin,
@@ -220,21 +223,20 @@ class TeacherSubstitutionViewSet(
     def candidates(self, request: Request) -> Response:
         query = SubstituteCandidatesQuerySerializer(data=request.query_params)
         query.is_valid(raise_exception=True)
-        # Under the caller's campus scope: another campus's slot is a 404, never a list
-        # of its staff. Scoped by the staff view key (the answer is a list of staff),
-        # then by this action's own key, so neither key's roles widen the other.
-        slots = TimetableSlot.objects.alive().select_related(
-            "section", "period", "academic_session", "staff"
-        )
-        for permission in ("staff.staff.view", route_permission(request, self)):
-            slots = scope_queryset(
-                slots,
+        # Under the scope of this action's own key: another campus's slot is a 404,
+        # never a list of its staff.
+        slot = get_object_or_404(
+            scope_queryset(
+                TimetableSlot.objects.alive().select_related(
+                    "section", "period", "academic_session", "staff"
+                ),
                 request.user,
-                permission=permission,
+                permission=route_permission(request, self),
                 own_field="staff__user_id",
                 campus_field="section__campus_id",
-            )
-        slot = get_object_or_404(slots, pk=query.validated_data["timetable_slot_id"])
+            ),
+            pk=query.validated_data["timetable_slot_id"],
+        )
         on_date = query.validated_data["date"]
         if slot.status != SlotStatus.PUBLISHED or slot.effective_to is not None:
             raise DomainRuleViolation(
@@ -252,7 +254,13 @@ class TeacherSubstitutionViewSet(
             raise DomainRuleViolation({"date": "This date is outside the academic session."})
 
         free = services.free_substitutes(slot=slot, on_date=on_date, absent_staff=slot.staff)
-        rows = free.order_by("last_name", "first_name")
+        # The answer is a list of staff, so it is scoped as `GET /staff` scopes one
+        # (`StaffViewSet`'s key and fields): the caller is offered only staff they may
+        # read, and the substitution key's roles do not widen that.
+        readable = scope_queryset(
+            free, request.user, permission=STAFF_VIEW, own_field="user_id", campus_field="campus_id"
+        )
+        rows = readable.order_by("last_name", "first_name")
         return ActionResponse.ok(SubstituteCandidateSerializer(rows, many=True).data)
 
     def _decide(self, request: Request, pk, *, approve: bool, message: str) -> Response:
