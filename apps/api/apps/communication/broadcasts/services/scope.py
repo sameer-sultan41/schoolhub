@@ -2,10 +2,11 @@
 
 `BroadcastViewSet` has no table to narrow, so `scope_queryset` never runs for it.
 Without this check a campus-scoped holder of `communication.broadcast.send`
-could broadcast to the whole school or to another campus. The scope is read the
-way `scope_queryset` reads it: `all` is unrestricted; otherwise only the
-campuses of the sender's `campus`-scoped roles are reachable. An `own` or
-`assigned` scope has no campus, so it reaches nothing and fails closed with a 404.
+could broadcast to the whole school or to another campus. Only the roles that
+grant `broadcast.send` count (`user_scopes_for_key`): `all` is unrestricted;
+otherwise only the campuses of those roles' `campus` scopes are reachable. An
+`own` or `assigned` scope has no campus, so it reaches nothing and fails closed
+with a 404.
 """
 
 from __future__ import annotations
@@ -16,9 +17,10 @@ from rest_framework.exceptions import NotFound
 
 from apps.communication.audience import resolve_audience
 from apps.communication.models import AudienceType
+from apps.communication.permissions import BROADCAST_SEND
 from core.api.exceptions import DomainRuleViolation
 from core.rbac.models import RecordScope
-from core.rbac.permissions import user_scopes
+from core.rbac.permissions import user_scopes_for_key
 
 CAMPUS_REQUIRED_MESSAGE = (
     "Your access is limited to particular campuses: choose one of them as campus_id."
@@ -26,8 +28,13 @@ CAMPUS_REQUIRED_MESSAGE = (
 
 
 def sender_campus_ids(user) -> frozenset[uuid.UUID] | None:
-    """`None` when the sender is unrestricted, else the campuses they may broadcast to."""
-    scopes = user_scopes(user)
+    """`None` when the sender is unrestricted, else the campuses they may broadcast to.
+
+    Read from the roles that grant `communication.broadcast.send` only: a scope
+    belongs to its role (auth-and-rbac.md §2.3), so an `all`-scoped role for some
+    other module must not widen a campus-scoped right to broadcast.
+    """
+    scopes = user_scopes_for_key(user, BROADCAST_SEND)
     if RecordScope.ALL in scopes:
         return None
     return frozenset(uuid.UUID(str(ref)) for ref in scopes.get(RecordScope.CAMPUS, []) if ref)

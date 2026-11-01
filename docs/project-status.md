@@ -311,6 +311,12 @@ with its reasoning. Read the entry for the area you are about to touch before re
    as parent-portal's task), notice acknowledgment-progress reporting deferred
    (tracked per-recipient on `Notification.acknowledged_at`, but no aggregate
    endpoint yet).
+   **Next RBAC change (high priority, unowned until picked up):** scope reads take the union of
+   every role's record scope, so a campus-scoped role plus any `all`-scoped role reads
+   tenant-wide. PR C fixed only the broadcast check (`user_scopes_for_key`). The next step is one
+   work-tier-2 plan for `scope_queryset` and every direct `user_scopes` caller, designed together
+   with attendance's mixed-scope union entry; both are in [`deferred-work.md`](deferred-work.md)'s
+   first entry.
 12. **`student-management`'s dashboard Phases 1-4 have shipped.** Phase 1
    (`docs/superpowers/plans/2026-09-30-students-dashboard-phase-1.md`): `/students`
    replaces the "Coming soon" placeholder with a directory, create/edit, profile

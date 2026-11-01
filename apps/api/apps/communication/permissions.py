@@ -56,6 +56,9 @@ NOTICE_ACKNOWLEDGERS = ("guardian", "student", "school_admin", "principal", "tea
 # the only mitigation — enforced wherever PR C's broadcast/ package ends up
 # sending it, following this module's per-resource-package convention.
 BROADCAST_SENDERS = ("school_owner", "principal", "school_admin")
+# Declared once: the viewset requires it, and the campus check reads the scopes of
+# the roles that grant it (broadcasts/services/scope.py).
+BROADCAST_SEND = "communication.broadcast.send"
 
 # §4 — "communication.thread.create / communication.message.create … all
 # tenant roles (guardian/student scope own)". Every role gets the key; a
@@ -138,7 +141,7 @@ registry.register(
 )
 
 registry.register(
-    "communication.broadcast.send",
+    BROADCAST_SEND,
     "Send an emergency multi-channel broadcast, bypassing preferences and quiet hours.",
     BROADCAST_SENDERS,
 )

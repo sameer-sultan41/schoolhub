@@ -10,6 +10,38 @@ either this file or `project-status.md`.
 
 ## Deliberately NOT done
 
+- **High priority: `scope_queryset` unions record scopes across all of a user's roles.** Per
+  [auth-and-rbac §2.3](02-architecture/auth-and-rbac.md) a scope belongs to its `user_role`, so
+  a campus-scoped role plus any `all`-scoped role reads tenant-wide on every scoped endpoint
+  (`core.rbac.permissions.user_scopes` feeds `scope_queryset` the union). The broadcast campus
+  check was fixed on its own in communication PR C: `user_scopes_for_key` (added for
+  broadcasts) returns the scopes of only the roles that grant one key, and is the building
+  block. Adopting it platform-wide needs each viewset's required key passed into
+  `scope_queryset`, which changes every module's reads, so it is its own work-tier-2 change.
+  - **Every direct `user_scopes` caller has the same union** and moves with it:
+    `apps/attendance/register.py:79,211` (marking), `apps/attendance/services.py:1390`
+    (reviewer scope), `apps/attendance/views.py:445`, `apps/examinations/services.py:699`
+    (marks entry), `apps/fees_finance/services.py:1757`,
+    `apps/student_management/serializers.py:168` (medical notes) and
+    `apps/timetable/periods/viewset.py:103`.
+  - **Design it together with attendance's mixed-scope entries** below ("Marking takes the
+    union of a mixed user's scopes; Records does not" and the campus-staff guardian's leave).
+    Those ask the read path for *more* union, across scope types; this asks for less, across
+    roles. Both change `scope_queryset`, so one plan has to settle them together.
+  - **Not the recipient side.** `audience._resolve_staff` puts a staff member in a
+    campus-narrowed `staff` audience when they hold any `all`-scoped role, whatever that role
+    grants. That answers "who works at this campus", not "what may this user read", and
+    ADR-0029 decision 5 records it as the audience definition, so this item leaves it alone.
+  - Owner and next step: [`project-status.md`](project-status.md), item 11.
+
+- **Soft-deleting a `Role` must drop its keys, scopes and restricted status together.** A
+  removed `user_roles` row already counts for nothing, but a soft-deleted *role* still does:
+  `effective_permission_keys`, `user_scopes`, `user_scopes_for_key` and
+  `live_restricted_role_assignments` (`core/rbac/permissions.py`) all filter only
+  `user_roles.deleted_at`. Add `role__deleted_at__isnull=True` to all four in one change: adding
+  it to the restricted check alone would leave a deleted guardian role's keys granted while its
+  holder counted as staff.
+
 - **`tenant`/`files`/`jobs`/`school-organization`/`dashboard` still have only the
   original three service-module files** (`<domain>-service.ts`/`index.ts`, no
   `-type`/`-constant`/`-helper`/`.schema`), not yet retrofitted to the five-file shape
@@ -968,16 +1000,21 @@ either this file or `project-status.md`.
   - **Replies and `:mark-read` are not audited.** A message is itself an immutable, attributed
     record, and a receipt is the caller's own state; thread create, close and reopen, oversight
     reads and broadcasts are audited.
+  - **`audience._resolve_staff` includes a user who holds both a staff role and a guardian
+    role.** That is deliberate: a teacher who is also a parent still gets staff broadcasts and
+    announcements. It differs from `thread_staff_users`, which leaves out anyone holding a live
+    restricted role, because a thread's staff side sees internal notes about other families.
+  - **A staff-only "last activity" ordering for threads.** An internal note leaves
+    `last_message_at` alone, because a bumped timestamp on a guardian's thread with no message
+    the guardian can see would leak that a note exists. So a note does not move a thread up a
+    staff inbox either; the staff `unread_count` still counts it. A separate staff-visible
+    activity column (bumped by every message, notes included, and never serialized to a
+    guardian or student) would let notes surface in staff inboxes without the leak.
   - **An `Idempotency-Key` longer than 64 characters is a 500.** `BackgroundJob.idempotency_key`
     is `max_length=64` and nothing checks the header's length first; shared with
     `fee-invoices:generate`. Reusing a key after its 24-hour replay window is a generic 409 from
     the job's unique index rather than a replay. A length check in `core.idempotency` closes the
     first for every endpoint.
-  - **`thread_staff_users` excludes anyone who ever held a restricted role**, soft-deleted
-    `UserRole` rows included, because it reads the same rows `is_restricted_principal` does (no
-    `deleted_at` filter). The two cannot disagree, which is the point, but a staff member whose
-    guardian role was removed (soft-deleted) still cannot be routed a thread or picked as a
-    recipient until the row is purged. Fixing it means changing `is_restricted_principal` too.
 
 - **Communication PR D built only the threads, oversight and broadcast screens**
   (`docs/03-modules/communication.md` §20, "Built (PR D)"). The API for the rest of the module

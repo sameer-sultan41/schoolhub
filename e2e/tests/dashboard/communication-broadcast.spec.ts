@@ -78,7 +78,7 @@ test.describe("the emergency broadcast, as a sender", () => {
     await broadcastPage.message.fill(MESSAGE);
     await broadcastPage.next.click();
 
-    // The preview names who is reached, with channel names rather than ids (L31).
+    // The preview names who is reached, with channel names rather than ids (L32).
     await expect(broadcastPage.recipients("42 recipients")).toBeVisible();
     await expect(page.getByText("In-app", { exact: true })).toBeVisible();
     await expect(page.getByText("SMS: not delivered, no provider")).toBeVisible();

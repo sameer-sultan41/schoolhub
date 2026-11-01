@@ -21,10 +21,10 @@ from apps.communication.broadcasts.services.dispatch import dispatch_emergency_b
 from apps.communication.broadcasts.services.preview import preview_broadcast
 from apps.communication.broadcasts.services.scope import assert_sender_may_target
 from apps.communication.permission_classes import FEATURE, STAFF_PERMISSIONS
+from apps.communication.permissions import BROADCAST_SEND
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.idempotency.services import replay_or_execute
 
-BROADCAST_PERMISSION = "communication.broadcast.send"
 EMERGENCY_IDEMPOTENCY_ENDPOINT = "broadcasts:emergency"
 
 
@@ -42,7 +42,7 @@ class BroadcastViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
     scope_campus_field = None
     required_feature = FEATURE
     # Previewing reads who would be reached — still only for those who may send.
-    required_permission = BROADCAST_PERMISSION
+    required_permission = BROADCAST_SEND
     # Its only routes are POST colon actions; DRF answers 405 to anything else.
     http_method_names = ["post", "head", "options"]
 
