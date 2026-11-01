@@ -61,6 +61,7 @@ APPROVE = "attendance.correction.approve"
 # requester holds it as every real requester role does.
 VIEW = "attendance.student-attendance.view"
 LEAVE_VIEW = "attendance.leave-request.view"
+LEAVE_CREATE = "attendance.leave-request.create"
 LEAVE_APPROVE = "attendance.leave-request.approve"
 # A date past any lock window, so a row is locked by its date as well as its column.
 LOCKED_DATE = MARKING_DATE - datetime.timedelta(days=30)
@@ -494,9 +495,8 @@ class LeaveReviewRecordTests(ApprovalsTestCase):
         self.assertNotIn(submitter.email, response.content.decode())
         self.assertNotIn(approver.email, response.content.decode())
 
-    def test_a_campus_staff_member_submits_for_their_child_on_another_campus(self) -> None:
-        """Was a 500: the create re-read went through their campus scope, which the
-        child's campus is outside, though the guardian link admitted the request."""
+    def campus_staff_parent_of_a_campus_b_child(self):
+        """A user holding the leave keys on campus A, linked as guardian of a campus-B child."""
         parent = UserFactory(tenant=self.tenant)
         child = self.campus_b_locked_row().student
         with tenant_context(self.tenant.id):
@@ -504,17 +504,14 @@ class LeaveReviewRecordTests(ApprovalsTestCase):
             StudentGuardianFactory(
                 tenant=self.tenant, student=child, guardian=guardian, has_portal_access=True
             )
-            child_section = child.enrollments.get().section
         self.sign_in(
-            parent,
-            "attendance.leave-request.create",
-            LEAVE_VIEW,
-            scope=RecordScope.CAMPUS,
-            scope_ref=self.campus.pk,
+            parent, LEAVE_CREATE, LEAVE_VIEW, scope=RecordScope.CAMPUS, scope_ref=self.campus.pk
         )
-        start = next_monday()
+        return parent, child
 
-        response = self.client.post(
+    def submit_for(self, child):
+        start = next_monday()
+        return self.client.post(
             LEAVE_REQUESTS,
             {
                 "student_id": str(child.pk),
@@ -526,8 +523,35 @@ class LeaveReviewRecordTests(ApprovalsTestCase):
             format="json",
         )
 
+    def test_a_campus_staff_member_submits_for_their_child_on_another_campus(self) -> None:
+        """Was a 500: the create re-read went through their campus scope, which the
+        child's campus is outside, though the guardian link admitted the request."""
+        _, child = self.campus_staff_parent_of_a_campus_b_child()
+        with tenant_context(self.tenant.id):
+            child_section = child.enrollments.get().section
+
+        response = self.submit_for(child)
+
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.json())
         self.assertEqual(response.json()["data"]["section_name"], child_section.name)
+
+    def test_campus_staff_guardian_reads_leave_for_child_on_another_campus(self) -> None:
+        """With the `own`-scoped guardian role as well, the list, the retrieve and
+        `:cancel` reach the request (ADR-0031 decision 7). First-wins returned at the
+        campus branch, so each was a 404 or an absent row."""
+        parent, child = self.campus_staff_parent_of_a_campus_b_child()
+        grant(parent, LEAVE_CREATE, LEAVE_VIEW, scope=RecordScope.OWN)
+        submitted = self.submit_for(child)
+        self.assertEqual(submitted.status_code, status.HTTP_201_CREATED, submitted.json())
+        request_id = submitted.json()["data"]["id"]
+
+        listed = self.ids(self.client.get(LEAVE_REQUESTS))
+        retrieved = self.client.get(f"{LEAVE_REQUESTS}/{request_id}")
+        cancelled = self.client.post(f"{LEAVE_REQUESTS}/{request_id}:cancel", {}, format="json")
+
+        self.assertIn(request_id, listed)
+        self.assertEqual(retrieved.status_code, status.HTTP_200_OK, retrieved.json())
+        self.assertEqual(cancelled.status_code, status.HTTP_200_OK, cancelled.json())
 
     def test_the_review_list_costs_no_query_per_row(self) -> None:
         self.leave(self.students[0])

@@ -6,6 +6,11 @@ key. A user holding a campus-scoped role for the key a route needs, plus *any*
 therefore carries an unrelated `all` role: against the key-blind union each test
 reads more than it should, and fails.
 
+The mixed-type tests hold one key at several scope types. Against first-wins
+precedence (campus > own > assigned) each reads less than the union, and fails.
+`test_single_scope_type_sql_is_unchanged` is the guard the other way: one type
+keeps its exact filter.
+
 Lives here rather than in one module's tests because the bug was in `core.rbac` and
 its callers span students, attendance, fees and examinations.
 """
@@ -17,16 +22,20 @@ import uuid
 from decimal import Decimal
 from unittest import mock
 
+from django.db import connection
+from django.db.models import Q
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.attendance import services as attendance_services
+from apps.attendance.models import StudentAttendance
 from apps.attendance.tasks import export_attendance_report_task
 from apps.attendance.tests.test_approvals_api import LOCKED_DATE, ApprovalsTestCase
 from apps.attendance.tests.test_staff_register_api import StaffRegisterTestCase
-from apps.attendance.views import AttendanceCorrectionViewSet
+from apps.attendance.views import AttendanceCorrectionViewSet, StudentAttendanceViewSet
 from apps.communication.models import ThreadType
 from apps.communication.threads.tests.base import ThreadAPITestCase
 from apps.examinations import services as exam_services
@@ -46,8 +55,10 @@ from apps.staff_management.tests.base import StaffManagementAPITestCase
 from apps.staff_management.tests.factories import StaffFactory
 from apps.student_management.models import Student
 from apps.student_management.tests.factories import (
+    GuardianFactory,
     StudentEnrollmentFactory,
     StudentFactory,
+    StudentGuardianFactory,
     enable_feature,
 )
 from apps.timetable.substitutions.tests.test_cover import CoverTestCase
@@ -58,7 +69,7 @@ from core.exports.scope import MISSING_SCOPE_PERMISSION
 from core.jobs.models import BackgroundJob, JobStatus
 from core.jobs.services import create_job
 from core.rbac.models import RecordScope, UserRole
-from core.rbac.permissions import AnyOf, scopes_for
+from core.rbac.permissions import AnyOf, scope_queryset, scopes_for
 from core.tenancy.context import tenant_context
 
 # A key no route below declares: the "unrelated" `all` role each mixed user holds.
@@ -70,6 +81,7 @@ STUDENT_WITHDRAW = "students.student.withdraw"
 GUARDIAN_VIEW = "students.guardian.view"
 ATTENDANCE_VIEW = "attendance.student-attendance.view"
 CORRECTION_CREATE = "attendance.correction.create"
+CORRECTION_APPROVE = "attendance.correction.approve"
 REPORT_VIEW = "attendance.report.view"
 REPORT_EXPORT = "attendance.report.export"
 STAFF_MARK = "attendance.staff-attendance.mark"
@@ -314,6 +326,82 @@ class AttendanceScopeTests(ApprovalsTestCase):
         self.assertEqual(job.result["rows"], 0)
         self.assertEqual(written, [])
 
+    # One key held at several scope types reads their union (ADR-0031 decision 7).
+    # `scope_queryset` used to return at the first of campus > own > assigned.
+
+    def test_any_of_route_unions_scopes_of_matching_roles(self) -> None:
+        """The queue's `AnyOf` holds the approve key on campus A and the create key at
+        `assigned`. The reader's own campus-B request is reached only through
+        `assigned`, so first-wins hid it behind the campus branch."""
+        grant(self.reader, CORRECTION_APPROVE, scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+        grant(self.reader, CORRECTION_CREATE, scope=RecordScope.ASSIGNED)
+        grant(self.reader, UNRELATED, scope=RecordScope.ALL)
+        someone_else = UserFactory(tenant=self.tenant)
+        theirs_on_a = self.correction(self.row_a, someone_else)
+        mine_on_b = self.correction(self.row_b, self.reader)
+        theirs_elsewhere = self.correction(self.campus_b_locked_row(), someone_else)
+
+        response = self.client.get(CORRECTIONS)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(ids(response), {str(theirs_on_a.pk), str(mine_on_b.pk)})
+        self.assertNotIn(str(theirs_elsewhere.pk), ids(response))
+
+    def test_empty_member_does_not_raise_in_report_cte(self) -> None:
+        """L22: a campus role with no campus is an empty member, dropped before the
+        `own` and `assigned` members are combined into the report's CTE. First-wins
+        fell through the empty campus to `own` alone: the child, not the class."""
+        child = self.row_b.student
+        with tenant_context(self.tenant.id):
+            guardian = GuardianFactory(tenant=self.tenant, user_id=self.teacher_user.pk)
+            StudentGuardianFactory(
+                tenant=self.tenant, student=child, guardian=guardian, has_portal_access=True
+            )
+        for scope in (RecordScope.CAMPUS, RecordScope.OWN, RecordScope.ASSIGNED):
+            grant(self.teacher_user, REPORT_VIEW, scope=scope)
+        authenticate(self.client, self.teacher_user)
+        query = "&".join(f"{key}={value}" for key, value in self.report_params().items())
+
+        response = self.client.get(f"{ATTENDANCE_REPORTS}?{query}")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(
+            student_ids(response.json()["data"]),
+            {str(self.row_a.student_id), str(child.pk)},
+        )
+
+    def test_single_scope_type_sql_is_unchanged(self) -> None:
+        """A user holding the key at one type gets the exact filter that type always
+        produced, not the `pk__in` union. Each expected queryset is that type's branch
+        body as it stood before the union."""
+        kwargs = StudentAttendanceViewSet.scope_kwargs()
+        cases = (
+            (
+                RecordScope.CAMPUS,
+                self.campus.pk,
+                lambda base, _user: base.filter(
+                    Q(**{f"{kwargs['campus_field']}__in": [self.campus.pk]})
+                ),
+            ),
+            (RecordScope.OWN, None, StudentAttendance.filter_owned_by_user),
+            (RecordScope.ASSIGNED, None, StudentAttendance.filter_assigned_to_user),
+        )
+
+        for scope, ref, expected in cases:
+            with self.subTest(scope=scope):
+                user = UserFactory(tenant=self.tenant)
+                grant(user, ATTENDANCE_VIEW, scope=scope, scope_ref=ref)
+                with tenant_context(self.tenant.id):
+                    base = StudentAttendance.objects.alive()
+                    scoped = scope_queryset(base, user, permission=ATTENDANCE_VIEW, **kwargs)
+                    with CaptureQueriesContext(connection) as actual:
+                        list(scoped)
+                    with CaptureQueriesContext(connection) as before:
+                        list(expected(base, user))
+
+                self.assertEqual(len(actual), 1)
+                self.assertEqual(actual[0]["sql"], before[0]["sql"])
+
 
 class FinanceReportScopeTests(FinanceReportTestCase):
     def test_unrelated_all_role_does_not_widen_finance_report(self) -> None:
@@ -491,13 +579,13 @@ class LegacyExportJobTests(TestCase):
 class RouteScopeMapTests(TestCase):
     def test_any_of_scopes_map_is_the_union(self) -> None:
         """The correction queue's `AnyOf` reads the union over the roles granting either
-        of its keys, and never an unrelated role's `all`. `scopes_for` only: the list
-        built from a mixed-type union is PR B's."""
+        of its keys, and never an unrelated role's `all`. The list built from a
+        mixed-type union is `test_any_of_route_unions_scopes_of_matching_roles`."""
         tenant = TenantFactory()
         user = UserFactory(tenant=tenant)
         campus_a, campus_b = uuid.uuid4(), uuid.uuid4()
         grant(user, CORRECTION_CREATE, scope=RecordScope.CAMPUS, scope_ref=campus_a)
-        grant(user, "attendance.correction.approve", scope=RecordScope.CAMPUS, scope_ref=campus_b)
+        grant(user, CORRECTION_APPROVE, scope=RecordScope.CAMPUS, scope_ref=campus_b)
         grant(user, UNRELATED, scope=RecordScope.ALL)
         declared = AttendanceCorrectionViewSet.required_permission_map["list"]
         self.assertIsInstance(declared, AnyOf)

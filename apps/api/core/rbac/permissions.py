@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import Mapping
-from typing import TypedDict
+from collections.abc import Callable, Mapping
+from typing import Any, TypedDict
 
 from django.contrib.auth.models import AbstractBaseUser, AnonymousUser
 from django.core.cache import cache
@@ -256,6 +256,11 @@ class DenyRestrictedPrincipals(permissions.BasePermission):
         return not is_restricted_principal(user)
 
 
+# The narrowing types, in a fixed order so a mixed user's SQL is stable. `all` is
+# handled before them, because it narrows nothing.
+_NARROWING_SCOPES = (RecordScope.CAMPUS, RecordScope.OWN, RecordScope.ASSIGNED)
+
+
 def scope_queryset(
     queryset,
     user,
@@ -276,6 +281,13 @@ def scope_queryset(
     route's own declaration. A write that first resolves a target calls this twice on
     the same queryset, with the target's view key and then the action's
     declaration, so the target is one the caller may both read and act on.
+
+    **A key held at several scope types reads their union** (ADR-0031 decision 7).
+    `all`, or a type that passes the queryset through, returns it unchanged. Otherwise
+    each type narrows on its own, and a type that can reach nothing (a `campus` role
+    with no campus, an `own` or `assigned` with no hook) is empty rather than
+    falling through to the next. One type keeps its exact filter; two or more are an
+    OR of `pk__in` subqueries.
 
     `assigned_filter(queryset, user)` replaces the model's `filter_assigned_to_user`
     for one call, for a reader that needs a narrower `assigned` than the model's
@@ -318,58 +330,111 @@ def scope_queryset(
     scopes = scopes_for(user, permission)
     if RecordScope.ALL in scopes:
         return queryset
-    if RecordScope.CAMPUS in scopes:
-        campus_ids = [ref for ref in scopes[RecordScope.CAMPUS] if ref]
-        if campus_ids:
-            # A per-model hook first, for the same reason `own` and `assigned`
-            # have one: a single field path cannot express every campus
-            # relationship. A student transfer has `from_campus_id` *and*
-            # `to_campus_id`, and scoping on either alone hides half the queue —
-            # the destination campus could not see the incoming transfer it is
-            # the one expected to approve.
-            by_campus = getattr(queryset.model, "filter_by_campus", None)
-            if callable(by_campus):
-                # The hook owns the *whole* campus predicate, so the NULL widening
-                # below never runs for it. Asking for both is a contradiction, and
-                # the way it would fail — the widening silently doing nothing — is
-                # the exact silent row-loss this function exists to stop. Say so
-                # instead of letting the next model discover it in production.
-                if campus_allows_null:
-                    raise ImproperlyConfigured(
-                        f"{queryset.model.__name__} defines filter_by_campus and also asks "
-                        "for campus_allows_null, which filter_by_campus cannot honour. "
-                        "Express the nullable-campus case inside the hook."
-                    )
-                return by_campus(queryset, campus_ids)
-            if campus_field is None:
-                return queryset
-            match = Q(**{f"{campus_field}__in": campus_ids})
+    # One key held at several scope types reads the union of what each type reaches
+    # (ADR-0031 decision 7). It used to return at the first of campus > own >
+    # assigned, so a campus-A teacher lost the campus-B section they class-teach.
+    members: list[QuerySet[Any]] = []
+    for scope in _NARROWING_SCOPES:
+        if scope not in scopes:
+            continue
+        member = _narrow_by_scope(
+            queryset,
+            user,
+            scope,
+            scopes[scope],
+            own_field=own_field,
+            campus_field=campus_field,
+            campus_allows_null=campus_allows_null,
+            assigned_filter=assigned_filter,
+        )
+        if member is None:
+            return queryset
+        if not member.query.is_empty():
+            members.append(member)
+    if not members:
+        return queryset.none()
+    if len(members) == 1:
+        # One type keeps the exact filter it always had, so its SQL is unchanged.
+        return members[0]
+    # `pk__in` subqueries rather than `a | b`, whose joins can duplicate rows, or
+    # `union()`, which cannot be filtered further. `.none()` members were dropped
+    # above: compiled to raw SQL they raise `EmptyResultSet` (L22).
+    match = Q()
+    for member in members:
+        match |= Q(pk__in=member.values("pk"))
+    return queryset.filter(match)
+
+
+def _narrow_by_scope(
+    queryset: QuerySet[Any],
+    user: RbacUser,
+    scope: str,
+    refs: list[uuid.UUID | None],
+    *,
+    own_field: str | None,
+    campus_field: str | None,
+    campus_allows_null: bool,
+    assigned_filter: Callable[[QuerySet[Any], RbacUser], QuerySet[Any]] | None,
+) -> QuerySet[Any] | None:
+    """The rows one scope type reaches, `.none()` if it can reach none, or None when the
+    type is already satisfied by tenant scoping and the queryset passes through.
+
+    Each type stands alone: one that cannot narrow fails closed rather than falling
+    through to the next, because the caller unions every type the key is held at.
+    """
+    if scope == RecordScope.CAMPUS:
+        campus_ids = [ref for ref in refs if ref]
+        if not campus_ids:
+            return queryset.none()
+        # A per-model hook first, for the same reason `own` and `assigned`
+        # have one: a single field path cannot express every campus
+        # relationship. A student transfer has `from_campus_id` *and*
+        # `to_campus_id`, and scoping on either alone hides half the queue —
+        # the destination campus could not see the incoming transfer it is
+        # the one expected to approve.
+        by_campus = getattr(queryset.model, "filter_by_campus", None)
+        if callable(by_campus):
+            # The hook owns the *whole* campus predicate, so the NULL widening
+            # below never runs for it. Asking for both is a contradiction, and
+            # the way it would fail — the widening silently doing nothing — is
+            # the exact silent row-loss this function exists to stop. Say so
+            # instead of letting the next model discover it in production.
             if campus_allows_null:
-                # A nullable campus column that means "every campus" — the
-                # pattern is all over this schema (`departments`, `class_subjects`
-                # and `periods` all say so in their own help_text). `IN (...)`
-                # drops NULL, so without this a campus-scoped principal loses
-                # exactly the rows that *do* apply to them, and nothing errors:
-                # the tenant-wide department, the shared curriculum mapping and
-                # the lunch break simply are not in the list.
-                #
-                # `campus_field` verbatim, not stripped of its `_id`: Django
-                # resolves `campus_id__isnull` and `campus__isnull` to the same
-                # SQL for a ForeignKey, while stripping would turn a plain
-                # non-FK `*_id` column (`staff.user_id` is one) into a FieldError.
-                match |= Q(**{f"{campus_field}__isnull": True})
-            return queryset.filter(match)
-    if RecordScope.OWN in scopes:
+                raise ImproperlyConfigured(
+                    f"{queryset.model.__name__} defines filter_by_campus and also asks "
+                    "for campus_allows_null, which filter_by_campus cannot honour. "
+                    "Express the nullable-campus case inside the hook."
+                )
+            return by_campus(queryset, campus_ids)
+        if campus_field is None:
+            return None
+        match = Q(**{f"{campus_field}__in": campus_ids})
+        if campus_allows_null:
+            # A nullable campus column that means "every campus" — the
+            # pattern is all over this schema (`departments`, `class_subjects`
+            # and `periods` all say so in their own help_text). `IN (...)`
+            # drops NULL, so without this a campus-scoped principal loses
+            # exactly the rows that *do* apply to them, and nothing errors:
+            # the tenant-wide department, the shared curriculum mapping and
+            # the lunch break simply are not in the list.
+            #
+            # `campus_field` verbatim, not stripped of its `_id`: Django
+            # resolves `campus_id__isnull` and `campus__isnull` to the same
+            # SQL for a ForeignKey, while stripping would turn a plain
+            # non-FK `*_id` column (`staff.user_id` is one) into a FieldError.
+            match |= Q(**{f"{campus_field}__isnull": True})
+        return queryset.filter(match)
+    if scope == RecordScope.OWN:
         owned = getattr(queryset.model, "filter_owned_by_user", None)
         if callable(owned):
             return owned(queryset, user)
-        if own_field:
+        if own_field and user is not None:
             return queryset.filter(**{own_field: user.pk})
-    if RecordScope.ASSIGNED in scopes:
-        # Each module defines what "assigned" means; it must override this hook.
-        assigned = assigned_filter or getattr(queryset.model, "filter_assigned_to_user", None)
-        if callable(assigned):
-            return assigned(queryset, user)
+        return queryset.none()
+    # `assigned`: each module defines what it means; it must override this hook.
+    assigned = assigned_filter or getattr(queryset.model, "filter_assigned_to_user", None)
+    if callable(assigned):
+        return assigned(queryset, user)
     return queryset.none()
 
 
