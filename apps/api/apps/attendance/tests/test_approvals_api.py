@@ -540,7 +540,8 @@ class LeaveReviewRecordTests(ApprovalsTestCase):
         `:cancel` reach the request (ADR-0031 decision 7). First-wins returned at the
         campus branch, so each was a 404 or an absent row."""
         parent, child = self.campus_staff_parent_of_a_campus_b_child()
-        grant(parent, LEAVE_CREATE, LEAVE_VIEW, scope=RecordScope.OWN)
+        # A real guardian role: `own`-scoped and a restricted principal.
+        grant(parent, LEAVE_CREATE, LEAVE_VIEW, scope=RecordScope.OWN, is_restricted_principal=True)
         submitted = self.submit_for(child)
         self.assertEqual(submitted.status_code, status.HTTP_201_CREATED, submitted.json())
         request_id = submitted.json()["data"]["id"]
@@ -552,6 +553,45 @@ class LeaveReviewRecordTests(ApprovalsTestCase):
         self.assertIn(request_id, listed)
         self.assertEqual(retrieved.status_code, status.HTTP_200_OK, retrieved.json())
         self.assertEqual(cancelled.status_code, status.HTTP_200_OK, cancelled.json())
+
+    def test_a_campus_role_elsewhere_cannot_decide_level_two(self) -> None:
+        """A key held at `campus:A` and at `assigned` reaches a campus-B request through
+        `assigned` (ADR-0031 decision 7). Level 2 needs a scope that covers the request's
+        campus, so their campus-A role does not make them wide enough for it."""
+        child = self.campus_b_locked_row().student
+        approver = UserFactory(tenant=self.tenant)
+        with tenant_context(self.tenant.id):
+            section_b = child.enrollments.get().section
+            teacher = StaffFactory(tenant=self.tenant, campus=section_b.campus, user_id=approver.pk)
+            section_b.class_teacher_staff_id = teacher.pk
+            section_b.save(update_fields=["class_teacher_staff_id", "updated_at"])
+        leave_request = self.leave(child)
+        with tenant_context(self.tenant.id):
+            LeaveApproval.objects.create(
+                tenant=self.tenant,
+                leave_request=leave_request,
+                level=2,
+                required_permission=LEAVE_APPROVE,
+                created_by=self.guardian_user.pk,
+                updated_by=self.guardian_user.pk,
+            )
+            services.decide_leave_step(
+                request=leave_request, approve=True, approver_id=self.principal.pk
+            )
+        grant(
+            approver, LEAVE_VIEW, LEAVE_APPROVE, scope=RecordScope.CAMPUS, scope_ref=self.campus.pk
+        )
+        self.sign_in(approver, LEAVE_VIEW, LEAVE_APPROVE, scope=RecordScope.ASSIGNED)
+
+        reached = self.client.get(f"{LEAVE_REQUESTS}/{leave_request.pk}")
+        response = self.client.post(
+            f"{LEAVE_REQUESTS}/{leave_request.pk}:approve", {}, format="json"
+        )
+
+        self.assertEqual(reached.status_code, status.HTTP_200_OK, reached.json())
+        self.assertEqual(
+            response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY, response.json()
+        )
 
     def test_the_review_list_costs_no_query_per_row(self) -> None:
         self.leave(self.students[0])

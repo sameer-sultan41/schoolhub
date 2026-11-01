@@ -1330,7 +1330,7 @@ def decide_leave_step(
                 )
             }
         )
-    _assert_escalation_reaches_wider(step=step, user_id=approver_id)
+    _assert_escalation_reaches_wider(step=step, request=request, user_id=approver_id)
 
     now = timezone.now()
     step.decision = ApprovalDecision.APPROVED if approve else ApprovalDecision.REJECTED
@@ -1366,7 +1366,9 @@ def decide_leave_step(
     return request
 
 
-def _assert_escalation_reaches_wider(*, step: LeaveApproval, user_id: uuid.UUID) -> None:
+def _assert_escalation_reaches_wider(
+    *, step: LeaveApproval, request: LeaveRequest, user_id: uuid.UUID
+) -> None:
     """Level 2 needs someone who can see more than level 1 could.
 
     "Two different people" was not enough on its own. §4 grants the approve key
@@ -1384,6 +1386,10 @@ def _assert_escalation_reaches_wider(*, step: LeaveApproval, user_id: uuid.UUID)
     The scope is the one the step's own key grants (`step.required_permission`,
     through `scopes_for`), so an `all` role for an unrelated key does not make an
     `assigned` approver wide enough to decide level 2.
+
+    A `campus` scope counts only for the request's own campus. A key held at
+    `campus:A` and at `assigned` reaches a campus-B request through `assigned`
+    (ADR-0031 decision 7), and their campus-A role says nothing about campus B.
     """
     if step.level < 2:
         return
@@ -1392,7 +1398,10 @@ def _assert_escalation_reaches_wider(*, step: LeaveApproval, user_id: uuid.UUID)
 
     reviewer = User.objects.filter(pk=user_id).first()
     scopes = scopes_for(reviewer, step.required_permission) if reviewer is not None else {}
-    if RecordScope.ALL in scopes or RecordScope.CAMPUS in scopes:
+    if RecordScope.ALL in scopes:
+        return
+    campus_ids = {ref for ref in scopes.get(RecordScope.CAMPUS, ()) if ref}
+    if campus_ids and _leave_request_campus_id(request) in campus_ids:
         return
 
     raise DomainRuleViolation(
@@ -1403,6 +1412,12 @@ def _assert_escalation_reaches_wider(*, step: LeaveApproval, user_id: uuid.UUID)
             )
         }
     )
+
+
+def _leave_request_campus_id(request: LeaveRequest) -> uuid.UUID | None:
+    """The campus a leave request belongs to: its student's, or its staff member's."""
+    owner = request.student or request.staff
+    return owner.campus_id if owner is not None else None
 
 
 @transaction.atomic
