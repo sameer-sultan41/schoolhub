@@ -61,6 +61,25 @@ def user_scopes(user) -> dict[str, list]:
     return scopes
 
 
+def user_scopes_for_key(user, key: str) -> dict[str, list]:
+    """Record scopes of only the user's live roles that grant ``key``, keyed by scope type.
+
+    auth-and-rbac.md §2.3: a record scope is attached to a ``user_role``, so it
+    narrows what *that* role's keys reach. ``user_scopes`` unions the scopes of
+    every role, which lets an unrelated ``all``-scoped role (exams, say) widen a
+    campus-scoped grant of some other key. Ask this instead when an action checks
+    the caller's scope for one key. Not cached: its callers ask once per request.
+    """
+    if not user or not user.is_authenticated:
+        return {}
+
+    scopes: dict[str, list] = {}
+    granting = user.user_roles.filter(deleted_at__isnull=True, role__permissions__key=key)
+    for scope, ref in granting.values_list("scope", "scope_ref"):
+        scopes.setdefault(scope, []).append(ref)
+    return scopes
+
+
 def has_permission_key(user, key: str) -> bool:
     return key in effective_permission_keys(user)
 

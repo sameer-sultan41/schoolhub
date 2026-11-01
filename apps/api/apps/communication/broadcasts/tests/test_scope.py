@@ -132,3 +132,34 @@ class CampusScopedSenderTests(BroadcastAPITestCase):
         self.assertEqual(no_campus.status_code, status.HTTP_200_OK, no_campus.json())
         self.assertEqual(other_campus.status_code, status.HTTP_200_OK, other_campus.json())
         self.assertEqual(off_campus_user.status_code, status.HTTP_200_OK, off_campus_user.json())
+
+    def test_an_unrelated_all_scope_role_does_not_lift_the_campus_limit(self) -> None:
+        """A scope belongs to its `user_role` (auth-and-rbac.md §2.3).
+
+        Only the roles that grant `broadcast.send` decide where the sender may broadcast.
+        """
+        with tenant_context(self.tenant.id):
+            grant(self.sender, "examinations.exam.view", scope=RecordScope.ALL)
+
+        no_campus = self.client.post(PREVIEW_URL, self.staff_audience(), format="json")
+        other_campus = self.client.post(
+            PREVIEW_URL, self.staff_audience(self.other_campus), format="json"
+        )
+        own_campus = self.client.post(PREVIEW_URL, self.staff_audience(self.campus), format="json")
+
+        self.assertEqual(no_campus.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(no_campus.json()["error"]["message"], CAMPUS_REQUIRED_MESSAGE)
+        self.assertEqual(other_campus.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(own_campus.status_code, status.HTTP_200_OK, own_campus.json())
+
+    def test_an_all_scope_role_that_grants_the_key_is_unrestricted(self) -> None:
+        with tenant_context(self.tenant.id):
+            grant(self.sender, "communication.broadcast.send", scope=RecordScope.ALL)
+
+        no_campus = self.client.post(PREVIEW_URL, self.staff_audience(), format="json")
+        other_campus = self.client.post(
+            PREVIEW_URL, self.staff_audience(self.other_campus), format="json"
+        )
+
+        self.assertEqual(no_campus.status_code, status.HTTP_200_OK, no_campus.json())
+        self.assertEqual(other_campus.status_code, status.HTTP_200_OK, other_campus.json())
