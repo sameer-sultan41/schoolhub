@@ -1,6 +1,6 @@
 """Celery tasks for the communication module (module doc §16).
 
-Thin, as `staff_management/tasks.py`'s are: fetch the job, do the one call, and
+Thin, as `staff_management/tasks.py`'s are: claim the job, do the one call, and
 record the outcome on the job.
 """
 
@@ -12,8 +12,7 @@ import uuid
 from celery import shared_task
 
 from apps.communication.notifications import EMERGENCY_BROADCAST
-from core.jobs.models import BackgroundJob, JobStatus
-from core.jobs.services import mark_failed, mark_running, mark_succeeded
+from core.jobs.services import claim_queued_job, mark_failed, mark_succeeded
 from core.notifications.services import Recipient, notify
 from core.tenancy.context import tenant_atomic
 from core.tenancy.tasks import TenantAwareTask
@@ -29,17 +28,20 @@ def send_emergency_broadcast_task(self, *, tenant_id: str, job_id: str, actor_id
 
     Preferences are not consulted: `notify()` never gates an `emergency`-category
     trigger. One transaction for the whole fan-out, so a failure leaves no
-    half-sent broadcast behind it. Only a `queued` job runs, so a second delivery
-    of the task is a no-op.
+    half-sent broadcast behind it.
+
+    The job is claimed with `claim_queued_job`, a conditional UPDATE from `queued`
+    to `running`, before anything is sent. A redelivered or re-enqueued task, even
+    one running at the same moment as the first, finds the row already claimed and
+    returns: an emergency fan-out must reach each recipient once.
     """
-    with tenant_atomic(uuid.UUID(tenant_id)):
-        job = BackgroundJob.objects.get(pk=job_id)
-    # A redelivered or re-enqueued task finds the job already running or done: an
-    # emergency fan-out must reach each recipient once, so only a queued job runs.
-    if job.status != JobStatus.QUEUED:
-        logger.warning("Emergency broadcast job %s is %s, not queued; skipped.", job.pk, job.status)
+    job = claim_queued_job(tenant_id=uuid.UUID(tenant_id), job_id=job_id)
+    if job is None:
+        logger.warning(
+            "Emergency broadcast job %s is not queued (already claimed or finished); skipped.",
+            job_id,
+        )
         return
-    mark_running(job=job)
     try:
         recipient_ids: list[str] = job.payload["recipient_ids"]
         with tenant_atomic(uuid.UUID(tenant_id)):

@@ -11,7 +11,7 @@ from apps.communication.notifications import EMERGENCY_BROADCAST
 from apps.communication.tasks import send_emergency_broadcast_task
 from apps.communication.tests.factories import NotificationPreferenceFactory
 from core.jobs.models import BackgroundJob, JobStatus
-from core.jobs.services import create_job
+from core.jobs.services import claim_queued_job, create_job
 from core.notifications.models import (
     DeliveryLog,
     DeliveryStatus,
@@ -115,3 +115,38 @@ class EmergencyBroadcastTaskTests(BroadcastAPITestCase):
 
                 notify.assert_not_called()
                 self.assertEqual(job.status, already)
+
+    def test_a_second_delivery_of_the_same_job_sends_nothing(self) -> None:
+        """The first delivery claims the row; the redelivery's claim is refused."""
+        job = self.make_job(self.alice)
+        self.run_task(job)
+
+        with (
+            mock.patch("apps.communication.tasks.notify") as notify,
+            self.assertLogs("apps.communication.tasks", "WARNING") as logs,
+        ):
+            job = self.run_task(job)
+
+        notify.assert_not_called()
+        self.assertEqual(job.status, JobStatus.SUCCEEDED)
+        self.assertIn(str(job.pk), logs.output[0])
+        with tenant_context(self.tenant.id):
+            self.assertEqual(Notification.objects.filter(event_key=EMERGENCY_BROADCAST).count(), 1)
+
+    def test_a_job_claimed_by_another_worker_is_not_sent(self) -> None:
+        """A delivery that read the job as queued still loses to a claim made since.
+
+        The old guard read `status`, then saved `running` unconditionally, so two
+        deliveries that both read `queued` both sent. The claim is one conditional
+        UPDATE, so the loser is told at write time, not by a read that can be stale.
+        """
+        job = self.make_job(self.alice)
+        claimed = claim_queued_job(tenant_id=self.tenant.pk, job_id=job.pk)
+        assert claimed is not None
+
+        with mock.patch("apps.communication.tasks.notify") as notify:
+            job = self.run_task(job)
+
+        notify.assert_not_called()
+        self.assertEqual(job.status, JobStatus.RUNNING)
+        self.assertEqual(job.started_at, claimed.started_at)
