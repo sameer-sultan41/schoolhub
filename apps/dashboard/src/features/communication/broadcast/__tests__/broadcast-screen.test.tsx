@@ -1,9 +1,11 @@
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { queryKeys } from "@/lib/query-client";
 import { ApiError } from "@/services";
+import { BROADCASTS_QUERY_MODULE } from "@/services/modules/broadcasts/broadcasts-constant";
 import { pick } from "@/test-fixtures/list-screen";
-import { renderWithProviders } from "@/test-utils";
+import { renderWithClient, renderWithProviders } from "@/test-utils";
 
 import { BroadcastScreen } from "../broadcast-screen";
 import {
@@ -32,15 +34,25 @@ jest.mock("@/services", () =>
 );
 
 const NO_CAMPUS = /Your access doesn't reach any campus/;
+const SCOPE_FAILED = "The campuses you can broadcast to couldn't be loaded.";
+
+const TIMED_OUT = new ApiError({
+  code: "network_error",
+  message: "Timed out.",
+  status: 0,
+  url: "/broadcasts:scope",
+});
+
+const nextButton = () => screen.getByRole("button", { name: "Next" });
 
 /** Renders the wizard and waits for the sender's scope, which Next waits for too. */
 async function renderBroadcast() {
   const user = userEvent.setup();
-  renderWithProviders(<BroadcastScreen />);
+  const { queryClient } = renderWithClient(<BroadcastScreen />);
   await waitFor(() => {
-    expect(screen.getByRole("button", { name: "Next" })).toBeEnabled();
+    expect(nextButton()).toBeEnabled();
   });
-  return user;
+  return { user, queryClient };
 }
 
 describe("BroadcastScreen", () => {
@@ -53,7 +65,7 @@ describe("BroadcastScreen", () => {
   });
 
   it("class audience requires at least one class", async () => {
-    const user = await renderBroadcast();
+    const { user } = await renderBroadcast();
 
     await user.click(screen.getByRole("radio", { name: "Specific classes" }));
     await user.click(screen.getByRole("button", { name: "Next" }));
@@ -66,7 +78,7 @@ describe("BroadcastScreen", () => {
   });
 
   it("counts the message against the API's limit and previews the built request", async () => {
-    const user = await renderBroadcast();
+    const { user } = await renderBroadcast();
 
     await user.click(screen.getByRole("button", { name: "Next" }));
     await user.type(await screen.findByLabelText("Message"), "Closed");
@@ -95,7 +107,7 @@ describe("BroadcastScreen", () => {
           url: "/broadcasts:emergency",
         }),
       );
-    const user = await renderBroadcast();
+    const { user } = await renderBroadcast();
 
     await user.click(screen.getByRole("button", { name: "Next" }));
     await user.type(await screen.findByLabelText("Message"), "Closed");
@@ -118,7 +130,7 @@ describe("BroadcastScreen", () => {
   it("enables Back again on a new broadcast after a send was queued", async () => {
     send.mockResolvedValueOnce({ job_id: JOB_ID, status: "queued" });
     fetchJob.mockResolvedValue(jobRecord());
-    const user = await renderBroadcast();
+    const { user } = await renderBroadcast();
 
     await user.click(screen.getByRole("button", { name: "Next" }));
     await user.type(await screen.findByLabelText("Message"), "Closed");
@@ -142,7 +154,7 @@ describe("BroadcastScreen", () => {
 
     it("is offered only their own campuses, never all of them", async () => {
       fetchScope.mockResolvedValue({ campus_ids: [NORTH.id, SOUTH.id, GONE_CAMPUS_ID] });
-      const user = await renderBroadcast();
+      const { user } = await renderBroadcast();
 
       await user.click(screen.getByRole("combobox", { name: "Campus" }));
       const offered = await screen.findAllByRole("option");
@@ -151,7 +163,7 @@ describe("BroadcastScreen", () => {
 
     it("cannot leave the audience step until a campus is chosen", async () => {
       fetchScope.mockResolvedValue({ campus_ids: [NORTH.id, SOUTH.id] });
-      const user = await renderBroadcast();
+      const { user } = await renderBroadcast();
 
       await user.click(screen.getByRole("button", { name: "Next" }));
       expect(await screen.findByText("Choose one of your campuses.")).toBeInTheDocument();
@@ -172,7 +184,7 @@ describe("BroadcastScreen", () => {
 
     it("has their only campus picked for them", async () => {
       fetchScope.mockResolvedValue({ campus_ids: [NORTH.id] });
-      const user = await renderBroadcast();
+      const { user } = await renderBroadcast();
 
       expect(screen.getByRole("combobox", { name: "Campus" })).toHaveTextContent(NORTH.name);
       await user.click(screen.getByRole("button", { name: "Next" }));
@@ -185,6 +197,40 @@ describe("BroadcastScreen", () => {
         message: "Closed",
         campus_id: NORTH.id,
       });
+    });
+
+    it("loses a picked campus that a refetched scope no longer allows", async () => {
+      fetchScope.mockResolvedValue({ campus_ids: [NORTH.id, SOUTH.id] });
+      const { user, queryClient } = await renderBroadcast();
+      await pick(user, "Campus", SOUTH.name);
+      expect(screen.getByRole("combobox", { name: "Campus" })).toHaveTextContent(SOUTH.name);
+
+      // A role change takes South away.
+      fetchScope.mockResolvedValue({ campus_ids: [NORTH.id, EAST.id] });
+      await act(() =>
+        queryClient.invalidateQueries({ queryKey: queryKeys.module(BROADCASTS_QUERY_MODULE) }),
+      );
+
+      expect(screen.getByRole("combobox", { name: "Campus" })).not.toHaveTextContent(SOUTH.name);
+      await user.click(nextButton());
+      expect(await screen.findByText("Choose one of your campuses.")).toBeInTheDocument();
+      expect(screen.queryByLabelText("Message")).not.toBeInTheDocument();
+    });
+
+    it("whose campus list fails is offered Try again, then their campus", async () => {
+      fetchScope.mockResolvedValue({ campus_ids: [NORTH.id] });
+      fetchCampuses.mockRejectedValueOnce(TIMED_OUT);
+      const user = userEvent.setup();
+      renderWithProviders(<BroadcastScreen />);
+
+      expect(await screen.findByText(SCOPE_FAILED)).toBeInTheDocument();
+      expect(nextButton()).toBeDisabled();
+      await user.click(screen.getByRole("button", { name: "Try again" }));
+
+      await waitFor(() => {
+        expect(nextButton()).toBeEnabled();
+      });
+      expect(screen.getByRole("combobox", { name: "Campus" })).toHaveTextContent(NORTH.name);
     });
 
     const unreachable: [string, string[]][] = [
@@ -204,9 +250,33 @@ describe("BroadcastScreen", () => {
     );
   });
 
+  it("keeps Next disabled while the sender's scope loads", () => {
+    fetchScope.mockImplementation(() => new Promise<never>(() => undefined));
+    renderWithProviders(<BroadcastScreen />);
+
+    expect(nextButton()).toBeDisabled();
+    expect(screen.queryByRole("combobox", { name: "Campus" })).not.toBeInTheDocument();
+  });
+
+  it("offers Try again when the scope fails, which then lets the sender on", async () => {
+    fetchScope.mockRejectedValueOnce(TIMED_OUT);
+    const user = userEvent.setup();
+    renderWithProviders(<BroadcastScreen />);
+
+    expect(await screen.findByText(SCOPE_FAILED)).toBeInTheDocument();
+    expect(nextButton()).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+
+    await waitFor(() => {
+      expect(nextButton()).toBeEnabled();
+    });
+    expect(screen.queryByText(SCOPE_FAILED)).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Campus" })).toBeInTheDocument();
+  });
+
   it("offers an unrestricted sender every campus, or all of them, and needs none", async () => {
     fetchCampuses.mockResolvedValue([NORTH, SOUTH]);
-    const user = await renderBroadcast();
+    const { user } = await renderBroadcast();
 
     await user.click(screen.getByRole("combobox", { name: "Campus" }));
     await screen.findByRole("option", { name: SOUTH.name });

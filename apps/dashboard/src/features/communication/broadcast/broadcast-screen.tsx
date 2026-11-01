@@ -56,11 +56,14 @@ export function BroadcastScreen() {
   const campuses = useBroadcastCampuses();
   const { requireCampus } = campuses;
   const canLeaveAudience = campuses.status === "ready" && !campuses.reachesNoCampus;
-  // A restricted sender with one campus has nothing to choose: it is picked for them.
+  // A restricted sender's pick counts only while their scope still allows it (a role change
+  // refetches the scope), and one with a single campus has it picked for them.
+  const isAllowed = campuses.options.some((campus) => campus.id === picked.campus_id);
+  const keptCampus = requireCampus && !isAllowed ? "" : picked.campus_id;
   const onlyCampus =
     requireCampus && campuses.options.length === 1 ? campuses.options[0] : undefined;
-  const values =
-    picked.campus_id === "" && onlyCampus ? { ...picked, campus_id: onlyCampus.id } : picked;
+  const campusId = keptCampus === "" && onlyCampus ? onlyCampus.id : keptCampus;
+  const values = campusId === picked.campus_id ? picked : { ...picked, campus_id: campusId };
 
   const schema = useMemo(
     () =>
