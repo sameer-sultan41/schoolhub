@@ -969,7 +969,14 @@ class IdCardGenerateViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
     def create(self, request, *args, **kwargs) -> Response:
         payload = IdCardGenerateRequestSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
-        student_ids = payload.validated_data["student_ids"]
+        # Only students the generate key's roles reach. One outside them is dropped,
+        # as an unknown id is, so a card's absence says nothing about the row.
+        student_ids = scope_queryset(
+            Student.objects.alive().filter(pk__in=payload.validated_data["student_ids"]),
+            request.user,
+            permission=route_permission(request, self),
+            **STUDENT_SCOPE,
+        ).values_list("pk", flat=True)
 
         job = create_job(
             tenant_id=request.tenant.pk,
