@@ -223,8 +223,10 @@ out through the real `notify()`.
 **PR C — threads and emergency broadcast.** Guardian, internal and group message
 threads with read receipts and audited oversight, and the emergency broadcast with a
 digest-confirmed send. That completes the module's backend except the `GET /notifications` inbox (deferred); see "Built (PR C)" below.
-**PR D — the dashboard.** The Messages inbox, thread oversight and the emergency broadcast
-screens under `/communication`; see "Built (PR D)" below.
+**PR D — the threads, oversight and broadcast dashboard.** The Messages inbox, thread
+oversight and the emergency broadcast screens under `/communication`; see "Built (PR D)" below.
+The other staff screens (announcements, notices with their publish-approval gate, template
+overrides, notification preferences, delivery logs) are not built yet.
 **Post-PR-B refactor.** `apps/communication` restructured from shared
 `views.py`/`services.py` files into one package per resource
 (`notices/`, `announcements/`, `template_overrides/`, `preferences/`,
@@ -286,7 +288,8 @@ one.
 
 ### Built (PR D)
 
-The dashboard is built: the inbox, oversight and the emergency broadcast, as three tabs under
+The threads, oversight and broadcast dashboard is built: the inbox, oversight and the emergency
+broadcast, as three tabs under
 `/communication` (`apps/dashboard/src/features/communication/`). Each tab shows only when the
 viewer holds its key (`communication.thread.view`, `communication.thread.oversee`,
 `communication.broadcast.send`), and `/communication` sends the viewer to the first they may open.
@@ -300,4 +303,4 @@ viewer holds its key (`communication.thread.view`, `communication.thread.oversee
 | Oversight | The same list and thread view over `/message-thread-oversight`, read-only: no reply box, no close or reopen, no `:mark-read`, under a banner that every view is audited |
 | Emergency broadcast | A four-step wizard: Audience, Message, Confirm, Status. A section audience picks a class first, then that class's sections (the class only narrows the picker; the API sees `section_ids`). Confirm previews the audience (count, channels with their names, and channels not delivered for want of a provider) and arms Send only when the sender types that exact count (grouping separators and Arabic-Indic or Urdu digits are accepted). A refused preview or send (an empty audience, a campus-scoped sender who named no campus) shows the server's own sentence, and a failed preview offers Try again. A `409 audience_changed` shows the new count from `error.meta`, re-previews and asks for the new number. The `Idempotency-Key` is minted per (preview, message, audience) and survives Back and Next, so a send whose reply was lost is replayed, never doubled; a changed message, count or digest gets a new key. The accepted job is polled to its end |
 | Tests | Jest for the services, the screens, the broadcast key and the job panel, and mocked Playwright journeys `e2e/tests/dashboard/communication-messages.spec.ts` (open, reply, close and reopen; a reader who never triggers `:mark-read`; read-only oversight) and `communication-broadcast.spec.ts` (preview 42, type 42, send, job succeeds; the refused-then-resent 409; a section audience; no Broadcast tab without the send key). The server's behaviour stays with the live API journey above |
-| Deferred | Composer attachment upload; sender names on bubbles; `GET /notifications` |
+| Deferred | Composer attachment upload; sender names on bubbles; `GET /notifications`; staff screens for announcements, notices (with the publish-approval gate), template overrides, notification preferences and delivery logs (`docs/deferred-work.md`) |

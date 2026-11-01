@@ -979,6 +979,19 @@ either this file or `project-status.md`.
     guardian role was removed (soft-deleted) still cannot be routed a thread or picked as a
     recipient until the row is purged. Fixing it means changing `is_restricted_principal` too.
 
+- **Communication PR D built only the threads, oversight and broadcast screens**
+  (`docs/03-modules/communication.md` §20, "Built (PR D)"). The API for the rest of the module
+  is built, but the dashboard has no screen for any of it, and `/communication` offers only
+  Messages, Oversight and Broadcast:
+  - **Announcements**: draft, edit, delete, and publish or schedule (`/announcements`,
+    `:publish`).
+  - **Notices**: draft, submit, the publish-approval gate (the approver must not be the drafter),
+    return to draft, acknowledgment and the A4 PDF (`/notices` and its actions).
+  - **Notification template overrides**, with their preview (`/notification-templates`,
+    `:preview`).
+  - **A user's notification preferences** (`/notification-preferences`).
+  - **The delivery logs and their summary report** (`/delivery-logs`, `:summary`).
+
 - **`eslint-plugin-playwright` for `e2e/`** (planned in the engineering-standards spec, PR 4) was
   deferred: adding a dependency means `pnpm install`, which runs PR 3's `prepare` script and
   turns the hooks on mid-PR, so pre-commit would reject the rule commit before its baseline

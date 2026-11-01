@@ -40,7 +40,8 @@
 
 - **Mistake.** The execute report showed a raw Python dictionary dump for a missing section, and it was deferred as a minor. The decision to make the section rule advisory relied on the report naming each failed student legibly. The whole-PR review reversed the deferral.
 - **Mistake (again, attendance dashboard PR C).** Import was put on the Records toolbar, and Records was gated on `attendance.student-attendance.view`. §4 grants the import key to `it_admin` alone, and `it_admin` does not hold `.view`, so the only role meant to import could not reach the button. The premise "an importer can open Records" was never checked against `permissions.py`.
-- **Check.** For each ruling or decision, write down the premise it rests on, and verify that premise on the real path before ruling a related defect minor. When an action lives on a screen, check that every role §4 grants the action can open that screen.
+- **Mistake (again, communication dashboard PR D).** `7e7c74a0` cut a conversation back to its first page after every write, on the premise that TanStack Query replays stored cursors on refetch. The installed `infiniteQueryBehavior.js` recomputes each later cursor from the fresh pages, so the trim only threw away history the user had loaded.
+- **Check.** For each ruling or decision, write down the premise it rests on, and verify that premise on the real path before ruling a related defect minor. When an action lives on a screen, check that every role §4 grants the action can open that screen. A premise about a library's behaviour is checked in its installed source under `node_modules`, not from memory.
 
 ### L4. Trace what the user can do after a failure
 

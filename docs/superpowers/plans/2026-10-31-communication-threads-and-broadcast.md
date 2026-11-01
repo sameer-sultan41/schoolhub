@@ -532,6 +532,18 @@ silently deviated from). Each ruling names what changed and why.
     missing from `required_permission_map`; an explicit read-key mapping passes. `:mark-read`
     keeps `communication.message.create` as a choice (a receipt is a write), and D2 calls it only
     when the user holds that key.
+12. **A message bubble says "You" or "Participant".** The API sends only `sender_id`, so D2
+    shows no names; a name field on `MessageSerializer` is deferred (`docs/deferred-work.md`).
+13. **Attachment chips download through the thread's own route** (`/message-threads/{id}/
+    attachments/{file_id}:download`) or the audited oversight twin, a fresh signed URL per click.
+    Uploading from the composer is deferred, for staff as well as guardians.
+14. **A section audience picks a class first**, then that class's sections; the class only
+    narrows the picker (`section_class_id`), and the API sees `section_ids`.
+15. **The post-write page trim was removed.** D2 cut the conversation back to its first page
+    before invalidating, on the premise that a refetch replays stored cursors. TanStack Query v5
+    refetches page one and recomputes each later cursor from the fresh pages
+    (`infiniteQueryBehavior.js`), so the trim only discarded history the user had loaded. A write
+    now only invalidates, the inbox and oversight modules both (`use-invalidate-threads.ts`).
 
 Other deviations from the tasks above:
 
@@ -552,3 +564,24 @@ Other deviations from the tasks above:
   `last_message_at`; a message body is capped at `MESSAGE_BODY_MAX_LENGTH` (5000);
   `mark_thread_read` checks the caller can open the thread; the broadcast task runs only a
   `queued` job; `unread_count` is a correlated subquery.
+
+PR D (the dashboard) deviated from its tasks as follows:
+
+- **Three query modules, not `queryKeys.module("communication")`.** `message-threads`,
+  `thread-oversight` and `broadcasts` each key their own reads, matching their service modules;
+  an inbox write invalidates the first two together.
+- **`useUrlParams`, not `useDataGridUrlState`,** keeps `?thread=` and `?status=`: the inbox is two
+  panes over a cursor list, not a `DataGrid`, and has no sort, page or columns to keep.
+- **Files the tasks did not list:** `picker-popover.tsx` (the recipient and student pickers'
+  shell), `thread-panes.tsx` (the two panes the inbox and oversight share), `thread-source.ts`
+  (`ThreadSource`, so oversight reuses the list and thread view), `use-broadcast-key.ts` (the
+  broadcast's idempotency key), and the test fixtures and support files
+  (`src/test-fixtures/communication.ts`, `messages-test-support.tsx`,
+  `broadcast-test-support.ts`, `broadcast-services-mock.ts`). The final fix wave added
+  `removable-chip.tsx` and `use-invalidate-threads.ts`.
+- **`docs/03-modules/attendance.md`'s cursor-list path** was corrected to
+  `hooks/use-cursor-list.ts` in passing.
+- **`:mark-read` is gated on `communication.message.create`** (Ruling 11), and is skipped for a
+  thread with nothing unread.
+- **The broadcast's `Idempotency-Key` is held on `BroadcastScreen`,** not the confirm step, so
+  Back then Next after a lost reply keeps the same key.
