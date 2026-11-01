@@ -1,7 +1,7 @@
-"""Routes for `/broadcasts:preview` and `/broadcasts:emergency`.
+"""Routes for `/broadcasts:scope`, `/broadcasts:preview` and `/broadcasts:emergency`.
 
 Explicit `path()`s: there is no `broadcasts` collection to register on a router,
-only the two colon actions.
+only the colon actions.
 """
 
 from __future__ import annotations
@@ -11,6 +11,11 @@ from django.urls import path
 from apps.communication.broadcasts.viewset import BroadcastViewSet
 
 urlpatterns = [
+    path(
+        "broadcasts:scope",
+        BroadcastViewSet.as_view({"get": "scope"}),
+        name="broadcasts-scope",
+    ),
     path(
         "broadcasts:preview",
         BroadcastViewSet.as_view({"post": "preview"}),

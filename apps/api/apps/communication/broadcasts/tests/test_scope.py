@@ -1,4 +1,7 @@
-"""A campus-scoped sender broadcasts to their own campus only; `all` scope is unaffected."""
+"""A campus-scoped sender broadcasts to their own campus only; `all` scope is unaffected.
+
+`GET /broadcasts:scope` tells the screen the same thing before it sends.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +12,7 @@ from apps.communication.broadcasts.services.scope import CAMPUS_REQUIRED_MESSAGE
 from apps.communication.broadcasts.tests.base import (
     MESSAGE,
     PREVIEW_URL,
+    SCOPE_URL,
     SEND_URL,
     BroadcastAPITestCase,
 )
@@ -19,7 +23,9 @@ from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
 
-class CampusScopedSenderTests(BroadcastAPITestCase):
+class CampusSenderTestCase(BroadcastAPITestCase):
+    """A sender holding `broadcast.send` scoped to `self.campus` alone."""
+
     def setUp(self) -> None:
         super().setUp()
         with tenant_context(self.tenant.id):
@@ -34,6 +40,8 @@ class CampusScopedSenderTests(BroadcastAPITestCase):
             )
         authenticate(self.client, self.sender)
 
+
+class CampusScopedSenderTests(CampusSenderTestCase):
     def staff_audience(self, campus=None) -> dict:
         """Staff on ``campus``: the sender and the all-scope caller, at least."""
         body: dict = {"audience_type": AudienceType.STAFF, "message": MESSAGE}
@@ -175,3 +183,79 @@ class CampusScopedSenderTests(BroadcastAPITestCase):
 
         self.assertEqual(no_campus.status_code, status.HTTP_200_OK, no_campus.json())
         self.assertEqual(other_campus.status_code, status.HTTP_200_OK, other_campus.json())
+
+
+class BroadcastScopeReadTests(CampusSenderTestCase):
+    """`GET /broadcasts:scope` answers from `sender_campus_ids`, as the send enforces."""
+
+    def scope(self):
+        return self.client.get(SCOPE_URL)
+
+    def test_an_all_scope_sender_is_unrestricted(self) -> None:
+        authenticate(self.client, self.user)
+
+        response = self.scope()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json(), {"data": {"campus_ids": None}})
+
+    def test_a_campus_scoped_sender_gets_their_campus(self) -> None:
+        response = self.scope()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json(), {"data": {"campus_ids": [str(self.campus.pk)]}})
+
+    def test_campuses_from_two_granting_roles_are_listed_in_id_order(self) -> None:
+        with tenant_context(self.tenant.id):
+            grant(
+                self.sender,
+                "communication.broadcast.send",
+                scope=RecordScope.CAMPUS,
+                scope_ref=self.other_campus.pk,
+            )
+
+        response = self.scope()
+
+        expected = sorted([str(self.campus.pk), str(self.other_campus.pk)])
+        self.assertEqual(response.json(), {"data": {"campus_ids": expected}})
+
+    def test_a_sender_whose_scope_reaches_no_campus_gets_an_empty_list(self) -> None:
+        """A 200, not the send's 404: this reads the caller's own capability, not a record."""
+        with tenant_context(self.tenant.id):
+            assigned = UserFactory(tenant=self.tenant)
+            grant(assigned, "communication.broadcast.send", scope=RecordScope.ASSIGNED)
+        authenticate(self.client, assigned)
+
+        response = self.scope()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json(), {"data": {"campus_ids": []}})
+
+    def test_an_unrelated_all_scope_role_does_not_widen_the_list(self) -> None:
+        with tenant_context(self.tenant.id):
+            grant(self.sender, "examinations.exam.view", scope=RecordScope.ALL)
+
+        response = self.scope()
+
+        self.assertEqual(response.json(), {"data": {"campus_ids": [str(self.campus.pk)]}})
+
+    def test_reading_the_scope_requires_broadcast_send(self) -> None:
+        with tenant_context(self.tenant.id):
+            publisher = UserFactory(tenant=self.tenant)
+            grant(publisher, "communication.announcement.publish")
+        authenticate(self.client, publisher)
+
+        response = self.scope()
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_a_guardian_holding_the_key_is_refused(self) -> None:
+        with tenant_context(self.tenant.id):
+            guardian = UserFactory(tenant=self.tenant)
+            # Even holding the key: a restricted principal never reaches a staff endpoint.
+            grant(guardian, "communication.broadcast.send", is_restricted_principal=True)
+        authenticate(self.client, guardian)
+
+        response = self.scope()
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

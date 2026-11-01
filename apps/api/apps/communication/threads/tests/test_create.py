@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest import mock
+
 from rest_framework import status
 
 from apps.communication.models import Message, MessageThread, ThreadType
@@ -12,12 +14,16 @@ from apps.communication.tests.factories import (
     authenticate,
     grant,
 )
-from apps.communication.threads.routing import THREAD_FALLBACK_ROLE_DEFAULT
+from apps.communication.threads.routing import (
+    THREAD_FALLBACK_ROLE_DEFAULT,
+    _class_teacher_user_id,
+)
 from apps.communication.threads.tests.base import (
     GUARDIAN_THREAD_KEYS,
     STAFF_THREAD_KEYS,
     ThreadAPITestCase,
 )
+from apps.student_management.models import StudentEnrollment
 from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
@@ -157,6 +163,38 @@ class GuardianRoutingTests(ThreadCreateTestCase):
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
         with tenant_context(self.tenant.id):
             self.assertFalse(MessageThread.objects.exists())
+
+
+class ClassTeacherLookupQueryTests(ThreadAPITestCase):
+    """The staff row and the staff-user pool are read together, so vetting costs nothing extra."""
+
+    def class_teacher(self):
+        """`_class_teacher_user_id`'s own queries, the enrollment and its section already loaded."""
+        with tenant_context(self.tenant.id):
+            enrollment = StudentEnrollment.objects.select_related("section").get(
+                student=self.student
+            )
+            with (
+                mock.patch(
+                    "apps.communication.threads.routing.active_enrollment",
+                    return_value=enrollment,
+                ),
+                self.assertNumQueries(1),
+            ):
+                return _class_teacher_user_id(student=self.student, tenant_id=self.tenant.pk)
+
+    def test_an_active_class_teacher_is_found_in_one_query(self) -> None:
+        teacher = self.make_class_teacher()
+
+        self.assertEqual(self.class_teacher(), teacher.pk)
+
+    def test_a_deactivated_class_teacher_is_ruled_out_in_the_same_query(self) -> None:
+        teacher = self.make_class_teacher()
+        with tenant_context(self.tenant.id):
+            teacher.is_active = False
+            teacher.save(update_fields=["is_active"])
+
+        self.assertIsNone(self.class_teacher())
 
 
 class StaffGuardianThreadTests(ThreadCreateTestCase):

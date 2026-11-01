@@ -1,4 +1,4 @@
-"""Serializers for `/broadcasts:preview` and `/broadcasts:emergency`."""
+"""Serializers for `/broadcasts:preview`, `/broadcasts:emergency` and `/broadcasts:scope`."""
 
 from __future__ import annotations
 
@@ -102,6 +102,24 @@ class BroadcastQueuedResponseSerializer(serializers.Serializer):
     """`ActionResponse.accepted`'s body; poll `GET /jobs/{job_id}`."""
 
     data = BroadcastQueuedSerializer()
+
+
+class BroadcastScopeSerializer(serializers.Serializer):
+    """Where the caller may broadcast, read from the same rule the send enforces."""
+
+    campus_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        allow_null=True,
+        help_text=(
+            "null: unrestricted, so `campus_id` is optional and may be any campus. A list: "
+            "the only campuses the caller may target, one of which a send must name as "
+            "`campus_id`; an empty list means the caller can reach no campus."
+        ),
+    )
+
+
+class BroadcastScopeResponseSerializer(serializers.Serializer):
+    data = BroadcastScopeSerializer()
 
 
 def _assert_all_found(queryset: QuerySet, ids: list[uuid.UUID]) -> None:

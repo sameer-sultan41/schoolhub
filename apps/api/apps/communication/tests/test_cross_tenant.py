@@ -29,12 +29,14 @@ from apps.communication.tests.factories import (
     StudentFactory,
     TenantFactory,
     UserFactory,
+    authenticate,
     grant,
 )
 from core.files.tests.factories import FileFactory
 from core.jobs.models import BackgroundJob
 from core.notifications.models import DeliveryLog, Notification, NotificationChannel
 from core.notifications.templates import registry as platform_templates
+from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
 CODE = "communication-cross-tenant-test.event"
@@ -337,3 +339,28 @@ class CommunicationCrossTenantTests(CommunicationAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         with tenant_context(self.tenant.id):
             self.assertFalse(BackgroundJob.objects.exists())
+
+    def test_the_broadcast_scope_lists_only_the_callers_own_campuses(self) -> None:
+        """Another tenant's campus-scoped sender never shows up in this caller's answer."""
+        with tenant_context(self.other_tenant.id):
+            grant(
+                self.other_user,
+                "communication.broadcast.send",
+                scope=RecordScope.CAMPUS,
+                scope_ref=self.other_student.campus_id,
+            )
+        with tenant_context(self.tenant.id):
+            campus = CampusFactory(tenant=self.tenant)
+            sender = UserFactory(tenant=self.tenant)
+            grant(
+                sender,
+                "communication.broadcast.send",
+                scope=RecordScope.CAMPUS,
+                scope_ref=campus.pk,
+            )
+        authenticate(self.client, sender)
+
+        response = self.client.get("/api/v1/broadcasts:scope")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json(), {"data": {"campus_ids": [str(campus.pk)]}})
