@@ -90,6 +90,9 @@ mixed-scope-type union to this record.
 - Until PR B, one key held at two scope types still takes the first of
   `all` > `campus` > `own` > `assigned` (the two attendance entries in `deferred-work.md`).
 - Unchanged by design: the broadcast recipient side (ADR-0029 decision 5).
+- Not covered by decision 3: promotion batch `:approve`, `:reject` and `:execute` pass the
+  batch id to the service without `get_queryset`, so they apply no record scope and do not
+  404 across campuses. A pre-existing gap, high priority for PR B (`deferred-work.md`).
 - Left for a follow-up (`deferred-work.md`): promotion approver notifications and
   `notify_result_approval_pending` (`apps/examinations/tasks.py`) reach every holder of the
   approve key, whatever its scope.
