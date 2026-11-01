@@ -70,6 +70,10 @@ CONFIGURABLE_STATUSES = frozenset({ExamStatus.DRAFT, ExamStatus.SCHEDULED})
 # already given to a parent.
 DELETABLE_STATUSES = frozenset({ExamStatus.DRAFT})
 
+# The key that enters marks: `MarksViewSet` declares it, and the allocation check
+# reads the scopes of the roles granting it.
+MARKS_CREATE = "exams.marks.create"
+
 
 def assert_session_is_writable(session: AcademicSession) -> None:
     """Refuse work in a closed or archived session.
@@ -680,11 +684,6 @@ def assert_marks_within_maximum(
                 )
             }
         )
-
-
-# The key that enters marks: `MarksViewSet` declares it, and the allocation check
-# reads the scopes of the roles granting it.
-MARKS_CREATE = "exams.marks.create"
 
 
 def assert_marker_may_enter(*, user, exam_subject: ExamSubject) -> None:

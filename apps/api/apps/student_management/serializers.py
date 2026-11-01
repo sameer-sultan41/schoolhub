@@ -39,7 +39,8 @@ from core.rbac.permissions import scope_queryset, scopes_for
 
 READ_ONLY_FIELDS = ("id", "created_at", "updated_at")
 
-# The keys medical-notes visibility reads, as `StudentViewSet` declares them.
+# `StudentViewSet`'s read and update keys, spelled once: the viewset declares them and
+# medical-notes visibility reads them.
 STUDENT_VIEW = "students.student.view"
 STUDENT_UPDATE = "students.student.update"
 

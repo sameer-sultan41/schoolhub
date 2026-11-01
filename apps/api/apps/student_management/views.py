@@ -32,6 +32,8 @@ from apps.student_management.models import (
     StudentTransfer,
 )
 from apps.student_management.serializers import (
+    STUDENT_UPDATE,
+    STUDENT_VIEW,
     ChangeSectionRequestSerializer,
     DocumentVerifyRequestSerializer,
     EmergencyContactSerializer,
@@ -132,11 +134,11 @@ class StudentViewSet(TenantModelViewSet):
     ordering = ["last_name", "first_name"]
     scope_own_field = "user_id"
     required_feature = "module.students"
-    required_permission = "students.student.view"
+    required_permission = STUDENT_VIEW
     required_permission_map = {
         "create": "students.student.create",
-        "update": "students.student.update",
-        "partial_update": "students.student.update",
+        "update": STUDENT_UPDATE,
+        "partial_update": STUDENT_UPDATE,
         "destroy": "students.student.delete",
         "enroll": "students.enrollment.enroll",
         "change_section": "students.enrollment.update",
@@ -481,7 +483,7 @@ class _NestedUnderStudentMixin:
         # other. `own_field` is the fallback only: `Student.filter_owned_by_user`
         # takes precedence and is what resolves a guardian to their linked children.
         queryset = Student.objects.alive()
-        for permission in ("students.student.view", route_permission(self.request, self)):
+        for permission in (STUDENT_VIEW, route_permission(self.request, self)):
             queryset = scope_queryset(
                 queryset, self.request.user, permission=permission, own_field="user_id"
             )
