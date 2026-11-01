@@ -3,9 +3,10 @@
 A report export is queued by one request and built later by a worker, which has no
 route to ask for a key. So the enqueuing request's declaration travels with the job,
 and the task scopes every row by it (`scope_queryset(permission=...)`). It cannot be
-derived from the job type: a `GET` over the inline ceiling queues the same job as a
-`POST`, under the *view* key rather than the export key, and the file must hold
-exactly what that `GET` would have shown.
+derived from the job type: in attendance and examinations a `GET` over the inline
+ceiling queues the same job a `POST` does, under the *view* key rather than the
+export key, and the file must hold exactly what that `GET` would have shown. (Fees
+answers such a `GET` with a 422, so only its `POST` queues a job.)
 """
 
 from __future__ import annotations

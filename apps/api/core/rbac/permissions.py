@@ -191,8 +191,15 @@ def required_declaration(request: Request, view: object) -> str | AnyOf | None:
 
     `required_permission_map[action]`, else `required_permission`. `HasPermissionKey`
     enforces it; public so that any other code needing a route's key reads the same
-    answer instead of re-deriving it. ``view`` is any object carrying those
-    attributes, so a mixin can pass itself.
+    answer instead of re-deriving it.
+
+    ``view`` is typed ``object`` because only its attributes are read (``action``,
+    ``required_permission_map``, ``required_permission``) and the nested-route mixins
+    pass ``self``, which mypy cannot see as an ``APIView``. Passing the wrong object
+    fails closed: one without the attributes declares nothing, so `HasPermissionKey`
+    refuses it (403), the mixin reads `.none()`, and `route_permission` raises
+    `PermissionDenied`, never a tenant-wide read. (One carrying another route's
+    attributes yields that route's key, so pass the view actually being served.)
     """
     action = getattr(view, "action", None) or request.method.lower()
     mapping = getattr(view, "required_permission_map", None) or {}
