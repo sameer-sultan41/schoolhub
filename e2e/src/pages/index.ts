@@ -14,6 +14,8 @@ export * from "./dashboard/dashboard.page";
 export * from "./dashboard/exams/exam.page";
 export * from "./dashboard/exams/exams.page";
 export * from "./dashboard/exams/grading-scales.page";
+export * from "./dashboard/exams/schedule.page";
+export * from "./dashboard/exams/admit-cards.page";
 export * from "./dashboard/login.page";
 export * from "./dashboard/staff.page";
 export * from "./dashboard/students.page";

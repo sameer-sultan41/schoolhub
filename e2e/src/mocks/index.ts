@@ -26,3 +26,4 @@ export * from "./domains/attendance-staff-reports-store";
 export * from "./domains/attendance-staff-reports";
 export * from "./domains/attendance-reports-import";
 export * from "./domains/exams-setup";
+export * from "./domains/exams-schedule";

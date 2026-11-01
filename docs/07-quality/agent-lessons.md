@@ -176,6 +176,7 @@
 
 - **Mistake.** The examinations dashboard's scope ruling and `examinations.md` §20 said the class teacher's exam scope was "not session-limited, matching `Marks`", and that narrowing it "would change what `Marks` returns". `Marks` joins through the student's *active enrolment* in the homeroom section (`student__enrollments__section_id`); `Exam`/`ExamSubject` join through the exam-subject's *class* (`school_class_id`) with no session — different joins, so the claim was false and last session's exams leaked to the class teacher (PR A final review).
 - **Check.** Before writing "matches X" or "would change X" in a ruling, doc or docstring, open both predicates and name the join each uses; if they differ, say what each actually filters on and test the case where they diverge (here, the same class in another session).
+- **Recurred in PR B.** `examinations.md` §20 said a class teacher sees a section's sittings "only through a homeroom with active enrolments in the exam's session, so last session's homeroom opens nothing", and shipped with no test of another session's allocation or homeroom; the sibling `AdmitCard` scope was not session-bound at all (PR B final review). A scope claim in a doc ships with the test of the case it rules out.
 
 ### L29. A page-number list's default ordering must be total
 
@@ -191,6 +192,21 @@
 
 - **Mistake.** `e2e/tests/live/api/exams-setup.spec.ts` imported the function `isOffsetPagination` from `@schoolhub/types`. Playwright loads that package as CommonJS, so the named import threw at load, every live spec went with it, and `e2e-live` reported zero tests (PR #147). The mocked lane never loads that spec, so the PR's CI stayed green.
 - **Check.** In `e2e/`, import from `@schoolhub/types` with `import type` only; check a runtime value inline (e.g. `toHaveProperty("total_pages")`). Dispatch `e2e-live` on the branch before calling a PR that touches `e2e/tests/live/` done.
+
+### L32. A background job's write must not overwrite state a user can change mid-job
+
+- **Mistake.** `render_admit_cards_task` read the cards, rendered each PDF, then `card.save()`d `status=issued`. A card revoked while its PDF rendered was written back to `issued` with a downloadable file, undoing the revocation (PR B final review).
+- **Check.** A job that writes a row a user can also change saves with a conditional `UPDATE` (`filter(...).exclude(<user-set state>).update(...)`, acting on 0 rows) or re-reads under `select_for_update`. Test it by changing the row between the job's read and its write (patch the slow step's side effect to make the change) and assert the user's change survives.
+
+### L33. "The student's enrolment in session X" does not filter `status=active`
+
+- **Mistake.** The admit-card section (serializer, viewset `Prefetch`, `section_id` filter) read the student's *active* enrolment in the exam's session. Promotion turns that row `promoted`/`retained`/`graduated`, so every card of a closed session lost its section (PR B final review).
+- **Check.** When the session is already pinned, match on session and `deleted_at IS NULL` only: `StudentEnrollment` is one row per (student, session). Keep `status=active` for "where is the student now". Test by promoting the student and asserting the historical read still resolves.
+
+### L34. An action that addresses a parent by id resolves it through the record scope
+
+- **Mistake.** `schedule-conflicts`, `:publish-schedule` and `:issue-admit-cards` looked the exam up with `get_object_or_404(Exam.objects.alive(), pk=pk)`: tenant-scoped, but not record-scoped, so an `assigned` teacher could read or act on any exam of the school by id (PR B final review).
+- **Check.** Grep for `get_object_or_404(<Model>.objects.alive()` in views you touch; resolve the parent through `scope_queryset(...)` with the parent viewset's own `own_field`/`campus_field` (out of scope is a 404), and test that an unassigned caller gets a 404 while an assigned one gets through.
 
 ## 4. Adding a lesson
 

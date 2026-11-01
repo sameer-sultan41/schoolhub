@@ -230,6 +230,13 @@ either this file or `project-status.md`.
     staff register marks (Present, Absent, Late, Half day), though the server accepts every
     staff status but `on_leave`. Neither the register nor a correction can record a staff day
     as a holiday from the dashboard; the school calendar's holidays refuse marking instead.
+- **Twelve older `examinations` actions look up their parent exam or exam-subject without the
+  caller's record scope** (`get_object_or_404(<Model>.objects.alive(), ...)` in
+  `apps/api/apps/examinations/views.py`), the pattern lesson L34 records. PR B fixed the three
+  it touched (`:publish-schedule`, `:issue-admit-cards`, `schedule-conflicts`); the rest are
+  gated by write keys teachers do not hold, so the exposure is narrow, but each should resolve
+  through `scope_queryset` with an out-of-scope 404 test. The marks, results and report-card
+  PRs (C, D) touch most of them and should convert each as they go.
 - **The examinations dashboard's PR A (grading scales, exams, their subjects) left these out:**
   - **`Section`, `Class` and `AcademicSession` have no `assigned`-scope hooks.** An
     `assigned` teacher can read the exams they teach, but the reference lists a picker reads
@@ -325,9 +332,9 @@ either this file or `project-status.md`.
   Settings; the corrections and leave queues; staff attendance, reports and the import),
   once the dashboard shell had settled. Examinations' are five PRs (plan
   `superpowers/plans/2026-11-01-examinations-dashboard.md`), of which PR A (grading scales,
-  exams and their subjects) is built; what remains is **PR B** (the Schedule tab and admit
-  cards), **PR C** (the Marks tab), **PR D** (Results, Report cards and the Reports section)
-  and **PR E** (question banks and paper assembly).
+  exams and their subjects) and PR B (the Schedule and Admit cards tabs) are built; what
+  remains is **PR C** (the Marks tab), **PR D** (Results, Report cards and the Reports
+  section) and **PR E** (question banks and paper assembly).
 - **Tier 2's three modules are all in.** `apps/api/apps/` now also has
   `academics`, `timetable` and `attendance`, attendance with all three of its
   halves: marking, leave, and staff attendance with reports (see above).
