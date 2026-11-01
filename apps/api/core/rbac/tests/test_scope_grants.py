@@ -23,7 +23,6 @@ from core.rbac.permissions import (
     is_restricted_principal,
     scope_grants,
     scopes_for,
-    user_scopes,
 )
 from core.rbac.seeding import ensure_role_with_permissions
 
@@ -109,15 +108,12 @@ class ScopeGrantsTests(TestCase):
         self.assertIn(OTHER, effective_permission_keys(self.user))
         self.assertEqual(scopes_for(self.user, OTHER), {RecordScope.ALL: [None]})
         self.assertTrue(is_restricted_principal(self.user))
-        self.assertIn(RecordScope.ALL, user_scopes(self.user))
 
         self.soft_delete(guardian)
 
         self.assertEqual(effective_permission_keys(self.user), frozenset({SEND}))
         self.assertEqual(scopes_for(self.user, OTHER), {})
         self.assertFalse(is_restricted_principal(self.user))
-        # The key-blind `user_scopes` is evicted too, until its last direct readers move.
-        self.assertEqual(user_scopes(self.user), {RecordScope.CAMPUS: [self.campus_a]})
         self.assertEqual(scopes_for(self.user, SEND), {RecordScope.CAMPUS: [self.campus_a]})
 
     def test_role_permission_change_evicts_scope_grants(self) -> None:

@@ -682,6 +682,11 @@ def assert_marks_within_maximum(
         )
 
 
+# The key that enters marks: `MarksViewSet` declares it, and the allocation check
+# reads the scopes of the roles granting it.
+MARKS_CREATE = "exams.marks.create"
+
+
 def assert_marker_may_enter(*, user, exam_subject: ExamSubject) -> None:
     """§4 — a teacher may only enter marks for a class-subject they are on.
 
@@ -691,16 +696,16 @@ def assert_marker_may_enter(*, user, exam_subject: ExamSubject) -> None:
     an allocation would break the legitimate case — the same early return
     `attendance.register.may_mark_register` makes, and the same reason the
     principal check has to sit in the *view* rather than inside here.
+
+    The scope is read from the roles that grant `MARKS_CREATE` only (`scopes_for`):
+    an `assigned` teacher who also holds an `all` role for some other key is still
+    held to their allocations.
     """
     from apps.academics.models import TeacherSubjectAllocation
     from apps.staff_management.models import EmploymentStatus, Staff
-    from core.rbac.permissions import user_scopes
+    from core.rbac.permissions import scopes_for
 
-    # `user_scopes` is keyed by **scope type**, not by permission key — the
-    # shape `attendance.register.may_mark_register` already reads. Keying it
-    # by permission returned nothing and made every caller look unscoped, which
-    # is how CI caught this.
-    scopes = user_scopes(user)
+    scopes = scopes_for(user, MARKS_CREATE)
     if RecordScope.ALL in scopes or RecordScope.CAMPUS in scopes:
         return
     if RecordScope.ASSIGNED not in scopes:

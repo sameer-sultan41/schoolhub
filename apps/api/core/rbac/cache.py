@@ -13,21 +13,15 @@ from django.core.cache import cache
 from django.db import transaction
 
 SCOPE_GRANTS_PREFIX = "scope-grants"
-# `user_scopes`' key; it goes when `user_scopes` does.
-USER_SCOPES_PREFIX = "scopes"
 
 
 def scope_grants_cache_key(user_id: uuid.UUID | str) -> str:
     return f"{SCOPE_GRANTS_PREFIX}:{user_id}"
 
 
-def user_scopes_cache_key(user_id: uuid.UUID | str) -> str:
-    return f"{USER_SCOPES_PREFIX}:{user_id}"
-
-
 def rbac_cache_keys(user_id: uuid.UUID | str) -> tuple[str, ...]:
     """Every cache key that holds RBAC state for one user."""
-    return (scope_grants_cache_key(user_id), user_scopes_cache_key(user_id))
+    return (scope_grants_cache_key(user_id),)
 
 
 def evict_rbac_caches(user_ids: Iterable[uuid.UUID | str]) -> None:

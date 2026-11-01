@@ -175,12 +175,12 @@ class PeriodEndpointTests(TimetableAPITestCase):
 
 
 class PeriodOrderingTests(TimetableAPITestCase):
-    """`?ordering=` on `/periods`.
+    """`?ordering=` on `/periods`, and what a campus-scoped reader is handed.
 
-    The bell schedule is this module's worst case for the no-`__` rule: `get_queryset`
-    hands a campus-scoped principal `(scoped | tenant_wide).distinct()`, and Postgres
-    refuses `SELECT DISTINCT` with an `ORDER BY` on a joined column that is not in the
-    select list. The last test here is the one that catches a `__` creeping back in.
+    A campus-scoped reader gets their campus's periods plus the tenant-wide ones
+    (`scope_campus_allows_null`): a null campus means "every campus". `campus_name`
+    is an annotation rather than a `__` path (tests/test_endpoint_contracts.py), so
+    sorting on it works for every reader.
     """
 
     def setUp(self) -> None:
@@ -252,13 +252,10 @@ class PeriodOrderingTests(TimetableAPITestCase):
         self.assertEqual(self.ids("ordering=-is_break")[0], str(self.recess.pk))
 
     def test_a_campus_scoped_principal_can_sort_by_the_annotated_campus(self) -> None:
-        """The `.distinct()` path, read by the principal it exists for.
-
-        `campus__name` in `ordering_fields` would answer 200 for the all-scoped admin
-        above and raise ProgrammingError for exactly this reader. Ordering is asserted
-        as a set because all three campus periods share one campus name and the pk
-        tiebreak decides between them; what is pinned is that the named campus sorts
-        ahead of the tenant-wide rows, whose `campus_name` is NULL.
+        """Ordering is asserted as a set because all three campus periods share one
+        campus name and the pk tiebreak decides between them; what is pinned is that
+        the named campus sorts ahead of the tenant-wide rows, whose `campus_name` is
+        NULL.
         """
         user = UserFactory(tenant=self.tenant)
         grant(
@@ -278,6 +275,59 @@ class PeriodOrderingTests(TimetableAPITestCase):
             set(ids[:3]),
             {str(self.zoology.pk), str(self.algebra.pk), str(self.recess.pk)},
         )
+
+    def _mixed_reader(self):
+        """Campus-scoped on the timetable's read key, plus an unrelated `all` role."""
+        user = UserFactory(tenant=self.tenant)
+        grant(
+            user,
+            "timetable.timetable.view",
+            scope=RecordScope.CAMPUS,
+            scope_ref=self.wing.pk,
+        )
+        grant(user, "exams.exam.view", scope=RecordScope.ALL)
+        authenticate(self.client, user)
+        with tenant_context(self.tenant.id):
+            self.elsewhere_period = PeriodFactory(
+                tenant=self.tenant, campus=CampusFactory(tenant=self.tenant), sequence=21
+            )
+        return user
+
+    def test_campus_scoped_reader_sees_campus_and_shared_periods(self) -> None:
+        """Against the key-blind union the unrelated `all` role skipped the tenant-wide
+        widening, and the shared periods (lunch included) vanished from the list."""
+        self._mixed_reader()
+
+        response = self.client.get("/api/v1/periods?page_size=100")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(
+            {row["id"] for row in response.json()["data"]},
+            {
+                str(self.zoology.pk),
+                str(self.algebra.pk),
+                str(self.recess.pk),
+                *(str(period.pk) for period in self.periods),
+            },
+        )
+
+    def test_ordering_by_campus_name(self) -> None:
+        """The named campus sorts ahead of the tenant-wide rows ascending, behind them
+        descending, for the reader whose list mixes the two."""
+        self._mixed_reader()
+        wing = {str(self.zoology.pk), str(self.algebra.pk), str(self.recess.pk)}
+        shared = {str(period.pk) for period in self.periods}
+
+        for query, first, last in (
+            ("ordering=campus_name", wing, shared),
+            ("ordering=-campus_name", shared, wing),
+        ):
+            with self.subTest(query=query):
+                response = self.client.get(f"/api/v1/periods?{query}&page_size=100")
+                self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+                ids = [row["id"] for row in response.json()["data"]]
+                self.assertEqual(set(ids[: len(first)]), first)
+                self.assertEqual(set(ids[len(first) :]), last)
 
     def test_an_undeclared_column_is_ignored_rather_than_an_error(self) -> None:
         """`weekdays` is an array; there is no ordering of it a reader would recognise

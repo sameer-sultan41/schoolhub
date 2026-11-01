@@ -12,7 +12,7 @@ from django.db.models import Q, QuerySet
 from rest_framework import exceptions, permissions
 from rest_framework.request import Request
 
-from core.rbac.cache import scope_grants_cache_key, user_scopes_cache_key
+from core.rbac.cache import scope_grants_cache_key
 from core.rbac.models import RecordScope, UserRole
 
 _CACHE_TTL = 300
@@ -86,39 +86,6 @@ def scopes_for(user: RbacUser, declared: str | AnyOf) -> dict[str, list[uuid.UUI
                 if ref not in merged:
                     merged.append(ref)
     return scopes
-
-
-def user_scopes(user: RbacUser) -> dict[str, list[uuid.UUID | None]]:
-    """Record scopes granted to the user by *any* role, keyed by scope type.
-
-    Key-blind: it unions every role's scope, so an unrelated `all` role widens a
-    campus-scoped grant. New code asks `scopes_for(user, key)` instead.
-
-    Cached per user, so a serializer calling it once per row
-    (student_management/serializers.py's _can_see_medical_notes) issues one query,
-    not one per row. Evicted with `scope_grants` (core/rbac/cache.py).
-    """
-    user_id = user.pk if user and user.is_authenticated else None
-    if user_id is None:
-        return {}
-
-    cache_key = user_scopes_cache_key(user_id)
-    cached = cache.get(cache_key)
-    if cached is not None:
-        return cached
-
-    scopes: dict[str, list[uuid.UUID | None]] = {}
-    for scope, ref in UserRole.objects.filter(
-        user_id=user_id, deleted_at__isnull=True, role__deleted_at__isnull=True
-    ).values_list("scope", "scope_ref"):
-        scopes.setdefault(scope, []).append(ref)
-    cache.set(cache_key, scopes, _CACHE_TTL)
-    return scopes
-
-
-def user_scopes_for_key(user: RbacUser, key: str) -> dict[str, list[uuid.UUID | None]]:
-    """Record scopes of only the user's live roles that grant ``key``; see `scopes_for`."""
-    return scopes_for(user, key)
 
 
 def has_permission_key(user: RbacUser, key: str) -> bool:

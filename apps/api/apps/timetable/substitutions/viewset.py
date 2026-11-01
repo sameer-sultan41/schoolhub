@@ -106,8 +106,8 @@ class TeacherSubstitutionViewSet(
         that holds even where nothing produces a ``.distinct()`` yet.
 
         ``scope_own_field`` here is a plain forward join (`substitute_staff__user_id`),
-        so today an own-scoped substitute's queryset is not distinct; `PeriodViewSet`
-        and `StudentViewSet` are where the hazard actually bites. Both staff FKs are
+        so today an own-scoped substitute's queryset is not distinct; `StudentViewSet`'s
+        `assigned` scope is where the hazard actually bites. Both staff FKs are
         non-null, so these annotations reuse the inner joins ``select_related`` already
         opens.
         """

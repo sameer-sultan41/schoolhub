@@ -52,7 +52,7 @@ from core.api.exceptions import Conflict, DomainRuleViolation
 from core.files.services import assert_file_usable
 from core.imports.tabular import parse_rows
 from core.rbac.models import RecordScope
-from core.rbac.permissions import user_scopes
+from core.rbac.permissions import scopes_for
 from core.tenancy.features import is_feature_enabled
 from core.tenancy.models import TenantSettings
 
@@ -1380,6 +1380,10 @@ def _assert_escalation_reaches_wider(*, step: LeaveApproval, user_id: uuid.UUID)
     rather than as a role because roles are tenant-editable and scope is what
     actually determines what an approver can see — the same reason
     `student_leave_chain` keys both levels the same and lets scope separate them.
+
+    The scope is the one the step's own key grants (`step.required_permission`,
+    through `scopes_for`), so an `all` role for an unrelated key does not make an
+    `assigned` approver wide enough to decide level 2.
     """
     if step.level < 2:
         return
@@ -1387,7 +1391,7 @@ def _assert_escalation_reaches_wider(*, step: LeaveApproval, user_id: uuid.UUID)
     from core.rbac.models import User
 
     reviewer = User.objects.filter(pk=user_id).first()
-    scopes = user_scopes(reviewer) if reviewer is not None else {}
+    scopes = scopes_for(reviewer, step.required_permission) if reviewer is not None else {}
     if RecordScope.ALL in scopes or RecordScope.CAMPUS in scopes:
         return
 

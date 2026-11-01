@@ -358,6 +358,28 @@ class AllocationScopeTests(MarksTestCase):
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
         self.assertIn("not currently allocated", str(response.json()))
 
+    def test_unrelated_all_role_does_not_skip_allocation_check(self) -> None:
+        """Only the roles granting `exams.marks.create` decide the early return.
+
+        The teacher's marks role is `assigned`; an `all` role for another key must
+        not lift them past the allocation check. Against the key-blind union this
+        teacher looked `all`-scoped and the unallocated grid was saved.
+        """
+        with tenant_context(self.tenant.id):
+            stranger_user = UserFactory(tenant=self.tenant)
+            from apps.examinations.tests.factories import StaffFactory
+
+            StaffFactory(tenant=self.tenant, campus=self.campus, user_id=stranger_user.pk)
+        grant(stranger_user, "exams.exam.view", scope=RecordScope.ALL)
+        client = self._teacher_client(stranger_user)
+
+        response = self.submit(client=client)
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertIn("not currently allocated", str(response.json()))
+        with tenant_context(self.tenant.id):
+            self.assertFalse(Marks.objects.filter(exam_subject=self.exam_subject).exists())
+
     def test_an_account_with_no_staff_row_is_refused(self) -> None:
         with tenant_context(self.tenant.id):
             orphan = UserFactory(tenant=self.tenant)

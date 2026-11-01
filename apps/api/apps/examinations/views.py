@@ -582,9 +582,9 @@ class MarksViewSet(
     scope_own_field = None
     scope_campus_field = "student__campus_id"
     required_feature = FEATURE
-    required_permission = "exams.marks.create"
+    required_permission = services.MARKS_CREATE
     required_permission_map = {
-        "bulk_entry": "exams.marks.create",
+        "bulk_entry": services.MARKS_CREATE,
         "lock": "exams.marks.lock",
         "unlock": "exams.marks.lock",
     }

@@ -12,8 +12,10 @@ docs/05-database/entities/people.md and the filter names in the module doc §16.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterable
 from typing import Any
 
+from django.db import models
 from rest_framework import serializers
 
 from apps.school_organization.models import AcademicSession, Campus, Class, House, Section
@@ -33,9 +35,17 @@ from core.files.models import File
 from core.files.serializers import SignedFileURLField
 from core.files.services import assert_file_usable
 from core.rbac.models import RecordScope
-from core.rbac.permissions import has_permission_key, user_scopes
+from core.rbac.permissions import scope_queryset, scopes_for
 
 READ_ONLY_FIELDS = ("id", "created_at", "updated_at")
+
+# The keys medical-notes visibility reads, as `StudentViewSet` declares them.
+STUDENT_VIEW = "students.student.view"
+STUDENT_UPDATE = "students.student.update"
+
+# The serializer context key that carries one response's `student id -> may see
+# medical_notes` map.
+MEDICAL_NOTES_CONTEXT_KEY = "students_medical_notes_visible"
 
 
 def _fk(model, **kwargs) -> serializers.PrimaryKeyRelatedField:
@@ -44,6 +54,17 @@ def _fk(model, **kwargs) -> serializers.PrimaryKeyRelatedField:
     not ``manager.all()``, is passed.
     """
     return serializers.PrimaryKeyRelatedField(queryset=model.objects, **kwargs)
+
+
+class StudentListSerializer(serializers.ListSerializer):
+    """Resolves every row's medical-notes visibility in one pass before the rows render."""
+
+    def to_representation(self, data):
+        rows = list(data.all() if isinstance(data, models.manager.BaseManager) else data)
+        user = _request_user(self.context)
+        if user is not None:
+            _load_medical_notes_visibility(self.context, user, (row.pk for row in rows))
+        return super().to_representation(rows)
 
 
 class StudentSerializer(serializers.ModelSerializer):
@@ -110,6 +131,7 @@ class StudentSerializer(serializers.ModelSerializer):
         # status: moves only through the enroll/change-section/withdraw
         # colon-actions added in a later PR, not a plain PATCH.
         read_only_fields = (*READ_ONLY_FIELDS, "status")
+        list_serializer_class = StudentListSerializer
 
     def validate_admission_number(self, value: str) -> str:
         if self.instance is not None:
@@ -146,32 +168,68 @@ class StudentSerializer(serializers.ModelSerializer):
     def to_representation(self, instance: Student) -> dict[str, Any]:
         """Strip medical_notes for callers without the visibility to see it.
 
-        Field-level, not row-level: an update-permission holder or a caller
-        whose role carries the `assigned` record scope (a class teacher, whose
-        queryset is already narrowed to their own sections) may see it; anyone
-        else — including a student/guardian viewing under `own` scope — gets the
-        field omitted entirely rather than nulled, so its *absence* is itself
-        the signal that the field exists but was withheld (see
-        student-profile.tsx's client-side handling of this in the dashboard PR).
+        Field-level, not row-level: a caller whose `students.student.update` scope
+        reaches this row, or a class teacher whose `students.student.view` scope is
+        `assigned` and who teaches this student, may see it
+        (`_load_medical_notes_visibility`). Anyone else — including a student/guardian
+        viewing under `own` scope — gets the field omitted entirely rather than
+        nulled, so its *absence* is itself the signal that the field exists but was
+        withheld (see student-profile.tsx's client-side handling of this in the
+        dashboard PR).
         """
         data = super().to_representation(instance)
-        request = self.context.get("request")
-        user = getattr(request, "user", None) if request else None
-        if user is None or not _can_see_medical_notes(user, instance):
+        user = _request_user(self.context)
+        if user is None or not _may_see_medical_notes(self.context, user, instance.pk):
             data.pop("medical_notes", None)
         return data
 
 
-def _can_see_medical_notes(user, student: Student) -> bool:
-    if has_permission_key(user, "students.student.update"):
-        return True
-    if RecordScope.ASSIGNED not in user_scopes(user):
-        return False
-    # A user can hold `assigned` scope from one role and a broader scope (e.g.
-    # `campus`) from another — the aggregate scope set alone can't say which one
-    # actually reached *this* record. Re-run the module's own assigned-filter
-    # against just this instance rather than trusting scope membership in general.
-    return Student.filter_assigned_to_user(Student.objects.filter(pk=student.pk), user).exists()
+def _request_user(context: dict):
+    request = context.get("request")
+    return getattr(request, "user", None) if request else None
+
+
+def _may_see_medical_notes(context: dict, user, student_id: uuid.UUID) -> bool:
+    return _load_medical_notes_visibility(context, user, [student_id])[student_id]
+
+
+def _load_medical_notes_visibility(
+    context: dict, user, student_ids: Iterable[uuid.UUID]
+) -> dict[uuid.UUID, bool]:
+    """Whether ``user`` may see each student's medical notes, kept in the root's context.
+
+    Each reach is read through the key it belongs to (auth-and-rbac.md §2.3), never
+    through another role's scope:
+
+    - `students.student.update` shows the notes of the rows inside *that key's*
+      scope (`scope_queryset`), not of every row some other role lets them read;
+    - an `assigned` scope on `students.student.view` (a class teacher) shows the
+      notes of the students they teach (`Student.filter_assigned_to_user`).
+
+    Ids already resolved are not asked again, so a list costs at most one query per
+    reach over the whole page, and a row of it none.
+    """
+    visible: dict[uuid.UUID, bool] = context.setdefault(MEDICAL_NOTES_CONTEXT_KEY, {})
+    missing = {pk for pk in student_ids if pk not in visible}
+    if not missing:
+        return visible
+    allowed = set(
+        scope_queryset(
+            Student.objects.filter(pk__in=missing),
+            user,
+            permission=STUDENT_UPDATE,
+            own_field="user_id",
+        ).values_list("pk", flat=True)
+    )
+    rest = missing - allowed
+    if rest and RecordScope.ASSIGNED in scopes_for(user, STUDENT_VIEW):
+        allowed |= set(
+            Student.filter_assigned_to_user(Student.objects.filter(pk__in=rest), user).values_list(
+                "pk", flat=True
+            )
+        )
+    visible.update({pk: pk in allowed for pk in missing})
+    return visible
 
 
 class GuardianSerializer(serializers.ModelSerializer):

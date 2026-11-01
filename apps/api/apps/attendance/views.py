@@ -108,7 +108,7 @@ from core.rbac.permissions import (
     HasPermissionKey,
     route_permission,
     scope_queryset,
-    user_scopes,
+    scopes_for,
 )
 
 if TYPE_CHECKING:
@@ -200,9 +200,9 @@ class StudentAttendanceViewSet(
     # The register and `my-registers` are the marking screen's reads, so they take
     # the marking key: a reader who cannot submit has no use for the roster form.
     required_permission_map = {
-        "bulk_mark": "attendance.student-attendance.mark",
-        "register": "attendance.student-attendance.mark",
-        "my_registers": "attendance.student-attendance.mark",
+        "bulk_mark": attendance_register.STUDENT_ATTENDANCE_MARK,
+        "register": attendance_register.STUDENT_ATTENDANCE_MARK,
+        "my_registers": attendance_register.STUDENT_ATTENDANCE_MARK,
     }
     http_method_names = ["get", "post", "head", "options"]
 
@@ -428,8 +428,8 @@ class StudentAttendanceViewSet(
 
         A refused section is a 404, never a 403 (AGENTS.md invariant 2), with one
         exception: `:bulk-mark` keeps its 422 on `section_id` for a caller holding
-        `assigned` scope, for whom the refusal is "not your register", not "not
-        there".
+        `assigned` scope on the marking key, for whom the refusal is "not your
+        register", not "not there".
         """
         user = self.request.user
         section = get_object_or_404(Section.objects.alive(), pk=pk)
@@ -443,7 +443,8 @@ class StudentAttendanceViewSet(
             user=user, section=section, on_date=on_date, period=period, lessons=lessons
         ):
             return section, lessons
-        if refuse_assigned_with_422 and RecordScope.ASSIGNED in user_scopes(user):
+        marking_scopes = scopes_for(user, attendance_register.STUDENT_ATTENDANCE_MARK)
+        if refuse_assigned_with_422 and RecordScope.ASSIGNED in marking_scopes:
             raise DomainRuleViolation({"section_id": services.NOT_ASSIGNED_TO_SECTION})
         raise Http404
 
