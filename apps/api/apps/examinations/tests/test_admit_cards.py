@@ -663,7 +663,7 @@ class AdmitCardNamesTests(AdmitCardTestCase):
             card = AdmitCard.objects.alive().get(exam=self.exam, student=self.students[0])
             data = AdmitCardSerializer(card).data
 
-        self.assertEqual(data["section_id"], str(self.section.pk))
+        self.assertEqual(data["section_id"], self.section.pk)
         self.assertEqual(data["section_name"], self.section.name)
         self.assertEqual(data["student_name"], self.students[0].full_name)
 

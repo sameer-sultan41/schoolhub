@@ -92,9 +92,15 @@ class PublishPermissionTests(ScheduleTestCase):
         """
         from apps.examinations.views import AdmitCardViewSet, ExamScheduleViewSet
 
-        for viewset in (ExamScheduleViewSet, AdmitCardViewSet):
+        # `download` is portal-readable on purpose: a student or guardian fetches
+        # their own admit card through it, narrowed by record scope (ADR-0021).
+        readable = {
+            ExamScheduleViewSet: frozenset({"list", "retrieve"}),
+            AdmitCardViewSet: frozenset({"list", "retrieve", "download"}),
+        }
+        for viewset, expected in readable.items():
             with self.subTest(viewset=viewset.__name__):
-                self.assertEqual(viewset.PORTAL_READABLE_ACTIONS, frozenset({"list", "retrieve"}))
+                self.assertEqual(viewset.PORTAL_READABLE_ACTIONS, expected)
                 self.assertFalse(hasattr(viewset, "STAFF_ONLY_ACTIONS"))
 
 
