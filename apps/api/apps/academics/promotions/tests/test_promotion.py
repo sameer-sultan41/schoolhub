@@ -12,6 +12,7 @@ from unittest import mock
 
 from django.contrib.admin import AdminSite
 from django.db import connection, transaction
+from django.http import Http404
 from django.test import SimpleTestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
@@ -1557,7 +1558,12 @@ class BatchRecordScopeTests(PromotionTestCase):
             self.assertFalse(queued.exists())
 
     def test_a_campus_a_preparer_cannot_create_a_batch_spanning_campus_b(self) -> None:
-        """The class is readable on every campus, so out-of-scope students are a 422."""
+        """The class is readable on every campus, so out-of-scope students are a 422.
+
+        "No rows written" holds with or without the view's inner `transaction.atomic()`:
+        under `ATOMIC_REQUESTS` the 422 already rolls the request's transaction back. So
+        this pins the 422 and the outcome, not the inner block.
+        """
         self.enroll_on_campus_b(self.school_class, self.mixed_section)
         authenticate(self.client, self.on_campus_a("academics.promotion.create"))
 
@@ -1574,6 +1580,26 @@ class BatchRecordScopeTests(PromotionTestCase):
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
         with tenant_context(self.tenant.id):
             self.assertFalse(StudentPromotion.objects.alive().exists())
+
+    def test_an_unknown_batch_id_is_a_404_from_the_scope_check_itself(self) -> None:
+        """No rows is an unknown id. The helper used to pass it and leave the 404 to each
+        service, so a new action calling one that did not 404 would answer 200."""
+        approver = self.on_campus_a(APPROVE)
+
+        with tenant_context(self.tenant.id), self.assertRaises(Http404):
+            services.assert_batch_in_scope(
+                services.batch_queryset(uuid.uuid4()),
+                user=approver,
+                read_permission=VIEW,
+                permission=APPROVE,
+            )
+
+    def test_an_unknown_batch_id_is_a_404_on_an_action(self) -> None:
+        authenticate(self.client, self.second_user(APPROVE))
+
+        response = self.transition(str(uuid.uuid4()), "approve")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_a_campus_a_preparer_still_creates_a_batch_wholly_on_campus_a(self) -> None:
         """The control for creation: the base class has only `self.student`, on A."""

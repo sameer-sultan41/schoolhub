@@ -189,15 +189,21 @@ def assert_batch_in_scope(
     like an unknown id (`hide_unreadable`), and one that is readable but not wholly in scope
     is a 422. Creation passes `hide_unreadable=False` over the rows it has just written: it
     names a class, which every campus may read, so an unreadable batch is a 422 there too.
-    An empty `rows` passes, and the service's own lookup answers the unknown id.
+    An empty `rows` is an unknown batch id, so it is a 404 here when `hide_unreadable`, and
+    a new batch action cannot answer 200 for one by calling a service that does not 404.
     """
+    total = rows.count()
+    if total == 0:
+        if hide_unreadable:
+            raise Http404("No such promotion batch.")
+        return
     readable = (
         rows
         if read_permission is None
         else scope_queryset(rows, user, permission=read_permission, **PROMOTION_SCOPE)
     )
     reachable = scope_queryset(readable, user, permission=permission, **PROMOTION_SCOPE)
-    if reachable.count() == rows.count():
+    if reachable.count() == total:
         return
     if readable.exists():
         raise DomainRuleViolation({"non_field": BATCH_OUT_OF_SCOPE_MESSAGE})
