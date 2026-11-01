@@ -54,6 +54,11 @@ export function ThreadView({ source, threadId, readOnly }: ThreadViewProps) {
   const markedRef = useRef<string | null>(null);
   const failedLoadRef = useRef<number | null>(null);
   const loadedAt = thread.dataUpdatedAt;
+  // The load on screen when a call fails, which may be newer than the one it started on.
+  const latestLoadRef = useRef(loadedAt);
+  useEffect(() => {
+    latestLoadRef.current = loadedAt;
+  }, [loadedAt]);
   const canMarkRead = canPost && (thread.data?.unread_count ?? 0) > 0;
   useEffect(() => {
     if (!canMarkRead || isMarkingRead || markedRef.current === threadId) return;
@@ -62,7 +67,7 @@ export function ThreadView({ source, threadId, readOnly }: ThreadViewProps) {
     markRead(undefined, {
       onError: () => {
         markedRef.current = null;
-        failedLoadRef.current = loadedAt;
+        failedLoadRef.current = latestLoadRef.current;
       },
     });
   }, [canMarkRead, isMarkingRead, threadId, loadedAt, markRead]);

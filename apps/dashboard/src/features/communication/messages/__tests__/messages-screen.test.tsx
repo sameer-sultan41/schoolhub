@@ -1,4 +1,5 @@
 import { ApiError } from "@schoolhub/api-client";
+import type { QueryClient } from "@tanstack/react-query";
 import { act, screen, waitFor, within } from "@testing-library/react";
 
 import type * as HelpersModule from "@/lib/helpers";
@@ -65,6 +66,21 @@ function conflict(issue: string) {
   });
 }
 
+/** A lost request, as the client reports one. */
+const TIMED_OUT = new ApiError({
+  code: "network_error",
+  message: "Timed out.",
+  status: 0,
+  url: "/message-threads",
+});
+
+/** Re-reads every inbox query, as a write elsewhere would, and waits for the refetch. */
+function reloadThreads(queryClient: QueryClient) {
+  return act(() =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.module(MESSAGE_THREADS_QUERY_MODULE) }),
+  );
+}
+
 describe("MessagesScreen", () => {
   it("selects thread from URL and marks it read once", async () => {
     stubInbox([VIEW, CREATE_MESSAGE]);
@@ -88,14 +104,7 @@ describe("MessagesScreen", () => {
   it("marks a thread read again on its next load after a failed call, once", async () => {
     stubInbox([VIEW, CREATE_MESSAGE]);
     fetchThread.mockResolvedValue(threadRecord({ unread_count: 2 }));
-    markRead.mockRejectedValueOnce(
-      new ApiError({
-        code: "network_error",
-        message: "Timed out.",
-        status: 0,
-        url: "/message-threads",
-      }),
-    );
+    markRead.mockRejectedValueOnce(TIMED_OUT);
     const { queryClient } = await renderMessages();
 
     expect(await screen.findByRole("heading", { name: "Fee query" })).toBeInTheDocument();
@@ -106,9 +115,7 @@ describe("MessagesScreen", () => {
     // The failure alone does not loop: it waits for the thread's next load.
     expect(markRead).toHaveBeenCalledTimes(1);
 
-    await act(() =>
-      queryClient.invalidateQueries({ queryKey: queryKeys.module(MESSAGE_THREADS_QUERY_MODULE) }),
-    );
+    await reloadThreads(queryClient);
     await waitFor(() => {
       expect(markRead).toHaveBeenCalledTimes(2);
     });
@@ -117,6 +124,38 @@ describe("MessagesScreen", () => {
       expect(fetchThread).toHaveBeenCalledTimes(3);
     });
     expect(markRead).toHaveBeenCalledTimes(2);
+  });
+
+  it("after a failure, waits for a load newer than one that landed mid-call", async () => {
+    stubInbox([VIEW, CREATE_MESSAGE]);
+    fetchThread.mockResolvedValue(threadRecord({ unread_count: 2 }));
+    let failCall: (error: unknown) => void = () => undefined;
+    markRead.mockImplementationOnce(
+      () =>
+        new Promise<never>((_resolve, reject) => {
+          failCall = reject;
+        }),
+    );
+    const { queryClient } = await renderMessages();
+    await waitFor(() => {
+      expect(markRead).toHaveBeenCalledTimes(1);
+    });
+
+    // The thread reloads while the call is still in flight, and then the call fails.
+    await reloadThreads(queryClient);
+    expect(fetchThread).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      failCall(TIMED_OUT);
+      await Promise.resolve();
+    });
+    await messagesList();
+    // That load is the one the failure happened on: no retry until the next.
+    expect(markRead).toHaveBeenCalledTimes(1);
+
+    await reloadThreads(queryClient);
+    await waitFor(() => {
+      expect(markRead).toHaveBeenCalledTimes(2);
+    });
   });
 
   it("does not mark a thread with nothing unread as read", async () => {
