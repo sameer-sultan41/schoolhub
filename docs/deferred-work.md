@@ -230,8 +230,35 @@ either this file or `project-status.md`.
     staff register marks (Present, Absent, Late, Half day), though the server accepts every
     staff status but `on_leave`. Neither the register nor a correction can record a staff day
     as a holiday from the dashboard; the school calendar's holidays refuse marking instead.
-- **Phase 2 Tier 2 is backend-complete, and its dashboards are academics (shipped),
-  timetable (in flight) and attendance (complete once its PR C merges).**
+- **The examinations dashboard's PR A (grading scales, exams, their subjects) left these out:**
+  - **`Section`, `Class` and `AcademicSession` have no `assigned`-scope hooks.** An
+    `assigned` teacher can read the exams they teach, but the reference lists a picker reads
+    (`/classes`, `/sections`, `/academic-sessions`) define no `filter_assigned_to_user`, so for
+    such a viewer they come back empty: the exams list's session filter is absent (the list
+    then shows every exam they may see, unfiltered), and any future teacher-facing form with a
+    class or section picker would offer nothing. The exam author roles are `all`-scoped, so
+    PR A's writes are unaffected. The fix is a hook on each, resolving through the same
+    teaching the exam hooks read (`examinations.models._assigned_teaching`'s shape), in
+    school-organization rather than here.
+  - **No archive action, and nothing sets `ongoing`.** `ExamStatus` declares `ongoing` and
+    `archived`, but no endpoint moves an exam into either: `scheduled` is set by publishing
+    the schedule and `marks_entry` by the first mark. The stepper shows `ongoing` as skipped,
+    and the delete refusal no longer tells the user to archive (examinations.md §20). An
+    `:archive` colon-action (from `published`, audited, hiding the exam from the default list)
+    is the missing piece; `ongoing` needs a decision on whether it is set by date or not at all.
+  - **§6/§8's "clone an exam" is not built.** §6 lists cloning an exam from a previous term,
+    and §8's exam-staff journey starts by cloning last year's.
+    There is no endpoint (`:clone`, as `/class-subjects:clone` and `/academic-sessions:clone`
+    have) and no screen action; an author re-creates the exam and its subjects by hand.
+  - **Portal roles would see a Reports tab that refuses them.** `student` and `guardian`
+    hold `exams.result.view` and `exams.report-card.view` (§4), so when PR D adds the
+    Reports section, keyed on a key they hold, a portal user signed in to the dashboard would
+    see the tab and get a 403 from the report endpoint, which is staff-only. The attendance
+    Leave tab is the precedent (above): hiding portal users from staff screens is
+    parent-portal's decision, so PR D should key the section on a staff-only key rather than
+    leave a tab that 403s.
+- **Phase 2 Tier 2 is complete: academics, timetable and attendance are full-stack, their
+  dashboards shipped.**
 - **Two dangling UUID columns became real foreign keys**:
   `student_attendance.leave_request_id` and
   `timetable.TeacherSubstitution.leave_request_id`, the latter carrying a comment
@@ -291,13 +318,16 @@ either this file or `project-status.md`.
 - **No `node_modules` locally.** Nothing is installed, built, linted, or tested
   locally — CI is the source of truth.
 - **No module screens beyond the dashboard home + student-management +
-  staff-management + academics + timetable's setup screens (periods, rooms) + attendance.**
-  Fees, examinations,
-  communication, parent-portal, … are untouched — the gap against
+  staff-management + academics + timetable + attendance + examinations' setup.**
+  Fees, communication, parent-portal, … are untouched — the gap against
   [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.md) tier 2+.
   Attendance's screens followed its API as three dashboard PRs (register, Records and
   Settings; the corrections and leave queues; staff attendance, reports and the import),
-  once the dashboard shell had settled.
+  once the dashboard shell had settled. Examinations' are five PRs (plan
+  `superpowers/plans/2026-11-01-examinations-dashboard.md`), of which PR A (grading scales,
+  exams and their subjects) is built; what remains is **PR B** (the Schedule tab and admit
+  cards), **PR C** (the Marks tab), **PR D** (Results, Report cards and the Reports section)
+  and **PR E** (question banks and paper assembly).
 - **Tier 2's three modules are all in.** `apps/api/apps/` now also has
   `academics`, `timetable` and `attendance`, attendance with all three of its
   halves: marking, leave, and staff attendance with reports (see above).

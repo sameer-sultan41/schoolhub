@@ -127,3 +127,31 @@ export const E2E_BASELINE_SUBSTITUTION_REASON = "e2e live-lane fixture";
  * it and asserts `is_locked`, so drift fails a test.
  */
 export const MAX_LOCK_WINDOW_DAYS = 7;
+
+/**
+ * Mirrors seed_e2e_data.py's E2E_EXAM_STAFF_EMAIL — an `exam_staff` login at `all` scope,
+ * holding the role's real `exams.*` keys (read from the registry by role) plus the reads its
+ * pickers make. The admin builds a spec's scaffold; this identity writes the exams, so a key
+ * the real role lacks fails here rather than passing on the admin's wider set.
+ */
+export const E2E_EXAM_STAFF_EMAIL = "e2e-exam-staff@schoolhub.test";
+
+/**
+ * Mirrors seed_e2e_data.py's E2E_TEACHER_EMAIL — a `teacher` login at `assigned` scope, with
+ * its own active teaching `Staff` row and no allocation: it sees an exam only once a spec
+ * allocates it to one of that exam's (class, subject) pairs in the exam's session.
+ */
+export const E2E_TEACHER_EMAIL = "e2e-teacher@schoolhub.test";
+
+/**
+ * Mirrors seed_e2e_data.py's E2E_TEACHER_LOGIN_EMPLOYEE_NUMBER — the teacher login's `Staff`
+ * row, found through `GET /staff?search=` (ids are generated per seed run).
+ */
+export const E2E_TEACHER_LOGIN_EMPLOYEE_NUMBER = "E2E-TEACHER-LOGIN";
+
+/**
+ * Mirrors `apps/api/apps/examinations/management/commands/seed_e2e_examinations.py`'s
+ * E2E_SCALE_NAME: the tenant's complete default grading scale, which an exam naming no scale
+ * grades against.
+ */
+export const E2E_GRADING_SCALE_NAME = "E2E Percentage";

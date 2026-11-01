@@ -56,6 +56,12 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 
 The approver of a result cannot be the user who ran processing (segregation of duties, RBAC doc §2.4).
 
+A `teacher` reads exams at record scope `assigned`: the exams with a subject they are currently allocated
+to in that exam's session, or any subject of their homeroom's class in the homeroom's session (the session
+of the active enrolments that make the section theirs).
+Grading scales are reference data, readable in full by every holder of `exams.grading-scale.view`. §20
+records how both are resolved.
+
 The last five rows were added during implementation. Each names a capability this
 document already granted in prose while the table omitted the key, so the capability
 was documented and unreachable: §3 says a `student`/`guardian` "views admit cards,
@@ -213,6 +219,26 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - `POST /api/v1/exams/{id}:approve-results` · `:publish-results` — colon-actions, permission-guarded, audited
 - `GET /api/v1/results` (scoped) · `GET /api/v1/report-cards` · `GET /api/v1/admit-cards` · `POST /api/v1/exams/{id}:generate-report-cards` · `:issue-admit-cards` (jobs)
 - `GET/POST/PATCH /api/v1/question-banks` · `/api/v1/questions` · `POST /api/v1/questions/{id}:approve` · `POST /api/v1/question-banks/{id}:generate-questions` (AI, job) · `:assemble-paper` (job → paper PDF file)
+
+List and read shapes the dashboard depends on:
+
+- **Pagination.** `/exams` and `/grading-scales` page by number (`?page=`, `meta.pagination.total_count`), as
+  [`api-architecture.md`](../02-architecture/api-architecture.md) §2.4's bounded admin lists do: one school's exams
+  and its handful of scales are navigated by position. `/exams` is ordered `-starts_on, name, id` by default (`id` makes the order total),
+  `/grading-scales` by `name`. `/exam-subjects` keeps the cursor and is ordered by class, then subject, so a client
+  grouping by class reads each class's rows together. A scale's `/grade-bands` is **unpaginated**, in display order
+  (`sort_order`, then `-min_percent`): a scale has a handful of bands and a client needs all of them.
+- **Names on the row.** An exam carries `academic_session_name`, `term_name` (null without a term),
+  `grading_scale_name` and `subject_count` (all of the exam's live exam-subjects, not only the ones the viewer
+  can see under record scope `assigned`); an exam-subject carries `exam_name`,
+  `class_name` and `subject_name`. All read-only, from joins and one annotation in the list's own query, so a
+  list renders without a lookup per id.
+- **The duplicate subject is a 422.** A second live (exam, class, subject) is refused as a
+  `domain_rule_violation` under `subject_id` ("This subject is already on this exam for this class."), checked
+  before the partial unique index would turn it into a bare 409.
+- **The two state refusals are 409s.** A write to an exam, or to its subjects, once it is past `scheduled`
+  ("… its configuration is frozen."); a delete of any exam but a draft ("This exam is scheduled. Only a draft
+  exam can be deleted.").
 
 ## 17. Integration Requirements
 
@@ -440,6 +466,37 @@ assembly. **The module is complete.**
   report counts what exists, so it can be exported over one queryset alongside
   the others. Where they disagree, the dashboard is for chasing and the report
   is a record of what was entered. Both docstrings say so.
+
+### The dashboard's setup contract (examinations dashboard, PR A)
+
+The dashboard's Examinations section (`/exams`, `/exams/{id}` with its Subjects tab, `/exams/grading-scales`)
+came with these server changes:
+
+- **Record scope `assigned` for exams and their subjects.** `Exam` and `ExamSubject` gained
+  `filter_assigned_to_user`, resolved through one helper, `models._assigned_teaching`, which `Marks` now reads
+  too, so the three cannot drift apart. A teacher sees an exam-subject they hold a **current** allocation for
+  (`effective_to IS NULL`), matched on (class, subject) **in the exam's own session**, so last year's
+  allocation does not open last year's papers; and every exam-subject of the class of a section they are
+  class teacher of, **in that homeroom's session**. An exam is visible when one of its exam-subjects is, and an assigned teacher opening it
+  sees only those subjects. A teacher with neither sees no exam at all.
+- **The homeroom side is session-limited too.** `_assigned_teaching` carries each homeroom as a
+  `(section_id, session_id)` pair, the session taken from the active enrolments that make the section the
+  teacher's; `Exam`/`ExamSubject` match the section's class **and** `exam.academic_session_id`. So a class
+  teacher does not see last session's exams for the same class. `Marks` keeps its own predicate — it joins
+  through the student's active enrolment in the homeroom section (`student__enrollments__section_id`), which
+  is a different join from the exam's class and session — and reads only the section ids, so its result is
+  unchanged.
+- **Grading scales and bands are reference data at every scope.** Their `filter_assigned_to_user` returns
+  every row, the same reasoning that gives their viewsets `scope_campus_field = None`: a scale belongs to no
+  class, campus or teacher, and a teacher who can see an exam but not the scale it grades against could not
+  read its results. `exams.grading-scale.view` is held by all staff (§4).
+- **The delete refusal names no way out.** It used to say "archive it instead", but nothing sets `archived`
+  (see `docs/deferred-work.md`), so it now reads "Only a draft exam can be deleted." and stops there.
+
+The e2e seed carries two identities for the live lane: `e2e-exam-staff@schoolhub.test` (`exam_staff`, scope
+`all`) and `e2e-teacher@schoolhub.test` (`teacher`, scope `assigned`, with its own teaching `Staff` row and no
+allocation, so a spec allocates it per run), plus the complete default scale `E2E Percentage`
+(`seed_e2e_examinations`). `e2e/tests/live/api/exams-setup.spec.ts` pins the scope against the real stack.
 
 ### Corrected in review
 

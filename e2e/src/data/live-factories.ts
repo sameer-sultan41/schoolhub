@@ -79,6 +79,24 @@ export function buildLiveSubject(overrides: Partial<{ name: string; code: string
   };
 }
 
+/**
+ * An exam in `academicSessionId`, naming no grading scale and no dates: it grades against the
+ * tenant default (the seeded `E2E_GRADING_SCALE_NAME`), and a dated exam would have to fall
+ * inside the session's far-future window.
+ */
+export function buildLiveExam(
+  academicSessionId: string,
+  overrides: Partial<{ name: string; exam_type: string }> = {},
+) {
+  const tag = uniqueTag();
+  return {
+    academic_session_id: academicSessionId,
+    name: `E2E Exam ${tag}`,
+    exam_type: "midterm",
+    ...overrides,
+  };
+}
+
 export function buildLiveRoom(
   overrides: Partial<{ name: string; code: string; room_type: string; capacity: number }> = {},
 ) {

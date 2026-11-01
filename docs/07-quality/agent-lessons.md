@@ -172,6 +172,21 @@
 - **Mistake.** `seed_e2e_data.py` gives its `school_admin` an exact list of module keys, not the role's registry grants. It left out `platform.job.view`, which every real staff role holds through `core/jobs/permissions.py`, so the promotion journey's job poll was a 403 and the screen reported a job that had succeeded as failed (e2e-live run 40659453170).
 - **Check.** When a live journey starts a `202` + job, opens a file or reads any other platform resource, add the matching `platform.*` key to that identity's list in `seed_e2e_data.py`, and confirm with the trace's network log that no request in the journey is a 403.
 
+### L28. A "matches X" claim must be checked against X's own predicate
+
+- **Mistake.** The examinations dashboard's scope ruling and `examinations.md` §20 said the class teacher's exam scope was "not session-limited, matching `Marks`", and that narrowing it "would change what `Marks` returns". `Marks` joins through the student's *active enrolment* in the homeroom section (`student__enrollments__section_id`); `Exam`/`ExamSubject` join through the exam-subject's *class* (`school_class_id`) with no session — different joins, so the claim was false and last session's exams leaked to the class teacher (PR A final review).
+- **Check.** Before writing "matches X" or "would change X" in a ruling, doc or docstring, open both predicates and name the join each uses; if they differ, say what each actually filters on and test the case where they diverge (here, the same class in another session).
+
+### L29. A page-number list's default ordering must be total
+
+- **Mistake.** `ExamViewSet.ordering` was `["-starts_on", "name"]`. Names are unique only per session and an undated draft has no `starts_on`, so two such rows tie and Postgres may return them in either order on each page query — a row repeats on page 2 or never appears (PR A final review). `StableOrderingFilter` appends `pk`, but the declared default did not say so.
+- **Check.** End every list's default `ordering` in a unique column (`id`), and pin it with a test of two rows that tie on every other key, paged with `page_size=1`, asserting the two pages give distinct ids. Mirror the same order in the e2e mock.
+
+### L30. An e2e-only seed command must refuse a non-e2e tenant
+
+- **Mistake.** `seed_e2e_examinations --tenant <slug>` would rewrite *any* tenant's default grading scale; nothing restricted it to the e2e tenants `seed_e2e_data` creates (PR A final review).
+- **Check.** A command that seeds e2e data checks `--tenant` against `E2E_TENANT_SLUG`/`E2E_OTHER_TENANT_SLUG` (`core/rbac/management/commands/seed_e2e_data.py`) before touching the database, raises `CommandError` otherwise, and has a test that a non-e2e tenant is refused and left untouched.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.

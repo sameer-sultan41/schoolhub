@@ -25,3 +25,4 @@ export * from "./domains/attendance-approvals";
 export * from "./domains/attendance-staff-reports-store";
 export * from "./domains/attendance-staff-reports";
 export * from "./domains/attendance-reports-import";
+export * from "./domains/exams-setup";
