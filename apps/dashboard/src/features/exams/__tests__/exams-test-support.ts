@@ -1,6 +1,7 @@
 import type { PermissionKey } from "@schoolhub/types";
 
 import { Services } from "@/services";
+import { admitCardPage } from "@/services/modules/admit-cards/__tests__/admit-cards-fixtures";
 import { curriculumRecord } from "@/services/modules/curriculum/__tests__/curriculum-fixtures";
 import {
   examPage,
@@ -26,6 +27,20 @@ export const fetchExamSubjects = mocked(Services.examSubjects.fetchExamSubjects)
 export const createExamSubject = mocked(Services.examSubjects.createExamSubject);
 export const updateExamSubject = mocked(Services.examSubjects.updateExamSubject);
 export const deleteExamSubject = mocked(Services.examSubjects.deleteExamSubject);
+export const fetchSittings = mocked(Services.examSchedules.fetchSittings);
+export const fetchConflicts = mocked(Services.examSchedules.fetchConflicts);
+export const createSitting = mocked(Services.examSchedules.createSitting);
+export const updateSitting = mocked(Services.examSchedules.updateSitting);
+export const cancelSitting = mocked(Services.examSchedules.cancelSitting);
+export const deleteSitting = mocked(Services.examSchedules.deleteSitting);
+export const publishSchedule = mocked(Services.examSchedules.publishSchedule);
+export const fetchAdmitCardsPage = mocked(Services.admitCards.fetchAdmitCardsPage);
+export const issueAdmitCards = mocked(Services.admitCards.issueAdmitCards);
+export const revokeAdmitCard = mocked(Services.admitCards.revokeAdmitCard);
+export const fetchAdmitCardDownloadUrl = mocked(Services.admitCards.fetchAdmitCardDownloadUrl);
+export const fetchJob = mocked(Services.jobs.fetchJob);
+export const fetchSections = mocked(Services.schoolOrganization.fetchSections);
+export const fetchActiveRooms = mocked(Services.rooms.fetchActiveRooms);
 export const fetchAcademicSessions = mocked(Services.schoolOrganization.fetchAcademicSessions);
 export const fetchTerms = mocked(Services.schoolOrganization.fetchTerms);
 
@@ -43,6 +58,12 @@ export function stubExamsServices(url = "/exams") {
   fetchExamsPage.mockResolvedValue(examPage([examRecord()]));
   fetchExam.mockResolvedValue(examRecord());
   fetchExamSubjects.mockResolvedValue([subjectRecord()]);
+  fetchSittings.mockResolvedValue([]);
+  fetchConflicts.mockResolvedValue([]);
+  fetchAdmitCardsPage.mockResolvedValue(admitCardPage([]));
+  fetchSections.mockResolvedValue([]);
+  fetchActiveRooms.mockResolvedValue([]);
+  mocked(Services.staff.fetchTeachingStaffOptions).mockResolvedValue([]);
   fetchAcademicSessions.mockResolvedValue([CURRENT_SESSION, PLANNED_SESSION]);
   fetchTerms.mockResolvedValue([{ id: TERM_ID, name: "Term 1", sequence: 1 }]);
   mocked(Services.schoolOrganization.fetchClasses).mockResolvedValue([

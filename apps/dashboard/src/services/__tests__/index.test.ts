@@ -31,12 +31,14 @@ jest.mock("@schoolhub/api-client", () => {
 describe("Services", () => {
   it("aggregates every domain, each action a real function", () => {
     expect(Object.keys(Services).sort()).toEqual([
+      "admitCards",
       "attendanceCorrections",
       "attendanceReports",
       "attendanceSettings",
       "auth",
       "curriculum",
       "dashboard",
+      "examSchedules",
       "examSubjects",
       "exams",
       "files",
@@ -79,6 +81,17 @@ describe("Services", () => {
     expect(typeof Services.examSubjects.createExamSubject).toBe("function");
     expect(typeof Services.examSubjects.updateExamSubject).toBe("function");
     expect(typeof Services.examSubjects.deleteExamSubject).toBe("function");
+    expect(typeof Services.examSchedules.fetchSittings).toBe("function");
+    expect(typeof Services.examSchedules.createSitting).toBe("function");
+    expect(typeof Services.examSchedules.updateSitting).toBe("function");
+    expect(typeof Services.examSchedules.cancelSitting).toBe("function");
+    expect(typeof Services.examSchedules.deleteSitting).toBe("function");
+    expect(typeof Services.examSchedules.fetchConflicts).toBe("function");
+    expect(typeof Services.examSchedules.publishSchedule).toBe("function");
+    expect(typeof Services.admitCards.fetchAdmitCardsPage).toBe("function");
+    expect(typeof Services.admitCards.issueAdmitCards).toBe("function");
+    expect(typeof Services.admitCards.revokeAdmitCard).toBe("function");
+    expect(typeof Services.admitCards.fetchAdmitCardDownloadUrl).toBe("function");
     expect(typeof Services.schoolOrganization.fetchTerms).toBe("function");
     expect(typeof Services.gradingScales.fetchScalesPage).toBe("function");
     expect(typeof Services.gradingScales.fetchScale).toBe("function");

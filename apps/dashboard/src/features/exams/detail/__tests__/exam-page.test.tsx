@@ -202,18 +202,38 @@ describe("ExamTabs", () => {
     ]);
   });
 
-  it("draws only the tabs that have content: Subjects now, whatever other keys the viewer holds", async () => {
-    asUser("exams.schedule.view", "exams.result.view");
+  it("draws only the tabs that have content: Subjects, Schedule and Admit cards now, whatever other keys the viewer holds", async () => {
+    asUser("exams.schedule.view", "exams.admit-card.view", "exams.result.view");
 
     await renderTabs();
 
-    expect(await screen.findAllByRole("tab")).toHaveLength(1);
+    expect(await screen.findAllByRole("tab")).toHaveLength(3);
     expect(screen.getByRole("tab", { name: "Subjects" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Schedule" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Admit cards" })).toBeInTheDocument();
   });
 
-  it("draws no tab for a viewer without a tab's key", async () => {
+  it("gates the Admit cards tab on the admit-card view key", async () => {
+    asUser("exams.schedule.view");
+
+    await renderTabs();
+
+    expect(await screen.findByRole("tab", { name: "Schedule" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Admit cards" })).not.toBeInTheDocument();
+  });
+
+  it("gates the Schedule tab on the schedule view key", async () => {
+    asUser();
+
+    await renderTabs();
+
+    expect(await screen.findByRole("tab", { name: "Subjects" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Schedule" })).not.toBeInTheDocument();
+  });
+
+  it("draws no tab for a viewer without the key of a tab that has content", async () => {
     mocked(Services.auth.fetchCurrentUser).mockResolvedValue(
-      buildUser(["exams.schedule.view" satisfies PermissionKey]),
+      buildUser(["exams.result.view" satisfies PermissionKey]),
     );
 
     await renderTabs();

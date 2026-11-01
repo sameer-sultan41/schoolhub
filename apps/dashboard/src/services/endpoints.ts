@@ -175,6 +175,25 @@ export const endpoints = {
   exams: {
     list: "/exams",
     detail: (id: string) => `/exams/${id}`,
+    /** The exam's clash list, keyed `exams.schedule.view`. */
+    scheduleConflicts: (id: string) => `/exams/${id}/schedule-conflicts`,
+    /** Colon-action, not a nested path: the registered route is `/exams/{id}:publish-schedule`. */
+    publishSchedule: (id: string) => `/exams/${id}:publish-schedule`,
+    /** Colon-action: `202` + a render job, keyed `exams.admit-card.issue`. */
+    issueAdmitCards: (id: string) => `/exams/${id}:issue-admit-cards`,
+  },
+  /** `/admit-cards`: an exam's issued cards, keyed `exams.admit-card.*`. */
+  admitCards: {
+    list: "/admit-cards",
+    /** Colon-action, keyed `exams.admit-card.issue`; the body carries the reason. */
+    revoke: (id: string) => `/admit-cards/${id}:revoke`,
+    /** Colon-action, keyed `exams.admit-card.view`: a signed link to the card's own PDF. */
+    download: (id: string) => `/admit-cards/${id}:download`,
+  },
+  /** `/exam-schedules`: an exam's sittings, keyed `exams.schedule.*`. */
+  examSchedules: {
+    list: "/exam-schedules",
+    detail: (id: string) => `/exam-schedules/${id}`,
   },
   /** `/exam-subjects`: one exam's per-class marks structure; writes are keyed `exams.exam.update`. */
   examSubjects: {

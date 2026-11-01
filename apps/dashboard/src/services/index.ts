@@ -1,9 +1,11 @@
+import { AdmitCardsService } from "./modules/admit-cards";
 import { AttendanceCorrectionsService } from "./modules/attendance-corrections";
 import { AttendanceReportsService } from "./modules/attendance-reports";
 import { AttendanceSettingsService } from "./modules/attendance-settings";
 import { AuthService } from "./modules/auth";
 import { CurriculumService } from "./modules/curriculum";
 import { DashboardService } from "./modules/dashboard";
+import { ExamSchedulesService } from "./modules/exam-schedules";
 import { ExamSubjectsService } from "./modules/exam-subjects";
 import { ExamsService } from "./modules/exams";
 import { FilesService } from "./modules/files";
@@ -42,6 +44,25 @@ export type {
 } from "./modules/students";
 
 export type { ExamInput, ExamPageQuery, ExamRecord, ExamStatus, ExamType } from "./modules/exams";
+
+export type {
+  AdmitCardIssue,
+  AdmitCardPageQuery,
+  AdmitCardRecord,
+  AdmitCardStatus,
+} from "./modules/admit-cards";
+
+export type {
+  ConflictSeverity as ExamConflictSeverity,
+  ExamConflict,
+  ExamConflictType,
+  SchedulePublishResult,
+  SittingDay,
+  SittingInput,
+  SittingRecord,
+  SittingStatus,
+  SittingWriteResult,
+} from "./modules/exam-schedules";
 
 export type {
   ExamSubjectGroup,
@@ -240,6 +261,8 @@ export const Services = {
   gradingScales: GradingScalesService,
   exams: ExamsService,
   examSubjects: ExamSubjectsService,
+  examSchedules: ExamSchedulesService,
+  admitCards: AdmitCardsService,
   guardians: GuardiansService,
   staff: StaffService,
   students: StudentsService,

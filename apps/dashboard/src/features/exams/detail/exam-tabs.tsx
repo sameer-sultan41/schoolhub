@@ -9,6 +9,8 @@ import { useCurrentUser } from "@/hooks/use-current-user";
 import { useUrlParams } from "@/hooks/use-url-params";
 import { hasPermission } from "@/lib/permissions";
 import type { ExamRecord } from "@/services";
+import { AdmitCardsTab } from "@/features/exams/admit-cards/admit-cards-tab";
+import { ScheduleTab } from "@/features/exams/schedule/schedule-tab";
 import { ExamSubjectsTable } from "@/features/exams/subjects/exam-subjects-table";
 
 /** The query-string key the open tab lives under (`?tab=`). */
@@ -22,8 +24,8 @@ export interface ExamTabSpec {
 
 /**
  * Every tab an exam page will have, in order, each on its permission key. A tab draws only once
- * it has content in `EXAM_TAB_CONTENT`: the later screens (schedule, admit cards, marks,
- * results, report cards) land in their own changes, each adding its content below.
+ * it has content in `EXAM_TAB_CONTENT`: the later screens (marks, results, report cards) land in
+ * their own changes, each adding its content below.
  */
 export const EXAM_TABS = [
   { id: "subjects", permission: "exams.exam.view" },
@@ -39,6 +41,8 @@ export type ExamTabId = (typeof EXAM_TABS)[number]["id"];
 /** A tab's content, given the exam. A tab with no entry here is not drawn. */
 export const EXAM_TAB_CONTENT: Partial<Record<ExamTabId, ComponentType<{ exam: ExamRecord }>>> = {
   subjects: ExamSubjectsTable,
+  schedule: ScheduleTab,
+  "admit-cards": AdmitCardsTab,
 };
 
 /** The exam's tabs, in `?tab=`. Shows only those with content whose key the viewer holds; an

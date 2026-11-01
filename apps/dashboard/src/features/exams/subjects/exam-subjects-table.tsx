@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
 import {
   Button,
@@ -27,17 +26,13 @@ import { useCurrentUser } from "@/hooks/use-current-user";
 import { EMPTY_VALUE } from "@/lib/constants";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { hasPermission } from "@/lib/permissions";
-import { queryKeys } from "@/lib/query-client";
-import { Services, type ExamRecord, type ExamSubjectRecord } from "@/services";
-import {
-  EXAM_SUBJECTS_LIST_RESOURCE,
-  EXAM_SUBJECTS_QUERY_MODULE,
-} from "@/services/modules/exam-subjects/exam-subjects-constant";
+import type { ExamRecord, ExamSubjectRecord } from "@/services";
 import {
   formatDateTime,
   groupByClass,
 } from "@/services/modules/exam-subjects/exam-subjects-helper";
 import { isExamConfigurable } from "@/services/modules/exams/exams-helper";
+import { useExamSubjects } from "@/features/exams/use-exam-subjects";
 import { DeleteExamSubjectDialog } from "./delete-exam-subject-dialog";
 import { ExamSubjectFormDialog } from "./exam-subject-form-dialog";
 
@@ -71,7 +66,7 @@ function EntryWindow({ row }: { row: ExamSubjectRecord }) {
 /**
  * The exam's Subjects tab: every subject of the exam, grouped by class (class, subject, max and
  * pass marks, practical split, weightage, marks entry window, locked), read in full through
- * `Services.examSubjects.fetchExamSubjects`. Add, edit and remove need `exams.exam.update` and an
+ * `useExamSubjects`. Add, edit and remove need `exams.exam.update` and an
  * exam still up to `scheduled`; past that the tab is read-only, since the exam's configuration is
  * frozen. Each dialog is mounted only while open.
  */
@@ -86,12 +81,7 @@ export function ExamSubjectsTable({ exam }: { exam: ExamRecord }) {
   const { data: user } = useCurrentUser();
   const canWrite = hasPermission(user, "exams.exam.update") && isExamConfigurable(exam.status);
 
-  const query = useQuery({
-    queryKey: queryKeys.list(EXAM_SUBJECTS_QUERY_MODULE, EXAM_SUBJECTS_LIST_RESOURCE, {
-      examId: exam.id,
-    }),
-    queryFn: () => Services.examSubjects.fetchExamSubjects(exam.id),
-  });
+  const query = useExamSubjects(exam.id);
 
   if (query.isError) {
     return (

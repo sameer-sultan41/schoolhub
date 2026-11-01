@@ -2010,6 +2010,157 @@
       "saved": "Subject saved.",
       "removed": "Subject removed."
     },
+    "schedule": {
+      "title": "Schedule",
+      "loadError": "The schedule couldn't be loaded.",
+      "emptyTitle": "No sittings yet",
+      "emptyDescription": "Add a sitting for each paper and section, with its date, time and room.",
+      "emptyReadOnly": "No sittings have been scheduled for this exam.",
+      "timeRange": "{start} to {end}",
+      "classSection": "{class} {section}",
+      "columns": {
+        "time": "Time",
+        "subject": "Subject",
+        "section": "Class and section",
+        "room": "Room",
+        "invigilator": "Invigilator",
+        "status": "Status"
+      },
+      "status": {
+        "scheduled": "Scheduled",
+        "completed": "Completed",
+        "cancelled": "Cancelled"
+      },
+      "clash": {
+        "hard": "Blocking clash",
+        "soft": "Clash warning"
+      },
+      "actions": {
+        "add": "Add sitting",
+        "editRow": "Reschedule {subject}, {class} {section}",
+        "cancelRow": "Cancel {subject}, {class} {section}",
+        "deleteRow": "Delete {subject}, {class} {section}"
+      },
+      "form": {
+        "createTitle": "Add sitting",
+        "editTitle": "Reschedule sitting",
+        "intro": "One section's sitting of one paper. A clash with another sitting is saved and flagged, and only blocks publishing.",
+        "subject": "Paper",
+        "selectSubject": "Select a paper",
+        "subjectOption": "{subject} ({class})",
+        "section": "Section",
+        "selectSection": "Select a section",
+        "date": "Date",
+        "startTime": "Starts",
+        "endTime": "Ends",
+        "room": "Room",
+        "selectRoom": "Select a room",
+        "noRoom": "No room",
+        "roomHint": "Rooms in service on the section's campus.",
+        "invigilator": "Invigilator",
+        "selectInvigilator": "Select an invigilator",
+        "noInvigilator": "No invigilator",
+        "endBeforeStart": "A sitting must end after it starts."
+      },
+      "saved": "Sitting saved.",
+      "cancel": {
+        "title": "Cancel {subject}, {class} {section}",
+        "description": "The sitting is called off and its room is freed. It stays on the schedule as cancelled.",
+        "confirm": "Cancel sitting",
+        "done": "Sitting cancelled."
+      },
+      "delete": {
+        "title": "Delete {subject}, {class} {section}",
+        "description": "The sitting is removed from this draft exam. This cannot be undone.",
+        "confirm": "Delete sitting",
+        "done": "Sitting deleted."
+      },
+      "conflicts": {
+        "title": "Clashes",
+        "none": "No clashes found.",
+        "loadError": "The clashes couldn't be checked.",
+        "involves": "Sittings involved",
+        "severity": {
+          "hard": "Blocking",
+          "soft": "Warning"
+        },
+        "types": {
+          "room_double_booked": "A room is booked for two sittings at the same time.",
+          "invigilator_double_booked": "An invigilator is assigned to two sittings at the same time.",
+          "student_two_papers_at_once": "Students in a section have two papers at the same time.",
+          "outside_exam_window": "A sitting falls outside the exam's dates.",
+          "not_a_working_day": "A sitting falls on a day the school doesn't work.",
+          "room_over_capacity": "A room is smaller than the section sitting in it.",
+          "clashes_with_timetable": "A sitting overlaps the regular timetable."
+        }
+      },
+      "publish": {
+        "button": "Publish schedule",
+        "blocked": "{count, plural, one {# blocking clash} other {# blocking clashes}} to resolve first",
+        "title": "Publish the schedule?",
+        "description": "Students and guardians are told the schedule is out, and admit cards can then be issued. Warnings do not stop this.",
+        "confirm": "Publish schedule",
+        "done": "Schedule published."
+      }
+    },
+    "admitCards": {
+      "caption": "Admit cards for this exam",
+      "pagination": "Admit card pages",
+      "loadError": "The admit cards couldn't be loaded.",
+      "emptyTitle": "No admit cards yet",
+      "emptyDescription": "No admit cards have been issued for this exam yet.",
+      "emptyDraft": "Admit cards are issued once the schedule is published.",
+      "noMatches": "No admit cards match these filters",
+      "noMatchesDescription": "Try another section or status.",
+      "filters": {
+        "section": "Section",
+        "status": "Status",
+        "all": "All"
+      },
+      "columns": {
+        "number": "Card number",
+        "student": "Student",
+        "admissionNumber": "Admission number",
+        "section": "Section",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "status": {
+        "generated": "Awaiting PDF",
+        "issued": "Issued",
+        "revoked": "Revoked"
+      },
+      "revokedReason": "Reason: {reason}",
+      "actions": {
+        "downloadRow": "Download {name}'s admit card",
+        "revokeRow": "Revoke {name}'s admit card"
+      },
+      "download": {
+        "failed": "The admit card couldn't be downloaded."
+      },
+      "issue": {
+        "button": "Issue admit cards",
+        "resume": "Check rendering again",
+        "summary": "{added, plural, =0 {No new admit cards} one {# admit card added} other {# admit cards added}}; {existing, plural, =0 {none already existed} other {# already existed}}.",
+        "rendering": "Rendering PDFs: {progress}%",
+        "rendered": "{count, plural, one {# admit card PDF is} other {# admit card PDFs are}} ready.",
+        "renderedAll": "Admit card PDFs are ready.",
+        "failed": "Admit cards couldn't be issued.",
+        "renderFailed": "The admit card PDFs couldn't be rendered.",
+        "timedOut": "Rendering is taking longer than expected. Check again in a moment."
+      },
+      "revoke": {
+        "title": "Revoke {name}'s admit card",
+        "description": "Card {number} is withdrawn and can no longer be downloaded. Issuing admit cards again will not restore it.",
+        "reason": "Reason",
+        "reasonHint": "Kept with the card: students and guardians may ask why.",
+        "submit": "Revoke card",
+        "submitting": "Revoking the card",
+        "done": "{name}'s admit card revoked.",
+        "required": "Give a reason for revoking this card.",
+        "tooLong": "Keep the reason to {max} characters."
+      }
+    },
     "gradingScales": {
       "title": "Grading scales",
       "summary": "How marks become grades: the bands, and which scale an exam uses when it names none.",
