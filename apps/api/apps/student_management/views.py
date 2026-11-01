@@ -473,11 +473,18 @@ class _NestedUnderStudentMixin:
         kwargs: dict[str, str]
 
     def get_student(self) -> Student:
-        from core.rbac.permissions import scope_queryset
+        from core.rbac.permissions import route_permission, scope_queryset
 
-        # `own_field` is the fallback only: `Student.filter_owned_by_user` takes
-        # precedence and is what resolves a guardian to their linked children.
-        queryset = scope_queryset(Student.objects.alive(), self.request.user, own_field="user_id")
+        # Scoped twice: by `/students`' own view key, so the parent is one the caller
+        # may read, then by this route's key, so it is one they may act under. Each
+        # reads only the roles granting its key, so neither key's roles widen the
+        # other. `own_field` is the fallback only: `Student.filter_owned_by_user`
+        # takes precedence and is what resolves a guardian to their linked children.
+        queryset = Student.objects.alive()
+        for permission in ("students.student.view", route_permission(self.request, self)):
+            queryset = scope_queryset(
+                queryset, self.request.user, permission=permission, own_field="user_id"
+            )
         try:
             return get_object_or_404(queryset, pk=self.kwargs["student_pk"])
         except (ValueError, TypeError) as exc:

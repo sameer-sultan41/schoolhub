@@ -984,10 +984,13 @@ def export_exam_report_task(self, *, tenant_id: str, job_id: str, actor_id: str)
     as authoritative, so an export must not widen what its requester could see
     inline — which it would if the job re-queried without the record scope the
     endpoint applied. That is `attendance`'s export task's reasoning, and the
-    same `build_report_rows` shape carries it.
+    same `build_report_rows` shape carries it. It is read under the key the
+    enqueuing request was admitted on (`scope_permission`, core/exports/scope.py),
+    and a job without one fails closed.
     """
     from apps.examinations import services, uploads
     from core.exports import tabular
+    from core.exports.scope import MISSING_SCOPE_PERMISSION, job_scope_permission
     from core.files.services import create_ready_file
     from core.rbac.models import User
     from core.tenancy.context import tenant_atomic
@@ -996,6 +999,11 @@ def export_exam_report_task(self, *, tenant_id: str, job_id: str, actor_id: str)
         job = BackgroundJob.objects.get(pk=job_id)
     mark_running(job=job)
 
+    permission = job_scope_permission(job.payload)
+    if permission is None:
+        mark_failed(job=job, error=MISSING_SCOPE_PERMISSION)
+        return
+
     try:
         with tenant_atomic(uuid.UUID(tenant_id)):
             payload = job.payload
@@ -1003,7 +1011,10 @@ def export_exam_report_task(self, *, tenant_id: str, job_id: str, actor_id: str)
             # No `limit`: the job is the unbounded path, which is the whole
             # reason the endpoint hands it anything over the inline ceiling.
             rows = services.build_report_rows(
-                kind=payload["kind"], exam_id=payload.get("exam_id"), user=requester
+                kind=payload["kind"],
+                exam_id=payload.get("exam_id"),
+                user=requester,
+                permission=permission,
             )
             fmt = payload.get("format", "csv")
             title = payload["kind"].replace("-", " ").capitalize()

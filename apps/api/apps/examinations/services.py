@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import uuid
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from django.db import transaction
 from django.utils import timezone
@@ -53,6 +54,9 @@ from apps.school_organization.models import (
 from core.api.exceptions import Conflict, DomainRuleViolation
 from core.imports.tabular import parse_rows
 from core.rbac.models import RecordScope
+
+if TYPE_CHECKING:
+    from core.rbac.permissions import AnyOf
 
 # §7.1's lifecycle. An exam may only be *configured* — subjects added, marks
 # structure changed, the scale swapped — while it is still in one of these
@@ -1772,8 +1776,13 @@ def assert_report_kind(kind: str) -> None:
         )
 
 
-def build_report_rows(*, kind: str, exam_id, user, limit: int | None = None) -> list[dict]:
-    """Build one §13 report's rows under `user`'s record scope.
+def build_report_rows(
+    *, kind: str, exam_id, user, permission: str | AnyOf, limit: int | None = None
+) -> list[dict]:
+    """Build one §13 report's rows under `user`'s record scope for `permission`.
+
+    `permission` is the declaration the request was admitted on (the view key inline,
+    whichever key queued the job in an export), so only the roles granting it count.
 
     Shared by the endpoint and the export job so the two can never disagree —
     which matters more here than usual, because a principal reads the inline
@@ -1795,11 +1804,15 @@ def build_report_rows(*, kind: str, exam_id, user, limit: int | None = None) -> 
     assert_report_kind(kind)
 
     if kind == "question-bank-usage":
-        scoped = scope_queryset(QuestionBank.objects.alive(), user, campus_field=None)
+        scoped = scope_queryset(
+            QuestionBank.objects.alive(), user, permission=permission, campus_field=None
+        )
         return reports.question_bank_usage(scoped, limit=limit)
 
     if kind in ("subject-performance", "marks-entry-status"):
-        scoped = scope_queryset(Marks.objects.alive(), user, campus_field="student__campus_id")
+        scoped = scope_queryset(
+            Marks.objects.alive(), user, permission=permission, campus_field="student__campus_id"
+        )
         builder = (
             reports.subject_performance
             if kind == "subject-performance"
@@ -1807,7 +1820,9 @@ def build_report_rows(*, kind: str, exam_id, user, limit: int | None = None) -> 
         )
         return builder(scoped, exam_id=exam_id, limit=limit)
 
-    scoped = scope_queryset(Result.objects.alive(), user, campus_field="student__campus_id")
+    scoped = scope_queryset(
+        Result.objects.alive(), user, permission=permission, campus_field="student__campus_id"
+    )
     if kind == "result-register":
         return reports.result_register(scoped, exam_id=exam_id, limit=limit)
     if kind == "pass-fail-analysis":

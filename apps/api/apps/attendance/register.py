@@ -36,7 +36,7 @@ from apps.staff_management.models import EmploymentStatus, Staff
 from apps.student_management.models import EnrollmentStatus, StudentEnrollment
 from apps.timetable.slots.services import teacher_slots_for
 from core.rbac.models import RecordScope
-from core.rbac.permissions import scope_queryset, user_scopes
+from core.rbac.permissions import AnyOf, scope_queryset, user_scopes
 
 if TYPE_CHECKING:
     from apps.school_organization.models import AcademicSession, Department
@@ -272,13 +272,17 @@ def my_registers(*, user, session: AcademicSession, on_date: datetime.date) -> l
 
 
 def staff_register(
-    *, user, on_date: datetime.date, department: Department | None = None
+    *,
+    user,
+    permission: str | AnyOf,
+    on_date: datetime.date,
+    department: Department | None = None,
 ) -> list[dict]:
     """The staff register for `on_date`: every active staff member the caller may see, by name.
 
-    Scoped the way `/staff-attendance` is (`all`, `campus` on the staff's campus,
-    `own` their own row, `assigned` their reports), so the register never lists
-    someone whose record the caller could not then read. Staff who had not joined
+    Scoped by the roles granting `permission`, the register route's own (marking)
+    key, the way `/staff-attendance` scopes a read (`all`, `campus` on the staff's
+    campus, `own` their own row, `assigned` their reports). Staff who had not joined
     by `on_date` are left out. Each entry carries the date's record, if marked,
     and `on_leave`: approved leave covers the date, or the record says so.
 
@@ -290,7 +294,9 @@ def staff_register(
     if department is not None:
         staff_rows = staff_rows.filter(department=department)
     staff = list(
-        scope_queryset(staff_rows, user, own_field="user_id", campus_field="campus_id")
+        scope_queryset(
+            staff_rows, user, permission=permission, own_field="user_id", campus_field="campus_id"
+        )
         .select_related("department")
         .order_by("last_name", "first_name", "pk")
     )

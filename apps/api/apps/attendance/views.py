@@ -106,6 +106,7 @@ from core.rbac.permissions import (
     AnyOf,
     DenyRestrictedPrincipals,
     HasPermissionKey,
+    route_permission,
     scope_queryset,
     user_scopes,
 )
@@ -471,10 +472,10 @@ class AttendanceCorrectionViewSet(
     required_feature = FEATURE
     required_permission = "attendance.correction.create"
     # The queue has two callers: requesters tracking their own and approvers deciding
-    # (ADR-0027). What each sees is their record scope, which belongs to their role
-    # assignments, not to whichever key matched (`user_scopes`,
-    # core/rbac/permissions.py:37-61): `assigned` is their own requests
-    # (`AttendanceCorrection.filter_assigned_to_user`), `campus`/`all` the queue.
+    # (ADR-0027). What each sees is the record scope of the roles granting either key
+    # (`scopes_for` over the `AnyOf`), never an unrelated role's: `assigned` is their
+    # own requests (`AttendanceCorrection.filter_assigned_to_user`), `campus`/`all`
+    # the queue.
     required_permission_map = {
         "list": AnyOf("attendance.correction.create", "attendance.correction.approve"),
         "retrieve": AnyOf("attendance.correction.create", "attendance.correction.approve"),
@@ -496,33 +497,50 @@ class AttendanceCorrectionViewSet(
         )
 
     def _correctable_rows(self):
-        """The caller's own scoped `student_attendance`, as `GET /student-attendance` scopes it.
+        """The `student_attendance` the caller may both read and correct.
 
-        A target outside it (another campus, another tenant, a section they neither
-        teach nor marked) is a 404, never a 400 or a 403 (AGENTS.md invariant 2).
-        `assigned` includes rows the caller marked (`StudentAttendance.filter_assigned_to_user`),
-        so a period or substitute teacher can correct their own register.
+        Scoped twice: by the scope `GET /student-attendance` applies (its view key's
+        roles, attendance.md §16), then by the roles granting this route's correction
+        key, so neither key's roles widen the other. A target outside either (another
+        campus, another tenant, a section they neither teach nor marked) is a 404,
+        never a 400 or a 403 (AGENTS.md invariant 2). `assigned` includes rows the
+        caller marked (`StudentAttendance.filter_assigned_to_user`), so a period or
+        substitute teacher can correct their own register.
         """
         rows = StudentAttendance.objects.alive().select_related("student", "period", "section")
-        return scope_queryset(
-            rows,
-            self.request.user,
-            own_field=StudentAttendanceViewSet.scope_own_field,
-            campus_field=StudentAttendanceViewSet.scope_campus_field,
-        )
+        for permission in (
+            "attendance.student-attendance.view",
+            route_permission(self.request, self),
+        ):
+            rows = scope_queryset(
+                rows,
+                self.request.user,
+                permission=permission,
+                own_field=StudentAttendanceViewSet.scope_own_field,
+                campus_field=StudentAttendanceViewSet.scope_campus_field,
+            )
+        return rows
 
     def _correctable_staff_rows(self):
-        """The caller's own scoped `staff_attendance`, as `GET /staff-attendance` scopes it.
+        """The `staff_attendance` the caller may both read and correct.
 
-        Outside it (another campus, another tenant, someone who does not report to
-        them) is a 404, as for a student row.
+        Scoped as `GET /staff-attendance` scopes it, then by the correction key's
+        roles, as for a student row. Outside either (another campus, another tenant,
+        someone who does not report to them) is a 404.
         """
-        return scope_queryset(
-            StaffAttendance.objects.alive().select_related("staff"),
-            self.request.user,
-            own_field=StaffAttendanceViewSet.scope_own_field,
-            campus_field=StaffAttendanceViewSet.scope_campus_field,
-        )
+        rows = StaffAttendance.objects.alive().select_related("staff")
+        for permission in (
+            "attendance.staff-attendance.view",
+            route_permission(self.request, self),
+        ):
+            rows = scope_queryset(
+                rows,
+                self.request.user,
+                permission=permission,
+                own_field=StaffAttendanceViewSet.scope_own_field,
+                campus_field=StaffAttendanceViewSet.scope_campus_field,
+            )
+        return rows
 
     @extend_schema(
         summary="Request a correction to a locked student or staff attendance record",
@@ -892,7 +910,10 @@ class StaffAttendanceViewSet(
         )
 
         entries = attendance_register.staff_register(
-            user=request.user, on_date=on_date, department=department
+            user=request.user,
+            permission=route_permission(request, self),
+            on_date=on_date,
+            department=department,
         )
         return Response(
             {
@@ -1012,9 +1033,15 @@ class AttendanceReportView(TenantScopedViewSetMixin, APIView):
         # One row past the ceiling is all it takes to know. Asking for
         # `limit + 1` means the decision costs a bounded query rather than the
         # whole term-scale one the job is going to rebuild anyway.
-        rows = self._rows(request, params, limit=services.SYNCHRONOUS_REPORT_ROW_LIMIT + 1)
+        permission = route_permission(request, self)
+        rows = self._rows(
+            request, params, permission=permission, limit=services.SYNCHRONOUS_REPORT_ROW_LIMIT + 1
+        )
         if len(rows) > services.SYNCHRONOUS_REPORT_ROW_LIMIT:
-            return self._queue_export(request, params, reason="too many rows to return inline")
+            # Queued under this GET's view key, so the file holds what it would have shown.
+            return self._queue_export(
+                request, params, permission=permission, reason="too many rows to return inline"
+            )
 
         kind = params["kind"]
         # PolymorphicProxySerializer documents the rows; this dict serializes them (ADR-0022).
@@ -1047,15 +1074,23 @@ class AttendanceReportView(TenantScopedViewSetMixin, APIView):
         """
         query = AttendanceReportQuerySerializer(data=request.data)
         query.is_valid(raise_exception=True)
-        return self._queue_export(request, query.validated_data, reason="export requested")
+        return self._queue_export(
+            request,
+            query.validated_data,
+            permission=route_permission(request, self),
+            reason="export requested",
+        )
 
     @staticmethod
-    def _rows(request: Request, params: dict, *, limit: int | None = None) -> list[dict]:
+    def _rows(
+        request: Request, params: dict, *, permission: str | AnyOf, limit: int | None = None
+    ) -> list[dict]:
         from apps.attendance.tasks import build_report_rows
 
         return build_report_rows(
             kind=params["kind"],
             user=request.user,
+            permission=permission,
             start_date=params["start_date"],
             end_date=params["end_date"],
             section_id=str(params["section_id"]) if params.get("section_id") else None,
@@ -1065,13 +1100,17 @@ class AttendanceReportView(TenantScopedViewSetMixin, APIView):
         )
 
     @staticmethod
-    def _queue_export(request: Request, params: dict, *, reason: str) -> Response:
+    def _queue_export(
+        request: Request, params: dict, *, permission: str | AnyOf, reason: str
+    ) -> Response:
         """Queue the export with every parameter the inline report used, so the two agree.
 
         Root cause of the defaulters mismatch this closes: `threshold` was validated
         and then dropped, inline and here, so every defaulters report used the default.
+        `permission` is the enqueuing route's declaration, which the job reads under.
         """
         from apps.attendance.tasks import export_attendance_report_task
+        from core.exports.scope import SCOPE_PERMISSION, scope_permission_payload
         from core.jobs.services import create_job, enqueue_job
 
         threshold = params.get("threshold")
@@ -1092,6 +1131,8 @@ class AttendanceReportView(TenantScopedViewSetMixin, APIView):
                 # The *requester*, so the job rebuilds the same record scope. Not
                 # the actor of the moment the worker runs, which is nobody.
                 "requested_by": str(request.user.pk),
+                # ...under the key this request was admitted on (core/exports/scope.py).
+                SCOPE_PERMISSION: scope_permission_payload(permission),
             },
             actor_id=request.user.pk,
         )

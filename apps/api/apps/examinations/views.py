@@ -100,12 +100,15 @@ from core.api.exceptions import Conflict, DomainRuleViolation
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
+from core.exports.scope import SCOPE_PERMISSION, scope_permission_payload
 from core.idempotency.services import replay_or_execute
 from core.jobs.services import create_job, enqueue_job
 from core.rbac.permissions import (
+    AnyOf,
     DenyRestrictedPrincipals,
     HasPermissionKey,
     is_restricted_principal,
+    route_permission,
 )
 
 if TYPE_CHECKING:
@@ -1204,16 +1207,20 @@ class ExamReportView(TenantScopedViewSetMixin, APIView):
         serializer = ExamReportQuerySerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
         exam = serializer.validated_data.get("exam")
+        permission = route_permission(request, self)
 
         rows = services.build_report_rows(
             kind=serializer.validated_data["kind"],
             exam_id=exam.pk if exam is not None else None,
             user=request.user,
+            permission=permission,
             limit=services.SYNCHRONOUS_REPORT_ROW_LIMIT + 1,
         )
         if len(rows) > services.SYNCHRONOUS_REPORT_ROW_LIMIT:
+            # Queued under this GET's view key, so the file holds what it would have shown.
             return self._queue_export(
                 request,
+                permission=permission,
                 kind=serializer.validated_data["kind"],
                 exam=exam,
                 fmt=serializer.validated_data["format"],
@@ -1230,13 +1237,23 @@ class ExamReportView(TenantScopedViewSetMixin, APIView):
         serializer.is_valid(raise_exception=True)
         return self._queue_export(
             request,
+            permission=route_permission(request, self),
             kind=serializer.validated_data["kind"],
             exam=serializer.validated_data.get("exam"),
             fmt=serializer.validated_data["format"],
             message="Report queued; poll the job for the file.",
         )
 
-    def _queue_export(self, request: Request, *, kind: str, exam, fmt: str, message: str):
+    def _queue_export(
+        self,
+        request: Request,
+        *,
+        permission: str | AnyOf,
+        kind: str,
+        exam,
+        fmt: str,
+        message: str,
+    ):
         job = create_job(
             tenant_id=request.tenant.pk,
             job_type="exams.report-export",
@@ -1248,6 +1265,8 @@ class ExamReportView(TenantScopedViewSetMixin, APIView):
                 # A report is read as authoritative, and an export must not
                 # widen what its requester could see inline.
                 "requested_by": str(request.user.pk),
+                # Under the key this request was admitted on (core/exports/scope.py).
+                SCOPE_PERMISSION: scope_permission_payload(permission),
             },
             actor_id=request.user.pk,
         )

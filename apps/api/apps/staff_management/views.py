@@ -63,9 +63,15 @@ class _NestedUnderStaffMixin:
         kwargs: dict[str, str]
 
     def get_staff(self) -> Staff:
-        from core.rbac.permissions import scope_queryset
+        from core.rbac.permissions import route_permission, scope_queryset
 
-        queryset = scope_queryset(Staff.objects.alive(), self.request.user, own_field="user_id")
+        # Scoped by `/staff`' own view key, then by this route's key, as
+        # `get_student` is.
+        queryset = Staff.objects.alive()
+        for permission in ("staff.staff.view", route_permission(self.request, self)):
+            queryset = scope_queryset(
+                queryset, self.request.user, permission=permission, own_field="user_id"
+            )
         try:
             return get_object_or_404(queryset, pk=self.kwargs["staff_pk"])
         except (ValueError, TypeError) as exc:

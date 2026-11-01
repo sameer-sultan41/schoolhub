@@ -116,7 +116,7 @@ class ScopeGrantsTests(TestCase):
         self.assertEqual(effective_permission_keys(self.user), frozenset({SEND}))
         self.assertEqual(scopes_for(self.user, OTHER), {})
         self.assertFalse(is_restricted_principal(self.user))
-        # `scope_queryset` still reads the key-blind `user_scopes` until its callers move.
+        # The key-blind `user_scopes` is evicted too, until its last direct readers move.
         self.assertEqual(user_scopes(self.user), {RecordScope.CAMPUS: [self.campus_a]})
         self.assertEqual(scopes_for(self.user, SEND), {RecordScope.CAMPUS: [self.campus_a]})
 

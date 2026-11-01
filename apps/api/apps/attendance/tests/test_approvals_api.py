@@ -57,6 +57,9 @@ CORRECTIONS = "/api/v1/attendance-corrections"
 LEAVE_REQUESTS = "/api/v1/leave-requests"
 CREATE = "attendance.correction.create"
 APPROVE = "attendance.correction.approve"
+# A correction's target is scoped by this key's roles too (attendance.md §16), so a
+# requester holds it as every real requester role does.
+VIEW = "attendance.student-attendance.view"
 LEAVE_VIEW = "attendance.leave-request.view"
 LEAVE_APPROVE = "attendance.leave-request.approve"
 # A date past any lock window, so a row is locked by its date as well as its column.
@@ -188,7 +191,7 @@ class CorrectionTargetScopeTests(ApprovalsTestCase):
     """The target resolves through the caller's scoped rows: outside them is a 404."""
 
     def sign_in_on_campus_a(self, user) -> None:
-        self.sign_in(user, CREATE, scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+        self.sign_in(user, CREATE, VIEW, scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
 
     def correction_count(self) -> int:
         with tenant_context(self.tenant.id):
@@ -219,7 +222,7 @@ class CorrectionTargetScopeTests(ApprovalsTestCase):
         with tenant_context(self.tenant.id):
             stranger = StudentFactory(tenant=self.tenant, campus=self.campus)
         row = self.locked_row(stranger, section=self.other_section, marked_by=self.principal)
-        self.sign_in(self.teacher_user, CREATE, scope=RecordScope.ASSIGNED)
+        self.sign_in(self.teacher_user, CREATE, VIEW, scope=RecordScope.ASSIGNED)
 
         response = self.client.post(CORRECTIONS, self.body(row), format="json")
 
@@ -232,7 +235,7 @@ class CorrectionTargetScopeTests(ApprovalsTestCase):
         with tenant_context(self.tenant.id):
             StaffFactory(tenant=self.tenant, campus=self.campus, user_id=slot_user.pk)
         row = self.locked_row(period=self.period, marked_by=slot_user)
-        self.sign_in(slot_user, CREATE, scope=RecordScope.ASSIGNED)
+        self.sign_in(slot_user, CREATE, VIEW, scope=RecordScope.ASSIGNED)
 
         created = self.client.post(CORRECTIONS, self.body(row), format="json")
 

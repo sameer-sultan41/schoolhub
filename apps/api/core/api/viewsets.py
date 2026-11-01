@@ -14,7 +14,7 @@ from rest_framework.response import Response
 
 from core.api.permissions import RequiresModuleFeature
 from core.audit.services import record_audit
-from core.rbac.permissions import HasPermissionKey, scope_queryset
+from core.rbac.permissions import HasPermissionKey, required_declaration, scope_queryset
 from core.tenancy.context import bind_tenant, unbind_tenant
 from core.tenancy.models import Tenant
 
@@ -113,11 +113,17 @@ class TenantScopedViewSetMixin:
 
     def get_queryset(self):
         # The model's default manager is already tenant-scoped, and RLS enforces it
-        # in the database; this narrows further by the user's record scope.
+        # in the database; this narrows further by the user's record scope for this
+        # route's own key, so only the roles granting that key count.
         queryset = super().get_queryset().alive()
+        declared = required_declaration(self.request, self)
+        if declared is None:
+            # `HasPermissionKey` refuses such a route; never read one under no key.
+            return queryset.none()
         return scope_queryset(
             queryset,
             self.request.user,
+            permission=declared,
             own_field=self.scope_own_field,
             campus_field=self.scope_campus_field,
             campus_allows_null=self.scope_campus_allows_null,

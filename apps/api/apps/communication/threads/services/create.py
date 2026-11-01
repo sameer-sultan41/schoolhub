@@ -108,8 +108,15 @@ def _owned_student(*, actor, student_id: uuid.UUID | None) -> Student:
 
 
 def _scoped_student(*, actor, student_id: uuid.UUID | None) -> Student:
-    """A student inside the staff member's record scope, scoped as `/students` scopes them."""
-    scoped = scope_queryset(Student.objects.alive(), actor, own_field="user_id")
+    """A student the staff member may both read and start a thread about.
+
+    Scoped as `/students` scopes them (its view key's roles), then by the roles
+    granting `communication.thread.create`, the key `POST /message-threads` declares,
+    so neither key's roles widen the other.
+    """
+    scoped = Student.objects.alive()
+    for permission in ("students.student.view", "communication.thread.create"):
+        scoped = scope_queryset(scoped, actor, permission=permission, own_field="user_id")
     student = scoped.filter(pk=_require_student_id(student_id)).first()
     if student is None:
         raise Http404("No such student.")

@@ -22,6 +22,7 @@ from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
 URL = "/api/v1/message-threads"
+STUDENT_VIEW = "students.student.view"
 
 
 class ThreadCreateTestCase(ThreadAPITestCase):
@@ -160,11 +161,17 @@ class GuardianRoutingTests(ThreadCreateTestCase):
 
 
 class StaffGuardianThreadTests(ThreadCreateTestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        # Staff pick a student they may read (`/students`' key) as well as one their
+        # thread key reaches (`_scoped_student`), as every staff role can.
+        grant(self.user, STUDENT_VIEW)
+
     def test_staff_guardian_thread_out_of_scope_student_is_404(self) -> None:
         with tenant_context(self.tenant.id):
             teacher = UserFactory(tenant=self.tenant)
             # `assigned`, but not this student's class teacher.
-            grant(teacher, *STAFF_THREAD_KEYS, scope=RecordScope.ASSIGNED)
+            grant(teacher, *STAFF_THREAD_KEYS, STUDENT_VIEW, scope=RecordScope.ASSIGNED)
         authenticate(self.client, teacher)
 
         response = self.guardian_thread()

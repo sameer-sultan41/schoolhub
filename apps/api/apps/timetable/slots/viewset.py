@@ -59,7 +59,7 @@ from core.api.exceptions import DomainRuleViolation
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
-from core.rbac.permissions import HasPermissionKey, scope_queryset
+from core.rbac.permissions import HasPermissionKey, route_permission, scope_queryset
 
 
 def _resolve_session(session: AcademicSession | None) -> AcademicSession:
@@ -83,17 +83,22 @@ def _resolve_session(session: AcademicSession | None) -> AcademicSession:
     return current
 
 
-def _scoped_section(request: Request, pk) -> Section:
+def _scoped_section(request: Request, view: object, pk) -> Section:
     """Resolve `{section_id}` under the caller's record scope.
 
     Through ``scope_queryset`` rather than a bare manager lookup: a campus-scoped
     vice principal must not be able to publish another campus's grid, and the
-    tenant-scoped manager alone would let them. A section they cannot reach is a
-    404, never a 403 (AGENTS.md invariant 4).
+    tenant-scoped manager alone would let them. Scoped twice, by `/sections`' view
+    key and then by ``view``'s own declaration for this action, so the section is one
+    the caller may both read and act on, and neither key's roles widen the other. A
+    section they cannot reach is a 404, never a 403 (AGENTS.md invariant 4).
     """
-    return get_object_or_404(
-        scope_queryset(Section.objects.alive(), request.user, campus_field="campus_id"), pk=pk
-    )
+    sections = Section.objects.alive()
+    for permission in ("school.section.view", route_permission(request, view)):
+        sections = scope_queryset(
+            sections, request.user, permission=permission, campus_field="campus_id"
+        )
+    return get_object_or_404(sections, pk=pk)
 
 
 class TimetableSlotViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
@@ -289,7 +294,7 @@ class TimetableViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
         },
     )
     def validate(self, request: Request, pk) -> Response:
-        section = _scoped_section(request, pk)
+        section = _scoped_section(request, self, pk)
         session = self._session_from_body(request)
 
         conflicts = services.conflicts_for(session=session, section=section)
@@ -319,7 +324,7 @@ class TimetableViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
         },
     )
     def publish(self, request: Request, pk) -> Response:
-        section = _scoped_section(request, pk)
+        section = _scoped_section(request, self, pk)
         session = self._session_from_body(request)
 
         # Raises DomainRuleViolation -> 422 on any hard conflict, carrying the

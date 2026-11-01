@@ -9,9 +9,8 @@ from django.contrib.auth.models import AbstractBaseUser, AnonymousUser
 from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured
 from django.db.models import Q, QuerySet
-from rest_framework import permissions
+from rest_framework import exceptions, permissions
 from rest_framework.request import Request
-from rest_framework.views import APIView
 
 from core.rbac.cache import scope_grants_cache_key, user_scopes_cache_key
 from core.rbac.models import RecordScope, UserRole
@@ -187,12 +186,13 @@ class HasPermissionKey(permissions.BasePermission):
         return any(key in held for key in declared_keys(required))
 
 
-def required_declaration(request: Request, view: APIView) -> str | AnyOf | None:
+def required_declaration(request: Request, view: object) -> str | AnyOf | None:
     """The permission one request to ``view`` is declared to need: a key, an `AnyOf`, or None.
 
     `required_permission_map[action]`, else `required_permission`. `HasPermissionKey`
     enforces it; public so that any other code needing a route's key reads the same
-    answer instead of re-deriving it.
+    answer instead of re-deriving it. ``view`` is any object carrying those
+    attributes, so a mixin can pass itself.
     """
     action = getattr(view, "action", None) or request.method.lower()
     mapping = getattr(view, "required_permission_map", None) or {}
@@ -203,6 +203,19 @@ def required_declaration(request: Request, view: APIView) -> str | AnyOf | None:
         return declared
     fallback: str | AnyOf | None = getattr(view, "required_permission", None)
     return fallback
+
+
+def route_permission(request: Request, view: object) -> str | AnyOf:
+    """`required_declaration` for a request `HasPermissionKey` has already admitted.
+
+    That class refuses a route declaring nothing, so None should not reach a caller
+    here; if one does (a view without the class), it is refused rather than read
+    under no key at all.
+    """
+    declared = required_declaration(request, view)
+    if declared is None:
+        raise exceptions.PermissionDenied()
+    return declared
 
 
 class IsPlatformPrincipal(permissions.BasePermission):
@@ -263,12 +276,22 @@ def scope_queryset(
     queryset,
     user,
     *,
+    permission: str | AnyOf,
     own_field: str | None = None,
     campus_field: str | None = "campus_id",
     campus_allows_null: bool = False,
     assigned_filter=None,
 ):
-    """Narrow a queryset by the user's record scope.
+    """Narrow a queryset by the user's record scope for one declared permission.
+
+    `permission` is the key (or `AnyOf`) that governs this read, and only the roles
+    granting it lend their scope (`scopes_for`): auth-and-rbac.md §2.3 attaches a
+    scope to a role assignment, so an unrelated `all` role must not widen a
+    campus-scoped grant. It is required, with no default, because a forgotten caller
+    falling back to every role's scope is that exact bug. The viewset mixin passes the
+    route's own declaration. A write that first resolves a target calls this twice on
+    the same queryset, with the target's view key and then the action's
+    declaration, so the target is one the caller may both read and act on.
 
     `assigned_filter(queryset, user)` replaces the model's `filter_assigned_to_user`
     for one call, for a reader that needs a narrower `assigned` than the model's
@@ -308,7 +331,7 @@ def scope_queryset(
     stated at the call site — each viewset opting out says so — rather than inferred
     by catching FieldError, which would also swallow a genuine typo in a real path.
     """
-    scopes = user_scopes(user)
+    scopes = scopes_for(user, permission)
     if RecordScope.ALL in scopes:
         return queryset
     if RecordScope.CAMPUS in scopes:

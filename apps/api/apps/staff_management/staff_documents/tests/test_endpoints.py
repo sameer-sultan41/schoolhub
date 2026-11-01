@@ -26,6 +26,9 @@ class StaffManagementAPITestCase(_BaseAPITestCase):
         super().setUp()
         with tenant_context(self.tenant.id):
             self.staff = StaffFactory(tenant=self.tenant, campus=self.campus)
+        # The nested route resolves its parent under `/staff`' own key as well as its
+        # own (`_NestedUnderStaffMixin.get_staff`).
+        self.allow("staff.staff.view")
 
 
 class DocumentTests(StaffManagementAPITestCase):
