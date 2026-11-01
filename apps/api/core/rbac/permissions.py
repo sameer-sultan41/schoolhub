@@ -10,7 +10,7 @@ from django.contrib.auth.models import AbstractBaseUser, AnonymousUser
 from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured
 from django.db import models
-from django.db.models import Q, QuerySet
+from django.db.models import Exists, OuterRef, Q, QuerySet
 from rest_framework import exceptions, permissions
 from rest_framework.request import Request
 
@@ -287,7 +287,7 @@ def scope_queryset(
     each type narrows on its own, and a type that can reach nothing (a `campus` role
     with no campus, an `own` or `assigned` with no hook) is empty rather than
     falling through to the next. One type keeps its exact filter; two or more are an
-    OR of `pk__in` subqueries.
+    OR of correlated `EXISTS` subqueries.
 
     `assigned_filter(queryset, user)` replaces the model's `filter_assigned_to_user`
     for one call, for a reader that needs a narrower `assigned` than the model's
@@ -349,6 +349,9 @@ def scope_queryset(
         )
         if member is None:
             return queryset
+        # A type that reaches nothing adds nothing to the union. Dropping it here,
+        # rather than leaving `.none()` inside the OR, is what lets a single remaining
+        # type keep its exact filter.
         if not member.query.is_empty():
             members.append(member)
     if not members:
@@ -356,12 +359,13 @@ def scope_queryset(
     if len(members) == 1:
         # One type keeps the exact filter it always had, so its SQL is unchanged.
         return members[0]
-    # `pk__in` subqueries rather than `a | b`, whose joins can duplicate rows, or
-    # `union()`, which cannot be filtered further. `.none()` members were dropped
-    # above: compiled to raw SQL they raise `EmptyResultSet` (L22).
+    # A correlated `EXISTS` per member, ORed: each probe is a primary-key lookup
+    # bounded by the outer rows, so a detail read stays a point query. Rather than
+    # `a | b`, whose joins can duplicate rows; `union()`, which cannot be filtered
+    # further; or uncorrelated `pk__in` subqueries, each evaluated in full (ruling 9).
     match = Q()
     for member in members:
-        match |= Q(pk__in=member.values("pk"))
+        match |= Q(Exists(member.filter(pk=OuterRef("pk"))))
     return queryset.filter(match)
 
 

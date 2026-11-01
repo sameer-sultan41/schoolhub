@@ -347,10 +347,14 @@ class AttendanceScopeTests(ApprovalsTestCase):
         self.assertEqual(ids(response), {str(theirs_on_a.pk), str(mine_on_b.pk)})
         self.assertNotIn(str(theirs_elsewhere.pk), ids(response))
 
-    def test_empty_member_does_not_raise_in_report_cte(self) -> None:
-        """L22: a campus role with no campus is an empty member, dropped before the
-        `own` and `assigned` members are combined into the report's CTE. First-wins
-        fell through the empty campus to `own` alone: the child, not the class."""
+    def test_an_empty_member_does_not_fall_through_and_the_union_runs_in_report_cte(
+        self,
+    ) -> None:
+        """A campus role with no campus reaches nothing, and adds nothing: it neither
+        falls through to another type nor stops the `own` and `assigned` members from
+        being combined inside the report's CTE (L22: that CTE compiles the scoped
+        queryset to raw SQL). First-wins fell through the empty campus to `own`
+        alone: the child, not the class."""
         child = self.row_b.student
         with tenant_context(self.tenant.id):
             guardian = GuardianFactory(tenant=self.tenant, user_id=self.teacher_user.pk)
@@ -371,26 +375,35 @@ class AttendanceScopeTests(ApprovalsTestCase):
         )
 
     def test_single_scope_type_sql_is_unchanged(self) -> None:
-        """A user holding the key at one type gets the exact filter that type always
-        produced, not the `pk__in` union. Each expected queryset is that type's branch
-        body as it stood before the union."""
+        """A user whose key reaches rows through one type gets the exact filter that type
+        always produced, not the `EXISTS` union. Each expected queryset is that type's
+        branch body as it stood before the union. A campus role with no campus beside an
+        `own` role leaves one type, so it too is the `own` hook's SQL."""
         kwargs = StudentAttendanceViewSet.scope_kwargs()
+
+        def campus_filter(base, _user):
+            return base.filter(Q(**{f"{kwargs['campus_field']}__in": [self.campus.pk]}))
+
         cases = (
+            ("campus", ((RecordScope.CAMPUS, self.campus.pk),), campus_filter),
+            ("own", ((RecordScope.OWN, None),), StudentAttendance.filter_owned_by_user),
             (
-                RecordScope.CAMPUS,
-                self.campus.pk,
-                lambda base, _user: base.filter(
-                    Q(**{f"{kwargs['campus_field']}__in": [self.campus.pk]})
-                ),
+                "assigned",
+                ((RecordScope.ASSIGNED, None),),
+                StudentAttendance.filter_assigned_to_user,
             ),
-            (RecordScope.OWN, None, StudentAttendance.filter_owned_by_user),
-            (RecordScope.ASSIGNED, None, StudentAttendance.filter_assigned_to_user),
+            (
+                "campus without a campus, and own",
+                ((RecordScope.CAMPUS, None), (RecordScope.OWN, None)),
+                StudentAttendance.filter_owned_by_user,
+            ),
         )
 
-        for scope, ref, expected in cases:
-            with self.subTest(scope=scope):
+        for label, grants, expected in cases:
+            with self.subTest(label):
                 user = UserFactory(tenant=self.tenant)
-                grant(user, ATTENDANCE_VIEW, scope=scope, scope_ref=ref)
+                for scope, ref in grants:
+                    grant(user, ATTENDANCE_VIEW, scope=scope, scope_ref=ref)
                 with tenant_context(self.tenant.id):
                     base = StudentAttendance.objects.alive()
                     scoped = scope_queryset(base, user, permission=ATTENDANCE_VIEW, **kwargs)
