@@ -28,6 +28,12 @@ either this file or `project-status.md`.
     The fix is to resolve the batch through the scoped queryset (`get_object`-style, over the
     batch's `student__campus_id` rows) or to check the action key with `holds_key_for`
     against the batch's campus before calling the service, so a batch out of scope is a 404.
+  - **Marks entry skips the allocation check on any `campus` scope.** `assert_marker_may_enter`
+    (`apps/examinations/services.py`) returns early on `RecordScope.CAMPUS in scopes` for
+    `MARKS_CREATE`, without checking which campus the exam subject's students are on. A marker
+    holding the key at `campus:A` and at `assigned` therefore skips the allocation check on a
+    campus-B subject that `assigned` lets them reach. The fix is the leave escalation one: pass
+    `all`, or a `campus` scope only when it names the row's campus.
   - **Result-approval notifications ignore scope too.** `notify_result_approval_pending`
     (`apps/examinations/tasks.py`) notifies every active user holding `exams.result.approve`,
     checked by key presence alone, whatever that key's scope. The fix is the promotions one:
