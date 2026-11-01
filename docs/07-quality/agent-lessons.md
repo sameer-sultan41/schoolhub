@@ -234,6 +234,11 @@
 - **Mistake.** PR #146's broadcast Audience step listed every campus and validated only classes and sections, so a campus-restricted sender met the server's `422` only at Confirm.
 - **Check.** When the server narrows a field by the caller's scope, read that scope from its endpoint, intersect it with the loaded options (a stale id may name a deleted record), require the field in that step's validation, and give the "reaches nothing" case its own message and a disabled Next.
 
+### L35. A resolved `invalidateQueries` is not a rendered refetch
+
+- **Mistake.** Two PR #146 Jest tests awaited `act(() => queryClient.invalidateQueries(...))` and then asserted on the screen, or failed a mutation, straight away. TanStack Query hands results to React on a `setTimeout(0)`, so the view still showed the old data, and CI failed (`33fe38c6`, `68521eac`).
+- **Check.** After a refetch, wait for something on screen that only the new data renders (`findBy…`, or `waitFor` on the changed text) before acting or asserting. To prove something did *not* happen, first let TanStack's queued notifications land: an `act` around a `setTimeout(0)`.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.
