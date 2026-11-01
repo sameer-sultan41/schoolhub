@@ -44,7 +44,9 @@ from apps.examinations.tests.test_reports import ReportDataTestCase as ExamRepor
 from apps.fees_finance.tasks import export_finance_report_task
 from apps.fees_finance.tests.test_reports import ReportTestCase as FinanceReportTestCase
 from apps.school_organization.tests.factories import (
+    AcademicSessionFactory,
     CampusFactory,
+    ClassFactory,
     SectionFactory,
     TenantFactory,
     UserFactory,
@@ -232,6 +234,77 @@ class DetailWriteScopeTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
         self.assertEqual(response.json()["data"]["medical_notes"], "Penicillin allergy")
         self.assertEqual(self.stored_student_b().first_name, "Renamed")
+
+
+class MixedScopeDetailWriteTests(APITestCase):
+    """A detail write whose two chained scopes are each a union (Task 5's review).
+
+    The user holds the view and update keys on campus A and at `assigned`. The mixin
+    scopes a PATCH by the view key and then by the update key, and each call has two
+    members, so the second call's correlated `EXISTS` subqueries are built over the
+    first call's: nested `EXISTS`. First-wins precedence ran the campus branch alone,
+    so the campus-B student this user class-teaches was a 404.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.tenant = TenantFactory()
+        enable_feature(self.tenant, "module.students")
+        self.user = UserFactory(tenant=self.tenant)
+        with tenant_context(self.tenant.id):
+            campus_a = CampusFactory(tenant=self.tenant)
+            campus_b = CampusFactory(tenant=self.tenant)
+            session = AcademicSessionFactory(tenant=self.tenant)
+            school_class = ClassFactory(tenant=self.tenant)
+            teacher = StaffFactory(tenant=self.tenant, campus=campus_b, user_id=self.user.pk)
+            taught = SectionFactory(
+                tenant=self.tenant,
+                school_class=school_class,
+                campus=campus_b,
+                class_teacher_staff_id=teacher.pk,
+            )
+            untaught = SectionFactory(
+                tenant=self.tenant, school_class=school_class, campus=campus_b
+            )
+            self.on_campus_a = StudentFactory(tenant=self.tenant, campus=campus_a)
+            self.taught_on_b = StudentFactory(tenant=self.tenant, campus=campus_b)
+            self.untaught_on_b = StudentFactory(tenant=self.tenant, campus=campus_b)
+            for student, section in ((self.taught_on_b, taught), (self.untaught_on_b, untaught)):
+                StudentEnrollmentFactory(
+                    tenant=self.tenant,
+                    student=student,
+                    academic_session=session,
+                    school_class=school_class,
+                    section=section,
+                )
+        for scope, ref in ((RecordScope.CAMPUS, campus_a.pk), (RecordScope.ASSIGNED, None)):
+            grant(self.user, STUDENT_VIEW, STUDENT_UPDATE, scope=scope, scope_ref=ref)
+        authenticate(self.client, self.user)
+
+    def patch(self, student: Student):
+        return self.client.patch(
+            f"/api/v1/students/{student.pk}", {"first_name": "Renamed"}, format="json"
+        )
+
+    def first_name(self, student: Student) -> str:
+        with tenant_context(self.tenant.id):
+            return Student.objects.get(pk=student.pk).first_name
+
+    def test_a_patch_through_two_chained_unions_reaches_each_members_rows(self) -> None:
+        with CaptureQueriesContext(connection) as captured:
+            taught = self.patch(self.taught_on_b)
+        on_campus_a = self.patch(self.on_campus_a)
+        untaught = self.patch(self.untaught_on_b)
+
+        self.assertEqual(taught.status_code, status.HTTP_200_OK, taught.json())
+        self.assertEqual(on_campus_a.status_code, status.HTTP_200_OK, on_campus_a.json())
+        self.assertEqual(untaught.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(self.first_name(self.taught_on_b), "Renamed")
+        self.assertEqual(self.first_name(self.untaught_on_b), self.untaught_on_b.first_name)
+        # Two members per call, so one query carries both unions: the read key's two
+        # `EXISTS`, and the action key's two built over them.
+        most = max(query["sql"].count("EXISTS") for query in captured.captured_queries)
+        self.assertGreaterEqual(most, 4)
 
 
 class AttendanceScopeTests(ApprovalsTestCase):
