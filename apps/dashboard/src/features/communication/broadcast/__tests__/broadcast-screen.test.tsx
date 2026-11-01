@@ -211,7 +211,13 @@ describe("BroadcastScreen", () => {
         queryClient.invalidateQueries({ queryKey: queryKeys.module(BROADCASTS_QUERY_MODULE) }),
       );
 
-      expect(screen.getByRole("combobox", { name: "Campus" })).not.toHaveTextContent(SOUTH.name);
+      expect(fetchScope).toHaveBeenCalledTimes(2);
+      // The refetched scope reaches the view on TanStack's next tick; the picker then shows its
+      // placeholder, not South.
+      await waitFor(() => {
+        expect(screen.getByRole("combobox", { name: "Campus" })).not.toHaveTextContent(SOUTH.name);
+      });
+      expect(screen.getByRole("combobox", { name: "Campus" })).toHaveTextContent(/^Campus$/);
       await user.click(nextButton());
       expect(await screen.findByText("Choose one of your campuses.")).toBeInTheDocument();
       expect(screen.queryByLabelText("Message")).not.toBeInTheDocument();
