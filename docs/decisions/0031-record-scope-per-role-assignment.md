@@ -43,7 +43,8 @@ PR B appended decision 7, the mixed-scope-type union.
    campuses, so it chains the same two calls over every row
    (`promotions.services.assert_batch_in_scope`, plan execution ruling 10): one student out
    of scope fails the action, as a 404 when no row is readable and a 422 otherwise. Batch
-   creation checks the class's active enrollments the same way, always as a 422. Substitution `candidates` is the exception (plan, execution ruling 4): the
+   creation checks the rows it has just written the same way, in the same transaction, always
+   as a 422. Substitution `candidates` is the exception (plan, execution ruling 4): the
    slot is scoped by the substitution key alone, and the staff list it returns by
    `staff.staff.view`, because the answer is a list of staff and discloses nothing of the
    slot. A target outside either scope is a 404.
