@@ -1,19 +1,54 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Alert, Checkbox, Label, RadioGroup, RadioGroupItem } from "@schoolhub/ui";
+import { Alert, Checkbox, Label, RadioGroup, RadioGroupItem, Skeleton } from "@schoolhub/ui";
 
 import { FilterSelect } from "@/components/filter-select";
-import { useCampuses, useClasses, useSections } from "@/hooks/use-reference-data";
+import { LoadErrorCard } from "@/components/load-error-card";
+import { useClasses, useSections } from "@/hooks/use-reference-data";
 import { BROADCAST_AUDIENCE_TYPES } from "@/services/modules/broadcasts/broadcasts-constant";
 
 import type { BroadcastFormValues } from "./broadcast-form-schema";
+import type { BroadcastCampuses } from "./use-broadcast-campuses";
 
 export interface AudienceStepProps {
   values: BroadcastFormValues;
   onChange: (patch: Partial<BroadcastFormValues>) => void;
-  /** The class and section pickers' failed rule, already translated. */
-  errors: { class_ids?: string; section_ids?: string };
+  /** The campuses this sender may target (`useBroadcastCampuses`). */
+  campuses: BroadcastCampuses;
+  /** The campus, class and section pickers' failed rule, already translated. */
+  errors: { campus_id?: string; class_ids?: string; section_ids?: string };
+}
+
+interface CampusPickerProps {
+  campuses: BroadcastCampuses;
+  value: string;
+  onChange: (campusId: string) => void;
+  error: string | undefined;
+}
+
+/** The campus picker: any campus (or all) for an unrestricted sender, one of their own for a
+ * campus-restricted one, and a notice for a sender whose scope reaches no campus. */
+function CampusPicker({ campuses, value, onChange, error }: CampusPickerProps) {
+  const t = useTranslations("communication.broadcast.audience");
+
+  if (campuses.status === "pending") return <Skeleton className="h-9 w-full sm:w-40" />;
+  if (campuses.status === "error") {
+    return <LoadErrorCard message={t("scopeFailed")} onRetry={campuses.retry} />;
+  }
+  if (campuses.reachesNoCampus) return <Alert variant="warning">{t("noCampus")}</Alert>;
+  return (
+    <div className="space-y-2">
+      <FilterSelect
+        label={t("campus")}
+        allLabel={campuses.requireCampus ? undefined : t("allCampuses")}
+        value={value}
+        onChange={onChange}
+        options={campuses.options}
+      />
+      {error && <Alert variant="destructive">{error}</Alert>}
+    </div>
+  );
 }
 
 interface ChecklistProps {
@@ -48,9 +83,8 @@ function Checklist({ legend, options, selected, onChange }: ChecklistProps) {
 }
 
 /** Step 1: who the broadcast goes to. A class or section audience adds its own pickers. */
-export function AudienceStep({ values, onChange, errors }: AudienceStepProps) {
+export function AudienceStep({ values, onChange, campuses, errors }: AudienceStepProps) {
   const t = useTranslations("communication.broadcast.audience");
-  const campuses = useCampuses();
   const classes = useClasses({ isActive: true });
   const sections = useSections(values.section_class_id, { isActive: true });
   const isClass = values.audience_type === "class";
@@ -74,14 +108,13 @@ export function AudienceStep({ values, onChange, errors }: AudienceStepProps) {
         ))}
       </RadioGroup>
 
-      <FilterSelect
-        label={t("campus")}
-        allLabel={t("allCampuses")}
+      <CampusPicker
+        campuses={campuses}
         value={values.campus_id}
         onChange={(campusId) => {
           onChange({ campus_id: campusId });
         }}
-        options={campuses.data ?? []}
+        error={errors.campus_id}
       />
 
       {isClass && (

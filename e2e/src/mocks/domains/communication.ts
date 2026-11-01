@@ -51,6 +51,26 @@ function audienceChanged(recipientCount: number, audienceDigest: string): MockRe
   };
 }
 
+/**
+ * `assert_sender_may_target`'s campus rule, in its order: a scope that reaches no campus and a
+ * campus outside it are 404s, and a restricted sender naming no campus is a 422.
+ */
+function campusRefusal(
+  campusIds: readonly string[] | null,
+  campusId: string | null | undefined,
+): MockResponse | null {
+  if (campusIds === null) return null;
+  if (campusIds.length === 0) return fail(404, COMMUNICATION_MESSAGES.notFound);
+  if (!campusId) {
+    const issue = COMMUNICATION_MESSAGES.campusRequired;
+    return fail(422, issue, {
+      code: "domain_rule_violation",
+      details: [{ field: "campus_id", issue }],
+    });
+  }
+  return campusIds.includes(campusId) ? null : fail(404, COMMUNICATION_MESSAGES.notFound);
+}
+
 /** Newest activity first, as the inbox and oversight lists order their threads. */
 function byActivity(a: ThreadRecord, b: ThreadRecord): number {
   return b.last_message_at.localeCompare(a.last_message_at);
@@ -58,8 +78,8 @@ function byActivity(a: ThreadRecord, b: ThreadRecord): number {
 
 /**
  * `/message-threads` (the inbox, a thread, its messages, `:mark-read`, `:close`, `:reopen`),
- * `/message-thread-oversight` (the read-only twin), and `POST /broadcasts:preview` and
- * `:emergency`, for the caller in `store.user`.
+ * `/message-thread-oversight` (the read-only twin), and `GET /broadcasts:scope`,
+ * `POST /broadcasts:preview` and `:emergency`, for the caller in `store.user`.
  *
  * Each route checks its permission key first (403), then the thread (404), then the service's
  * rules in the service's order with its sentences (L5). A send is compared with the audience as
@@ -164,7 +184,15 @@ export function communicationModule(store: CommunicationStore): MockModule {
 
     // ---- broadcasts ---------------------------------------------------------------------
     // The router reads `:name` as a parameter, so `/broadcasts:action` compiles to
-    // `/broadcasts([^/]+)` and takes both colon-actions: `action` is ":preview" or ":emergency".
+    // `/broadcasts([^/]+)`: the GET takes ":scope", the POST ":preview" or ":emergency".
+    api.get("/broadcasts:action", (request) => {
+      const action = (request.params["action"] ?? "").replace(/^:/, "");
+      if (action !== "scope") return harnessError(`No mock for GET broadcasts:${action}`);
+      if (lacks("communication.broadcast.send")) return forbidden();
+      const scope: ApiSchemas["BroadcastScope"] = { campus_ids: store.broadcastCampusIds };
+      return ok(scope);
+    });
+
     api.post("/broadcasts:action", (request) => {
       const action = (request.params["action"] ?? "").replace(/^:/, "");
       if (action !== "preview" && action !== "emergency") {
@@ -175,6 +203,8 @@ export function communicationModule(store: CommunicationStore): MockModule {
       if (action === "preview") {
         const requested = request.json() as ApiSchemas["BroadcastRequest"] | null;
         if (requested) store.previews.push(requested);
+        const refused = campusRefusal(store.broadcastCampusIds, requested?.campus_id);
+        if (refused) return refused;
         return ok({
           recipient_count: store.recipientCount,
           audience_digest: store.audienceDigest,
@@ -186,6 +216,8 @@ export function communicationModule(store: CommunicationStore): MockModule {
       const body = request.json() as BroadcastSendBody | null;
       if (!body) return fieldErrors([{ field: "audience_type", issue: REQUIRED }]);
       store.sends.push({ key: request.headers["idempotency-key"], body });
+      const refused = campusRefusal(store.broadcastCampusIds, body.campus_id);
+      if (refused) return refused;
       // `dispatch_emergency_broadcast`: resolve, compare, and only then queue; a 409 is raised,
       // never stored, so a retry with the same key re-checks the audience.
       if (

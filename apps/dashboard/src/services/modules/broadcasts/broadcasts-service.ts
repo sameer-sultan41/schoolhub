@@ -1,12 +1,23 @@
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
 import type { JobAccepted } from "@/services/modules/jobs/jobs-service";
-import type { BroadcastPreview, BroadcastRequest, BroadcastSend } from "./broadcasts-type";
+import type {
+  BroadcastPreview,
+  BroadcastRequest,
+  BroadcastScope,
+  BroadcastSend,
+} from "./broadcasts-type";
 
 /**
- * The broadcasts domain's API calls (`/broadcasts:preview`, `/broadcasts:emergency`). Reached
- * through `Services.broadcasts.*`.
+ * The broadcasts domain's API calls (`/broadcasts:scope`, `/broadcasts:preview`,
+ * `/broadcasts:emergency`). Reached through `Services.broadcasts.*`.
  */
+
+/** The campuses the caller may broadcast to: `null` is unrestricted, `[]` reaches none. */
+export async function fetchScope(): Promise<BroadcastScope> {
+  const { data } = await apiClient.get<BroadcastScope>(endpoints.broadcasts.scope);
+  return data;
+}
 
 /** What a send would do right now: the count, the digest and the channels a send must repeat. */
 export async function preview(body: BroadcastRequest): Promise<BroadcastPreview> {

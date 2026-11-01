@@ -31,6 +31,16 @@ describe("broadcasts-service", () => {
     mockPost.mockReset();
   });
 
+  it("reads the sender's scope with a GET on the colon-action", async () => {
+    const { fetchScope } = await import("../broadcasts-service");
+    const scope = { campus_ids: ["33333333-3333-4333-8333-333333333333"] };
+    mockGet.mockResolvedValue({ data: scope });
+
+    await expect(fetchScope()).resolves.toEqual(scope);
+    expect(mockGet).toHaveBeenCalledWith("/broadcasts:scope");
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
   it("previews on the colon-action and returns the preview", async () => {
     const { preview } = await import("../broadcasts-service");
     const result = {

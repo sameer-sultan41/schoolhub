@@ -23,6 +23,11 @@ export class BroadcastPage extends CommunicationPage {
     return this.page.getByRole("button", { name: "Back", exact: true });
   }
 
+  /** The campus the broadcast is narrowed to: every campus or one, or a restricted sender's own. */
+  get campus(): Locator {
+    return this.page.getByRole("combobox", { name: "Campus", exact: true });
+  }
+
   /** The class the section audience picks sections from. */
   get sectionClass(): Locator {
     return this.page.getByRole("combobox", { name: "Class", exact: true });

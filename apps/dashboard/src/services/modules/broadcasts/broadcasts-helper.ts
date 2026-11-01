@@ -21,3 +21,15 @@ export function normalizeTypedCount(typed: string): string {
   const ungrouped = typed.replace(GROUPING_SEPARATORS, "");
   return ungrouped.replace(ARABIC_INDIC_DIGITS, (digit) => String(digitValue(digit)));
 }
+
+/**
+ * The loaded campuses a campus-restricted sender may target: an intersection, not the scope's
+ * ids alone, since a soft-deleted campus can stay in a role's scope with no campus to show.
+ */
+export function campusesInScope<T extends { id: string }>(
+  campuses: readonly T[],
+  campusIds: readonly string[],
+): T[] {
+  const allowed = new Set(campusIds);
+  return campuses.filter((campus) => allowed.has(campus.id));
+}

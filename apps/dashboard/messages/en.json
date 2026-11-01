@@ -1487,7 +1487,9 @@
         "classes": "Classes",
         "classForSections": "Class",
         "sections": "Sections",
-        "sectionsFailed": "The sections couldn't be loaded."
+        "sectionsFailed": "The sections couldn't be loaded.",
+        "noCampus": "Your access doesn't reach any campus, so you can't send an emergency broadcast. Ask an administrator to give your role a campus.",
+        "scopeFailed": "The campuses you can broadcast to couldn't be loaded."
       },
       "message": {
         "label": "Message",
@@ -1520,7 +1522,8 @@
         "classRequired": "Choose at least one class.",
         "sectionRequired": "Choose at least one section.",
         "messageRequired": "Write a message.",
-        "messageTooLong": "The message can be at most {max} characters."
+        "messageTooLong": "The message can be at most {max} characters.",
+        "campusRequired": "Choose one of your campuses."
       }
     },
     "channels": {

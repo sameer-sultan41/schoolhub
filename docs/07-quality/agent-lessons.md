@@ -229,6 +229,11 @@
 - **Mistake.** PR #146's `thread-view.tsx` set its `markedRef` before `:mark-read` resolved and nothing reset it, so a failed mark-read was never tried again while the thread stayed open.
 - **Check.** A ref or flag that stops an async call repeating is released in `onError`, the retry has a trigger (the data's next load, not the error itself, which would loop), and the mutation's `isPending` blocks a second call in flight. Test it: the first call rejects, the data refetches, the call runs exactly once more.
 
+### L34. A picker offers only what the server will accept from this caller
+
+- **Mistake.** PR #146's broadcast Audience step listed every campus and validated only classes and sections, so a campus-restricted sender met the server's `422` only at Confirm.
+- **Check.** When the server narrows a field by the caller's scope, read that scope from its endpoint, intersect it with the loaded options (a stale id may name a deleted record), require the field in that step's validation, and give the "reaches nothing" case its own message and a disabled Next.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.

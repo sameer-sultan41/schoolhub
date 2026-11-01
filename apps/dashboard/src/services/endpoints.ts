@@ -255,8 +255,10 @@ export const endpoints = {
     attachmentDownload: (id: string, fileId: string) =>
       `/message-thread-oversight/${id}/attachments/${fileId}:download`,
   },
-  /** `POST /broadcasts:preview` and `POST /broadcasts:emergency` (202 + job). */
+  /** `GET /broadcasts:scope`, `POST /broadcasts:preview` and `POST /broadcasts:emergency`
+   * (202 + job). */
   broadcasts: {
+    scope: "/broadcasts:scope",
     preview: "/broadcasts:preview",
     emergency: "/broadcasts:emergency",
   },

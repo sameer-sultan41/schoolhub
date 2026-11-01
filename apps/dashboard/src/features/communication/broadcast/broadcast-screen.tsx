@@ -25,6 +25,7 @@ import {
 } from "./broadcast-form-schema";
 import { ConfirmStep } from "./confirm-step";
 import { MessageStep } from "./message-step";
+import { useBroadcastCampuses } from "./use-broadcast-campuses";
 import { useBroadcastKey } from "./use-broadcast-key";
 
 const STEPS = ["audience", "message", "confirm", "status"] as const;
@@ -35,11 +36,12 @@ type StepErrors = Partial<Record<keyof BroadcastFormValues, string>>;
 /**
  * The Emergency broadcast wizard: audience, message, a previewed confirmation and the job's
  * status. A step's Next validates only its own fields; the confirm step previews the exact
- * request the earlier steps built.
+ * request the earlier steps built. A campus-restricted sender must pick one of their own
+ * campuses (preselected when there is only one); a sender who reaches none cannot go on.
  */
 export function BroadcastScreen() {
   const t = useTranslations("communication.broadcast");
-  const [values, setValues] = useState<BroadcastFormValues>(BROADCAST_DEFAULTS);
+  const [picked, setPicked] = useState<BroadcastFormValues>(BROADCAST_DEFAULTS);
   const [step, setStep] = useState(AUDIENCE);
   const [errors, setErrors] = useState<StepErrors>({});
   const [jobId, setJobId] = useState<string | null>(null);
@@ -51,19 +53,32 @@ export function BroadcastScreen() {
     setIsSending(sending);
   }, []);
 
+  const campuses = useBroadcastCampuses();
+  const { requireCampus } = campuses;
+  const canLeaveAudience = campuses.status === "ready" && !campuses.reachesNoCampus;
+  // A restricted sender with one campus has nothing to choose: it is picked for them.
+  const onlyCampus =
+    requireCampus && campuses.options.length === 1 ? campuses.options[0] : undefined;
+  const values =
+    picked.campus_id === "" && onlyCampus ? { ...picked, campus_id: onlyCampus.id } : picked;
+
   const schema = useMemo(
     () =>
-      createBroadcastSchema({
-        classRequired: t("errors.classRequired"),
-        sectionRequired: t("errors.sectionRequired"),
-        messageRequired: t("errors.messageRequired"),
-        messageTooLong: t("errors.messageTooLong", { max: BROADCAST_MESSAGE_MAX_LENGTH }),
-      }),
-    [t],
+      createBroadcastSchema(
+        {
+          campusRequired: t("errors.campusRequired"),
+          classRequired: t("errors.classRequired"),
+          sectionRequired: t("errors.sectionRequired"),
+          messageRequired: t("errors.messageRequired"),
+          messageTooLong: t("errors.messageTooLong", { max: BROADCAST_MESSAGE_MAX_LENGTH }),
+        },
+        { requireCampus },
+      ),
+    [t, requireCampus],
   );
 
   function update(patch: Partial<BroadcastFormValues>) {
-    setValues((current) => ({ ...current, ...patch }));
+    setPicked((current) => ({ ...current, ...patch }));
     setErrors({});
   }
 
@@ -82,7 +97,7 @@ export function BroadcastScreen() {
   }
 
   function restart() {
-    setValues(BROADCAST_DEFAULTS);
+    setPicked(BROADCAST_DEFAULTS);
     setErrors({});
     setJobId(null);
     forget();
@@ -109,7 +124,12 @@ export function BroadcastScreen() {
         <AudienceStep
           values={values}
           onChange={update}
-          errors={{ class_ids: errors.class_ids, section_ids: errors.section_ids }}
+          campuses={campuses}
+          errors={{
+            campus_id: errors.campus_id,
+            class_ids: errors.class_ids,
+            section_ids: errors.section_ids,
+          }}
         />
       )}
       {step === MESSAGE && (
@@ -147,8 +167,9 @@ export function BroadcastScreen() {
           </Button>
           {step === AUDIENCE && (
             <Button
+              disabled={!canLeaveAudience}
               onClick={() => {
-                next(AUDIENCE, ["class_ids", "section_ids"]);
+                next(AUDIENCE, ["campus_id", "class_ids", "section_ids"]);
               }}
             >
               {t("next")}

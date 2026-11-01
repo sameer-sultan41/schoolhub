@@ -8,8 +8,10 @@ import {
 } from "@/data/factories";
 import { isApiCall } from "@/lib/request-matchers";
 import {
+  type Campus,
   type CommunicationOptions,
   CommunicationStore,
+  buildCampus,
   buildSchoolClass,
   buildSection,
   communicationModule,
@@ -22,10 +24,12 @@ import {
  * `/communication/broadcast` against a stubbed API: a sender previews an audience of 42, types
  * 42 and sends, and the job succeeds; an audience that shrank between the preview and the send
  * gets the server's 409 with the new count in `error.meta`, re-previews, and sends on the new
- * number; a section audience picks its class first; a user without the send key sees no
- * Broadcast tab. The stub (`communicationModule`) compares a send with the audience as it stands
- * (the real 409) and queues the job `jobsModule` serves (L5); who a real audience resolves to,
- * the campus scope and the idempotent replay are the Django suite's job.
+ * number; a section audience picks its class first; a campus-restricted sender is offered only
+ * their campus (`GET /broadcasts:scope`), and one whose scope reaches none cannot go on; a user
+ * without the send key sees no Broadcast tab. The stub (`communicationModule`) compares a send
+ * with the audience as it stands (the real 409) and queues the job `jobsModule` serves (L5); who
+ * a real audience resolves to, the scope a role grants and the idempotent replay are the Django
+ * suite's job.
  */
 
 const PREVIEW_PATH = /\/broadcasts:preview$/;
@@ -44,7 +48,11 @@ const gradeFive = buildSchoolClass({ name: "Grade 5" });
 const sectionA = buildSection({ name: "A", class_id: gradeFive.id });
 
 /** A fresh server per test: an audience of 42 reached in-app, with SMS not delivered. */
-function stubBroadcast(mockApi: MockApi, options: Partial<CommunicationOptions> = {}) {
+function stubBroadcast(
+  mockApi: MockApi,
+  options: Partial<CommunicationOptions> = {},
+  campuses?: Campus[],
+) {
   const store = new CommunicationStore({
     user: sender,
     recipientCount: 42,
@@ -54,7 +62,7 @@ function stubBroadcast(mockApi: MockApi, options: Partial<CommunicationOptions> 
     ...options,
   });
   mockApi.use(
-    schoolOrganizationModule({ classes: [gradeFive], sections: [sectionA] }),
+    schoolOrganizationModule({ classes: [gradeFive], sections: [sectionA], campuses }),
     communicationModule(store),
     jobsModule(store.jobsOptions()),
   );
@@ -185,6 +193,63 @@ test.describe("the emergency broadcast, as a sender", () => {
     await broadcastPage.next.click();
     await expect(broadcastPage.recipients("42 recipients")).toBeVisible();
     expect(store.previews[store.previews.length - 1]).toEqual(preview);
+  });
+});
+
+test.describe("the emergency broadcast, as a campus-restricted sender", () => {
+  const north = buildCampus({ name: "North Campus", code: "NORTH" });
+  const south = buildCampus({ name: "South Campus", code: "SOUTH", is_primary: false });
+  const campusHead = buildUser({
+    id: uuid(),
+    full_name: "Bilal Ahmed",
+    permissions: COMMUNICATION_BROADCAST_PERMISSIONS,
+    roles: [buildRole({ slug: "campus-head", name: "Campus Head", scope: `campus:${north.id}` })],
+  });
+  test.use({ authUser: campusHead });
+
+  /** North and South exist; the sender's scope names `ids`. */
+  function stubScope(mockApi: MockApi, ids: string[]) {
+    return stubBroadcast(mockApi, { user: campusHead, broadcastCampusIds: ids }, [north, south]);
+  }
+
+  test("is offered only their campus, already picked, and previews against it", async ({
+    page,
+    mockApi,
+    broadcastPage,
+    signedIn: _signedIn,
+  }) => {
+    const store = stubScope(mockApi, [north.id]);
+    await broadcastPage.goto();
+
+    await expect(broadcastPage.campus).toHaveText("North Campus");
+    await broadcastPage.campus.click();
+    await expect(broadcastPage.option("North Campus")).toBeVisible();
+    await expect(broadcastPage.option("South Campus")).toBeHidden();
+    await expect(broadcastPage.option("All campuses")).toBeHidden();
+    await page.keyboard.press("Escape");
+
+    await broadcastPage.next.click();
+    await broadcastPage.message.fill(MESSAGE);
+    await broadcastPage.next.click();
+
+    await expect(broadcastPage.recipients("42 recipients")).toBeVisible();
+    const onNorth = { audience_type: "all", campus_id: north.id, message: MESSAGE };
+    expect(store.previews).toEqual([onNorth]);
+  });
+
+  test("whose scope reaches no campus is told so and cannot go on", async ({
+    page,
+    mockApi,
+    broadcastPage,
+    signedIn: _signedIn,
+  }) => {
+    stubScope(mockApi, []);
+    await broadcastPage.goto();
+
+    await expect(page.getByText(/Your access doesn't reach any campus/)).toBeVisible();
+    await expect(broadcastPage.campus).toBeHidden();
+    await expect(broadcastPage.next).toBeDisabled();
+    expect(mockApi.calls.filter((call) => PREVIEW_PATH.test(call.path))).toEqual([]);
   });
 });
 

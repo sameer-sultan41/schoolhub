@@ -25,6 +25,9 @@ export const COMMUNICATION_MESSAGES = {
   reopenToReply: "Reopen the thread to reply.",
   audienceChanged:
     "The audience changed since the preview. Check the new recipient count and confirm again.",
+  /** `broadcasts/services/scope.py`'s `CAMPUS_REQUIRED_MESSAGE`. */
+  campusRequired: "Your access is limited to particular campuses: choose one of them as campus_id.",
+  notFound: "Not found.",
 } as const;
 
 /** The code `AudienceChanged` carries; it is not in the shared `ApiErrorCode` list. */
@@ -81,6 +84,9 @@ export interface CommunicationOptions {
   audienceDigest?: string;
   channels?: string[];
   unavailableChannels?: string[];
+  /** `GET /broadcasts:scope`'s `campus_ids`: `null` (the default) is an unrestricted sender, a
+   * list the only campuses a send may name, and `[]` a sender who reaches no campus. */
+  broadcastCampusIds?: string[] | null;
 }
 
 export class CommunicationStore {
@@ -91,6 +97,7 @@ export class CommunicationStore {
   audienceDigest: string;
   readonly channels: string[];
   readonly unavailableChannels: string[];
+  readonly broadcastCampusIds: string[] | null;
   /** `jobsModule`'s poll sequences and files, shared by reference: a job queued here is served
    * there. Pass `jobsOptions()` to `jobsModule`. */
   readonly jobs: Record<string, JobStub[]> = {};
@@ -110,6 +117,7 @@ export class CommunicationStore {
     this.audienceDigest = options.audienceDigest ?? "digest-0";
     this.channels = options.channels ?? ["in_app"];
     this.unavailableChannels = options.unavailableChannels ?? [];
+    this.broadcastCampusIds = options.broadcastCampusIds ? [...options.broadcastCampusIds] : null;
   }
 
   jobsOptions(): JobsOptions {
