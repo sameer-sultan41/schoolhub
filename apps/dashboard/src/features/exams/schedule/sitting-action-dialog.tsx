@@ -39,13 +39,11 @@ export function SittingActionDialog({
 
   const { error, isPending, confirm } = useConfirmAction({
     mutationFn: () =>
-      guardRefusal(
-        () =>
-          action === "cancel"
-            ? Services.examSchedules.cancelSitting(record.id)
-            : Services.examSchedules.deleteSitting(record.id),
-        invalidateExams,
-      ),
+      guardRefusal(async () => {
+        // Both answers are dropped: the module is invalidated on success either way.
+        if (action === "cancel") await Services.examSchedules.cancelSitting(record.id);
+        else await Services.examSchedules.deleteSitting(record.id);
+      }, invalidateExams),
     onSuccess: () => {
       invalidateExams();
       toast.success(t(`schedule.${action}.done`));
