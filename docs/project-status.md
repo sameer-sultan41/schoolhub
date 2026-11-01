@@ -317,7 +317,8 @@ with its reasoning. Read the entry for the area you are about to touch before re
    tenant-wide. **PR A** (#148, `fix/per-role-record-scope`, stacked on #145) is open: every
    scope check reads only the roles that grant its key (`scope_grants`, `scopes_for`,
    `scope_queryset(permission=)`), a write that resolves a target needs both the target's view
-   scope and the action's, a row privilege asks `holds_key_for`, and export jobs carry their key
+   scope and the action's (the viewset mixin applies it to every PATCH, DELETE and colon action),
+   ID-card generation reads its ids under its own key, a row privilege asks `holds_key_for`, and export jobs carry their key
    as `scope_permission`. **PR B** (`fix/record-scope-type-union`, stacked on PR A) is next: it
    unions one key's mixed scope types, closing attendance's two mixed-scope entries in
    [`deferred-work.md`](deferred-work.md). The follow-ups PR A left are that file's first entry.

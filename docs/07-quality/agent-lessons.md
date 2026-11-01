@@ -219,12 +219,15 @@
   campus-A role plus any unrelated `all` role read tenant-wide on every scoped endpoint. Four
   row-privilege checks (the capacity override on enrol and change-section, the clearance
   waiver, substitution cancel) asked `has_permission_key`, "held anywhere", as though it meant
-  "held for this row" (ADR-0031, `fix/per-role-record-scope`).
+  "held for this row" (ADR-0031, `fix/per-role-record-scope`). The final review then found
+  the viewset mixin resolving PATCH, DELETE and colon actions by the action's key alone, so an
+  `all` update role reached, and echoed back, a student the caller's campus view role hid.
 - **Check.** A permission helper that ignores which key it guards, or a presence check read as a
   row privilege, is a privilege-escalation path. Take the key as a required argument
   (`scope_queryset(permission=...)`, `scopes_for`), and check a row privilege against the row
-  (`holds_key_for(user, key, row, **SomeViewSet.scope_kwargs())`). Test it with a mixed user:
-  the key on campus A, an unrelated key at `all`, and a campus-B row.
+  (`holds_key_for(user, key, row, **SomeViewSet.scope_kwargs())`). A route that acts on a row
+  must reach it under the read key as well as its own. Test it with a mixed user: the key on
+  campus A, an unrelated or action key at `all`, and a campus-B row.
 
 ## 4. Adding a lesson
 

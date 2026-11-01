@@ -56,11 +56,20 @@ erDiagram
    - **Every scoped read names its key.** `scope_queryset(queryset, user, permission=...)` takes
      the declaration as a required keyword, with no default. The viewset mixin passes the route's
      own declaration (`required_declaration`); a direct caller names the key that governs it.
-   - **A write that resolves a target needs both the target's view scope and the action's
-     scope.** It calls `scope_queryset` twice on the same queryset: first with the target's view
-     key (`attendance.student-attendance.view` for a correction's row, `students.student.view`
-     for a nested route's parent student), then with the action's declaration. A target outside
-     either is a 404, and neither key's roles widen the other.
+   - **A route that acts on a row must reach it under the read key and its own key.**
+     `TenantScopedViewSetMixin.get_queryset` scopes the queryset twice whenever the route's
+     declaration differs from the viewset's read key: first by the read key, then by the
+     declaration. PATCH, PUT, DELETE and every colon action resolved through `get_object()` or
+     `get_queryset()` get this; a route declaring the read key itself gets one call. The read key
+     is `required_permission`, or `scope_read_permission` where the class names another (the
+     correction queue reads under `AnyOf(correction.create, correction.approve)`); an action in
+     `scope_read_exempt_actions` is scoped by its own key alone (a notice `:acknowledge`, which
+     guardians and students make without `communication.notice.view`). A target resolved outside
+     the mixin chains the same two calls itself, with the target's view key:
+     `attendance.student-attendance.view` or `attendance.staff-attendance.view` for a
+     correction's row, `students.student.view` or `staff.staff.view` for a nested route's parent,
+     `school.section.view` for timetable `:validate` and `:publish`. A target outside either
+     scope is a 404, and neither key's roles widen the other.
    - **A privilege applied to one row is checked against that row.** "Does the user hold this key
      at all" is the wrong question for a capacity override, a clearance waiver or an approver's
      cancel. `holds_key_for(user, permission, row, **SomeViewSet.scope_kwargs())` is

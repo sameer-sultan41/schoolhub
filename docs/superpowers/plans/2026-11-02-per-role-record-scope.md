@@ -324,3 +324,9 @@ Recorded during subagent-driven execution (stop rule 3: the plan is amended, not
    - substitution `cancel`, which reads `timetable.substitution.approve`.
 
    Each now asks `holds_key_for(user, permission, instance, ...)`, which is `scope_queryset` over that one row. They ship in PR A, because they break the same invariant.
+6. **The mixin scopes every route that acts on a row by the read key too** (final review, user decision 2026-11-02). `TenantScopedViewSetMixin.get_queryset` chains `scope_queryset(permission=<read key>)` ahead of the route's own declaration whenever the two differ, both with the viewset's `scope_kwargs()`. Where they are equal it is one call, as before. PATCH, PUT, DELETE and every colon action resolved through `get_object()` or `get_queryset()` now need a target the caller may read. The read key is `required_permission` unless a class names another:
+   - `AttendanceCorrectionViewSet` sets `scope_read_permission` to its queue's `AnyOf(correction.create, correction.approve)`, because an approver holds no create key;
+   - `NoticeViewSet` exempts `acknowledge` (`scope_read_exempt_actions`), because guardians and students acknowledge without `communication.notice.view`.
+
+   No other class needs an override. ADR-0031 decision 3 and auth-and-rbac §2.3 state the rule.
+7. **`POST /id-cards:generate` scopes its ids by the generate key.** The ids are read through `scope_queryset(Student…, permission=route_permission(...), **STUDENT_SCOPE)`, and the job carries only the ones that key's roles reach. An id outside them is dropped, as an unknown id already is, so the response says nothing about whether the row exists.

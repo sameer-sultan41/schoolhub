@@ -19,6 +19,10 @@ either this file or `project-status.md`.
     batch of campus-B students they cannot open (promotion rows are scoped by
     `student__campus_id`). Narrowing it means checking each holder's scope for that key
     (`scopes_for`) against the batch's students' campuses before sending.
+  - **Result-approval notifications ignore scope too.** `notify_result_approval_pending`
+    (`apps/examinations/tasks.py`) notifies every active user holding `exams.result.approve`,
+    checked by key presence alone, whatever that key's scope. The fix is the promotions one:
+    check each holder's scope for the key against the pending results' students.
   - **A rolled-back request can leave its grants cached for up to 300 s.** This predates PR A.
     Under `ATOMIC_REQUESTS`, a role change evicts the cache at once, and a later read in the
     same request re-caches the new, uncommitted grants. If the request then rolls back, the
