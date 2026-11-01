@@ -1523,6 +1523,13 @@
         "messageRequired": "پیغام لکھیں۔",
         "messageTooLong": "پیغام زیادہ سے زیادہ {max} حروف کا ہو سکتا ہے۔"
       }
+    },
+    "channels": {
+      "in_app": "ایپ کے اندر",
+      "email": "ای میل",
+      "sms": "ایس ایم ایس",
+      "push": "پش نوٹیفکیشن",
+      "whatsapp": "واٹس ایپ"
     }
   },
   "attendance": {

@@ -1,6 +1,7 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { ApiError } from "@/services";
 import { renderWithProviders } from "@/test-utils";
 
 import { BroadcastScreen } from "../broadcast-screen";
@@ -9,8 +10,10 @@ import {
   fetchCampuses,
   fetchClasses,
   fetchSections,
+  keyOfCall,
   preview,
   previewRecord,
+  send,
 } from "./broadcast-test-support";
 
 jest.mock("@/services", () =>
@@ -52,5 +55,44 @@ describe("BroadcastScreen", () => {
 
     expect(await screen.findByText("3 recipients")).toBeInTheDocument();
     expect(preview).toHaveBeenCalledWith({ audience_type: "all", message: "Closed" });
+  });
+
+  it("keeps the idempotency key when the sender goes Back and Next after a failed send", async () => {
+    send
+      .mockRejectedValueOnce(
+        new ApiError({
+          code: "network_error",
+          message: "Timed out.",
+          status: 0,
+          url: "/broadcasts:emergency",
+        }),
+      )
+      .mockRejectedValueOnce(
+        new ApiError({
+          code: "network_error",
+          message: "Timed out.",
+          status: 0,
+          url: "/broadcasts:emergency",
+        }),
+      );
+    const user = userEvent.setup();
+    renderWithProviders(<BroadcastScreen />);
+
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.type(await screen.findByLabelText("Message"), "Closed");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.type(await screen.findByLabelText(/Type 3 to confirm/), "3");
+    await user.click(screen.getByRole("button", { name: "Send emergency broadcast" }));
+    await screen.findByText("We could not reach the server. Check your connection.");
+
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    await user.click(await screen.findByRole("button", { name: "Next" }));
+    await user.type(await screen.findByLabelText(/Type 3 to confirm/), "3");
+    await user.click(screen.getByRole("button", { name: "Send emergency broadcast" }));
+    await waitFor(() => {
+      expect(send).toHaveBeenCalledTimes(2);
+    });
+
+    expect(keyOfCall(1)).toBe(keyOfCall(0));
   });
 });

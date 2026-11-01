@@ -17,6 +17,8 @@ export function broadcastSignature(
   return JSON.stringify([request, recipientCount, audienceDigest]);
 }
 
+export type BroadcastKey = ReturnType<typeof useBroadcastKey>;
+
 /**
  * One `Idempotency-Key` per signature: a retry of the same send reuses it (so the server
  * replays, never double-sends), and any change to the signature mints a new one.

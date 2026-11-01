@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   Button,
@@ -24,6 +24,7 @@ import {
 } from "./broadcast-form-schema";
 import { ConfirmStep } from "./confirm-step";
 import { MessageStep } from "./message-step";
+import { useBroadcastKey } from "./use-broadcast-key";
 
 const STEPS = ["audience", "message", "confirm", "status"] as const;
 const [AUDIENCE, MESSAGE, CONFIRM, STATUS] = [1, 2, 3, 4];
@@ -41,6 +42,13 @@ export function BroadcastScreen() {
   const [step, setStep] = useState(AUDIENCE);
   const [errors, setErrors] = useState<StepErrors>({});
   const [jobId, setJobId] = useState<string | null>(null);
+  const [isSending, setIsSending] = useState(false);
+  // Held here, not in ConfirmStep, so Back then Next after a lost send keeps the same key.
+  const broadcastKey = useBroadcastKey();
+  const { forget } = broadcastKey;
+  const handleSendingChange = useCallback((sending: boolean) => {
+    setIsSending(sending);
+  }, []);
 
   const schema = useMemo(
     () =>
@@ -76,6 +84,7 @@ export function BroadcastScreen() {
     setValues(BROADCAST_DEFAULTS);
     setErrors({});
     setJobId(null);
+    forget();
     setStep(AUDIENCE);
   }
 
@@ -114,6 +123,8 @@ export function BroadcastScreen() {
       {step === CONFIRM && (
         <ConfirmStep
           request={buildBroadcastRequest(values)}
+          broadcastKey={broadcastKey}
+          onSendingChange={handleSendingChange}
           onQueued={(id) => {
             setJobId(id);
             setStep(STATUS);
@@ -126,7 +137,7 @@ export function BroadcastScreen() {
         <div className="flex justify-between">
           <Button
             variant="outline"
-            disabled={step === AUDIENCE}
+            disabled={step === AUDIENCE || isSending}
             onClick={() => {
               setStep(step - 1);
             }}

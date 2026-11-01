@@ -6,7 +6,6 @@ import { Alert, Checkbox, Label, RadioGroup, RadioGroupItem } from "@schoolhub/u
 import { FilterSelect } from "@/components/filter-select";
 import { useCampuses, useClasses, useSections } from "@/hooks/use-reference-data";
 import { BROADCAST_AUDIENCE_TYPES } from "@/services/modules/broadcasts/broadcasts-constant";
-import type { BroadcastAudienceType } from "@/services/modules/broadcasts/broadcasts-type";
 
 import type { BroadcastFormValues } from "./broadcast-form-schema";
 
@@ -63,7 +62,8 @@ export function AudienceStep({ values, onChange, errors }: AudienceStepProps) {
         aria-label={t("label")}
         value={values.audience_type}
         onValueChange={(next) => {
-          onChange({ audience_type: next as BroadcastAudienceType });
+          const picked = BROADCAST_AUDIENCE_TYPES.find((type) => type === next);
+          if (picked) onChange({ audience_type: picked });
         }}
       >
         {BROADCAST_AUDIENCE_TYPES.map((type) => (

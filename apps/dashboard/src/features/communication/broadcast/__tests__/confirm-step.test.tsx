@@ -5,6 +5,7 @@ import { ApiError } from "@/services";
 import { renderWithProviders } from "@/test-utils";
 
 import { ConfirmStep } from "../confirm-step";
+import { useBroadcastKey } from "../use-broadcast-key";
 import { JOB_ID, keyOfCall, preview, previewRecord, REQUEST, send } from "./broadcast-test-support";
 
 jest.mock("@/services", () =>
@@ -34,9 +35,23 @@ function serverError() {
   });
 }
 
+const noop = () => undefined;
+
+function Host({ onQueued }: { onQueued: (jobId: string) => void }) {
+  const broadcastKey = useBroadcastKey();
+  return (
+    <ConfirmStep
+      request={REQUEST}
+      onQueued={onQueued}
+      broadcastKey={broadcastKey}
+      onSendingChange={noop}
+    />
+  );
+}
+
 function renderConfirm() {
   const onQueued = jest.fn();
-  renderWithProviders(<ConfirmStep request={REQUEST} onQueued={onQueued} />);
+  renderWithProviders(<Host onQueued={onQueued} />);
   return { onQueued, user: userEvent.setup() };
 }
 
@@ -62,8 +77,8 @@ describe("ConfirmStep", () => {
   it("unavailable channels render as not delivered", async () => {
     renderConfirm();
 
-    expect(await screen.findByText("in_app")).toBeInTheDocument();
-    expect(screen.getByText("sms: not delivered, no provider")).toBeInTheDocument();
+    expect(await screen.findByText("In-app")).toBeInTheDocument();
+    expect(screen.getByText("SMS: not delivered, no provider")).toBeInTheDocument();
   });
 
   it("409 audience_changed re-previews and clears confirmation", async () => {

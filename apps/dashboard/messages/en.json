@@ -1523,6 +1523,13 @@
         "messageRequired": "Write a message.",
         "messageTooLong": "The message can be at most {max} characters."
       }
+    },
+    "channels": {
+      "in_app": "In-app",
+      "email": "Email",
+      "sms": "SMS",
+      "push": "Push notification",
+      "whatsapp": "WhatsApp"
     }
   },
   "attendance": {

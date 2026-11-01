@@ -1,21 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { Alert, Badge, Button, Input, Label, Skeleton } from "@schoolhub/ui";
 
-import { resolveErrorMessage } from "@/lib/error-message";
+import { resolveErrorMessage, type ErrorCodeTranslator } from "@/lib/error-message";
 import { queryKeys } from "@/lib/query-client";
 import { ApiError, Services } from "@/services";
+import { BROADCASTS_QUERY_MODULE } from "@/services/modules/broadcasts/broadcasts-constant";
 import type { BroadcastRequest } from "@/services/modules/broadcasts/broadcasts-type";
 
-import { broadcastSignature, useBroadcastKey } from "./use-broadcast-key";
+import { broadcastSignature, type BroadcastKey } from "./use-broadcast-key";
 
 export interface ConfirmStepProps {
   request: BroadcastRequest;
   /** Called with the job to watch once the server accepted the send. */
   onQueued: (jobId: string) => void;
+  /** The screen's key holder: it outlives this step, so Back then Next keeps the key. */
+  broadcastKey: BroadcastKey;
+  /** Told whether a send is in flight, so the screen can hold Back. */
+  onSendingChange: (sending: boolean) => void;
+}
+
+/** A channel's translated name, or its id for one the messages don't know. */
+function channelLabel(t: ErrorCodeTranslator, channel: string): string {
+  return t.has(channel) ? t(channel) : channel;
 }
 
 /** The recipient count a 409 `audience_changed` reports in `error.meta`, if it is a number. */
@@ -29,15 +39,21 @@ function changedCount(error: unknown): number | null {
  * Step 3: previews who would receive the broadcast, and sends it once the sender has typed
  * that exact count. Mounted only while the step shows, so each visit previews afresh.
  */
-export function ConfirmStep({ request, onQueued }: ConfirmStepProps) {
+export function ConfirmStep({
+  request,
+  onQueued,
+  broadcastKey,
+  onSendingChange,
+}: ConfirmStepProps) {
   const t = useTranslations("communication.broadcast.confirm");
   const tErrors = useTranslations("errors");
   const [typed, setTyped] = useState("");
   const [changedTo, setChangedTo] = useState<number | null>(null);
-  const { keyFor, forget } = useBroadcastKey();
+  const tChannels = useTranslations("communication.channels");
+  const { keyFor, forget } = broadcastKey;
 
   const preview = useQuery({
-    queryKey: queryKeys.list("broadcasts", "preview", request),
+    queryKey: queryKeys.list(BROADCASTS_QUERY_MODULE, "preview", request),
     queryFn: () => Services.broadcasts.preview(request),
     staleTime: 0,
     gcTime: 0,
@@ -72,6 +88,11 @@ export function ConfirmStep({ request, onQueued }: ConfirmStepProps) {
     },
   });
 
+  const isSending = send.isPending;
+  useEffect(() => {
+    onSendingChange(isSending);
+  }, [isSending, onSendingChange]);
+
   if (preview.isPending) {
     return <Skeleton className="h-24 w-full" />;
   }
@@ -99,12 +120,12 @@ export function ConfirmStep({ request, onQueued }: ConfirmStepProps) {
         <div className="flex flex-wrap gap-2">
           {data.channels.map((channel) => (
             <Badge key={channel} variant="success" appearance="light">
-              {channel}
+              {channelLabel(tChannels, channel)}
             </Badge>
           ))}
           {data.unavailable_channels.map((channel) => (
             <Badge key={channel} variant="secondary" appearance="light" className="opacity-60">
-              {t("notDelivered", { channel })}
+              {t("notDelivered", { channel: channelLabel(tChannels, channel) })}
             </Badge>
           ))}
         </div>

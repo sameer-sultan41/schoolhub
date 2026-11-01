@@ -16,5 +16,11 @@ export const BROADCAST_AUDIENCE_TYPES = [
   "section",
 ] as const satisfies readonly BroadcastAudienceType[];
 
+/** An audience the screen offers: `BroadcastAudienceType` without `custom`. */
+export type BroadcastScreenAudience = (typeof BROADCAST_AUDIENCE_TYPES)[number];
+
+/** The query-key module a broadcast preview is cached under. */
+export const BROADCASTS_QUERY_MODULE = "broadcasts";
+
 /** The job-polling namespace a broadcast job's watch is cached under. */
 export const BROADCASTS_JOB_MODULE = "communication";
