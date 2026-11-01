@@ -8,7 +8,8 @@ import { Alert, Button, EmptyState, Skeleton } from "@schoolhub/ui";
 
 import { LoadErrorCard } from "@/components/load-error-card";
 import { useCurrentUser } from "@/hooks/use-current-user";
-import { resolveErrorMessage } from "@/lib/error-message";
+import { HTTP_STATUS_CONFLICT } from "@/lib/constants";
+import { foldUnknownFieldErrors, NON_FIELD, resolveErrorMessage } from "@/lib/error-message";
 import { hasPermission } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-client";
 import { ApiError, Services } from "@/services";
@@ -17,7 +18,7 @@ import { MessageList } from "./message-list";
 import { ReplyComposer } from "./reply-composer";
 import type { ThreadSource } from "./thread-source";
 import { ThreadStatusBadge } from "./thread-status-badge";
-import { useRefreshThreads } from "./use-refresh-threads";
+import { useInvalidateThreads } from "./use-invalidate-threads";
 
 export interface ThreadViewProps {
   source: ThreadSource;
@@ -31,7 +32,7 @@ export function ThreadView({ source, threadId, readOnly }: ThreadViewProps) {
   const t = useTranslations("communication.messages");
   const tErrors = useTranslations("errors");
   const { data: user } = useCurrentUser();
-  const invalidate = useRefreshThreads();
+  const invalidate = useInvalidateThreads();
   const [transitionError, setTransitionError] = useState<string | null>(null);
 
   // `:mark-read` is keyed `communication.message.create` on the server, so a reader without it
@@ -48,8 +49,9 @@ export function ThreadView({ source, threadId, readOnly }: ThreadViewProps) {
     mutationFn: () => Services.messageThreads.markRead(threadId),
     onSuccess: invalidate,
   });
+  // Once per opened thread, and only when it has something unread (Ruling 11 keeps the key gate).
   const markedRef = useRef<string | null>(null);
-  const canMarkRead = canPost && thread.isSuccess;
+  const canMarkRead = canPost && (thread.data?.unread_count ?? 0) > 0;
   useEffect(() => {
     if (!canMarkRead || markedRef.current === threadId) return;
     markedRef.current = threadId;
@@ -66,7 +68,16 @@ export function ThreadView({ source, threadId, readOnly }: ThreadViewProps) {
     },
     onSuccess: invalidate,
     onError: (error) => {
-      setTransitionError(resolveErrorMessage(error, tErrors, t("thread.transitionFailed")));
+      // A 409 means the thread already moved (closed or reopened elsewhere): reload its header.
+      if (error instanceof ApiError && error.status === HTTP_STATUS_CONFLICT) invalidate();
+      setTransitionError(
+        resolveErrorMessage(
+          foldUnknownFieldErrors(error),
+          tErrors,
+          t("thread.transitionFailed"),
+          NON_FIELD,
+        ),
+      );
     },
   });
 

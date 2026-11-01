@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { Button, Input, Popover, PopoverContent, PopoverTrigger } from "@schoolhub/ui";
 
@@ -14,6 +14,9 @@ export interface PickerOption {
 export interface PickerPopoverProps {
   /** The trigger's text. */
   triggerLabel: string;
+  /** Held by the caller, so its search query runs only while the popover is open. */
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   /** The search box's accessible name. */
   searchLabel: string;
   search: string;
@@ -31,11 +34,13 @@ export interface PickerPopoverProps {
 
 /**
  * A search-as-you-type picker: a trigger opening a popover with a search box and the matches.
- * The caller owns the query (and its debounce) and what a pick does; this is only the shell
- * the recipient and student pickers share.
+ * The caller owns the open state, the query (and its debounce) and what a pick does; this is
+ * only the shell the recipient and student pickers share.
  */
 export function PickerPopover({
   triggerLabel,
+  open,
+  onOpenChange,
   searchLabel,
   search,
   onSearchChange,
@@ -47,12 +52,11 @@ export function PickerPopover({
   children,
 }: PickerPopoverProps) {
   const t = useTranslations("communication.messages.picker");
-  const [open, setOpen] = useState(false);
 
   return (
     <div className="flex flex-col gap-2">
       {children}
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={onOpenChange}>
         <PopoverTrigger asChild>
           <Button type="button" variant="outline" className="w-full justify-start">
             {triggerLabel}
@@ -81,7 +85,7 @@ export function PickerPopover({
                   className="h-auto w-full flex-col items-start gap-0 px-2 py-1.5 text-start"
                   onClick={() => {
                     onPick(option.id);
-                    if (closeOnPick) setOpen(false);
+                    if (closeOnPick) onOpenChange(false);
                   }}
                 >
                   <span className="text-sm text-foreground">{option.label}</span>

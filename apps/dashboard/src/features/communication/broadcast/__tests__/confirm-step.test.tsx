@@ -26,6 +26,23 @@ function audienceChanged() {
   });
 }
 
+// The server's sentences: `broadcasts/services/scope.py` and `broadcasts/services/preview.py`.
+const CAMPUS_REQUIRED =
+  "Your access is limited to particular campuses: choose one of them as campus_id.";
+const EMPTY_AUDIENCE =
+  "This audience resolves to zero recipients. Broaden the targeting before broadcasting.";
+
+/** A `DomainRuleViolation` as the envelope carries it: one detail, its sentence as the message. */
+function refusal(field: string, issue: string, url: string) {
+  return new ApiError({
+    code: "domain_rule_violation",
+    message: issue,
+    status: 422,
+    url,
+    details: [{ field, issue }],
+  });
+}
+
 function serverError() {
   return new ApiError({
     code: "server_error",
@@ -79,6 +96,58 @@ describe("ConfirmStep", () => {
 
     expect(await screen.findByText("In-app")).toBeInTheDocument();
     expect(screen.getByText("SMS: not delivered, no provider")).toBeInTheDocument();
+  });
+
+  it("accepts a count typed with grouping separators", async () => {
+    preview.mockResolvedValue(previewRecord({ recipient_count: 15000 }));
+    const { user } = renderConfirm();
+
+    await user.type(await screen.findByLabelText(/Type 15000 to confirm/), "15,000");
+
+    expect(screen.getByRole("button", { name: SEND })).toBeEnabled();
+  });
+
+  it("accepts a count typed in Urdu digits", async () => {
+    preview.mockResolvedValue(previewRecord({ recipient_count: 42 }));
+    const { user } = renderConfirm();
+
+    await user.type(await screen.findByLabelText(/Type 42 to confirm/), "۴۲");
+
+    expect(screen.getByRole("button", { name: SEND })).toBeEnabled();
+  });
+
+  it("shows the campus refusal's own sentence and previews again on retry", async () => {
+    preview
+      .mockRejectedValueOnce(refusal("campus_id", CAMPUS_REQUIRED, "/broadcasts:preview"))
+      .mockResolvedValueOnce(previewRecord());
+    const { user } = renderConfirm();
+
+    expect(await screen.findByText(CAMPUS_REQUIRED)).toBeInTheDocument();
+    expect(screen.queryByText("That action isn't allowed right now.")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(await screen.findByLabelText(/Type 3 to confirm/)).toBeInTheDocument();
+    expect(preview).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows the empty-audience refusal's own sentence at preview", async () => {
+    preview.mockRejectedValue(refusal("non_field", EMPTY_AUDIENCE, "/broadcasts:preview"));
+    renderConfirm();
+
+    expect(await screen.findByText(EMPTY_AUDIENCE)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: SEND })).not.toBeInTheDocument();
+  });
+
+  it("shows the empty-audience refusal's own sentence when a send is refused", async () => {
+    send.mockRejectedValueOnce(refusal("non_field", EMPTY_AUDIENCE, "/broadcasts:emergency"));
+    const { user } = renderConfirm();
+
+    await user.type(await screen.findByLabelText(/Type 3 to confirm/), "3");
+    await user.click(screen.getByRole("button", { name: SEND }));
+
+    expect(await screen.findByText(EMPTY_AUDIENCE)).toBeInTheDocument();
+    expect(screen.queryByText("That action isn't allowed right now.")).not.toBeInTheDocument();
   });
 
   it("409 audience_changed re-previews and clears confirmation", async () => {

@@ -3,6 +3,8 @@ import { screen, waitFor, within } from "@testing-library/react";
 
 import type * as HelpersModule from "@/lib/helpers";
 import { downloadFile } from "@/lib/helpers";
+import { queryKeys } from "@/lib/query-client";
+import { THREAD_OVERSIGHT_QUERY_MODULE } from "@/services/modules/thread-oversight/thread-oversight-constant";
 import {
   cursorPage,
   FILE_ID,
@@ -51,9 +53,21 @@ jest.mock("@/lib/helpers", () => ({
 
 const messagesList = () => screen.findByRole("list", { name: "Messages" });
 
+/** A `Conflict` as the envelope carries it: the sentence as its one `non_field` detail. */
+function conflict(issue: string) {
+  return new ApiError({
+    code: "conflict",
+    message: issue,
+    status: 409,
+    url: "/message-threads",
+    details: [{ field: "non_field", issue }],
+  });
+}
+
 describe("MessagesScreen", () => {
   it("selects thread from URL and marks it read once", async () => {
     stubInbox([VIEW, CREATE_MESSAGE]);
+    fetchThread.mockResolvedValue(threadRecord({ unread_count: 2 }));
     await renderMessages();
 
     expect(await screen.findByRole("heading", { name: "Fee query" })).toBeInTheDocument();
@@ -70,8 +84,19 @@ describe("MessagesScreen", () => {
     expect(markRead).toHaveBeenCalledTimes(1);
   });
 
+  it("does not mark a thread with nothing unread as read", async () => {
+    stubInbox([VIEW, CREATE_MESSAGE]);
+    await renderMessages();
+
+    expect(await screen.findByRole("heading", { name: "Fee query" })).toBeInTheDocument();
+    await messagesList();
+
+    expect(markRead).not.toHaveBeenCalled();
+  });
+
   it("never calls markRead for a reader without the post key", async () => {
     stubInbox([VIEW]);
+    fetchThread.mockResolvedValue(threadRecord({ unread_count: 2 }));
     await renderMessages();
 
     expect(await screen.findByRole("heading", { name: "Fee query" })).toBeInTheDocument();
@@ -129,37 +154,48 @@ describe("MessagesScreen", () => {
     expect(items[1]).toHaveTextContent("newer");
   });
 
-  it("reads only the first page again after a post, losing no message", async () => {
+  it("keeps the earlier messages the user loaded after a post", async () => {
     stubInbox([VIEW, CREATE_MESSAGE]);
-    listMessages.mockImplementation((_threadId, query) =>
-      Promise.resolve(
-        query?.cursor === "c2"
-          ? cursorPage([messageRecord({ id: "m1", body: "oldest" })])
-          : cursorPage([messageRecord({ id: "m2", body: "older" })], "c2"),
-      ),
-    );
-    postMessage.mockResolvedValue(messageRecord());
-    const { user } = await renderMessages();
+    // A cursor-paged server: newest first, two a page, each cursor naming the last message read.
+    const server = [
+      messageRecord({ id: "m4", body: "fourth" }),
+      messageRecord({ id: "m3", body: "third" }),
+      messageRecord({ id: "m2", body: "second" }),
+      messageRecord({ id: "m1", body: "first" }),
+    ];
+    listMessages.mockImplementation((_threadId, query) => {
+      const cursor = query?.cursor;
+      const start = cursor ? server.findIndex((message) => message.id === cursor) + 1 : 0;
+      const items = server.slice(start, start + 2);
+      const next = start + 2 < server.length ? (items[items.length - 1]?.id ?? null) : null;
+      return Promise.resolve(cursorPage(items, next));
+    });
+    postMessage.mockImplementation((_threadId, body) => {
+      const posted = messageRecord({ id: "m5", body: body.body, sender_id: ME });
+      server.unshift(posted);
+      return Promise.resolve(posted);
+    });
+    const { user, queryClient } = await renderMessages();
     await user.click(await screen.findByRole("button", { name: "Load earlier messages" }));
-    await screen.findByText("oldest");
-    listMessages.mockClear();
-    // The server now has a newer message, which pushes "older" out of page one's cursor window.
-    const newest = messageRecord({ id: "m3", body: "newest" });
-    const older = messageRecord({ id: "m2", body: "older" });
-    listMessages.mockImplementation(() => Promise.resolve(cursorPage([newest, older], "c3")));
+    await screen.findByText("first");
+    const invalidate = jest.spyOn(queryClient, "invalidateQueries");
 
-    await user.type(await screen.findByLabelText("Reply"), "Thanks");
+    await user.type(screen.getByLabelText("Reply"), "Thanks");
     await user.click(screen.getByRole("button", { name: "Send" }));
 
-    await screen.findByText("newest");
-    await waitFor(() => {
-      expect(screen.getByText("older")).toBeInTheDocument();
-    });
-    // Only the first page is read again: the stale "c2" cursor is not replayed.
-    expect(listMessages).toHaveBeenCalled();
-    for (const [, query] of listMessages.mock.calls) expect(query?.cursor).toBeUndefined();
-    expect(screen.queryByText("oldest")).not.toBeInTheDocument();
+    expect(await within(await messagesList()).findByText("Thanks")).toBeInTheDocument();
+    // Both loaded pages are read again, the second from the fresh first page's cursor, so the
+    // earlier page the user opened stays on screen...
+    expect(listMessages).toHaveBeenLastCalledWith(THREAD_ID, { cursor: "m4", pageSize: 30 });
+    expect(screen.getByText("third")).toBeInTheDocument();
+    expect(screen.getByText("second")).toBeInTheDocument();
+    // ...and the oldest message, pushed onto a third page, is one "Load earlier" away.
+    expect(screen.queryByText("first")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Load earlier messages" })).toBeInTheDocument();
+    // An inbox write stales oversight's reads of the same thread too.
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.module(THREAD_OVERSIGHT_QUERY_MODULE),
+    });
   });
 
   it("closed thread disables send and shows reopen for permitted user", async () => {
@@ -208,8 +244,47 @@ describe("MessagesScreen", () => {
     expect(closeThread).toHaveBeenCalledWith(THREAD_ID);
   });
 
-  it("posts internal note flag", async () => {
+  it("a close refused with 409 shows the server's sentence and reloads the thread", async () => {
+    stubInbox([VIEW, CREATE_MESSAGE, CLOSE_THREAD]);
+    fetchThread
+      .mockResolvedValueOnce(threadRecord())
+      .mockResolvedValue(threadRecord({ status: "closed" }));
+    closeThread.mockRejectedValue(conflict("This thread is already closed."));
+    const { user } = await renderMessages();
+
+    await user.click(await screen.findByRole("button", { name: "Close conversation" }));
+
+    expect(await screen.findByText("This thread is already closed.")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Reopen" })).toBeInTheDocument();
+    expect(fetchThread).toHaveBeenCalledTimes(2);
+  });
+
+  it("a reply refused with 409 shows the server's sentence and reloads the thread", async () => {
     stubInbox([VIEW, CREATE_MESSAGE]);
+    fetchThread
+      .mockResolvedValueOnce(threadRecord())
+      .mockResolvedValue(threadRecord({ status: "closed" }));
+    postMessage.mockRejectedValue(conflict("Reopen the thread to reply."));
+    const { user } = await renderMessages();
+
+    await user.type(await screen.findByLabelText("Reply"), "Any news?");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByText("Reopen the thread to reply.")).toBeInTheDocument();
+    expect(await screen.findByText("This conversation is closed.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+  });
+
+  it("offers the internal-note flag only to a staff poster", async () => {
+    stubInbox([VIEW, CREATE_MESSAGE]);
+    await renderMessages();
+
+    expect(await screen.findByLabelText("Reply")).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "Internal note" })).not.toBeInTheDocument();
+  });
+
+  it("posts internal note flag", async () => {
+    stubInbox([VIEW, CREATE_MESSAGE, CLOSE_THREAD]);
     postMessage.mockResolvedValue(messageRecord());
     const { user } = await renderMessages();
 

@@ -5,10 +5,17 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { Alert, Badge, Button, Input, Label, Skeleton } from "@schoolhub/ui";
 
-import { resolveErrorMessage, type ErrorCodeTranslator } from "@/lib/error-message";
+import { LoadErrorCard } from "@/components/load-error-card";
+import {
+  foldUnknownFieldErrors,
+  NON_FIELD,
+  resolveErrorMessage,
+  type ErrorCodeTranslator,
+} from "@/lib/error-message";
 import { queryKeys } from "@/lib/query-client";
 import { ApiError, Services } from "@/services";
 import { BROADCASTS_QUERY_MODULE } from "@/services/modules/broadcasts/broadcasts-constant";
+import { normalizeTypedCount } from "@/services/modules/broadcasts/broadcasts-helper";
 import type { BroadcastRequest } from "@/services/modules/broadcasts/broadcasts-type";
 
 import { broadcastSignature, type BroadcastKey } from "./use-broadcast-key";
@@ -26,6 +33,12 @@ export interface ConfirmStepProps {
 /** A channel's translated name, or its id for one the messages don't know. */
 function channelLabel(t: ErrorCodeTranslator, channel: string): string {
   return t.has(channel) ? t(channel) : channel;
+}
+
+/** The server's own sentence for a refusal: an empty audience, or a campus-scoped sender who
+ * named no campus (`{campus_id: ...}`), which this step has no field for. */
+function refusalMessage(error: unknown, tErrors: ErrorCodeTranslator, fallback: string): string {
+  return resolveErrorMessage(foldUnknownFieldErrors(error), tErrors, fallback, NON_FIELD);
 }
 
 /** The recipient count a 409 `audience_changed` reports in `error.meta`, if it is a number. */
@@ -102,14 +115,18 @@ export function ConfirmStep({
   }
   if (!data) {
     return (
-      <Alert variant="destructive">
-        {resolveErrorMessage(preview.error, tErrors, t("previewFailed"))}
-      </Alert>
+      <LoadErrorCard
+        message={refusalMessage(preview.error, tErrors, t("previewFailed"))}
+        onRetry={() => {
+          void preview.refetch();
+        }}
+      />
     );
   }
 
+  // The server refuses an empty audience at preview (422), so a preview always has a count.
   const count = data.recipient_count;
-  const matches = typed.trim() === String(count);
+  const matches = normalizeTypedCount(typed) === String(count);
   const showSendError = send.isError && changedCount(send.error) === null;
 
   return (
@@ -135,33 +152,27 @@ export function ConfirmStep({
         </div>
       </div>
 
-      {count === 0 ? (
-        <Alert variant="warning">{t("nobody")}</Alert>
-      ) : (
-        <div className="space-y-2">
-          <Label htmlFor="broadcast-confirm-count">{t("typeCount", { count })}</Label>
-          <Input
-            id="broadcast-confirm-count"
-            inputMode="numeric"
-            autoComplete="off"
-            value={typed}
-            disabled={preview.isFetching}
-            onChange={(event) => {
-              setTyped(event.target.value);
-            }}
-          />
-        </div>
-      )}
+      <div className="space-y-2">
+        <Label htmlFor="broadcast-confirm-count">{t("typeCount", { count })}</Label>
+        <Input
+          id="broadcast-confirm-count"
+          inputMode="numeric"
+          autoComplete="off"
+          value={typed}
+          disabled={preview.isFetching}
+          onChange={(event) => {
+            setTyped(event.target.value);
+          }}
+        />
+      </div>
 
       {showSendError && (
-        <Alert variant="destructive">
-          {resolveErrorMessage(send.error, tErrors, t("sendFailed"))}
-        </Alert>
+        <Alert variant="destructive">{refusalMessage(send.error, tErrors, t("sendFailed"))}</Alert>
       )}
 
       <Button
         variant="destructive"
-        disabled={count === 0 || !matches || send.isPending || preview.isFetching}
+        disabled={!matches || send.isPending || preview.isFetching}
         onClick={() => {
           send.mutate({ count, digest: data.audience_digest });
         }}

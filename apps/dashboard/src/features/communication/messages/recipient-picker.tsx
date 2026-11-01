@@ -27,12 +27,14 @@ export interface RecipientPickerProps {
 export function RecipientPicker({ value, onChange, multiple }: RecipientPickerProps) {
   const t = useTranslations("communication.messages.picker");
   const tErrors = useTranslations("errors");
+  const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const search = useDebouncedValue(input.trim(), SEARCH_DEBOUNCE_MS);
 
   const recipients = useQuery({
     queryKey: queryKeys.list(MESSAGE_THREADS_QUERY_MODULE, "recipients", { search }),
     queryFn: () => Services.messageThreads.searchRecipients(search),
+    enabled: open,
   });
 
   const chosen = new Set(value.map((recipient) => recipient.user_id));
@@ -48,6 +50,8 @@ export function RecipientPicker({ value, onChange, multiple }: RecipientPickerPr
   return (
     <PickerPopover
       triggerLabel={t(multiple ? "addRecipients" : "chooseRecipient")}
+      open={open}
+      onOpenChange={setOpen}
       searchLabel={t("searchRecipients")}
       search={input}
       onSearchChange={setInput}

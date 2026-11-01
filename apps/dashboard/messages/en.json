@@ -1499,7 +1499,6 @@
         "recipients": "{count, plural, one {# recipient} other {# recipients}}",
         "channels": "Delivered by",
         "notDelivered": "{channel}: not delivered, no provider",
-        "nobody": "This audience has no recipients. Go back and change it.",
         "typeCount": "Type {count} to confirm you want to send this to everyone listed.",
         "audienceChanged": "The audience changed and now has {count, plural, one {# recipient} other {# recipients}}. Check it, then type the new number.",
         "send": "Send emergency broadcast",

@@ -17,11 +17,9 @@ import {
 import { FormDialogLayout } from "@/components/form-dialog-layout";
 import { FormSelectField } from "@/components/form-select-field";
 import { useFormDialogSubmit } from "@/hooks/use-form-dialog-submit";
-import { useInvalidateModule } from "@/hooks/use-invalidate-module";
 import { Services } from "@/services";
 import {
   MESSAGE_BODY_MAX_LENGTH,
-  MESSAGE_THREADS_QUERY_MODULE,
   THREAD_SUBJECT_MAX_LENGTH,
 } from "@/services/modules/message-threads/message-threads-constant";
 
@@ -34,6 +32,7 @@ import {
 } from "./new-thread-form-schema";
 import { RecipientPicker } from "./recipient-picker";
 import { StudentPicker } from "./student-picker";
+import { useInvalidateThreads } from "./use-invalidate-threads";
 
 export interface NewThreadDialogProps {
   open: boolean;
@@ -48,7 +47,7 @@ export interface NewThreadDialogProps {
  */
 export function NewThreadDialog({ open, onOpenChange, onCreated }: NewThreadDialogProps) {
   const t = useTranslations("communication.messages.newThread");
-  const invalidate = useInvalidateModule(MESSAGE_THREADS_QUERY_MODULE);
+  const invalidate = useInvalidateThreads();
 
   const schema = useMemo(
     () =>

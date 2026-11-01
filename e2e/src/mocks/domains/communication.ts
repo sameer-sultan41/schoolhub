@@ -195,8 +195,16 @@ export function communicationModule(store: CommunicationStore): MockModule {
         return audienceChanged(store.recipientCount, store.audienceDigest);
       }
       const jobId = uuid();
+      // `send_emergency_broadcast_task`'s result: one in-app notification per recipient.
       store.jobs[jobId] = [
-        { status: "succeeded", progress: 100, result: { recipient_count: store.recipientCount } },
+        {
+          status: "succeeded",
+          progress: 100,
+          result: {
+            recipient_count: store.recipientCount,
+            notification_count: store.recipientCount,
+          },
+        },
       ];
       return ok(
         { job_id: jobId, status: "queued" },

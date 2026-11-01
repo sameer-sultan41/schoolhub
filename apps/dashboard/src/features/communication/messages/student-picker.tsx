@@ -11,7 +11,7 @@ import { SEARCH_DEBOUNCE_MS } from "@/lib/constants";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
-import { MESSAGE_THREADS_QUERY_MODULE } from "@/services/modules/message-threads/message-threads-constant";
+import { STUDENTS_QUERY_MODULE } from "@/services/modules/students/students-constant";
 
 import { PickerPopover } from "./picker-popover";
 
@@ -32,13 +32,15 @@ const RESULTS_PAGE_SIZE = 10;
 export function StudentPicker({ value, onChange }: StudentPickerProps) {
   const t = useTranslations("communication.messages.picker");
   const tErrors = useTranslations("errors");
+  const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const search = useDebouncedValue(input.trim(), SEARCH_DEBOUNCE_MS);
 
   const students = useQuery({
-    queryKey: queryKeys.list(MESSAGE_THREADS_QUERY_MODULE, "student-search", { search }),
+    queryKey: queryKeys.list(STUDENTS_QUERY_MODULE, "search", { search }),
     queryFn: () =>
       Services.students.fetchStudentsPage({ page: 1, pageSize: RESULTS_PAGE_SIZE, search }),
+    enabled: open,
   });
 
   const options = (students.data?.items ?? []).map((student) => ({
@@ -55,6 +57,8 @@ export function StudentPicker({ value, onChange }: StudentPickerProps) {
   return (
     <PickerPopover
       triggerLabel={t("chooseStudent")}
+      open={open}
+      onOpenChange={setOpen}
       searchLabel={t("searchStudents")}
       search={input}
       onSearchChange={setInput}

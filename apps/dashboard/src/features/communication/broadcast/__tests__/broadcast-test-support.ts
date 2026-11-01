@@ -33,7 +33,7 @@ export function previewRecord(overrides: Partial<BroadcastPreview> = {}): Broadc
 export function jobRecord(overrides: Partial<BackgroundJobRecord> = {}): BackgroundJobRecord {
   return {
     id: JOB_ID,
-    job_type: "communication.emergency_broadcast",
+    job_type: "communication.emergency-broadcast",
     status: "succeeded",
     progress: 100,
     result: { recipient_count: 3, notification_count: 3 },
