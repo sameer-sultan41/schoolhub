@@ -53,6 +53,11 @@ erDiagram
      key means no scope, and the read fails closed (`.none()`, `False`, 404).
    - **An `AnyOf` route unions the assignments of every key it names**, so the answer does not
      depend on the order the keys are listed in.
+   - **A key held at several scope types reads their union.** A campus-A role and an `assigned`
+     role for the same key reach campus A's rows *and* the sections the user is assigned, not
+     the first type in some precedence. `all`, or a type that passes through (a `campus` scope
+     over a table with no campus column), reads the whole tenant. A type that can reach nothing
+     (a `campus` role with no campus) adds nothing and never falls through to another type.
    - **Every scoped read names its key.** `scope_queryset(queryset, user, permission=...)` takes
      the declaration as a required keyword, with no default. The viewset mixin passes the route's
      own declaration (`required_declaration`); a direct caller names the key that governs it.

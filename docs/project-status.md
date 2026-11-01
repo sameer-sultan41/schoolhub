@@ -319,9 +319,10 @@ with its reasoning. Read the entry for the area you are about to touch before re
    `scope_queryset(permission=)`), a write that resolves a target needs both the target's view
    scope and the action's (the viewset mixin applies it to every PATCH, DELETE and colon action),
    ID-card generation reads its ids under its own key, a row privilege asks `holds_key_for`, and export jobs carry their key
-   as `scope_permission`. **PR B** (`fix/record-scope-type-union`, stacked on PR A) is next: it
-   unions one key's mixed scope types, closing attendance's two mixed-scope entries in
-   [`deferred-work.md`](deferred-work.md). The follow-ups PR A left are that file's first entry.
+   as `scope_permission`. **PR B** (`fix/record-scope-type-union`, stacked on PR A) is built: one
+   key held at several scope types reads the union of what each type reaches (ADR-0031 decision
+   7), which closed attendance's two mixed-scope entries in [`deferred-work.md`](deferred-work.md);
+   a single-type user's SQL is unchanged. The follow-ups PR A left are that file's first entry.
 12. **`student-management`'s dashboard Phases 1-4 have shipped.** Phase 1
    (`docs/superpowers/plans/2026-09-30-students-dashboard-phase-1.md`): `/students`
    replaces the "Coming soon" placeholder with a directory, create/edit, profile

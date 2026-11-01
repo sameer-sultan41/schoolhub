@@ -1,11 +1,11 @@
 """Permission keys for the communication module — docs/03-modules/communication.md §4.
 
-Mirrors that table, with additions §4 needs and did not have — the same
-class of gap fees-finance's `fee-structure.view` and `ledger.create` were:
-`communication.announcement.view` and `communication.notice.view` are granted
-in prose (§7's publication workflow, §8's user journeys — staff reading a draft
-before it is published) but §4 lists only create/update/delete/publish for
-each. PR C adds three thread gap-fills the same way: `communication.thread.view`
+Mirrors that table, including keys §4 first granted only in prose — the same
+class of gap fees-finance's `fee-structure.view` and `ledger.create` were.
+`communication.announcement.view` and `communication.notice.view` (§7's
+publication workflow, §8's user journeys — staff reading a draft before it is
+published) were added this way and now have their own §4 rows. PR C adds three
+thread gap-fills the same way: `communication.thread.view`
 (reading an inbox §8 describes but §4 never keys), `communication.thread.close`
 (§7's close/reopen, staff-side only) and `communication.thread.oversee`
 (read-only safeguarding access to every thread). Each is registered in the same

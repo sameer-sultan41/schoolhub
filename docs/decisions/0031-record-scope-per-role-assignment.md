@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-02
-- **Enforced by:** `scope_queryset`'s required `permission` keyword (a caller that names no key is a `TypeError`); `apps/api/core/rbac/tests/test_scope_grants.py` (only the roles granting a key count, `AnyOf` unions, a soft-deleted role and an on-commit eviction drop a warm cache); `apps/api/tests/test_per_role_scope.py` (`test_unrelated_all_role_does_not_widen_campus_scope`, `test_nested_route_needs_the_parents_view_scope`, the attendance, finance and exam report cases, `test_get_overflow_export_uses_the_view_scope`, `test_legacy_export_job_without_key_fails_closed`, and `DetailWriteScopeTests`: a PATCH or colon action outside the view scope is a 404); `test_staff_correction_target_needs_the_staff_attendance_view_scope` in `attendance/tests/test_staff_corrections.py`; `test_a_student_outside_the_generate_keys_scope_is_dropped` in `student_management/tests/test_import_export_idcards.py`; `apps/api/core/rbac/tests/test_holds_key_for.py`; `test_unrelated_all_role_*` in `attendance/tests/test_leave.py`, `attendance/tests/test_marking.py` and `examinations/tests/test_marks.py`; `student_management/tests/test_record_scope.py` (medical notes, capacity override, clearance waiver); `apps/api/tests/test_endpoint_contracts.py` (every key passed to `holds_key_for`, `scope_queryset` or `scopes_for` is readable and registered, and so is every `scope_read_permission`). Naming the right key at a new call site is review only
+- **Enforced by:** `scope_queryset`'s required `permission` keyword (a caller that names no key is a `TypeError`); `apps/api/core/rbac/tests/test_scope_grants.py` (only the roles granting a key count, `AnyOf` unions, a soft-deleted role and an on-commit eviction drop a warm cache); `apps/api/tests/test_per_role_scope.py` (`test_unrelated_all_role_does_not_widen_campus_scope`, `test_nested_route_needs_the_parents_view_scope`, the attendance, finance and exam report cases, `test_get_overflow_export_uses_the_view_scope`, `test_legacy_export_job_without_key_fails_closed`, and `DetailWriteScopeTests`: a PATCH or colon action outside the view scope is a 404); `test_staff_correction_target_needs_the_staff_attendance_view_scope` in `attendance/tests/test_staff_corrections.py`; `test_a_student_outside_the_generate_keys_scope_is_dropped` in `student_management/tests/test_import_export_idcards.py`; `apps/api/core/rbac/tests/test_holds_key_for.py`; `test_unrelated_all_role_*` in `attendance/tests/test_leave.py`, `attendance/tests/test_marking.py` and `examinations/tests/test_marks.py`; `student_management/tests/test_record_scope.py` (medical notes, capacity override, clearance waiver); `apps/api/tests/test_endpoint_contracts.py` (every key passed to `holds_key_for`, `scope_queryset` or `scopes_for` is readable and registered, and so is every `scope_read_permission`; `DefaultRoleReadKeyTests` fails when a default role holds an action key without its read key); the seeded-owner tests `test_the_seeded_school_owner_sees_and_approves_a_batch` (`academics/promotions/tests/test_promotion.py`) and `test_the_seeded_school_owner_publishes_a_notice` (`communication/notices/tests/test_endpoints.py`); for decision 7, `test_any_of_route_unions_scopes_of_matching_roles`, `test_empty_member_does_not_raise_in_report_cte` and `test_single_scope_type_sql_is_unchanged` in `apps/api/tests/test_per_role_scope.py`, `test_campus_a_plus_assigned_reads_the_section_they_class_teach_on_campus_b` in `attendance/tests/test_register_api.py` and `test_campus_staff_guardian_reads_leave_for_child_on_another_campus` in `attendance/tests/test_approvals_api.py`. Naming the right key at a new call site is review only
 
 ## Context
 
@@ -12,8 +12,8 @@ role granted. A user with a campus-A role and any unrelated `all` role therefore
 tenant-wide on every scoped endpoint, entered marks for subjects they were not allocated, and
 escalated leave on any campus. Communication PR C fixed only the broadcast check, with
 `user_scopes_for_key`. `docs/deferred-work.md` recorded the rest as high priority. Decided in
-plan `docs/superpowers/plans/2026-11-02-per-role-record-scope.md` (PR A); PR B appends the
-mixed-scope-type union to this record.
+plan `docs/superpowers/plans/2026-11-02-per-role-record-scope.md`: PR A made decisions 1–6, and
+PR B appended decision 7, the mixed-scope-type union.
 
 ## Decision
 
@@ -59,6 +59,46 @@ mixed-scope-type union to this record.
    grants. It fires on `UserRole`, `RolePermission` and role-permission m2m changes, on a
    `Role` `post_save` (a soft delete is a save) and `post_delete`, and after seeding's
    `bulk_create`.
+7. **One key held at several scope types reads their union** (PR B). `scope_queryset` used to
+   return at the first of `all` > `campus` > `own` > `assigned`, so a campus-A teacher who
+   class-teaches a campus-B section could mark its register (`may_mark_register` already took
+   the union) but not read it in Records, and a campus-A staff member who is also a guardian of
+   a campus-B child could not read the leave they had just submitted. Now:
+   - `all`, or a type that passes the queryset through (`campus` with `campus_field=None`),
+     returns the queryset unchanged.
+   - Otherwise each present type narrows on its own, with the per-type rules it always had
+     (`filter_by_campus`, `campus_allows_null`, `own_field`, `assigned_filter`). A type that can
+     reach nothing is `.none()` and does not fall through to the next: a `campus` role with no
+     non-null campus, an `own` or `assigned` with no hook or field.
+   - `.none()` members are dropped. None left is `.none()`. One left is returned exactly as
+     before, so a single-type user's SQL does not change. Two or more are
+     `queryset.filter(Q(pk__in=a.values("pk")) | Q(pk__in=b.values("pk")) | ...)`.
+
+   **Query plan, mixed path on `student_attendance`** (a reader holding
+   `attendance.student-attendance.view` at `campus:A` and at `assigned`). This is the expected
+   shape on PostgreSQL 18; it was not captured locally, and is **to be confirmed from CI or the
+   e2e live lane** (`EXPLAIN` on the Records list query):
+
+   ```text
+   Limit
+     ->  Sort  (Sort Key: the Records list's ordering)
+           ->  Seq Scan on student_attendance  -- or a tenant-led index scan
+                 Filter: ((deleted_at IS NULL) AND (tenant_id = <bound tenant>)  -- RLS
+                          AND ((ANY (id = (hashed SubPlan 1).col1))
+                               OR (ANY (id = (hashed SubPlan 2).col1))))
+                 SubPlan 1  -- campus member
+                   ->  Hash Join  (student_attendance u0, sections: campus_id = ANY (...))
+                 SubPlan 2  -- assigned member
+                   ->  Hash Join  (student_attendance u0, sections)
+                         Filter: ((class_teacher_staff_id = ANY (<active staff of the user>))
+                                  OR (u0.marked_by = <user>))
+   ```
+
+   Each member runs once and is hashed, and the outer scan probes both hashes per
+   row: linear in the tenant's attendance rows, with no per-row subquery. A mixed user is rare
+   (production writes only `all`-scoped assignments today), and single-type users keep their
+   plan. If the outer scan shows up slow, the follow-up is the `marked_by` index already in
+   `deferred-work.md`.
 
 ## Alternatives considered
 
@@ -73,6 +113,7 @@ mixed-scope-type union to this record.
 | Role soft delete | Filter `role__deleted_at` in the grants query and `live_restricted_role_assignments`, plus a `Role` `post_save` eviction | **A separate PR:** the same functions are rewritten here. |
 | Eviction timing | Now **and** on commit (Django's documented pattern) | **Now only:** a concurrent read between eviction and commit re-caches the old grants for the full TTL. |
 | Medical-notes shortcut | Honours the update key's scope per row | **Defer:** the same bug class, on medical data, in a function this change rewrites. |
+| Mixed scope types for one key (PR B) | The union of each type's record set: `all` or a pass-through type short-circuits, one type keeps its exact filter, two or more are an `OR` of `pk__in` subqueries | **First-wins** (`all` > `campus` > `own` > `assigned`): the attendance gaps above. **`qs_a \| qs_b`:** combining joins can duplicate rows. **`union()`:** the result cannot be filtered or annotated further, which every caller does. |
 
 ## Consequences
 
@@ -87,8 +128,9 @@ mixed-scope-type union to this record.
 - A scoped read written without a key does not run, and a row privilege must use
   `holds_key_for`. Choosing the right key is still review only.
 - `holds_key_for` costs one query per check, even for an `all` holder.
-- Until PR B, one key held at two scope types still takes the first of
-  `all` > `campus` > `own` > `assigned` (the two attendance entries in `deferred-work.md`).
+- One key held at two scope types reads the union of both (decision 7), closing the two
+  attendance entries `deferred-work.md` recorded. A mixed user's read is an `OR` of `pk__in`
+  subqueries; a single-type user's SQL is unchanged.
 - Unchanged by design: the broadcast recipient side (ADR-0029 decision 5).
 - Not covered by decision 3: promotion batch `:approve`, `:reject` and `:execute` pass the
   batch id to the service without `get_queryset`, so they apply no record scope and do not

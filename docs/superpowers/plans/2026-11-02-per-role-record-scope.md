@@ -329,6 +329,8 @@ Recorded during subagent-driven execution (stop rule 3: the plan is amended, not
    - `NoticeViewSet` exempts `acknowledge` (`scope_read_exempt_actions`), because guardians and students acknowledge without `communication.notice.view`.
 
    No other class needs an override. ADR-0031 decision 3 and auth-and-rbac §2.3 state the rule.
+
+   *Amended by ruling 8:* `MarksViewSet` also needs one. It exempts `lock`/`unlock` (`scope_read_exempt_actions`), which act on an exam subject and never read a marks row.
 7. **`POST /id-cards:generate` scopes its ids by the generate key.** The ids are read through `scope_queryset(Student…, permission=route_permission(...), **STUDENT_SCOPE)`, and the job carries only the ones that key's roles reach. An id outside them is dropped, as an unknown id already is, so the response says nothing about whether the row exists.
 8. **An approver must be able to see what it approves.** The registry gave the `school_owner` default role `academics.promotion.approve` and `communication.notice.publish` without their view keys. Under ruling 6, a seeded owner therefore got a 404 publishing or returning a notice, and could not open a promotion batch at all. The defect was in the spec: academics.md §4 and communication.md §4 listed the owner as an approver but not as a viewer. The fix:
    - The registry now derives each view grant from its approver tuple (`PROMOTION_REVIEWERS` includes `PROMOTION_APPROVERS`; `NOTICE_VIEWERS` includes `NOTICE_PUBLISHERS`), and both §4 tables match.

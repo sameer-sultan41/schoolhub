@@ -175,27 +175,6 @@ either this file or `project-status.md`.
     `assigned`-scoped user now also match rows they marked
     (`StudentAttendance.filter_assigned_to_user`), an `OR` on an unindexed column. Add
     the index (its own migration) if that read shows up slow.
-  - **Marking takes the union of a mixed user's scopes; Records does not.**
-    `register.may_mark_register` grants a caller with a `campus` role *and* an
-    `assigned` role every register either one allows, but `scope_queryset`
-    (`core/rbac/permissions.py`) returns at its `campus` branch and never reaches
-    `assigned`. So a campus-A + assigned user who marks a campus-B section they
-    class-teach (`test_campus_a_plus_assigned_marks_the_section_they_class_teach_on_campus_b`)
-    cannot see those rows in Records. Next: PR B of per-role record scope
-    (`fix/record-scope-type-union`, ADR-0031) unions one key's scope types on the read
-    path, and removes this entry.
-  - **A campus-staff guardian cannot see the leave they submitted for a child on
-    another campus** (found in PR B; the same precedence fix as the entry above, which
-    per-role record scope's PR B makes).
-    The guardian link admits the create, so a campus-A staff member who is also a
-    linked guardian of a campus-B child gets a 201
-    (`test_a_campus_staff_member_submits_for_their_child_on_another_campus`). Every
-    read after that goes through `scope_queryset`, which takes the broadest scope in
-    the order `all` > `campus` > `own` > `assigned` and returns at its `campus`
-    branch: the list, the retrieve and `:cancel` are all a 404 on that request. A
-    union of scopes on the read path closes this gap only when the user also holds
-    the `own`-scoped guardian role: the guardian link is a data relation, not a
-    scope, so without that role there is no `own` branch to union in.
   - **`:bulk-mark` makes one extra `TenantSettings` read.** The lock window is read twice
     in one submission (once for the lock, once for the alert boundary). Passing the first
     read through would save the query; it is not worth a signature change on its own.
