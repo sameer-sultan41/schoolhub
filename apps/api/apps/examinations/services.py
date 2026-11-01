@@ -811,7 +811,7 @@ def _entry_students(*, exam_subject: ExamSubject, user) -> dict:
         return queryset.filter(pk__in=enrolled.filter(section_id__in=sections).values("student_id"))
 
     scoped = scope_queryset(
-        Student.objects.alive().filter(pk__in=list(enrolled.values_list("student_id", flat=True))),
+        Student.objects.alive().filter(pk__in=enrolled.values("student_id")),
         user,
         permission=MARKS_CREATE,
         assigned_filter=in_allocated_sections,
@@ -1139,8 +1139,11 @@ def import_marks_row(
         return {
             "row": str(row_number),
             "field": "admission_number",
+            # One message for an unknown number and an out-of-scope student, so a
+            # row does not say whether that student exists.
             "issue": (
-                f"No active enrolment for {admission_number!r} in a class this exam-subject covers."
+                f"No active enrolment for {admission_number!r} in a class this exam-subject "
+                "covers that you may import marks for."
             ),
         }
 
@@ -1197,8 +1200,15 @@ def import_marks_row(
     return None
 
 
-def import_candidates_by_admission_number(*, exam_subject: ExamSubject) -> dict:
-    """The eligible students keyed by admission number, for the importer.
+def import_candidates_by_admission_number(
+    *, exam_subject: ExamSubject, user, permission: str | AnyOf
+) -> dict:
+    """The students the importer may write, keyed by admission number.
+
+    The class roll narrowed by `permission`'s record scope over `STUDENT_SCOPE`:
+    `permission` is the key the enqueuing request was admitted on, so a
+    campus-A importer's campus-B rows find no student and are reported as an
+    unknown admission number is, without saying the student exists.
 
     Keyed by admission number because that is what a spreadsheet carries — a
     school transcribing a marks sheet has the number on the paper, not a UUID.
@@ -1206,14 +1216,17 @@ def import_candidates_by_admission_number(*, exam_subject: ExamSubject) -> dict:
     six-hundred-row import from being six hundred queries.
     """
     from apps.student_management.models import Student
+    from apps.student_management.services import STUDENT_SCOPE
+    from core.rbac.permissions import scope_queryset
 
-    # The class roll, unscoped: the job carries no user, and `exams.marks.import`
-    # is `exam_staff`'s alone. Scoping it by the importer is in `deferred-work.md`.
     enrolled = _class_enrollments(exam_subject).values("student_id")
-    return {
-        student.admission_number: student
-        for student in Student.objects.alive().filter(pk__in=enrolled)
-    }
+    scoped = scope_queryset(
+        Student.objects.alive().filter(pk__in=enrolled),
+        user,
+        permission=permission,
+        **STUDENT_SCOPE,
+    )
+    return {student.admission_number: student for student in scoped}
 
 
 # --- §5.5 processing, §5.6 approval and publishing -------------------------

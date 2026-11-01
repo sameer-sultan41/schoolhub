@@ -40,6 +40,7 @@
 
 - **Mistake.** The execute report showed a raw Python dictionary dump for a missing section, and it was deferred as a minor. The decision to make the section rule advisory relied on the report naming each failed student legibly. The whole-PR review reversed the deferral.
 - **Mistake (again, attendance dashboard PR C).** Import was put on the Records toolbar, and Records was gated on `attendance.student-attendance.view`. §4 grants the import key to `it_admin` alone, and `it_admin` does not hold `.view`, so the only role meant to import could not reach the button. The premise "an importer can open Records" was never checked against `permissions.py`.
+- **Mistake (again, per-role record scope PR B).** The marks import was deferred because "the job carries no user". The payload already held `requested_by` and the task received `actor_id`, so the export-job fix applied as-is; the re-review reversed the deferral (plan, ruling 14).
 - **Check.** For each ruling or decision, write down the premise it rests on, and verify that premise on the real path before ruling a related defect minor. When an action lives on a screen, check that every role §4 grants the action can open that screen.
 
 ### L4. Trace what the user can do after a failure

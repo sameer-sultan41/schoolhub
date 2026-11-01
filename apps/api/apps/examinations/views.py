@@ -680,7 +680,8 @@ class MarksViewSet(
 class MarksImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
     """`POST /marks-imports` — §9's marks sheet, as 202 + a job.
 
-    A pure job-launcher: no queryset, no record scope. The uploaded file is
+    A pure job-launcher with no queryset. Record scope applies in the job, which
+    narrows the class roll to the students this request's key reaches. The uploaded file is
     handed to the task base64-encoded in the job payload, matching
     `attendance`'s importer — a file small enough to be a marks sheet is small
     enough to carry, and staging it in object storage first would add a failure
@@ -716,6 +717,9 @@ class MarksImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
                 "filename": upload.name,
                 "content_base64": base64.b64encode(upload.read()).decode(),
                 "requested_by": str(request.user.pk),
+                # The job narrows the class roll to this key's record scope, as an
+                # export job reads its rows (core/exports/scope.py).
+                SCOPE_PERMISSION: scope_permission_payload(route_permission(request, self)),
             },
             actor_id=request.user.pk,
         )

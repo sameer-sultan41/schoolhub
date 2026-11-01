@@ -318,16 +318,27 @@ def import_marks_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> No
 
     Progress is reported as it goes, because a school's whole marks sheet is
     long enough that a caller polling `GET /jobs/{id}` needs to see it moving.
+
+    **Rows are matched only against the students the requester's key reaches**,
+    read under the key the enqueuing request was admitted on (`scope_permission`,
+    core/exports/scope.py). A job without one fails closed, as an export does.
     """
     import base64
 
     from apps.examinations import services
     from apps.examinations.models import ExamSubject
+    from core.exports.scope import MISSING_SCOPE_PERMISSION, job_scope_permission
+    from core.rbac.models import User
     from core.tenancy.context import tenant_atomic
 
     with tenant_atomic(uuid.UUID(tenant_id)):
         job = BackgroundJob.objects.get(pk=job_id)
     mark_running(job=job)
+
+    permission = job_scope_permission(job.payload)
+    if permission is None:
+        mark_failed(job=job, error=MISSING_SCOPE_PERMISSION)
+        return
 
     try:
         payload = job.payload
@@ -340,9 +351,12 @@ def import_marks_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> No
                 .select_related("exam")
                 .get(pk=payload["exam_subject_id"])
             )
+            requester = User.objects.get(pk=payload["requested_by"])
             # Built once for the whole file. Looked up per row it would be one
             # query each, and a six-hundred-row sheet is a real size.
-            students = services.import_candidates_by_admission_number(exam_subject=exam_subject)
+            students = services.import_candidates_by_admission_number(
+                exam_subject=exam_subject, user=requester, permission=permission
+            )
 
         errors: list[dict[str, str]] = []
         succeeded = 0
