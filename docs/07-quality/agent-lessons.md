@@ -213,6 +213,19 @@
   atomic step to report the loss while a read would still say "go". Running it twice proves only
   idempotence.
 
+### L31. A permission helper takes the key it guards, and checks it against the row
+
+- **Mistake.** `user_scopes` returned every role's record scope whatever the role granted, so a
+  campus-A role plus any unrelated `all` role read tenant-wide on every scoped endpoint. Four
+  row-privilege checks (the capacity override on enrol and change-section, the clearance
+  waiver, substitution cancel) asked `has_permission_key`, "held anywhere", as though it meant
+  "held for this row" (ADR-0031, `fix/per-role-record-scope`).
+- **Check.** A permission helper that ignores which key it guards, or a presence check read as a
+  row privilege, is a privilege-escalation path. Take the key as a required argument
+  (`scope_queryset(permission=...)`, `scopes_for`), and check a row privilege against the row
+  (`holds_key_for(user, key, row, **SomeViewSet.scope_kwargs())`). Test it with a mixed user:
+  the key on campus A, an unrelated key at `all`, and a campus-B row.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.

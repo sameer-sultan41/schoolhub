@@ -10,37 +10,27 @@ either this file or `project-status.md`.
 
 ## Deliberately NOT done
 
-- **High priority: `scope_queryset` unions record scopes across all of a user's roles.** Per
-  [auth-and-rbac §2.3](02-architecture/auth-and-rbac.md) a scope belongs to its `user_role`, so
-  a campus-scoped role plus any `all`-scoped role reads tenant-wide on every scoped endpoint
-  (`core.rbac.permissions.user_scopes` feeds `scope_queryset` the union). The broadcast campus
-  check was fixed on its own in communication PR C: `user_scopes_for_key` (added for
-  broadcasts) returns the scopes of only the roles that grant one key, and is the building
-  block. Adopting it platform-wide needs each viewset's required key passed into
-  `scope_queryset`, which changes every module's reads, so it is its own work-tier-2 change.
-  - **Every direct `user_scopes` caller has the same union** and moves with it:
-    `apps/attendance/register.py:79,211` (marking), `apps/attendance/services.py:1390`
-    (reviewer scope), `apps/attendance/views.py:445`, `apps/examinations/services.py:699`
-    (marks entry), `apps/fees_finance/services.py:1757`,
-    `apps/student_management/serializers.py:168` (medical notes) and
-    `apps/timetable/periods/viewset.py:103`.
-  - **Design it together with attendance's mixed-scope entries** below ("Marking takes the
-    union of a mixed user's scopes; Records does not" and the campus-staff guardian's leave).
-    Those ask the read path for *more* union, across scope types; this asks for less, across
-    roles. Both change `scope_queryset`, so one plan has to settle them together.
-  - **Not the recipient side.** `audience._resolve_staff` puts a staff member in a
-    campus-narrowed `staff` audience when they hold any `all`-scoped role, whatever that role
-    grants. That answers "who works at this campus", not "what may this user read", and
-    ADR-0029 decision 5 records it as the audience definition, so this item leaves it alone.
-  - Owner and next step: [`project-status.md`](project-status.md), item 11.
-
-- **Soft-deleting a `Role` must drop its keys, scopes and restricted status together.** A
-  removed `user_roles` row already counts for nothing, but a soft-deleted *role* still does:
-  `effective_permission_keys`, `user_scopes`, `user_scopes_for_key` and
-  `live_restricted_role_assignments` (`core/rbac/permissions.py`) all filter only
-  `user_roles.deleted_at`. Add `role__deleted_at__isnull=True` to all four in one change: adding
-  it to the restricted check alone would leave a deleted guardian role's keys granted while its
-  holder counted as staff.
+- **Record scope follow-ups left by per-role record scope** (PR A, `fix/per-role-record-scope`;
+  [ADR-0031](decisions/0031-record-scope-per-role-assignment.md)). Each scope check now reads
+  only the roles that grant its key. These were found on the way and left out:
+  - **Promotion approver notifications ignore scope.** `_promotion_approvers`
+    (`apps/academics/promotions/services.py`) notifies every holder of
+    `academics.promotion.approve`, whatever that key's scope. A campus-A approver is told about a
+    batch of campus-B students they cannot open (promotion rows are scoped by
+    `student__campus_id`). Narrowing it means checking each holder's scope for that key
+    (`scopes_for`) against the batch's students' campuses before sending.
+  - **A rolled-back request can leave its grants cached for up to 300 s.** This predates PR A.
+    Under `ATOMIC_REQUESTS`, a role change evicts the cache at once, and a later read in the
+    same request re-caches the new, uncommitted grants. If the request then rolls back, the
+    on-commit eviction never runs, and the rolled-back grants stay cached until the TTL ends.
+    Closing it means skipping the cache write while a transaction holds an uncommitted RBAC
+    change, or evicting on rollback.
+  - **`GET /teacher-substitutions/candidates` returns `[]` to a caller without
+    `staff.staff.view`.** The candidate list is scoped as `GET /staff` scopes it (execution
+    ruling 4 in the plan), so a proposer who may propose cover but not read staff is offered
+    nobody, with no error to say why. Every default staff role holds `staff.staff.view`
+    (`ALL_STAFF`), so only a custom role meets it. If one does, either grant the key or answer
+    403 with a reason.
 
 - **`tenant`/`files`/`jobs`/`school-organization`/`dashboard` still have only the
   original three service-module files** (`<domain>-service.ts`/`index.ts`, no
@@ -178,10 +168,12 @@ either this file or `project-status.md`.
     (`core/rbac/permissions.py`) returns at its `campus` branch and never reaches
     `assigned`. So a campus-A + assigned user who marks a campus-B section they
     class-teach (`test_campus_a_plus_assigned_marks_the_section_they_class_teach_on_campus_b`)
-    cannot see those rows in Records. Making the read path a union is a core RBAC
-    change that touches every module's lists, so it belongs in its own reviewed PR.
+    cannot see those rows in Records. Next: PR B of per-role record scope
+    (`fix/record-scope-type-union`, ADR-0031) unions one key's scope types on the read
+    path, and removes this entry.
   - **A campus-staff guardian cannot see the leave they submitted for a child on
-    another campus** (found in PR B; the same precedence fix as the entry above).
+    another campus** (found in PR B; the same precedence fix as the entry above, which
+    per-role record scope's PR B makes).
     The guardian link admits the create, so a campus-A staff member who is also a
     linked guardian of a campus-B child gets a 201
     (`test_a_campus_staff_member_submits_for_their_child_on_another_campus`). Every

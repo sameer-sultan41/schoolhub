@@ -42,7 +42,8 @@ changed between preview and send, would still go out. Decided in plan
    that campus's audience contains (else 404). A sender with only `own` or `assigned` scope
    reaches nothing: 404, not the "choose a campus" 422, since there is no campus to choose.
    The scope is read from the roles that grant `communication.broadcast.send` only
-   (`core.rbac.permissions.user_scopes_for_key`), since a scope belongs to its `user_role`.
+   (`core.rbac.permissions.scopes_for`, named `user_scopes_for_key` before ADR-0031), since a
+   scope belongs to its `user_role`.
    The recipient side deliberately reads differently: a campus-narrowed `staff` audience
    (`audience._resolve_staff`) includes anyone holding an `all`-scoped role, whatever that role
    grants, because a tenant-wide staff member works at every campus and an emergency there
