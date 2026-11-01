@@ -109,8 +109,8 @@ class EndpointContractTests(TestCase):
 class WritePermissionContractTests(TestCase):
     """A write is never authorised by a read key.
 
-    `HasPermissionKey._required_key` looks the action up in `required_permission_map` and falls
-    back to `required_permission` when it is missing. When that fallback is the resource's
+    `required_declaration` looks the action up in `required_permission_map` and falls back
+    to `required_permission` when it is missing. When that fallback is the resource's
     `.view` key, a PATCH or colon-action left out of the map is open to everyone who may *read*
     the resource; when there is no fallback, the route rejects every request. Neither shows up
     in a happy-path test, so this resolves the key for every write route the way the
@@ -136,7 +136,7 @@ class WritePermissionContractTests(TestCase):
             # The fallback may be a key or an `AnyOf`; a falsy one rejects everyone.
             fallback_keys = declared_keys(fallback) if fallback else ()
             for method, action in writes:
-                # As in `_required_key`: an action that is in the map is decided by its entry.
+                # As in `required_declaration`: an action in the map is decided by its entry.
                 if action in mapping:
                     continue
                 if not fallback_keys or any(k.rpartition(".")[2] == "view" for k in fallback_keys):

@@ -13,7 +13,6 @@ import datetime
 import uuid
 
 import factory
-from django.core.cache import cache
 
 from apps.school_organization.models import (
     AcademicSession,
@@ -26,6 +25,7 @@ from apps.school_organization.models import (
     Subject,
     Term,
 )
+from core.rbac.cache import evict_rbac_caches
 from core.rbac.models import Permission, RecordScope, Role, RolePermission, User, UserRole
 from core.tenancy.context import tenant_context
 from core.tenancy.models import Tenant, TenantSettings, TenantStatus
@@ -166,10 +166,9 @@ def grant(
 
     ``scope``/``scope_ref`` narrow the assignment the way a real one does, so a
     record-scope test does not have to hand-build ``Role``/``Permission``/
-    ``UserRole`` rows itself. Both caches keyed on the user are evicted, not just
-    the permission-key one — ``user_scopes`` has its own (core/rbac/permissions.py),
-    and a stale entry there is exactly what makes a scope test pass for the wrong
-    reason.
+    ``UserRole`` rows itself. The user's RBAC caches are evicted through
+    ``evict_rbac_caches`` (core/rbac/cache.py), which knows every cache key, so a
+    stale entry cannot make a scope test pass for the wrong reason.
     """
     role = Role.objects.create(
         tenant=user.tenant,
@@ -188,8 +187,7 @@ def grant(
     UserRole.objects.create(
         user=user, role=role, tenant=user.tenant, scope=scope, scope_ref=scope_ref
     )
-    cache.delete(f"perm-keys:{user.pk}")
-    cache.delete(f"scopes:{user.pk}")
+    evict_rbac_caches([user.pk])
     return role
 
 

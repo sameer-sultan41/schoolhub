@@ -8,12 +8,12 @@ from __future__ import annotations
 
 import datetime
 
-from django.core.cache import cache
 from rest_framework import status
 
 from apps.school_organization.tests.factories import ClassFactory, SectionFactory, UserFactory
 from apps.staff_management.tests.base import StaffManagementAPITestCase
 from apps.staff_management.tests.factories import DEFAULT_JOINING_DATE, StaffFactory
+from core.rbac.cache import evict_rbac_caches
 from core.rbac.models import Permission, Role, RolePermission, User, UserRole
 from core.rbac.registry import registry
 from core.tenancy.context import tenant_context
@@ -256,7 +256,7 @@ class DenyRestrictedPrincipalsTests(StaffManagementAPITestCase):
             )
             RolePermission.objects.create(role=role, permission=permission)
         UserRole.objects.create(user=self.user, role=role, tenant=self.tenant)
-        cache.delete(f"perm-keys:{self.user.pk}")
+        evict_rbac_caches([self.user.pk])
 
     def test_a_restricted_principal_is_denied_every_staff_endpoint_even_with_a_staff_key(
         self,

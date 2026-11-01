@@ -2,85 +2,127 @@
 
 from __future__ import annotations
 
+import uuid
+from collections.abc import Mapping
+
+from django.contrib.auth.models import AbstractBaseUser, AnonymousUser
 from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured
 from django.db.models import Q, QuerySet
 from rest_framework import permissions
+from rest_framework.request import Request
+from rest_framework.views import APIView
 
+from core.rbac.cache import scope_grants_cache_key, user_scopes_cache_key
 from core.rbac.models import RecordScope, UserRole
 
 _CACHE_TTL = 300
 
+type RbacUser = AbstractBaseUser | AnonymousUser | None
+# permission key -> scope type -> the scope refs of the live assignments granting that key.
+type ScopeGrants = Mapping[str, Mapping[str, tuple[uuid.UUID | None, ...]]]
 
-def effective_permission_keys(user) -> frozenset[str]:
-    """Union of permission keys across all of the user's roles.
 
-    Cached per user; invalidated by role/permission mutations (see signals.py).
+def scope_grants(user: RbacUser) -> ScopeGrants:
+    """Each permission key the user holds, mapped to the scopes of the roles that grant it.
+
+    auth-and-rbac.md §2.3 attaches a record scope to a `user_role`, so a scope narrows
+    only the keys *its* role grants. Keeping the key next to its scopes is what lets
+    a caller ask for one key's reach, where a flat union of every role's scope let an
+    unrelated `all` role widen a campus-scoped grant.
+
+    Live assignments of live roles only: a removed assignment or a soft-deleted role
+    grants nothing. One query, cached per user as `scope-grants:{pk}` and evicted by
+    `core.rbac.cache.evict_rbac_caches` on every role-graph change (signals.py).
     """
-    if not user or not user.is_authenticated:
-        return frozenset()
-
-    cache_key = f"perm-keys:{user.pk}"
-    cached = cache.get(cache_key)
-    if cached is not None:
-        return cached
-
-    keys = frozenset(
-        user.user_roles.filter(deleted_at__isnull=True)
-        .values_list("role__permissions__key", flat=True)
-        .exclude(role__permissions__key=None)
-    )
-    cache.set(cache_key, keys, _CACHE_TTL)
-    return keys
-
-
-def user_scopes(user) -> dict[str, list]:
-    """Record scopes granted to the user, keyed by scope type.
-
-    Cached per user, mirroring effective_permission_keys above — a serializer
-    calling this once per row in a list response (see
-    student_management/serializers.py's _can_see_medical_notes) would otherwise
-    issue one fresh query per row for the identical requesting user.
-    core/rbac/signals.py's _evict already runs on every UserRole change (the
-    only source of scope/scope_ref), so it evicts this cache key too.
-    """
-    if not user or not user.is_authenticated:
+    user_id = user.pk if user and user.is_authenticated else None
+    if user_id is None:
         return {}
 
-    cache_key = f"scopes:{user.pk}"
+    cache_key = scope_grants_cache_key(user_id)
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
 
-    scopes: dict[str, list] = {}
-    for scope, ref in user.user_roles.filter(deleted_at__isnull=True).values_list(
-        "scope", "scope_ref"
-    ):
+    collected: dict[str, dict[str, list[uuid.UUID | None]]] = {}
+    rows = UserRole.objects.filter(
+        user_id=user_id, deleted_at__isnull=True, role__deleted_at__isnull=True
+    ).values_list("role__permissions__key", "scope", "scope_ref")
+    for key, scope, ref in rows:
+        if key is None:  # a role with no permissions joins to one NULL key
+            continue
+        refs = collected.setdefault(key, {}).setdefault(scope, [])
+        if ref not in refs:
+            refs.append(ref)
+    grants = {
+        key: {scope: tuple(refs) for scope, refs in by_scope.items()}
+        for key, by_scope in collected.items()
+    }
+    cache.set(cache_key, grants, _CACHE_TTL)
+    return grants
+
+
+def effective_permission_keys(user: RbacUser) -> frozenset[str]:
+    """Union of permission keys across all of the user's live roles (auth-and-rbac §2.2).
+
+    The key set of `scope_grants`, so keys and scopes come from one query and one
+    cache entry and cannot disagree.
+    """
+    return frozenset(scope_grants(user))
+
+
+def scopes_for(user: RbacUser, declared: str | AnyOf) -> dict[str, list[uuid.UUID | None]]:
+    """The user's record scopes for one route's declaration, keyed by scope type.
+
+    Only the roles that grant a declared key count. For an `AnyOf`, the union over
+    the roles granting any of its keys, so the answer does not depend on key order.
+    No role granting a declared key means `{}`: the caller fails closed.
+    """
+    grants = scope_grants(user)
+    scopes: dict[str, list[uuid.UUID | None]] = {}
+    for key in declared_keys(declared):
+        for scope, refs in grants.get(key, {}).items():
+            merged = scopes.setdefault(scope, [])
+            for ref in refs:
+                if ref not in merged:
+                    merged.append(ref)
+    return scopes
+
+
+def user_scopes(user: RbacUser) -> dict[str, list[uuid.UUID | None]]:
+    """Record scopes granted to the user by *any* role, keyed by scope type.
+
+    Key-blind: it unions every role's scope, so an unrelated `all` role widens a
+    campus-scoped grant. New code asks `scopes_for(user, key)` instead.
+
+    Cached per user, so a serializer calling it once per row
+    (student_management/serializers.py's _can_see_medical_notes) issues one query,
+    not one per row. Evicted with `scope_grants` (core/rbac/cache.py).
+    """
+    user_id = user.pk if user and user.is_authenticated else None
+    if user_id is None:
+        return {}
+
+    cache_key = user_scopes_cache_key(user_id)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    scopes: dict[str, list[uuid.UUID | None]] = {}
+    for scope, ref in UserRole.objects.filter(
+        user_id=user_id, deleted_at__isnull=True, role__deleted_at__isnull=True
+    ).values_list("scope", "scope_ref"):
         scopes.setdefault(scope, []).append(ref)
     cache.set(cache_key, scopes, _CACHE_TTL)
     return scopes
 
 
-def user_scopes_for_key(user, key: str) -> dict[str, list]:
-    """Record scopes of only the user's live roles that grant ``key``, keyed by scope type.
-
-    auth-and-rbac.md §2.3: a record scope is attached to a ``user_role``, so it
-    narrows what *that* role's keys reach. ``user_scopes`` unions the scopes of
-    every role, which lets an unrelated ``all``-scoped role (exams, say) widen a
-    campus-scoped grant of some other key. Ask this instead when an action checks
-    the caller's scope for one key. Not cached: its callers ask once per request.
-    """
-    if not user or not user.is_authenticated:
-        return {}
-
-    scopes: dict[str, list] = {}
-    granting = user.user_roles.filter(deleted_at__isnull=True, role__permissions__key=key)
-    for scope, ref in granting.values_list("scope", "scope_ref"):
-        scopes.setdefault(scope, []).append(ref)
-    return scopes
+def user_scopes_for_key(user: RbacUser, key: str) -> dict[str, list[uuid.UUID | None]]:
+    """Record scopes of only the user's live roles that grant ``key``; see `scopes_for`."""
+    return scopes_for(user, key)
 
 
-def has_permission_key(user, key: str) -> bool:
+def has_permission_key(user: RbacUser, key: str) -> bool:
     return key in effective_permission_keys(user)
 
 
@@ -135,7 +177,7 @@ class HasPermissionKey(permissions.BasePermission):
     message = "You do not have permission to perform this action."
 
     def has_permission(self, request, view) -> bool:
-        required = self._required_key(request, view)
+        required = required_declaration(request, view)
         if required is None:
             # Fail closed: an authenticated endpoint with no declared key is a bug.
             return False
@@ -144,15 +186,23 @@ class HasPermissionKey(permissions.BasePermission):
         held = effective_permission_keys(request.user)  # one cache read, however many keys
         return any(key in held for key in declared_keys(required))
 
-    @staticmethod
-    def _required_key(request, view) -> str | AnyOf | None:
-        action = getattr(view, "action", None) or request.method.lower()
-        mapping = getattr(view, "required_permission_map", None) or {}
-        # An action that is in the map is decided by its entry, whatever it holds: an empty
-        # string must refuse everyone, not fall back to the resource's (read) key.
-        if action in mapping:
-            return mapping[action]
-        return getattr(view, "required_permission", None)
+
+def required_declaration(request: Request, view: APIView) -> str | AnyOf | None:
+    """The permission one request to ``view`` is declared to need: a key, an `AnyOf`, or None.
+
+    `required_permission_map[action]`, else `required_permission`. `HasPermissionKey`
+    enforces it; public so that any other code needing a route's key reads the same
+    answer instead of re-deriving it.
+    """
+    action = getattr(view, "action", None) or request.method.lower()
+    mapping = getattr(view, "required_permission_map", None) or {}
+    # An action that is in the map is decided by its entry, whatever it holds: an empty
+    # string must refuse everyone, not fall back to the resource's (read) key.
+    if action in mapping:
+        declared: str | AnyOf | None = mapping[action]
+        return declared
+    fallback: str | AnyOf | None = getattr(view, "required_permission", None)
+    return fallback
 
 
 class IsPlatformPrincipal(permissions.BasePermission):
@@ -170,12 +220,15 @@ def live_restricted_role_assignments() -> QuerySet[UserRole]:
     asks it of one user, and a queryset that must leave students and guardians
     out (`.values("user_id")`) asks it of many, so the two cannot disagree.
 
-    A removed assignment (``deleted_at`` set) does not count, matching
-    `effective_permission_keys` and `user_scopes`: a staff member whose guardian
-    role was removed is staff again. A soft-deleted *role* still counts, because
-    `effective_permission_keys` still grants its keys too.
+    A removed assignment (``deleted_at`` set) or a soft-deleted role does not count,
+    matching `scope_grants`: a staff member whose guardian role was removed is staff
+    again.
     """
-    return UserRole.objects.filter(deleted_at__isnull=True, role__is_restricted_principal=True)
+    return UserRole.objects.filter(
+        deleted_at__isnull=True,
+        role__deleted_at__isnull=True,
+        role__is_restricted_principal=True,
+    )
 
 
 def is_restricted_principal(user) -> bool:
