@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, type JSX } from "react";
+import { useCallback, useMemo, type JSX } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -21,7 +21,7 @@ import {
 
 import { MENU_SIDEBAR } from "@/config/menu-config";
 import { useCurrentUser } from "@/hooks/use-current-user";
-import { filterMenuByAccess } from "./menu-access";
+import { collectMenuPaths, filterMenuByAccess, isActiveMenuPath } from "./menu-access";
 
 // Ported verbatim from packages/ui's layouts/demo1/components/sidebar-menu.tsx —
 // real nested Metronic nav, built on this repo's own AccordionMenu port.
@@ -31,11 +31,14 @@ export function SidebarMenu() {
   // handful of MENU_SIDEBAR entries carry a `module` or `permission` key at all — every
   // vendor-demo item without one renders exactly as before, permission check or not.
   const { data: user } = useCurrentUser();
-  const visibleMenu = filterMenuByAccess(MENU_SIDEBAR, user);
+  // Memoised on `user`: `filterMenuByAccess` builds a new array each call, which would
+  // otherwise invalidate `menuPaths` below on every render.
+  const visibleMenu = useMemo(() => filterMenuByAccess(MENU_SIDEBAR, user), [user]);
 
+  const menuPaths = useMemo(() => collectMenuPaths(visibleMenu), [visibleMenu]);
   const matchPath = useCallback(
-    (path: string): boolean => path === pathname || (path.length > 1 && pathname.startsWith(path)),
-    [pathname],
+    (path: string): boolean => isActiveMenuPath(path, pathname, menuPaths),
+    [pathname, menuPaths],
   );
 
   const classNames: AccordionMenuClassNames = {

@@ -10,6 +10,10 @@ import {
 } from "@/services/modules/staff/staff-constant";
 import { toStaffOptions } from "@/services/modules/staff/staff-helper";
 
+/** The query-key module and resource the term list lives under. */
+const SCHOOL_ORGANIZATION_QUERY_MODULE = "school-organization";
+const TERMS_RESOURCE = "terms";
+
 /**
  * The school-organization lists a form or a filter picks from. Each hook uses the key the
  * other readers of that list use, so every screen shares one cache entry and a list is
@@ -74,5 +78,16 @@ export function useTeachingStaffOptions() {
     queryKey: queryKeys.list(STAFF_QUERY_MODULE, TEACHING_OPTIONS_RESOURCE),
     queryFn: () => Services.staff.fetchTeachingStaffOptions(),
     select: toStaffOptions,
+  });
+}
+
+/** One session's terms, in their order. Not requested until `sessionId` is set (`""` means none). */
+export function useTerms(sessionId: string) {
+  return useQuery({
+    queryKey: queryKeys.list(SCHOOL_ORGANIZATION_QUERY_MODULE, TERMS_RESOURCE, {
+      academicSessionId: sessionId,
+    }),
+    queryFn: () => Services.schoolOrganization.fetchTerms(sessionId),
+    enabled: sessionId !== "",
   });
 }

@@ -42,6 +42,8 @@ export const Paths = {
   ATTENDANCE_STAFF: "/attendance/staff",
   ATTENDANCE_REPORTS: "/attendance/reports",
   ATTENDANCE_SETTINGS: "/attendance/settings",
+  EXAMS: "/exams",
+  EXAMS_GRADING_SCALES: "/exams/grading-scales",
   LOGIN: "/login",
   FORGOT_PASSWORD: "/forgot-password",
   RESET_PASSWORD: "/reset-password",
@@ -49,3 +51,6 @@ export const Paths = {
 
 /** One promotion batch's review page, under the promotions list. */
 export const promotionBatchPath = (batchId: string) => `${Paths.ACADEMICS_PROMOTIONS}/${batchId}`;
+
+/** One exam's page, under the exams list. */
+export const examPath = (examId: string) => `${Paths.EXAMS}/${examId}`;

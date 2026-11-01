@@ -37,7 +37,10 @@ describe("Services", () => {
       "auth",
       "curriculum",
       "dashboard",
+      "examSubjects",
+      "exams",
       "files",
+      "gradingScales",
       "guardians",
       "jobs",
       "leaveRequests",
@@ -66,6 +69,27 @@ describe("Services", () => {
     expect(typeof Services.dashboard.fetchDashboardOverview).toBe("function");
 
     expect(typeof Services.files.uploadFile).toBe("function");
+
+    expect(typeof Services.exams.fetchExamsPage).toBe("function");
+    expect(typeof Services.exams.fetchExam).toBe("function");
+    expect(typeof Services.exams.createExam).toBe("function");
+    expect(typeof Services.exams.updateExam).toBe("function");
+    expect(typeof Services.exams.deleteExam).toBe("function");
+    expect(typeof Services.examSubjects.fetchExamSubjects).toBe("function");
+    expect(typeof Services.examSubjects.createExamSubject).toBe("function");
+    expect(typeof Services.examSubjects.updateExamSubject).toBe("function");
+    expect(typeof Services.examSubjects.deleteExamSubject).toBe("function");
+    expect(typeof Services.schoolOrganization.fetchTerms).toBe("function");
+    expect(typeof Services.gradingScales.fetchScalesPage).toBe("function");
+    expect(typeof Services.gradingScales.fetchScale).toBe("function");
+    expect(typeof Services.gradingScales.createScale).toBe("function");
+    expect(typeof Services.gradingScales.updateScale).toBe("function");
+    expect(typeof Services.gradingScales.deleteScale).toBe("function");
+    expect(typeof Services.gradingScales.setDefault).toBe("function");
+    expect(typeof Services.gradingScales.fetchBands).toBe("function");
+    expect(typeof Services.gradingScales.createBand).toBe("function");
+    expect(typeof Services.gradingScales.updateBand).toBe("function");
+    expect(typeof Services.gradingScales.deleteBand).toBe("function");
 
     expect(typeof Services.jobs.fetchJob).toBe("function");
     expect(typeof Services.jobs.fetchFileDownloadUrl).toBe("function");

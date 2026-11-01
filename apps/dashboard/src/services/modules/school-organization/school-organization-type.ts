@@ -13,3 +13,6 @@ export type AcademicSessionSummary = Pick<
   ApiSchemas["AcademicSession"],
   "id" | "name" | "status" | "is_current"
 >;
+
+/** The slice of the generated `Term` schema an exam form's term picker reads. */
+export type TermOption = Pick<ApiSchemas["Term"], "id" | "name" | "sequence">;

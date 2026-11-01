@@ -4,6 +4,7 @@ import {
   fetchHouses,
   fetchSections,
   fetchSubjects,
+  fetchTerms,
 } from "./school-organization-service";
 
 export const SchoolOrganizationService = {
@@ -12,9 +13,11 @@ export const SchoolOrganizationService = {
   fetchSections,
   fetchSubjects,
   fetchAcademicSessions,
+  fetchTerms,
 };
 export type {
   AcademicSessionSummary,
   SchoolOrganizationOption,
   SectionOption,
+  TermOption,
 } from "./school-organization-type";
