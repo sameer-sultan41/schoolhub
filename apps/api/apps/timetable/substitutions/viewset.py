@@ -19,6 +19,7 @@ from rest_framework.response import Response
 if TYPE_CHECKING:
     from rest_framework.request import Request
 
+from apps.staff_management.services import STAFF_SCOPE
 from apps.timetable.models import SlotStatus, TeacherSubstitution, TimetableSlot
 from apps.timetable.substitutions import services
 from apps.timetable.substitutions.filters import TeacherSubstitutionFilterSet
@@ -261,11 +262,9 @@ class TeacherSubstitutionViewSet(
 
         free = services.free_substitutes(slot=slot, on_date=on_date, absent_staff=slot.staff)
         # The answer is a list of staff, so it is scoped as `GET /staff` scopes one
-        # (`StaffViewSet`'s key and fields): the caller is offered only staff they may
+        # (`StaffViewSet`'s key and `STAFF_SCOPE`): the caller is offered only staff they may
         # read, and the substitution key's roles do not widen that.
-        readable = scope_queryset(
-            free, request.user, permission=STAFF_VIEW, own_field="user_id", campus_field="campus_id"
-        )
+        readable = scope_queryset(free, request.user, permission=STAFF_VIEW, **STAFF_SCOPE)
         rows = readable.order_by("last_name", "first_name")
         return ActionResponse.ok(SubstituteCandidateSerializer(rows, many=True).data)
 

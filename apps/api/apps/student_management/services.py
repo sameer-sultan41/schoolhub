@@ -40,8 +40,19 @@ from core.api.exceptions import Conflict, DomainRuleViolation
 from core.exports.tabular import spreadsheet_safe_row
 from core.files.services import assert_file_usable
 from core.imports.tabular import ROW_NUMBER_KEY
+from core.rbac.permissions import ScopeKwargs
 from core.tenancy.context import tenant_atomic
 from core.tenancy.sequences import allocate_number
+
+# `StudentViewSet`'s record-scope settings, declared once: the viewset sets its
+# `scope_*` attributes from these, and every other read of a student row (a nested
+# parent, the medical-notes check, another app's student lookup) passes them on.
+# `own_field` is the fallback; `Student.filter_owned_by_user` takes precedence.
+STUDENT_SCOPE: ScopeKwargs = {
+    "own_field": "user_id",
+    "campus_field": "campus_id",
+    "campus_allows_null": False,
+}
 
 # Pattern tokens the admission-number template may use. Anything else in the
 # pattern is left as a literal character, never evaluated — see

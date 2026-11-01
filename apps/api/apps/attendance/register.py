@@ -33,6 +33,7 @@ from apps.attendance.models import (
 from apps.school_organization.models import Section
 from apps.school_organization.services import LOCKED_SESSION_STATES
 from apps.staff_management.models import EmploymentStatus, Staff
+from apps.staff_management.services import STAFF_SCOPE
 from apps.student_management.models import EnrollmentStatus, StudentEnrollment
 from apps.timetable.slots.services import teacher_slots_for
 from core.rbac.models import RecordScope
@@ -303,9 +304,7 @@ def staff_register(
     if department is not None:
         staff_rows = staff_rows.filter(department=department)
     staff = list(
-        scope_queryset(
-            staff_rows, user, permission=permission, own_field="user_id", campus_field="campus_id"
-        )
+        scope_queryset(staff_rows, user, permission=permission, **STAFF_SCOPE)
         .select_related("department")
         .order_by("last_name", "first_name", "pk")
     )

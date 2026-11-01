@@ -219,7 +219,7 @@ def _load_medical_notes_visibility(
             Student.objects.filter(pk__in=missing),
             user,
             permission=STUDENT_UPDATE,
-            own_field="user_id",
+            **services.STUDENT_SCOPE,
         ).values_list("pk", flat=True)
     )
     rest = missing - allowed

@@ -345,6 +345,20 @@ class StaffCorrectionScopeTests(StaffCorrectionTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.json())
 
+    def test_staff_correction_target_needs_the_staff_attendance_view_scope(self) -> None:
+        """The staff twin of `test_correction_target_needs_the_attendance_view_scope`:
+        the correction key is held tenant-wide, the staff view key on campus A only,
+        so a campus-B staff row is a 404 (ADR-0031 decision 3)."""
+        clerk = UserFactory(tenant=self.tenant)
+        grant(clerk, CREATE, scope=RecordScope.ALL)
+        self.sign_in(clerk, STAFF_VIEW, scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+
+        foreign = self.raise_correction(self.row_b)
+        own = self.raise_correction(self.row)
+
+        self.assertEqual(foreign.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(own.status_code, status.HTTP_201_CREATED, own.json())
+
     def test_a_campus_approver_decides_staff_corrections_on_their_campus_only(self) -> None:
         on_campus = self.correction(self.row)
         elsewhere = self.correction(self.row_b)

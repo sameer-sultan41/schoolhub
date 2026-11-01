@@ -28,6 +28,7 @@ from apps.communication.models import MessageThread, ThreadStatus, ThreadType
 from apps.communication.threads.routing import route_guardian_thread, thread_staff_users
 from apps.communication.threads.services.post_message import post_message
 from apps.student_management.models import Student, StudentGuardian
+from apps.student_management.services import STUDENT_SCOPE
 from core.api.exceptions import DomainRuleViolation
 from core.rbac.permissions import is_restricted_principal, scope_queryset
 
@@ -116,7 +117,7 @@ def _scoped_student(*, actor, student_id: uuid.UUID | None) -> Student:
     """
     scoped = Student.objects.alive()
     for permission in ("students.student.view", "communication.thread.create"):
-        scoped = scope_queryset(scoped, actor, permission=permission, own_field="user_id")
+        scoped = scope_queryset(scoped, actor, permission=permission, **STUDENT_SCOPE)
     student = scoped.filter(pk=_require_student_id(student_id)).first()
     if student is None:
         raise Http404("No such student.")

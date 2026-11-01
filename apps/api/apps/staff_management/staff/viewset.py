@@ -23,6 +23,7 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 
 from apps.staff_management.models import Staff
+from apps.staff_management.services import STAFF_SCOPE
 from apps.staff_management.staff.filters import StaffFilterSet
 from apps.staff_management.staff.serializers import (
     ExitRequestSerializer,
@@ -90,7 +91,10 @@ class StaffViewSet(_StaffModuleViewSetMixin, viewsets.ModelViewSet):
     #: Entries in ordering_fields that are annotations from get_queryset, not model
     #: fields — tests/test_endpoint_contracts.py cannot resolve these against the model.
     ordering_annotations = ("campus_name", "department_name", "designation_name")
-    scope_own_field = "user_id"
+    # From `STAFF_SCOPE`, which every other read of a staff row also passes.
+    scope_own_field = STAFF_SCOPE["own_field"]
+    scope_campus_field = STAFF_SCOPE["campus_field"]
+    scope_campus_allows_null = STAFF_SCOPE["campus_allows_null"]
     required_feature = "module.staff"
     required_permission = "staff.staff.view"
     required_permission_map = {

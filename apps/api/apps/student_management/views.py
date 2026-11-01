@@ -55,6 +55,7 @@ from apps.student_management.serializers import (
     WithdrawRequestSerializer,
 )
 from apps.student_management.services import (
+    STUDENT_SCOPE,
     active_enrollment,
     add_emergency_contact,
     add_student_document,
@@ -82,7 +83,7 @@ from core.api.pagination import PageNumberPagination
 from core.api.viewsets import ActionResponse, TenantModelViewSet, TenantScopedViewSetMixin
 from core.idempotency.services import replay_or_execute
 from core.jobs.services import create_job, enqueue_job
-from core.rbac.permissions import holds_key_for
+from core.rbac.permissions import holds_key_for, route_permission, scope_queryset
 
 # The key that lets a withdrawal waive outstanding clearance (`withdraw`).
 WITHDRAWAL_APPROVE = "students.withdrawal.approve"
@@ -138,7 +139,10 @@ class StudentViewSet(TenantModelViewSet):
     # *view's* default, not the model's, and a list with no view default lets the
     # paginator page an unordered result.
     ordering = ["last_name", "first_name"]
-    scope_own_field = "user_id"
+    # From `STUDENT_SCOPE`, which every other read of a student row also passes.
+    scope_own_field = STUDENT_SCOPE["own_field"]
+    scope_campus_field = STUDENT_SCOPE["campus_field"]
+    scope_campus_allows_null = STUDENT_SCOPE["campus_allows_null"]
     required_feature = "module.students"
     required_permission = STUDENT_VIEW
     required_permission_map = {
@@ -492,17 +496,16 @@ class _NestedUnderStudentMixin:
         kwargs: dict[str, str]
 
     def get_student(self) -> Student:
-        from core.rbac.permissions import route_permission, scope_queryset
-
         # Scoped twice: by `/students`' own view key, so the parent is one the caller
         # may read, then by this route's key, so it is one they may act under. Each
         # reads only the roles granting its key, so neither key's roles widen the
-        # other. `own_field` is the fallback only: `Student.filter_owned_by_user`
-        # takes precedence and is what resolves a guardian to their linked children.
+        # other. `STUDENT_SCOPE`'s `own_field` is the fallback only:
+        # `Student.filter_owned_by_user` takes precedence and is what resolves a
+        # guardian to their linked children.
         queryset = Student.objects.alive()
         for permission in (STUDENT_VIEW, route_permission(self.request, self)):
             queryset = scope_queryset(
-                queryset, self.request.user, permission=permission, own_field="user_id"
+                queryset, self.request.user, permission=permission, **STUDENT_SCOPE
             )
         try:
             return get_object_or_404(queryset, pk=self.kwargs["student_pk"])

@@ -72,6 +72,7 @@ from apps.attendance.models import (
     StaffAttendance,
     StudentAttendance,
 )
+from apps.attendance.register import STUDENT_ATTENDANCE_MARK
 from apps.attendance.serializers import (
     REPORT_ROW_SERIALIZERS,
     AttendanceCorrectionSerializer,
@@ -203,9 +204,9 @@ class StudentAttendanceViewSet(
     # The register and `my-registers` are the marking screen's reads, so they take
     # the marking key: a reader who cannot submit has no use for the roster form.
     required_permission_map = {
-        "bulk_mark": attendance_register.STUDENT_ATTENDANCE_MARK,
-        "register": attendance_register.STUDENT_ATTENDANCE_MARK,
-        "my_registers": attendance_register.STUDENT_ATTENDANCE_MARK,
+        "bulk_mark": STUDENT_ATTENDANCE_MARK,
+        "register": STUDENT_ATTENDANCE_MARK,
+        "my_registers": STUDENT_ATTENDANCE_MARK,
     }
     http_method_names = ["get", "post", "head", "options"]
 
@@ -446,7 +447,7 @@ class StudentAttendanceViewSet(
             user=user, section=section, on_date=on_date, period=period, lessons=lessons
         ):
             return section, lessons
-        marking_scopes = scopes_for(user, attendance_register.STUDENT_ATTENDANCE_MARK)
+        marking_scopes = scopes_for(user, STUDENT_ATTENDANCE_MARK)
         if refuse_assigned_with_422 and RecordScope.ASSIGNED in marking_scopes:
             raise DomainRuleViolation({"section_id": services.NOT_ASSIGNED_TO_SECTION})
         raise Http404
