@@ -202,6 +202,16 @@
   staff", register its purpose with `module_gated=True` (`core/files/purposes.py`) and serve the
   download from the record's own route, resolved through the same rule that hides the record.
 
+### L30. Strict `tsc` rejects what jest never types: defaulted params and enum casts
+
+- **Mistake.** Communication PR D's jest mock read `query.cursor` in an implementation typed from a service signature whose `query` parameter has a default value, so strict `tsc` saw it as possibly `undefined`. A cast between a generated schema enum and a narrower form union (`as`) failed strict `tsc` too. Jest strips types, so only the pre-push typecheck caught either.
+- **Check.** Type a mock's parameters from the real signature and read defaulted or optional ones with `?.` (`query?.cursor`). Narrow a schema enum with `.find()` over the allowed list, or `satisfies`, never `as`.
+
+### L31. Never render a raw API enum value as user-visible text
+
+- **Mistake.** The broadcast preview listed channels by their API ids (`in_app`, `sms`), which reached the screen as written (fixed in `a7e49cb5`).
+- **Check.** Every enum a user can see (channel, status, type, role) goes through an i18n label map in both locale files, with a fallback for a value the map lacks, and a spec asserts the label, not the id.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.

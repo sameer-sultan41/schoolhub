@@ -209,8 +209,8 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md);
 
 ## 20. Implementation status
 
-Built as three stacked backend PRs (A, B, C); the dashboard screens for threads,
-oversight and broadcast follow as PR D. This section is updated by each.
+Built as three stacked backend PRs (A, B, C) and a dashboard PR (D) for threads,
+oversight and the emergency broadcast. This section is updated by each.
 
 **PR A — templates and preferences.** Tenant-editable per-channel
 notification templates, per-user channel preferences, and the delivery
@@ -223,6 +223,8 @@ out through the real `notify()`.
 **PR C — threads and emergency broadcast.** Guardian, internal and group message
 threads with read receipts and audited oversight, and the emergency broadcast with a
 digest-confirmed send. That completes the module's backend except the `GET /notifications` inbox (deferred); see "Built (PR C)" below.
+**PR D — the dashboard.** The Messages inbox, thread oversight and the emergency broadcast
+screens under `/communication`; see "Built (PR D)" below.
 **Post-PR-B refactor.** `apps/communication` restructured from shared
 `views.py`/`services.py` files into one package per resource
 (`notices/`, `announcements/`, `template_overrides/`, `preferences/`,
@@ -281,3 +283,21 @@ one.
 | Endpoints | §16's `/message-threads` (+ `/{id}`, `/{id}/messages`, `:mark-read`, `:close`, `:reopen`, `/recipients`, `/{id}/attachments/{file_id}:download`), `/message-thread-oversight` (+ `/{id}`, `/{id}/messages`, `/{id}/attachments/{file_id}:download`), `/broadcasts:preview`, `/broadcasts:emergency`. Every list declares `ordering_fields` (the cursor's own column) |
 | Live lane | `e2e/tests/live/api/communication-threads-broadcast.spec.ts` on `seed_e2e_data`'s comms fixture (a guardian linked to a child in the baseline section, whose class teacher is an `assigned`-scope login): the thread routed, answered with an internal note hidden from the guardian, read receipts, the notifications read from `/delivery-logs`, the principal's oversight and inbox `404`, the other tenant's `404`; a broadcast previewed, refused on a tampered digest, sent, replayed by key and fanned out as a job |
 | Deferred | See `docs/deferred-work.md`'s communication entries: the `GET /notifications` inbox; message soft delete; uploader-checked attachments; sender names on messages; audited replies and read receipts; batched broadcast fan-out; the live delivery board; MFA step-up; quiet hours; a read-receipt tenant toggle; the `message_participants` join table; §10's webhook events; `AI-COM-03`; parent-portal §7's topic category; the thread SLA report; campus-narrowed oversight |
+
+### Built (PR D)
+
+The dashboard is built: the inbox, oversight and the emergency broadcast, as three tabs under
+`/communication` (`apps/dashboard/src/features/communication/`). Each tab shows only when the
+viewer holds its key (`communication.thread.view`, `communication.thread.oversee`,
+`communication.broadcast.send`), and `/communication` sends the viewer to the first they may open.
+
+| Area | State |
+| ---- | ----- |
+| Messages | The caller's threads (newest activity first, cursor paged, filtered by status) beside the open thread; `?thread=` and `?status=` keep both in the URL. A staff member with `communication.thread.create` starts a conversation (guardian-school about a student, internal with one colleague, group with two or more); a participant replies, flags an internal note (staff only) and, with `communication.thread.close`, closes and reopens. A closed thread disables the reply box and offers Reopen |
+| Read receipts | `:mark-read` is called once per opened thread, and only when the user holds `communication.message.create`: the server keys it on that write key, so a reader without it would only get a `403` |
+| Message senders | A bubble says "You" or "Participant". The API returns only `sender_id`, so names are not shown; a name field on the message is deferred (`docs/deferred-work.md`) |
+| Attachments | A message's attachments download through the thread's own route (`/message-threads/{id}/attachments/{file_id}:download`), or the oversight twin on the oversight tab, a fresh signed URL per click. Uploading from the composer is deferred, for staff as well as guardians |
+| Oversight | The same list and thread view over `/message-thread-oversight`, read-only: no reply box, no close or reopen, no `:mark-read`, under a banner that every view is audited |
+| Emergency broadcast | A four-step wizard: Audience, Message, Confirm, Status. A section audience picks a class first, then that class's sections (the class only narrows the picker; the API sees `section_ids`). Confirm previews the audience (count, channels with their names, and channels not delivered for want of a provider) and arms Send only when the sender types that exact count. A `409 audience_changed` shows the new count from `error.meta`, re-previews and asks for the new number. The `Idempotency-Key` is minted per (preview, message, audience) and survives Back and Next, so a send whose reply was lost is replayed, never doubled; a changed message, count or digest gets a new key. The accepted job is polled to its end |
+| Tests | Jest for the services, the screens, the broadcast key and the job panel, and mocked Playwright journeys `e2e/tests/dashboard/communication-messages.spec.ts` (open, reply, close and reopen; a reader who never triggers `:mark-read`; read-only oversight) and `communication-broadcast.spec.ts` (preview 42, type 42, send, job succeeds; the refused-then-resent 409; a section audience; no Broadcast tab without the send key). The server's behaviour stays with the live API journey above |
+| Deferred | Composer attachment upload; sender names on bubbles; `GET /notifications` |

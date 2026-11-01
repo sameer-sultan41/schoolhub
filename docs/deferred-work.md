@@ -952,14 +952,19 @@ either this file or `project-status.md`.
     unguessable UUID, and the purpose is module-gated, so `GET /files` does not list it to other
     staff; but every participant of a thread it was sent in sees the id, and could re-send it
     into another thread. `created_by == sender` is the full check.
-  - **A guardian or student cannot attach a file to a thread.** `platform.file.create` is
-    staff-only (`core/files/permissions.py`), so they can download what staff send them (through
-    `/message-threads/{id}/attachments/{file_id}:download`) but not upload. Parent-portal must
-    grant the upload, scoped to the `communication.thread-attachment` purpose, as it must for
-    leave attachments.
-  - **Messages carry `sender_id` only**, no sender name. The dashboard resolves names from the
-    thread's participants; a name field on `MessageSerializer` (as `UserNamesModelSerializer`
-    gives attendance) would save it the lookup.
+  - **Nobody can attach a file to a thread from the dashboard yet.** The API takes attachments
+    (ready `communication.thread-attachment` files, uploaded and confirmed through `/files`), but
+    the thread composer has no upload control, for staff or for guardians; attachments render
+    and download through the thread's own route and the oversight twin. A guardian or student
+    also cannot upload at the API: `platform.file.create` is staff-only
+    (`core/files/permissions.py`), so they can download what staff send them but not upload.
+    Parent-portal must grant the upload, scoped to the `communication.thread-attachment`
+    purpose, as it must for leave attachments. The staff composer's upload (the two-step
+    presigned flow, a chip per file, the same type and size limits) is a dashboard follow-up
+    that needs no backend change.
+  - **Messages carry `sender_id` only**, no sender name, so the dashboard's bubbles say "You" or
+    "Participant". A name field on `MessageSerializer` (as `UserNamesModelSerializer` gives
+    attendance) is what would let the thread show who wrote what.
   - **Replies and `:mark-read` are not audited.** A message is itself an immutable, attributed
     record, and a receipt is the caller's own state; thread create, close and reopen, oversight
     reads and broadcasts are audited.
