@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-01
-- **Enforced by:** `apps/api/apps/communication/broadcasts/tests/test_dispatch.py` (a stale count, and the same count with a different audience, are each a 409 that creates no job; a repeated `Idempotency-Key` replays one job, and the same key with a corrected message is a 422), `test_scope.py` (campus-scoped senders), `test_task.py` (frozen recipients, the `emergency` queue, preferences bypassed, a failed fan-out leaves nothing, a redelivered task sends nothing), `apps/api/core/jobs/tests/test_claim.py` (the job is claimed by one conditional UPDATE), `apps/api/core/idempotency/tests/test_replay.py` (the same body replays, a different body is refused, a legacy row replays); `e2e/tests/live/api/communication-threads-broadcast.spec.ts` (preview, a tampered digest refused, send, replay, the job)
+- **Enforced by:** `apps/api/apps/communication/broadcasts/tests/test_dispatch.py` (a stale count, and the same count with a different audience, are each a 409 that creates no job; a repeated `Idempotency-Key` replays one job, and the same key with a corrected message is a 422), `test_scope.py` (campus-scoped senders, and the `:scope` read that tells the client), `test_task.py` (frozen recipients, the `emergency` queue, preferences bypassed, a failed fan-out leaves nothing, a redelivered task sends nothing), `apps/api/core/jobs/tests/test_claim.py` (the job is claimed by one conditional UPDATE), `apps/api/core/idempotency/tests/test_replay.py` (the same body replays, a different body is refused, a legacy row replays); `e2e/tests/live/api/communication-threads-broadcast.spec.ts` (preview, a tampered digest refused, send, replay, the job)
 
 ## Context
 
@@ -47,7 +47,8 @@ changed between preview and send, would still go out. Decided in plan
    (`audience._resolve_staff`) includes anyone holding an `all`-scoped role, whatever that role
    grants, because a tenant-wide staff member works at every campus and an emergency there
    must reach them. The sender's limit is about what they may do; the audience is about who is
-   on the campus.
+   on the campus. The client reads the same scope via `GET /broadcasts:scope`
+   (`sender_campus_ids`), so the screen offers only the campuses a send will accept.
 6. **Audited.** Each send writes a `broadcast` audit row with the message, count, channels,
    unavailable channels and audience.
 
