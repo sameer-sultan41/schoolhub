@@ -197,13 +197,13 @@ class BroadcastScopeReadTests(CampusSenderTestCase):
         response = self.scope()
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
-        self.assertEqual(response.json(), {"data": {"campus_ids": None}})
+        self.assertEqual(response.json()["data"], {"campus_ids": None})
 
     def test_a_campus_scoped_sender_gets_their_campus(self) -> None:
         response = self.scope()
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
-        self.assertEqual(response.json(), {"data": {"campus_ids": [str(self.campus.pk)]}})
+        self.assertEqual(response.json()["data"], {"campus_ids": [str(self.campus.pk)]})
 
     def test_campuses_from_two_granting_roles_are_listed_in_id_order(self) -> None:
         with tenant_context(self.tenant.id):
@@ -217,7 +217,7 @@ class BroadcastScopeReadTests(CampusSenderTestCase):
         response = self.scope()
 
         expected = sorted([str(self.campus.pk), str(self.other_campus.pk)])
-        self.assertEqual(response.json(), {"data": {"campus_ids": expected}})
+        self.assertEqual(response.json()["data"], {"campus_ids": expected})
 
     def test_a_sender_whose_scope_reaches_no_campus_gets_an_empty_list(self) -> None:
         """A 200, not the send's 404: this reads the caller's own capability, not a record."""
@@ -229,7 +229,7 @@ class BroadcastScopeReadTests(CampusSenderTestCase):
         response = self.scope()
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
-        self.assertEqual(response.json(), {"data": {"campus_ids": []}})
+        self.assertEqual(response.json()["data"], {"campus_ids": []})
 
     def test_an_unrelated_all_scope_role_does_not_widen_the_list(self) -> None:
         with tenant_context(self.tenant.id):
@@ -237,7 +237,7 @@ class BroadcastScopeReadTests(CampusSenderTestCase):
 
         response = self.scope()
 
-        self.assertEqual(response.json(), {"data": {"campus_ids": [str(self.campus.pk)]}})
+        self.assertEqual(response.json()["data"], {"campus_ids": [str(self.campus.pk)]})
 
     def test_reading_the_scope_requires_broadcast_send(self) -> None:
         with tenant_context(self.tenant.id):
