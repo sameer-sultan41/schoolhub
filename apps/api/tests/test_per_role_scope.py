@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import datetime
 import uuid
+from decimal import Decimal
 from unittest import mock
 
 from django.test import TestCase
@@ -24,7 +25,11 @@ from rest_framework.test import APITestCase
 from apps.attendance import services as attendance_services
 from apps.attendance.tasks import export_attendance_report_task
 from apps.attendance.tests.test_approvals_api import LOCKED_DATE, ApprovalsTestCase
+from apps.attendance.tests.test_staff_register_api import StaffRegisterTestCase
 from apps.attendance.views import AttendanceCorrectionViewSet
+from apps.communication.models import ThreadType
+from apps.communication.threads.tests.base import ThreadAPITestCase
+from apps.examinations import services as exam_services
 from apps.examinations.tasks import export_exam_report_task
 from apps.examinations.tests.test_reports import ReportDataTestCase as ExamReportTestCase
 from apps.fees_finance.tasks import export_finance_report_task
@@ -37,12 +42,17 @@ from apps.school_organization.tests.factories import (
     authenticate,
     grant,
 )
+from apps.staff_management.tests.base import StaffManagementAPITestCase
+from apps.staff_management.tests.factories import StaffFactory
 from apps.student_management.models import Student
 from apps.student_management.tests.factories import (
     StudentEnrollmentFactory,
     StudentFactory,
     enable_feature,
 )
+from apps.timetable.substitutions.tests.test_cover import CoverTestCase
+from apps.timetable.tests.base import TimetableAPITestCase
+from apps.timetable.tests.factories import MONDAY
 from core.exports import tabular
 from core.exports.scope import MISSING_SCOPE_PERMISSION
 from core.jobs.models import BackgroundJob, JobStatus
@@ -60,6 +70,7 @@ ATTENDANCE_VIEW = "attendance.student-attendance.view"
 CORRECTION_CREATE = "attendance.correction.create"
 REPORT_VIEW = "attendance.report.view"
 REPORT_EXPORT = "attendance.report.export"
+STAFF_MARK = "attendance.staff-attendance.mark"
 
 CORRECTIONS = "/api/v1/attendance-corrections"
 ATTENDANCE_REPORTS = "/api/v1/reports/attendance-summary"
@@ -71,6 +82,25 @@ def ids(response) -> set[str]:
 
 def student_ids(rows) -> set[str]:
     return {str(row["student_id"]) for row in rows}
+
+
+def capture_rendered_rows(run) -> list[dict]:
+    """Call `run()` (an export task) and return the rows it handed the renderer."""
+    written: list[dict] = []
+    real_render = tabular.render
+
+    def capture(rows, **kwargs):
+        written.extend(rows)
+        return real_render(rows, **kwargs)
+
+    with mock.patch.object(tabular, "render", side_effect=capture):
+        run()
+    return written
+
+
+def job_payload(tenant, response) -> dict:
+    with tenant_context(tenant.id):
+        return BackgroundJob.objects.get(pk=response.json()["data"]["job_id"]).payload
 
 
 class StudentScopeTests(APITestCase):
@@ -148,17 +178,11 @@ class AttendanceScopeTests(ApprovalsTestCase):
 
     def run_export(self, job_id: str) -> tuple[BackgroundJob, list[dict]]:
         """Run the export task, returning the finished job and the rows it wrote."""
-        written: list[dict] = []
-        real_render = tabular.render
-
-        def capture(rows, **kwargs):
-            written.extend(rows)
-            return real_render(rows, **kwargs)
-
-        with mock.patch.object(tabular, "render", side_effect=capture):
-            export_attendance_report_task(
+        written = capture_rendered_rows(
+            lambda: export_attendance_report_task(
                 tenant_id=str(self.tenant.pk), job_id=job_id, actor_id=str(self.reader.pk)
             )
+        )
         with tenant_context(self.tenant.id):
             return BackgroundJob.objects.get(pk=job_id), written
 
@@ -256,8 +280,83 @@ class FinanceReportScopeTests(FinanceReportTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
         self.assertEqual(student_ids(response.json()["data"]), {str(self.student.pk)})
 
+    def test_campus_scoped_ledger_reports_stay_empty_despite_an_unrelated_all_role(self) -> None:
+        """`_ledger_report_queryset` refuses a campus scope on the campus-less ledger.
+        It must read that scope from the report key's roles: read key-blind, the
+        unrelated `all` role let the campus caller through to the whole tenant's P&L,
+        inline and in the export file."""
+        self._pay(self._invoice(due=datetime.date(2026, 9, 10)), Decimal("1000.00"))
+        url = "/api/v1/reports/finance-summary?kind={}&date_from=2026-01-01&date_to=2027-01-01"
+        # The control: the fixture's tenant-wide admin does see postings.
+        self.assertNotEqual(self.client.get(url.format("income-vs-expense")).json()["data"], [])
+        reader = UserFactory(tenant=self.tenant)
+        grant(
+            reader,
+            "fees.report.view",
+            "fees.report.export",
+            scope=RecordScope.CAMPUS,
+            scope_ref=self.campus.pk,
+        )
+        grant(reader, UNRELATED, scope=RecordScope.ALL)
+        authenticate(self.client, reader)
+
+        for kind in ("income-vs-expense", "trial-balance"):
+            with self.subTest(kind=kind):
+                inline = self.client.get(url.format(kind))
+                self.assertEqual(inline.status_code, status.HTTP_200_OK, inline.json())
+                self.assertEqual(inline.json()["data"], [])
+
+                queued = self.client.post(
+                    "/api/v1/reports/finance-summary",
+                    {"kind": kind, "date_from": "2026-01-01", "date_to": "2027-01-01"},
+                    format="json",
+                )
+                self.assertEqual(queued.status_code, status.HTTP_202_ACCEPTED, queued.json())
+                job_id = queued.json()["data"]["job_id"]
+                written = capture_rendered_rows(
+                    lambda job_id=job_id: export_finance_report_task(
+                        tenant_id=str(self.tenant.pk), job_id=job_id, actor_id=str(reader.pk)
+                    )
+                )
+                with tenant_context(self.tenant.id):
+                    job = BackgroundJob.objects.get(pk=job_id)
+                self.assertEqual(job.status, JobStatus.SUCCEEDED, job.error)
+                self.assertEqual(written, [])
+
+    def test_the_export_post_stores_its_key(self) -> None:
+        response = self.client.post(
+            "/api/v1/reports/finance-summary",
+            {"kind": "collection", "date_from": "2026-01-01", "date_to": "2027-01-01"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.json())
+        self.assertEqual(
+            job_payload(self.tenant, response)["scope_permission"], ["fees.report.export"]
+        )
+
 
 class ExamReportScopeTests(ExamReportTestCase):
+    def test_each_enqueuer_stores_its_own_key(self) -> None:
+        """A GET over the ceiling queues under the view key, a POST under the export key."""
+        url = f"/api/v1/reports/exam-summary?kind=result-register&exam_id={self.exam.pk}"
+        with mock.patch.object(exam_services, "SYNCHRONOUS_REPORT_ROW_LIMIT", 0):
+            overflow = self.client.get(url)
+        posted = self.client.post(
+            "/api/v1/reports/exam-summary",
+            {"kind": "result-register", "exam_id": str(self.exam.pk)},
+            format="json",
+        )
+
+        self.assertEqual(overflow.status_code, status.HTTP_202_ACCEPTED, overflow.json())
+        self.assertEqual(posted.status_code, status.HTTP_202_ACCEPTED, posted.json())
+        self.assertEqual(
+            job_payload(self.tenant, overflow)["scope_permission"], ["exams.result.view"]
+        )
+        self.assertEqual(
+            job_payload(self.tenant, posted)["scope_permission"], ["exams.result.export"]
+        )
+
     def test_unrelated_all_role_does_not_widen_exam_report(self) -> None:
         with tenant_context(self.tenant.id):
             campus_b = CampusFactory(tenant=self.tenant)
@@ -341,3 +440,129 @@ class RouteScopeMapTests(TestCase):
 
         self.assertEqual(list(scopes), [RecordScope.CAMPUS])
         self.assertCountEqual(scopes[RecordScope.CAMPUS], [campus_a, campus_b])
+
+
+# --- writes that resolve a target: the target's view key, then the action's ------
+
+
+class NestedStaffScopeTests(StaffManagementAPITestCase):
+    def test_a_staff_parent_needs_the_staff_view_scope(self) -> None:
+        """`get_staff`: the qualification key tenant-wide does not reach a staff member
+        the caller may read on campus A only."""
+        with tenant_context(self.tenant.id):
+            campus_b = CampusFactory(tenant=self.tenant)
+            staff_a = StaffFactory(tenant=self.tenant, campus=self.campus)
+            staff_b = StaffFactory(tenant=self.tenant, campus=campus_b)
+        grant(self.user, "staff.qualification.view", scope=RecordScope.ALL)
+        grant(self.user, "staff.staff.view", scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+
+        foreign = self.client.get(f"/api/v1/staff/{staff_b.pk}/qualifications")
+        own = self.client.get(f"/api/v1/staff/{staff_a.pk}/qualifications")
+
+        self.assertEqual(foreign.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(own.status_code, status.HTTP_200_OK, own.json())
+
+
+class ThreadStudentScopeTests(ThreadAPITestCase):
+    def test_a_staff_thread_needs_the_student_view_scope(self) -> None:
+        """`_scoped_student`: the thread key tenant-wide does not reach a student the
+        caller may only read on another campus."""
+        with tenant_context(self.tenant.id):
+            elsewhere = CampusFactory(tenant=self.tenant)
+        staff = UserFactory(tenant=self.tenant)
+        grant(staff, "communication.thread.create", scope=RecordScope.ALL)
+        grant(staff, STUDENT_VIEW, scope=RecordScope.CAMPUS, scope_ref=elsewhere.pk)
+        authenticate(self.client, staff)
+        body = {
+            "subject": "About homework",
+            "thread_type": ThreadType.GUARDIAN_SCHOOL,
+            "student_id": str(self.student.pk),
+            "body": "Could you share this week's homework?",
+        }
+
+        refused = self.client.post("/api/v1/message-threads", body, format="json")
+        grant(staff, STUDENT_VIEW, scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+        allowed = self.client.post("/api/v1/message-threads", body, format="json")
+
+        self.assertEqual(refused.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(allowed.status_code, status.HTTP_201_CREATED, allowed.json())
+
+
+class TimetableSectionScopeTests(TimetableAPITestCase):
+    def test_validate_and_publish_need_the_section_view_scope(self) -> None:
+        """`_scoped_section`: both action keys tenant-wide do not reach a section the
+        caller may only read on another campus."""
+        with tenant_context(self.tenant.id):
+            elsewhere = CampusFactory(tenant=self.tenant)
+        planner = UserFactory(tenant=self.tenant)
+        grant(planner, "timetable.slot.view", "timetable.timetable.publish")
+        grant(planner, "school.section.view", scope=RecordScope.CAMPUS, scope_ref=elsewhere.pk)
+        authenticate(self.client, planner)
+        base = f"/api/v1/timetables/{self.section.pk}"
+
+        validate = self.client.post(f"{base}:validate", {}, format="json")
+        publish = self.client.post(f"{base}:publish", {}, format="json")
+        grant(planner, "school.section.view", scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+        control = self.client.post(f"{base}:validate", {}, format="json")
+
+        self.assertEqual(validate.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(publish.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(control.status_code, status.HTTP_200_OK, control.json())
+
+
+class CandidatesScopeTests(CoverTestCase):
+    """`candidates`: the slot under the substitution key, the staff under the staff key."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        with tenant_context(self.tenant.id):
+            self.elsewhere = CampusFactory(tenant=self.tenant)
+        self.planner = UserFactory(tenant=self.tenant)
+        authenticate(self.client, self.planner)
+
+    def candidates(self):
+        return self.client.get(
+            "/api/v1/teacher-substitutions/candidates",
+            {"timetable_slot_id": str(self.slot.pk), "date": MONDAY.isoformat()},
+        )
+
+    def on(self, campus, *keys: str) -> None:
+        grant(self.planner, *keys, scope=RecordScope.CAMPUS, scope_ref=campus.pk)
+
+    def test_a_slot_outside_the_substitution_scope_is_a_404(self) -> None:
+        self.on(self.elsewhere, "timetable.substitution.create")
+        grant(self.planner, "staff.staff.view", scope=RecordScope.ALL)
+
+        self.assertEqual(self.candidates().status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_only_staff_the_caller_may_read_are_offered(self) -> None:
+        """The substitution key tenant-wide does not offer staff the caller may only
+        read on another campus; reading this campus's staff does."""
+        grant(self.planner, "timetable.substitution.create", scope=RecordScope.ALL)
+        self.on(self.elsewhere, "staff.staff.view")
+
+        unreadable = self.candidates()
+        self.on(self.campus, "staff.staff.view")
+        readable = self.candidates()
+
+        self.assertEqual(unreadable.status_code, status.HTTP_200_OK, unreadable.json())
+        self.assertEqual(unreadable.json()["data"], [])
+        names = [row["staff_name"] for row in readable.json()["data"]]
+        self.assertIn(self.cover.full_name, names)
+
+
+class StaffRegisterScopeTests(StaffRegisterTestCase):
+    def test_the_register_reads_the_marking_keys_scope(self) -> None:
+        """The register route declares the marking key, so a tenant-wide staff view
+        role does not widen a campus-scoped marker's register."""
+        with tenant_context(self.tenant.id):
+            elsewhere = StaffFactory(tenant=self.tenant, campus=CampusFactory(tenant=self.tenant))
+        clerk = UserFactory(tenant=self.tenant)
+        grant(clerk, STAFF_MARK, scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+        grant(clerk, "attendance.staff-attendance.view", scope=RecordScope.ALL)
+        authenticate(self.client, clerk)
+
+        listed = {row["staff_id"] for row in self.rows()}
+
+        self.assertIn(str(self.zara.pk), listed)
+        self.assertNotIn(str(elsewhere.pk), listed)
