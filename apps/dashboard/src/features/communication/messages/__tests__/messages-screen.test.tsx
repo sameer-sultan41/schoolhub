@@ -81,6 +81,16 @@ function reloadThreads(queryClient: QueryClient) {
   );
 }
 
+/** TanStack Query hands results to React on a `setTimeout(0)`: lets the ones queued so far land. */
+function flushQueryNotifications() {
+  return act(
+    () =>
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, 0);
+      }),
+  );
+}
+
 describe("MessagesScreen", () => {
   it("selects thread from URL and marks it read once", async () => {
     stubInbox([VIEW, CREATE_MESSAGE]);
@@ -141,15 +151,18 @@ describe("MessagesScreen", () => {
       expect(markRead).toHaveBeenCalledTimes(1);
     });
 
-    // The thread reloads while the call is still in flight, and then the call fails.
+    // The thread reloads, and the view shows the new load, while the call is still in flight...
+    const reloaded = "Fee query (reloaded)";
+    fetchThread.mockResolvedValue(threadRecord({ unread_count: 2, subject: reloaded }));
     await reloadThreads(queryClient);
-    expect(fetchThread).toHaveBeenCalledTimes(2);
+    expect(await screen.findByRole("heading", { name: reloaded })).toBeInTheDocument();
+    // ...then the call fails, and the mutation's settled state reaches the view.
     await act(async () => {
       failCall(TIMED_OUT);
       await Promise.resolve();
     });
-    await messagesList();
-    // That load is the one the failure happened on: no retry until the next.
+    await flushQueryNotifications();
+    // The load on screen is the one the failure happened on: no retry until the next.
     expect(markRead).toHaveBeenCalledTimes(1);
 
     await reloadThreads(queryClient);
