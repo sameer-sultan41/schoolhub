@@ -176,6 +176,21 @@ class PostMessageTests(MessageTestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         self.assertEqual(self.reply_recipients(thread), [str(self.colleague.pk)])
 
+    def test_a_guardian_whose_only_role_was_removed_is_notified_of_nothing(self) -> None:
+        """Notifications are an allowlist.
+
+        With no live staff role and no live restricted one, no preview reaches them.
+        """
+        self.remove_roles(self.guardian_user)
+        thread = self.guardian_thread(self.user, self.colleague)
+
+        for is_internal_note in (True, False):
+            with self.subTest(is_internal_note=is_internal_note):
+                response = self.post(thread, is_internal_note=is_internal_note)
+                self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+
+        self.assertEqual(self.reply_recipients(thread), [str(self.colleague.pk)] * 2)
+
     def test_guardian_cannot_post_internal_note(self) -> None:
         thread = self.guardian_thread(self.user)
         authenticate(self.client, self.guardian_user)

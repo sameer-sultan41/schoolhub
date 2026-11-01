@@ -17,6 +17,7 @@ from django.utils.text import Truncator
 from apps.communication import uploads
 from apps.communication.models import Message, MessageThread, ThreadStatus
 from apps.communication.notifications import THREAD_REPLY
+from apps.communication.threads.routing import thread_staff_users
 from apps.communication.threads.services.access import (
     assert_thread_participant,
     owns_thread_student,
@@ -104,28 +105,32 @@ def _assert_attachments_usable(attachments: list | None) -> None:
 def _notify_participants(*, thread: MessageThread, message: Message, sender) -> None:
     """One `THREAD_REPLY` fan-out to everyone who can read the new message.
 
-    Guardians and students are left out of an internal note, which they never
-    see, and out of a thread about a child they no longer own, which they can no
-    longer open — a notification carries the preview, so it must not reach
-    anyone the message list would refuse. The ownership loop is bounded by one
-    thread's restricted participants (a child's guardians), and reuses
-    `Student.filter_owned_by_user` so "owns" keeps one definition.
+    An allowlist, since a notification carries the preview and must not reach
+    anyone the message list would refuse:
+
+    - staff: participants in `thread_staff_users` (a live staff role and no live
+      restricted one), who see every message, internal notes included;
+    - guardians and students: participants holding a live restricted role who
+      still own the thread's child, and only for a message that is not an
+      internal note.
+
+    Anyone else, such as a participant whose only role was removed, is skipped.
+    The ownership loop is bounded by one thread's restricted participants (a
+    child's guardians), and reuses `Student.filter_owned_by_user` so "owns" keeps
+    one definition.
     """
     from core.rbac.models import User
 
     others = [uid for uid in thread.participant_user_ids if uid != str(sender.pk)]
-    restricted_users = list(
-        User.objects.filter(pk__in=others).filter(
+    staff = thread_staff_users(tenant_id=thread.tenant_id).filter(pk__in=others)
+    allowed = {str(pk) for pk in staff.values_list("pk", flat=True)}
+    if not message.is_internal_note:
+        restricted_users = User.objects.filter(pk__in=others).filter(
             pk__in=live_restricted_role_assignments().values("user_id")
         )
-    )
-    excluded = {
-        str(user.pk)
-        for user in restricted_users
-        if message.is_internal_note or not owns_thread_student(thread, user)
-    }
+        allowed |= {str(user.pk) for user in restricted_users if owns_thread_student(thread, user)}
     # The JSON column holds strings; `notify` keys addresses by `uuid.UUID`.
-    recipients = [Recipient(user_id=uuid.UUID(uid)) for uid in others if uid not in excluded]
+    recipients = [Recipient(user_id=uuid.UUID(uid)) for uid in others if uid in allowed]
     if not recipients:
         return
 

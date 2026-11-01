@@ -86,18 +86,26 @@ class ThreadAPITestCase(CommunicationAPITestCase):
             self.section.save(update_fields=["class_teacher_staff_id"])
         return teacher_user
 
-    def give_removed_guardian_role(self, user) -> None:
-        """A guardian role ``user`` once held and no longer does (its `user_role` soft-deleted).
+    def remove_roles(self, user, *roles) -> None:
+        """Soft-delete ``user``'s assignments of ``roles``, or of every role if none is named.
 
         Saved, not `.update()`d, so the rbac signals evict the user's cached keys and scopes.
         """
         with tenant_context(self.tenant.id):
+            assignments = UserRole.objects.filter(user=user)
+            if roles:
+                assignments = assignments.filter(role__in=roles)
+            for assignment in assignments:
+                assignment.deleted_at = timezone.now()
+                assignment.save(update_fields=["deleted_at", "updated_at"])
+
+    def give_removed_guardian_role(self, user) -> None:
+        """A guardian role ``user`` once held and no longer does (its `user_role` soft-deleted)."""
+        with tenant_context(self.tenant.id):
             role = grant(
                 user, *GUARDIAN_THREAD_KEYS, scope=RecordScope.OWN, is_restricted_principal=True
             )
-            assignment = UserRole.objects.get(user=user, role=role)
-            assignment.deleted_at = timezone.now()
-            assignment.save(update_fields=["deleted_at", "updated_at"])
+        self.remove_roles(user, role)
 
     def make_staff_with_role(self, slug: str):
         """A staff user holding a role named ``slug`` — routing looks roles up by slug."""
