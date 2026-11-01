@@ -187,6 +187,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admit-cards/{id}:download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description A short-lived signed link to the admit card's PDF. */
+        post: operations["admit_cards_:download_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admit-cards/{id}:revoke": {
         parameters: {
             query?: never;
@@ -1178,6 +1195,23 @@ export interface paths {
          *     it beside the exam, and §13 lists "marks-entry status" as its own row.
          */
         get: operations["exams_marks_progress_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exams/{id}/schedule-conflicts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The exam's schedule clashes, hard findings first. */
+        get: operations["exams_schedule_conflicts_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6011,6 +6045,11 @@ export interface components {
             readonly exam_id: string;
             /** Format: uuid */
             readonly student_id: string;
+            readonly student_name: string;
+            readonly admission_number: string;
+            /** Format: uuid */
+            readonly section_id: string | null;
+            readonly section_name: string | null;
             readonly admit_card_no: string;
             /** Format: uuid */
             readonly file_id: string | null;
@@ -6022,6 +6061,17 @@ export interface components {
             readonly created_at: string;
             /** Format: date-time */
             readonly updated_at: string;
+        };
+        /**
+         * @description `:issue-admit-cards`' 202: the render job, and the cards this run added
+         *     beside the ones that already existed.
+         */
+        AdmitCardIssueAccepted: {
+            /** Format: uuid */
+            job_id: string;
+            status: string;
+            added: number;
+            existing: number;
         };
         /**
          * @description The body of `POST /admit-cards/{id}:revoke`.
@@ -6385,6 +6435,10 @@ export interface components {
         CancelInvoice: {
             reason: string;
         };
+        /** @description A short-lived signed link to a card's PDF. */
+        CardDownload: {
+            download_url: string;
+        };
         ChangePassword: {
             current_password: string;
             new_password: string;
@@ -6429,6 +6483,12 @@ export interface components {
          * @enum {string}
          */
         CommunicationAudienceTypeEnum: "all" | "staff" | "students" | "guardians" | "class" | "section" | "custom";
+        /**
+         * @description * `hard` - hard
+         *     * `soft` - soft
+         * @enum {string}
+         */
+        ConflictSeverityEnum: "hard" | "soft";
         /**
          * @description Body for `:approve` / `:reject` — an optional note, nothing else.
          *
@@ -6833,6 +6893,29 @@ export interface components {
             readonly updated_at: string;
         };
         /**
+         * @description One clash in an exam's schedule (§5.2, §11).
+         *
+         *     `schedule_ids` names every sitting involved, so a client highlights each of
+         *     them. A hard finding blocks `:publish-schedule`; a soft one only warns.
+         */
+        ExamConflict: {
+            type: components["schemas"]["ExamConflictTypeEnum"];
+            severity: components["schemas"]["ConflictSeverityEnum"];
+            schedule_ids: string[];
+            message: string;
+        };
+        /**
+         * @description * `room_double_booked` - room_double_booked
+         *     * `invigilator_double_booked` - invigilator_double_booked
+         *     * `student_two_papers_at_once` - student_two_papers_at_once
+         *     * `outside_exam_window` - outside_exam_window
+         *     * `not_a_working_day` - not_a_working_day
+         *     * `room_over_capacity` - room_over_capacity
+         *     * `clashes_with_timetable` - clashes_with_timetable
+         * @enum {string}
+         */
+        ExamConflictTypeEnum: "room_double_booked" | "invigilator_double_booked" | "student_two_papers_at_once" | "outside_exam_window" | "not_a_working_day" | "room_over_capacity" | "clashes_with_timetable";
+        /**
          * @description The query for `GET /reports/exam-summary`, and the body of its export.
          *
          *     `exam_id` is required for every report except question-bank usage, which is
@@ -6869,9 +6952,15 @@ export interface components {
             /** Format: uuid */
             readonly id: string;
             /** Format: uuid */
+            readonly exam_id: string;
+            readonly exam_name: string;
+            /** Format: uuid */
             exam_subject_id: string;
+            readonly subject_name: string;
+            readonly class_name: string;
             /** Format: uuid */
             section_id: string;
+            readonly section_name: string;
             /** Format: date */
             exam_date: string;
             /** Format: time */
@@ -6880,8 +6969,10 @@ export interface components {
             end_time: string;
             /** Format: uuid */
             room_id?: string | null;
+            readonly room_name: string | null;
             /** Format: uuid */
             invigilator_staff_id?: string | null;
+            readonly invigilator_name: string | null;
             status?: components["schemas"]["ExamScheduleStatusEnum"];
             /** @description Printed on admit cards (§5.3). */
             instructions?: string | null;
@@ -6889,6 +6980,14 @@ export interface components {
             readonly created_at: string;
             /** Format: date-time */
             readonly updated_at: string;
+        };
+        /**
+         * @description `:publish-schedule`'s answer: the exam's new status, and the soft clashes
+         *     published over.
+         */
+        ExamSchedulePublish: {
+            status: components["schemas"]["ExamStatusEnum"];
+            conflicts: components["schemas"]["ExamConflict"][];
         };
         /**
          * @description * `scheduled` - Scheduled
@@ -8943,9 +9042,15 @@ export interface components {
             /** Format: uuid */
             readonly id?: string;
             /** Format: uuid */
+            readonly exam_id?: string;
+            readonly exam_name?: string;
+            /** Format: uuid */
             exam_subject_id?: string;
+            readonly subject_name?: string;
+            readonly class_name?: string;
             /** Format: uuid */
             section_id?: string;
+            readonly section_name?: string;
             /** Format: date */
             exam_date?: string;
             /** Format: time */
@@ -8954,8 +9059,10 @@ export interface components {
             end_time?: string;
             /** Format: uuid */
             room_id?: string | null;
+            readonly room_name?: string | null;
             /** Format: uuid */
             invigilator_staff_id?: string | null;
+            readonly invigilator_name?: string | null;
             status?: components["schemas"]["ExamScheduleStatusEnum"];
             /** @description Printed on admit cards (§5.3). */
             instructions?: string | null;
@@ -11278,16 +11385,10 @@ export interface components {
              *     * `hard` - hard
              *     * `soft` - soft
              */
-            severity: components["schemas"]["TimetableConflictSeverityEnum"];
+            severity: components["schemas"]["ConflictSeverityEnum"];
             slot_ids: string[];
             message: string;
         };
-        /**
-         * @description * `hard` - hard
-         *     * `soft` - soft
-         * @enum {string}
-         */
-        TimetableConflictSeverityEnum: "hard" | "soft";
         /**
          * @description `:publish`'s answer: drafts made live, live cells they end-dated, and the soft
          *     conflicts accepted along the way.
@@ -11758,6 +11859,7 @@ export interface operations {
                 page_size?: number;
                 /** @description A search term. */
                 search?: string;
+                section_id?: string;
                 /**
                  * @description * `generated` - Generated
                  *     * `issued` - Issued
@@ -11801,6 +11903,34 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AdmitCard"];
                 };
+            };
+        };
+    };
+    "admit_cards_:download_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CardDownload"];
+                };
+            };
+            /** @description Not this caller's card, not rendered yet, or revoked. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -13417,6 +13547,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description The sitting, plus `meta.conflicts`: the exam's whole clash list, each an `ExamConflict`, hard findings first. */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -13488,6 +13619,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description The sitting, plus `meta.conflicts`: the exam's whole clash list, each an `ExamConflict`, hard findings first. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -13839,6 +13971,27 @@ export interface operations {
             };
         };
     };
+    exams_schedule_conflicts_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamConflict"][];
+                };
+            };
+        };
+    };
     "exams_:approve_results_create": {
         parameters: {
             query?: never;
@@ -13890,12 +14043,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
             202: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AdmitCardIssueAccepted"];
+                };
             };
         };
     };
@@ -13961,30 +14115,7 @@ export interface operations {
     };
     "exams_:publish_schedule_create": {
         parameters: {
-            query?: {
-                /** @description The pagination cursor value. */
-                cursor?: string;
-                exam_date?: string;
-                exam_date__gte?: string;
-                exam_date__lte?: string;
-                exam_id?: string;
-                exam_subject_id?: string;
-                invigilator_staff_id?: string;
-                /** @description Which field to use when ordering the results. */
-                ordering?: string;
-                /** @description Number of results to return per page. */
-                page_size?: number;
-                room_id?: string;
-                /** @description A search term. */
-                search?: string;
-                section_id?: string;
-                /**
-                 * @description * `scheduled` - Scheduled
-                 *     * `completed` - Completed
-                 *     * `cancelled` - Cancelled
-                 */
-                status?: "cancelled" | "completed" | "scheduled";
-            };
+            query?: never;
             header?: never;
             path: {
                 id: string;
@@ -13998,8 +14129,22 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedExamScheduleList"];
+                    "application/json": components["schemas"]["ExamSchedulePublish"];
                 };
+            };
+            /** @description The exam is past `scheduled`. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A hard clash (the whole list in `error.meta.conflicts`, each an `ExamConflict`), or no sittings to publish. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

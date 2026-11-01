@@ -178,9 +178,16 @@ class ActionResponse:
         return Response(payload, status=status)
 
     @staticmethod
-    def accepted(job_id: str, message: str = "Queued.") -> Response:
-        """202 for long-running work; clients poll GET /api/v1/jobs/{id}."""
+    def accepted(job_id: str, message: str = "Queued.", data: dict | None = None) -> Response:
+        """202 for long-running work; clients poll GET /api/v1/jobs/{id}.
+
+        `data` adds typed fields beside `job_id` and `status`, for an action
+        whose synchronous half has numbers a client renders itself.
+        """
         return Response(
-            {"data": {"job_id": job_id, "status": "queued"}, "meta": {"message": message}},
+            {
+                "data": {"job_id": job_id, "status": "queued", **(data or {})},
+                "meta": {"message": message},
+            },
             status=202,
         )

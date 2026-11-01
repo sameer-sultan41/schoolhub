@@ -366,7 +366,16 @@ def publish_exam_schedule(*, exam: Exam, actor_id: uuid.UUID) -> dict:
     Moves the exam to `scheduled`, which is what makes admit cards issuable —
     §5.3 issues them per exam per section, and there is nothing to print before
     a sitting has a date, a time and a room.
+
+    Only a `draft` or `scheduled` exam publishes: from `marks_entry` on, moving
+    it back to `scheduled` would reopen a timetable students have already sat.
+    The exam is locked first, so a concurrent transition cannot slip between
+    this check and the save.
     """
+    locked = Exam.objects.alive().select_for_update().get(pk=exam.pk)
+    if locked.status not in (ExamStatus.DRAFT, ExamStatus.SCHEDULED):
+        raise Conflict("Only a draft or scheduled exam's schedule can be published.")
+
     findings = conflicts.detect_conflicts(exam=exam)
     hard = [finding for finding in findings if finding["severity"] == "hard"]
     if hard:

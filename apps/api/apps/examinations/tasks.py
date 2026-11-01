@@ -48,7 +48,8 @@ def render_admit_cards_task(self, *, tenant_id: str, job_id: str, actor_id: str)
     registrar prints a sheet of them at once, which is the opposite need.
 
     A **revoked** card is skipped. Rendering one would put a downloadable
-    document behind a card someone deliberately withdrew.
+    document behind a card someone deliberately withdrew — including one
+    revoked while the job was running, which the conditional save catches.
     """
     from apps.examinations import documents, uploads
     from apps.examinations.models import AdmitCard, AdmitCardStatus, Exam
@@ -100,22 +101,33 @@ def render_admit_cards_task(self, *, tenant_id: str, job_id: str, actor_id: str)
                         data=render_pdf(document),
                         actor_id=uuid.UUID(actor_id),
                     )
-                    card.file = file
-                    card.status = AdmitCardStatus.ISSUED
-                    card.issued_by = uuid.UUID(actor_id)
-                    card.issued_at = timezone.now()
-                    card.updated_by = uuid.UUID(actor_id)
-                    card.save(
-                        update_fields=[
-                            "file",
-                            "status",
-                            "issued_by",
-                            "issued_at",
-                            "updated_by",
-                            "updated_at",
-                        ]
+                    # Conditional, so a revoke made while this card rendered
+                    # wins: the job read the card before the revoke, and a
+                    # plain `save()` would write `issued` straight over it.
+                    now = timezone.now()
+                    saved = (
+                        AdmitCard.objects.alive()
+                        .filter(pk=card.pk)
+                        .exclude(status=AdmitCardStatus.REVOKED)
+                        .update(
+                            file=file,
+                            status=AdmitCardStatus.ISSUED,
+                            issued_by=uuid.UUID(actor_id),
+                            issued_at=now,
+                            updated_by=uuid.UUID(actor_id),
+                            updated_at=now,
+                        )
                     )
-                rendered += 1
+                    if not saved:
+                        # Revoked mid-render: retire the document nothing points
+                        # at, rather than leave a live orphan behind.
+                        file.deleted_at = now
+                        file.save(update_fields=["deleted_at", "updated_at"])
+                        logger.info(
+                            "admit card %s was revoked mid-render; skipped", card.admit_card_no
+                        )
+                if saved:
+                    rendered += 1
             except Exception as exc:
                 # One card failing must not cost the other three hundred theirs.
                 # The card keeps `generated` with no file, so a re-run picks it
