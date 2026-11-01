@@ -9,7 +9,10 @@ import {
   CLASS_ID,
   fetchCampuses,
   fetchClasses,
+  fetchJob,
   fetchSections,
+  jobRecord,
+  JOB_ID,
   keyOfCall,
   preview,
   previewRecord,
@@ -94,5 +97,26 @@ describe("BroadcastScreen", () => {
     });
 
     expect(keyOfCall(1)).toBe(keyOfCall(0));
+  });
+
+  it("enables Back again on a new broadcast after a send was queued", async () => {
+    send.mockResolvedValueOnce({ job_id: JOB_ID, status: "queued" });
+    fetchJob.mockResolvedValue(jobRecord());
+    const user = userEvent.setup();
+    renderWithProviders(<BroadcastScreen />);
+
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.type(await screen.findByLabelText("Message"), "Closed");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.type(await screen.findByLabelText(/Type 3 to confirm/), "3");
+    await user.click(screen.getByRole("button", { name: "Send emergency broadcast" }));
+    await user.click(await screen.findByRole("button", { name: "Send another" }));
+
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByRole("button", { name: "Back" })).toBeEnabled();
+    await user.type(screen.getByLabelText("Message"), "Open again");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await screen.findByText("3 recipients");
+    expect(screen.getByRole("button", { name: "Back" })).toBeEnabled();
   });
 });

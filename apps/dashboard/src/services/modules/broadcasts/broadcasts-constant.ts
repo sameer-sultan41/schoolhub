@@ -16,9 +16,6 @@ export const BROADCAST_AUDIENCE_TYPES = [
   "section",
 ] as const satisfies readonly BroadcastAudienceType[];
 
-/** An audience the screen offers: `BroadcastAudienceType` without `custom`. */
-export type BroadcastScreenAudience = (typeof BROADCAST_AUDIENCE_TYPES)[number];
-
 /** The query-key module a broadcast preview is cached under. */
 export const BROADCASTS_QUERY_MODULE = "broadcasts";
 

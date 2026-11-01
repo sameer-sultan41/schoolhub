@@ -91,6 +91,10 @@ export function ConfirmStep({
   const isSending = send.isPending;
   useEffect(() => {
     onSendingChange(isSending);
+    // Unmounting (a queued send moves to Status) must not leave the screen thinking it sends.
+    return () => {
+      onSendingChange(false);
+    };
   }, [isSending, onSendingChange]);
 
   if (preview.isPending) {
