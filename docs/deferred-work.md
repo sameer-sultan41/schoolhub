@@ -21,13 +21,21 @@ either this file or `project-status.md`.
     (`assert_batch_in_scope`, PR B), so the notification asks for something they cannot do.
     Narrowing it means checking each holder's scope for that key (`scopes_for`) against the
     batch's students' campuses before sending.
-  - **The marks import is not record-scoped.** PR B scoped `POST /marks:bulk-entry` by
-    `exams.marks.create` over each student (plan, ruling 13). `POST /marks-imports` still
-    matches admission numbers against the whole class roll
-    (`import_candidates_by_admission_number`, `apps/examinations/services.py`): the job carries
-    no user, so a campus-scoped holder of `exams.marks.import` (`exam_staff` only) can import
-    marks for another campus's students. The fix is the export one: store the request's key in
-    the job beside `requested_by`, and scope the roll by it with `STUDENT_SCOPE`.
+  - **Admit-card issue is not record-scoped.** `issue_admit_cards`
+    (`apps/examinations/services.py`) issues a card to every student on the exam's roll, with
+    no actor scope, so a campus-scoped holder of `exams.admit-card.issue` (`exam_staff`) issues
+    cards for every campus. Marks entry and import are now scoped by their keys (plan, rulings
+    13 and 14); issuing cards needs the same narrowing of `admit_card_candidates` by
+    `scope_queryset(..., permission=<the route's key>, **STUDENT_SCOPE)`, or a ruling that
+    issuing for the whole exam is an exam-wide act.
+  - **`own` beside `campus` or `assigned` on `exams.marks.create` reaches the holder's own
+    children.** The grid's student narrowing unions every scope type the key is held at, and
+    `own` over `STUDENT_SCOPE` is `Student.filter_owned_by_user`: the user themself or their
+    linked children. No default role grants the key at `own`, and `own` alone is refused by
+    `assert_marker_may_enter`, but a custom non-restricted role granting it at `own` with
+    `campus` or `assigned` would let a staff member who is also a guardian enter their own
+    child's marks. A conflict of interest to refuse before role management allows custom
+    scopes, by excluding `own` from marks entry's narrowing or refusing the grant.
   - **A staff member who is also a guardian still gets a 404 on their child's leave on
     another campus.** ADR-0031 decision 7 reaches the child only through the `own`-scoped
     guardian role, and that role is a restricted principal: holding it shuts the user out of
