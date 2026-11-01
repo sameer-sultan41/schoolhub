@@ -163,7 +163,7 @@ class PeriodEndpointTests(TimetableAPITestCase):
         self.assertEqual(response.json()["data"]["name"], "Renamed")
 
     def test_deleting_a_period_is_a_soft_delete(self) -> None:
-        self.allow("timetable.period.delete")
+        self.allow("timetable.period.delete", "timetable.timetable.view")
         with tenant_context(self.tenant.id):
             spare = PeriodFactory(tenant=self.tenant, sequence=93)
 
@@ -435,7 +435,7 @@ class PeriodDeleteGuardTests(TimetableAPITestCase):
 
     def setUp(self) -> None:
         super().setUp()
-        self.allow("timetable.period.delete")
+        self.allow("timetable.period.delete", "timetable.timetable.view")
 
     def assert_still_alive(self, period) -> None:
         with tenant_context(self.tenant.id):

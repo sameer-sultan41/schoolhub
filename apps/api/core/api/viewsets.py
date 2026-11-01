@@ -20,6 +20,7 @@ from core.rbac.permissions import (
     HasPermissionKey,
     RbacUser,
     ScopeKwargs,
+    declared_keys,
     holds_key_for,
     required_declaration,
     scope_queryset,
@@ -57,6 +58,12 @@ class TenantScopedViewSetMixin:
     whatever this names, so a table without that column raises ``FieldError``
     for every campus-scoped user the moment they hit the endpoint — override it
     per child viewset rather than leaving the default.
+
+    A route whose declaration is not the read key (an update, a delete, a colon
+    action) is scoped by the read key and then by its own, so its target must be
+    one the caller may read as well as act on. The read key is
+    ``required_permission`` unless ``scope_read_permission`` names another, and
+    ``scope_read_exempt_actions`` lists any action with no read requirement.
     """
 
     permission_classes = [IsAuthenticated, RequiresModuleFeature, HasPermissionKey]
@@ -70,6 +77,11 @@ class TenantScopedViewSetMixin:
     # `IN (...)` drops NULL, so without this a campus-scoped principal silently
     # loses the tenant-wide rows — no error, just a shorter list.
     scope_campus_allows_null: bool = False
+    # The key a row must be readable under before any other route acts on it (ADR-0031
+    # decision 3). None means `required_permission`; set it where that is not the read key.
+    scope_read_permission: str | AnyOf | None = None
+    # Actions whose target need not be readable. Each use says why.
+    scope_read_exempt_actions: frozenset[str] = frozenset()
     audit_resource: str | None = None
 
     def initial(self, request, *args, **kwargs):
@@ -129,9 +141,27 @@ class TenantScopedViewSetMixin:
         if declared is None:
             # `HasPermissionKey` refuses such a route; never read one under no key.
             return queryset.none()
-        return scope_queryset(
-            queryset, self.request.user, permission=declared, **self.scope_kwargs()
-        )
+        scope = self.scope_kwargs()
+        read = self.scope_read_declaration()
+        if read is not None and set(declared_keys(read)) != set(declared_keys(declared)):
+            # A route acting on a row (PATCH, DELETE, a colon action) finds it only if
+            # the caller may read it too, so a wide action role cannot reach, or echo
+            # back, a row their view role hides. ADR-0031 decision 3.
+            queryset = scope_queryset(queryset, self.request.user, permission=read, **scope)
+        return scope_queryset(queryset, self.request.user, permission=declared, **scope)
+
+    def scope_read_declaration(self) -> str | AnyOf | None:
+        """The read key a row this route acts on must also be reachable under.
+
+        `scope_read_permission`, else `required_permission`; None for an action in
+        `scope_read_exempt_actions`, which is then scoped by its own key alone.
+        """
+        if getattr(self, "action", None) in self.scope_read_exempt_actions:
+            return None
+        if self.scope_read_permission is not None:
+            return self.scope_read_permission
+        fallback: str | AnyOf | None = getattr(self, "required_permission", None)
+        return fallback
 
     @classmethod
     def scope_kwargs(cls) -> ScopeKwargs:

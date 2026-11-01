@@ -137,7 +137,12 @@ class CancelTests(CoverTestCase):
         with tenant_context(self.tenant.id):
             elsewhere = CampusFactory(tenant=self.tenant)
         grant(self.user, APPROVE, scope=RecordScope.CAMPUS, scope_ref=elsewhere.pk)
-        grant(self.user, "timetable.substitution.create", scope=RecordScope.ALL)
+        grant(
+            self.user,
+            "timetable.timetable.view",
+            "timetable.substitution.create",
+            scope=RecordScope.ALL,
+        )
         cover = self.open_cover(on=next_monday(), created_by=UserFactory(tenant=self.tenant).pk)
 
         self.assertEqual(self.cancel(cover).status_code, status.HTTP_403_FORBIDDEN)
@@ -145,7 +150,12 @@ class CancelTests(CoverTestCase):
 
     def test_an_approver_for_this_campus_cancels_someone_elses_proposal(self) -> None:
         grant(self.user, APPROVE, scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
-        grant(self.user, "timetable.substitution.create", scope=RecordScope.ALL)
+        grant(
+            self.user,
+            "timetable.timetable.view",
+            "timetable.substitution.create",
+            scope=RecordScope.ALL,
+        )
         cover = self.open_cover(on=next_monday(), created_by=UserFactory(tenant=self.tenant).pk)
 
         response = self.cancel(cover)

@@ -387,7 +387,7 @@ class StudentDocumentTests(StudentManagementAPITestCase):
         self.assertEqual(verify_response.json()["data"]["verified_by"], str(self.user.pk))
 
     def test_verifying_twice_is_a_conflict(self) -> None:
-        self.allow("students.document.create", "students.document.verify")
+        self.allow("students.document.create", "students.document.view", "students.document.verify")
         file = self._ready_file()
         create_response = self.client.post(
             f"/api/v1/students/{self.student.pk}/documents",

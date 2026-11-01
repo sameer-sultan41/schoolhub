@@ -274,6 +274,9 @@ class PrivilegeKeyScopeTests(APITestCase):
         enable_feature(self.tenant, "module.students")
         self.user = UserFactory(tenant=self.tenant)
         authenticate(self.client, self.user)
+        # A row must be readable before an action reaches it (ADR-0031 decision 3);
+        # these tests are about the privilege key alone.
+        grant(self.user, VIEW_KEY, scope=RecordScope.ALL)
         with tenant_context(self.tenant.id):
             self.campus_a = CampusFactory(tenant=self.tenant)
             self.campus_b = CampusFactory(tenant=self.tenant)

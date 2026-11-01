@@ -204,7 +204,7 @@ class CurriculumEndpointTests(AcademicsAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     def test_term_plans_must_reference_this_sessions_terms(self) -> None:
-        self.allow("academics.curriculum.update")
+        self.allow("academics.curriculum.view", "academics.curriculum.update")
         with tenant_context(self.tenant.id):
             stray_term = self.next_session.terms.create(
                 tenant=self.tenant,
@@ -229,7 +229,7 @@ class CurriculumEndpointTests(AcademicsAPITestCase):
 
     def test_a_patch_on_a_closed_session_is_refused(self) -> None:
         """§11 session lock — previously only create and clone were guarded."""
-        self.allow("academics.curriculum.update")
+        self.allow("academics.curriculum.view", "academics.curriculum.update")
         self._closed()
         response = self.client.patch(
             f"/api/v1/class-subjects/{self.curriculum.pk}", {"weekly_periods": 6}, format="json"
@@ -237,13 +237,13 @@ class CurriculumEndpointTests(AcademicsAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     def test_a_delete_on_a_closed_session_is_refused(self) -> None:
-        self.allow("academics.curriculum.delete")
+        self.allow("academics.curriculum.view", "academics.curriculum.delete")
         self._closed()
         response = self.client.delete(f"/api/v1/class-subjects/{self.curriculum.pk}")
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     def test_a_patch_may_not_move_a_row_into_a_closed_session(self) -> None:
-        self.allow("academics.curriculum.update")
+        self.allow("academics.curriculum.view", "academics.curriculum.update")
         with tenant_context(self.tenant.id):
             self.next_session.status = SessionStatus.CLOSED
             self.next_session.save(update_fields=["status"])
@@ -255,7 +255,7 @@ class CurriculumEndpointTests(AcademicsAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     def test_a_patch_to_an_inactive_subject_is_refused(self) -> None:
-        self.allow("academics.curriculum.update")
+        self.allow("academics.curriculum.view", "academics.curriculum.update")
         with tenant_context(self.tenant.id):
             inactive = SubjectFactory(tenant=self.tenant, is_active=False)
         response = self.client.patch(
@@ -270,7 +270,7 @@ class CurriculumEndpointTests(AcademicsAPITestCase):
         )
 
     def test_a_patch_onto_an_existing_mapping_is_a_conflict(self) -> None:
-        self.allow("academics.curriculum.update")
+        self.allow("academics.curriculum.view", "academics.curriculum.update")
         with tenant_context(self.tenant.id):
             other = SubjectFactory(tenant=self.tenant)
             twin = ClassSubjectFactory(
@@ -286,7 +286,7 @@ class CurriculumEndpointTests(AcademicsAPITestCase):
 
     def test_a_patch_that_changes_nothing_identifying_skips_the_identity_checks(self) -> None:
         """An inactive class must not block editing the weekly target of an existing row."""
-        self.allow("academics.curriculum.update")
+        self.allow("academics.curriculum.view", "academics.curriculum.update")
         with tenant_context(self.tenant.id):
             self.school_class.is_active = False
             self.school_class.save(update_fields=["is_active"])
@@ -305,7 +305,11 @@ class CurriculumEndpointTests(AcademicsAPITestCase):
 
     def test_create_and_patch_responses_carry_names(self) -> None:
         """Those instances never pass through get_queryset's annotations."""
-        self.allow("academics.curriculum.create", "academics.curriculum.update")
+        self.allow(
+            "academics.curriculum.create",
+            "academics.curriculum.update",
+            "academics.curriculum.view",
+        )
         with tenant_context(self.tenant.id):
             other = SubjectFactory(tenant=self.tenant)
         created = self.client.post(
@@ -327,7 +331,7 @@ class CurriculumEndpointTests(AcademicsAPITestCase):
 
     def test_a_patch_response_keeps_a_null_campus_name(self) -> None:
         """A partial update must not drop `campus_name` for a row with no campus."""
-        self.allow("academics.curriculum.update")
+        self.allow("academics.curriculum.view", "academics.curriculum.update")
         patched = self.client.patch(
             f"/api/v1/class-subjects/{self.curriculum.pk}", {"weekly_periods": 3}, format="json"
         ).json()["data"]
@@ -368,7 +372,7 @@ class CurriculumElectiveGroupTests(AcademicsAPITestCase):
             )
 
     def test_a_patch_may_not_take_the_last_row_out_of_a_group(self) -> None:
-        self.allow("academics.curriculum.update")
+        self.allow("academics.curriculum.view", "academics.curriculum.update")
         sole = self._elective("Languages")
 
         response = self.client.patch(
@@ -385,7 +389,7 @@ class CurriculumElectiveGroupTests(AcademicsAPITestCase):
         self.assertEqual(sole.elective_group, "Languages", "the refused PATCH must not have saved")
 
     def test_a_patch_that_leaves_the_group_populated_is_allowed(self) -> None:
-        self.allow("academics.curriculum.update")
+        self.allow("academics.curriculum.view", "academics.curriculum.update")
         moving = self._elective("Languages")
         self._elective("Languages")
 
@@ -400,7 +404,7 @@ class CurriculumElectiveGroupTests(AcademicsAPITestCase):
 
     def test_a_patch_that_leaves_the_group_alone_is_untouched_by_the_rule(self) -> None:
         """A group of one is a group being built up — editing it is not removal."""
-        self.allow("academics.curriculum.update")
+        self.allow("academics.curriculum.view", "academics.curriculum.update")
         sole = self._elective("Languages")
 
         response = self.client.patch(
@@ -415,7 +419,7 @@ class CurriculumElectiveGroupTests(AcademicsAPITestCase):
         A sibling keeps the group populated, so only the serializer's own rule can refuse this:
         without it the PATCH saves a blank group on an elective row.
         """
-        self.allow("academics.curriculum.update")
+        self.allow("academics.curriculum.view", "academics.curriculum.update")
         sole = self._elective("Languages")
         self._elective("Languages")
 
@@ -434,7 +438,7 @@ class CurriculumElectiveGroupTests(AcademicsAPITestCase):
 
     def test_a_patch_with_a_whitespace_only_group_on_an_elective_row_is_refused(self) -> None:
         # The field trims "   " to "" before `validate` runs; this pins the rule users see.
-        self.allow("academics.curriculum.update")
+        self.allow("academics.curriculum.view", "academics.curriculum.update")
         sole = self._elective("Languages")
         self._elective("Languages")
 
@@ -450,7 +454,7 @@ class CurriculumElectiveGroupTests(AcademicsAPITestCase):
 
     def test_a_patch_making_a_row_core_may_blank_its_group(self) -> None:
         """Negative control: the group is only required while the row is an elective."""
-        self.allow("academics.curriculum.update")
+        self.allow("academics.curriculum.view", "academics.curriculum.update")
         leaving = self._elective("Languages")
         self._elective("Languages")
 
@@ -464,7 +468,7 @@ class CurriculumElectiveGroupTests(AcademicsAPITestCase):
 
     def test_a_patch_that_does_not_name_the_group_keeps_an_elective_row_valid(self) -> None:
         """Negative control: with no `elective_group` key the stored group still counts."""
-        self.allow("academics.curriculum.update")
+        self.allow("academics.curriculum.view", "academics.curriculum.update")
         sole = self._elective("Languages")
 
         response = self.client.patch(
@@ -486,7 +490,7 @@ class CurriculumDeleteTests(AcademicsAPITestCase):
     """
 
     def test_a_row_with_live_dependents_is_refused_with_a_422(self) -> None:
-        self.allow("academics.curriculum.delete")
+        self.allow("academics.curriculum.view", "academics.curriculum.delete")
 
         with mock.patch.object(
             school_services, "_live_dependents", return_value=["timetable entries"]
@@ -502,7 +506,7 @@ class CurriculumDeleteTests(AcademicsAPITestCase):
             )
 
     def test_a_row_nothing_points_at_still_deletes(self) -> None:
-        self.allow("academics.curriculum.delete")
+        self.allow("academics.curriculum.view", "academics.curriculum.delete")
 
         response = self.client.delete(f"/api/v1/class-subjects/{self.curriculum.pk}")
 

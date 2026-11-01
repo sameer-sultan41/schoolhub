@@ -65,6 +65,8 @@ from core.tenancy.context import tenant_context
 UNRELATED = "exams.exam.view"
 
 STUDENT_VIEW = "students.student.view"
+STUDENT_UPDATE = "students.student.update"
+STUDENT_WITHDRAW = "students.student.withdraw"
 GUARDIAN_VIEW = "students.guardian.view"
 ATTENDANCE_VIEW = "attendance.student-attendance.view"
 CORRECTION_CREATE = "attendance.correction.create"
@@ -154,6 +156,70 @@ class StudentScopeTests(APITestCase):
 
         self.assertEqual(ids(listed), {str(self.student_a.pk), str(self.student_b.pk)})
         self.assertEqual(nested.status_code, status.HTTP_200_OK, nested.json())
+
+
+class DetailWriteScopeTests(APITestCase):
+    """A write's target must be readable as well as reachable by the action (ADR-0031
+    decision 3). The mixin used to resolve PATCH, DELETE and colon actions by the
+    action's key alone, so a tenant-wide action role reached, and echoed back, a
+    student the caller's view role hides."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.tenant = TenantFactory()
+        enable_feature(self.tenant, "module.students")
+        with tenant_context(self.tenant.id):
+            self.campus_a = CampusFactory(tenant=self.tenant)
+            campus_b = CampusFactory(tenant=self.tenant)
+            self.student_b = StudentFactory(
+                tenant=self.tenant, campus=campus_b, medical_notes="Penicillin allergy"
+            )
+        self.user = UserFactory(tenant=self.tenant)
+        authenticate(self.client, self.user)
+
+    def view_on_campus_a(self) -> None:
+        grant(self.user, STUDENT_VIEW, scope=RecordScope.CAMPUS, scope_ref=self.campus_a.pk)
+
+    def stored_student_b(self) -> Student:
+        with tenant_context(self.tenant.id):
+            return Student.objects.get(pk=self.student_b.pk)
+
+    def test_patch_outside_the_view_scope_is_a_404_and_leaks_nothing(self) -> None:
+        grant(self.user, STUDENT_UPDATE, scope=RecordScope.ALL)
+        self.view_on_campus_a()
+
+        response = self.client.patch(
+            f"/api/v1/students/{self.student_b.pk}", {"first_name": "Renamed"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertNotIn("Penicillin", response.content.decode())
+        self.assertEqual(self.stored_student_b().first_name, self.student_b.first_name)
+
+    def test_colon_action_outside_the_view_scope_is_a_404(self) -> None:
+        grant(self.user, STUDENT_WITHDRAW, scope=RecordScope.ALL)
+        self.view_on_campus_a()
+
+        response = self.client.post(
+            f"/api/v1/students/{self.student_b.pk}:withdraw",
+            {"reason": "Family relocation", "effective_date": "2026-06-01"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(self.stored_student_b().status, self.student_b.status)
+
+    def test_both_keys_at_all_still_write(self) -> None:
+        """The control: chaining the view scope changes nothing for a tenant-wide reader."""
+        grant(self.user, STUDENT_VIEW, STUDENT_UPDATE, scope=RecordScope.ALL)
+
+        response = self.client.patch(
+            f"/api/v1/students/{self.student_b.pk}", {"first_name": "Renamed"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json()["data"]["medical_notes"], "Penicillin allergy")
+        self.assertEqual(self.stored_student_b().first_name, "Renamed")
 
 
 class AttendanceScopeTests(ApprovalsTestCase):

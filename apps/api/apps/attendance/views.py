@@ -129,6 +129,9 @@ STAFF_PERMISSIONS = [
 # docstring. The record scope, not the permission class, is what narrows them.
 PORTAL_READABLE_PERMISSIONS = [IsAuthenticated, RequiresModuleFeature, HasPermissionKey]
 
+# The correction queue's two callers, requesters and approvers (ADR-0027).
+CORRECTION_READ = AnyOf("attendance.correction.create", "attendance.correction.approve")
+
 
 def _resolve_session(
     session: AcademicSession | None, *, on_date: datetime.date | None = None
@@ -472,14 +475,17 @@ class AttendanceCorrectionViewSet(
     # `filter_by_campus` owns it, as `StudentTransfer`'s does.
     required_feature = FEATURE
     required_permission = "attendance.correction.create"
+    # The queue's read key, not `required_permission`: an approver holds no create key,
+    # and `:approve`/`:reject` must find the rows the queue shows them.
+    scope_read_permission = CORRECTION_READ
     # The queue has two callers: requesters tracking their own and approvers deciding
     # (ADR-0027). What each sees is the record scope of the roles granting either key
     # (`scopes_for` over the `AnyOf`), never an unrelated role's: `assigned` is their
     # own requests (`AttendanceCorrection.filter_assigned_to_user`), `campus`/`all`
     # the queue.
     required_permission_map = {
-        "list": AnyOf("attendance.correction.create", "attendance.correction.approve"),
-        "retrieve": AnyOf("attendance.correction.create", "attendance.correction.approve"),
+        "list": CORRECTION_READ,
+        "retrieve": CORRECTION_READ,
         "create": "attendance.correction.create",
         "approve": "attendance.correction.approve",
         "reject": "attendance.correction.approve",
