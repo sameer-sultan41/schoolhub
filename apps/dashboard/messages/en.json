@@ -1353,6 +1353,26 @@
       "description": "Teachers, students and guardians see the published week. A timetable with blocking conflicts can't be published."
     }
   },
+  "communication": {
+    "nav": {
+      "label": "Communication sections",
+      "messages": "Messages",
+      "oversight": "Oversight",
+      "broadcast": "Broadcast"
+    },
+    "messages": {
+      "title": "Messages",
+      "summary": "Conversations between your school's staff, guardians and students."
+    },
+    "oversight": {
+      "title": "Thread oversight",
+      "summary": "Every conversation in your school, read-only. Each view is recorded in the audit log."
+    },
+    "broadcast": {
+      "title": "Emergency broadcast",
+      "summary": "Send an urgent message to a chosen audience, after previewing who will receive it."
+    }
+  },
   "attendance": {
     "nav": {
       "label": "Attendance sections",

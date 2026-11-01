@@ -234,4 +234,30 @@ export const endpoints = {
     execute: (id: string) => `/student-promotions/${id}:execute`,
     revert: (id: string) => `/student-promotions/${id}:revert`,
   },
+  /** `/message-threads` (`apps/api/apps/communication/threads/urls.py`): the caller's inbox. `messages`
+   * is nested under a thread; `markRead`/`close`/`reopen` are colon-actions on one thread. */
+  messageThreads: {
+    list: "/message-threads",
+    detail: (id: string) => `/message-threads/${id}`,
+    messages: (id: string) => `/message-threads/${id}/messages`,
+    markRead: (id: string) => `/message-threads/${id}:mark-read`,
+    close: (id: string) => `/message-threads/${id}:close`,
+    reopen: (id: string) => `/message-threads/${id}:reopen`,
+    recipients: "/message-threads/recipients",
+    attachmentDownload: (id: string, fileId: string) =>
+      `/message-threads/${id}/attachments/${fileId}:download`,
+  },
+  /** `/message-thread-oversight`: every alive thread in the tenant, read-only and audited. */
+  threadOversight: {
+    list: "/message-thread-oversight",
+    detail: (id: string) => `/message-thread-oversight/${id}`,
+    messages: (id: string) => `/message-thread-oversight/${id}/messages`,
+    attachmentDownload: (id: string, fileId: string) =>
+      `/message-thread-oversight/${id}/attachments/${fileId}:download`,
+  },
+  /** `POST /broadcasts:preview` and `POST /broadcasts:emergency` (202 + job). */
+  broadcasts: {
+    preview: "/broadcasts:preview",
+    emergency: "/broadcasts:emergency",
+  },
 } as const;

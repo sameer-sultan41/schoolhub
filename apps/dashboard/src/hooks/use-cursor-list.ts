@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { keepPreviousData, useQuery, type QueryKey } from "@tanstack/react-query";
 import { isCursorPagination, type Page } from "@schoolhub/types";
 
-import { useCursorStack } from "@/features/attendance/use-cursor-stack";
+import { useCursorStack } from "@/hooks/use-cursor-stack";
 
 export interface CursorListOptions<TItem> {
   /** The query the cursors belong to (its filters and sort): a change starts over at page one. */

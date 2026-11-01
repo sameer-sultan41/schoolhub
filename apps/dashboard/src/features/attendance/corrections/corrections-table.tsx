@@ -10,7 +10,7 @@ import { CorrectionDecisionDialog } from "@/features/attendance/corrections/corr
 import { useCorrectionColumns } from "@/features/attendance/corrections/correction-columns";
 import { CorrectionsFilters } from "@/features/attendance/corrections/corrections-filters";
 import { CursorDataGridCard } from "@/features/attendance/cursor-data-grid-card";
-import { useCursorList } from "@/features/attendance/use-cursor-list";
+import { useCursorList } from "@/hooks/use-cursor-list";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { hideableColumnIds, useDataGridUrlState } from "@/hooks/use-data-grid-url-state";
 import { FILTER_ALL } from "@/lib/constants";
