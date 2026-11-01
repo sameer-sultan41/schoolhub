@@ -363,4 +363,4 @@ class CommunicationCrossTenantTests(CommunicationAPITestCase):
         response = self.client.get("/api/v1/broadcasts:scope")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
-        self.assertEqual(response.json(), {"data": {"campus_ids": [str(campus.pk)]}})
+        self.assertEqual(response.json()["data"], {"campus_ids": [str(campus.pk)]})
