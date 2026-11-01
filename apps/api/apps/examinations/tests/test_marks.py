@@ -27,10 +27,15 @@ from apps.examinations import services, tasks
 from apps.examinations.models import ExamStatus, Marks, MarksStatus
 from apps.examinations.tests.base import ExaminationsAPITestCase
 from apps.examinations.tests.factories import (
+    CampusFactory,
     ExamFactory,
     ExamSubjectFactory,
     MarksFactory,
+    SectionFactory,
+    StaffFactory,
+    StudentEnrollmentFactory,
     StudentFactory,
+    TeacherAllocationFactory,
     UserFactory,
     authenticate,
     grant,
@@ -433,6 +438,141 @@ class AllocationScopeTests(MarksTestCase):
             subject=subject,
         )
         return subject
+
+
+class EntryRecordScopeTests(MarksTestCase):
+    """Which students a marker may write is `exams.marks.create`'s record scope.
+
+    The exam-subject is resolved unscoped (a class has no campus), so the scope
+    lives on the students. Against the old code a campus-scoped marker returned
+    early and every enrolled student of the class was eligible, so a campus-A
+    marker wrote campus-B marks, and an allocated teacher wrote marks for a
+    section they do not teach.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        with tenant_context(self.tenant.id):
+            self.campus_b = CampusFactory(tenant=self.tenant)
+            self.section_b = SectionFactory(
+                tenant=self.tenant, school_class=self.school_class, campus=self.campus_b
+            )
+            self.student_b = self._enrol(campus=self.campus_b, section=self.section_b)
+
+    def _enrol(self, *, campus, section):
+        student = StudentFactory(tenant=self.tenant, campus=campus)
+        StudentEnrollmentFactory(
+            tenant=self.tenant,
+            student=student,
+            academic_session=self.session,
+            school_class=self.school_class,
+            section=section,
+        )
+        return student
+
+    def _client(self, user) -> APIClient:
+        client = APIClient()
+        authenticate(client, user)
+        return client
+
+    def _row(self, student) -> dict:
+        return {"student_id": str(student.pk), "theory_marks": "55.00"}
+
+    def _marks_written(self) -> int:
+        with tenant_context(self.tenant.id):
+            return Marks.objects.alive().filter(exam_subject=self.exam_subject).count()
+
+    def _assert_rejected_alone(self, response, *, index: int, student) -> None:
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        rows = response.json()["error"]["meta"]["rows"]
+        self.assertEqual(
+            [(row["index"], row["student_id"], row["field"]) for row in rows],
+            [(index, str(student.pk), "student_id")],
+        )
+        self.assertEqual(self._marks_written(), 0)
+
+    def _campus_a_marker(self):
+        with tenant_context(self.tenant.id):
+            marker = UserFactory(tenant=self.tenant)
+        grant(marker, "exams.marks.create", scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+        return marker
+
+    def test_a_campus_a_marker_cannot_write_a_campus_b_student(self) -> None:
+        marker = self._campus_a_marker()
+
+        response = self.submit(
+            [*self.entries(), self._row(self.student_b)], client=self._client(marker)
+        )
+
+        self._assert_rejected_alone(response, index=3, student=self.student_b)
+
+    def test_a_campus_a_marker_still_writes_their_own_campus(self) -> None:
+        marker = self._campus_a_marker()
+
+        response = self.submit(client=self._client(marker))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(self._marks_written(), 3)
+
+    def test_an_assigned_teacher_cannot_write_a_student_outside_their_sections(self) -> None:
+        """The allocation is to `self.section`, and the gate only checks the class."""
+        with tenant_context(self.tenant.id):
+            outsider = self._enrol(campus=self.campus, section=self.other_section)
+        grant(self.subject_teacher_user, "exams.marks.create", scope=RecordScope.ASSIGNED)
+
+        response = self.submit(
+            [*self.entries(), self._row(outsider)],
+            client=self._client(self.subject_teacher_user),
+        )
+
+        self._assert_rejected_alone(response, index=3, student=outsider)
+
+    def test_campus_a_plus_assigned_without_a_campus_b_allocation_cannot_write_campus_b(
+        self,
+    ) -> None:
+        """`deferred-work.md`'s case: the `campus` grant used to skip the allocation check."""
+        with tenant_context(self.tenant.id):
+            marker = UserFactory(tenant=self.tenant)
+            StaffFactory(tenant=self.tenant, campus=self.campus, user_id=marker.pk)
+        grant(marker, "exams.marks.create", scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+        grant(marker, "exams.marks.create", scope=RecordScope.ASSIGNED)
+
+        response = self.submit([self._row(self.student_b)], client=self._client(marker))
+
+        self._assert_rejected_alone(response, index=0, student=self.student_b)
+
+    def test_campus_a_plus_assigned_writes_the_campus_b_section_they_are_allocated(
+        self,
+    ) -> None:
+        """The two grants are a union (ADR-0031 decision 7), not the narrower of the two."""
+        with tenant_context(self.tenant.id):
+            marker = UserFactory(tenant=self.tenant)
+            staff = StaffFactory(tenant=self.tenant, campus=self.campus, user_id=marker.pk)
+            TeacherAllocationFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                section=self.section_b,
+                subject=self.subject,
+                staff=staff,
+            )
+        grant(marker, "exams.marks.create", scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+        grant(marker, "exams.marks.create", scope=RecordScope.ASSIGNED)
+
+        response = self.submit(
+            [*self.entries(), self._row(self.student_b)], client=self._client(marker)
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(self._marks_written(), 4)
+
+    def test_an_all_scoped_marker_still_writes_every_campus_and_section(self) -> None:
+        with tenant_context(self.tenant.id):
+            outsider = self._enrol(campus=self.campus, section=self.other_section)
+
+        response = self.submit([*self.entries(), self._row(self.student_b), self._row(outsider)])
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(self._marks_written(), 5)
 
 
 class LockLifecycleTests(MarksTestCase):

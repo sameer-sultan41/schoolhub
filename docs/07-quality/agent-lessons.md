@@ -222,11 +222,17 @@
   "held for this row" (ADR-0031, `fix/per-role-record-scope`). The final review then found
   the viewset mixin resolving PATCH, DELETE and colon actions by the action's key alone, so an
   `all` update role reached, and echoed back, a student the caller's campus view role hid.
+- **Mistake (again, PR B final review).** `POST /marks:bulk-entry` resolved its exam subject
+  unscoped, `assert_marker_may_enter` passed any `campus` holder, and the posted student ids
+  were checked against the class roll only, so a campus-A marker wrote campus-B marks.
+  `deferred-work.md` had recorded the hole as a narrower `campus`+`assigned` edge case.
 - **Check.** A permission helper that ignores which key it guards, or a presence check read as a
   row privilege, is a privilege-escalation path. Take the key as a required argument
   (`scope_queryset(permission=...)`, `scopes_for`), and check a row privilege against the row
   (`holds_key_for(user, key, row, **SomeViewSet.scope_kwargs())`). A route that acts on a row
-  must reach it under the read key as well as its own. Test it with a mixed user: the key on
+  must reach it under the read key as well as its own. A write that takes a list of ids under
+  a parent (a grid, a batch) scopes the ids, not only the parent, and a gate that passes
+  `campus` must be followed by a per-row campus check. Test it with a mixed user: the key on
   campus A, an unrelated or action key at `all`, and a campus-B row.
 
 ### L32. Read `captured_queries` before the next request

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import uuid
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from django.db import transaction
 from django.utils import timezone
@@ -56,6 +56,9 @@ from core.imports.tabular import parse_rows
 from core.rbac.models import RecordScope
 
 if TYPE_CHECKING:
+    from django.db.models import QuerySet
+
+    from apps.academics.models import TeacherSubjectAllocation
     from core.rbac.permissions import AnyOf
 
 # §7.1's lifecycle. An exam may only be *configured* — subjects added, marks
@@ -686,21 +689,45 @@ def assert_marks_within_maximum(
         )
 
 
-def assert_marker_may_enter(*, user, exam_subject: ExamSubject) -> None:
-    """§4 — a teacher may only enter marks for a class-subject they are on.
+def _current_allocations(
+    *, staff_ids: Any, exam_subject: ExamSubject
+) -> QuerySet[TeacherSubjectAllocation]:
+    """The current allocations of these staff rows to this exam-subject's class-subject.
 
-    Resolved through `academics.TeacherSubjectAllocation`, the table academics
-    built for exactly this. An `all`- or `campus`-scoped caller returns early:
-    many `exam_staff` and admin users have no `Staff` row at all, so requiring
-    an allocation would break the legitimate case — the same early return
-    `attendance.register.may_mark_register` makes, and the same reason the
-    principal check has to sit in the *view* rather than inside here.
+    One row per section taught. Shared by the allocation gate and the `assigned`
+    student filter, so "allocated" means the same thing in both.
+    """
+    from apps.academics.models import TeacherSubjectAllocation
+
+    return TeacherSubjectAllocation.objects.alive().filter(
+        staff_id__in=staff_ids,
+        subject_id=exam_subject.subject_id,
+        section__school_class_id=exam_subject.school_class_id,
+        effective_to__isnull=True,
+    )
+
+
+def assert_marker_may_enter(*, user, exam_subject: ExamSubject) -> None:
+    """§4 — may this caller enter marks for this exam-subject at all?
+
+    The subject-level gate. *Which* students they may mark is the row-level
+    question, answered by `_entry_students`, and a student outside it is a
+    rejected row.
+
+    - `all` passes. Many `exam_staff` and admin users have no `Staff` row, so
+      requiring an allocation would break the legitimate case, the same reason
+      `attendance.register.may_mark_register` gives.
+    - `campus` passes here but is not a wildcard: `_entry_students` keeps only
+      the students on a held campus (plus, with `assigned`, those in an allocated
+      section), so a campus-A marker's campus-B rows are rejected.
+    - `assigned` alone must hold a current `academics.TeacherSubjectAllocation`
+      for this class-subject; `_entry_students` then narrows to its sections.
+    - `own` alone cannot enter marks.
 
     The scope is read from the roles that grant `MARKS_CREATE` only (`scopes_for`):
     an `assigned` teacher who also holds an `all` role for some other key is still
     held to their allocations.
     """
-    from apps.academics.models import TeacherSubjectAllocation
     from apps.staff_management.models import EmploymentStatus, Staff
     from core.rbac.permissions import scopes_for
 
@@ -729,17 +756,7 @@ def assert_marker_may_enter(*, user, exam_subject: ExamSubject) -> None:
             }
         )
 
-    teaches = (
-        TeacherSubjectAllocation.objects.alive()
-        .filter(
-            staff_id__in=staff_ids,
-            subject_id=exam_subject.subject_id,
-            section__school_class_id=exam_subject.school_class_id,
-            effective_to__isnull=True,
-        )
-        .exists()
-    )
-    if not teaches:
+    if not _current_allocations(staff_ids=staff_ids, exam_subject=exam_subject).exists():
         raise DomainRuleViolation(
             {
                 "exam_subject_id": (
@@ -750,28 +767,57 @@ def assert_marker_may_enter(*, user, exam_subject: ExamSubject) -> None:
         )
 
 
-def _entry_students(*, exam_subject: ExamSubject) -> dict:
-    """The students eligible for this exam-subject's marks, by id.
+def _class_enrollments(exam_subject: ExamSubject) -> QuerySet[Any]:
+    """Active enrollments in a section of the exam-subject's class, in the exam's session."""
+    from apps.student_management.models import EnrollmentStatus, StudentEnrollment
 
-    Eligibility is an **active enrollment in a section of the exam-subject's
-    class**, in the exam's session. A student who has withdrawn since the exam
-    was configured is not marked, and a student from another year group is not
-    silently accepted because their id was posted.
-    """
-    from apps.student_management.models import EnrollmentStatus, Student, StudentEnrollment
-
-    student_ids = (
-        StudentEnrollment.objects.alive()
-        .filter(
-            academic_session_id=exam_subject.exam.academic_session_id,
-            school_class_id=exam_subject.school_class_id,
-            status=EnrollmentStatus.ACTIVE,
-        )
-        .values_list("student_id", flat=True)
+    return StudentEnrollment.objects.alive().filter(
+        academic_session_id=exam_subject.exam.academic_session_id,
+        school_class_id=exam_subject.school_class_id,
+        status=EnrollmentStatus.ACTIVE,
     )
-    return {
-        student.pk: student for student in Student.objects.alive().filter(pk__in=list(student_ids))
-    }
+
+
+def _entry_students(*, exam_subject: ExamSubject, user) -> dict:
+    """The students this caller may enter marks for in this exam-subject, by id.
+
+    Two narrowings. **Eligibility** is an active enrollment in a section of the
+    exam-subject's class, in the exam's session: a withdrawn student is not
+    marked, and a student from another year group is not accepted because their
+    id was posted. **Record scope** is `MARKS_CREATE`'s, over `STUDENT_SCOPE`
+    (ADR-0013: the student app's settings, not a copy): `campus` keeps the held
+    campuses' students, and `assigned` keeps the students enrolled in a section
+    the caller is currently allocated this subject in, rather than the class
+    teacher's homeroom that `Student`'s own hook reads. A student outside either
+    is rejected exactly as an ineligible one is, so a campus-B id is never
+    written by a campus-A marker.
+    """
+    from apps.staff_management.models import EmploymentStatus, Staff
+    from apps.student_management.models import Student
+    from apps.student_management.services import STUDENT_SCOPE
+    from core.rbac.permissions import scope_queryset
+
+    enrolled = _class_enrollments(exam_subject)
+
+    def in_allocated_sections(queryset: QuerySet[Any], marker: Any) -> QuerySet[Any]:
+        staff_ids = (
+            Staff.objects.alive()
+            .filter(user_id=marker.pk, employment_status=EmploymentStatus.ACTIVE)
+            .values("pk")
+        )
+        sections = _current_allocations(staff_ids=staff_ids, exam_subject=exam_subject).values(
+            "section_id"
+        )
+        return queryset.filter(pk__in=enrolled.filter(section_id__in=sections).values("student_id"))
+
+    scoped = scope_queryset(
+        Student.objects.alive().filter(pk__in=list(enrolled.values_list("student_id", flat=True))),
+        user,
+        permission=MARKS_CREATE,
+        assigned_filter=in_allocated_sections,
+        **STUDENT_SCOPE,
+    )
+    return {student.pk: student for student in scoped}
 
 
 @transaction.atomic
@@ -800,7 +846,7 @@ def bulk_enter_marks(
     assert_marks_window_open(exam_subject)
     assert_marker_may_enter(user=user, exam_subject=exam_subject)
 
-    eligible = _entry_students(exam_subject=exam_subject)
+    eligible = _entry_students(exam_subject=exam_subject, user=user)
     rejected: list[dict] = []
     accepted: list[dict] = []
 
@@ -812,8 +858,11 @@ def bulk_enter_marks(
                     "index": index,
                     "student_id": str(student_id),
                     "field": "student_id",
+                    # One message for both causes, so a rejected row does not say
+                    # whether an out-of-scope student exists or where.
                     "issue": (
-                        "This student has no active enrolment in a class this exam-subject covers."
+                        "This student has no active enrolment in a class this exam-subject "
+                        "covers that you may enter marks for."
                     ),
                 }
             )
@@ -1156,9 +1205,14 @@ def import_candidates_by_admission_number(*, exam_subject: ExamSubject) -> dict:
     Built once per file rather than looked up per row, which is what keeps a
     six-hundred-row import from being six hundred queries.
     """
+    from apps.student_management.models import Student
+
+    # The class roll, unscoped: the job carries no user, and `exams.marks.import`
+    # is `exam_staff`'s alone. Scoping it by the importer is in `deferred-work.md`.
+    enrolled = _class_enrollments(exam_subject).values("student_id")
     return {
         student.admission_number: student
-        for student in _entry_students(exam_subject=exam_subject).values()
+        for student in Student.objects.alive().filter(pk__in=enrolled)
     }
 
 
