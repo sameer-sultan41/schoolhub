@@ -309,3 +309,18 @@ This file lands in PR A's first commit, together with its `## Independent review
 - **Unresolved:** none. The user settled both open questions on 2026-11-02:
   - writes need both the view scope and the action scope;
   - the medical-notes shortcut is fixed in PR A.
+
+## Execution rulings
+
+Recorded during subagent-driven execution (stop rule 3: the plan is amended, not silently deviated from).
+
+1. **Task 5 runs on its own branch** `fix/record-scope-type-union`, cut from PR A's head once PR A is pushed.
+2. **Test names in this plan use `any_of`.** The cspell hook rejected the run-together spelling.
+3. **Task 2 moved the fees `_ledger_report_queryset` onto `scopes_for`.** That was Task 3's row, but leaving it would have kept a gap beside the new code. A test pins it.
+4. **Substitution `candidates` is scoped in two parts.** The slot is scoped by the substitution key alone. The candidate staff list is scoped by `staff.staff.view`, because the read's target is the staff list and no slot data is disclosed. If the response ever carries slot fields, intersect `timetable.slot.view` too.
+5. **Task 3b: the key-blind presence checks get the same fix.** Four sites check a key held anywhere as though it were held for this row:
+   - `StudentViewSet` `enroll` and `change_section`, whose capacity override reads `students.student.update`;
+   - `withdraw`, which reads `students.withdrawal.approve`;
+   - substitution `cancel`, which reads `timetable.substitution.approve`.
+
+   Each now asks `holds_key_for(user, permission, instance, ...)`, which is `scope_queryset` over that one row. They ship in PR A, because they break the same invariant.
