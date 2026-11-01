@@ -48,10 +48,13 @@ from apps.examinations.tests.factories import (
     StudentFactory,
     SubjectFactory,
     TenantFactory,
+    authenticate,
     complete_scale,
     enable_feature,
     exam_week,
+    grant,
 )
+from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
 SCALES = "/api/v1/grading-scales"
@@ -232,6 +235,34 @@ class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
 
         ids = {row["id"] for row in response.json()["data"]}
         self.assertNotIn(str(self.foreign_exam.pk), ids)
+
+    def test_an_assigned_teacher_never_reaches_another_tenant_s_exams(self) -> None:
+        """The `assigned` hooks resolve teaching through tenant-scoped managers,
+        so a foreign exam is neither listed nor retrievable — 404, not 403."""
+        grant(
+            self.subject_teacher_user,
+            "exams.exam.view",
+            "exams.grading-scale.view",
+            scope=RecordScope.ASSIGNED,
+        )
+        authenticate(self.client, self.subject_teacher_user)
+
+        for url in (EXAMS, EXAM_SUBJECTS, SCALES):
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+                ids = {row["id"] for row in response.json()["data"]}
+                self.assertFalse(
+                    ids
+                    & {
+                        str(self.foreign_exam.pk),
+                        str(self.foreign_exam_subject.pk),
+                        str(self.foreign_scale.pk),
+                    }
+                )
+        self.assert404(self.client.get(f"{EXAMS}/{self.foreign_exam.pk}"))
+        self.assert404(self.client.get(f"{EXAM_SUBJECTS}/{self.foreign_exam_subject.pk}"))
+        self.assert404(self.client.get(f"{SCALES}/{self.foreign_scale.pk}"))
 
     def test_creating_an_exam_in_a_foreign_session_does_not_validate(self) -> None:
         """A 400, not a 404: the session id arrives in the body and fails the

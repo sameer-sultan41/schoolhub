@@ -39,7 +39,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import mixins, viewsets
@@ -97,6 +97,7 @@ from apps.examinations.serializers import (
     SendResultsBackSerializer,
 )
 from core.api.exceptions import Conflict, DomainRuleViolation
+from core.api.pagination import PageNumberPagination
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
@@ -133,7 +134,13 @@ class GradingScaleViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     serializer_class = GradingScaleSerializer
     filterset_class = GradingScaleFilterSet
     search_fields = ["name", "description"]
+    # Page numbers, not a cursor: a school has a handful of scales and a reader
+    # navigates them by position. api-architecture.md §2.4.
+    pagination_class = PageNumberPagination
     ordering_fields = ["name", "created_at"]
+    # GradingScale.Meta.ordering. DRF's ordering filter reads the view's default,
+    # not the model's, and a page-number list needs a stable order to page.
+    ordering = ["name"]
     scope_campus_field = None
     required_feature = FEATURE
     required_permission = "exams.grading-scale.view"
@@ -198,6 +205,10 @@ class GradeBandViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     }
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
     ordering_fields = ["sort_order", "min_percent"]
+    # In display order. Unpaginated: a scale has a handful of bands and a client
+    # rendering it needs all of them, not a page of them.
+    ordering = ["sort_order", "-min_percent"]
+    pagination_class = None
 
     def get_scale(self) -> GradingScale:
         """The scale named in the URL, 404 if it is not this tenant's.
@@ -241,7 +252,15 @@ class ExamViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     serializer_class = ExamSerializer
     filterset_class = ExamFilterSet
     search_fields = ["name", "description"]
+    # Page numbers, not a cursor: one school's exams across its sessions, which
+    # a reader navigates by position. api-architecture.md §2.4.
+    pagination_class = PageNumberPagination
     ordering_fields = ["starts_on", "name", "created_at"]
+    # Exam.Meta.ordering, declared on the view because the ordering filter reads
+    # the view's default and the `subject_count` GROUP BY drops the model's. Ends
+    # in `id` so a page-number list is total: names repeat across sessions and an
+    # undated draft has no `starts_on`.
+    ordering = ["-starts_on", "name", "id"]
     scope_campus_field = None
     required_feature = FEATURE
     required_permission = "exams.exam.view"
@@ -254,7 +273,18 @@ class ExamViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
-        return super().get_queryset().select_related("academic_session", "term", "grading_scale")
+        # The three names ride on these joins; `subject_count` counts live
+        # exam-subjects in the same query rather than one COUNT per row.
+        return (
+            super()
+            .get_queryset()
+            .select_related("academic_session", "term", "grading_scale")
+            .annotate(
+                subject_count=Count(
+                    "exam_subjects", filter=Q(exam_subjects__deleted_at__isnull=True)
+                )
+            )
+        )
 
     def perform_update(self, serializer) -> None:
         services.assert_exam_is_configurable(serializer.instance)
@@ -272,7 +302,16 @@ class ExamSubjectViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     queryset = ExamSubject.objects
     serializer_class = ExamSubjectSerializer
     filterset_class = ExamSubjectFilterSet
-    ordering_fields = ["created_at"]
+    # `class_name`/`subject_name` are annotations from `get_queryset`, never
+    # `school_class__name`: tests/test_endpoint_contracts.py refuses a `__` here,
+    # because a scope hook ending in `.distinct()` makes Postgres reject an ORDER
+    # BY on a joined column that is not selected. An annotation is selected.
+    ordering_fields = ["class_name", "subject_name", "created_at"]
+    #: Entries in ordering_fields that are annotations from get_queryset, not model
+    #: fields — tests/test_endpoint_contracts.py cannot resolve these against the model.
+    ordering_annotations = ("class_name", "subject_name")
+    # A configuration grid reads class by class, then subject by subject.
+    ordering = ["class_name", "subject_name"]
     scope_campus_field = None
     required_feature = FEATURE
     required_permission = "exams.exam.view"
@@ -285,7 +324,13 @@ class ExamSubjectViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
-        return super().get_queryset().select_related("exam", "school_class", "subject")
+        # The annotations reuse the select_related joins rather than adding their own.
+        return (
+            super()
+            .get_queryset()
+            .select_related("exam", "school_class", "subject")
+            .annotate(class_name=F("school_class__name"), subject_name=F("subject__name"))
+        )
 
     def perform_update(self, serializer) -> None:
         services.assert_exam_is_configurable(serializer.instance.exam)

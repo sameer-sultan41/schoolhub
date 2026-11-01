@@ -160,30 +160,49 @@ class GradingScaleSerializer(serializers.ModelSerializer):
 
 
 class ExamSerializer(serializers.ModelSerializer):
-    """`exams` — an examination event (§5.1)."""
+    """An examination event within an academic session (§5.1)."""
 
+    # The `*_name` fields ride on the viewset's `select_related`, so a list row
+    # renders its session, term and scale without a lookup per id.
     academic_session_id = _fk(AcademicSession, source="academic_session")
+    academic_session_name = serializers.CharField(source="academic_session.name", read_only=True)
     term_id = _fk(Term, source="term", required=False, allow_null=True)
+    term_name = serializers.CharField(source="term.name", read_only=True, allow_null=True)
     grading_scale_id = _fk(GradingScale, source="grading_scale", required=False)
+    grading_scale_name = serializers.CharField(source="grading_scale.name", read_only=True)
+    subject_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Exam
         fields = (
             "id",
             "academic_session_id",
+            "academic_session_name",
             "term_id",
+            "term_name",
             "name",
             "exam_type",
             "grading_scale_id",
+            "grading_scale_name",
             "weightage_percent",
             "starts_on",
             "ends_on",
             "status",
+            "subject_count",
             "description",
             "created_at",
             "updated_at",
         )
         read_only_fields = (*READ_ONLY_FIELDS, "status")
+
+    def get_subject_count(self, exam: Exam) -> int:
+        """All of the exam's live subjects, not only those visible to the viewer."""
+        # The viewset's annotation, or one COUNT without it: a created exam never
+        # passed through the annotated queryset, so its 201 body counts instead.
+        annotated = getattr(exam, "subject_count", None)
+        if annotated is not None:
+            return annotated
+        return exam.exam_subjects.alive().count()
 
     def validate_weightage_percent(self, value: Decimal) -> Decimal:
         if value <= 0 or value > 100:
@@ -241,16 +260,22 @@ class ExamSubjectSerializer(serializers.ModelSerializer):
     """`exam_subjects` — per-class marks structure for one subject (§5.1)."""
 
     exam_id = _fk(Exam, source="exam")
+    exam_name = serializers.CharField(source="exam.name", read_only=True)
     class_id = _fk(Class, source="school_class")
+    class_name = serializers.CharField(source="school_class.name", read_only=True)
     subject_id = _fk(Subject, source="subject")
+    subject_name = serializers.CharField(source="subject.name", read_only=True)
 
     class Meta:
         model = ExamSubject
         fields = (
             "id",
             "exam_id",
+            "exam_name",
             "class_id",
+            "class_name",
             "subject_id",
+            "subject_name",
             "max_marks",
             "pass_marks",
             "has_practical",
@@ -285,6 +310,13 @@ class ExamSubjectSerializer(serializers.ModelSerializer):
         services.assert_exam_is_configurable(exam)
         services.assert_subject_in_class_curriculum(
             session=exam.academic_session, school_class=school_class, subject=subject
+        )
+
+        services.assert_exam_subject_is_unique(
+            exam=exam,
+            school_class=school_class,
+            subject=subject,
+            exclude_pk=self.instance.pk if self.instance else None,
         )
 
         services.assert_practical_marks(

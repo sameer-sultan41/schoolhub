@@ -6798,19 +6798,22 @@ export interface components {
          * @enum {string}
          */
         EnrollmentHistoryEventTypeEnum: "enrollment";
-        /** @description `exams` — an examination event (§5.1). */
+        /** @description An examination event within an academic session (§5.1). */
         Exam: {
             /** Format: uuid */
             readonly id: string;
             /** Format: uuid */
             academic_session_id: string;
+            readonly academic_session_name: string;
             /** Format: uuid */
             term_id?: string | null;
+            readonly term_name: string | null;
             /** @description e.g. "Term 1 Midterm". */
             name: string;
             exam_type: components["schemas"]["ExamTypeEnum"];
             /** Format: uuid */
             grading_scale_id?: string;
+            readonly grading_scale_name: string;
             /**
              * Format: decimal
              * @description Contribution to a consolidated term or session result.
@@ -6821,6 +6824,8 @@ export interface components {
             /** Format: date */
             ends_on?: string | null;
             readonly status: components["schemas"]["ExamStatusEnum"];
+            /** @description All of the exam's live subjects, not only those visible to the viewer. */
+            readonly subject_count: number;
             description?: string | null;
             /** Format: date-time */
             readonly created_at: string;
@@ -6910,10 +6915,13 @@ export interface components {
             readonly id: string;
             /** Format: uuid */
             exam_id: string;
+            readonly exam_name: string;
             /** Format: uuid */
             class_id: string;
+            readonly class_name: string;
             /** Format: uuid */
             subject_id: string;
+            readonly subject_name: string;
             /** Format: decimal */
             max_marks: string;
             /** Format: decimal */
@@ -8147,9 +8155,10 @@ export interface components {
             data?: components["schemas"]["Exam"][];
             meta?: {
                 pagination?: {
-                    next_cursor?: string | null;
-                    previous_cursor?: string | null;
+                    page?: number;
                     page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
                 };
             };
         };
@@ -8263,23 +8272,14 @@ export interface components {
                 };
             };
         };
-        PaginatedGradeBandList: {
-            data?: components["schemas"]["GradeBand"][];
-            meta?: {
-                pagination?: {
-                    next_cursor?: string | null;
-                    previous_cursor?: string | null;
-                    page_size?: number;
-                };
-            };
-        };
         PaginatedGradingScaleList: {
             data?: components["schemas"]["GradingScale"][];
             meta?: {
                 pagination?: {
-                    next_cursor?: string | null;
-                    previous_cursor?: string | null;
+                    page?: number;
                     page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
                 };
             };
         };
@@ -8896,19 +8896,22 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
-        /** @description `exams` — an examination event (§5.1). */
+        /** @description An examination event within an academic session (§5.1). */
         PatchedExam: {
             /** Format: uuid */
             readonly id?: string;
             /** Format: uuid */
             academic_session_id?: string;
+            readonly academic_session_name?: string;
             /** Format: uuid */
             term_id?: string | null;
+            readonly term_name?: string | null;
             /** @description e.g. "Term 1 Midterm". */
             name?: string;
             exam_type?: components["schemas"]["ExamTypeEnum"];
             /** Format: uuid */
             grading_scale_id?: string;
+            readonly grading_scale_name?: string;
             /**
              * Format: decimal
              * @description Contribution to a consolidated term or session result.
@@ -8919,6 +8922,8 @@ export interface components {
             /** Format: date */
             ends_on?: string | null;
             readonly status?: components["schemas"]["ExamStatusEnum"];
+            /** @description All of the exam's live subjects, not only those visible to the viewer. */
+            readonly subject_count?: number;
             description?: string | null;
             /** Format: date-time */
             readonly created_at?: string;
@@ -8965,10 +8970,13 @@ export interface components {
             readonly id?: string;
             /** Format: uuid */
             exam_id?: string;
+            readonly exam_name?: string;
             /** Format: uuid */
             class_id?: string;
+            readonly class_name?: string;
             /** Format: uuid */
             subject_id?: string;
+            readonly subject_name?: string;
             /** Format: decimal */
             max_marks?: string;
             /** Format: decimal */
@@ -13663,8 +13671,6 @@ export interface operations {
         parameters: {
             query?: {
                 academic_session_id?: string;
-                /** @description The pagination cursor value. */
-                cursor?: string;
                 ends_on?: string;
                 ends_on__gte?: string;
                 ends_on__lte?: string;
@@ -13679,6 +13685,8 @@ export interface operations {
                 grading_scale_id?: string;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
                 /** @description Number of results to return per page. */
                 page_size?: number;
                 /** @description A search term. */
@@ -15257,11 +15265,11 @@ export interface operations {
     grading_scales_list: {
         parameters: {
             query?: {
-                /** @description The pagination cursor value. */
-                cursor?: string;
                 is_default?: boolean;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
                 /** @description Number of results to return per page. */
                 page_size?: number;
                 /**
@@ -15410,12 +15418,8 @@ export interface operations {
     grading_scales_grade_bands_list: {
         parameters: {
             query?: {
-                /** @description The pagination cursor value. */
-                cursor?: string;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
-                /** @description Number of results to return per page. */
-                page_size?: number;
                 /** @description A search term. */
                 search?: string;
             };
@@ -15432,7 +15436,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedGradeBandList"];
+                    "application/json": components["schemas"]["GradeBand"][];
                 };
             };
         };

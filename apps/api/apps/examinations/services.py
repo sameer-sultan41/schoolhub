@@ -169,13 +169,15 @@ def assert_exam_is_deletable(exam: Exam) -> None:
 
     A scheduled exam has admit cards and a room booking; anything further has
     marks. §5.1 makes an exam deletable and this is the narrowest reading that
-    stays true to it — the wider operation a school actually wants past draft is
-    `archived`, which is a status change rather than a delete.
+    stays true to it.
+
+    The refusal names no way out, because there is none to name: `archived` is
+    declared on `ExamStatus` but no action sets it, so telling the user to
+    archive the exam sent them looking for a button that does not exist.
     """
     if exam.status not in DELETABLE_STATUSES:
         raise Conflict(
-            f"This exam is {exam.get_status_display().lower()}. Only a draft exam can be "
-            "deleted; archive it instead to take it out of operational lists."
+            f"This exam is {exam.get_status_display().lower()}. Only a draft exam can be deleted."
         )
 
 
@@ -204,6 +206,28 @@ def assert_subject_in_class_curriculum(
                     "Add it to the curriculum first."
                 )
             }
+        )
+
+
+def assert_exam_subject_is_unique(
+    *, exam: Exam, school_class: Class, subject: Subject, exclude_pk=None
+) -> None:
+    """One configuration per (exam, class, subject) among live rows.
+
+    The partial unique index `exam_subjects_unique_per_class_subject` holds this
+    against a race, but it includes the tenant, so DRF derives no validator from
+    it and an IntegrityError would surface as a bare 409. Answered here first, as
+    a 422 under `subject_id`, so the form can say which input is wrong.
+    `exclude_pk` is the row being edited, which is its own duplicate otherwise.
+    """
+    duplicates = ExamSubject.objects.alive().filter(
+        exam=exam, school_class=school_class, subject=subject
+    )
+    if exclude_pk is not None:
+        duplicates = duplicates.exclude(pk=exclude_pk)
+    if duplicates.exists():
+        raise DomainRuleViolation(
+            {"subject_id": "This subject is already on this exam for this class."}
         )
 
 
@@ -241,8 +265,11 @@ def assert_practical_marks(
 
 
 @transaction.atomic
-def set_default_scale(*, scale: GradingScale, actor_id: uuid.UUID) -> GradingScale:
+def set_default_scale(*, scale: GradingScale, actor_id: uuid.UUID | None) -> GradingScale:
     """Make `scale` the tenant default, clearing whichever held it.
+
+    `actor_id` is None only for a seed (`seed_e2e_examinations`), which has no
+    signed-in user to stamp; `updated_by` is nullable for exactly that case.
 
     Two statements inside one transaction rather than one `update()`: the
     partial unique index `grading_scales_one_default` refuses two live defaults,
