@@ -14,6 +14,7 @@ from django.contrib.admin import AdminSite
 from django.db import connection, transaction
 from django.test import SimpleTestCase
 from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 from rest_framework import status
 
 from apps.academics import tasks
@@ -1292,6 +1293,24 @@ class PromotionNotificationTests(PromotionTestCase):
         pending = self._notifications("academics.promotion-pending")
         self.assertEqual([row.user_id for row in pending], [approver.pk])
         self.assertIn(self.school_class.name, pending[0].body)
+
+    def test_a_holder_of_a_soft_deleted_approver_role_is_not_asked(self) -> None:
+        """A soft-deleted role grants nothing (`scope_grants`), so the endpoint would
+        refuse its holder; asking them to approve would be an instruction they cannot
+        follow."""
+        self.allow(*PREPARE_KEYS)
+        approver = UserFactory(tenant=self.tenant)
+        role = grant(approver, "academics.promotion.approve")
+        role.deleted_at = timezone.now()
+        role.save(update_fields=["deleted_at", "updated_at"])
+        batch_id = self.create_batch()
+
+        response = self.client.post(
+            f"/api/v1/student-promotions/{batch_id}:submit", {}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(self._notifications("academics.promotion-pending"), [])
 
     def test_the_preparer_is_never_asked_to_approve_their_own_batch(self) -> None:
         """Asking them would be an instruction `approve_batch` then refuses."""

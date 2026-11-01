@@ -631,6 +631,7 @@ def _promotion_approvers(tenant_id: uuid.UUID) -> set[uuid.UUID]:
             is_active=True,
             deleted_at__isnull=True,
             user_roles__deleted_at__isnull=True,
+            user_roles__role__deleted_at__isnull=True,
             user_roles__role__permissions__key=PROMOTION_APPROVAL_KEY,
         ).values_list("pk", flat=True)
     )
