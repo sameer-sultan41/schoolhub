@@ -533,6 +533,29 @@ silently deviated from). Each ruling names what changed and why.
     keeps `communication.message.create` as a choice (a receipt is a write), and D2 calls it only
     when the user holds that key.
 
+The second whole-PR review's rulings follow. They start at 16 because rulings 12 to 15 are PR D's,
+recorded on `feat/communication-dashboard`.
+
+16. **The emergency task claims its job with a conditional UPDATE**
+    (`core.jobs.services.claim_queued_job`). Reading `status` and then calling `mark_running`
+    left a window in which two deliveries both read `queued` and both fanned out.
+17. **The broadcast campus check uses `user_scopes_for_key`**, the scopes of only the roles that
+    grant `communication.broadcast.send` (auth-and-rbac §2.3), so an unrelated `all`-scoped role
+    no longer lifts a campus limit. `scope_queryset` has the same union platform-wide; adopting
+    the per-key resolver there is deferred (`docs/deferred-work.md`, high priority).
+18. **Restricted-principal checks ignore removed roles**, through one helper,
+    `core.rbac.permissions.live_restricted_role_assignments`, read by `is_restricted_principal`,
+    the thread notification fan-out and `thread_staff_users`.
+19. **Declined findings, with reasons:**
+    - Internal notes not reordering staff inboxes is deliberate. The staff unread count still
+      surfaces them, and a staff-only activity column is deferred (`docs/deferred-work.md`).
+    - The attachment download keeps its own 404 filter. `assert_file_usable` is a write-path 422
+      that names the purpose, which a read path must not reveal.
+    - The per-guardian ownership query is bounded by one child's guardians, and keeps
+      `filter_owned_by_user` as the single definition.
+    - A legacy empty fingerprint replays only inside the 24h TTL, and that behaviour is
+      documented.
+
 Other deviations from the tasks above:
 
 - **`core/api/pagination` ordering is a tuple.** The cursor classes declare

@@ -10,6 +10,15 @@ either this file or `project-status.md`.
 
 ## Deliberately NOT done
 
+- **High priority: `scope_queryset` unions record scopes across all of a user's roles.** Per
+  [auth-and-rbac §2.3](02-architecture/auth-and-rbac.md) a scope belongs to its `user_role`, so
+  a campus-scoped role plus any `all`-scoped role reads tenant-wide on every scoped endpoint
+  (`core.rbac.permissions.user_scopes` feeds `scope_queryset` the union). The broadcast campus
+  check was fixed on its own in communication PR C: `user_scopes_for_key` (added for
+  broadcasts) returns the scopes of only the roles that grant one key, and is the building
+  block. Adopting it platform-wide needs each viewset's required key passed into
+  `scope_queryset`, which changes every module's reads, so it is its own work-tier-2 change.
+
 - **`tenant`/`files`/`jobs`/`school-organization`/`dashboard` still have only the
   original three service-module files** (`<domain>-service.ts`/`index.ts`, no
   `-type`/`-constant`/`-helper`/`.schema`), not yet retrofitted to the five-file shape
@@ -963,6 +972,12 @@ either this file or `project-status.md`.
   - **Replies and `:mark-read` are not audited.** A message is itself an immutable, attributed
     record, and a receipt is the caller's own state; thread create, close and reopen, oversight
     reads and broadcasts are audited.
+  - **A staff-only "last activity" ordering for threads.** An internal note leaves
+    `last_message_at` alone, because a bumped timestamp on a guardian's thread with no message
+    the guardian can see would leak that a note exists. So a note does not move a thread up a
+    staff inbox either; the staff `unread_count` still counts it. A separate staff-visible
+    activity column (bumped by every message, notes included, and never serialized to a
+    guardian or student) would let notes surface in staff inboxes without the leak.
   - **An `Idempotency-Key` longer than 64 characters is a 500.** `BackgroundJob.idempotency_key`
     is `max_length=64` and nothing checks the header's length first; shared with
     `fee-invoices:generate`. Reusing a key after its 24-hour replay window is a generic 409 from

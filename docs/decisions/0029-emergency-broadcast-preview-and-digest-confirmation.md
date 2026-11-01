@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-01
-- **Enforced by:** `apps/api/apps/communication/broadcasts/tests/test_dispatch.py` (a stale count, and the same count with a different audience, are each a 409 that creates no job; a repeated `Idempotency-Key` replays one job, and the same key with a corrected message is a 422), `test_scope.py` (campus-scoped senders), `test_task.py` (frozen recipients, the `emergency` queue, preferences bypassed, a failed fan-out leaves nothing), `apps/api/core/idempotency/tests/test_replay.py` (the same body replays, a different body is refused, a legacy row replays); `e2e/tests/live/api/communication-threads-broadcast.spec.ts` (preview, a tampered digest refused, send, replay, the job)
+- **Enforced by:** `apps/api/apps/communication/broadcasts/tests/test_dispatch.py` (a stale count, and the same count with a different audience, are each a 409 that creates no job; a repeated `Idempotency-Key` replays one job, and the same key with a corrected message is a 422), `test_scope.py` (campus-scoped senders), `test_task.py` (frozen recipients, the `emergency` queue, preferences bypassed, a failed fan-out leaves nothing, a redelivered task sends nothing), `apps/api/core/jobs/tests/test_claim.py` (the job is claimed by one conditional UPDATE), `apps/api/core/idempotency/tests/test_replay.py` (the same body replays, a different body is refused, a legacy row replays); `e2e/tests/live/api/communication-threads-broadcast.spec.ts` (preview, a tampered digest refused, send, replay, the job)
 
 ## Context
 
@@ -41,6 +41,8 @@ changed between preview and send, would still go out. Decided in plan
    as `campus_id` (none is 422, another is 404), and a `custom` audience may name only users
    that campus's audience contains (else 404). A sender with only `own` or `assigned` scope
    reaches nothing: 404, not the "choose a campus" 422, since there is no campus to choose.
+   The scope is read from the roles that grant `communication.broadcast.send` only
+   (`core.rbac.permissions.user_scopes_for_key`), since a scope belongs to its `user_role`.
 6. **Audited.** Each send writes a `broadcast` audit row with the message, count, channels,
    unavailable channels and audience.
 
