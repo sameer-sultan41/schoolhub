@@ -24,9 +24,8 @@ export async function fetchSittings(examId: string): Promise<SittingRecord[]> {
 }
 
 /** Create, update and cancel each answer with the sitting and the exam's whole clash list
- * (`meta.conflicts`). The schedule's callers invalidate the exam's reads instead of using
- * `conflicts`, so the panel reloads from `fetchConflicts` and the table and panel stay in step;
- * the field is returned for any caller that needs the list at once. */
+ * (`meta.conflicts`). The schedule's callers put `conflicts` straight into the panel's cache
+ * rather than reading `fetchConflicts` again. */
 export async function createSitting(input: SittingInput): Promise<SittingWriteResult> {
   const { data, meta } = await apiClient.post<SittingRecord>(
     endpoints.examSchedules.list,

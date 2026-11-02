@@ -14,6 +14,7 @@ that ship their tables.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from decimal import Decimal
 
 from django.db import transaction
@@ -56,12 +57,14 @@ from core.api.exceptions import Conflict, DomainRuleViolation
 from core.imports.tabular import parse_rows
 from core.rbac.models import RecordScope
 from core.rbac.permissions import has_permission_key, user_scopes
+from core.tenancy.locks import AdvisoryLockNamespace, advisory_xact_lock
 
 # §7.1's lifecycle. An exam may only be *configured* — subjects added, marks
 # structure changed, the scale swapped — while it is still in one of these
 # states. Past `marks_entry` a configuration change would silently invalidate
 # marks already entered against the old maximum, which is the kind of edit that
-# produces a percentage nobody can reproduce.
+# produces a percentage nobody can reproduce. `:publish-schedule` accepts the
+# same two: publishing from `marks_entry` on would reopen a sat timetable.
 CONFIGURABLE_STATUSES = frozenset({ExamStatus.DRAFT, ExamStatus.SCHEDULED})
 
 # Deleting an exam is only safe while nothing downstream references it. §5.1
@@ -340,9 +343,41 @@ def assert_section_studies_the_class(*, exam_subject: ExamSubject, section: Sect
         )
 
 
+def lock_exams(*exam_ids: uuid.UUID | None) -> None:
+    """Lock the given exam rows with `SELECT ... FOR UPDATE`, in pk order.
+
+    Pk order so two writers locking the same pair cannot deadlock.
+    """
+    ids = sorted({exam_id for exam_id in exam_ids if exam_id is not None})
+    list(Exam.objects.select_for_update().filter(pk__in=ids).order_by("pk").values_list("pk"))
+
+
+def lock_school_schedule(tenant_id: uuid.UUID) -> None:
+    """Take the school's one schedule lock, before any exam row lock.
+
+    `:publish-schedule` reads room and invigilator clashes against *other*
+    exams' sittings, so locking the published exam alone let a concurrent
+    write to another exam's sitting commit unseen. Every sitting write and
+    every publish in the school takes this lock first, in that same order.
+    """
+    advisory_xact_lock(AdvisoryLockNamespace.EXAM_SCHEDULE, tenant_id)
+
+
 @transaction.atomic
-def save_schedule_with_conflicts(*, schedule: ExamSchedule, actor_id: uuid.UUID) -> list[dict]:
-    """Persist a sitting and return every clash it now participates in.
+def save_schedule_with_conflicts(
+    *,
+    exam_subject: ExamSubject,
+    save: Callable[[], object],
+    previous_exam_subject: ExamSubject | None = None,
+) -> list[dict]:
+    """Persist a sitting write and return the exam's whole clash list.
+
+    **Locks first**: the school's schedule lock, then the parent exam (both
+    exams, when an update moves the sitting to another exam's subject).
+    `publish_exam_schedule` reads the clash list under the same school lock, so
+    a sitting saved concurrently, in this exam or any other, either commits
+    before publish reads or waits for it: publish can no longer move the exam
+    to `scheduled` over a clash it never saw.
 
     **Saves first, then reports.** §5.2 wants a clash *list*, and a schedule
     mid-build is allowed to be imperfect — an exam-staff journey (§8) is
@@ -351,9 +386,24 @@ def save_schedule_with_conflicts(*, schedule: ExamSchedule, actor_id: uuid.UUID)
     become blocking, exactly as `timetable`'s draft grid and `:publish` divide
     the same responsibility.
     """
-    schedule.updated_by = actor_id
-    schedule.save()
-    return conflicts.detect_conflicts(exam=schedule.exam_subject.exam)
+    lock_school_schedule(exam_subject.tenant_id)
+    # The exam rows still serialise this write against status transitions
+    # (results, admit cards) that never take the schedule lock.
+    lock_exams(
+        exam_subject.exam_id,
+        previous_exam_subject.exam_id if previous_exam_subject else None,
+    )
+    save()
+    return conflicts.detect_conflicts(exam=exam_subject.exam)
+
+
+@transaction.atomic
+def delete_schedule(*, schedule: ExamSchedule, delete: Callable[[], object]) -> None:
+    """Delete a sitting under the locks the save takes, for the same reason."""
+    lock_school_schedule(schedule.tenant_id)
+    lock_exams(schedule.exam_subject.exam_id)
+    assert_schedule_is_editable(schedule)
+    delete()
 
 
 @transaction.atomic
@@ -372,11 +422,13 @@ def publish_exam_schedule(*, exam: Exam, actor_id: uuid.UUID) -> dict:
 
     Only a `draft` or `scheduled` exam publishes: from `marks_entry` on, moving
     it back to `scheduled` would reopen a timetable students have already sat.
-    The exam is locked first, so a concurrent transition cannot slip between
+    The school's schedule lock comes first, then the exam row, so a
+    concurrent sitting write or transition cannot slip between
     this check and the save.
     """
+    lock_school_schedule(exam.tenant_id)
     locked = Exam.objects.alive().select_for_update().get(pk=exam.pk)
-    if locked.status not in (ExamStatus.DRAFT, ExamStatus.SCHEDULED):
+    if locked.status not in CONFIGURABLE_STATUSES:
         raise Conflict("Only a draft or scheduled exam's schedule can be published.")
 
     findings = conflicts.detect_conflicts(exam=exam)
@@ -471,50 +523,41 @@ def issue_admit_cards(*, exam: Exam, actor_id: uuid.UUID) -> dict:
     A **revoked** card is deliberately not re-created. Revocation is a policy
     decision someone made (§5.3's fee-clearance case), and a top-up run
     silently reinstating it would undo that decision without anyone asking.
+
+    The exam row is locked first, so two concurrent runs are serialised: the
+    second waits, then reads the first one's cards as `existing` and issues 0.
+    Without the lock both read the same `existing` set and both reported N.
     """
+    exam = lock_exam(exam)
     assert_exam_is_issuable(exam)
 
     students = admit_card_candidates(exam=exam)
     existing = set(AdmitCard.objects.alive().filter(exam=exam).values_list("student_id", flat=True))
     missing = [student for student in students if student.pk not in existing]
 
-    created = [
-        AdmitCard(
-            tenant=exam.tenant,
-            exam=exam,
-            student=student,
-            admit_card_no=admit_card_number(exam=exam, admission_number=student.admission_number),
-            status=AdmitCardStatus.GENERATED,
-            created_by=actor_id,
-            updated_by=actor_id,
-        )
-        for student in missing
-    ]
-    # `ignore_conflicts`: two exam staff pressing the button at once both read
-    # the same "missing" set, and `admit_cards_one_per_student_per_exam` lets
-    # exactly one of them insert each row. The loser's duplicates are dropped
-    # rather than turning a legitimate retry into a 409 — the same reasoning
-    # `attendance.bulk_mark_student_attendance` applies to a re-submitted
-    # register.
-    AdmitCard.objects.bulk_create(created, ignore_conflicts=True)
-
-    # Counted from the database, not from `len(created)`. Review found the
-    # latter overstating under exactly the race `ignore_conflicts` exists to
-    # absorb: the loser of a concurrent double-issue attempted N rows, inserted
-    # none, and reported N. `bulk_create(ignore_conflicts=True)` cannot say
-    # which of its objects landed — on PostgreSQL the returned instances have
-    # no reliable primary keys — so the honest number comes from a re-count.
-    total_now = AdmitCard.objects.alive().filter(exam=exam).count()
-    issued = total_now - len(existing)
+    # No `ignore_conflicts`: this is the only writer and the lock serialises it,
+    # so a unique violation here is a real defect and must raise.
+    AdmitCard.objects.bulk_create(
+        [
+            AdmitCard(
+                tenant=exam.tenant,
+                exam=exam,
+                student=student,
+                admit_card_no=admit_card_number(
+                    exam=exam, admission_number=student.admission_number
+                ),
+                status=AdmitCardStatus.GENERATED,
+                created_by=actor_id,
+                updated_by=actor_id,
+            )
+            for student in missing
+        ]
+    )
 
     return {
-        "issued": issued,
+        "issued": len(missing),
         "already_issued": len(existing),
         "students": len(students),
-        # What this run *tried* to create, so a caller that sees `issued` come
-        # back lower knows a concurrent run took the difference rather than
-        # that students were skipped.
-        "attempted": len(created),
     }
 
 

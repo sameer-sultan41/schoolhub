@@ -41,8 +41,9 @@ export const SKIPPABLE_EXAM_STATUSES: readonly ExamStatus[] = ["ongoing"];
 /** The last status: nothing follows it. */
 export const TERMINAL_EXAM_STATUS: ExamStatus = "archived";
 
-/** An exam is configured (edited, its subjects changed) up to and including `scheduled`
- * (`services.CONFIGURABLE_STATUSES`); past it, marks may exist against the structure. */
+/** An exam is configured (edited, its subjects changed) and its schedule published up to and
+ * including `scheduled` (`services.CONFIGURABLE_STATUSES`); past it, marks may exist against the
+ * structure. */
 export const CONFIGURABLE_EXAM_STATUSES: readonly ExamStatus[] = ["draft", "scheduled"];
 /** Only a draft exam is deleted (`services.assert_exam_is_deletable`). */
 export const DELETABLE_EXAM_STATUS: ExamStatus = "draft";

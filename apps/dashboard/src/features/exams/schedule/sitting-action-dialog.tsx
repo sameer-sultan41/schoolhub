@@ -9,6 +9,7 @@ import { useInvalidateModule } from "@/hooks/use-invalidate-module";
 import { Services, type SittingRecord } from "@/services";
 import { EXAM_SCHEDULES_QUERY_MODULE } from "@/services/modules/exam-schedules/exam-schedules-constant";
 import { guardRefusal } from "@/features/exams/guard-refusal";
+import { useApplySittingWrite } from "./use-schedule-conflicts";
 
 export type SittingAction = "cancel" | "delete";
 
@@ -36,16 +37,22 @@ export function SittingActionDialog({
   const t = useTranslations("exams");
   const tCommon = useTranslations("common");
   const invalidateExams = useInvalidateModule(EXAM_SCHEDULES_QUERY_MODULE);
+  const applySittingWrite = useApplySittingWrite(record.exam_id);
 
   const { error, isPending, confirm } = useConfirmAction({
     mutationFn: () =>
       guardRefusal(async () => {
-        // Both answers are dropped: the module is invalidated on success either way.
-        if (action === "cancel") await Services.examSchedules.cancelSitting(record.id);
-        else await Services.examSchedules.deleteSitting(record.id);
+        if (action === "cancel") {
+          const { conflicts } = await Services.examSchedules.cancelSitting(record.id);
+          return conflicts;
+        }
+        await Services.examSchedules.deleteSitting(record.id);
+        return null;
       }, invalidateExams),
-    onSuccess: () => {
-      invalidateExams();
+    onSuccess: (conflicts) => {
+      // A cancel answers with the exam's clash list; a delete has none, so it reloads them all.
+      if (conflicts) applySittingWrite(conflicts);
+      else invalidateExams();
       toast.success(t(`schedule.${action}.done`));
       onOpenChange(false);
     },

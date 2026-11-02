@@ -81,7 +81,7 @@ function byPercentage(a: ExamResult, b: ExamResult): number {
  * - processing runs only before approval (409), and is refused while marks are outstanding (409,
  *   `marks_outstanding`, naming the subjects); a run upserts every computed row as
  *   `pending_approval`, **keeps a withheld result withheld**, stamps the viewer as `processed_by`
- *   on every pending row (L37), moves the exam to `processing`, and replays its first answer for
+ *   on every pending row (L38), moves the exam to `processing`, and replays its first answer for
  *   a repeated `Idempotency-Key`;
  * - approval needs a `processing` exam with pending rows (409s), and **refuses the latest
  *   processor** (422 under `approved_by`); it approves a withheld row too, which stays withheld;

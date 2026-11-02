@@ -25,6 +25,7 @@ import {
 } from "@/services/modules/exam-schedules/exam-schedules.schema";
 import { guardRefusal } from "@/features/exams/guard-refusal";
 import { SittingFormFields } from "./sitting-form-fields";
+import { useApplySittingWrite } from "./use-schedule-conflicts";
 
 export interface SittingFormDialogProps {
   open: boolean;
@@ -36,9 +37,9 @@ export interface SittingFormDialogProps {
 
 /**
  * Adds a sitting to the exam, or reschedules one. A clash is not a refusal: the server saves the
- * sitting and reports the exam's clashes, which the panel reloads (the write invalidates the
- * exam's reads). A real refusal shows under its field (a section of another class under
- * Section); a 409 (the sitting or the exam moved on while the dialog was open) reads in the
+ * sitting and answers with the exam's whole clash list, which goes straight into the panel's
+ * cache; the exam's other reads reload. A real refusal shows under its field (a section of another
+ * class under Section); a 409 (the sitting or the exam moved on while the dialog was open) reads in the
  * server's words, with the exam reloaded.
  *
  * Mounting contract: the caller mounts this only while it is open, so every open is a fresh form.
@@ -47,6 +48,7 @@ export function SittingFormDialog({ open, onOpenChange, exam, record }: SittingF
   const t = useTranslations("exams");
   const tCommon = useTranslations("common");
   const invalidateExams = useInvalidateModule(EXAM_SCHEDULES_QUERY_MODULE);
+  const applySittingWrite = useApplySittingWrite(exam.id);
 
   const schema = useMemo(
     () =>
@@ -74,8 +76,8 @@ export function SittingFormDialog({ open, onOpenChange, exam, record }: SittingF
       );
     },
     knownFields: SITTING_ERROR_FIELDS,
-    onSuccess: () => {
-      invalidateExams();
+    onSuccess: (result) => {
+      applySittingWrite(result.conflicts);
       toast.success(t("schedule.saved"));
       onOpenChange(false);
     },

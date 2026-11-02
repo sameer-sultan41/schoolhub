@@ -377,7 +377,7 @@ def write(*, exam: Exam, computed: list[dict], actor_id: uuid.UUID) -> dict:
 
     # Every pending row of the exam now names this run, including one it did not recompute (a
     # student withdrawn since keeps their earlier row): the approval gate reads every pending
-    # row, so a stale stamp would refuse the right approver (L37).
+    # row, so a stale stamp would refuse the right approver (L38).
     Result.objects.alive().filter(exam=exam, status=ResultStatus.PENDING_APPROVAL).update(
         processed_by=actor_id, updated_by=actor_id, updated_at=timezone.now()
     )
