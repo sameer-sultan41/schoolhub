@@ -75,10 +75,14 @@ class MarksTestCase(ExaminationsAPITestCase):
             rows[0].update(overrides)
         return rows
 
-    def submit(self, entries=None, client=None):
+    def submit(self, entries=None, client=None, section=None):
         return (client or self.client).post(
             BULK_ENTRY,
-            {"exam_subject_id": str(self.exam_subject.pk), "entries": entries or self.entries()},
+            {
+                "exam_subject_id": str(self.exam_subject.pk),
+                "section_id": str((section or self.section).pk),
+                "entries": entries or self.entries(),
+            },
             format="json",
         )
 
@@ -254,13 +258,21 @@ class BulkEntryTests(MarksTestCase):
     def test_an_idempotency_key_replays_the_counts(self) -> None:
         first = self.client.post(
             BULK_ENTRY,
-            {"exam_subject_id": str(self.exam_subject.pk), "entries": self.entries()},
+            {
+                "exam_subject_id": str(self.exam_subject.pk),
+                "section_id": str(self.section.pk),
+                "entries": self.entries(),
+            },
             format="json",
             **{"HTTP_IDEMPOTENCY_KEY": "grid-1"},
         )
         second = self.client.post(
             BULK_ENTRY,
-            {"exam_subject_id": str(self.exam_subject.pk), "entries": self.entries()},
+            {
+                "exam_subject_id": str(self.exam_subject.pk),
+                "section_id": str(self.section.pk),
+                "entries": self.entries(),
+            },
             format="json",
             **{"HTTP_IDEMPOTENCY_KEY": "grid-1"},
         )
@@ -391,7 +403,12 @@ class AllocationScopeTests(MarksTestCase):
                 entered_by=self.user.pk,
             )
         self.submit()
-        grant(self.subject_teacher_user, "exams.marks.create", scope=RecordScope.ASSIGNED)
+        grant(
+            self.subject_teacher_user,
+            "exams.marks.view",
+            "exams.marks.create",
+            scope=RecordScope.ASSIGNED,
+        )
         client = APIClient()
         authenticate(client, self.subject_teacher_user)
 
@@ -503,9 +520,10 @@ class ProgressTests(MarksTestCase):
         self.assertEqual(row["submitted"], 0)
 
     def test_progress_is_a_bounded_number_of_queries(self) -> None:
-        """Two queries flat, whatever the size of the exam. The obvious shape —
-        for each subject, count its marks — is a query per subject, and an exam
-        covers every subject in every year group."""
+        """Four queries flat (subjects, rolls, sections, marks counts), whatever
+        the size of the exam. The obvious shape — for each subject, count its
+        marks — is a query per subject, and an exam covers every subject in
+        every year group."""
         from django.db import connection
         from django.test.utils import CaptureQueriesContext
 
@@ -521,7 +539,7 @@ class ProgressTests(MarksTestCase):
         with tenant_context(self.tenant.id), CaptureQueriesContext(connection) as captured:
             services.marks_entry_progress(exam=self.exam)
 
-        self.assertLessEqual(len(captured.captured_queries), 3)
+        self.assertLessEqual(len(captured.captured_queries), 4)
 
     def _extra_subject(self):
         from apps.examinations.tests.factories import ClassSubjectFactory, SubjectFactory
@@ -590,7 +608,9 @@ class MarksImportTests(MarksTestCase):
         its own path: §6 asks to re-import failed rows only, which needs a
         per-row verdict."""
         with tenant_context(self.tenant.id):
-            students = {student.admission_number: student for student in self.students}
+            enrollments = services.import_candidates_by_admission_number(
+                exam_subject=self.exam_subject
+            )
         rows = [
             f"{self.students[0].admission_number},60,,,,",
             "NOT-A-STUDENT,55,,,,",
@@ -608,7 +628,8 @@ class MarksImportTests(MarksTestCase):
                     row=row,
                     row_number=index + 1,
                     exam_subject=self.exam_subject,
-                    students_by_number=students,
+                    enrollments_by_number=enrollments,
+                    writable_section_ids=frozenset({self.section.pk}),
                     actor_id=self.user.pk,
                 )
                 if error:
@@ -629,7 +650,10 @@ class MarksImportTests(MarksTestCase):
                 row={"admission_number": self.students[0].admission_number, "theory_marks": "60"},
                 row_number=2,
                 exam_subject=self.exam_subject,
-                students_by_number={self.students[0].admission_number: self.students[0]},
+                enrollments_by_number=services.import_candidates_by_admission_number(
+                    exam_subject=self.exam_subject
+                ),
+                writable_section_ids=frozenset({self.section.pk}),
                 actor_id=self.user.pk,
             )
             row = Marks.objects.alive().get(
@@ -646,7 +670,10 @@ class MarksImportTests(MarksTestCase):
                 row={"admission_number": self.students[0].admission_number, "theory_marks": ""},
                 row_number=2,
                 exam_subject=self.exam_subject,
-                students_by_number={self.students[0].admission_number: self.students[0]},
+                enrollments_by_number=services.import_candidates_by_admission_number(
+                    exam_subject=self.exam_subject
+                ),
+                writable_section_ids=frozenset({self.section.pk}),
                 actor_id=self.user.pk,
             )
             row = Marks.objects.alive().get(

@@ -115,10 +115,20 @@ class MarksFilterSet(django_filters.FilterSet):
     # A grid is loaded per exam-subject, but "everything outstanding for this
     # exam" is the chase list §6 describes, and it crosses subjects.
     exam_id = django_filters.UUIDFilter(field_name="exam_subject__exam_id")
+    section_id = django_filters.UUIDFilter(method="filter_section")
 
     class Meta:
         model = Marks
         fields = {"status": ["exact"], "is_absent": ["exact"], "is_exempt": ["exact"]}
+
+    def filter_section(self, queryset, name, value):
+        # The student's enrollment in the exam's own session, in any status (L33):
+        # one row per (student, session), so a promoted student's marks keep their section.
+        return queryset.filter(
+            student__enrollments__section_id=value,
+            student__enrollments__academic_session_id=F("exam_subject__exam__academic_session_id"),
+            student__enrollments__deleted_at__isnull=True,
+        )
 
 
 class ResultFilterSet(django_filters.FilterSet):

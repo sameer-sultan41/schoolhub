@@ -113,6 +113,12 @@ urlpatterns = [
         name="exams-publish-report-cards",
     ),
     path(
+        "marks/grid",
+        # Not a list: one section's whole roll, no page and no filters.
+        MarksViewSet.as_view({"get": "grid"}, pagination_class=None, filter_backends=[]),
+        name="marks-grid",
+    ),
+    path(
         "marks:bulk-entry",
         MarksViewSet.as_view({"post": "bulk_entry"}),
         name="marks-bulk-entry",
@@ -134,7 +140,7 @@ urlpatterns = [
     ),
     path(
         "exams/<uuid:pk>/marks-progress",
-        MarksViewSet.as_view({"get": "progress"}),
+        MarksViewSet.as_view({"get": "progress"}, pagination_class=None, filter_backends=[]),
         name="exams-marks-progress",
     ),
     path(

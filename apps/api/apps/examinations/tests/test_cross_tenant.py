@@ -107,6 +107,7 @@ class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
             foreign_section = SectionFactory(
                 tenant=self.other_tenant, school_class=school_class, campus=foreign_campus
             )
+            self.foreign_section = foreign_section
             foreign_room = RoomFactory(tenant=self.other_tenant, campus=foreign_campus)
             self.foreign_exam.starts_on = timezone.localdate()
             self.foreign_exam.ends_on = timezone.localdate() + datetime.timedelta(days=5)
@@ -491,6 +492,7 @@ class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
             BULK_ENTRY,
             {
                 "exam_subject_id": str(self.foreign_exam_subject.pk),
+                "section_id": str(self.section.pk),
                 "entries": [{"student_id": str(self.students[0].pk), "theory_marks": "50.00"}],
             },
             format="json",
@@ -507,6 +509,40 @@ class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
     def test_unlocking_a_foreign_exam_subject_is_a_404(self) -> None:
         self.assert404(
             self.client.post(f"/api/v1/exam-subjects/{self.foreign_exam_subject.pk}:unlock-marks")
+        )
+
+    def test_reading_a_foreign_exam_subject_s_grid_is_a_404(self) -> None:
+        self.assert404(
+            self.client.get(
+                f"{MARKS}/grid",
+                {
+                    "exam_subject_id": str(self.foreign_exam_subject.pk),
+                    "section_id": str(self.foreign_section.pk),
+                },
+            )
+        )
+
+    def test_reading_the_grid_of_a_foreign_section_is_a_404(self) -> None:
+        """Own exam-subject, another school's section."""
+        with tenant_context(self.tenant.id):
+            own_exam = ExamFactory(
+                tenant=self.tenant, academic_session=self.session, grading_scale=self.scale
+            )
+            own_subject = ExamSubjectFactory(
+                tenant=self.tenant,
+                exam=own_exam,
+                school_class=self.school_class,
+                subject=self.subject,
+            )
+
+        self.assert404(
+            self.client.get(
+                f"{MARKS}/grid",
+                {
+                    "exam_subject_id": str(own_subject.pk),
+                    "section_id": str(self.foreign_section.pk),
+                },
+            )
         )
 
     def test_reading_a_foreign_exam_s_marks_progress_is_a_404(self) -> None:

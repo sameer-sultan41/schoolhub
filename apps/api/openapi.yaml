@@ -2862,7 +2862,11 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarksLockResult'
+          description: ''
   /api/v1/exam-subjects/{id}:unlock-marks:
     post:
       operationId: exam_subjects_:unlock_marks_create
@@ -2884,7 +2888,11 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarksUnlockResult'
+          description: ''
   /api/v1/exams:
     get:
       operationId: exams_list
@@ -3135,13 +3143,12 @@ paths:
           description: No response body
   /api/v1/exams/{id}/marks-progress:
     get:
-      operationId: exams_marks_progress_retrieve
+      operationId: exams_marks_progress_list
       description: |-
         `GET /exams/{id}/marks-progress` — §6's missing-entries dashboard.
 
-        A plain `GET` rather than a report `kind`, because it is operational
-        rather than analytical: an exam clerk chasing outstanding entries wants
-        it beside the exam, and §13 lists "marks-entry status" as its own row.
+        One row per exam-subject and section, limited to the sections the
+        caller may enter marks for unless their scope is `all`.
       parameters:
       - in: path
         name: id
@@ -3155,7 +3162,13 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MarksProgressRow'
+          description: ''
   /api/v1/exams/{id}/schedule-conflicts:
     get:
       operationId: exams_schedule_conflicts_retrieve
@@ -6809,6 +6822,11 @@ paths:
         schema:
           type: string
       - in: query
+        name: section_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
         name: status
         schema:
           type: string
@@ -6895,11 +6913,48 @@ paths:
               schema:
                 $ref: '#/components/schemas/Marks'
           description: ''
+  /api/v1/marks/grid:
+    get:
+      operationId: marks_grid_retrieve
+      description: '`GET /marks/grid` — one section''s entry grid for one exam-subject.'
+      parameters:
+      - in: query
+        name: exam_subject_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: section_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - marks
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MarksGridEntry'
+          description: The section's active roll in the exam's session, in roll order,
+            each student with their `marks` row or null. `meta.exam_subject` carries
+            `max_marks`, `pass_marks`, `has_practical` and `practical_max_marks`.
+            `meta.writable` says whether `:bulk-entry` would accept this grid now;
+            when false, `meta.unwritable_reason` is one of `no_permission`, `exam_status`,
+            `locked`, `window_not_open` or `window_closed`, and `meta.unwritable_message`
+            is the refusing gate's sentence. An exam-subject or section the caller
+            may not enter (`services.may_enter_marks`) is a 404.
   /api/v1/marks:bulk-entry:
     post:
       operationId: marks:bulk_entry_create
       description: |-
-        `POST /marks:bulk-entry` — one exam-subject's grid (§16).
+        `POST /marks:bulk-entry` — one section's grid for one exam-subject (§16).
 
         Accepts `Idempotency-Key`: §16 calls this an idempotent grid submit, and
         a teacher on a school Wi-Fi genuinely does re-send. The service is an
@@ -6924,7 +6979,11 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkMarksEntryResult'
+          description: ''
   /api/v1/notices:
     get:
       operationId: notices_list
@@ -14727,10 +14786,13 @@ components:
       - student_id
     BulkMarksEntry:
       type: object
-      description: The body of `POST /marks:bulk-entry` — one exam-subject's whole
-        grid.
+      description: The body of `POST /marks:bulk-entry` — one section's grid for one
+        exam-subject.
       properties:
         exam_subject_id:
+          type: string
+          format: uuid
+        section_id:
           type: string
           format: uuid
         entries:
@@ -14740,6 +14802,21 @@ components:
       required:
       - entries
       - exam_subject_id
+      - section_id
+    BulkMarksEntryResult:
+      type: object
+      description: '`:bulk-entry`''s 200: rows created, rows updated, and rows written.'
+      properties:
+        entered:
+          type: integer
+        updated:
+          type: integer
+        rows:
+          type: integer
+      required:
+      - entered
+      - rows
+      - updated
     Campus:
       type: object
       properties:
@@ -18003,6 +18080,31 @@ components:
       description: |-
         * `draft` - draft
         * `submitted` - submitted
+    MarksGridEntry:
+      type: object
+      description: One student on a section's roll, in roll order, with their marks
+        row if entered.
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        student_name:
+          type: string
+        admission_number:
+          type: string
+        roll_number:
+          type: string
+          nullable: true
+        marks:
+          allOf:
+          - $ref: '#/components/schemas/Marks'
+          nullable: true
+      required:
+      - admission_number
+      - marks
+      - roll_number
+      - student_id
+      - student_name
     MarksImportRequest:
       type: object
       description: The body of `POST /marks-imports` — a multipart CSV or .xlsx upload.
@@ -18016,6 +18118,54 @@ components:
       required:
       - exam_subject_id
       - file
+    MarksLockResult:
+      type: object
+      description: '`:lock-marks`'' 200. `already_locked` marks a retry.'
+      properties:
+        locked_rows:
+          type: integer
+        already_locked:
+          type: boolean
+      required:
+      - already_locked
+      - locked_rows
+    MarksProgressRow:
+      type: object
+      description: One (exam-subject, section) row of `GET /exams/{id}/marks-progress`.
+      properties:
+        exam_subject_id:
+          type: string
+          format: uuid
+        subject_name:
+          type: string
+        class_name:
+          type: string
+        section_id:
+          type: string
+          format: uuid
+        section_name:
+          type: string
+        expected:
+          type: integer
+          description: Students on the section's active roll.
+        entered:
+          type: integer
+          description: Of those, students with a marks row.
+        submitted:
+          type: integer
+          description: Of those, rows submitted or locked.
+        is_locked:
+          type: boolean
+      required:
+      - class_name
+      - entered
+      - exam_subject_id
+      - expected
+      - is_locked
+      - section_id
+      - section_name
+      - subject_name
+      - submitted
     MarksStatusEnum:
       enum:
       - draft
@@ -18026,6 +18176,17 @@ components:
         * `draft` - Draft
         * `submitted` - Submitted
         * `locked` - Locked
+    MarksUnlockResult:
+      type: object
+      description: '`:unlock-marks`'' 200. `already_unlocked` marks a retry.'
+      properties:
+        unlocked_rows:
+          type: integer
+        already_unlocked:
+          type: boolean
+      required:
+      - already_unlocked
+      - unlocked_rows
     MyRegister:
       type: object
       description: One register the caller marks on a date. The period fields are

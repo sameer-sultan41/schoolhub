@@ -84,6 +84,7 @@ from apps.examinations.serializers import (
     AdmitCardRevokeSerializer,
     AdmitCardSerializer,
     AssemblePaperSerializer,
+    BulkMarksEntryResultSerializer,
     BulkMarksEntrySerializer,
     CardDownloadSerializer,
     ExamConflictSerializer,
@@ -94,8 +95,13 @@ from apps.examinations.serializers import (
     ExamSubjectSerializer,
     GradeBandSerializer,
     GradingScaleSerializer,
+    MarksGridEntrySerializer,
+    MarksGridQuerySerializer,
     MarksImportRequestSerializer,
+    MarksLockResultSerializer,
+    MarksProgressRowSerializer,
     MarksSerializer,
+    MarksUnlockResultSerializer,
     QuestionBankSerializer,
     QuestionSerializer,
     ReportCardSerializer,
@@ -103,6 +109,7 @@ from apps.examinations.serializers import (
     ResultWithholdSerializer,
     SendResultsBackSerializer,
 )
+from apps.school_organization.models import Section
 from apps.student_management.models import StudentEnrollment
 from core.api.exceptions import Conflict, DomainRuleViolation
 from core.api.pagination import PageNumberPagination
@@ -131,6 +138,17 @@ def scoped_exam(request: Request, pk: str | None) -> Exam:
     """
     exams = scope_queryset(Exam.objects.alive(), request.user, own_field=None, campus_field=None)
     return get_object_or_404(exams, pk=pk)
+
+
+def scoped_exam_subject(request: Request, pk) -> ExamSubject:
+    """The exam-subject an action addresses by id, through `ExamSubjectViewSet`'s record scope."""
+    exam_subjects = scope_queryset(
+        ExamSubject.objects.alive().select_related("exam"),
+        request.user,
+        own_field=None,
+        campus_field=None,
+    )
+    return get_object_or_404(exam_subjects, pk=pk)
 
 
 STAFF_PERMISSIONS = [
@@ -762,10 +780,16 @@ class MarksViewSet(
     # own them and take precedence over these fallbacks, which are left None so
     # a mistaken single-column reading cannot silently apply instead.
     scope_own_field = None
+    # `Marks.filter_by_campus` takes precedence: it scopes by the section's campus,
+    # as `may_enter_marks` does. This column is only the contract-test fallback.
     scope_campus_field = "student__campus_id"
     required_feature = FEATURE
-    required_permission = "exams.marks.create"
+    required_permission = "exams.marks.view"
     required_permission_map = {
+        "list": "exams.marks.view",
+        "retrieve": "exams.marks.view",
+        "grid": "exams.marks.view",
+        "progress": "exams.marks.view",
         "bulk_entry": "exams.marks.create",
         "lock": "exams.marks.lock",
         "unlock": "exams.marks.lock",
@@ -775,9 +799,63 @@ class MarksViewSet(
     def get_queryset(self):
         return super().get_queryset().select_related("student", "exam_subject__subject")
 
-    @extend_schema(request=BulkMarksEntrySerializer, responses={200: None})
+    @extend_schema(
+        parameters=[MarksGridQuerySerializer],
+        responses={
+            200: OpenApiResponse(
+                response=MarksGridEntrySerializer(many=True),
+                description=(
+                    "The section's active roll in the exam's session, in roll order, each "
+                    "student with their `marks` row or null. `meta.exam_subject` carries "
+                    "`max_marks`, `pass_marks`, `has_practical` and `practical_max_marks`. "
+                    "`meta.writable` says whether `:bulk-entry` would accept this grid now; "
+                    "when false, `meta.unwritable_reason` is one of `no_permission`, "
+                    "`exam_status`, `locked`, `window_not_open` or `window_closed`, and "
+                    "`meta.unwritable_message` is the refusing gate's sentence. An exam-subject "
+                    "or section the caller may not enter (`services.may_enter_marks`) is a 404."
+                ),
+            )
+        },
+    )
+    def grid(self, request: Request) -> Response:
+        """`GET /marks/grid` — one section's entry grid for one exam-subject."""
+        query = MarksGridQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        exam_subject = scoped_exam_subject(request, query.validated_data["exam_subject_id"])
+        section = get_object_or_404(Section.objects.alive(), pk=query.validated_data["section_id"])
+        # Out of the caller's sections reads as absent, like any out-of-scope row.
+        if not services.may_enter_marks(
+            user=request.user, exam_subject=exam_subject, section=section
+        ):
+            raise NotFound
+        entries = services.marks_grid(exam_subject=exam_subject, section=section)
+        blocked = services.marks_grid_writability(user=request.user, exam_subject=exam_subject)
+        return Response(
+            {
+                "data": MarksGridEntrySerializer(entries, many=True).data,
+                "meta": {
+                    "exam_subject": {
+                        "max_marks": str(exam_subject.max_marks),
+                        "pass_marks": str(exam_subject.pass_marks),
+                        "has_practical": exam_subject.has_practical,
+                        "practical_max_marks": (
+                            None
+                            if exam_subject.practical_max_marks is None
+                            else str(exam_subject.practical_max_marks)
+                        ),
+                    },
+                    "writable": blocked is None,
+                    "unwritable_reason": blocked[0] if blocked else None,
+                    "unwritable_message": blocked[1] if blocked else None,
+                },
+            }
+        )
+
+    @extend_schema(
+        request=BulkMarksEntrySerializer, responses={200: BulkMarksEntryResultSerializer}
+    )
     def bulk_entry(self, request: Request):
-        """`POST /marks:bulk-entry` — one exam-subject's grid (§16).
+        """`POST /marks:bulk-entry` — one section's grid for one exam-subject (§16).
 
         Accepts `Idempotency-Key`: §16 calls this an idempotent grid submit, and
         a teacher on a school Wi-Fi genuinely does re-send. The service is an
@@ -792,13 +870,14 @@ class MarksViewSet(
         def execute():
             outcome = services.bulk_enter_marks(
                 exam_subject=exam_subject,
+                section=serializer.validated_data["section"],
                 entries=serializer.validated_data["entries"],
                 user=request.user,
                 actor_id=request.user.pk,
             )
             record_audit(request, "create", exam_subject, after=outcome)
             return ActionResponse.ok(
-                None,
+                BulkMarksEntryResultSerializer(outcome).data,
                 message=(f"{outcome['entered']} entered, {outcome['updated']} updated."),
             )
 
@@ -809,10 +888,10 @@ class MarksViewSet(
             execute=execute,
         )
 
-    @extend_schema(request=None, responses={200: None})
+    @extend_schema(request=None, responses={200: MarksLockResultSerializer})
     def lock(self, request: Request, pk: str | None = None):
         """`POST /exam-subjects/{id}:lock-marks` (§16)."""
-        exam_subject = get_object_or_404(ExamSubject.objects.alive(), pk=pk)
+        exam_subject = scoped_exam_subject(request, pk)
         outcome = services.lock_marks(exam_subject=exam_subject, actor_id=request.user.pk)
         record_audit(request, "lock", exam_subject, after=outcome)
         return ActionResponse.ok(
@@ -824,14 +903,14 @@ class MarksViewSet(
             ),
         )
 
-    @extend_schema(request=None, responses={200: None})
+    @extend_schema(request=None, responses={200: MarksUnlockResultSerializer})
     def unlock(self, request: Request, pk: str | None = None):
         """`POST /exam-subjects/{id}:unlock-marks` (§16).
 
         Behind `exams.marks.lock`, and audited — §6 asks for both, because
         reopening a window is how a settled mark changes.
         """
-        exam_subject = get_object_or_404(ExamSubject.objects.alive(), pk=pk)
+        exam_subject = scoped_exam_subject(request, pk)
         outcome = services.unlock_marks(exam_subject=exam_subject, actor_id=request.user.pk)
         record_audit(request, "update", exam_subject, after=outcome)
         return ActionResponse.ok(
@@ -843,16 +922,17 @@ class MarksViewSet(
             ),
         )
 
-    @extend_schema(responses={200: None})
+    @extend_schema(responses={200: MarksProgressRowSerializer(many=True)})
     def progress(self, request: Request, pk: str | None = None):
         """`GET /exams/{id}/marks-progress` — §6's missing-entries dashboard.
 
-        A plain `GET` rather than a report `kind`, because it is operational
-        rather than analytical: an exam clerk chasing outstanding entries wants
-        it beside the exam, and §13 lists "marks-entry status" as its own row.
+        One row per exam-subject and section, limited to the sections the
+        caller may enter marks for unless their scope is `all`.
         """
-        exam = get_object_or_404(Exam.objects.alive(), pk=pk)
-        return ActionResponse.ok(services.marks_entry_progress(exam=exam))
+        # A plain GET rather than a report `kind`: it is operational, read beside the exam.
+        exam = scoped_exam(request, pk)
+        rows = services.marks_entry_progress(exam=exam, user=request.user)
+        return ActionResponse.ok(MarksProgressRowSerializer(rows, many=True).data)
 
 
 class MarksImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
@@ -880,6 +960,8 @@ class MarksImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
         exam_subject = serializer.validated_data["exam_subject"]
         upload = serializer.validated_data["file"]
 
+        # The caller must be able to enter at least one section; the job checks each row's.
+        services.assert_marker_may_enter_some_section(user=request.user, exam_subject=exam_subject)
         # The window and lock are checked *here*, before a job is created, so a
         # clerk importing into a locked subject is told immediately rather than
         # by polling a job that fails.

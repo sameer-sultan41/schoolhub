@@ -1190,11 +1190,10 @@ export interface paths {
         /**
          * @description `GET /exams/{id}/marks-progress` — §6's missing-entries dashboard.
          *
-         *     A plain `GET` rather than a report `kind`, because it is operational
-         *     rather than analytical: an exam clerk chasing outstanding entries wants
-         *     it beside the exam, and §13 lists "marks-entry status" as its own row.
+         *     One row per exam-subject and section, limited to the sections the
+         *     caller may enter marks for unless their scope is `all`.
          */
-        get: operations["exams_marks_progress_retrieve"];
+        get: operations["exams_marks_progress_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2910,6 +2909,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/marks/grid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET /marks/grid` — one section's entry grid for one exam-subject. */
+        get: operations["marks_grid_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/marks:bulk-entry": {
         parameters: {
             query?: never;
@@ -2920,7 +2936,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description `POST /marks:bulk-entry` — one exam-subject's grid (§16).
+         * @description `POST /marks:bulk-entry` — one section's grid for one exam-subject (§16).
          *
          *     Accepts `Idempotency-Key`: §16 calls this an idempotent grid submit, and
          *     a teacher on a school Wi-Fi genuinely does re-send. The service is an
@@ -6404,11 +6420,19 @@ export interface components {
             check_out_time?: string | null;
             remarks?: string | null;
         };
-        /** @description The body of `POST /marks:bulk-entry` — one exam-subject's whole grid. */
+        /** @description The body of `POST /marks:bulk-entry` — one section's grid for one exam-subject. */
         BulkMarksEntry: {
             /** Format: uuid */
             exam_subject_id: string;
+            /** Format: uuid */
+            section_id: string;
             entries: components["schemas"]["MarksEntry"][];
+        };
+        /** @description `:bulk-entry`'s 200: rows created, rows updated, and rows written. */
+        BulkMarksEntryResult: {
+            entered: number;
+            updated: number;
+            rows: number;
         };
         Campus: {
             /** Format: uuid */
@@ -7978,12 +8002,43 @@ export interface components {
          * @enum {string}
          */
         MarksEntryStatusEnum: "draft" | "submitted";
+        /** @description One student on a section's roll, in roll order, with their marks row if entered. */
+        MarksGridEntry: {
+            /** Format: uuid */
+            student_id: string;
+            student_name: string;
+            admission_number: string;
+            roll_number: string | null;
+            marks: components["schemas"]["Marks"] | null;
+        };
         /** @description The body of `POST /marks-imports` — a multipart CSV or .xlsx upload. */
         MarksImportRequest: {
             /** Format: uuid */
             exam_subject_id: string;
             /** Format: uri */
             file: string;
+        };
+        /** @description `:lock-marks`' 200. `already_locked` marks a retry. */
+        MarksLockResult: {
+            locked_rows: number;
+            already_locked: boolean;
+        };
+        /** @description One (exam-subject, section) row of `GET /exams/{id}/marks-progress`. */
+        MarksProgressRow: {
+            /** Format: uuid */
+            exam_subject_id: string;
+            subject_name: string;
+            class_name: string;
+            /** Format: uuid */
+            section_id: string;
+            section_name: string;
+            /** @description Students on the section's active roll. */
+            expected: number;
+            /** @description Of those, students with a marks row. */
+            entered: number;
+            /** @description Of those, rows submitted or locked. */
+            submitted: number;
+            is_locked: boolean;
         };
         /**
          * @description * `draft` - Draft
@@ -7992,6 +8047,11 @@ export interface components {
          * @enum {string}
          */
         MarksStatusEnum: "draft" | "submitted" | "locked";
+        /** @description `:unlock-marks`' 200. `already_unlocked` marks a retry. */
+        MarksUnlockResult: {
+            unlocked_rows: number;
+            already_unlocked: boolean;
+        };
         /** @description One register the caller marks on a date. The period fields are null in daily mode. */
         MyRegister: {
             /** Format: uuid */
@@ -13770,12 +13830,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MarksLockResult"];
+                };
             };
         };
     };
@@ -13790,12 +13851,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MarksUnlockResult"];
+                };
             };
         };
     };
@@ -13951,7 +14013,7 @@ export interface operations {
             };
         };
     };
-    exams_marks_progress_retrieve: {
+    exams_marks_progress_list: {
         parameters: {
             query?: never;
             header?: never;
@@ -13962,12 +14024,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MarksProgressRow"][];
+                };
             };
         };
     };
@@ -16522,6 +16585,7 @@ export interface operations {
                 page_size?: number;
                 /** @description A search term. */
                 search?: string;
+                section_id?: string;
                 /**
                  * @description * `draft` - Draft
                  *     * `submitted` - Submitted
@@ -16590,6 +16654,29 @@ export interface operations {
             };
         };
     };
+    marks_grid_retrieve: {
+        parameters: {
+            query: {
+                exam_subject_id: string;
+                section_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The section's active roll in the exam's session, in roll order, each student with their `marks` row or null. `meta.exam_subject` carries `max_marks`, `pass_marks`, `has_practical` and `practical_max_marks`. `meta.writable` says whether `:bulk-entry` would accept this grid now; when false, `meta.unwritable_reason` is one of `no_permission`, `exam_status`, `locked`, `window_not_open` or `window_closed`, and `meta.unwritable_message` is the refusing gate's sentence. An exam-subject or section the caller may not enter (`services.may_enter_marks`) is a 404. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarksGridEntry"][];
+                };
+            };
+        };
+    };
     "marks:bulk_entry_create": {
         parameters: {
             query?: never;
@@ -16605,12 +16692,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["BulkMarksEntryResult"];
+                };
             };
         };
     };

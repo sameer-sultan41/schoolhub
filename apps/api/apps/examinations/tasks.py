@@ -335,6 +335,7 @@ def import_marks_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> No
 
     from apps.examinations import services
     from apps.examinations.models import ExamSubject
+    from core.rbac.models import User
     from core.tenancy.context import tenant_atomic
 
     with tenant_atomic(uuid.UUID(tenant_id)):
@@ -354,7 +355,10 @@ def import_marks_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> No
             )
             # Built once for the whole file. Looked up per row it would be one
             # query each, and a six-hundred-row sheet is a real size.
-            students = services.import_candidates_by_admission_number(exam_subject=exam_subject)
+            enrollments = services.import_candidates_by_admission_number(exam_subject=exam_subject)
+            # The requester's sections, checked per row like the grid checks its section.
+            requester = User.objects.get(pk=payload["requested_by"])
+            writable = services.enterable_section_ids(user=requester, exam_subject=exam_subject)
 
         errors: list[dict[str, str]] = []
         succeeded = 0
@@ -366,7 +370,8 @@ def import_marks_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> No
                     row=row,
                     row_number=int(row[ROW_NUMBER_KEY]),
                     exam_subject=exam_subject,
-                    students_by_number=students,
+                    enrollments_by_number=enrollments,
+                    writable_section_ids=writable,
                     actor_id=uuid.UUID(actor_id),
                 )
             if error:
@@ -378,7 +383,12 @@ def import_marks_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> No
 
         mark_succeeded(
             job=job,
-            result={"rows": len(rows), "succeeded": succeeded, "errors": errors},
+            result={
+                "total": len(rows),
+                "succeeded": succeeded,
+                "failed": len(errors),
+                "errors": errors,
+            },
         )
     except Exception as exc:  # noqa: BLE001
         # The job row is the only place a caller polling GET /jobs/{id} can
@@ -401,7 +411,8 @@ def remind_tenant_marks_entry(tenant_id: uuid.UUID) -> int:
     so a subject nobody has started counts and one that is merely unsubmitted
     does too.
 
-    **Recipients are the allocated subject teachers**, from
+    One reminder per outstanding *section*. **Recipients are that section's
+    allocated subject teachers in the exam's session**, from
     `academics.TeacherSubjectAllocation`, which is the same table
     `Marks.filter_assigned_to_user` resolves entry rights through. §12 says
     "teachers with pending entries", and a broadcast to all staff would be the
@@ -429,29 +440,37 @@ def remind_tenant_marks_entry(tenant_id: uuid.UUID) -> int:
                 status__in=[ExamStatus.SCHEDULED, ExamStatus.ONGOING, ExamStatus.MARKS_ENTRY]
             )
         )
+        now = timezone.now()
         for exam in exams:
-            for entry in marks_entry_progress(exam=exam):
-                if entry["is_locked"] or entry["closes_at"] is None:
-                    continue
-                if entry["closes_at"] > horizon or entry["closes_at"] < timezone.now():
-                    continue
-                if entry["submitted"] >= entry["expected"]:
-                    continue
-
-                # `marks_entry_progress` carries `subject_id`/`class_id` so
-                # this does not re-fetch the exam-subject per row — the N+1
-                # shape PR B's review caught twice.
-                teachers = list(
-                    TeacherSubjectAllocation.objects.alive()
-                    .filter(
-                        subject_id=entry["subject_id"],
-                        section__school_class_id=entry["class_id"],
-                        effective_to__isnull=True,
-                        staff__user_id__isnull=False,
-                    )
-                    .values_list("staff__user_id", flat=True)
+            due = [
+                entry
+                for entry in marks_entry_progress(exam=exam)
+                if not entry["is_locked"]
+                and entry["closes_at"] is not None
+                and now <= entry["closes_at"] <= horizon
+                and entry["submitted"] < entry["expected"]
+            ]
+            if not due:
+                continue
+            # One read per exam: each due row is one section, reminded to that
+            # section's current subject teachers in the exam's session only.
+            teachers: dict[tuple, list] = {}
+            for section_id, subject_id, user_id in (
+                TeacherSubjectAllocation.objects.alive()
+                .filter(
+                    section_id__in={entry["section_id"] for entry in due},
+                    subject_id__in={entry["subject_id"] for entry in due},
+                    academic_session_id=exam.academic_session_id,
+                    effective_to__isnull=True,
+                    staff__user_id__isnull=False,
                 )
-                recipients = [Recipient(user_id=user_id) for user_id in dict.fromkeys(teachers)]
+                .values_list("section_id", "subject_id", "staff__user_id")
+            ):
+                teachers.setdefault((section_id, subject_id), []).append(user_id)
+
+            for entry in due:
+                user_ids = teachers.get((entry["section_id"], entry["subject_id"]), [])
+                recipients = [Recipient(user_id=user_id) for user_id in dict.fromkeys(user_ids)]
                 if not recipients:
                     continue
                 try:
@@ -463,7 +482,7 @@ def remind_tenant_marks_entry(tenant_id: uuid.UUID) -> int:
                             "exam.name": exam.name,
                             "school.name": school_name,
                             "subject.name": entry["subject_name"],
-                            "class.name": entry["class_name"],
+                            "class.name": f"{entry['class_name']} {entry['section_name']}",
                             "outstanding": str(entry["expected"] - entry["submitted"]),
                             "closes_at": entry["closes_at"].isoformat(),
                         },

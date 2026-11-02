@@ -245,12 +245,6 @@ class AssignedTeaching:
     staff_ids: frozenset[uuid.UUID] = frozenset()
 
     @property
-    def homeroom_section_ids(self) -> frozenset[uuid.UUID]:
-        # `Marks` scopes by section through the student's active enrollment,
-        # which already pins the session; it needs only the ids.
-        return frozenset(section_id for section_id, _session_id in self.homerooms)
-
-    @property
     def is_empty(self) -> bool:
         return not (self.allocations or self.homerooms)
 
@@ -961,6 +955,22 @@ class Marks(TenantOwnedModel):
         return queryset.filter(student__in=visible)
 
     @classmethod
+    def filter_by_campus(cls, queryset, campus_ids):
+        """Record scope `campus` — the campus of the section the row belongs to.
+
+        The section is the student's enrollment in the exam's own session, the one
+        `services.may_enter_marks` checks `section.campus_id` on. Any status (L33),
+        so a promoted session's marks stay readable to its campus.
+        """
+        return queryset.filter(
+            student__enrollments__section__campus_id__in=campus_ids,
+            student__enrollments__academic_session_id=models.F(
+                "exam_subject__exam__academic_session_id"
+            ),
+            student__enrollments__deleted_at__isnull=True,
+        )
+
+    @classmethod
     def filter_assigned_to_user(cls, queryset, user):
         """Record scope `assigned` — §4's marks-entry rights.
 
@@ -976,9 +986,10 @@ class Marks(TenantOwnedModel):
           different thing from teaching the subject.
 
         Narrowing to either alone would hide half of what each role needs. Both
-        halves come from `_assigned_teaching`, which `Exam` and `ExamSubject`
-        resolve through too; only allocations' (section, subject) is used here,
-        as it always was.
+        halves come from `_assigned_teaching`, and both match only in the
+        exam's session, through the student's active enrollment there — the
+        same rule `services.may_enter_marks` applies to a write, so a teacher
+        reads exactly the rows they may enter.
         """
         from apps.student_management.models import EnrollmentStatus
 
@@ -986,21 +997,25 @@ class Marks(TenantOwnedModel):
         if teaching.is_empty:
             return queryset.none()
 
+        enrolled = {
+            "student__enrollments__status": EnrollmentStatus.ACTIVE,
+            "student__enrollments__deleted_at__isnull": True,
+        }
         predicate = models.Q(pk__in=[])
-        for section_id, _class_id, subject_id, _session_id in teaching.allocations:
-            # Marks name a student and an exam-subject, so "the section I teach"
-            # resolves through the student's active enrollment in it.
+        for section_id, _class_id, subject_id, session_id in teaching.allocations:
             predicate |= models.Q(
                 exam_subject__subject_id=subject_id,
+                exam_subject__exam__academic_session_id=session_id,
                 student__enrollments__section_id=section_id,
-                student__enrollments__status=EnrollmentStatus.ACTIVE,
-                student__enrollments__deleted_at__isnull=True,
+                student__enrollments__academic_session_id=session_id,
+                **enrolled,
             )
-        if teaching.homeroom_section_ids:
+        for section_id, session_id in teaching.homerooms:
             predicate |= models.Q(
-                student__enrollments__section_id__in=teaching.homeroom_section_ids,
-                student__enrollments__status=EnrollmentStatus.ACTIVE,
-                student__enrollments__deleted_at__isnull=True,
+                exam_subject__exam__academic_session_id=session_id,
+                student__enrollments__section_id=section_id,
+                student__enrollments__academic_session_id=session_id,
+                **enrolled,
             )
         return queryset.filter(predicate).distinct()
 

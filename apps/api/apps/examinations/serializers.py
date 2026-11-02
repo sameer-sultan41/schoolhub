@@ -620,9 +620,10 @@ class MarksEntrySerializer(serializers.Serializer):
 
 
 class BulkMarksEntrySerializer(serializers.Serializer):
-    """The body of `POST /marks:bulk-entry` — one exam-subject's whole grid."""
+    """The body of `POST /marks:bulk-entry` — one section's grid for one exam-subject."""
 
     exam_subject_id = _fk(ExamSubject, source="exam_subject")
+    section_id = _fk(Section, source="section")
     entries = serializers.ListField(child=MarksEntrySerializer(), allow_empty=False)
 
     def validate_entries(self, value: list[dict]) -> list[dict]:
@@ -634,6 +635,63 @@ class BulkMarksEntrySerializer(serializers.Serializer):
                 )
             seen.add(entry["student_id"])
         return value
+
+
+class BulkMarksEntryResultSerializer(serializers.Serializer):
+    """`:bulk-entry`'s 200: rows created, rows updated, and rows written."""
+
+    entered = serializers.IntegerField()
+    updated = serializers.IntegerField()
+    rows = serializers.IntegerField()
+
+
+class MarksLockResultSerializer(serializers.Serializer):
+    """`:lock-marks`' 200. `already_locked` marks a retry."""
+
+    locked_rows = serializers.IntegerField()
+    already_locked = serializers.BooleanField()
+
+
+class MarksUnlockResultSerializer(serializers.Serializer):
+    """`:unlock-marks`' 200. `already_unlocked` marks a retry."""
+
+    unlocked_rows = serializers.IntegerField()
+    already_unlocked = serializers.BooleanField()
+
+
+class MarksGridQuerySerializer(serializers.Serializer):
+    """Query parameters of `GET /marks/grid`.
+
+    Plain UUIDs, not related fields, so an unknown, foreign or out-of-scope id is
+    the view's 404 rather than a 400 (AGENTS.md invariant 2).
+    """
+
+    exam_subject_id = serializers.UUIDField()
+    section_id = serializers.UUIDField()
+
+
+class MarksGridEntrySerializer(serializers.Serializer):
+    """One student on a section's roll, in roll order, with their marks row if entered."""
+
+    student_id = serializers.UUIDField()
+    student_name = serializers.CharField()
+    admission_number = serializers.CharField()
+    roll_number = serializers.CharField(allow_null=True)
+    marks = MarksSerializer(allow_null=True)
+
+
+class MarksProgressRowSerializer(serializers.Serializer):
+    """One (exam-subject, section) row of `GET /exams/{id}/marks-progress`."""
+
+    exam_subject_id = serializers.UUIDField()
+    subject_name = serializers.CharField()
+    class_name = serializers.CharField()
+    section_id = serializers.UUIDField()
+    section_name = serializers.CharField()
+    expected = serializers.IntegerField(help_text="Students on the section's active roll.")
+    entered = serializers.IntegerField(help_text="Of those, students with a marks row.")
+    submitted = serializers.IntegerField(help_text="Of those, rows submitted or locked.")
+    is_locked = serializers.BooleanField()
 
 
 class MarksImportRequestSerializer(serializers.Serializer):
@@ -650,6 +708,11 @@ class MarksImportRequestSerializer(serializers.Serializer):
             )
         if not value.name.lower().endswith((".csv", ".xlsx")):
             raise serializers.ValidationError("Upload a .csv or .xlsx marks sheet.")
+        # The purpose's declared MIME allowlist, which this direct upload used to skip.
+        if value.content_type not in spec.mime_types:
+            raise serializers.ValidationError(
+                f"'{value.content_type}' is not a CSV or .xlsx file type this import accepts."
+            )
         return value
 
 

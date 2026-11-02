@@ -19,8 +19,9 @@ to register the key **and add the §4 row in the same PR** — which is where
 AGENTS.md's "update the module doc in the same PR" points. Inventing a key the
 doc never mentions anywhere would be the different, worse thing.
 
-The five added keys are `exams.grading-scale.view`, `exams.schedule.view`,
-`exams.admit-card.view`, `exams.result.create` and `exams.question-bank.view`.
+The added keys are `exams.grading-scale.view`, `exams.schedule.view`,
+`exams.admit-card.view`, `exams.result.create`, `exams.question-bank.view` and,
+with the marks dashboard, `exams.marks.view`.
 
 **No RBAC registry change ships with this module.** Every verb §4 declares is
 already registered: `view/create/update/delete/export/import/approve/publish`
@@ -182,6 +183,14 @@ registry.register(
     ("exam_staff",),
 )
 
+# Reading the marks grid and its progress. §4 had no view key, so reads fell back
+# to `.create` and shut out the leadership roles that review marks. The record
+# scope (`services.may_enter_marks`) still narrows each caller to their sections.
+registry.register(
+    "exams.marks.view",
+    "View marks, the entry grid and entry progress (record-scoped by section).",
+    EXAM_VIEWERS,
+)
 registry.register(
     "exams.marks.create",
     "Enter marks for an assigned class-subject (§5.4).",
