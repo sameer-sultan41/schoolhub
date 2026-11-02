@@ -56,6 +56,13 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 | `exams.marks.view` | Read marks, the entry grid and entry progress (record-scoped by section, as entry is) | `teacher`, `class_teacher`, `exam_staff`, `school_admin`, `principal`, `vice_principal` |
 
 The approver of a result cannot be the user who ran processing (segregation of duties, RBAC doc §2.4).
+It is the **latest** run that counts: every run stamps `results.processed_by` on every pending row of the exam
+(including a row it did not recompute, such as a student withdrawn since), so after a send-back and a re-process
+by someone else, the new processor may not approve and the original one may.
+
+Report-card remarks are split by field: `class_teacher_remarks` needs `exams.report-card.create` and
+`principal_remarks` needs `exams.report-card.publish`. The `PATCH` takes either key
+(`AnyOf`, ADR-0027), and a body naming a field whose key the caller lacks is a 403 naming that field.
 
 A `teacher` reads exams at record scope `assigned`: the exams with a subject they are currently allocated
 to in that exam's session, or any subject of their homeroom's class in the homeroom's session (the session
@@ -232,9 +239,10 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - `GET/POST/PATCH /api/v1/exams` · `/api/v1/exam-subjects` · `/api/v1/exam-schedules` · `/api/v1/grading-scales` (bands nested: `/api/v1/grading-scales/{id}/grade-bands`)
 - `GET /api/v1/marks` — filters: `exam_subject_id`, `section_id`, `student_id`, `status`; `GET /api/v1/marks/grid?exam_subject_id=&section_id=` (one section's roll with its marks, and `meta.writable`); `POST /api/v1/marks:bulk-entry` (idempotent grid submit for one `section_id`) · `POST /api/v1/exam-subjects/{id}:lock-marks` · `:unlock-marks`
 - `POST /api/v1/exams/{id}:process-results` — `202` + job resource (API doc §2.7)
-- `POST /api/v1/exams/{id}:approve-results` · `:publish-results` — colon-actions, permission-guarded, audited
+- `POST /api/v1/exams/{id}:approve-results` · `:send-results-back` · `:publish-results` — colon-actions, permission-guarded, audited
 - `GET /api/v1/exams/{id}/schedule-conflicts` (the clash list) · `POST /api/v1/exams/{id}:publish-schedule`
-- `GET /api/v1/results` (scoped) · `GET /api/v1/report-cards` · `GET /api/v1/admit-cards` · `POST /api/v1/exams/{id}:generate-report-cards` · `:issue-admit-cards` (jobs) · `POST /api/v1/admit-cards/{id}:revoke` · `:download`
+- `GET /api/v1/results` (scoped) · `POST /api/v1/results/{id}:withhold` · `GET/PATCH /api/v1/report-cards` (remarks only) · `POST /api/v1/report-cards/{id}:download` · `GET /api/v1/admit-cards` · `POST /api/v1/exams/{id}:generate-report-cards` · `:issue-admit-cards` (jobs) · `:publish-report-cards` · `POST /api/v1/admit-cards/{id}:revoke` · `:download`
+- `GET/POST /api/v1/reports/exam-summary` — one `kind` per report, inline rows under a ceiling, a job above it and for every export
 - `GET/POST/PATCH /api/v1/question-banks` · `/api/v1/questions` · `POST /api/v1/questions/{id}:approve` · `POST /api/v1/question-banks/{id}:generate-questions` (AI, job) · `:assemble-paper` (job → paper PDF file)
 
 List and read shapes the dashboard depends on:
@@ -317,6 +325,41 @@ List and read shapes the dashboard depends on:
   content type outside the `exams.marks-import` purpose's MIME allowlist (`text/csv`, Windows' `application/vnd.ms-excel` CSV type and `.xlsx`; a 400 under
   `file`), and a caller who may enter no section of the exam-subject (a 422 on `exam_subject_id`); the job then
   checks each row's student against the importer's sections.
+- **A result carries its names and its processor.** `Result` reads `student_name`, `admission_number`,
+  `section_name` (the section recorded at processing time), `processed_by` and `processed_by_name` (who ran the
+  latest processing), and `approved_by` and `approved_by_name` (null until approved). Names are first and last,
+  never an email, loaded in one query per page. A client disables Approve for the user whose id is
+  `processed_by`; a forced `:approve-results` by them is a 422 `domain_rule_violation` under `approved_by`.
+  The same serializer serves a student's or guardian's read of their published results, so the portal also
+  receives the processor's and approver's staff ids and names; dropping them there is deferred
+  (`deferred-work.md`).
+- **The results actions are typed and scoped.** `:approve-results` answers `{approved}`, `:send-results-back`
+  `{reopened, reason}` and `:publish-results` `{published, withheld, published_ids}` (the ids this call moved; a
+  repeat moves none). `:process-results` is a `202` with an `Idempotency-Key`, refused with a 409 of its own
+  code, `marks_outstanding`, while any exam-subject has marks outstanding; its job's `result` is
+  `{created, updated, students}`. `:generate-report-cards` is a `202` too, its job's `result`
+  `{rendered, failed, cards}`. `:process-results`, `:approve-results`, `:send-results-back` and
+  `:publish-results` resolve the exam through `ExamViewSet`'s record scope, and `:withhold` the result
+  through `/results`' own (L34): out of scope is a 404.
+- **A report card carries its student, section and figures.** `ReportCard` reads `student_name`,
+  `admission_number`, and from its result `section_id`, `section_name`, `percentage` and `grade` (all four null on
+  a term-consolidated card, which has no single result). `/report-cards` filters on `exam_id`, `term_id`,
+  `student_id`, `section_id` (the result's section) and `status`. `:generate-report-cards` and
+  `:publish-report-cards` resolve the exam through `ExamViewSet`'s record scope; `:publish-report-cards` answers
+  `{published, published_ids}`.
+- **Remarks are written per field.** `PATCH /report-cards/{id}` takes `class_teacher_remarks` (needs
+  `exams.report-card.create`) and `principal_remarks` (needs `exams.report-card.publish`); a field whose key the
+  caller lacks is a 403 naming it in `error.details`, checked after the scoped lookup (out of scope stays a 404)
+  and before anything is written. A published card is a 409.
+- **A report card's document has its own action.** `POST /report-cards/{id}:download` returns `{download_url}`
+  under `exams.report-card.view` and the record scope, the admit card's shape (ADR-0021). A student or guardian
+  reaches only their own **published** card; a card with no rendered file, or whose file is not `ready` or was
+  soft-deleted, is a 404.
+- **Report rows are typed per `kind`.** `GET /reports/exam-summary` answers `ExamReportRow[]`, a `oneOf` keyed by
+  each row's `kind` (`result-register`, `pass-fail-analysis`, `subject-performance`, `marks-entry-status`,
+  `grade-distribution`, `question-bank-usage`), each row type mirroring its report function field for field
+  (ADR-0022). Decimals stay JSON numbers; averages are rounded to two places in the query, so an inline row
+  and an export of the same report carry the same figure.
 
 ## 17. Integration Requirements
 
@@ -355,7 +398,7 @@ publish, and the admit-card batch.
 the sheet import and the missing-entries dashboard.
 **PR D — results and report cards.** Processing, the approval gate,
 publishing, withholding, and versioned report cards.
-**PR E — reports and question banks (this PR).** §13's five reports with the
+**PR E — reports and question banks (this PR).** §13's six reports with the
 export lane, question banks with §7.2's approval gate, and deterministic paper
 assembly. **The module is complete.**
 
@@ -364,14 +407,14 @@ assembly. **The module is complete.**
 | Area | State |
 | ---- | ----- |
 | Entities | **All 11** of §15's tables — `grading_scales`, `grade_bands`, `exams`, `exam_subjects`, `exam_schedules`, `admit_cards`, `marks`, `results`, `report_cards`, `question_banks`, `questions` — tenant-owned with RLS policies |
-| §16 endpoints | `GET/POST/PATCH/DELETE /grading-scales`, `POST /grading-scales/{id}:set-default`, `GET/POST/PATCH/DELETE /grading-scales/{id}/grade-bands`, `GET/POST/PATCH/DELETE /exams`, `GET/POST/PATCH/DELETE /exam-subjects`, `GET/POST/PATCH/DELETE /exam-schedules` (every write returns `meta.conflicts`), `GET /exams/{id}/schedule-conflicts`, `POST /exams/{id}:publish-schedule`, `GET /admit-cards`, `POST /exams/{id}:issue-admit-cards` (202 + job, accepts `Idempotency-Key`), `POST /admit-cards/{id}:revoke` · `:download`, `GET /marks` (filters `exam_subject_id`, `exam_id`, `section_id`, `student_id`, `status`, `is_absent`, `is_exempt`), `GET /marks/grid`, `POST /marks:bulk-entry` (one `section_id`, accepts `Idempotency-Key`), `POST /exam-subjects/{id}:lock-marks` · `:unlock-marks`, `GET /exams/{id}/marks-progress`, `POST /marks-imports` (202 + job), `GET /results`, `POST /exams/{id}:process-results` (202 + job) · `:approve-results` · `:publish-results` · `:send-results-back`, `POST /results/{id}:withhold`, `GET/PATCH /report-cards` (remarks only), `POST /exams/{id}:generate-report-cards` (202 + job) · `:publish-report-cards`, `GET/POST /reports/exam-summary` (five report kinds, inline under 1,000 rows and a 202 job above), `GET/POST/PATCH/DELETE /question-banks`, `GET/POST/PATCH/DELETE /question-banks/{id}/questions`, `POST /question-banks/{bank}/questions/{id}:approve`, `POST /question-banks/{id}:assemble-paper` (202 + a paper PDF) |
+| §16 endpoints | `GET/POST/PATCH/DELETE /grading-scales`, `POST /grading-scales/{id}:set-default`, `GET/POST/PATCH/DELETE /grading-scales/{id}/grade-bands`, `GET/POST/PATCH/DELETE /exams`, `GET/POST/PATCH/DELETE /exam-subjects`, `GET/POST/PATCH/DELETE /exam-schedules` (every write returns `meta.conflicts`), `GET /exams/{id}/schedule-conflicts`, `POST /exams/{id}:publish-schedule`, `GET /admit-cards`, `POST /exams/{id}:issue-admit-cards` (202 + job, accepts `Idempotency-Key`), `POST /admit-cards/{id}:revoke` · `:download`, `GET /marks` (filters `exam_subject_id`, `exam_id`, `section_id`, `student_id`, `status`, `is_absent`, `is_exempt`), `GET /marks/grid`, `POST /marks:bulk-entry` (one `section_id`, accepts `Idempotency-Key`), `POST /exam-subjects/{id}:lock-marks` · `:unlock-marks`, `GET /exams/{id}/marks-progress`, `POST /marks-imports` (202 + job), `GET /results`, `POST /exams/{id}:process-results` (202 + job) · `:approve-results` · `:publish-results` · `:send-results-back`, `POST /results/{id}:withhold`, `GET/PATCH /report-cards` (remarks only), `POST /exams/{id}:generate-report-cards` (202 + job) · `:publish-report-cards`, `GET/POST /reports/exam-summary` (six report kinds, inline under 1,000 rows and a 202 job above), `GET/POST/PATCH/DELETE /question-banks`, `GET/POST/PATCH/DELETE /question-banks/{id}/questions`, `POST /question-banks/{bank}/questions/{id}:approve`, `POST /question-banks/{id}:assemble-paper` (202 + a paper PDF) |
 | §4 permissions | `exams.exam.{view,create,update,delete}`, `exams.grading-scale.{view,create,update}`, `exams.schedule.{view,create,update}`, `exams.admit-card.{view,issue}`, `exams.marks.{view,create,update,import,lock}`, `exams.result.{view,create,approve,publish}`, `exams.report-card.{view,create,publish}`. `exams.question-bank.{view,create,update,delete}`, `exams.question.approve`, `exams.result.export`. **All of §4's keys are registered, and every one but `exams.marks.update` has an endpoint behind it:** `:bulk-entry` checks `exams.marks.create` for a new row and an update alike, so `.update` gates nothing yet (`docs/deferred-work.md`, lesson L35). `tests/test_endpoint_contracts.py` checks that every key a view names is registered, not the reverse |
 | §11 validations | Exam name unique per session · exam dates set together and ordered · dates within the named term, or the session where no term is named · a term must belong to the exam's session · the session must be writable · one `exam_subjects` row per (exam, class, subject) · `pass_marks ≤ max_marks` · a practical component requires a practical maximum · the subject must be in the class's curriculum for the session · grading bands contiguous, non-overlapping and covering 0–100% before an exam may use the scale |
 | §13 reports | All five — result register (ordered by rank, unranked last), pass/fail analysis per section, subject performance over `marks`, marks-entry status, grade distribution — plus question-bank usage, behind one `kind`-parameterised endpoint with a 202 export lane in all three of `core.exports.tabular`'s formats. Every one asserted at **one query** |
 | §5.8 question banks | Banks per subject (class optional — null means every level), questions with §7.2's approval gate, and deterministic blueprint assembly ordered by `usage_count` so reuse spreads and a re-run produces the same paper |
 | §5.5 processing | `processing.py` — totals with subject weightage on *both* sides of the fraction, percentage, grade band, GPA, dense ranks, and outcome. Five queries for a whole school; the per-student loop never queries |
-| §11 processing | Blocked while any exam-subject has marks outstanding, measured against the **expected roll** rather than rows that happen to exist. Recompute is idempotent and refused once approved |
-| §5.6 approval | Per-row `status` and per-exam status both move. **The approver cannot be the processor** — compared against `results.created_by`, which processing stamps. Publishing releases approved, non-withheld rows only; withholding is a per-student `outcome` |
+| §11 processing | Blocked while any exam-subject has marks outstanding, measured against the **expected roll** rather than rows that happen to exist: a 409 with its own code, `marks_outstanding`, naming the subjects. Recompute is idempotent and refused once approved (a plain `conflict`) |
+| §5.6 approval | Per-row `status` and per-exam status both move. **The approver cannot be the processor** — compared against `results.processed_by`, which every processing run re-stamps on every pending row of the exam (a re-process after a send-back included), not `created_by`, which names only the first run (lesson L37). Publishing releases approved, non-withheld rows only; withholding is a per-student `outcome` |
 | §5.7 report cards | Versioned on regeneration, remarks preserved, stale file cleared. Attendance is a JSONB **snapshot** from `attendance.reports.student_summary` — one query for the whole cohort |
 | §11 marks | One row per (exam-subject, student) · nothing negative and absent-excludes-a-mark at the **database**; `0 ≤ mark ≤ max_marks` in `services`, because a CHECK cannot read `exam_subjects.max_marks` · absent and exempt are mutually exclusive · a practical mark on a theory-only subject is refused · only students on the submitted section's active roll in the exam's session, in a section of the exam-subject's class |
 | §5.4 lifecycle | `draft → submitted → locked` on the row, plus `exam_subjects.marks_locked_at` on the *window*. Four gates on every write, each with its own message because each has a different remedy: the exam's status (§7.1), the entry window (§6), the subject lock, and the teacher's allocation (§4). An **unset** window means always open |
@@ -622,6 +665,104 @@ entry kept; the author locks and the grid turns read-only) and `e2e/tests/live/a
 seeded `teacher`, allocated to one section, sees only that section in progress, reads its roll and submits;
 the sibling section is a 404 to read and a 422 to write, another scaffold's exam and section are 404s; the exam
 staff sees entered = expected, locks, and the teacher's re-submission is a 409).
+
+### The dashboard's Results tab (examinations dashboard, PR D)
+
+`/exams/{id}?tab=results`, shown to a holder of `exams.result.view`. The exam's results, cursor-paged
+(`CursorDataGridCard`), highest percentage first, filtered by **section** (the sections the exam's sittings
+name), **outcome** and **status**, all in the URL. Each row shows the rank in section, the student (a link that
+opens the detail sheet) with their admission number, the section, percentage, grade, GPA, and the outcome and
+status as token, icon and label; every figure is the server's. The **detail sheet** shows the result's figures,
+who processed and who approved it, and the student's subject marks (`GET /marks?exam_id=&student_id=`, each
+named by its exam-subject, read under the Subjects tab's key). The subject marks need `exams.marks.view`, which
+not every Results viewer holds; without it the sheet says so and makes no `/marks` read.
+
+Above the list, the lifecycle bar offers each action on its key and the exam's status:
+
+- **Process results** (`exams.result.create`; `scheduled`, `ongoing`, `marks_entry` or `processing`) sends an
+  `Idempotency-Key` (kept until the `202`, then dropped, as Issue admit cards does), polls the job and reloads
+  the results when it ends. A 409 shows the server's sentence inline. While marks are outstanding the 409 carries
+  its own code, `marks_outstanding` (`processing.MarksOutstanding`), its sentence names the subjects, and a
+  **Go to Marks** link opens `?tab=marks`; the exam's other 409s keep `conflict` and show no link.
+- **Approve** (`exams.result.approve`; `processing`) is held, with the reason beside it, when the signed-in user's
+  id is the pending results' `processed_by` (one pending row is read for it: every run stamps every pending row
+  of the exam, including one it did not recompute, such as a student withdrawn since), and when nothing awaits
+  approval. A failed read says so with a retry, never a silent hold. A forced approval still gets the server's
+  422, shown in the confirm dialog.
+- **Send back** (`exams.result.approve`; `processing` or `approved`) asks for a reason (500 characters at most)
+  and reports the server's count of results reopened.
+- **Publish results** (`exams.result.publish`; `approved`) confirms, then reports the server's counts of results
+  published and withheld.
+
+**Withhold** (`exams.result.publish`) is a row action on a result neither published nor already withheld; it asks
+for a reason (255 characters at most). A withheld result stays withheld through a re-process, and publishing
+skips it.
+
+### The dashboard's Report cards tab (examinations dashboard, PR D)
+
+`/exams/{id}?tab=report-cards`, shown to a holder of `exams.report-card.view`. The exam's cards, cursor-paged,
+newest first, filtered by **section** and **status** in the URL; each row shows the student, section, percentage
+and grade, version and status. **Download** fetches the card's own `:download` link once the render job wrote a
+file. **Remarks** is offered on an unpublished card to a holder of either remarks key, and shows and sends only
+the fields the viewer may write: the class teacher's remark with `exams.report-card.create`, the principal's with
+`.publish` (1000 characters each; a blank one clears it). A refused field (403) shows the server's sentence.
+**Generate report cards** (`.create`) and **Publish report cards** (`.publish`) appear once the exam is
+`published`; generating is a polled `202` job with an `Idempotency-Key` (a partial render warns with the job's
+own count of cards that failed, which stay drafts until a re-run), and publishing reports the server's count.
+
+Leaving any tab drops the list filters and the marks grid's keys (`subject`, `section`, `outcome`, `status`) from
+the URL, so the next tab never reads another's filter.
+
+### The dashboard's Reports section (examinations dashboard, PR D)
+
+`/exams/reports`, a section of the Examinations tab bar and sidebar shown to a holder of `exams.result.view`
+(§4). The viewer picks one of §13's six reports (result register, pass/fail analysis, subject performance,
+marks-entry status, grade distribution, question-bank usage) and, for every kind but question-bank usage, the
+exam it is about (the newest 100 exams, each named with its session); the picker is hidden for question-bank
+usage, which is about the school's banks. Both live in the URL (`?kind=&exam=`), so a link names its report and
+runs it on arrival. **Run report** reads `GET /reports/exam-summary`: up to 1,000 rows show as a table whose
+columns follow the kind (the typed `ExamReportRow` union, narrowed on `row.kind`; every figure is the server's,
+a null one a dash, the ungraded band named "Ungraded"); a larger report is a `202` whose CSV job the screen polls
+to a download, offering to run it again if the poll is refused. **Export CSV / XLSX / PDF** (`POST`, a polled
+job each) shows only to a holder of `exams.result.export`. A hint says when the form no longer matches the report
+on screen. The job panel, export buttons and grid are the shared `components/reports/` pieces attendance's
+Reports screen uses too. The five per-exam kinds are offered only to a viewer who also holds `exams.exam.view`,
+since the exam picker reads `GET /exams`; without it (the accountant, the school owner and the other staff roles
+that hold only `exams.result.view`) the kind picker offers question-bank usage alone, no `/exams` read is made,
+and a note says the per-exam reports need exam access (recorded in `deferred-work.md`). A `student` or
+`guardian` also holds `exams.result.view`, so sees the tab, but `ExamReportView` is staff-only and answers them
+403 (recorded there too).
+
+### E2E coverage of results, report cards and reports (examinations dashboard, PR D)
+
+- **Mocked** (`e2e/tests/dashboard/exams-results.spec.ts` and `exams-report-cards.spec.ts`, on the shared
+  world of `e2e/src/data/exams-results-scenario.ts`; stubs `e2e/src/mocks/domains/exams-results.ts` and
+  `exams-report-cards.ts` over one `exams-results-state.ts`): the exam author processes (the Idempotency-Key sent,
+  the results awaiting approval, no Approve for a role without the key) and is refused with a **Go to Marks** link
+  while marks are outstanding; the principal, holding exactly the seeded `e2e-principal`'s keys, withholds one
+  result, approves and publishes (the server's counts, the withheld result left unpublished), and a publish after
+  a send-back behind the screen shows the 409; a school owner holding both keys who ran the processing finds
+  Approve held with the reason, a re-process keeps the withheld result withheld, and an approval forced after a
+  re-process behind the screen shows the 422; the author generates report cards and downloads one through its own
+  `:download`; the principal runs the result register. The stub enforces approver ≠ processor, approve before
+  publish, and withheld surviving a re-process (lesson L5).
+- **Live API** (`e2e/tests/live/api/exams-results.spec.ts`, on a run-unique scaffold built by
+  `buildProcessedExam` in `e2e/src/lib/live-exams.ts`): the exam staff builds the exam and publishes its schedule,
+  the allocated `teacher` submits the marks, the exam staff locks and processes (the job awaited); the principal
+  sends the results back; the worker's admin (the school owner, holding both keys) re-processes, which re-stamps
+  `processed_by`, and its own approval is a 422 under `approved_by`; publishing before approval is a 409; the
+  principal approves and publishes; the exam staff generates report cards, each gets a `file_id`, and `:download`
+  returns a signed link. A second test pins the 409 `marks_outstanding` before any mark exists.
+- **Live browser** (`e2e/tests/live/exams-results-journey.spec.ts`): the seeded principal signs in, opens
+  Examinations, the exam and its Results tab, and approves and publishes an exam the spec took to `processing`
+  through `buildProcessedExam`; one real login, every screen reached by a click.
+- **Left to the Django suite:** a student's or guardian's view of published results (`ResultViewSet`'s
+  restricted-principal narrowing). Seeing it live would mean enrolling the seeded student into a run-unique
+  section, and parallel workers would race on that student's single active enrolment.
+
+The e2e seed's `e2e-principal@schoolhub.test` holds the results approver's keys (`exams.result.view`,
+`.approve`, `.publish`, `exams.report-card.view`, `.publish`, and the exam, schedule and marks reads), never
+`exams.result.create`, so it is never the processor.
 
 ### The dashboard's setup contract (examinations dashboard, PR A)
 

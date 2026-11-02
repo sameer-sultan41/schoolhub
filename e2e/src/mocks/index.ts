@@ -28,3 +28,6 @@ export * from "./domains/attendance-reports-import";
 export * from "./domains/exams-setup";
 export * from "./domains/exams-schedule";
 export * from "./domains/exams-marks";
+export * from "./domains/exams-results-state";
+export * from "./domains/exams-results";
+export * from "./domains/exams-report-cards";

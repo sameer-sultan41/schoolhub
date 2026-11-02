@@ -230,18 +230,21 @@ either this file or `project-status.md`.
     staff register marks (Present, Absent, Late, Half day), though the server accepts every
     staff status but `on_leave`. Neither the register nor a correction can record a staff day
     as a holiday from the dashboard; the school calendar's holidays refuse marking instead.
-- **Eight `examinations` actions still look up their parent without the
-  caller's record scope** (`get_object_or_404(<Model>.objects.alive(), pk=pk)` in
-  `apps/api/apps/examinations/views.py`), the pattern lesson L34 records: `:process-results`,
-  `:approve-results`, `:send-results-back` and `:publish-results` on the exam,
-  `/results/{id}:withhold` on the result, and `:generate-report-cards` and `:publish-report-cards`
-  on the exam, plus the QuestionBank nested lookup (`get_bank`, `views.py:1401`, which reads
-  `QuestionBank.objects.alive()` for the question routes). PR B converted `:publish-schedule`, `:issue-admit-cards` and `schedule-conflicts`;
-  PR C converted the marks ones (`:lock-marks`, `:unlock-marks` and the grid's exam-subject through
-  `scoped_exam_subject`, `marks-progress` through `scoped_exam`), and gates the import on the
-  importer's sections. The eight left are gated by write keys teachers do not hold, so the exposure
-  is narrow; **PR D (results and report cards) converts each**, through `scoped_exam` or the
-  viewset's own queryset, with an out-of-scope 404 test per action.
+- **One `examinations` lookup still finds its parent without the caller's record scope**:
+  the QuestionBank nested lookup (`get_bank` in `apps/api/apps/examinations/views.py`, which reads
+  `QuestionBank.objects.alive()` for the question routes), the pattern lesson L34 records. PR B
+  converted `:publish-schedule`, `:issue-admit-cards` and `schedule-conflicts`; PR C the marks
+  actions; PR D (results and report cards) `:process-results`, `:approve-results`,
+  `:send-results-back`, `:publish-results`, `/results/{id}:withhold`, `:generate-report-cards` and
+  `:publish-report-cards`, each with an out-of-scope 404 test. **PR E (question banks) converts
+  `get_bank`** through `QuestionBankViewSet`'s own scope.
+- **An `assigned` holder of `exams.result.approve` or `.publish` acts on the whole exam.** PR D
+  resolves `:approve-results`, `:send-results-back`, `:publish-results` and `:publish-report-cards`
+  through `scoped_exam`, which admits a caller who teaches *any* section of the exam; the action
+  then approves or publishes every section's rows. No default role grants a teacher those keys
+  (only `principal`, `vice_principal` and `school_admin` hold them by default), so this is latent. A
+  tenant that grants one to an `assigned` role needs a section-level gate first: approve and
+  publish only the caller's sections' rows, or refuse a caller without `all` scope.
 - **The examinations dashboard's PR C (marks) left these out:**
   - **`class.name` in the marks-entry reminder carries "Class Section".** The reminder goes per
     section, so the variable is the class and section joined. A tenant override that words
@@ -278,13 +281,41 @@ either this file or `project-status.md`.
     and §8's exam-staff journey starts by cloning last year's.
     There is no endpoint (`:clone`, as `/class-subjects:clone` and `/academic-sessions:clone`
     have) and no screen action; an author re-creates the exam and its subjects by hand.
-  - **Portal roles would see a Reports tab that refuses them.** `student` and `guardian`
-    hold `exams.result.view` and `exams.report-card.view` (§4), so when PR D adds the
-    Reports section, keyed on a key they hold, a portal user signed in to the dashboard would
-    see the tab and get a 403 from the report endpoint, which is staff-only. The attendance
-    Leave tab is the precedent (above): hiding portal users from staff screens is
-    parent-portal's decision, so PR D should key the section on a staff-only key rather than
-    leave a tab that 403s.
+  - **Portal roles see a Reports tab that refuses them.** `student` and `guardian` hold
+    `exams.result.view` and `exams.report-card.view` (§4). PR D's Reports section
+    (`/exams/reports`) is keyed on `exams.result.view`, the key §4 gives it, so a portal user
+    signed in to the dashboard sees the tab and gets a 403 from `ExamReportView`, which is
+    staff-only. The attendance Leave tab is the precedent (above): the dashboard is a staff tool,
+    and hiding portal users from staff screens is parent-portal's decision. A staff-only view key
+    for the reports (or a staff gate on the section) is the fix if it should not wait for it.
+- **The examinations dashboard's PR D (results, report cards, reports) left these out:**
+  - **Most Reports viewers cannot run the per-exam reports.** `exams.result.view`, which opens the
+    Reports section, is granted to every staff role, but picking an exam reads `GET /exams`
+    (`exams.exam.view`, held only by the exam roles: `exam_staff`, `school_admin`, `principal`,
+    `vice_principal`, `teacher`, `class_teacher`). The screen therefore offers a viewer without
+    `exams.exam.view` question-bank usage alone, with a note, though `ExamReportView` would serve
+    them the other five (L35). An exam-name source readable with `exams.result.view` (a slim
+    `/exams` options read keyed on either key, or exam names in a results-side endpoint) would
+    open those reports to the `school_owner`, `accountant` and the other result-viewing roles.
+  - **The Reports section's exam picker lists the newest 100 exams.** It reads one page of
+    `/exams` at the API's maximum page size, ordered by `-starts_on`
+    (`features/exams/use-exam-options.ts`), as the exam form's grading-scale picker does. A school
+    with more than 100 exams cannot pick an older one there; a link naming its id still runs it.
+    A session filter on the picker, or a search-as-you-type picker, is the fix.
+  - **The live lane does not sign in as a student or guardian to read published results.**
+    `ResultViewSet` narrows a restricted principal to `published` rows, and the Django suite covers
+    it (`test_processing.py`'s `test_a_student_sees_their_own_result_once_published` and its two
+    neighbours); the e2e results specs stop at the staff side. Proving it live would enrol the one
+    seeded student into a run-unique section per test, and parallel workers would race on that
+    student's single active enrolment. A per-run student with its own login (one more login per
+    worker, `AuthEndpointThrottle`) would close it, once parent-portal gives that student a screen
+    to read results on.
+  - **The portal's result read carries the staff stamps.** `ResultSerializer` serves the
+    restricted principals too, so a student or guardian reading their published results receives
+    `processed_by`, `processed_by_name`, `approved_by` and `approved_by_name`: the staff ids and
+    names of whoever processed and approved them. The portal read should drop the four stamp fields
+    (a portal serializer, or the restricted-principal branch of `ResultViewSet` picking one), with
+    a test that a student's read carries none of them.
 - **Phase 2 Tier 2 is complete: academics, timetable and attendance are full-stack, their
   dashboards shipped.**
 - **Two dangling UUID columns became real foreign keys**:

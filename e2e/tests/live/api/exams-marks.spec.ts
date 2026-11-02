@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { ApiError, type ApiClient } from "@schoolhub/api-client";
 import { expect, test } from "@/fixtures";
 import {
@@ -6,9 +5,11 @@ import {
   allocateTeacher,
   createExamWithSubject,
   EXAM_SUBJECT_MAX_MARKS,
+  EXAM_THEORY_MARK,
   examStaffSession,
   publishExamForMarks,
   seedExamScaffold,
+  submitSectionMarks,
   teacherLoginStaffId,
   teacherSession,
 } from "@/lib/live-exams";
@@ -56,14 +57,6 @@ interface GridMeta {
   unwritable_reason: string | null;
 }
 
-interface BulkEntryResult {
-  entered: number;
-  updated: number;
-  rows: number;
-}
-
-const THEORY_MARK = "72.50";
-
 async function refusal(request: Promise<unknown>): Promise<ApiError> {
   const outcome = await request.catch((error: unknown) => error);
   expect(outcome).toBeInstanceOf(ApiError);
@@ -78,29 +71,6 @@ function gridOf(client: ApiClient, examSubjectId: string, sectionId: string) {
   return client.get<GridEntry[]>("/marks/grid", {
     query: { exam_subject_id: examSubjectId, section_id: sectionId },
   });
-}
-
-/** `:bulk-entry` for one section, every student as `submitted`: the first absent, the rest
- * with a theory mark. A fresh `Idempotency-Key` each call, so a repeat is a new submission. */
-function submitSection(
-  client: ApiClient,
-  examSubjectId: string,
-  sectionId: string,
-  studentIds: readonly string[],
-) {
-  return client.post<BulkEntryResult>(
-    "/marks:bulk-entry",
-    {
-      exam_subject_id: examSubjectId,
-      section_id: sectionId,
-      entries: studentIds.map((studentId, index) =>
-        index === 0
-          ? { student_id: studentId, is_absent: true, status: "submitted" }
-          : { student_id: studentId, theory_marks: THEORY_MARK, status: "submitted" },
-      ),
-    },
-    { idempotencyKey: randomUUID() },
-  );
 }
 
 test.describe("exam marks entry", () => {
@@ -145,13 +115,18 @@ test.describe("exam marks entry", () => {
     const siblingGrid = await refusal(gridOf(teacher, exam.examSubjectId, sibling.sectionId));
     expect(siblingGrid.status).toBe(404);
     const siblingWrite = await refusal(
-      submitSection(teacher, exam.examSubjectId, sibling.sectionId, sibling.studentIds),
+      submitSectionMarks(teacher, exam.examSubjectId, sibling.sectionId, sibling.studentIds),
     );
     expect(siblingWrite.status).toBe(422);
     expect(siblingWrite.details.map((detail) => detail.field)).toEqual(["section_id"]);
 
     // Submit: every student, one absent. The first write moves the exam to `marks_entry`.
-    const submitted = await submitSection(teacher, exam.examSubjectId, scaffold.sectionId, roster);
+    const submitted = await submitSectionMarks(
+      teacher,
+      exam.examSubjectId,
+      scaffold.sectionId,
+      roster,
+    );
     expect(submitted.data).toEqual({ entered: roster.length, updated: 0, rows: roster.length });
     const moved = await staff.get<{ status: string }>(`/exams/${exam.examId}`);
     expect(moved.data.status).toBe("marks_entry");
@@ -160,7 +135,7 @@ test.describe("exam marks entry", () => {
     const absentee = reread.data.find((entry) => entry.student_id === roster[0]);
     expect(absentee?.marks).toMatchObject({ is_absent: true, theory_marks: null });
     for (const entry of reread.data.filter((row) => row.student_id !== roster[0])) {
-      expect(entry.marks).toMatchObject({ theory_marks: THEORY_MARK, status: "submitted" });
+      expect(entry.marks).toMatchObject({ theory_marks: EXAM_THEORY_MARK, status: "submitted" });
     }
 
     // The exam staff sees the teacher's section complete, and the sibling untouched.
@@ -182,7 +157,7 @@ test.describe("exam marks entry", () => {
 
     // Locked: a re-submission is refused, and the grid says why.
     const resubmit = await refusal(
-      submitSection(teacher, exam.examSubjectId, scaffold.sectionId, roster),
+      submitSectionMarks(teacher, exam.examSubjectId, scaffold.sectionId, roster),
     );
     expect(resubmit.status).toBe(409);
     const closed = await gridOf(teacher, exam.examSubjectId, scaffold.sectionId);

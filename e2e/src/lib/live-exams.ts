@@ -1,19 +1,22 @@
+import { randomUUID } from "node:crypto";
 import type { ApiClient } from "@schoolhub/api-client";
 import { buildLiveExam, buildLiveSection, buildLiveSubject } from "@/data/live-factories";
 import { env } from "@/env";
 import { createLiveSession } from "@/lib/live-api";
 import { seedAttendanceRegister } from "@/lib/live-attendance-register";
+import { awaitJobResult, LIVE_JOB_TIMEOUT_MS } from "@/lib/live-jobs";
 import { createStudentReadyToEnrol } from "@/lib/live-student";
 import { findSeededStaff } from "@/lib/live-timetable-grid";
 import {
   E2E_EXAM_STAFF_EMAIL,
+  E2E_PRINCIPAL_EMAIL,
   E2E_TEACHER_EMAIL,
   E2E_TEACHER_LOGIN_EMPLOYEE_NUMBER,
 } from "@/lib/seed-constants";
 
 /**
  * The preconditions an exam needs, through the real API, shared by every examinations live spec
- * (setup here; schedule, marks and results in the PRs after it).
+ * (setup, schedule, marks and results).
  *
  * **Run-unique, on the attendance register's scaffold.** `seedAttendanceRegister` already builds
  * a campus, class, section and a far-future session of the worker's own date band
@@ -58,6 +61,16 @@ export interface ExamWithSubject {
   examSubjectId: string;
 }
 
+/** What an examinations live test spends outside its polled jobs: up to four cold logins (admin,
+ * exam staff, teacher, principal, or one browser sign-in), the scaffold's dozen-odd writes, and
+ * the synchronous actions and reads around the jobs. */
+export const LIVE_EXAM_SETUP_MARGIN_MS = 30_000;
+
+/** A test's budget when it awaits `jobs` Celery jobs, each allowed `LIVE_JOB_TIMEOUT_MS` (L6). */
+export function liveExamTimeout(jobs: number): number {
+  return jobs * LIVE_JOB_TIMEOUT_MS + LIVE_EXAM_SETUP_MARGIN_MS;
+}
+
 /** Weekly periods on the curriculum row: any positive number; nothing here reads it. */
 const CURRICULUM_WEEKLY_PERIODS = 4;
 /** The exam-subject's marks: decimals as strings, as the API serializes them. */
@@ -66,6 +79,7 @@ export const EXAM_SUBJECT_PASS_MARKS = "40.00";
 
 let examStaffLogin: Promise<ApiClient> | undefined;
 let teacherLogin: Promise<ApiClient> | undefined;
+let principalLogin: Promise<ApiClient> | undefined;
 
 /** Clears `reset`'s memo when `login` rejects, so one failed login does not fail every later
  * test in the worker with the same cached rejection. */
@@ -101,6 +115,21 @@ export function teacherSession(): Promise<ApiClient> {
     },
   );
   return teacherLogin;
+}
+
+/** The seeded `principal` (all scope), one login per worker: the results approver, who holds
+ * `exams.result.approve` and `.publish` and never `.create` (seed_e2e_data.py). */
+export function principalSession(): Promise<ApiClient> {
+  principalLogin ??= forgetOnFailure(
+    createLiveSession({
+      identifier: E2E_PRINCIPAL_EMAIL,
+      password: env.LIVE_ADMIN_PASSWORD,
+    }),
+    () => {
+      principalLogin = undefined;
+    },
+  );
+  return principalLogin;
 }
 
 /** A run-unique session, class, section, curriculum row and enrolled roster. */
@@ -266,4 +295,96 @@ export async function publishExamForMarks(
     end_time: "11:00",
   });
   await client.post(`/exams/${exam.examId}:publish-schedule`);
+}
+
+/** The theory mark `submitSectionMarks` gives every student but the first (absent). */
+export const EXAM_THEORY_MARK = "72.50";
+
+/** `:bulk-entry`'s 200: rows created, rows updated, rows sent. */
+export interface BulkEntryResult {
+  entered: number;
+  updated: number;
+  rows: number;
+}
+
+/**
+ * `:bulk-entry` for one section, every student as `submitted`: the first absent, the rest with
+ * `EXAM_THEORY_MARK`. A fresh `Idempotency-Key` each call, so a repeat is a new submission.
+ */
+export function submitSectionMarks(
+  client: ApiClient,
+  examSubjectId: string,
+  sectionId: string,
+  studentIds: readonly string[],
+) {
+  return client.post<BulkEntryResult>(
+    "/marks:bulk-entry",
+    {
+      exam_subject_id: examSubjectId,
+      section_id: sectionId,
+      entries: studentIds.map((studentId, index) =>
+        index === 0
+          ? { student_id: studentId, is_absent: true, status: "submitted" }
+          : { student_id: studentId, theory_marks: EXAM_THEORY_MARK, status: "submitted" },
+      ),
+    },
+    { idempotencyKey: randomUUID() },
+  );
+}
+
+/** A `202`'s body: the job to poll. */
+export interface JobAccepted {
+  job_id: string;
+  status: "queued";
+}
+
+/** `process_exam_results`' outcome, the processing job's `result`. */
+export interface ProcessOutcome {
+  created: number;
+  updated: number;
+  students: number;
+}
+
+/** `:process-results` as `client`, awaiting its job (polled as `client`, which holds
+ * `platform.job.view`) and returning the job's outcome. */
+export async function processResults(client: ApiClient, examId: string): Promise<ProcessOutcome> {
+  const accepted = await client.post<JobAccepted>(`/exams/${examId}:process-results`, undefined, {
+    idempotencyKey: randomUUID(),
+  });
+  return awaitJobResult<ProcessOutcome>(client, accepted.data.job_id);
+}
+
+/** An exam `buildProcessedExam` took to `processing`, with the run that put it there. */
+export interface ProcessedExam {
+  scaffold: ExamScaffold;
+  exam: ExamWithSubject;
+  processed: ProcessOutcome;
+}
+
+/**
+ * A run-unique exam, built through the real API to `processing`: its results awaiting approval,
+ * processed by the exam staff (so neither the principal nor the worker's admin ran it).
+ *
+ * The admin builds the scaffold; the exam staff writes the exam, publishes its schedule, locks the
+ * marks and processes. The marks are entered by `teacher` when given (allocated to the section
+ * first, the `assigned` path), else by the exam staff (`all` scope), which spares a worker that
+ * needs no teacher the teacher's login.
+ */
+export async function buildProcessedExam(
+  adminClient: ApiClient,
+  { teacher }: { teacher?: ApiClient } = {},
+): Promise<ProcessedExam> {
+  const staff = await examStaffSession();
+  const scaffold = await seedExamScaffold(adminClient);
+  const exam = await createExamWithSubject(staff, scaffold);
+  if (teacher) {
+    await allocateTeacher(adminClient, scaffold, await teacherLoginStaffId(adminClient));
+  }
+  await publishExamForMarks(staff, scaffold, exam);
+
+  const entrant = teacher ?? staff;
+  await submitSectionMarks(entrant, exam.examSubjectId, scaffold.sectionId, scaffold.studentIds);
+  await staff.post(`/exam-subjects/${exam.examSubjectId}:lock-marks`);
+  const processed = await processResults(staff, exam.examId);
+  return { scaffold, exam, processed };
 }
