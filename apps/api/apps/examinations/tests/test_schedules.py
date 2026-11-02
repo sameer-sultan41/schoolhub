@@ -612,7 +612,7 @@ class SittingWriteLockTests(ScheduleTestCase):
         self.assertEqual(response.status_code, 201, response.json())
         locks = self._exam_locks_before_the_write(captured, 'INSERT INTO "exam_schedules"')
         self.assertEqual(len(locks), 1)
-        self.assertIn(str(self.exam.pk), locks[0])
+        self.assertIn(self.exam.pk.hex, locks[0])
 
     def test_update_locks_the_exam_before_saving(self) -> None:
         with tenant_context(self.tenant.id):
@@ -626,7 +626,7 @@ class SittingWriteLockTests(ScheduleTestCase):
         self.assertEqual(response.status_code, 200, response.json())
         locks = self._exam_locks_before_the_write(captured, 'UPDATE "exam_schedules"')
         self.assertEqual(len(locks), 1)
-        self.assertIn(str(self.exam.pk), locks[0])
+        self.assertIn(self.exam.pk.hex, locks[0])
 
     def test_moving_a_sitting_to_another_exam_locks_both(self) -> None:
         with tenant_context(self.tenant.id):
@@ -653,8 +653,8 @@ class SittingWriteLockTests(ScheduleTestCase):
         self.assertEqual(response.json()["data"]["exam_id"], str(other_exam.pk))
         locks = self._exam_locks_before_the_write(captured, 'UPDATE "exam_schedules"')
         self.assertEqual(len(locks), 1)
-        self.assertIn(str(self.exam.pk), locks[0])
-        self.assertIn(str(other_exam.pk), locks[0])
+        self.assertIn(self.exam.pk.hex, locks[0])
+        self.assertIn(other_exam.pk.hex, locks[0])
 
     def test_delete_locks_the_exam_before_deleting(self) -> None:
         with tenant_context(self.tenant.id):
@@ -666,7 +666,7 @@ class SittingWriteLockTests(ScheduleTestCase):
         self.assertEqual(response.status_code, 204)
         locks = self._exam_locks_before_the_write(captured, 'UPDATE "exam_schedules"')
         self.assertEqual(len(locks), 1)
-        self.assertIn(str(self.exam.pk), locks[0])
+        self.assertIn(self.exam.pk.hex, locks[0])
 
 
 class ScheduleRecordScopeTests(ScheduleTestCase):
