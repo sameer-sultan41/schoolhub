@@ -34,6 +34,7 @@ from apps.examinations.tests.factories import (
     exam_week,
 )
 from core.tenancy.context import tenant_context
+from core.tenancy.locks import AdvisoryLockNamespace, advisory_lock_key
 
 
 class ScheduleTestCase(ExaminationsAPITestCase):
@@ -588,12 +589,14 @@ class ScheduleEndpointTests(ScheduleTestCase):
 
 
 class SittingWriteLockTests(ScheduleTestCase):
-    """Every sitting write locks its exam, as `:publish-schedule` does.
+    """Every sitting write takes the school's schedule lock, then its exam's,
+    as `:publish-schedule` does.
 
-    Publish reads the clash list under the exam lock; a sitting write that did
-    not take it could commit after that read, and the exam went to `scheduled`
-    over a hard clash publish never saw. Asserted on the SQL issued, as
-    `fees_finance` `ConcurrencyTests` does: a real race needs two connections.
+    Publish reads the clash list, other exams' sittings included, under the
+    school lock; a sitting write that did not take it could commit after that
+    read, and the exam went to `scheduled` over a hard clash publish never saw.
+    Asserted on the SQL issued, as `fees_finance` `ConcurrencyTests` does: a
+    real race needs two connections.
     """
 
     URL = ScheduleEndpointTests.URL
@@ -603,7 +606,15 @@ class SittingWriteLockTests(ScheduleTestCase):
     def _exam_locks_before_the_write(self, captured, write_sql: str) -> list[str]:
         sql = [query["sql"] for query in captured.captured_queries]
         write_at = next(i for i, q in enumerate(sql) if q.startswith(write_sql))
-        return [q for q in sql[:write_at] if "FOR UPDATE" in q and '"exams"' in q]
+        exam_locks = [i for i, q in enumerate(sql[:write_at]) if _is_exam_lock(q)]
+        self.assert_school_lock_first(sql, before=exam_locks[0] if exam_locks else write_at)
+        return [sql[i] for i in exam_locks]
+
+    def assert_school_lock_first(self, sql: list[str], *, before: int) -> None:
+        """The school's schedule lock is taken once, ahead of index `before`."""
+        locks = [i for i, q in enumerate(sql) if _is_school_schedule_lock(q, self.tenant.pk)]
+        self.assertEqual(len(locks), 1, "expected one school schedule lock")
+        self.assertLess(locks[0], before)
 
     def test_create_locks_the_exam_before_saving(self) -> None:
         with CaptureQueriesContext(connection) as captured:
@@ -667,6 +678,44 @@ class SittingWriteLockTests(ScheduleTestCase):
         locks = self._exam_locks_before_the_write(captured, 'UPDATE "exam_schedules"')
         self.assertEqual(len(locks), 1)
         self.assertIn(self.exam.pk.hex, locks[0])
+
+    def test_cancelling_takes_the_school_lock_before_saving(self) -> None:
+        with tenant_context(self.tenant.id):
+            sitting = self.sitting()
+
+        with CaptureQueriesContext(connection) as captured:
+            response = self.client.patch(
+                f"{self.URL}/{sitting.pk}", {"status": ScheduleStatus.CANCELLED}, format="json"
+            )
+
+        self.assertEqual(response.status_code, 200, response.json())
+        locks = self._exam_locks_before_the_write(captured, 'UPDATE "exam_schedules"')
+        self.assertEqual(len(locks), 1)
+        self.assertIn(self.exam.pk.hex, locks[0])
+
+    def test_publishing_takes_the_school_lock_before_the_exam_lock(self) -> None:
+        with tenant_context(self.tenant.id):
+            self.sitting(room=self.room)
+
+        with CaptureQueriesContext(connection) as captured:
+            response = self.client.post(f"/api/v1/exams/{self.exam.pk}:publish-schedule")
+
+        self.assertEqual(response.status_code, 200, response.json())
+        sql = [query["sql"] for query in captured.captured_queries]
+        exam_lock_at = next(i for i, q in enumerate(sql) if _is_exam_lock(q))
+        self.assertIn(self.exam.pk.hex, sql[exam_lock_at])
+        self.assert_school_lock_first(sql, before=exam_lock_at)
+
+
+def _is_exam_lock(query: str) -> bool:
+    return "FOR UPDATE" in query and '"exams"' in query
+
+
+def _is_school_schedule_lock(query: str, tenant_id) -> bool:
+    # The two-int advisory lock: (namespace, int4 derived from the tenant id).
+    namespace = int(AdvisoryLockNamespace.EXAM_SCHEDULE)
+    key = advisory_lock_key(tenant_id)
+    return "pg_advisory_xact_lock" in query and f"({namespace}, {key})" in query
 
 
 class ScheduleRecordScopeTests(ScheduleTestCase):

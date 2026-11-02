@@ -2,10 +2,10 @@ import { ApiError } from "@schoolhub/api-client";
 import type { ApiMeta } from "@schoolhub/types";
 
 import { copyMappedFields } from "@/lib/helpers";
+import { CONFIGURABLE_EXAM_STATUSES } from "@/services/modules/exams/exams-constant";
 import type { ExamStatus } from "@/services/modules/exams/exams-type";
 import {
   CONFLICT_SEVERITIES,
-  PUBLISHABLE_EXAM_STATUSES,
   SHORT_TIME_LENGTH,
   SITTING_BODY_FIELDS,
   SITTING_STATUS_SCHEDULED,
@@ -126,8 +126,9 @@ export function isSittingOpen(sitting: SittingRecord): boolean {
   return (sitting.status ?? SITTING_STATUS_SCHEDULED) === SITTING_STATUS_SCHEDULED;
 }
 
+/** `:publish-schedule` accepts the same statuses an exam is configured in (any other is a 409). */
 export function isSchedulePublishable(status: ExamStatus): boolean {
-  return PUBLISHABLE_EXAM_STATUSES.includes(status);
+  return CONFIGURABLE_EXAM_STATUSES.includes(status);
 }
 
 export function defaultSittingFormValues(): SittingFormValues {

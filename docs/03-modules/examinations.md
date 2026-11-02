@@ -269,7 +269,7 @@ List and read shapes the dashboard depends on:
   exam's new status, `scheduled`, and the soft findings that did not block it. A hard finding is a 422
   `domain_rule_violation` carrying the **whole** list in `error.meta.conflicts` (never flattened into
   `details`, which would keep one `schedule_ids` entry); a schedule with no sittings is a 422 under `exam_id`.
-  Only a `draft` or `scheduled` exam publishes: the exam is locked (`select_for_update`) and any later status is
+  Only a `draft` or `scheduled` exam publishes: the school's schedule lock, then the exam row (`select_for_update`), are taken first, and any later status is
   a 409, so a publish can never move an exam back to `scheduled`.
 - **An admit card carries its student and section.** `AdmitCard` reads `student_name`, `admission_number`,
   `section_id` and `section_name`, the section from the student's enrolment **in the exam's session**, in
@@ -711,8 +711,18 @@ clash list, and the exam went to `scheduled` over a hard clash nobody saw. Every
 sitting write (create, update including a cancel, delete) now goes through
 `services.save_schedule_with_conflicts` or `services.delete_schedule`, which lock
 the parent exam first (both exams, in pk order, when an update moves the sitting
-to another exam). A clash with *another* exam's sitting is still read without
-that exam's lock; see `docs/deferred-work.md`.
+to another exam).
+
+Publish also reads room and invigilator clashes against *other* exams'
+sittings, which those exams' locks did not cover. So every sitting write and
+every publish first takes one per-school schedule lock,
+`services.lock_school_schedule`: a transaction-scoped PostgreSQL advisory lock
+(`pg_advisory_xact_lock`) keyed on the tenant, through the shared
+`core.tenancy.locks.advisory_xact_lock`. It is taken before the exam row lock
+everywhere, so the order is the same on every path. The exam row lock stays,
+because results and admit-card actions change the exam's status without the
+schedule lock. The cost is that schedule edits within one school run one at a
+time, which the school chose over a publish that can miss a clash.
 
 ### Corrected in review (PR D)
 

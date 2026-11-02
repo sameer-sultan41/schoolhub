@@ -1,6 +1,5 @@
 import { EXAMS_QUERY_MODULE } from "@/services/modules/exams/exams-constant";
 import type { ConflictSeverity, SittingInput, SittingStatus } from "./exam-schedules-type";
-import type { ExamStatus } from "@/services/modules/exams/exams-type";
 
 /** The exam-schedules module's constants. */
 
@@ -15,10 +14,6 @@ export const SITTING_STATUS_CANCELLED: SittingStatus = "cancelled";
 
 /** The severities the API sends; a finding with any other counts as hard (it blocks, never hides). */
 export const CONFLICT_SEVERITIES: readonly ConflictSeverity[] = ["hard", "soft"];
-
-/** The exam statuses `:publish-schedule` is offered in: the same two the server accepts (any other
- * is a 409), so the button never offers a publish the server would refuse. */
-export const PUBLISHABLE_EXAM_STATUSES: readonly ExamStatus[] = ["draft", "scheduled"];
 
 /** camelCase `SittingInput` key -> the API's body key. */
 export const SITTING_BODY_FIELDS: ReadonlyArray<readonly [keyof SittingInput, string]> = [

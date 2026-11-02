@@ -1048,7 +1048,7 @@ class ResultViewSet(
         outstanding. In the job it is what actually holds, because marks can
         change between the request and the worker picking it up.
         """
-        exam = get_object_or_404(Exam.objects.alive(), pk=pk)
+        exam = scoped_exam(request, pk)
         services.assert_exam_is_recomputable(exam)
         processing.assert_ready_to_process(processing.collect(exam=exam))
 
@@ -1232,7 +1232,7 @@ class ReportCardViewSet(
     @extend_schema(request=None, responses={202: None})
     def generate(self, request: Request, pk: str | None = None):
         """`POST /exams/{id}:generate-report-cards` — 202 + a job (§16)."""
-        exam = get_object_or_404(Exam.objects.alive(), pk=pk)
+        exam = scoped_exam(request, pk)
         services.assert_report_cards_are_generatable(exam)
 
         def execute():

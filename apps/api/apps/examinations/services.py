@@ -57,12 +57,14 @@ from core.api.exceptions import Conflict, DomainRuleViolation
 from core.imports.tabular import parse_rows
 from core.rbac.models import RecordScope
 from core.rbac.permissions import has_permission_key, user_scopes
+from core.tenancy.locks import AdvisoryLockNamespace, advisory_xact_lock
 
 # §7.1's lifecycle. An exam may only be *configured* — subjects added, marks
 # structure changed, the scale swapped — while it is still in one of these
 # states. Past `marks_entry` a configuration change would silently invalidate
 # marks already entered against the old maximum, which is the kind of edit that
-# produces a percentage nobody can reproduce.
+# produces a percentage nobody can reproduce. `:publish-schedule` accepts the
+# same two: publishing from `marks_entry` on would reopen a sat timetable.
 CONFIGURABLE_STATUSES = frozenset({ExamStatus.DRAFT, ExamStatus.SCHEDULED})
 
 # Deleting an exam is only safe while nothing downstream references it. §5.1
@@ -350,6 +352,17 @@ def lock_exams(*exam_ids: uuid.UUID | None) -> None:
     list(Exam.objects.select_for_update().filter(pk__in=ids).order_by("pk").values_list("pk"))
 
 
+def lock_school_schedule(tenant_id: uuid.UUID) -> None:
+    """Take the school's one schedule lock, before any exam row lock.
+
+    `:publish-schedule` reads room and invigilator clashes against *other*
+    exams' sittings, so locking the published exam alone let a concurrent
+    write to another exam's sitting commit unseen. Every sitting write and
+    every publish in the school takes this lock first, in that same order.
+    """
+    advisory_xact_lock(AdvisoryLockNamespace.EXAM_SCHEDULE, tenant_id)
+
+
 @transaction.atomic
 def save_schedule_with_conflicts(
     *,
@@ -359,9 +372,10 @@ def save_schedule_with_conflicts(
 ) -> list[dict]:
     """Persist a sitting write and return the exam's whole clash list.
 
-    **Locks the parent exam first** (both exams, when an update moves the
-    sitting to another exam's subject). `publish_exam_schedule` reads the clash
-    list under the same lock, so a sitting saved concurrently either commits
+    **Locks first**: the school's schedule lock, then the parent exam (both
+    exams, when an update moves the sitting to another exam's subject).
+    `publish_exam_schedule` reads the clash list under the same school lock, so
+    a sitting saved concurrently, in this exam or any other, either commits
     before publish reads or waits for it: publish can no longer move the exam
     to `scheduled` over a clash it never saw.
 
@@ -372,6 +386,9 @@ def save_schedule_with_conflicts(
     become blocking, exactly as `timetable`'s draft grid and `:publish` divide
     the same responsibility.
     """
+    lock_school_schedule(exam_subject.tenant_id)
+    # The exam rows still serialise this write against status transitions
+    # (results, admit cards) that never take the schedule lock.
     lock_exams(
         exam_subject.exam_id,
         previous_exam_subject.exam_id if previous_exam_subject else None,
@@ -382,7 +399,8 @@ def save_schedule_with_conflicts(
 
 @transaction.atomic
 def delete_schedule(*, schedule: ExamSchedule, delete: Callable[[], object]) -> None:
-    """Delete a sitting under its exam's lock, for the reason the save takes it."""
+    """Delete a sitting under the locks the save takes, for the same reason."""
+    lock_school_schedule(schedule.tenant_id)
     lock_exams(schedule.exam_subject.exam_id)
     assert_schedule_is_editable(schedule)
     delete()
@@ -404,11 +422,13 @@ def publish_exam_schedule(*, exam: Exam, actor_id: uuid.UUID) -> dict:
 
     Only a `draft` or `scheduled` exam publishes: from `marks_entry` on, moving
     it back to `scheduled` would reopen a timetable students have already sat.
-    The exam is locked first, so a concurrent transition cannot slip between
+    The school's schedule lock comes first, then the exam row, so a
+    concurrent sitting write or transition cannot slip between
     this check and the save.
     """
+    lock_school_schedule(exam.tenant_id)
     locked = Exam.objects.alive().select_for_update().get(pk=exam.pk)
-    if locked.status not in (ExamStatus.DRAFT, ExamStatus.SCHEDULED):
+    if locked.status not in CONFIGURABLE_STATUSES:
         raise Conflict("Only a draft or scheduled exam's schedule can be published.")
 
     findings = conflicts.detect_conflicts(exam=exam)
