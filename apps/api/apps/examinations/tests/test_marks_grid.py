@@ -21,6 +21,7 @@ from apps.examinations.models import ExamStatus, Marks
 from apps.examinations.tests.factories import (
     AcademicSessionFactory,
     CampusFactory,
+    ClassFactory,
     ClassSubjectFactory,
     ExamSubjectFactory,
     MarksFactory,
@@ -191,11 +192,11 @@ class SectionWriteScopeTests(GridTestCase):
             self.assertFalse(Marks.objects.alive().filter(exam_subject=self.exam_subject).exists())
 
     def test_a_section_of_another_class_is_a_422_on_section_id(self) -> None:
-        from apps.examinations.tests.factories import ClassFactory
-
         with tenant_context(self.tenant.id):
             elsewhere = SectionFactory(
-                tenant=self.tenant, school_class=ClassFactory(tenant=self.tenant, level=9)
+                tenant=self.tenant,
+                school_class=ClassFactory(tenant=self.tenant, level=9),
+                campus=self.campus,
             )
 
         response = self.submit(section=elsewhere)
