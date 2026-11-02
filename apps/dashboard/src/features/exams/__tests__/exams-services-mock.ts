@@ -27,6 +27,7 @@ export function examsServicesMock() {
       "revokeAdmitCard",
       "fetchAdmitCardDownloadUrl",
     ],
+    marks: ["fetchGrid", "bulkEntry", "fetchProgress", "lockMarks", "unlockMarks", "importMarks"],
     jobs: ["fetchJob"],
     schoolOrganization: ["fetchAcademicSessions", "fetchTerms", "fetchClasses", "fetchSections"],
     rooms: ["fetchActiveRooms"],

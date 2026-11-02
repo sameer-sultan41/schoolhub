@@ -181,6 +181,8 @@ export const endpoints = {
     publishSchedule: (id: string) => `/exams/${id}:publish-schedule`,
     /** Colon-action: `202` + a render job, keyed `exams.admit-card.issue`. */
     issueAdmitCards: (id: string) => `/exams/${id}:issue-admit-cards`,
+    /** Per (exam-subject, section) entry counts, keyed `exams.marks.view`. */
+    marksProgress: (id: string) => `/exams/${id}/marks-progress`,
   },
   /** `/admit-cards`: an exam's issued cards, keyed `exams.admit-card.*`. */
   admitCards: {
@@ -189,6 +191,13 @@ export const endpoints = {
     revoke: (id: string) => `/admit-cards/${id}:revoke`,
     /** Colon-action, keyed `exams.admit-card.view`: a signed link to the card's own PDF. */
     download: (id: string) => `/admit-cards/${id}:download`,
+  },
+  /** `/marks`: one section's grid (`exams.marks.view`), its whole-grid save (`exams.marks.create`)
+   * and the sheet import (`exams.marks.import`, multipart, `202` + job). */
+  marks: {
+    grid: "/marks/grid",
+    bulkEntry: "/marks:bulk-entry",
+    imports: "/marks-imports",
   },
   /** `/exam-schedules`: an exam's sittings, keyed `exams.schedule.*`. */
   examSchedules: {
@@ -199,6 +208,9 @@ export const endpoints = {
   examSubjects: {
     list: "/exam-subjects",
     detail: (id: string) => `/exam-subjects/${id}`,
+    /** Colon-actions keyed `exams.marks.lock`; the unlock is audited. */
+    lockMarks: (id: string) => `/exam-subjects/${id}:lock-marks`,
+    unlockMarks: (id: string) => `/exam-subjects/${id}:unlock-marks`,
   },
   /** `apps/api/apps/timetable/rooms/urls.py`. */
   rooms: {

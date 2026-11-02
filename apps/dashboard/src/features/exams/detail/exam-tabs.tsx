@@ -10,6 +10,12 @@ import { useUrlParams } from "@/hooks/use-url-params";
 import { hasPermission } from "@/lib/permissions";
 import type { ExamRecord } from "@/services";
 import { AdmitCardsTab } from "@/features/exams/admit-cards/admit-cards-tab";
+import { MarksTab } from "@/features/exams/marks/marks-tab";
+import {
+  MARKS_SECTION_URL_KEY,
+  MARKS_SUBJECT_URL_KEY,
+  MARKS_TAB_ID,
+} from "@/services/modules/marks/marks-constant";
 import { ScheduleTab } from "@/features/exams/schedule/schedule-tab";
 import { ExamSubjectsTable } from "@/features/exams/subjects/exam-subjects-table";
 
@@ -24,14 +30,14 @@ export interface ExamTabSpec {
 
 /**
  * Every tab an exam page will have, in order, each on its permission key. A tab draws only once
- * it has content in `EXAM_TAB_CONTENT`: the later screens (marks, results, report cards) land in
+ * it has content in `EXAM_TAB_CONTENT`: the later screens (results, report cards) land in
  * their own changes, each adding its content below.
  */
 export const EXAM_TABS = [
   { id: "subjects", permission: "exams.exam.view" },
   { id: "schedule", permission: "exams.schedule.view" },
   { id: "admit-cards", permission: "exams.admit-card.view" },
-  { id: "marks", permission: "exams.marks.create" }, // PR C: exams.marks.view
+  { id: MARKS_TAB_ID, permission: "exams.marks.view" },
   { id: "results", permission: "exams.result.view" },
   { id: "report-cards", permission: "exams.report-card.view" },
 ] as const satisfies readonly ExamTabSpec[];
@@ -43,6 +49,7 @@ export const EXAM_TAB_CONTENT: Partial<Record<ExamTabId, ComponentType<{ exam: E
   subjects: ExamSubjectsTable,
   schedule: ScheduleTab,
   "admit-cards": AdmitCardsTab,
+  [MARKS_TAB_ID]: MarksTab,
 };
 
 /** The exam's tabs, in `?tab=`. Shows only those with content whose key the viewer holds; an
@@ -65,8 +72,14 @@ export function ExamTabs({ exam }: { exam: ExamRecord }) {
     <Tabs
       value={active.id}
       onValueChange={(value) => {
-        // The first tab is the URL's default, so it leaves the key out.
-        setParams({ [EXAM_TAB_URL_KEY]: value === first.id ? null : value });
+        // The first tab is the URL's default, so it leaves the key out. The marks grid's subject
+        // and section belong to that tab only: another tab must not read them (Admit cards would
+        // take `section` as its filter).
+        const leavingMarks = value !== MARKS_TAB_ID;
+        setParams({
+          [EXAM_TAB_URL_KEY]: value === first.id ? null : value,
+          ...(leavingMarks ? { [MARKS_SUBJECT_URL_KEY]: null, [MARKS_SECTION_URL_KEY]: null } : {}),
+        });
       }}
       className="space-y-4"
     >

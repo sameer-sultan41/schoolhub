@@ -13,6 +13,7 @@ import { GradingScalesService } from "./modules/grading-scales";
 import { GuardiansService } from "./modules/guardians";
 import { JobsService } from "./modules/jobs";
 import { LeaveRequestsService } from "./modules/leave-requests";
+import { MarksService } from "./modules/marks";
 import { PeriodsService } from "./modules/periods";
 import { PromotionsService } from "./modules/promotions";
 import { RoomsService } from "./modules/rooms";
@@ -51,6 +52,22 @@ export type {
   AdmitCardRecord,
   AdmitCardStatus,
 } from "./modules/admit-cards";
+
+export type {
+  BulkMarksEntryInput,
+  BulkMarksEntryResult,
+  MarksEntryInput,
+  MarksEntryStatus,
+  MarksGrid,
+  MarksGridEntry,
+  MarksGridMeta,
+  MarksGridQuery,
+  MarksLockResult,
+  MarksProgressRow,
+  MarksRecord,
+  MarksUnlockResult,
+  MarksUnwritableReason,
+} from "./modules/marks";
 
 export type {
   ConflictSeverity as ExamConflictSeverity,
@@ -151,10 +168,12 @@ export type {
   RegisterMeta,
   RegisterQuery,
   RegisterResult,
-  RowIssue,
   StudentAttendanceRecord,
   UnmarkableReason,
 } from "./modules/student-attendance";
+
+/** One refused row of a whole-grid submission (attendance's `:bulk-mark`, marks' `:bulk-entry`). */
+export type { RowIssue } from "./shared/row-issues";
 
 export type {
   MarkableStaffStatus,
@@ -263,6 +282,7 @@ export const Services = {
   examSubjects: ExamSubjectsService,
   examSchedules: ExamSchedulesService,
   admitCards: AdmitCardsService,
+  marks: MarksService,
   guardians: GuardiansService,
   staff: StaffService,
   students: StudentsService,

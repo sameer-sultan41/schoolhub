@@ -27,7 +27,6 @@ export type {
   RegisterMeta,
   RegisterQuery,
   RegisterResult,
-  RowIssue,
   StudentAttendanceRecord,
   UnmarkableReason,
 } from "./student-attendance-type";

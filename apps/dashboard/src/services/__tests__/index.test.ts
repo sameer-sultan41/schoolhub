@@ -46,6 +46,7 @@ describe("Services", () => {
       "guardians",
       "jobs",
       "leaveRequests",
+      "marks",
       "periods",
       "promotions",
       "rooms",
@@ -92,6 +93,12 @@ describe("Services", () => {
     expect(typeof Services.admitCards.issueAdmitCards).toBe("function");
     expect(typeof Services.admitCards.revokeAdmitCard).toBe("function");
     expect(typeof Services.admitCards.fetchAdmitCardDownloadUrl).toBe("function");
+    expect(typeof Services.marks.fetchGrid).toBe("function");
+    expect(typeof Services.marks.bulkEntry).toBe("function");
+    expect(typeof Services.marks.fetchProgress).toBe("function");
+    expect(typeof Services.marks.lockMarks).toBe("function");
+    expect(typeof Services.marks.unlockMarks).toBe("function");
+    expect(typeof Services.marks.importMarks).toBe("function");
     expect(typeof Services.schoolOrganization.fetchTerms).toBe("function");
     expect(typeof Services.gradingScales.fetchScalesPage).toBe("function");
     expect(typeof Services.gradingScales.fetchScale).toBe("function");

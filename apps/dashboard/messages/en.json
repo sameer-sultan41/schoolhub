@@ -2161,6 +2161,91 @@
         "tooLong": "Keep the reason to {max} characters."
       }
     },
+    "marks": {
+      "progress": {
+        "loading": "Loading marks progress",
+        "loadError": "The marks progress couldn't be loaded.",
+        "emptyTitle": "No marks to enter",
+        "emptyDescription": "No subject and section of this exam is open to you for marks entry.",
+        "caption": "Marks entry progress by subject and section",
+        "columns": {
+          "subject": "Subject",
+          "section": "Class and section",
+          "entered": "Entered",
+          "submitted": "Submitted",
+          "status": "Status",
+          "actions": "Actions"
+        },
+        "state": {
+          "locked": "Locked",
+          "submitted": "Submitted",
+          "inProgress": "In progress",
+          "notStarted": "Not started"
+        },
+        "sectionName": "{class} – {section}",
+        "count": "{done} of {total}",
+        "enter": "Enter marks",
+        "enterRow": "Enter marks for {subject}, {section}",
+        "unlockHint": "Some subjects are locked and take no marks until they are unlocked. To correct one (after the results were sent back, for example), unlock it first; unlocking is audited.",
+        "unlockHintAsk": "Some subjects are locked and take no marks until they are unlocked. To correct one (after the results were sent back, for example), ask someone who can lock marks to unlock it."
+      },
+      "lock": {
+        "lock": "Lock",
+        "lockRow": "Lock {subject} marks for {class}",
+        "unlock": "Unlock",
+        "unlockRow": "Unlock {subject} marks for {class}",
+        "locked": "{subject} marks locked.",
+        "unlocked": "{subject} marks unlocked.",
+        "failed": "The marks couldn't be locked.",
+        "unlockTitle": "Unlock {subject} marks for {class}?",
+        "unlockDescription": "Every section of {subject} takes marks again until it is locked. Unlocking is audited.",
+        "unlockConfirm": "Unlock marks"
+      },
+      "grid": {
+        "heading": "{subject} · {class} – {section}",
+        "headingFallback": "Marks entry",
+        "back": "Back to progress",
+        "caption": "Marks for {heading}",
+        "loadError": "The marks couldn't be loaded.",
+        "notFoundTitle": "This section isn't open to you",
+        "notFoundDescription": "You can only enter marks for the subjects and sections you teach.",
+        "readOnly": "These marks are read-only.",
+        "emptyTitle": "No students",
+        "emptyDescription": "No students are on this section's roll for the exam's session.",
+        "columns": {
+          "roll": "Roll",
+          "student": "Student",
+          "admissionNumber": "Admission number",
+          "theory": "Theory (out of {max})",
+          "practical": "Practical (out of {max})",
+          "absent": "Absent",
+          "exempt": "Exempt",
+          "remarks": "Remarks"
+        },
+        "theoryFor": "Theory marks for {name}",
+        "practicalFor": "Practical marks for {name}",
+        "absentFor": "{name} was absent",
+        "exemptFor": "{name} is exempt",
+        "remarksFor": "Remarks for {name}",
+        "aboveMax": "Above the maximum of {max}.",
+        "invalid": "Enter a number with at most two decimals.",
+        "absentValue": "Absent",
+        "exemptValue": "Exempt",
+        "yes": "Yes",
+        "no": "No",
+        "saveDraft": "Save draft",
+        "submit": "Submit",
+        "blankCount": "{count, plural, one {# student has} other {# students have}} no mark yet. Enter a mark, or mark them absent or exempt, before submitting.",
+        "saved": "Draft saved: {entered} entered, {updated} updated.",
+        "submitted": "Marks submitted: {entered} entered, {updated} updated."
+      },
+      "import": {
+        "button": "Import marks",
+        "title": "Import {subject} marks",
+        "description": "Upload a CSV or .xlsx sheet with one row per student, by admission number. Each row is checked on its own; rows for sections you don't enter are refused.",
+        "titleFallback": "Import a marks sheet"
+      }
+    },
     "gradingScales": {
       "title": "Grading scales",
       "summary": "How marks become grades: the bands, and which scale an exam uses when it names none.",
