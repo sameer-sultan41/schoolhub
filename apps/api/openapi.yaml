@@ -1108,6 +1108,27 @@ paths:
         '422':
           description: The audience resolves to nobody, or a campus-scoped sender
             gave no `campus_id`.
+  /api/v1/broadcasts:scope:
+    get:
+      operationId: broadcasts:scope_retrieve
+      description: |-
+        `GET /broadcasts:scope` — `campus_ids` is null when unrestricted.
+
+        `sender_campus_ids`, the rule `preview` and `emergency` enforce, so the
+        screen can offer only the campuses a send will accept. An empty list is
+        a 200, not a 404: this reads the caller's own capability, not a record.
+      summary: The campuses the caller may broadcast to
+      tags:
+      - broadcasts:scope
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BroadcastScopeResponse'
+          description: ''
   /api/v1/budgets:
     get:
       operationId: budgets_list
@@ -15224,6 +15245,30 @@ components:
       required:
       - audience_type
       - message
+    BroadcastScope:
+      type: object
+      description: Where the caller may broadcast, read from the same rule the send
+        enforces.
+      properties:
+        campus_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          nullable: true
+          description: 'null: unrestricted, so `campus_id` is optional and may be
+            any campus. A list: the only campuses the caller may target, one of which
+            a send must name as `campus_id`; an empty list means the caller can reach
+            no campus.'
+      required:
+      - campus_ids
+    BroadcastScopeResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/BroadcastScope'
+      required:
+      - data
     BroadcastSend:
       type: object
       description: 'The preview''s answer, repeated back: a mismatch on either is

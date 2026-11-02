@@ -8,7 +8,7 @@ import { ClipboardList } from "lucide-react";
 
 import { CursorDataGridCard } from "@/features/attendance/cursor-data-grid-card";
 import { RequestCorrectionDialog } from "@/features/attendance/request-correction-dialog";
-import { useCursorList } from "@/features/attendance/use-cursor-list";
+import { useCursorList } from "@/hooks/use-cursor-list";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { hideableColumnIds, useDataGridUrlState } from "@/hooks/use-data-grid-url-state";
 import { FILTER_ALL } from "@/lib/constants";

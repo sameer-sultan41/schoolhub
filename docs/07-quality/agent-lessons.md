@@ -41,7 +41,8 @@
 - **Mistake.** The execute report showed a raw Python dictionary dump for a missing section, and it was deferred as a minor. The decision to make the section rule advisory relied on the report naming each failed student legibly. The whole-PR review reversed the deferral.
 - **Mistake (again, attendance dashboard PR C).** Import was put on the Records toolbar, and Records was gated on `attendance.student-attendance.view`. §4 grants the import key to `it_admin` alone, and `it_admin` does not hold `.view`, so the only role meant to import could not reach the button. The premise "an importer can open Records" was never checked against `permissions.py`.
 - **Mistake (again, per-role record scope PR B).** The marks import was deferred because "the job carries no user". The payload already held `requested_by` and the task received `actor_id`, so the export-job fix applied as-is; the re-review reversed the deferral (plan, ruling 14).
-- **Check.** For each ruling or decision, write down the premise it rests on, and verify that premise on the real path before ruling a related defect minor. When an action lives on a screen, check that every role §4 grants the action can open that screen.
+- **Mistake (again, communication dashboard PR D).** `7e7c74a0` cut a conversation back to its first page after every write, on the premise that TanStack Query replays stored cursors on refetch. The installed `infiniteQueryBehavior.js` recomputes each later cursor from the fresh pages, so the trim only threw away history the user had loaded.
+- **Check.** For each ruling or decision, write down the premise it rests on, and verify that premise on the real path before ruling a related defect minor. When an action lives on a screen, check that every role §4 grants the action can open that screen. A premise about a library's behaviour is checked in its installed source under `node_modules`, not from memory.
 
 ### L4. Trace what the user can do after a failure
 
@@ -214,7 +215,32 @@
   atomic step to report the loss while a read would still say "go". Running it twice proves only
   idempotence.
 
-### L31. A permission helper takes the key it guards, and checks it against the row
+### L31. Strict `tsc` rejects what jest never types: defaulted params and enum casts
+
+- **Mistake.** Communication PR D's jest mock read `query.cursor` in an implementation typed from a service signature whose `query` parameter has a default value, so strict `tsc` saw it as possibly `undefined`. A cast between a generated schema enum and a narrower form union (`as`) failed strict `tsc` too. Jest strips types, so only the pre-push typecheck caught either.
+- **Check.** Type a mock's parameters from the real signature and read defaulted or optional ones with `?.` (`query?.cursor`). Narrow a schema enum with `.find()` over the allowed list, or `satisfies`, never `as`.
+
+### L32. Never render a raw API enum value as user-visible text
+
+- **Mistake.** The broadcast preview listed channels by their API ids (`in_app`, `sms`), which reached the screen as written (fixed in `a7e49cb5`).
+- **Check.** Every enum a user can see (channel, status, type, role) goes through an i18n label map in both locale files, with a fallback for a value the map lacks, and a spec asserts the label, not the id.
+
+### L33. A "do it once" guard must be released when the call fails
+
+- **Mistake.** PR #146's `thread-view.tsx` set its `markedRef` before `:mark-read` resolved and nothing reset it, so a failed mark-read was never tried again while the thread stayed open.
+- **Check.** A ref or flag that stops an async call repeating is released in `onError`, the retry has a trigger (the data's next load, not the error itself, which would loop), and the mutation's `isPending` blocks a second call in flight. Test it: the first call rejects, the data refetches, the call runs exactly once more.
+
+### L34. A picker offers only what the server will accept from this caller
+
+- **Mistake.** PR #146's broadcast Audience step listed every campus and validated only classes and sections, so a campus-restricted sender met the server's `422` only at Confirm.
+- **Check.** When the server narrows a field by the caller's scope, read that scope from its endpoint, intersect it with the loaded options (a stale id may name a deleted record), require the field in that step's validation, and give the "reaches nothing" case its own message and a disabled Next.
+
+### L35. A resolved `invalidateQueries` is not a rendered refetch
+
+- **Mistake.** Two PR #146 Jest tests awaited `act(() => queryClient.invalidateQueries(...))` and then asserted on the screen, or failed a mutation, straight away. TanStack Query hands results to React on a `setTimeout(0)`, so the view still showed the old data, and CI failed (`33fe38c6`, `68521eac`).
+- **Check.** After a refetch, wait for something on screen that only the new data renders (`findBy…`, or `waitFor` on the changed text) before acting or asserting. To prove something did *not* happen, first let TanStack's queued notifications land: an `act` around a `setTimeout(0)`.
+
+### L36. A permission helper takes the key it guards, and checks it against the row
 
 - **Mistake.** `user_scopes` returned every role's record scope whatever the role granted, so a
   campus-A role plus any unrelated `all` role read tenant-wide on every scoped endpoint. Four
@@ -236,7 +262,7 @@
   `campus` must be followed by a per-row campus check. Test it with a mixed user: the key on
   campus A, an unrelated or action key at `all`, and a campus-B row.
 
-### L32. Read `captured_queries` before the next request
+### L37. Read `captured_queries` before the next request
 
 - **Mistake.** `MixedScopeDetailWriteTests` (`apps/api/tests/test_per_role_scope.py`) captured
   one PATCH, made two more requests, then read `captured.captured_queries`. That property

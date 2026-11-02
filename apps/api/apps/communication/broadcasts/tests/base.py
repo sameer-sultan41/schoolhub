@@ -15,6 +15,7 @@ from apps.communication.tests.base import CommunicationAPITestCase
 from apps.communication.tests.factories import UserFactory
 from core.tenancy.context import tenant_context
 
+SCOPE_URL = "/api/v1/broadcasts:scope"
 PREVIEW_URL = "/api/v1/broadcasts:preview"
 SEND_URL = "/api/v1/broadcasts:emergency"
 MESSAGE = "School closes at noon today."

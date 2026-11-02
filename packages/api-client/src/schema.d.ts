@@ -574,6 +574,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/broadcasts:scope": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The campuses the caller may broadcast to
+         * @description `GET /broadcasts:scope` — `campus_ids` is null when unrestricted.
+         *
+         *     `sender_campus_ids`, the rule `preview` and `emergency` enforce, so the
+         *     screen can offer only the campuses a send will accept. An empty list is
+         *     a 200, not a 404: this reads the caller's own capability, not a record.
+         */
+        get: operations["broadcasts:scope_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/budgets": {
         parameters: {
             query?: never;
@@ -6629,6 +6653,14 @@ export interface components {
             /** Format: uuid */
             campus_id?: string | null;
             message: string;
+        };
+        /** @description Where the caller may broadcast, read from the same rule the send enforces. */
+        BroadcastScope: {
+            /** @description null: unrestricted, so `campus_id` is optional and may be any campus. A list: the only campuses the caller may target, one of which a send must name as `campus_id`; an empty list means the caller can reach no campus. */
+            campus_ids: string[] | null;
+        };
+        BroadcastScopeResponse: {
+            data: components["schemas"]["BroadcastScope"];
         };
         /** @description The preview's answer, repeated back: a mismatch on either is a 409. */
         BroadcastSend: {
@@ -12869,6 +12901,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    "broadcasts:scope_retrieve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BroadcastScopeResponse"];
+                };
             };
         };
     };

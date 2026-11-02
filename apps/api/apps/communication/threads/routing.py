@@ -118,7 +118,8 @@ def _class_teacher_user_id(*, student: Student, tenant_id: uuid.UUID) -> uuid.UU
 
     `Section.class_teacher_staff_id` and `Staff.user_id` are plain UUID columns,
     not foreign keys, so a departed teacher or a deactivated account is checked
-    here rather than falling out of a join.
+    here rather than falling out of a join: the staff row is a subquery of the
+    `thread_staff_users` pool, so both checks are one query.
     """
     from apps.staff_management.models import EmploymentStatus, Staff
 
@@ -126,17 +127,17 @@ def _class_teacher_user_id(*, student: Student, tenant_id: uuid.UUID) -> uuid.UU
     staff_id = enrollment.section.class_teacher_staff_id if enrollment else None
     if staff_id is None:
         return None
-    user_id = (
+    teacher_user = (
         Staff.objects.alive()
         .filter(pk=staff_id, employment_status=EmploymentStatus.ACTIVE, user_id__isnull=False)
-        .values_list("user_id", flat=True)
+        .values("user_id")
+    )
+    return (
+        thread_staff_users(tenant_id=tenant_id)
+        .filter(pk__in=teacher_user)
+        .values_list("pk", flat=True)
         .first()
     )
-    if user_id is None:
-        return None
-    if not thread_staff_users(tenant_id=tenant_id).filter(pk=user_id).exists():
-        return None
-    return user_id
 
 
 def _fallback_role(*, tenant_id: uuid.UUID) -> str:
