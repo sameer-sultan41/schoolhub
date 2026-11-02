@@ -14,6 +14,7 @@ that ship their tables.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from decimal import Decimal
 
 from django.db import transaction
@@ -337,9 +338,29 @@ def assert_section_studies_the_class(*, exam_subject: ExamSubject, section: Sect
         )
 
 
+def lock_exams(*exam_ids: uuid.UUID | None) -> None:
+    """Lock the given exam rows with `SELECT ... FOR UPDATE`, in pk order.
+
+    Pk order so two writers locking the same pair cannot deadlock.
+    """
+    ids = sorted({exam_id for exam_id in exam_ids if exam_id is not None})
+    list(Exam.objects.select_for_update().filter(pk__in=ids).order_by("pk").values_list("pk"))
+
+
 @transaction.atomic
-def save_schedule_with_conflicts(*, schedule: ExamSchedule, actor_id: uuid.UUID) -> list[dict]:
-    """Persist a sitting and return every clash it now participates in.
+def save_schedule_with_conflicts(
+    *,
+    exam_subject: ExamSubject,
+    save: Callable[[], object],
+    previous_exam_subject: ExamSubject | None = None,
+) -> list[dict]:
+    """Persist a sitting write and return the exam's whole clash list.
+
+    **Locks the parent exam first** (both exams, when an update moves the
+    sitting to another exam's subject). `publish_exam_schedule` reads the clash
+    list under the same lock, so a sitting saved concurrently either commits
+    before publish reads or waits for it: publish can no longer move the exam
+    to `scheduled` over a clash it never saw.
 
     **Saves first, then reports.** §5.2 wants a clash *list*, and a schedule
     mid-build is allowed to be imperfect — an exam-staff journey (§8) is
@@ -348,9 +369,20 @@ def save_schedule_with_conflicts(*, schedule: ExamSchedule, actor_id: uuid.UUID)
     become blocking, exactly as `timetable`'s draft grid and `:publish` divide
     the same responsibility.
     """
-    schedule.updated_by = actor_id
-    schedule.save()
-    return conflicts.detect_conflicts(exam=schedule.exam_subject.exam)
+    lock_exams(
+        exam_subject.exam_id,
+        previous_exam_subject.exam_id if previous_exam_subject else None,
+    )
+    save()
+    return conflicts.detect_conflicts(exam=exam_subject.exam)
+
+
+@transaction.atomic
+def delete_schedule(*, schedule: ExamSchedule, delete: Callable[[], object]) -> None:
+    """Delete a sitting under its exam's lock, for the reason the save takes it."""
+    lock_exams(schedule.exam_subject.exam_id)
+    assert_schedule_is_editable(schedule)
+    delete()
 
 
 @transaction.atomic

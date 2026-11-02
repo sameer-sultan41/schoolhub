@@ -612,6 +612,15 @@ card, so three hundred cards was six hundred round trips, the shape
 answers the whole batch in two queries, and a test asserts it agrees with the
 single form.
 
+A later review found `:publish-schedule` locking the exam while sitting writes
+did not, so a sitting saved concurrently could commit after publish had read the
+clash list, and the exam went to `scheduled` over a hard clash nobody saw. Every
+sitting write (create, update including a cancel, delete) now goes through
+`services.save_schedule_with_conflicts` or `services.delete_schedule`, which lock
+the parent exam first (both exams, in pk order, when an update moves the sitting
+to another exam). A clash with *another* exam's sitting is still read without
+that exam's lock; see `docs/deferred-work.md`.
+
 ### Corrected in review (PR D)
 
 **One Major: the result lifecycle took no row locks.** `approve_exam_results`,
