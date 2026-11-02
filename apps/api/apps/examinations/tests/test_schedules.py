@@ -587,6 +587,88 @@ class ScheduleEndpointTests(ScheduleTestCase):
         self.assertEqual(response.status_code, 403)
 
 
+class SittingWriteLockTests(ScheduleTestCase):
+    """Every sitting write locks its exam, as `:publish-schedule` does.
+
+    Publish reads the clash list under the exam lock; a sitting write that did
+    not take it could commit after that read, and the exam went to `scheduled`
+    over a hard clash publish never saw. Asserted on the SQL issued, as
+    `fees_finance` `ConcurrencyTests` does: a real race needs two connections.
+    """
+
+    URL = ScheduleEndpointTests.URL
+    # Borrowed rather than inherited, so the endpoint cases do not run twice.
+    _payload = ScheduleEndpointTests._payload
+
+    def _exam_locks_before_the_write(self, captured, write_sql: str) -> list[str]:
+        sql = [query["sql"] for query in captured.captured_queries]
+        write_at = next(i for i, q in enumerate(sql) if q.startswith(write_sql))
+        return [q for q in sql[:write_at] if "FOR UPDATE" in q and '"exams"' in q]
+
+    def test_create_locks_the_exam_before_saving(self) -> None:
+        with CaptureQueriesContext(connection) as captured:
+            response = self.client.post(self.URL, self._payload(), format="json")
+
+        self.assertEqual(response.status_code, 201, response.json())
+        locks = self._exam_locks_before_the_write(captured, 'INSERT INTO "exam_schedules"')
+        self.assertEqual(len(locks), 1)
+        self.assertIn(self.exam.pk.hex, locks[0])
+
+    def test_update_locks_the_exam_before_saving(self) -> None:
+        with tenant_context(self.tenant.id):
+            sitting = self.sitting()
+
+        with CaptureQueriesContext(connection) as captured:
+            response = self.client.patch(
+                f"{self.URL}/{sitting.pk}", {"room_id": str(self.room.pk)}, format="json"
+            )
+
+        self.assertEqual(response.status_code, 200, response.json())
+        locks = self._exam_locks_before_the_write(captured, 'UPDATE "exam_schedules"')
+        self.assertEqual(len(locks), 1)
+        self.assertIn(self.exam.pk.hex, locks[0])
+
+    def test_moving_a_sitting_to_another_exam_locks_both(self) -> None:
+        with tenant_context(self.tenant.id):
+            sitting = self.sitting()
+            other_exam = ExamFactory(
+                tenant=self.tenant, academic_session=self.session, grading_scale=self.scale
+            )
+            other_subject = ExamSubjectFactory(
+                tenant=self.tenant,
+                exam=other_exam,
+                school_class=self.school_class,
+                subject=self.subject,
+            )
+        exam_week(self.tenant, other_exam)
+
+        with CaptureQueriesContext(connection) as captured:
+            response = self.client.patch(
+                f"{self.URL}/{sitting.pk}",
+                {"exam_subject_id": str(other_subject.pk)},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 200, response.json())
+        self.assertEqual(response.json()["data"]["exam_id"], str(other_exam.pk))
+        locks = self._exam_locks_before_the_write(captured, 'UPDATE "exam_schedules"')
+        self.assertEqual(len(locks), 1)
+        self.assertIn(self.exam.pk.hex, locks[0])
+        self.assertIn(other_exam.pk.hex, locks[0])
+
+    def test_delete_locks_the_exam_before_deleting(self) -> None:
+        with tenant_context(self.tenant.id):
+            sitting = self.sitting()
+
+        with CaptureQueriesContext(connection) as captured:
+            response = self.client.delete(f"{self.URL}/{sitting.pk}")
+
+        self.assertEqual(response.status_code, 204)
+        locks = self._exam_locks_before_the_write(captured, 'UPDATE "exam_schedules"')
+        self.assertEqual(len(locks), 1)
+        self.assertIn(self.exam.pk.hex, locks[0])
+
+
 class ScheduleRecordScopeTests(ScheduleTestCase):
     def test_a_student_sees_only_their_own_section_s_sittings(self) -> None:
         """§3 gives a student a view of their own exam schedule. The record

@@ -365,7 +365,7 @@ assembly. **The module is complete.**
 | ---- | ----- |
 | Entities | **All 11** of §15's tables — `grading_scales`, `grade_bands`, `exams`, `exam_subjects`, `exam_schedules`, `admit_cards`, `marks`, `results`, `report_cards`, `question_banks`, `questions` — tenant-owned with RLS policies |
 | §16 endpoints | `GET/POST/PATCH/DELETE /grading-scales`, `POST /grading-scales/{id}:set-default`, `GET/POST/PATCH/DELETE /grading-scales/{id}/grade-bands`, `GET/POST/PATCH/DELETE /exams`, `GET/POST/PATCH/DELETE /exam-subjects`, `GET/POST/PATCH/DELETE /exam-schedules` (every write returns `meta.conflicts`), `GET /exams/{id}/schedule-conflicts`, `POST /exams/{id}:publish-schedule`, `GET /admit-cards`, `POST /exams/{id}:issue-admit-cards` (202 + job, accepts `Idempotency-Key`), `POST /admit-cards/{id}:revoke` · `:download`, `GET /marks` (filters `exam_subject_id`, `exam_id`, `section_id`, `student_id`, `status`, `is_absent`, `is_exempt`), `GET /marks/grid`, `POST /marks:bulk-entry` (one `section_id`, accepts `Idempotency-Key`), `POST /exam-subjects/{id}:lock-marks` · `:unlock-marks`, `GET /exams/{id}/marks-progress`, `POST /marks-imports` (202 + job), `GET /results`, `POST /exams/{id}:process-results` (202 + job) · `:approve-results` · `:publish-results` · `:send-results-back`, `POST /results/{id}:withhold`, `GET/PATCH /report-cards` (remarks only), `POST /exams/{id}:generate-report-cards` (202 + job) · `:publish-report-cards`, `GET/POST /reports/exam-summary` (five report kinds, inline under 1,000 rows and a 202 job above), `GET/POST/PATCH/DELETE /question-banks`, `GET/POST/PATCH/DELETE /question-banks/{id}/questions`, `POST /question-banks/{bank}/questions/{id}:approve`, `POST /question-banks/{id}:assemble-paper` (202 + a paper PDF) |
-| §4 permissions | `exams.exam.{view,create,update,delete}`, `exams.grading-scale.{view,create,update}`, `exams.schedule.{view,create,update}`, `exams.admit-card.{view,issue}`, `exams.marks.{view,create,update,import,lock}`, `exams.result.{view,create,approve,publish}`, `exams.report-card.{view,create,publish}`. `exams.question-bank.{view,create,update,delete}`, `exams.question.approve`, `exams.result.export`. **All of §4's keys are registered, and every one but `exams.marks.update` has an endpoint behind it:** `:bulk-entry` checks `exams.marks.create` for a new row and an update alike, so `.update` gates nothing yet (`docs/deferred-work.md`, lesson L35). `tests/test_endpoint_contracts.py` checks that every key a view names is registered, not the reverse |
+| §4 permissions | `exams.exam.{view,create,update,delete}`, `exams.grading-scale.{view,create,update}`, `exams.schedule.{view,create,update}`, `exams.admit-card.{view,issue}`, `exams.marks.{view,create,update,import,lock}`, `exams.result.{view,create,approve,publish}`, `exams.report-card.{view,create,publish}`. `exams.question-bank.{view,create,update,delete}`, `exams.question.approve`, `exams.result.export`. **All of §4's keys are registered, and every one but `exams.marks.update` has an endpoint behind it:** `:bulk-entry` checks `exams.marks.create` for a new row and an update alike, so `.update` gates nothing yet (`docs/deferred-work.md`, lesson L36). `tests/test_endpoint_contracts.py` checks that every key a view names is registered, not the reverse |
 | §11 validations | Exam name unique per session · exam dates set together and ordered · dates within the named term, or the session where no term is named · a term must belong to the exam's session · the session must be writable · one `exam_subjects` row per (exam, class, subject) · `pass_marks ≤ max_marks` · a practical component requires a practical maximum · the subject must be in the class's curriculum for the session · grading bands contiguous, non-overlapping and covering 0–100% before an exam may use the scale |
 | §13 reports | All five — result register (ordered by rank, unranked last), pass/fail analysis per section, subject performance over `marks`, marks-entry status, grade distribution — plus question-bank usage, behind one `kind`-parameterised endpoint with a 202 export lane in all three of `core.exports.tabular`'s formats. Every one asserted at **one query** |
 | §5.8 question banks | Banks per subject (class optional — null means every level), questions with §7.2's approval gate, and deterministic blueprint assembly ordered by `usage_count` so reuse spreads and a re-run produces the same paper |
@@ -695,13 +695,24 @@ And four smaller ones: `DELETE` on a sitting fell through to the mixin's soft
 delete with no `assert_schedule_is_editable`, making it the way around a rule
 `PATCH` enforced; `exams.admit-card-issued` was registered with templates and
 documented as wired while nothing called `notify()` for it; `issue_admit_cards`
-reported `len(created)` rather than the change in row count, which overstates
-under exactly the race `ignore_conflicts=True` exists to absorb; and the render
+reported `len(created)`, which overstated when two runs raced (both read the
+same `existing` set). It now locks the exam row (`lock_exam`) before reading
+`existing`, so a concurrent run waits and reports 0, and `issued` is simply the
+rows it inserted, with no `ignore_conflicts`; and the render
 job called the single-card `student_sittings` inside its loop — two queries per
 card, so three hundred cards was six hundred round trips, the shape
 `conflicts.collect_scope`'s own docstring warns against. `services.sittings_by_student`
 answers the whole batch in two queries, and a test asserts it agrees with the
 single form.
+
+A later review found `:publish-schedule` locking the exam while sitting writes
+did not, so a sitting saved concurrently could commit after publish had read the
+clash list, and the exam went to `scheduled` over a hard clash nobody saw. Every
+sitting write (create, update including a cancel, delete) now goes through
+`services.save_schedule_with_conflicts` or `services.delete_schedule`, which lock
+the parent exam first (both exams, in pk order, when an update moves the sitting
+to another exam). A clash with *another* exam's sitting is still read without
+that exam's lock; see `docs/deferred-work.md`.
 
 ### Corrected in review (PR D)
 

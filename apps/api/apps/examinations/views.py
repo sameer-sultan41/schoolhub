@@ -36,6 +36,7 @@ scale's whole set, so the scale has to be in the URL rather than in the body.
 
 from __future__ import annotations
 
+from functools import partial
 from typing import TYPE_CHECKING
 
 from django.db import transaction
@@ -457,16 +458,6 @@ class ExamScheduleViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
             )
         )
 
-    def _conflict_meta(self, schedule: ExamSchedule) -> dict:
-        """§5.2's clash list, for the exam the edited sitting belongs to.
-
-        Exam-scoped rather than sitting-scoped: a room or invigilator clash is
-        by definition with some *other* sitting, and a caller editing one cell
-        needs the whole list to act on — §8's journey is "resolves the two room
-        clashes the checker flags", plural.
-        """
-        return {"conflicts": conflicts.detect_conflicts(exam=schedule.exam_subject.exam)}
-
     @extend_schema(
         responses={
             201: OpenApiResponse(
@@ -482,16 +473,16 @@ class ExamScheduleViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         """201 with `meta.conflicts` — a clash list, not a refusal."""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
+        findings = services.save_schedule_with_conflicts(
+            exam_subject=serializer.validated_data["exam_subject"],
+            save=partial(self.perform_create, serializer),
+        )
 
         # A bare Response, not ActionResponse.ok: that helper wraps its argument
         # in {"data": ...}, so an already-enveloped payload nests twice.
         # EnvelopeJSONRenderer passes a pre-shaped {"data", "meta"} through and
         # injects request_id — the same shape timetable's slot grid returns.
-        return Response(
-            {"data": serializer.data, "meta": self._conflict_meta(serializer.instance)},
-            status=201,
-        )
+        return Response({"data": serializer.data, "meta": {"conflicts": findings}}, status=201)
 
     @extend_schema(
         responses={
@@ -506,15 +497,21 @@ class ExamScheduleViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     )
     def update(self, request: Request, *args, **kwargs):
         """200 with `meta.conflicts`, on the same reasoning as `create`."""
-        partial = kwargs.pop("partial", False)
+        is_partial = kwargs.pop("partial", False)
         instance = self.get_object()
         services.assert_schedule_is_editable(instance)
 
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer = self.get_serializer(instance, data=request.data, partial=is_partial)
         serializer.is_valid(raise_exception=True)
-        self.perform_update(serializer)
+        # The clash list is exam-scoped, for the exam the sitting ends up in;
+        # the exam it leaves is locked too.
+        findings = services.save_schedule_with_conflicts(
+            exam_subject=serializer.validated_data.get("exam_subject", instance.exam_subject),
+            previous_exam_subject=instance.exam_subject,
+            save=partial(self.perform_update, serializer),
+        )
 
-        return Response({"data": serializer.data, "meta": self._conflict_meta(serializer.instance)})
+        return Response({"data": serializer.data, "meta": {"conflicts": findings}})
 
     @extend_schema(
         responses={
@@ -540,8 +537,9 @@ class ExamScheduleViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         — `cancelled` is the state for calling one off, and it keeps the row
         visible to whoever saw it.
         """
-        services.assert_schedule_is_editable(instance)
-        super().perform_destroy(instance)
+        services.delete_schedule(
+            schedule=instance, delete=partial(super().perform_destroy, instance)
+        )
 
     @extend_schema(
         request=None,

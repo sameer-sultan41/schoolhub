@@ -249,7 +249,7 @@ either this file or `project-status.md`.
   - **`exams.marks.update` gates nothing.** It is registered for `teacher` and `exam_staff`, but
     `:bulk-entry` writes a new row and an update alike under `exams.marks.create`, so no role is
     ever refused for want of it (the audit's suggestion in
-    `07-quality/2026-09-module-audit-findings.md`, lesson L35). Either the update half of a
+    `07-quality/2026-09-module-audit-findings.md`, lesson L36). Either the update half of a
     submission checks it, which needs a ruling on what a teacher holding `.create` alone may do to
     a row they already saved, or the key is dropped from the registry, the seed and §4.
   - **`attendance.import`'s CSV allowlist rejects Windows' `application/vnd.ms-excel` type.** A
@@ -258,6 +258,13 @@ either this file or `project-status.md`.
     `fees.settlement-file` accept it; `attendance.import` lists `text/csv` and `.xlsx` only, and
     is enforced only through `POST /files`, its own multipart import still skipping the check (the
     audit's attendance Minor). Widen it when that check is added.
+- **`:publish-schedule` does not lock the *other* exams its clash list reads.** Every sitting
+  write now locks its own exam, and publish locks the exam it publishes, so a clash between two
+  sittings of that exam cannot slip past publish. A room or invigilator clash with another
+  exam's sitting written concurrently can: that write locks only its own exam. It is still
+  reported on that exam's own write response and blocks that exam's publish. Closing it fully
+  needs a tenant-wide schedule lock (e.g. an advisory lock on the tenant) taken by publish and by
+  every sitting write; weigh it against serialising all schedule edits in a school.
 - **The examinations dashboard's PR A (grading scales, exams, their subjects) left these out:**
   - **`Section`, `Class` and `AcademicSession` have no `assigned`-scope hooks.** An
     `assigned` teacher can read the exams they teach, but the reference lists a picker reads

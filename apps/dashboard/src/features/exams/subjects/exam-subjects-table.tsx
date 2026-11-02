@@ -2,22 +2,7 @@
 
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import {
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardHeading,
-  CardTitle,
-  EmptyState,
-  Skeleton,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@schoolhub/ui";
+import { Button, EmptyState, Skeleton, TableCell, TableRow } from "@schoolhub/ui";
 import { BookOpen, Lock, LockOpen, Plus } from "lucide-react";
 
 import { LoadErrorCard } from "@/components/load-error-card";
@@ -32,6 +17,7 @@ import {
   groupByClass,
 } from "@/services/modules/exam-subjects/exam-subjects-helper";
 import { isExamConfigurable } from "@/services/modules/exams/exams-helper";
+import { GroupTableCard } from "@/features/exams/group-table-card";
 import { useExamSubjects } from "@/features/exams/use-exam-subjects";
 import { DeleteExamSubjectDialog } from "./delete-exam-subject-dialog";
 import { ExamSubjectFormDialog } from "./exam-subject-form-dialog";
@@ -105,6 +91,7 @@ export function ExamSubjectsTable({ exam }: { exam: ExamRecord }) {
   }
 
   const groups = groupByClass(query.data);
+  const columns = COLUMN_KEYS.map((key) => ({ key, label: t(`subjects.columns.${key}`) }));
 
   return (
     <div className="space-y-5">
@@ -129,82 +116,68 @@ export function ExamSubjectsTable({ exam }: { exam: ExamRecord }) {
         />
       ) : (
         groups.map((group) => (
-          <Card key={group.classId}>
-            <CardHeader>
-              <CardHeading>
-                <CardTitle>{group.className}</CardTitle>
-              </CardHeading>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    {COLUMN_KEYS.map((key) => (
-                      <TableHead key={key}>{t(`subjects.columns.${key}`)}</TableHead>
-                    ))}
-                    {canWrite && <TableHead className="w-0" />}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {group.rows.map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell className="font-medium">{row.subject_name}</TableCell>
-                      <TableCell>{row.max_marks}</TableCell>
-                      <TableCell>{row.pass_marks}</TableCell>
-                      <TableCell>
-                        {row.has_practical && row.practical_max_marks
-                          ? t("subjects.practicalSplit", {
-                              max: row.practical_max_marks,
-                              pass: row.practical_pass_marks ?? EMPTY_VALUE,
-                            })
-                          : t("subjects.noPractical")}
-                      </TableCell>
-                      <TableCell>
-                        {row.subject_weightage_percent
-                          ? t("subjects.weightagePercent", {
-                              percent: row.subject_weightage_percent,
-                            })
-                          : EMPTY_VALUE}
-                      </TableCell>
-                      <TableCell>
-                        <EntryWindow row={row} />
-                      </TableCell>
-                      <TableCell>
-                        <span className="inline-flex items-center gap-1.5">
-                          {row.marks_locked_at ? (
-                            <Lock className="size-3.5" aria-hidden="true" />
-                          ) : (
-                            <LockOpen className="size-3.5" aria-hidden="true" />
-                          )}
-                          {t(row.marks_locked_at ? "subjects.lockedYes" : "subjects.lockedNo")}
-                        </span>
-                      </TableCell>
-                      {canWrite && (
-                        <TableCell>
-                          <RowEditRemoveActions
-                            editLabel={t("subjects.actions.editRow", {
-                              subject: row.subject_name,
-                              class: row.class_name,
-                            })}
-                            onEdit={() => {
-                              setEditTarget(row);
-                            }}
-                            removeLabel={t("subjects.actions.deleteRow", {
-                              subject: row.subject_name,
-                              class: row.class_name,
-                            })}
-                            onRemove={() => {
-                              setDeleteTarget(row);
-                            }}
-                          />
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <GroupTableCard
+            key={group.classId}
+            title={group.className}
+            columns={columns}
+            hasActions={canWrite}
+          >
+            {group.rows.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell className="font-medium">{row.subject_name}</TableCell>
+                <TableCell>{row.max_marks}</TableCell>
+                <TableCell>{row.pass_marks}</TableCell>
+                <TableCell>
+                  {row.has_practical && row.practical_max_marks
+                    ? t("subjects.practicalSplit", {
+                        max: row.practical_max_marks,
+                        pass: row.practical_pass_marks ?? EMPTY_VALUE,
+                      })
+                    : t("subjects.noPractical")}
+                </TableCell>
+                <TableCell>
+                  {row.subject_weightage_percent
+                    ? t("subjects.weightagePercent", {
+                        percent: row.subject_weightage_percent,
+                      })
+                    : EMPTY_VALUE}
+                </TableCell>
+                <TableCell>
+                  <EntryWindow row={row} />
+                </TableCell>
+                <TableCell>
+                  <span className="inline-flex items-center gap-1.5">
+                    {row.marks_locked_at ? (
+                      <Lock className="size-3.5" aria-hidden="true" />
+                    ) : (
+                      <LockOpen className="size-3.5" aria-hidden="true" />
+                    )}
+                    {t(row.marks_locked_at ? "subjects.lockedYes" : "subjects.lockedNo")}
+                  </span>
+                </TableCell>
+                {canWrite && (
+                  <TableCell>
+                    <RowEditRemoveActions
+                      editLabel={t("subjects.actions.editRow", {
+                        subject: row.subject_name,
+                        class: row.class_name,
+                      })}
+                      onEdit={() => {
+                        setEditTarget(row);
+                      }}
+                      removeLabel={t("subjects.actions.deleteRow", {
+                        subject: row.subject_name,
+                        class: row.class_name,
+                      })}
+                      onRemove={() => {
+                        setDeleteTarget(row);
+                      }}
+                    />
+                  </TableCell>
+                )}
+              </TableRow>
+            ))}
+          </GroupTableCard>
         ))
       )}
       {addOpen && <ExamSubjectFormDialog open onOpenChange={setAddOpen} exam={exam} />}
