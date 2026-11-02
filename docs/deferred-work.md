@@ -237,13 +237,6 @@ either this file or `project-status.md`.
   gated by write keys teachers do not hold, so the exposure is narrow, but each should resolve
   through `scope_queryset` with an out-of-scope 404 test. The marks, results and report-card
   PRs (C, D) touch most of them and should convert each as they go.
-- **`:publish-schedule` does not lock the *other* exams its clash list reads.** Every sitting
-  write now locks its own exam, and publish locks the exam it publishes, so a clash between two
-  sittings of that exam cannot slip past publish. A room or invigilator clash with another
-  exam's sitting written concurrently can: that write locks only its own exam. It is still
-  reported on that exam's own write response and blocks that exam's publish. Closing it fully
-  needs a tenant-wide schedule lock (e.g. an advisory lock on the tenant) taken by publish and by
-  every sitting write; weigh it against serialising all schedule edits in a school.
 - **The examinations dashboard's PR A (grading scales, exams, their subjects) left these out:**
   - **`Section`, `Class` and `AcademicSession` have no `assigned`-scope hooks.** An
     `assigned` teacher can read the exams they teach, but the reference lists a picker reads

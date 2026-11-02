@@ -211,7 +211,7 @@
 ### L35. A check-then-write across rows locks the parent every writer shares, in the gate and in each writer
 
 - **Mistake.** `:publish-schedule` locked the exam and read the clash list, but sitting create, update and delete never took that lock, so a sitting saved mid-publish committed unseen and the exam went to `scheduled` over a hard clash. `issue_admit_cards` read the existing cards with no lock, so two runs both saw none missing and both reported `issued = N` (PR #149 review).
-- **Check.** When a gate reads child rows and decides on them, find every writer of those rows and lock the same parent (`lock_exam`, `select_for_update()` on the parent, several parents in pk order) before it writes, as well as in the gate. A count of rows "this run added" is then just what it inserted. Test each path with `CaptureQueriesContext`: a `FOR UPDATE` on the parent's table before the first read or write of the children.
+- **Check.** When a gate reads child rows and decides on them, find every writer of those rows and lock the same parent (`lock_exam`, `select_for_update()` on the parent, several parents in pk order) before it writes, as well as in the gate. When the gate also reads rows of *other* parents (a clash check across exams), lock their common ancestor instead, here a per-tenant advisory lock (`core.tenancy.locks.advisory_xact_lock`), taken before any row lock on every path. A count of rows "this run added" is then just what it inserted. Test each path with `CaptureQueriesContext`: a `FOR UPDATE` on the parent's table before the first read or write of the children.
 
 ## 4. Adding a lesson
 
