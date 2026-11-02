@@ -121,6 +121,7 @@ Keyspace
 Laiba
 Laravel
 launchable
+libgobject
 libharfbuzz
 libpango
 libpangoft
