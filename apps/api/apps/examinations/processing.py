@@ -154,6 +154,8 @@ def collect(*, exam: Exam) -> Scope:
         by_class[class_id].add(student_id)
     for subject in exam_subjects:
         expected_by_subject[subject.pk] = by_class[subject.school_class_id]
+    # Only the active roll is computed: a student withdrawn since has no section to rank in.
+    marks = [row for row in marks if row["student_id"] in student_section]
 
     return Scope(
         exam=exam,
