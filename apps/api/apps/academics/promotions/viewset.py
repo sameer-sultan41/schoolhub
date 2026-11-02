@@ -108,8 +108,17 @@ class AggregateOrderingFilter(StableOrderingFilter):
         return [*ordering, "batch_id"]
 
 
+class PromotionScopeMixin:
+    """Record scope for promotion rows, from `services.PROMOTION_SCOPE`, which
+    `assert_batch_in_scope` also reads; both promotion viewsets share it."""
+
+    scope_own_field: str | None = services.PROMOTION_SCOPE["own_field"]
+    scope_campus_field: str | None = services.PROMOTION_SCOPE["campus_field"]
+    scope_campus_allows_null: bool = services.PROMOTION_SCOPE["campus_allows_null"]
+
+
 class PromotionBatchViewSet(
-    TenantScopedViewSetMixin, mixins.ListModelMixin, viewsets.GenericViewSet
+    PromotionScopeMixin, TenantScopedViewSetMixin, mixins.ListModelMixin, viewsets.GenericViewSet
 ):
     """`/student-promotions` — the batch resource (§16).
 
@@ -165,10 +174,6 @@ class PromotionBatchViewSet(
     #: Entries in ordering_fields that are annotations from get_queryset, not model
     #: fields — tests/test_endpoint_contracts.py cannot resolve these against the model.
     ordering_annotations = ("students", "started_at")
-    # From `services.PROMOTION_SCOPE`, which `assert_batch_in_scope` also reads.
-    scope_own_field = services.PROMOTION_SCOPE["own_field"]
-    scope_campus_field = services.PROMOTION_SCOPE["campus_field"]
-    scope_campus_allows_null = services.PROMOTION_SCOPE["campus_allows_null"]
     required_feature = FEATURE
     required_permission = "academics.promotion.view"
     required_permission_map = {
@@ -405,7 +410,7 @@ class PromotionBatchViewSet(
 
 
 class PromotionDecisionViewSet(
-    TenantScopedViewSetMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet
+    PromotionScopeMixin, TenantScopedViewSetMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet
 ):
     """`/student-promotions/{batch_id}/decisions/{student_id}` — §16's shape.
 
@@ -422,10 +427,6 @@ class PromotionDecisionViewSet(
     ]
     queryset = StudentPromotion.objects
     serializer_class = PromotionDecisionSerializer
-    # From `services.PROMOTION_SCOPE`, which `assert_batch_in_scope` also reads.
-    scope_own_field = services.PROMOTION_SCOPE["own_field"]
-    scope_campus_field = services.PROMOTION_SCOPE["campus_field"]
-    scope_campus_allows_null = services.PROMOTION_SCOPE["campus_allows_null"]
     required_feature = FEATURE
     required_permission = "academics.promotion.view"
     required_permission_map = {
