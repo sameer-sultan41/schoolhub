@@ -2,23 +2,7 @@
 
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import {
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardHeading,
-  CardTitle,
-  cn,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-  type BadgeProps,
-} from "@schoolhub/ui";
+import { Badge, Button, cn, TableCell, TableRow, type BadgeProps } from "@schoolhub/ui";
 import {
   Ban,
   CalendarClock,
@@ -44,6 +28,7 @@ import {
   worstSeverity,
 } from "@/services/modules/exam-schedules/exam-schedules-helper";
 import { SITTING_STATUS_SCHEDULED } from "@/services/modules/exam-schedules/exam-schedules-constant";
+import { GroupTableCard } from "@/features/exams/group-table-card";
 import { SittingActionDialog, type SittingAction } from "./sitting-action-dialog";
 import { SittingFormDialog } from "./sitting-form-dialog";
 
@@ -122,105 +107,90 @@ export function ScheduleTable({
   const [editTarget, setEditTarget] = useState<SittingRecord | null>(null);
   const [action, setAction] = useState<{ kind: SittingAction; record: SittingRecord } | null>(null);
   const hasActions = canEdit || canCancel || canDelete;
+  const columns = COLUMN_KEYS.map((key) => ({ key, label: t(`schedule.columns.${key}`) }));
 
   return (
     <div className="space-y-5">
       {days.map((day) => (
-        <Card key={day.date}>
-          <CardHeader>
-            <CardHeading>
-              <CardTitle>{formatSittingDate(day.date, locale)}</CardTitle>
-            </CardHeading>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {COLUMN_KEYS.map((key) => (
-                    <TableHead key={key}>{t(`schedule.columns.${key}`)}</TableHead>
-                  ))}
-                  {hasActions && <TableHead className="w-0" />}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {day.sittings.map((sitting) => {
-                  const severity = worstSeverity(conflictsBySitting.get(sitting.id));
-                  const status = sitting.status ?? SITTING_STATUS_SCHEDULED;
-                  const open = isSittingOpen(sitting);
-                  const names = {
-                    subject: sitting.subject_name,
+        <GroupTableCard
+          key={day.date}
+          title={formatSittingDate(day.date, locale)}
+          columns={columns}
+          hasActions={hasActions}
+        >
+          {day.sittings.map((sitting) => {
+            const severity = worstSeverity(conflictsBySitting.get(sitting.id));
+            const status = sitting.status ?? SITTING_STATUS_SCHEDULED;
+            const open = isSittingOpen(sitting);
+            const names = {
+              subject: sitting.subject_name,
+              class: sitting.class_name,
+              section: sitting.section_name,
+            };
+            return (
+              <TableRow key={sitting.id}>
+                <TableCell className="whitespace-nowrap">
+                  {t("schedule.timeRange", {
+                    start: toShortTime(sitting.start_time),
+                    end: toShortTime(sitting.end_time),
+                  })}
+                </TableCell>
+                <TableCell className="font-medium">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {sitting.subject_name}
+                    {severity && <ClashMarker severity={severity} />}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  {t("schedule.classSection", {
                     class: sitting.class_name,
                     section: sitting.section_name,
-                  };
-                  return (
-                    <TableRow key={sitting.id}>
-                      <TableCell className="whitespace-nowrap">
-                        {t("schedule.timeRange", {
-                          start: toShortTime(sitting.start_time),
-                          end: toShortTime(sitting.end_time),
-                        })}
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        <div className="flex flex-wrap items-center gap-2">
-                          {sitting.subject_name}
-                          {severity && <ClashMarker severity={severity} />}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {t("schedule.classSection", {
-                          class: sitting.class_name,
-                          section: sitting.section_name,
-                        })}
-                      </TableCell>
-                      <TableCell>{sitting.room_name ?? EMPTY_VALUE}</TableCell>
-                      <TableCell>{sitting.invigilator_name ?? EMPTY_VALUE}</TableCell>
-                      <TableCell>
-                        <SittingStatusBadge status={status} />
-                      </TableCell>
-                      {hasActions && (
-                        <TableCell>
-                          {open && (
-                            <div className="flex items-center gap-1">
-                              <RowEditRemoveActions
-                                editLabel={
-                                  canEdit ? t("schedule.actions.editRow", names) : undefined
-                                }
-                                onEdit={() => {
-                                  setEditTarget(sitting);
-                                }}
-                                removeLabel={
-                                  canDelete ? t("schedule.actions.deleteRow", names) : undefined
-                                }
-                                onRemove={() => {
-                                  setAction({ kind: "delete", record: sitting });
-                                }}
-                              />
-                              {canCancel && (
-                                <Button
-                                  variant="secondary"
-                                  appearance="light"
-                                  mode="icon"
-                                  shape="circle"
-                                  size="sm"
-                                  aria-label={t("schedule.actions.cancelRow", names)}
-                                  onClick={() => {
-                                    setAction({ kind: "cancel", record: sitting });
-                                  }}
-                                >
-                                  <Ban className="size-4" aria-hidden="true" />
-                                </Button>
-                              )}
-                            </div>
-                          )}
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                  })}
+                </TableCell>
+                <TableCell>{sitting.room_name ?? EMPTY_VALUE}</TableCell>
+                <TableCell>{sitting.invigilator_name ?? EMPTY_VALUE}</TableCell>
+                <TableCell>
+                  <SittingStatusBadge status={status} />
+                </TableCell>
+                {hasActions && (
+                  <TableCell>
+                    {open && (
+                      <div className="flex items-center gap-1">
+                        <RowEditRemoveActions
+                          editLabel={canEdit ? t("schedule.actions.editRow", names) : undefined}
+                          onEdit={() => {
+                            setEditTarget(sitting);
+                          }}
+                          removeLabel={
+                            canDelete ? t("schedule.actions.deleteRow", names) : undefined
+                          }
+                          onRemove={() => {
+                            setAction({ kind: "delete", record: sitting });
+                          }}
+                        />
+                        {canCancel && (
+                          <Button
+                            variant="secondary"
+                            appearance="light"
+                            mode="icon"
+                            shape="circle"
+                            size="sm"
+                            aria-label={t("schedule.actions.cancelRow", names)}
+                            onClick={() => {
+                              setAction({ kind: "cancel", record: sitting });
+                            }}
+                          >
+                            <Ban className="size-4" aria-hidden="true" />
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </TableCell>
+                )}
+              </TableRow>
+            );
+          })}
+        </GroupTableCard>
       ))}
       {editTarget && (
         <SittingFormDialog
