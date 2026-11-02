@@ -18,6 +18,7 @@ import {
   CurriculumPage,
   DashboardPage,
   ExamAdmitCardsPage,
+  ExamMarksPage,
   ExamPage,
   ExamSchedulePage,
   ExamsPage,
@@ -107,6 +108,7 @@ export interface E2EFixtures {
   examPage: ExamPage;
   examSchedulePage: ExamSchedulePage;
   examAdmitCardsPage: ExamAdmitCardsPage;
+  examMarksPage: ExamMarksPage;
   gradingScalesPage: GradingScalesPage;
   /**
    * Signs a **second** identity in, on its own browser context, and hands back that
@@ -304,6 +306,10 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
 
   examAdmitCardsPage: async ({ page }, use) => {
     await use(new ExamAdmitCardsPage(page));
+  },
+
+  examMarksPage: async ({ page }, use) => {
+    await use(new ExamMarksPage(page));
   },
 
   gradingScalesPage: async ({ page }, use) => {

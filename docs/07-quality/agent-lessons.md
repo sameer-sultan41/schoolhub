@@ -208,6 +208,16 @@
 - **Mistake.** `schedule-conflicts`, `:publish-schedule` and `:issue-admit-cards` looked the exam up with `get_object_or_404(Exam.objects.alive(), pk=pk)`: tenant-scoped, but not record-scoped, so an `assigned` teacher could read or act on any exam of the school by id (PR B final review).
 - **Check.** Grep for `get_object_or_404(<Model>.objects.alive()` in views you touch; resolve the parent through `scope_queryset(...)` with the parent viewset's own `own_field`/`campus_field` (out of scope is a 404), and test that an unassigned caller gets a 404 while an assigned one gets through.
 
+### L35. Every registered key has a view that reads it, and every read has a key of its own
+
+- **Mistake.** The marks reads (`GET /marks`, progress) had no view key and fell back to `exams.marks.create`, so `principal`, `vice_principal` and `school_admin`, who review marks, could not open them; `exams.marks.view` was added in examinations dashboard PR C. Meanwhile `exams.marks.update` is registered for `teacher` and `exam_staff` but no view reads it (`bulk_entry` checks `.create` for updates too), while `examinations.md` §20 said every registered key "has an endpoint behind it" (audit suggestion, `2026-09-module-audit-findings.md`).
+- **Check.** For each key you register, grep `required_permission`, `required_permission_map` and `has_permission_key` for it; a key nothing reads is wired up or dropped, never documented as live. For each read action, confirm its key is a `.view` key the reading roles hold, not a write key it borrowed.
+
+### L36. A read scope and the write gate on the same rows are one predicate, with an agreement test
+
+- **Mistake.** `Marks.filter_assigned_to_user` (what a teacher reads) matched a homeroom with no session, and the campus read was the `scope_campus_field = "student__campus_id"` fallback (the student's own campus), while marks entry gated on the allocation in the exam's session and the section's campus. A teacher read last session's marks they could not write, and a campus reader saw a visiting student's mark by the wrong campus (examinations dashboard PR C, Task 8). The read hooks (`filter_by_campus`, `filter_assigned_to_user`) now mirror `may_enter_marks`' rule as joins rather than calling it, and `PredicateAgreementTests` pins their agreement.
+- **Check.** When a resource has a record-scope read and a separate write gate, build both from one helper, and add a test that asserts they agree on the cases where two joins could differ (another session, a student whose campus differs from their section's), as `PredicateAgreementTests` does. A progress list or grid narrowed "to what you may enter" calls the write predicate itself.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.

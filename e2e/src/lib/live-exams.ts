@@ -1,8 +1,9 @@
 import type { ApiClient } from "@schoolhub/api-client";
-import { buildLiveExam, buildLiveSubject } from "@/data/live-factories";
+import { buildLiveExam, buildLiveSection, buildLiveSubject } from "@/data/live-factories";
 import { env } from "@/env";
 import { createLiveSession } from "@/lib/live-api";
 import { seedAttendanceRegister } from "@/lib/live-attendance-register";
+import { createStudentReadyToEnrol } from "@/lib/live-student";
 import { findSeededStaff } from "@/lib/live-timetable-grid";
 import {
   E2E_EXAM_STAFF_EMAIL,
@@ -212,4 +213,57 @@ export async function allocateTeacher(
     staff_id: staffId,
   });
   return (allocation.data as Identified).id;
+}
+
+/** A second section of the scaffold's class and the student enrolled in it. */
+export interface EnrolledSection {
+  sectionId: string;
+  studentIds: string[];
+}
+
+/**
+ * A second section of the scaffold's class, on its campus, with one student actively enrolled
+ * in the scaffold's session: a section of the same exam-subject that a teacher allocated to the
+ * first section does not teach, so progress lists it for the exam staff and not for them.
+ */
+export async function addEnrolledSection(
+  client: ApiClient,
+  scaffold: ExamScaffold,
+): Promise<EnrolledSection> {
+  const section = (
+    await client.post("/sections", {
+      ...buildLiveSection(),
+      class_id: scaffold.classId,
+      campus_id: scaffold.campusId,
+    })
+  ).data as Identified;
+  const student = await createStudentReadyToEnrol(client, scaffold.campusId);
+  await client.post(`/students/${student.id}:enroll`, {
+    academic_session_id: scaffold.sessionId,
+    class_id: scaffold.classId,
+    section_id: section.id,
+    enrollment_date: scaffold.sessionStartDate,
+  });
+  return { sectionId: section.id, studentIds: [student.id] };
+}
+
+/**
+ * Schedules the exam's subject for the scaffold's section on its first exam day and publishes
+ * the schedule, as `client` (the exam staff): the exam moves to `scheduled`, one of the statuses
+ * that take marks (`services.MARKS_WRITABLE_EXAM_STATUSES`). No entry window is set, and an unset
+ * window is open (`assert_marks_window_open`).
+ */
+export async function publishExamForMarks(
+  client: ApiClient,
+  scaffold: ExamScaffold,
+  exam: ExamWithSubject,
+): Promise<void> {
+  await client.post("/exam-schedules", {
+    exam_subject_id: exam.examSubjectId,
+    section_id: scaffold.sectionId,
+    exam_date: firstExamDay(scaffold),
+    start_time: "09:00",
+    end_time: "11:00",
+  });
+  await client.post(`/exams/${exam.examId}:publish-schedule`);
 }

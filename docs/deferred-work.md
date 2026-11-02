@@ -230,13 +230,34 @@ either this file or `project-status.md`.
     staff register marks (Present, Absent, Late, Half day), though the server accepts every
     staff status but `on_leave`. Neither the register nor a correction can record a staff day
     as a holiday from the dashboard; the school calendar's holidays refuse marking instead.
-- **Twelve older `examinations` actions look up their parent exam or exam-subject without the
-  caller's record scope** (`get_object_or_404(<Model>.objects.alive(), ...)` in
-  `apps/api/apps/examinations/views.py`), the pattern lesson L34 records. PR B fixed the three
-  it touched (`:publish-schedule`, `:issue-admit-cards`, `schedule-conflicts`); the rest are
-  gated by write keys teachers do not hold, so the exposure is narrow, but each should resolve
-  through `scope_queryset` with an out-of-scope 404 test. The marks, results and report-card
-  PRs (C, D) touch most of them and should convert each as they go.
+- **Eight `examinations` actions still look up their parent without the
+  caller's record scope** (`get_object_or_404(<Model>.objects.alive(), pk=pk)` in
+  `apps/api/apps/examinations/views.py`), the pattern lesson L34 records: `:process-results`,
+  `:approve-results`, `:send-results-back` and `:publish-results` on the exam,
+  `/results/{id}:withhold` on the result, and `:generate-report-cards` and `:publish-report-cards`
+  on the exam, plus the QuestionBank nested lookup (`get_bank`, `views.py:1401`, which reads
+  `QuestionBank.objects.alive()` for the question routes). PR B converted `:publish-schedule`, `:issue-admit-cards` and `schedule-conflicts`;
+  PR C converted the marks ones (`:lock-marks`, `:unlock-marks` and the grid's exam-subject through
+  `scoped_exam_subject`, `marks-progress` through `scoped_exam`), and gates the import on the
+  importer's sections. The eight left are gated by write keys teachers do not hold, so the exposure
+  is narrow; **PR D (results and report cards) converts each**, through `scoped_exam` or the
+  viewset's own queryset, with an out-of-scope 404 test per action.
+- **The examinations dashboard's PR C (marks) left these out:**
+  - **`class.name` in the marks-entry reminder carries "Class Section".** The reminder goes per
+    section, so the variable is the class and section joined. A tenant override that words
+    `class.name` as a whole class reads oddly; a separate `section.name` variable is the fix.
+  - **`exams.marks.update` gates nothing.** It is registered for `teacher` and `exam_staff`, but
+    `:bulk-entry` writes a new row and an update alike under `exams.marks.create`, so no role is
+    ever refused for want of it (the audit's suggestion in
+    `07-quality/2026-09-module-audit-findings.md`, lesson L35). Either the update half of a
+    submission checks it, which needs a ruling on what a teacher holding `.create` alone may do to
+    a row they already saved, or the key is dropped from the registry, the seed and §4.
+  - **`attendance.import`'s CSV allowlist rejects Windows' `application/vnd.ms-excel` type.** A
+    browser on Windows with Excel installed commonly sends a `.csv` as `application/vnd.ms-excel`.
+    `exams.marks-import` (PR C, which began enforcing its list on the direct upload) and
+    `fees.settlement-file` accept it; `attendance.import` lists `text/csv` and `.xlsx` only, and
+    is enforced only through `POST /files`, its own multipart import still skipping the check (the
+    audit's attendance Minor). Widen it when that check is added.
 - **The examinations dashboard's PR A (grading scales, exams, their subjects) left these out:**
   - **`Section`, `Class` and `AcademicSession` have no `assigned`-scope hooks.** An
     `assigned` teacher can read the exams they teach, but the reference lists a picker reads

@@ -53,6 +53,7 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 | `exams.admit-card.view` | View issued admit cards | `exam_staff`, leadership, `student`, `guardian` |
 | `exams.result.create` | Run result processing (not approval) | `exam_staff`, `school_admin` |
 | `exams.question-bank.view` | Read question banks and questions | `teacher`, `exam_staff`, leadership |
+| `exams.marks.view` | Read marks, the entry grid and entry progress (record-scoped by section, as entry is) | `teacher`, `class_teacher`, `exam_staff`, `school_admin`, `principal`, `vice_principal` |
 
 The approver of a result cannot be the user who ran processing (segregation of duties, RBAC doc §2.4).
 
@@ -62,7 +63,19 @@ of the active enrolments that make the section theirs).
 Grading scales are reference data, readable in full by every holder of `exams.grading-scale.view`. §20
 records how both are resolved.
 
-The last five rows were added during implementation. Each names a capability this
+Marks entry (`exams.marks.create`) and the marks reads (`exams.marks.view`) are narrowed per **section**
+by one predicate, `services.may_enter_marks`: `all` scope reaches every section; `campus` scope the
+sections on the caller's campuses; `assigned` scope a section the caller holds a current allocation for
+(that section and subject, in the exam's session) or is class teacher of (in the same session). §11
+states the write rule.
+
+`exams.marks.view` was added with the marks dashboard. Before it, the marks reads fell back to
+`exams.marks.create`, so `principal`, `vice_principal` and `school_admin`, who review marks but do not
+enter them, could not open the grid or the progress board. `exams.marks.update` is registered but no endpoint
+reads it yet: `:bulk-entry` writes a new row and an update alike under `exams.marks.create`
+([`deferred-work.md`](../deferred-work.md)).
+
+The five rows from `exams.grading-scale.view` to `exams.question-bank.view` were added during implementation. Each names a capability this
 document already granted in prose while the table omitted the key, so the capability
 was documented and unreachable: §3 says a `student`/`guardian` "views admit cards,
 exam schedules, published results, and report cards" and §12 notifies both about a
@@ -157,6 +170,7 @@ AI-generated questions never enter a bank without explicit approval (`exams.ques
 
 - Unique: exam name per session; one `exam_subjects` row per (exam, class, subject); one marks row per (exam_subject, student); one result per (exam, student).
 - Marks: `0 ≤ obtained ≤ max_marks` per component; pass marks ≤ max marks; entries rejected outside the entry window unless unlocked; absent flag and marks are mutually exclusive.
+- Marks entry is per section: a submit names one `section_id` of the exam-subject's class and may only carry students on that section's active roll in the exam's session (any other is a `meta.rows` issue). An `assigned` caller may write a section only when they hold a current allocation for that section and subject in the exam's session, or are its class teacher in that session; anything else is a 422 on `section_id`. The import applies the same rule per row.
 - Scheduling: no student may have two papers at overlapping times; room and invigilator single-booked; exam dates within the session/term.
 - Processing: blocked while any assigned exam-subject has unsubmitted marks (override with an audited waiver — recommendation); grading bands must be contiguous, non-overlapping, and fully cover 0–100%.
 - Publishing: only approved results; report cards only from published results; approver ≠ processor.
@@ -171,6 +185,8 @@ AI-generated questions never enter a bank without explicit approval (`exams.ques
 | Results published / report card available | Students, guardians | Push, SMS, email (tenant preference) | `exams.result-published` / `exams.report-card-ready` |
 
 Channels and delivery behavior follow [`notifications.md`](../02-architecture/notifications.md).
+
+The `exams.marks-entry-reminder` template's `class.name` variable carries the class and section together ("Class Section"), because the reminder goes per section.
 
 ## 13. Reports
 
@@ -214,7 +230,7 @@ Exam papers are generated documents (assembled from `questions`, stored via the 
 Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 
 - `GET/POST/PATCH /api/v1/exams` · `/api/v1/exam-subjects` · `/api/v1/exam-schedules` · `/api/v1/grading-scales` (bands nested: `/api/v1/grading-scales/{id}/grade-bands`)
-- `GET /api/v1/marks` — filters: `exam_subject_id`, `student_id`, `status`; `POST /api/v1/marks:bulk-entry` (idempotent grid submit) · `POST /api/v1/exam-subjects/{id}:lock-marks` · `:unlock-marks`
+- `GET /api/v1/marks` — filters: `exam_subject_id`, `section_id`, `student_id`, `status`; `GET /api/v1/marks/grid?exam_subject_id=&section_id=` (one section's roll with its marks, and `meta.writable`); `POST /api/v1/marks:bulk-entry` (idempotent grid submit for one `section_id`) · `POST /api/v1/exam-subjects/{id}:lock-marks` · `:unlock-marks`
 - `POST /api/v1/exams/{id}:process-results` — `202` + job resource (API doc §2.7)
 - `POST /api/v1/exams/{id}:approve-results` · `:publish-results` — colon-actions, permission-guarded, audited
 - `GET /api/v1/exams/{id}/schedule-conflicts` (the clash list) · `POST /api/v1/exams/{id}:publish-schedule`
@@ -272,6 +288,35 @@ List and read shapes the dashboard depends on:
   student or guardian reaches only their own card). It is a **404**, not a 409, while the card has no file
   (the render job has not written it), once it is revoked, or when its file is not `ready` or was soft-deleted
   (the same checks as `core/files`' `get_display_url`): either way there is no document to hand out.
+- **The marks grid is one section's roll.** `GET /marks/grid?exam_subject_id=&section_id=` (`exams.marks.view`)
+  returns `MarksGridEntry[]` unpaginated: the section's active roll in the exam's session, in roll order
+  (`enrollment_roll_order`), each with `student_id`, `student_name`, `admission_number`, `roll_number` and its
+  `marks` row or null. `meta.exam_subject` carries `max_marks`, `pass_marks`, `has_practical` and
+  `practical_max_marks`; `meta.writable` says whether `:bulk-entry` would take the grid now, and when false
+  `meta.unwritable_reason` (`no_permission`, `exam_status`, `locked`, `window_not_open`, `window_closed`, from
+  the gates `:bulk-entry` runs, in its order) and `meta.unwritable_message` (the refusing gate's sentence). An
+  exam-subject outside the caller's record scope, or a section `services.may_enter_marks` refuses them, is a
+  404.
+- **Bulk entry names its section and refuses whole.** `POST /marks:bulk-entry` takes `exam_subject_id`,
+  `section_id` and `entries`, with an `Idempotency-Key`. In order: the serializer (a mark on an absent row, or
+  absent with exempt, is a 400 under `entries.N.<field>`; a student twice is a 400); the exam's status, the
+  lock and the entry window (409s, each with its own sentence); the section gate (a 422 on `section_id`); then
+  every row (on the section's roll, at most `max_marks`). Any refused row refuses the grid: a 422
+  `domain_rule_violation`, "N of M rows were rejected; nothing was saved.", with each row in
+  `error.meta.rows` as `{index, student_id, field, issue}`, and nothing written. The 200 is
+  `BulkMarksEntryResult` (`entered`, `updated`, `rows`).
+- **Progress is per section.** `GET /exams/{id}/marks-progress` (`exams.marks.view`) returns
+  `MarksProgressRow[]` unpaginated, one per (exam-subject, section with an active roll), in class, subject and
+  section order: `exam_subject_id`, `subject_name`, `class_name`, `section_id`, `section_name`, `expected`,
+  `entered`, `submitted` (submitted or locked rows) and `is_locked`. A caller without `all` scope gets only the
+  pairs `may_enter_marks` allows; the exam resolves through `ExamViewSet`'s record scope (out of scope is a 404).
+- **Lock and unlock are typed and scoped.** `:lock-marks` answers `{locked_rows, already_locked}` and
+  `:unlock-marks` `{unlocked_rows, already_unlocked}`; a repeat is a retry, not a conflict. The exam-subject
+  resolves through `ExamSubjectViewSet`'s record scope (L34), and an unlock once results are approved is a 409.
+- **The marks import checks the file's type and the importer's sections.** `POST /marks-imports` refuses a
+  content type outside the `exams.marks-import` purpose's MIME allowlist (`text/csv`, Windows' `application/vnd.ms-excel` CSV type and `.xlsx`; a 400 under
+  `file`), and a caller who may enter no section of the exam-subject (a 422 on `exam_subject_id`); the job then
+  checks each row's student against the importer's sections.
 
 ## 17. Integration Requirements
 
@@ -319,8 +364,8 @@ assembly. **The module is complete.**
 | Area | State |
 | ---- | ----- |
 | Entities | **All 11** of §15's tables — `grading_scales`, `grade_bands`, `exams`, `exam_subjects`, `exam_schedules`, `admit_cards`, `marks`, `results`, `report_cards`, `question_banks`, `questions` — tenant-owned with RLS policies |
-| §16 endpoints | `GET/POST/PATCH/DELETE /grading-scales`, `POST /grading-scales/{id}:set-default`, `GET/POST/PATCH/DELETE /grading-scales/{id}/grade-bands`, `GET/POST/PATCH/DELETE /exams`, `GET/POST/PATCH/DELETE /exam-subjects`, `GET/POST/PATCH/DELETE /exam-schedules` (every write returns `meta.conflicts`), `GET /exams/{id}/schedule-conflicts`, `POST /exams/{id}:publish-schedule`, `GET /admit-cards`, `POST /exams/{id}:issue-admit-cards` (202 + job, accepts `Idempotency-Key`), `POST /admit-cards/{id}:revoke` · `:download`, `GET /marks` (filters `exam_subject_id`, `exam_id`, `student_id`, `status`, `is_absent`, `is_exempt`), `POST /marks:bulk-entry` (accepts `Idempotency-Key`), `POST /exam-subjects/{id}:lock-marks` · `:unlock-marks`, `GET /exams/{id}/marks-progress`, `POST /marks-imports` (202 + job), `GET /results`, `POST /exams/{id}:process-results` (202 + job) · `:approve-results` · `:publish-results` · `:send-results-back`, `POST /results/{id}:withhold`, `GET/PATCH /report-cards` (remarks only), `POST /exams/{id}:generate-report-cards` (202 + job) · `:publish-report-cards`, `GET/POST /reports/exam-summary` (five report kinds, inline under 1,000 rows and a 202 job above), `GET/POST/PATCH/DELETE /question-banks`, `GET/POST/PATCH/DELETE /question-banks/{id}/questions`, `POST /question-banks/{bank}/questions/{id}:approve`, `POST /question-banks/{id}:assemble-paper` (202 + a paper PDF) |
-| §4 permissions | `exams.exam.{view,create,update,delete}`, `exams.grading-scale.{view,create,update}`, `exams.schedule.{view,create,update}`, `exams.admit-card.{view,issue}`, `exams.marks.{create,update,import,lock}`, `exams.result.{view,create,approve,publish}`, `exams.report-card.{view,create,publish}`. `exams.question-bank.{view,create,update,delete}`, `exams.question.approve`, `exams.result.export`. **All of §4's keys are registered, and every one has an endpoint behind it.** The remaining keys arrive with the PR that ships an endpoint for them, so `tests/test_endpoint_contracts.py` never sees a registered key with nothing behind it |
+| §16 endpoints | `GET/POST/PATCH/DELETE /grading-scales`, `POST /grading-scales/{id}:set-default`, `GET/POST/PATCH/DELETE /grading-scales/{id}/grade-bands`, `GET/POST/PATCH/DELETE /exams`, `GET/POST/PATCH/DELETE /exam-subjects`, `GET/POST/PATCH/DELETE /exam-schedules` (every write returns `meta.conflicts`), `GET /exams/{id}/schedule-conflicts`, `POST /exams/{id}:publish-schedule`, `GET /admit-cards`, `POST /exams/{id}:issue-admit-cards` (202 + job, accepts `Idempotency-Key`), `POST /admit-cards/{id}:revoke` · `:download`, `GET /marks` (filters `exam_subject_id`, `exam_id`, `section_id`, `student_id`, `status`, `is_absent`, `is_exempt`), `GET /marks/grid`, `POST /marks:bulk-entry` (one `section_id`, accepts `Idempotency-Key`), `POST /exam-subjects/{id}:lock-marks` · `:unlock-marks`, `GET /exams/{id}/marks-progress`, `POST /marks-imports` (202 + job), `GET /results`, `POST /exams/{id}:process-results` (202 + job) · `:approve-results` · `:publish-results` · `:send-results-back`, `POST /results/{id}:withhold`, `GET/PATCH /report-cards` (remarks only), `POST /exams/{id}:generate-report-cards` (202 + job) · `:publish-report-cards`, `GET/POST /reports/exam-summary` (five report kinds, inline under 1,000 rows and a 202 job above), `GET/POST/PATCH/DELETE /question-banks`, `GET/POST/PATCH/DELETE /question-banks/{id}/questions`, `POST /question-banks/{bank}/questions/{id}:approve`, `POST /question-banks/{id}:assemble-paper` (202 + a paper PDF) |
+| §4 permissions | `exams.exam.{view,create,update,delete}`, `exams.grading-scale.{view,create,update}`, `exams.schedule.{view,create,update}`, `exams.admit-card.{view,issue}`, `exams.marks.{view,create,update,import,lock}`, `exams.result.{view,create,approve,publish}`, `exams.report-card.{view,create,publish}`. `exams.question-bank.{view,create,update,delete}`, `exams.question.approve`, `exams.result.export`. **All of §4's keys are registered, and every one but `exams.marks.update` has an endpoint behind it:** `:bulk-entry` checks `exams.marks.create` for a new row and an update alike, so `.update` gates nothing yet (`docs/deferred-work.md`, lesson L35). `tests/test_endpoint_contracts.py` checks that every key a view names is registered, not the reverse |
 | §11 validations | Exam name unique per session · exam dates set together and ordered · dates within the named term, or the session where no term is named · a term must belong to the exam's session · the session must be writable · one `exam_subjects` row per (exam, class, subject) · `pass_marks ≤ max_marks` · a practical component requires a practical maximum · the subject must be in the class's curriculum for the session · grading bands contiguous, non-overlapping and covering 0–100% before an exam may use the scale |
 | §13 reports | All five — result register (ordered by rank, unranked last), pass/fail analysis per section, subject performance over `marks`, marks-entry status, grade distribution — plus question-bank usage, behind one `kind`-parameterised endpoint with a 202 export lane in all three of `core.exports.tabular`'s formats. Every one asserted at **one query** |
 | §5.8 question banks | Banks per subject (class optional — null means every level), questions with §7.2's approval gate, and deterministic blueprint assembly ordered by `usage_count` so reuse spreads and a re-run produces the same paper |
@@ -328,12 +373,12 @@ assembly. **The module is complete.**
 | §11 processing | Blocked while any exam-subject has marks outstanding, measured against the **expected roll** rather than rows that happen to exist. Recompute is idempotent and refused once approved |
 | §5.6 approval | Per-row `status` and per-exam status both move. **The approver cannot be the processor** — compared against `results.created_by`, which processing stamps. Publishing releases approved, non-withheld rows only; withholding is a per-student `outcome` |
 | §5.7 report cards | Versioned on regeneration, remarks preserved, stale file cleared. Attendance is a JSONB **snapshot** from `attendance.reports.student_summary` — one query for the whole cohort |
-| §11 marks | One row per (exam-subject, student) · nothing negative and absent-excludes-a-mark at the **database**; `0 ≤ mark ≤ max_marks` in `services`, because a CHECK cannot read `exam_subjects.max_marks` · absent and exempt are mutually exclusive · a practical mark on a theory-only subject is refused · only students with an active enrolment in a class the exam-subject covers |
+| §11 marks | One row per (exam-subject, student) · nothing negative and absent-excludes-a-mark at the **database**; `0 ≤ mark ≤ max_marks` in `services`, because a CHECK cannot read `exam_subjects.max_marks` · absent and exempt are mutually exclusive · a practical mark on a theory-only subject is refused · only students on the submitted section's active roll in the exam's session, in a section of the exam-subject's class |
 | §5.4 lifecycle | `draft → submitted → locked` on the row, plus `exam_subjects.marks_locked_at` on the *window*. Four gates on every write, each with its own message because each has a different remedy: the exam's status (§7.1), the entry window (§6), the subject lock, and the teacher's allocation (§4). An **unset** window means always open |
-| §6 dashboard | `GET /exams/{id}/marks-progress` — expected / entered / submitted per exam-subject, in a bounded number of queries whatever the size of the exam |
+| §6 dashboard | `GET /exams/{id}/marks-progress` — expected / entered / submitted per (exam-subject, section), narrowed by `services.may_enter_marks` for a caller without `all` scope, in a bounded number of queries whatever the size of the exam. The marks-entry reminder goes per section to that section's allocated subject teachers |
 | §11 scheduling | One sitting per (exam-subject, section) · `end_time > start_time` · a section must belong to the exam-subject's class · a completed or cancelled sitting cannot be rescheduled · admit cards need a published schedule · a revocation needs a reason (CHECK, not only a service rule) |
 | §5.2 clash engine | `conflicts.py` — hard: room double-booked, invigilator double-booked, a student sitting two papers at once, a sitting outside the exam's own dates, a sitting on a non-working day or holiday. Soft: an over-capacity room, a sitting on a weekday the sections have published lessons. Every write returns the whole list; only hard findings block `:publish-schedule` |
-| §12 notifications | Two of six wired — `exams.schedule-published` (one `notify()` for the whole exam, on commit) and `exams.admit-card-issued` (one per card, because §12's template names the card number, with guardians fetched once and grouped rather than queried per card). The admit-card one fires after the **render**, not at issue: it says the card is ready to download, which is only true once a document exists. PR C adds `exams.marks-entry-reminder`, to the *allocated subject teachers* of any exam-subject whose window closes within two days with marks still outstanding — §12 says "teachers with pending entries", and a broadcast to all staff is the kind of notification people learn to ignore. PR D adds the last three — `result-approval-pending` (in-app only, to whoever holds `exams.result.approve`, resolved from the **permission** so a delegation to `vice_principal` is followed), `result-published` and `report-card-ready` (both to the students whose rows actually *transitioned*, whose ids the caller passes in). **All six of §12's rows now have a caller** — PR B's review found one registered with none |
+| §12 notifications | Two of six wired — `exams.schedule-published` (one `notify()` for the whole exam, on commit) and `exams.admit-card-issued` (one per card, because §12's template names the card number, with guardians fetched once and grouped rather than queried per card). The admit-card one fires after the **render**, not at issue: it says the card is ready to download, which is only true once a document exists. PR C adds `exams.marks-entry-reminder`, sent once per outstanding section, to that section's allocated subject teachers in the exam's session, for any exam-subject whose window closes within two days with marks still outstanding — §12 says "teachers with pending entries", and a broadcast to all staff is the kind of notification people learn to ignore. PR D adds the last three — `result-approval-pending` (in-app only, to whoever holds `exams.result.approve`, resolved from the **permission** so a delegation to `vice_principal` is followed), `result-published` and `report-card-ready` (both to the students whose rows actually *transitioned*, whose ids the caller passes in). **All six of §12's rows now have a caller** — PR B's review found one registered with none |
 | §5.5 grading | `grading.py` — `percentage_for` (ROUND_HALF_UP, one decimal place), `assert_scale_is_complete`, `band_for` (boundary resolves to the upper band), `gpa_for` (None unless the scale type is `gpa` or `hybrid`) |
 | §7.1 lifecycle | `exams.status` starts at `draft` and is **read-only on the wire**. Configuration is frozen past `scheduled`; only a draft exam may be deleted |
 | Feature flag | `module.examinations`, `default_enabled=False` |
@@ -539,6 +584,45 @@ a class teacher sees a card when its exam is in a homeroom's session and the stu
 session (any status) is in that section, so neither last session's homeroom nor this session's reaches the
 other's cards (`AdmitCardAssignedScopeTests`).
 
+### The dashboard's Marks tab (examinations dashboard, PR C)
+
+`/exams/{id}?tab=marks`, shown to a holder of `exams.marks.view`. It opens on the **progress list**
+(`GET /exams/{id}/marks-progress`): one row per (exam-subject, section) the viewer may enter (every one for
+`all` scope), with entered and submitted against the expected roll and a state as token, icon and label
+(locked, submitted, in progress, not started). **Enter marks** opens that section's grid at
+`?tab=marks&subject=<exam_subject_id>&section=<section_id>`, so a grid is a shareable link; a section the
+viewer may not enter answers 404 and says so. A holder of `exams.marks.lock` gets **Lock** (straight away) and
+**Unlock** (confirmed, saying it is audited) on each row; both act on the whole exam-subject. Whenever the exam is
+in `marks_entry` with any subject locked, the tab notes that a locked subject takes no marks and must be
+unlocked to be corrected, or that the viewer must ask someone who can. A send-back is one such case (the exam
+returns to `marks_entry` with its subjects still locked); locking one subject while others are still being
+entered is another, so the note is informational, not a warning.
+
+The **grid** (`GET /marks/grid`) lists the section's roll: roll, name, admission number, then theory,
+practical (only when the subject has one), absent, exempt and remarks. Absent and exempt exclude each other
+and clear and disable the marks. Each mark is checked as typed: more than four digits before the point or two after (the serializer's
+`max_digits=6, decimal_places=2`), or not a number, holds
+the save (the server would refuse it as a 400), and a mark above `max_marks` shows a hint but is sent, so the
+server's own refusal names it. **Save draft** sends every row that holds something, or held something before
+(so a cleared row is cleared), as `draft`; **Submit** is held while any student has nothing entered, then
+sends every row as `submitted`. Both send `section_id` and an `Idempotency-Key` that is remade on every edit
+and after each success, and kept on a refusal. A refusal (422) marks each row `error.meta.rows` names, on the
+cell its `field` names, with the server's sentence, and keeps every entry; a 409 (the window closed or the
+subject was locked meanwhile) reloads the grid. A grid with `meta.writable` false is read-only with
+`meta.unwritable_message`, whatever the reason, and shows only the saved values: an edit refused by a 409 is
+not left on screen as if it were saved. Leaving the Marks tab drops `subject` and `section` from the URL, so
+another tab (Admit cards filters by `section`) never inherits them. **Import marks** (`exams.marks.import`) uploads a sheet for
+the exam-subject through the shared import dialog; it is offered while the grid takes marks, or when only the
+entry key is missing.
+
+The server side of the tab is §16's grid, bulk-entry, progress, lock and import shapes, and the one predicate
+§4 describes. E2E coverage: `e2e/tests/dashboard/exams-marks.spec.ts` (mocked: a teacher opens their section
+from progress, enters marks with an absentee and submits; an out-of-range mark refused on its row with every
+entry kept; the author locks and the grid turns read-only) and `e2e/tests/live/api/exams-marks.spec.ts` (the
+seeded `teacher`, allocated to one section, sees only that section in progress, reads its roll and submits;
+the sibling section is a 404 to read and a 422 to write, another scaffold's exam and section are 404s; the exam
+staff sees entered = expected, locks, and the teacher's re-submission is a 409).
+
 ### The dashboard's setup contract (examinations dashboard, PR A)
 
 The dashboard's Examinations section (`/exams`, `/exams/{id}` with its Subjects tab, `/exams/grading-scales`)
@@ -554,10 +638,19 @@ came with these server changes:
 - **The homeroom side is session-limited too.** `_assigned_teaching` carries each homeroom as a
   `(section_id, session_id)` pair, the session taken from the active enrolments that make the section the
   teacher's; `Exam`/`ExamSubject` match the section's class **and** `exam.academic_session_id`. So a class
-  teacher does not see last session's exams for the same class. `Marks` keeps its own predicate — it joins
-  through the student's active enrolment in the homeroom section (`student__enrollments__section_id`), which
-  is a different join from the exam's class and session — and reads only the section ids, so its result is
-  unchanged.
+  teacher does not see last session's exams for the same class.
+- **`Marks` shares the write rule.** `Marks.filter_assigned_to_user` and `services.may_enter_marks` both
+  read `_assigned_teaching`, and both are pinned to the exam's session: a row is visible when the student's
+  **active** enrolment in the exam's session is in a section the teacher holds a current allocation for
+  (that subject, that session) or is class teacher of in that session. `PredicateAgreementTests` pins the
+  agreement, including a last-session exam. Its `campus` side matches too: `Marks.filter_by_campus` reads
+  the campus of the section the student's enrolment in the exam's session names, as `may_enter_marks`
+  reads `section.campus_id`.
+- **A closed session's marks leave the teacher with the enrolment.** The assigned read requires the
+  enrolment to be `active`, deliberately unlike L33's historical reads: once a session's students are
+  promoted, their subject and class teachers can no longer read that session's marks, exactly as they can
+  no longer write them. Leadership (`all`/`campus` scope) still reads them; a teacher's history view is
+  results, not raw marks.
 - **Grading scales and bands are reference data at every scope.** Their `filter_assigned_to_user` returns
   every row, the same reasoning that gives their viewsets `scope_campus_field = None`: a scale belongs to no
   class, campus or teacher, and a teacher who can see an exam but not the scale it grades against could not
