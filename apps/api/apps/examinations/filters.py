@@ -145,6 +145,9 @@ class ReportCardFilterSet(django_filters.FilterSet):
     exam_id = django_filters.UUIDFilter(field_name="exam_id")
     term_id = django_filters.UUIDFilter(field_name="term_id")
     student_id = django_filters.UUIDFilter(field_name="student_id")
+    # The section on the card's result (recorded at processing time), the one
+    # `ReportCardSerializer.section_id` reports; a term card has none.
+    section_id = django_filters.UUIDFilter(field_name="result__section_id")
 
     class Meta:
         model = ReportCard

@@ -1076,10 +1076,11 @@ class Result(TenantOwnedModel):
     and resolving the section through the enrolment at read time would do
     exactly that.
 
-    `created_by` is the processing initiator, and `approved_by` must differ from
-    it — §4's closing line and auth-and-rbac §2.4's segregation of duties. That
-    is checked in `services`, not here, because a CHECK cannot compare a column
-    against another row's author and the rule has to hold for any caller.
+    `processed_by` is whoever ran the latest processing, re-stamped on every run
+    (a re-process after a send-back included), and `approved_by` must differ
+    from it — §4's closing line and auth-and-rbac §2.4's segregation of duties.
+    `created_by` names only the first run, so it cannot carry the rule. That is
+    checked in `services`, not here, because the rule has to hold for any caller.
     """
 
     exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name="results")
@@ -1111,8 +1112,13 @@ class Result(TenantOwnedModel):
     status = models.CharField(
         max_length=20, choices=ResultStatus.choices, default=ResultStatus.PROCESSING
     )
+    processed_by = models.UUIDField(
+        null=True,
+        blank=True,
+        help_text="users(id) of the latest processing run; re-stamped on every run.",
+    )
     approved_by = models.UUIDField(
-        null=True, blank=True, help_text="Must differ from the processing initiator (§4)."
+        null=True, blank=True, help_text="Must differ from `processed_by` (§4)."
     )
     approved_at = models.DateTimeField(null=True, blank=True)
     published_at = models.DateTimeField(null=True, blank=True)

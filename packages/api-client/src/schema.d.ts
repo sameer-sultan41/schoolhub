@@ -3768,6 +3768,23 @@ export interface paths {
         patch: operations["report_cards_partial_update"];
         trace?: never;
     };
+    "/api/v1/report-cards/{id}:download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description A short-lived signed link to the report card's PDF. */
+        post: operations["report_cards_:download_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reports/attendance-summary": {
         parameters: {
             query?: never;
@@ -6963,6 +6980,7 @@ export interface components {
          * @enum {string}
          */
         ExamReportQueryKindEnum: "result-register" | "pass-fail-analysis" | "subject-performance" | "marks-entry-status" | "grade-distribution" | "question-bank-usage";
+        ExamReportRow: components["schemas"]["ResultRegisterReportRow"] | components["schemas"]["PassFailAnalysisReportRow"] | components["schemas"]["SubjectPerformanceReportRow"] | components["schemas"]["MarksEntryStatusReportRow"] | components["schemas"]["GradeDistributionReportRow"] | components["schemas"]["QuestionBankUsageReportRow"];
         /**
          * @description `exam_schedules` — one section's sitting of one paper (§5.2).
          *
@@ -7531,6 +7549,28 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /** @description `reports.grade_distribution`: one band's count; band fields are null when ungraded. */
+        GradeDistributionReportRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "grade-distribution";
+            /** Format: uuid */
+            readonly grade_band_id: string | null;
+            readonly grade: string | null;
+            /** Format: double */
+            readonly min_percent: number | null;
+            /** Format: double */
+            readonly max_percent: number | null;
+            readonly is_passing: boolean | null;
+            readonly students: number;
+        };
+        /**
+         * @description * `grade-distribution` - grade-distribution
+         * @enum {string}
+         */
+        GradeDistributionReportRowKindEnum: "grade-distribution";
         /**
          * @description `grading_scales` — a tenant's grading model (§5.5).
          *
@@ -8002,6 +8042,31 @@ export interface components {
          * @enum {string}
          */
         MarksEntryStatusEnum: "draft" | "submitted";
+        /** @description `reports.marks_entry_status`: one exam-subject's entered rows by status. */
+        MarksEntryStatusReportRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "marks-entry-status";
+            /** Format: uuid */
+            readonly exam_subject_id: string;
+            readonly subject_name: string;
+            readonly class_name: string;
+            /** Format: date-time */
+            readonly locked_at: string | null;
+            readonly entered: number;
+            readonly draft: number;
+            readonly submitted: number;
+            readonly locked: number;
+            readonly absent: number;
+            readonly exempt: number;
+        };
+        /**
+         * @description * `marks-entry-status` - marks-entry-status
+         * @enum {string}
+         */
+        MarksEntryStatusReportRowKindEnum: "marks-entry-status";
         /** @description One student on a section's roll, in roll order, with their marks row if entered. */
         MarksGridEntry: {
             /** Format: uuid */
@@ -8821,6 +8886,36 @@ export interface components {
             /** Format: decimal */
             marks_each?: string | null;
         };
+        /** @description `reports.pass_fail_analysis`: one section's counts; the rate is passed over sat. */
+        PassFailAnalysisReportRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "pass-fail-analysis";
+            /** Format: uuid */
+            readonly section_id: string;
+            readonly section_name: string;
+            readonly students: number;
+            readonly sat: number;
+            readonly passed: number;
+            readonly failed: number;
+            readonly absent: number;
+            readonly withheld: number;
+            /** Format: double */
+            readonly average_percentage: number | null;
+            /** Format: double */
+            readonly highest_percentage: number | null;
+            /** Format: double */
+            readonly lowest_percentage: number | null;
+            /** Format: double */
+            readonly pass_rate: number;
+        };
+        /**
+         * @description * `pass-fail-analysis` - pass-fail-analysis
+         * @enum {string}
+         */
+        PassFailAnalysisReportRowKindEnum: "pass-fail-analysis";
         PatchedAcademicSession: {
             /** Format: uuid */
             readonly id?: string;
@@ -9702,8 +9797,16 @@ export interface components {
             readonly term_id?: string;
             /** Format: uuid */
             readonly student_id?: string;
+            readonly student_name?: string;
+            readonly admission_number?: string;
             /** Format: uuid */
             readonly result_id?: string;
+            /** Format: uuid */
+            readonly section_id?: string | null;
+            readonly section_name?: string | null;
+            /** Format: decimal */
+            readonly percentage?: string | null;
+            readonly grade?: string | null;
             /** Format: uuid */
             readonly file_id?: string | null;
             class_teacher_remarks?: string | null;
@@ -10348,6 +10451,30 @@ export interface components {
          * @enum {string}
          */
         QuestionBankStatusEnum: "active" | "archived";
+        /** @description `reports.question_bank_usage`: one bank's questions at one difficulty. */
+        QuestionBankUsageReportRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "question-bank-usage";
+            /** Format: uuid */
+            readonly question_bank_id: string;
+            readonly bank_name: string;
+            readonly subject_name: string;
+            readonly difficulty: components["schemas"]["QuestionDifficultyEnum"];
+            readonly questions: number;
+            readonly approved: number;
+            /** @description Questions used in at least one paper. */
+            readonly total_uses: number;
+            /** Format: double */
+            readonly average_uses: number | null;
+        };
+        /**
+         * @description * `question-bank-usage` - question-bank-usage
+         * @enum {string}
+         */
+        QuestionBankUsageReportRowKindEnum: "question-bank-usage";
         /**
          * @description * `easy` - Easy
          *     * `medium` - Medium
@@ -10480,8 +10607,16 @@ export interface components {
             readonly term_id: string;
             /** Format: uuid */
             readonly student_id: string;
+            readonly student_name: string;
+            readonly admission_number: string;
             /** Format: uuid */
             readonly result_id: string;
+            /** Format: uuid */
+            readonly section_id: string | null;
+            readonly section_name: string | null;
+            /** Format: decimal */
+            readonly percentage: string | null;
+            readonly grade: string | null;
             /** Format: uuid */
             readonly file_id: string | null;
             class_teacher_remarks?: string | null;
@@ -10504,6 +10639,11 @@ export interface components {
          * @enum {string}
          */
         ReportCardStatusEnum: "draft" | "generated" | "published";
+        /** @description `:publish-report-cards`' 200: the cards this call moved. */
+        ReportCardsPublished: {
+            published: number;
+            published_ids: string[];
+        };
         /** @description ⚿ `POST /refunds` — §7.3 step one. */
         RequestRefund: {
             /** Format: uuid */
@@ -10518,8 +10658,8 @@ export interface components {
          *     Every field here is computed or moved by a permissioned action: the
          *     aggregates by `:process-results`, `status`/`approved_*` by
          *     `:approve-results`, `published_at` by `:publish-results`, and `outcome` by
-         *     processing or `:withhold`. A client that could PATCH any of them could skip
-         *     §5.6's gate entirely, which is the whole point of having one.
+         *     processing or `:withhold`. `processed_by` is the latest run's processor,
+         *     who may not approve it.
          */
         Result: {
             /** Format: uuid */
@@ -10528,8 +10668,11 @@ export interface components {
             readonly exam_id: string;
             /** Format: uuid */
             readonly student_id: string;
+            readonly student_name: string;
+            readonly admission_number: string;
             /** Format: uuid */
             readonly section_id: string;
+            readonly section_name: string;
             /** Format: decimal */
             readonly total_max_marks: string;
             /** Format: decimal */
@@ -10548,6 +10691,18 @@ export interface components {
              */
             readonly grace_marks: string;
             readonly status: components["schemas"]["ResultStatusEnum"];
+            /**
+             * Format: uuid
+             * @description users(id) of the latest processing run; re-stamped on every run.
+             */
+            readonly processed_by: string | null;
+            readonly processed_by_name: string | null;
+            /**
+             * Format: uuid
+             * @description Must differ from `processed_by` (§4).
+             */
+            readonly approved_by: string | null;
+            readonly approved_by_name: string | null;
             /** Format: date-time */
             readonly approved_at: string | null;
             /** Format: date-time */
@@ -10565,6 +10720,40 @@ export interface components {
          * @enum {string}
          */
         ResultOutcomeEnum: "pass" | "fail" | "absent" | "withheld";
+        /** @description `reports.result_register`: one student's result, in rank order (unranked last). */
+        ResultRegisterReportRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "result-register";
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly student_id: string;
+            readonly first_name: string;
+            readonly last_name: string;
+            readonly admission_number: string;
+            readonly section_name: string;
+            /** Format: double */
+            readonly percentage: number;
+            /** Format: double */
+            readonly total_obtained_marks: number;
+            /** Format: double */
+            readonly total_max_marks: number;
+            readonly grade: string | null;
+            /** Format: double */
+            readonly gpa: number | null;
+            readonly rank_in_section: number | null;
+            readonly rank_in_class: number | null;
+            readonly outcome: components["schemas"]["ResultOutcomeEnum"];
+            readonly status: components["schemas"]["ResultStatusEnum"];
+        };
+        /**
+         * @description * `result-register` - result-register
+         * @enum {string}
+         */
+        ResultRegisterReportRowKindEnum: "result-register";
         /**
          * @description * `processing` - Processing
          *     * `pending_approval` - Pending approval
@@ -10581,6 +10770,21 @@ export interface components {
          *     into the audit log — the same argument the admit-card revocation makes.
          */
         ResultWithhold: {
+            reason: string;
+        };
+        /** @description `:approve-results`' 200: the rows this approval moved. */
+        ResultsApproved: {
+            approved: number;
+        };
+        /** @description `:publish-results`' 200. `published_ids` are the rows this call moved. */
+        ResultsPublished: {
+            published: number;
+            withheld: number;
+            published_ids: string[];
+        };
+        /** @description `:send-results-back`' 200: the rows reopened, and the reason given. */
+        ResultsSentBack: {
+            reopened: number;
             reason: string;
         };
         /** @description `rooms` — physical rooms, labs and halls (§5.4). */
@@ -11296,6 +11500,37 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /** @description `reports.subject_performance`: one exam-subject's theory marks, absent/exempt left out. */
+        SubjectPerformanceReportRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "subject-performance";
+            /** Format: uuid */
+            readonly exam_subject_id: string;
+            readonly subject_name: string;
+            readonly class_name: string;
+            /** Format: double */
+            readonly max_marks: number;
+            /** Format: double */
+            readonly pass_marks: number;
+            readonly students: number;
+            /** Format: double */
+            readonly average_marks: number | null;
+            /** Format: double */
+            readonly highest_marks: number | null;
+            /** Format: double */
+            readonly lowest_marks: number | null;
+            readonly passed: number;
+            /** Format: double */
+            readonly pass_rate: number;
+        };
+        /**
+         * @description * `subject-performance` - subject-performance
+         * @enum {string}
+         */
+        SubjectPerformanceReportRowKindEnum: "subject-performance";
         /**
          * @description * `core` - Core
          *     * `elective` - Elective
@@ -14066,12 +14301,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ResultsApproved"];
+                };
             };
         };
     };
@@ -14147,12 +14383,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ReportCardsPublished"];
+                };
             };
         };
     };
@@ -14167,12 +14404,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ResultsPublished"];
+                };
             };
         };
     };
@@ -14228,12 +14466,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ResultsSentBack"];
+                };
             };
         };
     };
@@ -17889,6 +18128,7 @@ export interface operations {
                 page_size?: number;
                 /** @description A search term. */
                 search?: string;
+                section_id?: string;
                 /**
                  * @description * `draft` - Draft
                  *     * `generated` - Generated
@@ -17961,6 +18201,34 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ReportCard"];
                 };
+            };
+        };
+    };
+    "report_cards_:download_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CardDownload"];
+                };
+            };
+            /** @description Not this caller's card, not published to them, or not rendered. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -18057,12 +18325,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The report's rows. */
+            /** @description The report's rows, each carrying the report's `kind`. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ExamReportRow"][];
+                };
             };
             /** @description Too many rows to serve inline; a job resource. */
             202: {

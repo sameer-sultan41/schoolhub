@@ -43,7 +43,7 @@ from django.db.models import Count, F, Prefetch, Q
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import mixins, viewsets
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -78,6 +78,7 @@ from apps.examinations.models import (
     Result,
     ResultStatus,
 )
+from apps.examinations.report_serializers import EXAM_REPORT_ROWS, REPORT_ROW_SERIALIZERS
 from apps.examinations.serializers import (
     ADMIT_CARD_ENROLLMENTS,
     AdmitCardIssueAcceptedSerializer,
@@ -105,7 +106,11 @@ from apps.examinations.serializers import (
     QuestionBankSerializer,
     QuestionSerializer,
     ReportCardSerializer,
+    ReportCardsPublishedSerializer,
+    ResultsApprovedSerializer,
     ResultSerializer,
+    ResultsPublishedSerializer,
+    ResultsSentBackSerializer,
     ResultWithholdSerializer,
     SendResultsBackSerializer,
 )
@@ -119,8 +124,10 @@ from core.audit.services import record_audit
 from core.idempotency.services import replay_or_execute
 from core.jobs.services import create_job, enqueue_job
 from core.rbac.permissions import (
+    AnyOf,
     DenyRestrictedPrincipals,
     HasPermissionKey,
+    has_permission_key,
     is_restricted_principal,
     scope_queryset,
 )
@@ -736,19 +743,14 @@ class AdmitCardViewSet(
         #
         # 404, not 409, for a card with no usable document: not rendered yet,
         # revoked, or its file retired. All say "nothing for you here", and the
-        # file checks mirror `core/files`' `get_display_url`.
-        from core.files.models import FileStatus
-        from core.files.services import get_download_url
+        # file check is `core/files`' `servable_file`, shared with `get_display_url`.
+        from core.files.services import get_download_url, servable_file
 
         card = self.get_object()
-        if (
-            card.file is None
-            or card.status == AdmitCardStatus.REVOKED
-            or card.file.status != FileStatus.READY
-            or card.file.deleted_at is not None
-        ):
+        file = servable_file(card.file)
+        if file is None or card.status == AdmitCardStatus.REVOKED:
             raise NotFound("This admit card has no document to download.")
-        return ActionResponse.ok({"download_url": get_download_url(card.file)})
+        return ActionResponse.ok({"download_url": get_download_url(file)})
 
 
 class MarksViewSet(
@@ -1050,7 +1052,7 @@ class ResultViewSet(
         outstanding. In the job it is what actually holds, because marks can
         change between the request and the worker picking it up.
         """
-        exam = get_object_or_404(Exam.objects.alive(), pk=pk)
+        exam = scoped_exam(request, pk)
         services.assert_exam_is_recomputable(exam)
         processing.assert_ready_to_process(processing.collect(exam=exam))
 
@@ -1072,7 +1074,7 @@ class ResultViewSet(
             execute=execute,
         )
 
-    @extend_schema(request=None, responses={200: None})
+    @extend_schema(request=None, responses={200: ResultsApprovedSerializer})
     def approve(self, request: Request, pk: str | None = None):
         """`POST /exams/{id}:approve-results` — §5.6's gate.
 
@@ -1081,13 +1083,16 @@ class ResultViewSet(
         closing line makes it a property of the results rather than of the
         request.
         """
-        exam = get_object_or_404(Exam.objects.alive(), pk=pk)
+        exam = scoped_exam(request, pk)
         before = {"status": exam.status}
         outcome = services.approve_exam_results(exam=exam, approver_id=request.user.pk)
         record_audit(request, "approve", exam, before=before, after=outcome)
-        return ActionResponse.ok(outcome, message=f"{outcome['approved']} result(s) approved.")
+        return ActionResponse.ok(
+            ResultsApprovedSerializer(outcome).data,
+            message=f"{outcome['approved']} result(s) approved.",
+        )
 
-    @extend_schema(request=SendResultsBackSerializer, responses={200: None})
+    @extend_schema(request=SendResultsBackSerializer, responses={200: ResultsSentBackSerializer})
     def send_back(self, request: Request, pk: str | None = None):
         """`POST /exams/{id}:send-results-back` — §7.1's "changes requested" edge.
 
@@ -1095,7 +1100,7 @@ class ResultViewSet(
         Behind the *approve* key, because sending back is the other half of the
         same decision.
         """
-        exam = get_object_or_404(Exam.objects.alive(), pk=pk)
+        exam = scoped_exam(request, pk)
         serializer = SendResultsBackSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         before = {"status": exam.status}
@@ -1108,11 +1113,11 @@ class ResultViewSet(
 
         record_audit(request, "update", exam, before=before, after=outcome)
         return ActionResponse.ok(
-            outcome,
+            ResultsSentBackSerializer(outcome).data,
             message=f"{outcome['reopened']} result(s) reopened; marks entry is open again.",
         )
 
-    @extend_schema(request=None, responses={200: None})
+    @extend_schema(request=None, responses={200: ResultsPublishedSerializer})
     def publish(self, request: Request, pk: str | None = None):
         """`POST /exams/{id}:publish-results` — §5.6's release.
 
@@ -1122,7 +1127,7 @@ class ResultViewSet(
         notifying on current status would re-send every guardian the same
         message on a re-publish.
         """
-        exam = get_object_or_404(Exam.objects.alive(), pk=pk)
+        exam = scoped_exam(request, pk)
         before = {"status": exam.status}
 
         # The moved ids come back **from the service**, which collected them
@@ -1142,7 +1147,7 @@ class ResultViewSet(
             )
         )
         return ActionResponse.ok(
-            outcome,
+            ResultsPublishedSerializer(outcome).data,
             message=(
                 f"{outcome['published']} result(s) published"
                 + (f"; {outcome['withheld']} withheld." if outcome["withheld"] else ".")
@@ -1152,12 +1157,14 @@ class ResultViewSet(
     @extend_schema(request=ResultWithholdSerializer, responses={200: ResultSerializer})
     def withhold(self, request: Request, pk: str | None = None):
         """`POST /results/{id}:withhold` — §5.6's per-student hold."""
-        result = get_object_or_404(Result.objects.alive(), pk=pk)
+        # Through the record scope (L34): a result outside it is a 404.
+        result = get_object_or_404(self.get_queryset(), pk=pk)
         serializer = ResultWithholdSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         before = {"outcome": result.outcome}
 
-        services.withhold_result(
+        # The service re-reads the row under its lock; answer with that one.
+        result = services.withhold_result(
             result=result,
             reason=serializer.validated_data["reason"],
             actor_id=request.user.pk,
@@ -1203,14 +1210,27 @@ class ReportCardViewSet(
     required_feature = FEATURE
     required_permission = "exams.report-card.view"
     required_permission_map = {
-        "update": "exams.report-card.create",
-        "partial_update": "exams.report-card.create",
+        # A class teacher writes their remark, a principal theirs; each field's
+        # own key is checked in `check_object_permissions` (ADR-0027 amendment).
+        "update": AnyOf("exams.report-card.create", "exams.report-card.publish"),
+        "partial_update": AnyOf("exams.report-card.create", "exams.report-card.publish"),
         "generate": "exams.report-card.create",
         "publish": "exams.report-card.publish",
+        # A download is a read of one card, so it takes the view key (ADR-0021).
+        "download": "exams.report-card.view",
     }
     http_method_names = ["get", "post", "patch", "head", "options"]
 
-    PORTAL_READABLE_ACTIONS = frozenset({"list", "retrieve"})
+    # The key each remark field needs: §4 gives class-teacher remarks to
+    # `.create` and principal remarks to `.publish`.
+    REMARK_FIELD_KEYS = {
+        "class_teacher_remarks": "exams.report-card.create",
+        "principal_remarks": "exams.report-card.publish",
+    }
+
+    # `download` is a read: a student or guardian fetches their own published
+    # card, and `get_queryset` keeps a restricted principal to published ones.
+    PORTAL_READABLE_ACTIONS = frozenset({"list", "retrieve", "download"})
 
     def get_permissions(self):
         if self.action in self.PORTAL_READABLE_ACTIONS:
@@ -1218,10 +1238,28 @@ class ReportCardViewSet(
         return [permission() for permission in STAFF_PERMISSIONS]
 
     def get_queryset(self):
-        queryset = super().get_queryset().select_related("student", "result")
+        queryset = super().get_queryset()
+        if self.action == "download":
+            queryset = queryset.select_related("file")
+        else:
+            queryset = queryset.select_related("student", "result__section", "result__grade_band")
         if is_restricted_principal(self.request.user):
             queryset = queryset.filter(status=ReportCardStatus.PUBLISHED)
         return queryset
+
+    def check_object_permissions(self, request: Request, obj) -> None:
+        # After the scoped lookup, so a foreign or out-of-scope card is still a
+        # 404; before the serializer, so a refused field writes nothing.
+        super().check_object_permissions(request, obj)
+        if self.action not in ("update", "partial_update"):
+            return
+        refused = {
+            field: f"You do not have permission to write {field}."
+            for field, key in self.REMARK_FIELD_KEYS.items()
+            if field in request.data and not has_permission_key(request.user, key)
+        }
+        if refused:
+            raise PermissionDenied(refused)
 
     def perform_update(self, serializer) -> None:
         if serializer.instance.status == ReportCardStatus.PUBLISHED:
@@ -1234,7 +1272,7 @@ class ReportCardViewSet(
     @extend_schema(request=None, responses={202: None})
     def generate(self, request: Request, pk: str | None = None):
         """`POST /exams/{id}:generate-report-cards` — 202 + a job (§16)."""
-        exam = get_object_or_404(Exam.objects.alive(), pk=pk)
+        exam = scoped_exam(request, pk)
         services.assert_report_cards_are_generatable(exam)
 
         def execute():
@@ -1255,7 +1293,7 @@ class ReportCardViewSet(
             execute=execute,
         )
 
-    @extend_schema(request=None, responses={200: None})
+    @extend_schema(request=None, responses={200: ReportCardsPublishedSerializer})
     def publish(self, request: Request, pk: str | None = None):
         """`POST /exams/{id}:publish-report-cards` — release them to the portals.
 
@@ -1263,7 +1301,7 @@ class ReportCardViewSet(
         collected before the write — the same transition-not-state rule
         `:publish-results` follows.
         """
-        exam = get_object_or_404(Exam.objects.alive(), pk=pk)
+        exam = scoped_exam(request, pk)
 
         outcome = services.publish_report_cards(exam=exam, actor_id=request.user.pk)
         record_audit(request, "publish", exam, after=outcome)
@@ -1276,8 +1314,33 @@ class ReportCardViewSet(
             )
         )
         return ActionResponse.ok(
-            outcome, message=f"{outcome['published']} report card(s) published."
+            ReportCardsPublishedSerializer(outcome).data,
+            message=f"{outcome['published']} report card(s) published.",
         )
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: CardDownloadSerializer,
+            404: OpenApiResponse(
+                description="Not this caller's card, not published to them, or not rendered."
+            ),
+        },
+    )
+    def download(self, request: Request, pk: str | None = None):
+        """A short-lived signed link to the report card's PDF."""
+        # The admit card's `:download` shape (ADR-0021): `get_object()` applies
+        # the record scope and, for a student or guardian, the published-only
+        # narrowing, so anything else is a 404 before a file is touched. A card
+        # with no usable document (not rendered, or its file not ready or
+        # retired) is a 404 too, through the same `servable_file` check.
+        from core.files.services import get_download_url, servable_file
+
+        card = self.get_object()
+        file = servable_file(card.file)
+        if file is None:
+            raise NotFound("This report card has no document to download.")
+        return ActionResponse.ok({"download_url": get_download_url(file)})
 
 
 class QuestionBankViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
@@ -1432,12 +1495,12 @@ class QuestionViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
 
 
 class ExamReportView(TenantScopedViewSetMixin, APIView):
-    """`GET/POST /reports/exam-summary` — §13's five reports.
+    """`GET/POST /reports/exam-summary` — §13's six reports.
 
-    One `kind`-parameterised endpoint rather than five routes, matching
+    One `kind`-parameterised endpoint rather than six routes, matching
     `attendance`'s report view: the shape of the response differs per kind but
     the *contract* — scoped rows, inline under a ceiling, a job above it —
-    does not, and five routes would be five places to keep that consistent.
+    does not, and six routes would be six places to keep that consistent.
 
     `GET` serves inline; `POST` queues an export in any of the three formats
     `core.exports.tabular` renders. The `POST` needs the export key, not the
@@ -1453,7 +1516,10 @@ class ExamReportView(TenantScopedViewSetMixin, APIView):
     @extend_schema(
         parameters=[ExamReportQuerySerializer],
         responses={
-            200: OpenApiResponse(description="The report's rows."),
+            200: OpenApiResponse(
+                response=EXAM_REPORT_ROWS,
+                description="The report's rows, each carrying the report's `kind`.",
+            ),
             202: OpenApiResponse(description="Too many rows to serve inline; a job resource."),
         },
     )
@@ -1469,8 +1535,9 @@ class ExamReportView(TenantScopedViewSetMixin, APIView):
         serializer.is_valid(raise_exception=True)
         exam = serializer.validated_data.get("exam")
 
+        kind = serializer.validated_data["kind"]
         rows = services.build_report_rows(
-            kind=serializer.validated_data["kind"],
+            kind=kind,
             exam_id=exam.pk if exam is not None else None,
             user=request.user,
             limit=services.SYNCHRONOUS_REPORT_ROW_LIMIT + 1,
@@ -1478,14 +1545,16 @@ class ExamReportView(TenantScopedViewSetMixin, APIView):
         if len(rows) > services.SYNCHRONOUS_REPORT_ROW_LIMIT:
             return self._queue_export(
                 request,
-                kind=serializer.validated_data["kind"],
+                kind=kind,
                 exam=exam,
                 fmt=serializer.validated_data["format"],
                 message=(
                     "This report is too large to return inline; it is being exported instead."
                 ),
             )
-        return ActionResponse.ok(rows)
+        # PolymorphicProxySerializer documents the rows; this dict serializes them (ADR-0022).
+        typed = REPORT_ROW_SERIALIZERS[kind]([{**row, "kind": kind} for row in rows], many=True)
+        return ActionResponse.ok(typed.data)
 
     @extend_schema(request=ExamReportQuerySerializer, responses={202: None})
     def post(self, request: Request) -> Response:

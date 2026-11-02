@@ -3216,7 +3216,11 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultsApproved'
+          description: ''
   /api/v1/exams/{id}:generate-report-cards:
     post:
       operationId: exams_:generate_report_cards_create
@@ -3313,7 +3317,11 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportCardsPublished'
+          description: ''
   /api/v1/exams/{id}:publish-results:
     post:
       operationId: exams_:publish_results_create
@@ -3338,7 +3346,11 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultsPublished'
+          description: ''
   /api/v1/exams/{id}:publish-schedule:
     post:
       operationId: exams_:publish_schedule_create
@@ -3405,7 +3417,11 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultsSentBack'
+          description: ''
   /api/v1/expense-categories:
     get:
       operationId: expense_categories_list
@@ -8697,6 +8713,11 @@ paths:
         schema:
           type: string
       - in: query
+        name: section_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
         name: status
         schema:
           type: string
@@ -8803,6 +8824,30 @@ paths:
               schema:
                 $ref: '#/components/schemas/ReportCard'
           description: ''
+  /api/v1/report-cards/{id}:download:
+    post:
+      operationId: report_cards_:download_create
+      description: A short-lived signed link to the report card's PDF.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - report-cards
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDownload'
+          description: ''
+        '404':
+          description: Not this caller's card, not published to them, or not rendered.
   /api/v1/reports/attendance-summary:
     get:
       operationId: reports_attendance_summary_retrieve
@@ -8995,7 +9040,13 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: The report's rows.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExamReportRow'
+          description: The report's rows, each carrying the report's `kind`.
         '202':
           description: Too many rows to serve inline; a job resource.
     post:
@@ -15970,6 +16021,23 @@ components:
         * `marks-entry-status` - marks-entry-status
         * `grade-distribution` - grade-distribution
         * `question-bank-usage` - question-bank-usage
+    ExamReportRow:
+      oneOf:
+      - $ref: '#/components/schemas/ResultRegisterReportRow'
+      - $ref: '#/components/schemas/PassFailAnalysisReportRow'
+      - $ref: '#/components/schemas/SubjectPerformanceReportRow'
+      - $ref: '#/components/schemas/MarksEntryStatusReportRow'
+      - $ref: '#/components/schemas/GradeDistributionReportRow'
+      - $ref: '#/components/schemas/QuestionBankUsageReportRow'
+      discriminator:
+        propertyName: kind
+        mapping:
+          result-register: '#/components/schemas/ResultRegisterReportRow'
+          pass-fail-analysis: '#/components/schemas/PassFailAnalysisReportRow'
+          subject-performance: '#/components/schemas/SubjectPerformanceReportRow'
+          marks-entry-status: '#/components/schemas/MarksEntryStatusReportRow'
+          grade-distribution: '#/components/schemas/GradeDistributionReportRow'
+          question-bank-usage: '#/components/schemas/QuestionBankUsageReportRow'
     ExamSchedule:
       type: object
       description: |-
@@ -17133,6 +17201,62 @@ components:
       - max_percent
       - min_percent
       - updated_at
+    GradeDistributionReportRow:
+      type: object
+      description: '`reports.grade_distribution`: one band''s count; band fields are
+        null when ungraded.'
+      properties:
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/GradeDistributionReportRowKindEnum'
+          readOnly: true
+        grade_band_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        grade:
+          type: string
+          readOnly: true
+          nullable: true
+        min_percent:
+          type: number
+          format: double
+          maximum: 10000000000
+          minimum: -10000000000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+          readOnly: true
+          nullable: true
+        max_percent:
+          type: number
+          format: double
+          maximum: 10000000000
+          minimum: -10000000000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+          readOnly: true
+          nullable: true
+        is_passing:
+          type: boolean
+          readOnly: true
+          nullable: true
+        students:
+          type: integer
+          readOnly: true
+      required:
+      - grade
+      - grade_band_id
+      - is_passing
+      - kind
+      - max_percent
+      - min_percent
+      - students
+    GradeDistributionReportRowKindEnum:
+      enum:
+      - grade-distribution
+      type: string
+      description: '* `grade-distribution` - grade-distribution'
     GradingScale:
       type: object
       description: |-
@@ -18080,6 +18204,65 @@ components:
       description: |-
         * `draft` - draft
         * `submitted` - submitted
+    MarksEntryStatusReportRow:
+      type: object
+      description: '`reports.marks_entry_status`: one exam-subject''s entered rows
+        by status.'
+      properties:
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/MarksEntryStatusReportRowKindEnum'
+          readOnly: true
+        exam_subject_id:
+          type: string
+          format: uuid
+          readOnly: true
+        subject_name:
+          type: string
+          readOnly: true
+        class_name:
+          type: string
+          readOnly: true
+        locked_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        entered:
+          type: integer
+          readOnly: true
+        draft:
+          type: integer
+          readOnly: true
+        submitted:
+          type: integer
+          readOnly: true
+        locked:
+          type: integer
+          readOnly: true
+        absent:
+          type: integer
+          readOnly: true
+        exempt:
+          type: integer
+          readOnly: true
+      required:
+      - absent
+      - class_name
+      - draft
+      - entered
+      - exam_subject_id
+      - exempt
+      - kind
+      - locked
+      - locked_at
+      - subject_name
+      - submitted
+    MarksEntryStatusReportRowKindEnum:
+      enum:
+      - marks-entry-status
+      type: string
+      description: '* `marks-entry-status` - marks-entry-status'
     MarksGridEntry:
       type: object
       description: One student on a section's roll, in roll order, with their marks
@@ -19791,6 +19974,94 @@ components:
       required:
       - count
       - difficulty
+    PassFailAnalysisReportRow:
+      type: object
+      description: '`reports.pass_fail_analysis`: one section''s counts; the rate
+        is passed over sat.'
+      properties:
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/PassFailAnalysisReportRowKindEnum'
+          readOnly: true
+        section_id:
+          type: string
+          format: uuid
+          readOnly: true
+        section_name:
+          type: string
+          readOnly: true
+        students:
+          type: integer
+          readOnly: true
+        sat:
+          type: integer
+          readOnly: true
+        passed:
+          type: integer
+          readOnly: true
+        failed:
+          type: integer
+          readOnly: true
+        absent:
+          type: integer
+          readOnly: true
+        withheld:
+          type: integer
+          readOnly: true
+        average_percentage:
+          type: number
+          format: double
+          maximum: 10000000000
+          minimum: -10000000000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+          readOnly: true
+          nullable: true
+        highest_percentage:
+          type: number
+          format: double
+          maximum: 10000000000
+          minimum: -10000000000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+          readOnly: true
+          nullable: true
+        lowest_percentage:
+          type: number
+          format: double
+          maximum: 10000000000
+          minimum: -10000000000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+          readOnly: true
+          nullable: true
+        pass_rate:
+          type: number
+          format: double
+          maximum: 1000
+          minimum: -1000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+          readOnly: true
+      required:
+      - absent
+      - average_percentage
+      - failed
+      - highest_percentage
+      - kind
+      - lowest_percentage
+      - pass_rate
+      - passed
+      - sat
+      - section_id
+      - section_name
+      - students
+      - withheld
+    PassFailAnalysisReportRowKindEnum:
+      enum:
+      - pass-fail-analysis
+      type: string
+      description: '* `pass-fail-analysis` - pass-fail-analysis'
     PatchedAcademicSession:
       type: object
       properties:
@@ -21440,10 +21711,35 @@ components:
           type: string
           format: uuid
           readOnly: true
+        student_name:
+          type: string
+          readOnly: true
+        admission_number:
+          type: string
+          readOnly: true
         result_id:
           type: string
           format: uuid
           readOnly: true
+        section_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        section_name:
+          type: string
+          readOnly: true
+          nullable: true
+        percentage:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+        grade:
+          type: string
+          readOnly: true
+          nullable: true
         file_id:
           type: string
           format: uuid
@@ -22749,6 +23045,58 @@ components:
       description: |-
         * `active` - Active
         * `archived` - Archived
+    QuestionBankUsageReportRow:
+      type: object
+      description: '`reports.question_bank_usage`: one bank''s questions at one difficulty.'
+      properties:
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/QuestionBankUsageReportRowKindEnum'
+          readOnly: true
+        question_bank_id:
+          type: string
+          format: uuid
+          readOnly: true
+        bank_name:
+          type: string
+          readOnly: true
+        subject_name:
+          type: string
+          readOnly: true
+        difficulty:
+          allOf:
+          - $ref: '#/components/schemas/QuestionDifficultyEnum'
+          readOnly: true
+        questions:
+          type: integer
+          readOnly: true
+        approved:
+          type: integer
+          readOnly: true
+        total_uses:
+          type: integer
+          readOnly: true
+          description: Questions used in at least one paper.
+        average_uses:
+          type: number
+          format: double
+          readOnly: true
+          nullable: true
+      required:
+      - approved
+      - average_uses
+      - bank_name
+      - difficulty
+      - kind
+      - question_bank_id
+      - questions
+      - subject_name
+      - total_uses
+    QuestionBankUsageReportRowKindEnum:
+      enum:
+      - question-bank-usage
+      type: string
+      description: '* `question-bank-usage` - question-bank-usage'
     QuestionDifficultyEnum:
       enum:
       - easy
@@ -23030,10 +23378,35 @@ components:
           type: string
           format: uuid
           readOnly: true
+        student_name:
+          type: string
+          readOnly: true
+        admission_number:
+          type: string
+          readOnly: true
         result_id:
           type: string
           format: uuid
           readOnly: true
+        section_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        section_name:
+          type: string
+          readOnly: true
+          nullable: true
+        percentage:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+        grade:
+          type: string
+          readOnly: true
+          nullable: true
         file_id:
           type: string
           format: uuid
@@ -23072,15 +23445,21 @@ components:
           format: date-time
           readOnly: true
       required:
+      - admission_number
       - attendance_summary
       - created_at
       - exam_id
       - file_id
+      - grade
       - id
+      - percentage
       - published_at
       - result_id
+      - section_id
+      - section_name
       - status
       - student_id
+      - student_name
       - term_id
       - updated_at
       - version
@@ -23094,6 +23473,20 @@ components:
         * `draft` - Draft
         * `generated` - Generated
         * `published` - Published
+    ReportCardsPublished:
+      type: object
+      description: '`:publish-report-cards`'' 200: the cards this call moved.'
+      properties:
+        published:
+          type: integer
+        published_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - published
+      - published_ids
     RequestRefund:
       type: object
       description: ⚿ `POST /refunds` — §7.3 step one.
@@ -23120,8 +23513,8 @@ components:
         Every field here is computed or moved by a permissioned action: the
         aggregates by `:process-results`, `status`/`approved_*` by
         `:approve-results`, `published_at` by `:publish-results`, and `outcome` by
-        processing or `:withhold`. A client that could PATCH any of them could skip
-        §5.6's gate entirely, which is the whole point of having one.
+        processing or `:withhold`. `processed_by` is the latest run's processor,
+        who may not approve it.
       properties:
         id:
           type: string
@@ -23135,9 +23528,18 @@ components:
           type: string
           format: uuid
           readOnly: true
+        student_name:
+          type: string
+          readOnly: true
+        admission_number:
+          type: string
+          readOnly: true
         section_id:
           type: string
           format: uuid
+          readOnly: true
+        section_name:
+          type: string
           readOnly: true
         total_max_marks:
           type: string
@@ -23185,6 +23587,27 @@ components:
           allOf:
           - $ref: '#/components/schemas/ResultStatusEnum'
           readOnly: true
+        processed_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: users(id) of the latest processing run; re-stamped on every
+            run.
+        processed_by_name:
+          type: string
+          nullable: true
+          readOnly: true
+        approved_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: Must differ from `processed_by` (§4).
+        approved_by_name:
+          type: string
+          nullable: true
+          readOnly: true
         approved_at:
           type: string
           format: date-time
@@ -23204,7 +23627,10 @@ components:
           format: date-time
           readOnly: true
       required:
+      - admission_number
       - approved_at
+      - approved_by
+      - approved_by_name
       - created_at
       - exam_id
       - gpa
@@ -23213,12 +23639,16 @@ components:
       - id
       - outcome
       - percentage
+      - processed_by
+      - processed_by_name
       - published_at
       - rank_in_class
       - rank_in_section
       - section_id
+      - section_name
       - status
       - student_id
+      - student_name
       - total_max_marks
       - total_obtained_marks
       - updated_at
@@ -23234,6 +23664,110 @@ components:
         * `fail` - Fail
         * `absent` - Absent
         * `withheld` - Withheld
+    ResultRegisterReportRow:
+      type: object
+      description: '`reports.result_register`: one student''s result, in rank order
+        (unranked last).'
+      properties:
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/ResultRegisterReportRowKindEnum'
+          readOnly: true
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        student_id:
+          type: string
+          format: uuid
+          readOnly: true
+        first_name:
+          type: string
+          readOnly: true
+        last_name:
+          type: string
+          readOnly: true
+        admission_number:
+          type: string
+          readOnly: true
+        section_name:
+          type: string
+          readOnly: true
+        percentage:
+          type: number
+          format: double
+          maximum: 10000000000
+          minimum: -10000000000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+          readOnly: true
+        total_obtained_marks:
+          type: number
+          format: double
+          maximum: 10000000000
+          minimum: -10000000000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+          readOnly: true
+        total_max_marks:
+          type: number
+          format: double
+          maximum: 10000000000
+          minimum: -10000000000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+          readOnly: true
+        grade:
+          type: string
+          readOnly: true
+          nullable: true
+        gpa:
+          type: number
+          format: double
+          maximum: 10000000000
+          minimum: -10000000000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+          readOnly: true
+          nullable: true
+        rank_in_section:
+          type: integer
+          readOnly: true
+          nullable: true
+        rank_in_class:
+          type: integer
+          readOnly: true
+          nullable: true
+        outcome:
+          allOf:
+          - $ref: '#/components/schemas/ResultOutcomeEnum'
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ResultStatusEnum'
+          readOnly: true
+      required:
+      - admission_number
+      - first_name
+      - gpa
+      - grade
+      - id
+      - kind
+      - last_name
+      - outcome
+      - percentage
+      - rank_in_class
+      - rank_in_section
+      - section_name
+      - status
+      - student_id
+      - total_max_marks
+      - total_obtained_marks
+    ResultRegisterReportRowKindEnum:
+      enum:
+      - result-register
+      type: string
+      description: '* `result-register` - result-register'
     ResultStatusEnum:
       enum:
       - processing
@@ -23260,6 +23794,44 @@ components:
           maxLength: 255
       required:
       - reason
+    ResultsApproved:
+      type: object
+      description: '`:approve-results`'' 200: the rows this approval moved.'
+      properties:
+        approved:
+          type: integer
+      required:
+      - approved
+    ResultsPublished:
+      type: object
+      description: '`:publish-results`'' 200. `published_ids` are the rows this call
+        moved.'
+      properties:
+        published:
+          type: integer
+        withheld:
+          type: integer
+        published_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - published
+      - published_ids
+      - withheld
+    ResultsSentBack:
+      type: object
+      description: '`:send-results-back`'' 200: the rows reopened, and the reason
+        given.'
+      properties:
+        reopened:
+          type: integer
+        reason:
+          type: string
+      required:
+      - reason
+      - reopened
     Room:
       type: object
       description: '`rooms` — physical rooms, labs and halls (§5.4).'
@@ -24782,6 +25354,100 @@ components:
       - id
       - name
       - updated_at
+    SubjectPerformanceReportRow:
+      type: object
+      description: '`reports.subject_performance`: one exam-subject''s theory marks,
+        absent/exempt left out.'
+      properties:
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/SubjectPerformanceReportRowKindEnum'
+          readOnly: true
+        exam_subject_id:
+          type: string
+          format: uuid
+          readOnly: true
+        subject_name:
+          type: string
+          readOnly: true
+        class_name:
+          type: string
+          readOnly: true
+        max_marks:
+          type: number
+          format: double
+          maximum: 10000000000
+          minimum: -10000000000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+          readOnly: true
+        pass_marks:
+          type: number
+          format: double
+          maximum: 10000000000
+          minimum: -10000000000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+          readOnly: true
+        students:
+          type: integer
+          readOnly: true
+        average_marks:
+          type: number
+          format: double
+          maximum: 10000000000
+          minimum: -10000000000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+          readOnly: true
+          nullable: true
+        highest_marks:
+          type: number
+          format: double
+          maximum: 10000000000
+          minimum: -10000000000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+          readOnly: true
+          nullable: true
+        lowest_marks:
+          type: number
+          format: double
+          maximum: 10000000000
+          minimum: -10000000000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+          readOnly: true
+          nullable: true
+        passed:
+          type: integer
+          readOnly: true
+        pass_rate:
+          type: number
+          format: double
+          maximum: 1000
+          minimum: -1000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+          readOnly: true
+      required:
+      - average_marks
+      - class_name
+      - exam_subject_id
+      - highest_marks
+      - kind
+      - lowest_marks
+      - max_marks
+      - pass_marks
+      - pass_rate
+      - passed
+      - students
+      - subject_name
+    SubjectPerformanceReportRowKindEnum:
+      enum:
+      - subject-performance
+      type: string
+      description: '* `subject-performance` - subject-performance'
     SubjectSubjectTypeEnum:
       enum:
       - core

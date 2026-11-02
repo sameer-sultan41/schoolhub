@@ -628,6 +628,27 @@ class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
     def test_publishing_a_foreign_exam_s_report_cards_is_a_404(self) -> None:
         self.assert404(self.client.post(f"{EXAMS}/{self.foreign_exam.pk}:publish-report-cards"))
 
+    def test_downloading_a_foreign_report_card_is_a_404(self) -> None:
+        """The foreign card is published with a rendered file, so the 404 can only
+        come from tenant scoping."""
+        from apps.examinations import uploads
+        from apps.examinations.models import ReportCardStatus
+        from core.files.services import create_ready_file
+
+        with tenant_context(self.other_tenant.id):
+            self.foreign_report_card.file = create_ready_file(
+                tenant_id=self.other_tenant.pk,
+                purpose=uploads.REPORT_CARD.key,
+                original_name="report-card.pdf",
+                mime_type="application/pdf",
+                data=b"%PDF-stub",
+                actor_id=self.user.pk,
+            )
+            self.foreign_report_card.status = ReportCardStatus.PUBLISHED
+            self.foreign_report_card.save(update_fields=["file", "status"])
+
+        self.assert404(self.client.post(f"{REPORT_CARDS}/{self.foreign_report_card.pk}:download"))
+
     # --- question banks ---------------------------------------------------
 
     def test_retrieving_a_foreign_bank_is_a_404(self) -> None:

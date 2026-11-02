@@ -113,6 +113,11 @@ urlpatterns = [
         name="exams-publish-report-cards",
     ),
     path(
+        "report-cards/<uuid:pk>:download",
+        ReportCardViewSet.as_view({"post": "download"}),
+        name="report-cards-download",
+    ),
+    path(
         "marks/grid",
         # Not a list: one section's whole roll, no page and no filters.
         MarksViewSet.as_view({"get": "grid"}, pagination_class=None, filter_backends=[]),

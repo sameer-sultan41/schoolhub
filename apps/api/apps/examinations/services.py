@@ -1414,12 +1414,13 @@ def assert_approver_is_not_the_processor(*, results: list, approver_id: uuid.UUI
     module's: it has to hold when a later caller approves through some other
     door.
 
-    Compared against `created_by` on the result rows, which `processing.write`
-    stamps with the processing initiator. Reading it from the rows rather than
-    from the exam is deliberate: the exam's `updated_by` is whoever touched it
-    last, which after a rename is not the processor at all.
+    Compared against `processed_by` on the result rows, which every
+    `processing.write` re-stamps. Not `created_by`: that names the *first* run,
+    so after a send-back and a re-process by someone else it would refuse the
+    original processor and let the new one approve their own figures. Nor the
+    exam's `updated_by`, which is whoever touched it last.
     """
-    processors = {row.created_by for row in results if row.created_by is not None}
+    processors = {row.processed_by for row in results if row.processed_by is not None}
     if approver_id in processors:
         raise DomainRuleViolation(
             {
@@ -1552,7 +1553,12 @@ def withhold_result(*, result: Result, reason: str, actor_id: uuid.UUID) -> Resu
     """
     # The row, not the exam: withholding is per student, and locking the exam
     # would serialise every guardian's hold against every other one.
-    result = Result.objects.select_for_update().get(pk=result.pk)
+    # Joined for the caller's serializer, but only the result row is locked.
+    result = (
+        Result.objects.select_related("student", "section", "grade_band")
+        .select_for_update(of=("self",))
+        .get(pk=result.pk)
+    )
     if result.status == ResultStatus.PUBLISHED:
         raise Conflict(
             "This result is already published, so it cannot be withheld. Reprocess the exam "

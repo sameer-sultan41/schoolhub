@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import uuid
 from decimal import Decimal
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from rest_framework import serializers
 
@@ -48,7 +48,11 @@ from apps.school_organization.models import AcademicSession, Class, Section, Sub
 from apps.staff_management.models import Staff
 from apps.student_management.models import StudentEnrollment
 from apps.timetable.models import Room
+from core.api.serializers import UserNamesListSerializer, UserNamesModelSerializer
 from core.exports import tabular
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 READ_ONLY_FIELDS = ("id", "created_at", "updated_at")
 
@@ -716,28 +720,37 @@ class MarksImportRequestSerializer(serializers.Serializer):
         return value
 
 
-class ResultSerializer(serializers.ModelSerializer):
+class ResultSerializer(UserNamesModelSerializer):
     """`results` — read-only on the wire (§16 declares a `GET` and no writes).
 
     Every field here is computed or moved by a permissioned action: the
     aggregates by `:process-results`, `status`/`approved_*` by
     `:approve-results`, `published_at` by `:publish-results`, and `outcome` by
-    processing or `:withhold`. A client that could PATCH any of them could skip
-    §5.6's gate entirely, which is the whole point of having one.
+    processing or `:withhold`. `processed_by` is the latest run's processor,
+    who may not approve it.
     """
 
     exam_id = serializers.UUIDField(read_only=True)
     student_id = serializers.UUIDField(read_only=True)
+    student_name = serializers.CharField(source="student.full_name", read_only=True)
+    admission_number = serializers.CharField(source="student.admission_number", read_only=True)
     section_id = serializers.UUIDField(read_only=True)
+    section_name = serializers.CharField(source="section.name", read_only=True)
     grade = serializers.CharField(source="grade_band.label", read_only=True, default=None)
+    processed_by_name = serializers.SerializerMethodField()
+    approved_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Result
+        list_serializer_class = UserNamesListSerializer
         fields = (
             "id",
             "exam_id",
             "student_id",
+            "student_name",
+            "admission_number",
             "section_id",
+            "section_name",
             "total_max_marks",
             "total_obtained_marks",
             "percentage",
@@ -748,12 +761,25 @@ class ResultSerializer(serializers.ModelSerializer):
             "outcome",
             "grace_marks",
             "status",
+            "processed_by",
+            "processed_by_name",
+            "approved_by",
+            "approved_by_name",
             "approved_at",
             "published_at",
             "created_at",
             "updated_at",
         )
         read_only_fields = fields
+
+    def user_ids(self, instance: Result) -> Iterable[uuid.UUID | None]:
+        return (instance.processed_by, instance.approved_by)
+
+    def get_processed_by_name(self, instance: Result) -> str | None:
+        return self.user_name(instance.processed_by)
+
+    def get_approved_by_name(self, instance: Result) -> str | None:
+        return self.user_name(instance.approved_by)
 
 
 class ReportCardSerializer(serializers.ModelSerializer):
@@ -768,7 +794,28 @@ class ReportCardSerializer(serializers.ModelSerializer):
     exam_id = serializers.UUIDField(read_only=True)
     term_id = serializers.UUIDField(read_only=True)
     student_id = serializers.UUIDField(read_only=True)
+    student_name = serializers.CharField(source="student.full_name", read_only=True)
+    admission_number = serializers.CharField(source="student.admission_number", read_only=True)
     result_id = serializers.UUIDField(read_only=True)
+    # From the card's result: the section and figures recorded at processing
+    # time. Null on a term-consolidated card, which has no single result.
+    section_id = serializers.UUIDField(
+        source="result.section_id", read_only=True, allow_null=True, default=None
+    )
+    section_name = serializers.CharField(
+        source="result.section.name", read_only=True, allow_null=True, default=None
+    )
+    percentage = serializers.DecimalField(
+        source="result.percentage",
+        max_digits=5,
+        decimal_places=2,
+        read_only=True,
+        allow_null=True,
+        default=None,
+    )
+    grade = serializers.CharField(
+        source="result.grade_band.label", read_only=True, allow_null=True, default=None
+    )
     file_id = serializers.UUIDField(read_only=True, allow_null=True)
 
     class Meta:
@@ -778,7 +825,13 @@ class ReportCardSerializer(serializers.ModelSerializer):
             "exam_id",
             "term_id",
             "student_id",
+            "student_name",
+            "admission_number",
             "result_id",
+            "section_id",
+            "section_name",
+            "percentage",
+            "grade",
             "file_id",
             "class_teacher_remarks",
             "principal_remarks",
@@ -794,7 +847,13 @@ class ReportCardSerializer(serializers.ModelSerializer):
             "exam_id",
             "term_id",
             "student_id",
+            "student_name",
+            "admission_number",
             "result_id",
+            "section_id",
+            "section_name",
+            "percentage",
+            "grade",
             "file_id",
             "attendance_summary",
             "version",
@@ -827,6 +886,34 @@ class SendResultsBackSerializer(serializers.Serializer):
     """
 
     reason = serializers.CharField(max_length=500)
+
+
+class ResultsApprovedSerializer(serializers.Serializer):
+    """`:approve-results`' 200: the rows this approval moved."""
+
+    approved = serializers.IntegerField()
+
+
+class ResultsSentBackSerializer(serializers.Serializer):
+    """`:send-results-back`' 200: the rows reopened, and the reason given."""
+
+    reopened = serializers.IntegerField()
+    reason = serializers.CharField()
+
+
+class ResultsPublishedSerializer(serializers.Serializer):
+    """`:publish-results`' 200. `published_ids` are the rows this call moved."""
+
+    published = serializers.IntegerField()
+    withheld = serializers.IntegerField()
+    published_ids = serializers.ListField(child=serializers.UUIDField())
+
+
+class ReportCardsPublishedSerializer(serializers.Serializer):
+    """`:publish-report-cards`' 200: the cards this call moved."""
+
+    published = serializers.IntegerField()
+    published_ids = serializers.ListField(child=serializers.UUIDField())
 
 
 class QuestionBankSerializer(serializers.ModelSerializer):

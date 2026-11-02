@@ -311,6 +311,18 @@ E2E_PRINCIPAL_PERMISSIONS = [
     # stops the escalation being theatre.
     "attendance.leave-request.view",
     "attendance.leave-request.approve",
+    # The examinations approver: §4 bars the processor of the latest run from
+    # approving it, so the results journey needs a second identity to approve,
+    # publish and write principal remarks on the report cards. The schedule key
+    # feeds the Results and Report cards tabs' section filter (`/exam-schedules`).
+    "exams.exam.view",
+    "exams.schedule.view",
+    "exams.marks.view",
+    "exams.result.view",
+    "exams.result.approve",
+    "exams.result.publish",
+    "exams.report-card.view",
+    "exams.report-card.publish",
 ]
 # A `class_teacher` identity, and it exists for one reason: **§4 grants
 # `attendance.student-attendance.mark` to `teacher`/`class_teacher` and to nobody
