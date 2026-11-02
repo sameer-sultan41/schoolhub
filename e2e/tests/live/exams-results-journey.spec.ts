@@ -55,6 +55,9 @@ test.describe("exam results approval (real API, principal)", () => {
     await dashboardPage.navGroup("Examinations").click();
     await dashboardPage.navLink("Exams").click();
     await examsPage.search.fill(exam.examName);
+    // The search writes the URL after a debounce; clicking first lets that late write pull the
+    // page back to the list, so wait for the filter to land as a person waits for the results.
+    await expect(page).toHaveURL(/[?&]search=/);
     await examsPage.examLink(exam.examName).click();
     await examResultsPage.tab("Results").click();
 

@@ -238,6 +238,12 @@ either this file or `project-status.md`.
   `:send-results-back`, `:publish-results`, `/results/{id}:withhold`, `:generate-report-cards` and
   `:publish-report-cards`, each with an out-of-scope 404 test. **PR E (question banks) converts
   `get_bank`** through `QuestionBankViewSet`'s own scope.
+- **A list's debounced URL write can undo a click made inside the debounce.** Typing in a
+  `useDataGridUrlState` search box and clicking a row link before the debounce fires navigates,
+  then the late `replaceState` writes the list's `?search=` URL and the router returns to the list
+  (seen in e2e-live run 41476591369's trace). The live results journey now waits for the filter
+  to land. The fix belongs in `useUrlParams`/`useDataGridUrlState`: drop a pending write once a
+  navigation starts, or flush it on the link's click.
 - **An `assigned` holder of `exams.result.approve` or `.publish` acts on the whole exam.** PR D
   resolves `:approve-results`, `:send-results-back`, `:publish-results` and `:publish-report-cards`
   through `scoped_exam`, which admits a caller who teaches *any* section of the exam; the action
