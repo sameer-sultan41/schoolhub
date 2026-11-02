@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { TableCell, TableRow } from "@schoolhub/ui";
 
 import { GroupTableCard } from "../group-table-card";
@@ -27,8 +27,7 @@ describe("GroupTableCard", () => {
     expect(screen.getByText("Grade 5")).toBeInTheDocument();
     const headers = screen.getAllByRole("columnheader");
     expect(headers.map((header) => header.textContent)).toEqual(["Subject", "Room"]);
-    const rows = screen.getAllByRole("row");
-    expect(within(rows[1]).getByText("Mathematics")).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /Mathematics/ })).toBeInTheDocument();
   });
 
   it("adds an empty trailing header for the row actions only when asked", () => {
