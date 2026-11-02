@@ -468,50 +468,41 @@ def issue_admit_cards(*, exam: Exam, actor_id: uuid.UUID) -> dict:
     A **revoked** card is deliberately not re-created. Revocation is a policy
     decision someone made (§5.3's fee-clearance case), and a top-up run
     silently reinstating it would undo that decision without anyone asking.
+
+    The exam row is locked first, so two concurrent runs are serialised: the
+    second waits, then reads the first one's cards as `existing` and issues 0.
+    Without the lock both read the same `existing` set and both reported N.
     """
+    exam = lock_exam(exam)
     assert_exam_is_issuable(exam)
 
     students = admit_card_candidates(exam=exam)
     existing = set(AdmitCard.objects.alive().filter(exam=exam).values_list("student_id", flat=True))
     missing = [student for student in students if student.pk not in existing]
 
-    created = [
-        AdmitCard(
-            tenant=exam.tenant,
-            exam=exam,
-            student=student,
-            admit_card_no=admit_card_number(exam=exam, admission_number=student.admission_number),
-            status=AdmitCardStatus.GENERATED,
-            created_by=actor_id,
-            updated_by=actor_id,
-        )
-        for student in missing
-    ]
-    # `ignore_conflicts`: two exam staff pressing the button at once both read
-    # the same "missing" set, and `admit_cards_one_per_student_per_exam` lets
-    # exactly one of them insert each row. The loser's duplicates are dropped
-    # rather than turning a legitimate retry into a 409 — the same reasoning
-    # `attendance.bulk_mark_student_attendance` applies to a re-submitted
-    # register.
-    AdmitCard.objects.bulk_create(created, ignore_conflicts=True)
-
-    # Counted from the database, not from `len(created)`. Review found the
-    # latter overstating under exactly the race `ignore_conflicts` exists to
-    # absorb: the loser of a concurrent double-issue attempted N rows, inserted
-    # none, and reported N. `bulk_create(ignore_conflicts=True)` cannot say
-    # which of its objects landed — on PostgreSQL the returned instances have
-    # no reliable primary keys — so the honest number comes from a re-count.
-    total_now = AdmitCard.objects.alive().filter(exam=exam).count()
-    issued = total_now - len(existing)
+    # No `ignore_conflicts`: this is the only writer and the lock serialises it,
+    # so a unique violation here is a real defect and must raise.
+    AdmitCard.objects.bulk_create(
+        [
+            AdmitCard(
+                tenant=exam.tenant,
+                exam=exam,
+                student=student,
+                admit_card_no=admit_card_number(
+                    exam=exam, admission_number=student.admission_number
+                ),
+                status=AdmitCardStatus.GENERATED,
+                created_by=actor_id,
+                updated_by=actor_id,
+            )
+            for student in missing
+        ]
+    )
 
     return {
-        "issued": issued,
+        "issued": len(missing),
         "already_issued": len(existing),
         "students": len(students),
-        # What this run *tried* to create, so a caller that sees `issued` come
-        # back lower knows a concurrent run took the difference rather than
-        # that students were skipped.
-        "attempted": len(created),
     }
 
 

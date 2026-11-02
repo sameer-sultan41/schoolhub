@@ -602,8 +602,10 @@ And four smaller ones: `DELETE` on a sitting fell through to the mixin's soft
 delete with no `assert_schedule_is_editable`, making it the way around a rule
 `PATCH` enforced; `exams.admit-card-issued` was registered with templates and
 documented as wired while nothing called `notify()` for it; `issue_admit_cards`
-reported `len(created)` rather than the change in row count, which overstates
-under exactly the race `ignore_conflicts=True` exists to absorb; and the render
+reported `len(created)`, which overstated when two runs raced (both read the
+same `existing` set). It now locks the exam row (`lock_exam`) before reading
+`existing`, so a concurrent run waits and reports 0, and `issued` is simply the
+rows it inserted, with no `ignore_conflicts`; and the render
 job called the single-card `student_sittings` inside its loop — two queries per
 card, so three hundred cards was six hundred round trips, the shape
 `conflicts.collect_scope`'s own docstring warns against. `services.sittings_by_student`
