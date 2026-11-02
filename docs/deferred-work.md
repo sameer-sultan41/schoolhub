@@ -230,13 +230,16 @@ either this file or `project-status.md`.
     staff register marks (Present, Absent, Late, Half day), though the server accepts every
     staff status but `on_leave`. Neither the register nor a correction can record a staff day
     as a holiday from the dashboard; the school calendar's holidays refuse marking instead.
-- **Twelve older `examinations` actions look up their parent exam or exam-subject without the
-  caller's record scope** (`get_object_or_404(<Model>.objects.alive(), ...)` in
-  `apps/api/apps/examinations/views.py`), the pattern lesson L34 records. PR B fixed the three
-  it touched (`:publish-schedule`, `:issue-admit-cards`, `schedule-conflicts`); the rest are
-  gated by write keys teachers do not hold, so the exposure is narrow, but each should resolve
-  through `scope_queryset` with an out-of-scope 404 test. The marks, results and report-card
-  PRs (C, D) touch most of them and should convert each as they go.
+- **Ten older `examinations` actions look up their parent without the caller's record scope**
+  (`get_object_or_404(<Model>.objects.alive(), ...)` in `apps/api/apps/examinations/views.py`),
+  the pattern lesson L34 records: `:lock-marks` and `:unlock-marks` (exam-subject),
+  `marks-progress`, `:approve-results`, `:send-results-back`, `:publish-results` and
+  `:publish-report-cards` (exam), `results/{id}:withhold` (result), and the nested grade-band and
+  question routes' parent scale and bank. PR B fixed five (`:publish-schedule`,
+  `:issue-admit-cards`, `schedule-conflicts`, `:process-results`, `:generate-report-cards`); the
+  rest are gated by write keys teachers do not hold, so the exposure is narrow, but each should
+  resolve through `scope_queryset` with an out-of-scope 404 test. The marks, results and
+  report-card PRs (C, D) touch most of them and should convert each as they go.
 - **The examinations dashboard's PR A (grading scales, exams, their subjects) left these out:**
   - **`Section`, `Class` and `AcademicSession` have no `assigned`-scope hooks.** An
     `assigned` teacher can read the exams they teach, but the reference lists a picker reads
