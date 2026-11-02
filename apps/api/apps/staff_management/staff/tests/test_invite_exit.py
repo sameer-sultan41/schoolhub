@@ -8,12 +8,12 @@ from __future__ import annotations
 
 import datetime
 
-from django.core.cache import cache
 from rest_framework import status
 
 from apps.school_organization.tests.factories import ClassFactory, SectionFactory, UserFactory
 from apps.staff_management.tests.base import StaffManagementAPITestCase
 from apps.staff_management.tests.factories import DEFAULT_JOINING_DATE, StaffFactory
+from core.rbac.cache import evict_rbac_caches
 from core.rbac.models import Permission, Role, RolePermission, User, UserRole
 from core.rbac.registry import registry
 from core.tenancy.context import tenant_context
@@ -55,7 +55,7 @@ class InviteTests(StaffManagementAPITestCase):
             NotificationChannel,
         )
 
-        self.allow("staff.staff.update")
+        self.allow("staff.staff.update", "staff.staff.view")
         with tenant_context(self.tenant.id):
             staff = StaffFactory(
                 tenant=self.tenant, campus=self.campus, email="welcome@example.test"
@@ -88,7 +88,7 @@ class InviteTests(StaffManagementAPITestCase):
         """The account and its roles are the actual outcome of `:invite`."""
         from unittest.mock import patch
 
-        self.allow("staff.staff.update")
+        self.allow("staff.staff.update", "staff.staff.view")
         with tenant_context(self.tenant.id):
             staff = StaffFactory(tenant=self.tenant, campus=self.campus, email="ok@example.test")
 
@@ -104,7 +104,7 @@ class InviteTests(StaffManagementAPITestCase):
             self.assertTrue(User.objects.filter(pk=staff.user_id).exists())
 
     def test_inviting_an_already_linked_staff_member_is_a_conflict(self) -> None:
-        self.allow("staff.staff.update")
+        self.allow("staff.staff.update", "staff.staff.view")
         with tenant_context(self.tenant.id):
             linked_user = UserFactory(tenant=self.tenant)
             staff = StaffFactory(
@@ -119,7 +119,7 @@ class InviteTests(StaffManagementAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
 
     def test_inviting_a_staff_member_with_no_email_is_rejected(self) -> None:
-        self.allow("staff.staff.update")
+        self.allow("staff.staff.update", "staff.staff.view")
         with tenant_context(self.tenant.id):
             staff = StaffFactory(tenant=self.tenant, campus=self.campus, email=None)
 
@@ -156,7 +156,7 @@ class ExitTests(StaffManagementAPITestCase):
         self.assertEqual(data["exit_reason"], "Resigned to relocate.")
 
     def test_exit_date_before_joining_date_is_rejected(self) -> None:
-        self.allow("staff.staff.delete")
+        self.allow("staff.staff.delete", "staff.staff.view")
         with tenant_context(self.tenant.id):
             staff = StaffFactory(
                 tenant=self.tenant, campus=self.campus, joining_date=DEFAULT_JOINING_DATE
@@ -175,7 +175,7 @@ class ExitTests(StaffManagementAPITestCase):
         self.assertEqual(response.json()["error"]["code"], "domain_rule_violation")
 
     def test_exiting_an_already_exited_staff_member_is_a_conflict(self) -> None:
-        self.allow("staff.staff.delete")
+        self.allow("staff.staff.delete", "staff.staff.view")
         with tenant_context(self.tenant.id):
             staff = StaffFactory(tenant=self.tenant, campus=self.campus)
         exit_url = f"/api/v1/staff/{staff.pk}:exit"
@@ -187,7 +187,7 @@ class ExitTests(StaffManagementAPITestCase):
         self.assertEqual(second.status_code, status.HTTP_409_CONFLICT)
 
     def test_exit_is_blocked_while_the_sole_class_teacher_of_a_section(self) -> None:
-        self.allow("staff.staff.delete")
+        self.allow("staff.staff.delete", "staff.staff.view")
         with tenant_context(self.tenant.id):
             staff = StaffFactory(tenant=self.tenant, campus=self.campus)
             school_class = ClassFactory(tenant=self.tenant)
@@ -209,7 +209,7 @@ class ExitTests(StaffManagementAPITestCase):
 
     def test_exit_succeeds_when_not_the_class_teacher_of_any_section(self) -> None:
         """Positive control: the block above is about class-teacher assignment, not exit itself."""
-        self.allow("staff.staff.delete")
+        self.allow("staff.staff.delete", "staff.staff.view")
         with tenant_context(self.tenant.id):
             staff = StaffFactory(tenant=self.tenant, campus=self.campus)
             school_class = ClassFactory(tenant=self.tenant)
@@ -256,7 +256,7 @@ class DenyRestrictedPrincipalsTests(StaffManagementAPITestCase):
             )
             RolePermission.objects.create(role=role, permission=permission)
         UserRole.objects.create(user=self.user, role=role, tenant=self.tenant)
-        cache.delete(f"perm-keys:{self.user.pk}")
+        evict_rbac_caches([self.user.pk])
 
     def test_a_restricted_principal_is_denied_every_staff_endpoint_even_with_a_staff_key(
         self,

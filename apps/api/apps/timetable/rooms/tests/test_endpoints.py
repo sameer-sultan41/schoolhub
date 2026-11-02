@@ -70,7 +70,7 @@ class RoomEndpointTests(TimetableAPITestCase):
         self.assertEqual(response.json()["data"]["capacity"], 25)
 
     def test_deleting_a_room_is_a_soft_delete(self) -> None:
-        self.allow("timetable.room.delete")
+        self.allow("timetable.room.delete", "timetable.timetable.view")
 
         response = self.client.delete(f"/api/v1/rooms/{self.room.pk}")
 
@@ -245,7 +245,7 @@ class RoomDeleteGuardTests(TimetableAPITestCase):
 
     def setUp(self) -> None:
         super().setUp()
-        self.allow("timetable.room.delete")
+        self.allow("timetable.room.delete", "timetable.timetable.view")
 
     def test_a_room_a_current_cell_names_is_refused(self) -> None:
         self.make_slot(room=self.room)

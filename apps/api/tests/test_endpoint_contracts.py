@@ -11,6 +11,7 @@ from django.test import SimpleTestCase, TestCase
 from django.urls import get_resolver
 from rest_framework.permissions import AllowAny
 
+from core.api.viewsets import TenantScopedViewSetMixin
 from core.rbac.permissions import AnyOf, HasPermissionKey, declared_keys
 from core.rbac.registry import registry
 from tests.source_tree import source_modules
@@ -89,9 +90,12 @@ class EndpointContractTests(TestCase):
             keys: set[str] = set()
             for declared in getattr(view, "required_permission_map", {}).values():
                 keys.update(declared_keys(declared))
-            single = getattr(view, "required_permission", None)
-            if single:
-                keys.update(declared_keys(single))
+            for single in (
+                getattr(view, "required_permission", None),
+                getattr(view, "scope_read_permission", None),
+            ):
+                if single:
+                    keys.update(declared_keys(single))
             unknown.extend(f"{route}: {key}" for key in keys if key not in registry)
         self.assertEqual(unknown, [], f"Unregistered permission keys referenced: {unknown}")
 
@@ -109,8 +113,8 @@ class EndpointContractTests(TestCase):
 class WritePermissionContractTests(TestCase):
     """A write is never authorised by a read key.
 
-    `HasPermissionKey._required_key` looks the action up in `required_permission_map` and falls
-    back to `required_permission` when it is missing. When that fallback is the resource's
+    `required_declaration` looks the action up in `required_permission_map` and falls back
+    to `required_permission` when it is missing. When that fallback is the resource's
     `.view` key, a PATCH or colon-action left out of the map is open to everyone who may *read*
     the resource; when there is no fallback, the route rejects every request. Neither shows up
     in a happy-path test, so this resolves the key for every write route the way the
@@ -136,7 +140,7 @@ class WritePermissionContractTests(TestCase):
             # The fallback may be a key or an `AnyOf`; a falsy one rejects everyone.
             fallback_keys = declared_keys(fallback) if fallback else ()
             for method, action in writes:
-                # As in `_required_key`: an action that is in the map is decided by its entry.
+                # As in `required_declaration`: an action in the map is decided by its entry.
                 if action in mapping:
                     continue
                 if not fallback_keys or any(k.rpartition(".")[2] == "view" for k in fallback_keys):
@@ -174,53 +178,288 @@ class AnyOfContractTests(TestCase):
         self.assertEqual(offenders, [], f"AnyOf lists a read key: {offenders}")
 
 
-def _inline_permission_keys() -> list[tuple[str, int, str]]:
-    """Every permission-key string literal checked inline in app code.
+class DefaultRoleReadKeyTests(SimpleTestCase):
+    """A default role that may act on a row may also read it (ADR-0031 decision 3).
+
+    The viewset mixin resolves an action's target under the read key and the action's
+    own key, so a default role holding the action key without the read key gets a 404
+    on every row. That is a gap in the role's grants, not in the route: an approver
+    must be able to see what it approves.
+    """
+
+    def test_a_default_role_holding_an_action_key_holds_its_read_key(self):
+        held: dict[str, set[str]] = {}
+        for spec in registry.all():
+            for role in spec.default_roles:
+                held.setdefault(role, set()).add(spec.key)
+        offenders: set[str] = set()
+        for route, view in _api_views():
+            if not issubclass(view, TenantScopedViewSetMixin):
+                continue
+            read = view.scope_read_permission or getattr(view, "required_permission", None)
+            if not read:
+                continue
+            read_keys = set(declared_keys(read))
+            for action, declared in (getattr(view, "required_permission_map", None) or {}).items():
+                if not declared or action in view.scope_read_exempt_actions:
+                    continue
+                action_keys = set(declared_keys(declared))
+                if action_keys == read_keys:
+                    continue
+                offenders.update(
+                    f"{role}: {view.__name__}.{action} ({route}) lacks {sorted(read_keys)}"
+                    for role, keys in held.items()
+                    if keys & action_keys and not keys & read_keys
+                )
+        self.assertEqual(sorted(offenders), [], "\n".join(sorted(offenders)))
+
+
+def _module_string_constants() -> dict[str, dict[str, str]]:
+    """Each module's top-level `NAME = "<str>"` assignments, by dotted module name."""
+    constants: dict[str, dict[str, str]] = {}
+    for module in source_modules():
+        names = constants.setdefault(module.name, {})
+        for node in module.tree.body:
+            target = node.target if isinstance(node, ast.AnnAssign) else None
+            if isinstance(node, ast.Assign) and len(node.targets) == 1:
+                target = node.targets[0]
+            value = getattr(node, "value", None)
+            if (
+                isinstance(target, ast.Name)
+                and isinstance(value, ast.Constant)
+                and isinstance(value.value, str)
+            ):
+                names[target.id] = value.value
+    return constants
+
+
+# Calls that return a route's own declaration, which the URLconf tests above validate.
+ROUTE_DECLARATION_CALLS = frozenset(
+    {"route_permission", "required_declaration", "scope_read_declaration"}
+)
+
+# Keys that are data, not code, so no spelling in the source can be checked. Each entry is
+# (path, the argument as written); the test fails on an entry that no longer occurs.
+DATA_KEY_SITES = frozenset(
+    {
+        # A leave-approval step's stored key, written by `student_leave_chain` from a
+        # registered constant when the step is created.
+        ("apps/attendance/services.py", "step.required_permission"),
+    }
+)
+
+type _Function = ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda
+_FUNCTIONS = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+
+
+def _parameters(function: _Function) -> set[str]:
+    return {node.arg for node in ast.walk(function.args) if isinstance(node, ast.arg)}
+
+
+def _bindings(function: _Function, name: str) -> list[ast.expr] | None:
+    """What `name` is bound to inside `function` (not nested ones), or None if unbound.
+
+    A `for name in (a, b)` binds each element; `name = value` binds the value. A loop over
+    anything but a literal tuple or list binds something this check cannot read.
+    """
+    found: list[ast.expr] = []
+    bound = False
+    stack = list(ast.iter_child_nodes(function))
+    while stack:
+        node = stack.pop()
+        if isinstance(node, _FUNCTIONS):
+            continue
+        if isinstance(node, ast.For) and isinstance(node.target, ast.Name):
+            if node.target.id == name:
+                bound = True
+                if isinstance(node.iter, (ast.Tuple, ast.List)):
+                    items = ast.iter_child_nodes(node.iter)
+                    found.extend(item for item in items if isinstance(item, ast.expr))
+                else:
+                    found.append(node.iter)
+        elif (
+            isinstance(node, ast.Assign)
+            and any(isinstance(target, ast.Name) and target.id == name for target in node.targets)
+        ) or (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == name
+            and node.value is not None
+        ):
+            bound = True
+            found.append(node.value)
+        stack.extend(ast.iter_child_nodes(node))
+    return found if bound else None
+
+
+def _resolve_key(
+    node: ast.expr,
+    functions: list[_Function],
+    visible: dict[str, str],
+    resolving: frozenset[str] = frozenset(),
+) -> tuple[list[str], list[str]]:
+    """The keys one key argument names, and the parts of it that cannot be read.
+
+    A literal, a module-level constant (this module's, or imported by name), `AnyOf(...)`
+    of those, a route's own declaration (`ROUTE_DECLARATION_CALLS`), a parameter of an
+    enclosing function passed through, or a local bound to any of these. Anything else
+    (`services.KEY`, a relative import, a local bound to something else) is unreadable.
+    """
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return [node.value], []
+    if isinstance(node, ast.Call):
+        func = node.func
+        called = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
+        if called in ROUTE_DECLARATION_CALLS:
+            return [], []
+        if called == "AnyOf":
+            return _resolve_all(node.args, functions, visible, resolving)
+    if isinstance(node, ast.Name) and node.id not in resolving:
+        if node.id in visible:
+            return [visible[node.id]], []
+        for index in range(len(functions) - 1, -1, -1):
+            function = functions[index]
+            values = _bindings(function, node.id)
+            if values is not None:
+                # A name bound to itself (`key = key or X`) is not followed twice.
+                return _resolve_all(values, functions[: index + 1], visible, resolving | {node.id})
+            if node.id in _parameters(function):
+                return [], []
+    return [], [ast.unparse(node)]
+
+
+def _resolve_all(
+    nodes: list[ast.expr],
+    functions: list[_Function],
+    visible: dict[str, str],
+    resolving: frozenset[str] = frozenset(),
+) -> tuple[list[str], list[str]]:
+    keys: list[str] = []
+    unreadable: list[str] = []
+    for node in nodes:
+        found, missing = _resolve_key(node, functions, visible, resolving)
+        keys.extend(found)
+        unreadable.extend(missing)
+    return keys, unreadable
+
+
+def _key_argument(node: ast.Call) -> ast.expr | None:
+    """The key a scope or privilege check is asked about, or None for any other call."""
+    func = node.func
+    called = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
+    keyword = {kw.arg: kw.value for kw in node.keywords if kw.arg}
+    if called in ("holds_key_for", "holds_key_for_row"):
+        return node.args[1] if len(node.args) > 1 else keyword.get("permission")
+    if called == "scope_queryset":
+        return keyword.get("permission")
+    if called == "scopes_for":
+        return node.args[1] if len(node.args) > 1 else keyword.get("declared")
+    return None
+
+
+def _inline_permission_keys() -> tuple[list[tuple[str, int, str]], list[str]]:
+    """Every permission key checked inline in app code, and every one that cannot be read.
 
     `required_permission` / `required_permission_map` are validated through the URLconf above;
     keys checked inside a method body, serializer or task never reach it, so they are found by
-    reading the source. Two forms: `has_permission_key(user, "<key>")` (or `key="<key>"`) and
-    `"<key>" in effective_permission_keys(user)`.
+    reading the source: the key argument of `holds_key_for`, `holds_key_for_row`,
+    `scope_queryset` (`permission=`) and `scopes_for`, and `"<key>" in
+    effective_permission_keys(user)`. `_resolve_key` says which spellings it reads; a
+    constant imported by name (`from x import KEY`) resolves to its string, so naming a key
+    once does not hide it from this check. Returns `(path, line, key)` for each key read, and
+    `"path:line expression"` for each argument that could not be read and is not in
+    `DATA_KEY_SITES`.
     """
     found: list[tuple[str, int, str]] = []
+    unreadable: list[str] = []
+    constants = _module_string_constants()
+    for module in source_modules():
+        # This module's own constants, then every `from x import NAME` that names one.
+        visible = dict(constants.get(module.name, {}))
+        for node in ast.walk(module.tree):
+            if isinstance(node, ast.ImportFrom) and node.module and not node.level:
+                for alias in node.names:
+                    value = constants.get(node.module, {}).get(alias.name)
+                    if value is not None:
+                        visible[alias.asname or alias.name] = value
+        _collect_keys(module.tree, [], module.relative, visible, found, unreadable)
+    return found, unreadable
 
-    def called(node: ast.AST, name: str) -> bool:
-        if not isinstance(node, ast.Call):
-            return False
-        func = node.func
-        return (func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)) == name
 
-    def literal(node: ast.AST | None) -> str | None:
-        is_str = isinstance(node, ast.Constant) and isinstance(node.value, str)
-        return node.value if is_str else None
+def _collect_keys(
+    node: ast.AST,
+    functions: list[_Function],
+    path: str,
+    visible: dict[str, str],
+    found: list[tuple[str, int, str]],
+    unreadable: list[str],
+) -> None:
+    """Walk `node`, keeping the chain of enclosing functions a local name resolves in."""
+    inner = [*functions, node] if isinstance(node, _FUNCTIONS) else functions
+    argument: ast.expr | None = None
+    if isinstance(node, ast.Call):
+        argument = _key_argument(node)
+    elif (
+        isinstance(node, ast.Compare)
+        and any(isinstance(op, (ast.In, ast.NotIn)) for op in node.ops)
+        and any(_calls(c, "effective_permission_keys") for c in node.comparators)
+    ):
+        argument = node.left
+    if argument is not None:
+        keys, missing = _resolve_key(argument, inner, visible)
+        line = getattr(node, "lineno", 0)
+        found.extend((path, line, key) for key in keys)
+        unreadable.extend(
+            f"{path}:{line} {expression}"
+            for expression in missing
+            if (path, expression) not in DATA_KEY_SITES
+        )
+    for child in ast.iter_child_nodes(node):
+        _collect_keys(child, inner, path, visible, found, unreadable)
 
+
+def _calls(node: ast.AST, name: str) -> bool:
+    if not isinstance(node, ast.Call):
+        return False
+    func = node.func
+    return (func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)) == name
+
+
+def _data_key_sites_in_use() -> set[tuple[str, str]]:
+    """The `DATA_KEY_SITES` entries the source still contains."""
+    in_use: set[tuple[str, str]] = set()
     for module in source_modules():
         for node in ast.walk(module.tree):
-            key = None
-            if called(node, "has_permission_key"):
-                positional = node.args[1] if len(node.args) > 1 else None
-                keyword = next((kw.value for kw in node.keywords if kw.arg == "key"), None)
-                key = literal(positional or keyword)
-            elif (
-                isinstance(node, ast.Compare)
-                and any(isinstance(op, (ast.In, ast.NotIn)) for op in node.ops)
-                and any(called(c, "effective_permission_keys") for c in node.comparators)
-            ):
-                key = literal(node.left)
-            if key is not None:
-                found.append((module.relative, node.lineno, key))
-    return found
+            argument = _key_argument(node) if isinstance(node, ast.Call) else None
+            if argument is not None and (module.relative, ast.unparse(argument)) in DATA_KEY_SITES:
+                in_use.add((module.relative, ast.unparse(argument)))
+    return in_use
 
 
 class InlinePermissionKeyTests(SimpleTestCase):
     def test_inline_permission_key_literals_exist_in_the_registry(self):
         """A mistyped inline key silently denies (or notifies nobody) — it must be registered."""
-        keys = _inline_permission_keys()
+        keys, _ = _inline_permission_keys()
         self.assertTrue(keys, "expected at least one inline permission check to verify")
         unregistered = [f"{path}:{line} {key!r}" for path, line, key in keys if key not in registry]
         self.assertEqual(
             unregistered, [], "Unregistered inline permission keys:\n" + "\n".join(unregistered)
         )
+
+    def test_every_inline_permission_key_can_be_read(self):
+        """A key this check cannot read is a key it cannot verify, so it is refused rather
+        than skipped. Spell it as a literal, a constant imported by name, or a parameter
+        passed through; a key that is data goes in `DATA_KEY_SITES` with its reason."""
+        _, unreadable = _inline_permission_keys()
+        self.assertEqual(
+            unreadable,
+            [],
+            "Inline permission keys this test cannot read:\n" + "\n".join(unreadable),
+        )
+
+    def test_every_data_key_site_still_exists(self):
+        """`DATA_KEY_SITES` may only shrink: an entry whose call is gone must be removed."""
+        self.assertEqual(_data_key_sites_in_use(), set(DATA_KEY_SITES))
 
 
 class PermissionRegistryTests(TestCase):

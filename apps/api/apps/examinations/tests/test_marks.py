@@ -27,10 +27,15 @@ from apps.examinations import services, tasks
 from apps.examinations.models import ExamStatus, Marks, MarksStatus
 from apps.examinations.tests.base import ExaminationsAPITestCase
 from apps.examinations.tests.factories import (
+    CampusFactory,
     ExamFactory,
     ExamSubjectFactory,
     MarksFactory,
+    SectionFactory,
+    StaffFactory,
+    StudentEnrollmentFactory,
     StudentFactory,
+    TeacherAllocationFactory,
     UserFactory,
     authenticate,
     grant,
@@ -358,6 +363,28 @@ class AllocationScopeTests(MarksTestCase):
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
         self.assertIn("not currently allocated", str(response.json()))
 
+    def test_unrelated_all_role_does_not_skip_allocation_check(self) -> None:
+        """Only the roles granting `exams.marks.create` decide the early return.
+
+        The teacher's marks role is `assigned`; an `all` role for another key must
+        not lift them past the allocation check. Against the key-blind union this
+        teacher looked `all`-scoped and the unallocated grid was saved.
+        """
+        with tenant_context(self.tenant.id):
+            stranger_user = UserFactory(tenant=self.tenant)
+            from apps.examinations.tests.factories import StaffFactory
+
+            StaffFactory(tenant=self.tenant, campus=self.campus, user_id=stranger_user.pk)
+        grant(stranger_user, "exams.exam.view", scope=RecordScope.ALL)
+        client = self._teacher_client(stranger_user)
+
+        response = self.submit(client=client)
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertIn("not currently allocated", str(response.json()))
+        with tenant_context(self.tenant.id):
+            self.assertFalse(Marks.objects.filter(exam_subject=self.exam_subject).exists())
+
     def test_an_account_with_no_staff_row_is_refused(self) -> None:
         with tenant_context(self.tenant.id):
             orphan = UserFactory(tenant=self.tenant)
@@ -411,6 +438,145 @@ class AllocationScopeTests(MarksTestCase):
             subject=subject,
         )
         return subject
+
+
+class CampusBMarksTestCase(MarksTestCase):
+    """The base class gains a campus-B section and one student enrolled in it."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        with tenant_context(self.tenant.id):
+            self.campus_b = CampusFactory(tenant=self.tenant)
+            self.section_b = SectionFactory(
+                tenant=self.tenant, school_class=self.school_class, campus=self.campus_b
+            )
+            self.student_b = self._enrol(campus=self.campus_b, section=self.section_b)
+
+    def _enrol(self, *, campus, section):
+        student = StudentFactory(tenant=self.tenant, campus=campus)
+        StudentEnrollmentFactory(
+            tenant=self.tenant,
+            student=student,
+            academic_session=self.session,
+            school_class=self.school_class,
+            section=section,
+        )
+        return student
+
+    def _client(self, user) -> APIClient:
+        client = APIClient()
+        authenticate(client, user)
+        return client
+
+    def _marks_written(self) -> int:
+        with tenant_context(self.tenant.id):
+            return Marks.objects.alive().filter(exam_subject=self.exam_subject).count()
+
+
+class EntryRecordScopeTests(CampusBMarksTestCase):
+    """Which students a marker may write is `exams.marks.create`'s record scope.
+
+    The exam-subject is resolved unscoped (a class has no campus), so the scope
+    lives on the students. Against the old code a campus-scoped marker returned
+    early and every enrolled student of the class was eligible, so a campus-A
+    marker wrote campus-B marks, and an allocated teacher wrote marks for a
+    section they do not teach.
+    """
+
+    def _row(self, student) -> dict:
+        return {"student_id": str(student.pk), "theory_marks": "55.00"}
+
+    def _assert_rejected_alone(self, response, *, index: int, student) -> None:
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        rows = response.json()["error"]["meta"]["rows"]
+        self.assertEqual(
+            [(row["index"], row["student_id"], row["field"]) for row in rows],
+            [(index, str(student.pk), "student_id")],
+        )
+        self.assertEqual(self._marks_written(), 0)
+
+    def _campus_a_marker(self):
+        with tenant_context(self.tenant.id):
+            marker = UserFactory(tenant=self.tenant)
+        grant(marker, "exams.marks.create", scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+        return marker
+
+    def test_a_campus_a_marker_cannot_write_a_campus_b_student(self) -> None:
+        marker = self._campus_a_marker()
+
+        response = self.submit(
+            [*self.entries(), self._row(self.student_b)], client=self._client(marker)
+        )
+
+        self._assert_rejected_alone(response, index=3, student=self.student_b)
+
+    def test_a_campus_a_marker_still_writes_their_own_campus(self) -> None:
+        marker = self._campus_a_marker()
+
+        response = self.submit(client=self._client(marker))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(self._marks_written(), 3)
+
+    def test_an_assigned_teacher_cannot_write_a_student_outside_their_sections(self) -> None:
+        """The allocation is to `self.section`, and the gate only checks the class."""
+        with tenant_context(self.tenant.id):
+            outsider = self._enrol(campus=self.campus, section=self.other_section)
+        grant(self.subject_teacher_user, "exams.marks.create", scope=RecordScope.ASSIGNED)
+
+        response = self.submit(
+            [*self.entries(), self._row(outsider)],
+            client=self._client(self.subject_teacher_user),
+        )
+
+        self._assert_rejected_alone(response, index=3, student=outsider)
+
+    def test_campus_a_plus_assigned_without_a_campus_b_allocation_cannot_write_campus_b(
+        self,
+    ) -> None:
+        """`deferred-work.md`'s case: the `campus` grant used to skip the allocation check."""
+        with tenant_context(self.tenant.id):
+            marker = UserFactory(tenant=self.tenant)
+            StaffFactory(tenant=self.tenant, campus=self.campus, user_id=marker.pk)
+        grant(marker, "exams.marks.create", scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+        grant(marker, "exams.marks.create", scope=RecordScope.ASSIGNED)
+
+        response = self.submit([self._row(self.student_b)], client=self._client(marker))
+
+        self._assert_rejected_alone(response, index=0, student=self.student_b)
+
+    def test_campus_a_plus_assigned_writes_the_campus_b_section_they_are_allocated(
+        self,
+    ) -> None:
+        """The two grants are a union (ADR-0031 decision 7), not the narrower of the two."""
+        with tenant_context(self.tenant.id):
+            marker = UserFactory(tenant=self.tenant)
+            staff = StaffFactory(tenant=self.tenant, campus=self.campus, user_id=marker.pk)
+            TeacherAllocationFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                section=self.section_b,
+                subject=self.subject,
+                staff=staff,
+            )
+        grant(marker, "exams.marks.create", scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+        grant(marker, "exams.marks.create", scope=RecordScope.ASSIGNED)
+
+        response = self.submit(
+            [*self.entries(), self._row(self.student_b)], client=self._client(marker)
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(self._marks_written(), 4)
+
+    def test_an_all_scoped_marker_still_writes_every_campus_and_section(self) -> None:
+        with tenant_context(self.tenant.id):
+            outsider = self._enrol(campus=self.campus, section=self.other_section)
+
+        response = self.submit([*self.entries(), self._row(self.student_b), self._row(outsider)])
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(self._marks_written(), 5)
 
 
 class LockLifecycleTests(MarksTestCase):
@@ -688,6 +854,105 @@ class MarksImportTests(MarksTestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class ImportRecordScopeTests(CampusBMarksTestCase):
+    """Plan, ruling 14: the import matches rows only against the students its key reaches.
+
+    Against the old code the job read the whole class roll, so an `exam_staff` importer
+    scoped to campus A wrote campus-B marks by CSV that `:bulk-entry` now refuses.
+    """
+
+    def _upload(self, client, rows: list[str]):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        header = ",".join(services.MARKS_IMPORT_COLUMNS)
+        content = ("\n".join([header, *rows]) + "\n").encode()
+        return client.post(
+            MarksImportTests.URL,
+            {
+                "exam_subject_id": str(self.exam_subject.pk),
+                "file": SimpleUploadedFile("marks.csv", content, content_type="text/csv"),
+            },
+            format="multipart",
+        )
+
+    def _job(self, job_id: str):
+        from core.jobs.models import BackgroundJob
+
+        with tenant_context(self.tenant.id):
+            return BackgroundJob.objects.get(pk=job_id)
+
+    def test_the_import_job_carries_the_request_s_key(self) -> None:
+        response = self._upload(self.client, [f"{self.students[0].admission_number},60,,,,"])
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.json())
+        job = self._job(response.json()["data"]["job_id"])
+        self.assertEqual(job.payload.get("scope_permission"), ["exams.marks.import"])
+
+    def test_a_campus_a_importer_s_campus_b_row_is_rejected_as_unknown(self) -> None:
+        from core.jobs.models import JobStatus
+
+        with tenant_context(self.tenant.id):
+            importer = UserFactory(tenant=self.tenant)
+            own_number = self.students[0].admission_number
+            b_number = self.student_b.admission_number
+        grant(importer, "exams.marks.import", scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self._upload(
+                self._client(importer),
+                [f"{own_number},60,,,,", f"{b_number},70,,,,", "NOT-A-STUDENT,55,,,,"],
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.json())
+        job = self._job(response.json()["data"]["job_id"])
+        self.assertEqual(job.status, JobStatus.SUCCEEDED, job.error)
+        self.assertEqual(job.result["succeeded"], 1)
+        out_of_scope, unknown = job.result["errors"]
+        self.assertEqual(out_of_scope["field"], "admission_number")
+        # Worded exactly as an unknown number, so the row says nothing about the student.
+        self.assertEqual(
+            out_of_scope["issue"].replace(repr(b_number), "<n>"),
+            unknown["issue"].replace(repr("NOT-A-STUDENT"), "<n>"),
+        )
+        with tenant_context(self.tenant.id):
+            b_marks = Marks.objects.filter(exam_subject=self.exam_subject, student=self.student_b)
+            self.assertFalse(b_marks.exists())
+        self.assertEqual(self._marks_written(), 1)
+
+    def test_a_legacy_import_job_without_the_key_fails_closed(self) -> None:
+        """Queued before `scope_permission`: read under no key it would be empty, and
+        under every role's scope it would leak, so it fails and says what to do."""
+        import base64
+
+        from core.exports.scope import MISSING_SCOPE_PERMISSION
+        from core.jobs.models import JobStatus
+        from core.jobs.services import create_job
+
+        sheet = ",".join(services.MARKS_IMPORT_COLUMNS) + "\n"
+        sheet += f"{self.students[0].admission_number},60,,,,\n"
+        with tenant_context(self.tenant.id):
+            job = create_job(
+                tenant_id=self.tenant.pk,
+                job_type="exams.marks-import",
+                payload={
+                    "exam_subject_id": str(self.exam_subject.pk),
+                    "filename": "marks.csv",
+                    "content_base64": base64.b64encode(sheet.encode()).decode(),
+                    "requested_by": str(self.user.pk),
+                },
+                actor_id=self.user.pk,
+            )
+
+        tasks.import_marks_task(
+            tenant_id=str(self.tenant.pk), job_id=str(job.pk), actor_id=str(self.user.pk)
+        )
+
+        job = self._job(str(job.pk))
+        self.assertEqual(job.status, JobStatus.FAILED)
+        self.assertEqual(job.error, MISSING_SCOPE_PERMISSION)
+        self.assertEqual(self._marks_written(), 0)
 
 
 class NoDirectWriteTests(MarksTestCase):

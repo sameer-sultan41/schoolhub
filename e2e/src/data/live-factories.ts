@@ -273,3 +273,23 @@ export function buildLiveTerm(
     ...overrides,
   };
 }
+
+/**
+ * A guardian's thread about their child. The subject is run-unique because the delivery
+ * log is searched by it: push rows carry the rendered subject, and nothing else on them
+ * names the thread.
+ */
+export function buildLiveThread(studentId: string) {
+  const tag = uniqueTag();
+  return {
+    subject: `E2E thread ${tag}`,
+    thread_type: "guardian_school",
+    student_id: studentId,
+    body: `Is the field trip still on? (${tag})`,
+  };
+}
+
+/** An emergency broadcast's message, run-unique so its delivery rows can be found by body. */
+export function buildLiveBroadcastMessage(): string {
+  return `E2E drill ${uniqueTag()}: school closes at noon.`;
+}

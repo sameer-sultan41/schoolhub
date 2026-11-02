@@ -1,8 +1,8 @@
 """Lifecycle helpers for BackgroundJob rows.
 
-Kept out of the task bodies so a task only has to call `mark_running` /
-`mark_succeeded` / `mark_failed` / `update_progress` and never touches the
-model's field bookkeeping directly — the same "services own the rules"
+Kept out of the task bodies so a task only has to call `claim_queued_job` /
+`mark_running` / `mark_succeeded` / `mark_failed` / `update_progress` and never
+touches the model's field bookkeeping directly — the same "services own the rules"
 convention as every other app in this codebase.
 
 `mark_running`/`update_progress`/`mark_succeeded`/`mark_failed` each open their
@@ -79,6 +79,27 @@ def enqueue_job(*, job: BackgroundJob, task: Task) -> None:
             mark_failed(job=job, error=QUEUE_FAILURE_MESSAGE)
 
     transaction.on_commit(send)
+
+
+def claim_queued_job(*, tenant_id: uuid.UUID, job_id: uuid.UUID | str) -> BackgroundJob | None:
+    """Atomically move a queued job to running; ``None`` if it is not queued any more.
+
+    A compare-and-set: one conditional ``UPDATE ... WHERE status = 'queued'``, so of
+    two deliveries of the same task only one matches the row, and the other learns it
+    lost without a read-then-write window between them. ``mark_running`` is an
+    unconditional save and cannot tell a task whether it is the first to run.
+
+    ``.update()`` skips ``auto_now``, so ``updated_at`` is set here; ``updated_by``
+    is left alone, as ``mark_running`` leaves it.
+    """
+    now = timezone.now()
+    with tenant_atomic(tenant_id):
+        claimed = BackgroundJob.objects.filter(pk=job_id, status=JobStatus.QUEUED).update(
+            status=JobStatus.RUNNING, started_at=now, updated_at=now
+        )
+        if not claimed:
+            return None
+        return BackgroundJob.objects.get(pk=job_id)
 
 
 def mark_running(*, job: BackgroundJob) -> BackgroundJob:

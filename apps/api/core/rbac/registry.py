@@ -51,6 +51,7 @@ EXTRA_ACTIONS = frozenset(
         "impersonate",
         "request",
         "revoke",
+        "oversee",
     }
 )
 

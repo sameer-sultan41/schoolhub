@@ -588,6 +588,33 @@ class EscalationScopeTests(LeaveTestCase):
                     request=after_first, approve=True, approver_id=narrow_approver.pk
                 )
 
+    def test_unrelated_all_role_cannot_escalate_leave(self) -> None:
+        """Level 2 reads the scope of the roles granting the step's own key.
+
+        The approver's approve role is `assigned`; an `all` role for another key
+        does not make them wide enough. Against the key-blind union it did, and a
+        class teacher settled the escalated request alone.
+        """
+        monday = next_monday()
+        narrow_approver = UserFactory(tenant=self.tenant)
+        grant(
+            narrow_approver,
+            services.STUDENT_LEAVE_APPROVE,
+            scope=RecordScope.ASSIGNED,
+        )
+        grant(narrow_approver, "exams.exam.view", scope=RecordScope.ALL)
+
+        with tenant_context(self.tenant.id):
+            request = self.submit(start_date=monday, end_date=monday + datetime.timedelta(days=13))
+            after_first = services.decide_leave_step(
+                request=request, approve=True, approver_id=self.approver.pk
+            )
+
+            with self.assertRaises(DomainRuleViolation):
+                services.decide_leave_step(
+                    request=after_first, approve=True, approver_id=narrow_approver.pk
+                )
+
     def test_a_campus_scoped_approver_satisfies_level_two(self) -> None:
         from core.rbac.models import RecordScope
 

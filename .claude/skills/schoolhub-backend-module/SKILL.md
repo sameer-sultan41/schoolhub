@@ -111,6 +111,12 @@ apps/api/apps/<module>/
    `AnyOf("a.b.approve", "a.b.create")` (`core/rbac/permissions.py`), never to the view key with
    the real check hidden in the body; the body keeps only the row-level rule. A bare tuple is
    rejected, since Django reads one as all-of.
+   A mapped action that resolves a row (PATCH, DELETE, a detail colon-action) finds it only under
+   the read key's scope **and** its own key's (ADR-0031 decision 3): the mixin chains both. The
+   read key is `required_permission`. If that is not what reading a row needs, set
+   `scope_read_permission` (the correction queue's `AnyOf`). If an action's callers never hold
+   the read key, list it in `scope_read_exempt_actions` with the reason (a notice
+   `:acknowledge`).
    The one safe fallback is a single-purpose viewset whose `required_permission` is itself the
    write key (the import/export viewsets). Restrict `http_method_names` to what the module doc's
    §16 actually exposes. `WritePermissionContractTests` in `apps/api/tests/test_endpoint_contracts.py`

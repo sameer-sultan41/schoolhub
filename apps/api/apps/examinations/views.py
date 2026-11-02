@@ -100,12 +100,15 @@ from core.api.exceptions import Conflict, DomainRuleViolation
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
+from core.exports.scope import SCOPE_PERMISSION, scope_permission_payload
 from core.idempotency.services import replay_or_execute
 from core.jobs.services import create_job, enqueue_job
 from core.rbac.permissions import (
+    AnyOf,
     DenyRestrictedPrincipals,
     HasPermissionKey,
     is_restricted_principal,
+    route_permission,
 )
 
 if TYPE_CHECKING:
@@ -522,6 +525,7 @@ class AdmitCardViewSet(
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="exams:issue-admit-cards",
+            request_data=request.data,
             execute=execute,
         )
 
@@ -578,12 +582,15 @@ class MarksViewSet(
     scope_own_field = None
     scope_campus_field = "student__campus_id"
     required_feature = FEATURE
-    required_permission = "exams.marks.create"
+    required_permission = services.MARKS_CREATE
     required_permission_map = {
-        "bulk_entry": "exams.marks.create",
+        "bulk_entry": services.MARKS_CREATE,
         "lock": "exams.marks.lock",
         "unlock": "exams.marks.lock",
     }
+    # `:lock-marks` and `:unlock-marks` act on an exam subject, never on a marks row, and
+    # school_admin locks without holding `exams.marks.create`.
+    scope_read_exempt_actions = frozenset({"lock", "unlock"})
     http_method_names = ["get", "post", "head", "options"]
 
     def get_queryset(self):
@@ -620,6 +627,7 @@ class MarksViewSet(
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="marks:bulk-entry",
+            request_data=request.data,
             execute=execute,
         )
 
@@ -672,7 +680,8 @@ class MarksViewSet(
 class MarksImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
     """`POST /marks-imports` — §9's marks sheet, as 202 + a job.
 
-    A pure job-launcher: no queryset, no record scope. The uploaded file is
+    A pure job-launcher with no queryset. Record scope applies in the job, which
+    narrows the class roll to the students this request's key reaches. The uploaded file is
     handed to the task base64-encoded in the job payload, matching
     `attendance`'s importer — a file small enough to be a marks sheet is small
     enough to carry, and staging it in object storage first would add a failure
@@ -708,6 +717,9 @@ class MarksImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
                 "filename": upload.name,
                 "content_base64": base64.b64encode(upload.read()).decode(),
                 "requested_by": str(request.user.pk),
+                # The job narrows the class roll to this key's record scope, as an
+                # export job reads its rows (core/exports/scope.py).
+                SCOPE_PERMISSION: scope_permission_payload(route_permission(request, self)),
             },
             actor_id=request.user.pk,
         )
@@ -801,6 +813,7 @@ class ResultViewSet(
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="exams:process-results",
+            request_data=request.data,
             execute=execute,
         )
 
@@ -984,6 +997,7 @@ class ReportCardViewSet(
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="exams:generate-report-cards",
+            request_data=request.data,
             execute=execute,
         )
 
@@ -1200,16 +1214,20 @@ class ExamReportView(TenantScopedViewSetMixin, APIView):
         serializer = ExamReportQuerySerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
         exam = serializer.validated_data.get("exam")
+        permission = route_permission(request, self)
 
         rows = services.build_report_rows(
             kind=serializer.validated_data["kind"],
             exam_id=exam.pk if exam is not None else None,
             user=request.user,
+            permission=permission,
             limit=services.SYNCHRONOUS_REPORT_ROW_LIMIT + 1,
         )
         if len(rows) > services.SYNCHRONOUS_REPORT_ROW_LIMIT:
+            # Queued under this GET's view key, so the file holds what it would have shown.
             return self._queue_export(
                 request,
+                permission=permission,
                 kind=serializer.validated_data["kind"],
                 exam=exam,
                 fmt=serializer.validated_data["format"],
@@ -1226,13 +1244,23 @@ class ExamReportView(TenantScopedViewSetMixin, APIView):
         serializer.is_valid(raise_exception=True)
         return self._queue_export(
             request,
+            permission=route_permission(request, self),
             kind=serializer.validated_data["kind"],
             exam=serializer.validated_data.get("exam"),
             fmt=serializer.validated_data["format"],
             message="Report queued; poll the job for the file.",
         )
 
-    def _queue_export(self, request: Request, *, kind: str, exam, fmt: str, message: str):
+    def _queue_export(
+        self,
+        request: Request,
+        *,
+        permission: str | AnyOf,
+        kind: str,
+        exam,
+        fmt: str,
+        message: str,
+    ):
         job = create_job(
             tenant_id=request.tenant.pk,
             job_type="exams.report-export",
@@ -1244,6 +1272,8 @@ class ExamReportView(TenantScopedViewSetMixin, APIView):
                 # A report is read as authoritative, and an export must not
                 # widen what its requester could see inline.
                 "requested_by": str(request.user.pk),
+                # Under the key this request was admitted on (core/exports/scope.py).
+                SCOPE_PERMISSION: scope_permission_payload(permission),
             },
             actor_id=request.user.pk,
         )

@@ -19,6 +19,7 @@ from django.db.models import F
 from apps.school_organization.models import Section
 from apps.school_organization.sections.filters import SectionFilterSet
 from apps.school_organization.sections.serializers import SectionSerializer
+from apps.school_organization.services import SECTION_SCOPE
 from apps.school_organization.views import BlockingDestroyMixin
 from core.api.pagination import PageNumberPagination
 from core.api.viewsets import TenantModelViewSet
@@ -45,6 +46,10 @@ class SectionViewSet(BlockingDestroyMixin, TenantModelViewSet):
     # all a table scan plus a sort, with a join first for the annotated two.
     ordering_fields = ["name", "capacity", "class_name", "campus_name", "created_at"]
     ordering_annotations = ("class_name", "campus_name")
+    # From `SECTION_SCOPE`, which another app's check on a section row also reads.
+    scope_own_field = SECTION_SCOPE["own_field"]
+    scope_campus_field = SECTION_SCOPE["campus_field"]
+    scope_campus_allows_null = SECTION_SCOPE["campus_allows_null"]
     required_feature = "module.school"
     required_permission = "school.section.view"
     required_permission_map = {
