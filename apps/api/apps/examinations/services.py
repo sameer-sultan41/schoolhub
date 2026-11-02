@@ -60,7 +60,8 @@ from core.tenancy.locks import AdvisoryLockNamespace, advisory_xact_lock
 # structure changed, the scale swapped — while it is still in one of these
 # states. Past `marks_entry` a configuration change would silently invalidate
 # marks already entered against the old maximum, which is the kind of edit that
-# produces a percentage nobody can reproduce.
+# produces a percentage nobody can reproduce. `:publish-schedule` accepts the
+# same two: publishing from `marks_entry` on would reopen a sat timetable.
 CONFIGURABLE_STATUSES = frozenset({ExamStatus.DRAFT, ExamStatus.SCHEDULED})
 
 # Deleting an exam is only safe while nothing downstream references it. §5.1
@@ -424,7 +425,7 @@ def publish_exam_schedule(*, exam: Exam, actor_id: uuid.UUID) -> dict:
     """
     lock_school_schedule(exam.tenant_id)
     locked = Exam.objects.alive().select_for_update().get(pk=exam.pk)
-    if locked.status not in (ExamStatus.DRAFT, ExamStatus.SCHEDULED):
+    if locked.status not in CONFIGURABLE_STATUSES:
         raise Conflict("Only a draft or scheduled exam's schedule can be published.")
 
     findings = conflicts.detect_conflicts(exam=exam)
