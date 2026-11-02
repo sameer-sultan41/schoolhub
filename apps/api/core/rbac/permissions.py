@@ -351,7 +351,9 @@ def scope_queryset(
             return queryset
         # A type that reaches nothing adds nothing to the union. Dropping it here,
         # rather than leaving `.none()` inside the OR, is what lets a single remaining
-        # type keep its exact filter.
+        # type keep its exact filter. Only a literal `.none()` is recognised: a hook
+        # whose filter is empty only at run time (`pk__in` an empty subquery) stays in
+        # the OR, which is still correct, just not the single-type SQL.
         if not member.query.is_empty():
             members.append(member)
     if not members:
@@ -383,8 +385,12 @@ def _narrow_by_scope(
     """The rows one scope type reaches, `.none()` if it can reach none, or None when the
     type is already satisfied by tenant scoping and the queryset passes through.
 
-    Each type stands alone: one that cannot narrow fails closed rather than falling
+    Each type stands alone: one that can reach nothing (a `campus` role with no
+    campus, an `own` or `assigned` with no hook) fails closed rather than falling
     through to the next, because the caller unions every type the key is held at.
+    The one pass-through is deliberate and opt-in: `campus` over a table the caller
+    declared tenant-wide (`campus_field=None`) returns None, and `scope_queryset`
+    then returns the queryset unfiltered (see its docstring).
     """
     if scope == RecordScope.CAMPUS:
         campus_ids = [ref for ref in refs if ref]
