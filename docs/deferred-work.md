@@ -989,14 +989,19 @@ either this file or `project-status.md`.
     unguessable UUID, and the purpose is module-gated, so `GET /files` does not list it to other
     staff; but every participant of a thread it was sent in sees the id, and could re-send it
     into another thread. `created_by == sender` is the full check.
-  - **A guardian or student cannot attach a file to a thread.** `platform.file.create` is
-    staff-only (`core/files/permissions.py`), so they can download what staff send them (through
-    `/message-threads/{id}/attachments/{file_id}:download`) but not upload. Parent-portal must
-    grant the upload, scoped to the `communication.thread-attachment` purpose, as it must for
-    leave attachments.
-  - **Messages carry `sender_id` only**, no sender name. The dashboard resolves names from the
-    thread's participants; a name field on `MessageSerializer` (as `UserNamesModelSerializer`
-    gives attendance) would save it the lookup.
+  - **Nobody can attach a file to a thread from the dashboard yet.** The API takes attachments
+    (ready `communication.thread-attachment` files, uploaded and confirmed through `/files`), but
+    the thread composer has no upload control, for staff or for guardians; attachments render
+    and download through the thread's own route and the oversight twin. A guardian or student
+    also cannot upload at the API: `platform.file.create` is staff-only
+    (`core/files/permissions.py`), so they can download what staff send them but not upload.
+    Parent-portal must grant the upload, scoped to the `communication.thread-attachment`
+    purpose, as it must for leave attachments. The staff composer's upload (the two-step
+    presigned flow, a chip per file, the same type and size limits) is a dashboard follow-up
+    that needs no backend change.
+  - **Messages carry `sender_id` only**, no sender name, so the dashboard's bubbles say "You" or
+    "Participant". A name field on `MessageSerializer` (as `UserNamesModelSerializer` gives
+    attendance) is what would let the thread show who wrote what.
   - **Replies and `:mark-read` are not audited.** A message is itself an immutable, attributed
     record, and a receipt is the caller's own state; thread create, close and reopen, oversight
     reads and broadcasts are audited.
@@ -1015,6 +1020,19 @@ either this file or `project-status.md`.
     `fee-invoices:generate`. Reusing a key after its 24-hour replay window is a generic 409 from
     the job's unique index rather than a replay. A length check in `core.idempotency` closes the
     first for every endpoint.
+
+- **Communication PR D built only the threads, oversight and broadcast screens**
+  (`docs/03-modules/communication.md` §20, "Built (PR D)"). The API for the rest of the module
+  is built, but the dashboard has no screen for any of it, and `/communication` offers only
+  Messages, Oversight and Broadcast:
+  - **Announcements**: draft, edit, delete, and publish or schedule (`/announcements`,
+    `:publish`).
+  - **Notices**: draft, submit, the publish-approval gate (the approver must not be the drafter),
+    return to draft, acknowledgment and the A4 PDF (`/notices` and its actions).
+  - **Notification template overrides**, with their preview (`/notification-templates`,
+    `:preview`).
+  - **A user's notification preferences** (`/notification-preferences`).
+  - **The delivery logs and their summary report** (`/delivery-logs`, `:summary`).
 
 - **`eslint-plugin-playwright` for `e2e/`** (planned in the engineering-standards spec, PR 4) was
   deferred: adding a dependency means `pnpm install`, which runs PR 3's `prepare` script and

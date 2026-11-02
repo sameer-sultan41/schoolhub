@@ -6,6 +6,7 @@ import {
   GraduationCap,
   IdCard,
   LayoutGrid,
+  MessagesSquare,
   Package,
   ScrollText,
   Settings,
@@ -21,6 +22,7 @@ import type { MenuConfig } from "@schoolhub/ui";
 import { sectionMenuItems } from "@/components/module-sections/module-sections";
 import { ACADEMICS_SECTIONS } from "@/features/academics/academics-sections";
 import { ATTENDANCE_SECTIONS } from "@/features/attendance/attendance-sections";
+import { COMMUNICATION_SECTIONS } from "@/features/communication/communication-sections";
 import { TIMETABLE_SECTIONS } from "@/features/timetable/timetable-sections";
 
 import { Paths } from "./paths";
@@ -73,6 +75,13 @@ export const MENU_SIDEBAR: MenuConfig = [
     module: "attendance",
     // Shared with the Attendance tabs and landing, gated the same way.
     children: sectionMenuItems(ATTENDANCE_SECTIONS),
+  },
+  {
+    title: "Communication",
+    icon: MessagesSquare,
+    module: "communication",
+    // Shared with the Communication tabs and landing, gated the same way.
+    children: sectionMenuItems(COMMUNICATION_SECTIONS),
   },
   { heading: "User" },
   {

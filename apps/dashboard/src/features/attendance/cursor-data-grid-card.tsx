@@ -22,7 +22,7 @@ import {
 
 import { DASHBOARD_DATA_GRID_LABELS } from "@/app/(app)/shell/data-grid-labels";
 import { LoadErrorCard } from "@/components/load-error-card";
-import type { CursorList } from "@/features/attendance/use-cursor-list";
+import type { CursorList } from "@/hooks/use-cursor-list";
 import { resolveErrorMessage } from "@/lib/error-message";
 
 export interface CursorDataGridCardProps<TItem extends object> {

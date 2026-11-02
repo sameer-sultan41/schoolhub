@@ -1353,6 +1353,187 @@
       "description": "Teachers, students and guardians see the published week. A timetable with blocking conflicts can't be published."
     }
   },
+  "communication": {
+    "nav": {
+      "label": "Communication sections",
+      "messages": "Messages",
+      "oversight": "Oversight",
+      "broadcast": "Broadcast"
+    },
+    "messages": {
+      "title": "Messages",
+      "summary": "Conversations between your school's staff, guardians and students.",
+      "status": {
+        "filter": "Status",
+        "all": "All statuses",
+        "open": "Open",
+        "closed": "Closed"
+      },
+      "type": {
+        "guardian_school": "Guardian and school",
+        "internal": "Internal",
+        "group": "Group"
+      },
+      "list": {
+        "label": "Conversations",
+        "emptyTitle": "No conversations yet",
+        "emptyDescription": "Conversations you take part in appear here.",
+        "noMatches": "No conversations match",
+        "noMatchesDescription": "Try a different status.",
+        "loadError": "The conversations couldn't be loaded.",
+        "unread": "{count} unread"
+      },
+      "thread": {
+        "selectTitle": "Select a conversation",
+        "selectDescription": "Choose a conversation from the list to read it.",
+        "back": "Back to conversations",
+        "notFoundTitle": "Conversation not found",
+        "notFoundDescription": "It may have been removed, or you may not have access to it.",
+        "loadError": "The conversation couldn't be loaded.",
+        "close": "Close conversation",
+        "closing": "Closing",
+        "transitionFailed": "The conversation couldn't be updated.",
+        "closedNotice": "This conversation is closed.",
+        "reopen": "Reopen",
+        "reopening": "Reopening"
+      },
+      "message": {
+        "you": "You",
+        "participant": "Participant",
+        "internalNote": "Internal note",
+        "listLabel": "Messages",
+        "empty": "No messages yet.",
+        "loadEarlier": "Load earlier messages",
+        "loadingEarlier": "Loading earlier messages",
+        "loadError": "The messages couldn't be loaded.",
+        "attachment": "Attachment {number}",
+        "attachmentFailed": "The attachment couldn't be downloaded."
+      },
+      "composer": {
+        "label": "Reply",
+        "placeholder": "Write a reply",
+        "internalNote": "Internal note",
+        "send": "Send",
+        "sending": "Sending",
+        "failed": "Your message couldn't be sent."
+      },
+      "picker": {
+        "search": "Search",
+        "loading": "Searching…",
+        "noResults": "No matches.",
+        "failed": "The search failed.",
+        "remove": "Remove {name}",
+        "chooseStudent": "Choose a student",
+        "searchStudents": "Search students",
+        "addRecipients": "Add recipients",
+        "chooseRecipient": "Choose a colleague",
+        "searchRecipients": "Search colleagues"
+      },
+      "newThread": {
+        "open": "New conversation",
+        "title": "Start a conversation",
+        "type": "Conversation type",
+        "types": {
+          "guardian_school": "Guardian and school",
+          "internal": "Internal (one colleague)",
+          "group": "Group (two or more colleagues)"
+        },
+        "student": "Student",
+        "recipients": "Recipients",
+        "subject": "Subject",
+        "body": "First message",
+        "submit": "Start conversation",
+        "submitting": "Starting",
+        "failed": "The conversation couldn't be started.",
+        "errors": {
+          "subjectRequired": "Enter a subject.",
+          "subjectTooLong": "The subject can be at most {max} characters.",
+          "bodyRequired": "Write a first message.",
+          "bodyTooLong": "The message can be at most {max} characters.",
+          "studentRequired": "Choose the student this conversation is about.",
+          "internalNeedsOne": "Choose one colleague.",
+          "groupNeedsTwo": "Choose at least two colleagues for a group conversation."
+        }
+      }
+    },
+    "oversight": {
+      "title": "Thread oversight",
+      "summary": "Every conversation in your school, read-only. Each view is recorded in the audit log.",
+      "auditBanner": "Every conversation or attachment you open here is recorded in the audit log."
+    },
+    "broadcast": {
+      "title": "Emergency broadcast",
+      "summary": "Send an urgent message to a chosen audience, after previewing who will receive it.",
+      "steps": {
+        "audience": "Audience",
+        "message": "Message",
+        "confirm": "Confirm",
+        "status": "Status"
+      },
+      "back": "Back",
+      "next": "Next",
+      "audience": {
+        "label": "Audience",
+        "types": {
+          "all": "Everyone",
+          "staff": "All staff",
+          "students": "All students",
+          "guardians": "All guardians",
+          "class": "Specific classes",
+          "section": "Specific sections"
+        },
+        "campus": "Campus",
+        "allCampuses": "All campuses",
+        "classes": "Classes",
+        "classForSections": "Class",
+        "sections": "Sections",
+        "sectionsFailed": "The sections couldn't be loaded.",
+        "noCampus": "Your access doesn't reach any campus, so you can't send an emergency broadcast. Ask an administrator to give your role a campus.",
+        "scopeFailed": "The campuses you can broadcast to couldn't be loaded."
+      },
+      "message": {
+        "label": "Message",
+        "placeholder": "Write the urgent message",
+        "counter": "{count} / {max}"
+      },
+      "confirm": {
+        "previewFailed": "The audience couldn't be previewed.",
+        "recipients": "{count, plural, one {# recipient} other {# recipients}}",
+        "channels": "Delivered by",
+        "notDelivered": "{channel}: not delivered, no provider",
+        "typeCount": "Type {count} to confirm you want to send this to everyone listed.",
+        "audienceChanged": "The audience changed and now has {count, plural, one {# recipient} other {# recipients}}. Check it, then type the new number.",
+        "send": "Send emergency broadcast",
+        "sending": "Sending",
+        "sendFailed": "The broadcast couldn't be sent."
+      },
+      "status": {
+        "title": "Emergency broadcast",
+        "progress": "{progress}% complete",
+        "succeeded": "The broadcast was sent.",
+        "succeededCount": "The broadcast was sent to {count, plural, one {# recipient} other {# recipients}}.",
+        "another": "Send another",
+        "failed": "The broadcast failed.",
+        "pollFailed": "The broadcast's status couldn't be checked.",
+        "timedOut": "The broadcast is taking longer than expected.",
+        "checkAgain": "Check again"
+      },
+      "errors": {
+        "classRequired": "Choose at least one class.",
+        "sectionRequired": "Choose at least one section.",
+        "messageRequired": "Write a message.",
+        "messageTooLong": "The message can be at most {max} characters.",
+        "campusRequired": "Choose one of your campuses."
+      }
+    },
+    "channels": {
+      "in_app": "In-app",
+      "email": "Email",
+      "sms": "SMS",
+      "push": "Push notification",
+      "whatsapp": "WhatsApp"
+    }
+  },
   "attendance": {
     "nav": {
       "label": "Attendance sections",
