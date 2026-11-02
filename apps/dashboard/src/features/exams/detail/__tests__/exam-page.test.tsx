@@ -20,6 +20,7 @@ import {
   fetchExam,
   fetchExamSubjects,
   fetchGrid,
+  fetchReportCardsPage,
   lastArg,
   mocked,
   stubExamsServices,
@@ -44,6 +45,8 @@ jest.mock("@/services", () =>
     .requireActual<{ examsServicesMock: () => unknown }>("../../__tests__/exams-services-mock")
     .examsServicesMock(),
 );
+
+const TAB_NAMES = ["Subjects", "Schedule", "Admit cards", "Marks", "Results", "Report cards"];
 
 const FROZEN = "This exam is marks entry and its configuration is frozen.";
 
@@ -210,16 +213,52 @@ describe("ExamTabs", () => {
     ]);
   });
 
-  it("draws only the tabs that have content: Subjects, Schedule, Admit cards and Marks now, whatever other keys the viewer holds", async () => {
-    asUser("exams.schedule.view", "exams.admit-card.view", "exams.marks.view", "exams.result.view");
+  it("draws every tab whose key the viewer holds", async () => {
+    asUser(
+      "exams.schedule.view",
+      "exams.admit-card.view",
+      "exams.marks.view",
+      "exams.result.view",
+      "exams.report-card.view",
+    );
 
     await renderTabs();
 
-    expect(await screen.findAllByRole("tab")).toHaveLength(4);
-    expect(screen.getByRole("tab", { name: "Subjects" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Schedule" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Admit cards" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Marks" })).toBeInTheDocument();
+    expect(await screen.findAllByRole("tab")).toHaveLength(EXAM_TABS.length);
+    for (const name of TAB_NAMES) {
+      expect(screen.getByRole("tab", { name })).toBeInTheDocument();
+    }
+  });
+
+  it("gates the Results and Report cards tabs on their view keys", async () => {
+    asUser("exams.result.create", "exams.report-card.create");
+
+    await renderTabs();
+
+    expect(await screen.findByRole("tab", { name: "Subjects" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Results" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Report cards" })).not.toBeInTheDocument();
+  });
+
+  it("drops a list's filters when moving to another tab, which reads `section` and `status` too", async () => {
+    asUser("exams.result.view", "exams.report-card.view");
+    setUrl(`/exams/${EXAM_ID}?tab=results&section=${SECTION_ID}&outcome=pass&status=approved`);
+
+    await renderTabs();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("tab", { name: "Report cards" }));
+
+    expect(urlParam("tab")).toBe("report-cards");
+    expect(urlParam("section")).toBeNull();
+    expect(urlParam("outcome")).toBeNull();
+    expect(urlParam("status")).toBeNull();
+    await waitFor(() => {
+      expect(fetchReportCardsPage).toHaveBeenCalled();
+    });
+    expect(lastArg(fetchReportCardsPage)).toMatchObject({
+      sectionId: undefined,
+      status: undefined,
+    });
   });
 
   it("gates the Marks tab on the marks view key, not the entry key", async () => {
@@ -251,7 +290,7 @@ describe("ExamTabs", () => {
 
   it("draws no tab for a viewer without the key of a tab that has content", async () => {
     mocked(Services.auth.fetchCurrentUser).mockResolvedValue(
-      buildUser(["exams.result.view" satisfies PermissionKey]),
+      buildUser(["exams.grading-scale.view" satisfies PermissionKey]),
     );
 
     await renderTabs();

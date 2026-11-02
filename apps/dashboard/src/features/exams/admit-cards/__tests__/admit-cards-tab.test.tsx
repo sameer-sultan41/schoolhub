@@ -162,7 +162,8 @@ describe("AdmitCardsTab: the list", () => {
 describe("AdmitCardsTab: filters", () => {
   beforeEach(() => {
     stubExamsServices();
-    asUser(CARD_VIEW);
+    // The section filter reads `/exam-schedules`, so it needs the schedule key too.
+    asUser(CARD_VIEW, "exams.schedule.view");
     fetchAdmitCardsPage.mockResolvedValue(admitCardPage([ISSUED]));
     fetchSittings.mockResolvedValue([
       sittingRecord(),

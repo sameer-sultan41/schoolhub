@@ -38,6 +38,8 @@ describe("Services", () => {
       "auth",
       "curriculum",
       "dashboard",
+      "examReports",
+      "examResults",
       "examSchedules",
       "examSubjects",
       "exams",
@@ -49,6 +51,7 @@ describe("Services", () => {
       "marks",
       "periods",
       "promotions",
+      "reportCards",
       "rooms",
       "schoolOrganization",
       "staff",
@@ -99,6 +102,20 @@ describe("Services", () => {
     expect(typeof Services.marks.lockMarks).toBe("function");
     expect(typeof Services.marks.unlockMarks).toBe("function");
     expect(typeof Services.marks.importMarks).toBe("function");
+    expect(typeof Services.marks.fetchStudentMarks).toBe("function");
+    expect(typeof Services.examResults.fetchResultsPage).toBe("function");
+    expect(typeof Services.examResults.processResults).toBe("function");
+    expect(typeof Services.examResults.approveResults).toBe("function");
+    expect(typeof Services.examResults.sendResultsBack).toBe("function");
+    expect(typeof Services.examResults.publishResults).toBe("function");
+    expect(typeof Services.examResults.withholdResult).toBe("function");
+    expect(typeof Services.reportCards.fetchReportCardsPage).toBe("function");
+    expect(typeof Services.reportCards.generateReportCards).toBe("function");
+    expect(typeof Services.reportCards.publishReportCards).toBe("function");
+    expect(typeof Services.reportCards.updateRemarks).toBe("function");
+    expect(typeof Services.reportCards.fetchReportCardDownloadUrl).toBe("function");
+    expect(typeof Services.examReports.runReport).toBe("function");
+    expect(typeof Services.examReports.exportReport).toBe("function");
     expect(typeof Services.schoolOrganization.fetchTerms).toBe("function");
     expect(typeof Services.gradingScales.fetchScalesPage).toBe("function");
     expect(typeof Services.gradingScales.fetchScale).toBe("function");

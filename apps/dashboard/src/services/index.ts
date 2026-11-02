@@ -5,6 +5,8 @@ import { AttendanceSettingsService } from "./modules/attendance-settings";
 import { AuthService } from "./modules/auth";
 import { CurriculumService } from "./modules/curriculum";
 import { DashboardService } from "./modules/dashboard";
+import { ExamReportsService } from "./modules/exam-reports";
+import { ExamResultsService } from "./modules/exam-results";
 import { ExamSchedulesService } from "./modules/exam-schedules";
 import { ExamSubjectsService } from "./modules/exam-subjects";
 import { ExamsService } from "./modules/exams";
@@ -16,6 +18,7 @@ import { LeaveRequestsService } from "./modules/leave-requests";
 import { MarksService } from "./modules/marks";
 import { PeriodsService } from "./modules/periods";
 import { PromotionsService } from "./modules/promotions";
+import { ReportCardsService } from "./modules/report-cards";
 import { RoomsService } from "./modules/rooms";
 import { SchoolOrganizationService } from "./modules/school-organization";
 import { StaffService } from "./modules/staff";
@@ -68,6 +71,25 @@ export type {
   MarksUnlockResult,
   MarksUnwritableReason,
 } from "./modules/marks";
+
+export type {
+  ResultOutcome,
+  ResultPageQuery,
+  ResultRecord,
+  ResultsApproved,
+  ResultsPublished,
+  ResultsSentBack,
+  ResultStatus,
+} from "./modules/exam-results";
+
+export type {
+  ReportCardPageQuery,
+  ReportCardRecord,
+  ReportCardRemarkField,
+  ReportCardRemarksInput,
+  ReportCardsPublished,
+  ReportCardStatus,
+} from "./modules/report-cards";
 
 export type {
   ConflictSeverity as ExamConflictSeverity,
@@ -127,6 +149,17 @@ export type {
   CorrectionSubjectType,
   RequestCorrectionInput,
 } from "./modules/attendance-corrections";
+
+export type {
+  ExamInlineReport,
+  ExamQueuedReport,
+  ExamReportFormValues,
+  ExamReportKind,
+  ExamReportQuery,
+  ExamReportRow,
+  ExamReportRowOf,
+  ExamReportRun,
+} from "./modules/exam-reports";
 
 export type {
   AttendanceReportRow,
@@ -283,6 +316,9 @@ export const Services = {
   examSchedules: ExamSchedulesService,
   admitCards: AdmitCardsService,
   marks: MarksService,
+  examResults: ExamResultsService,
+  examReports: ExamReportsService,
+  reportCards: ReportCardsService,
   guardians: GuardiansService,
   staff: StaffService,
   students: StudentsService,

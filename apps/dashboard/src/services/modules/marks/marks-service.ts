@@ -1,3 +1,4 @@
+import { collectPages, MAX_PAGE_SIZE } from "@schoolhub/api-client";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
 import type { JobAccepted } from "@/services/modules/jobs/jobs-service";
@@ -10,6 +11,7 @@ import type {
   MarksGridQuery,
   MarksLockResult,
   MarksProgressRow,
+  MarksRecord,
   MarksUnlockResult,
 } from "./marks-type";
 
@@ -37,6 +39,14 @@ export async function bulkEntry(
     { idempotencyKey },
   );
   return data;
+}
+
+/** Every subject mark one student has in one exam (the results detail sheet). The list is
+ * cursor-paginated, so this follows the cursor; the caller's record scope decides what it sees. */
+export async function fetchStudentMarks(examId: string, studentId: string): Promise<MarksRecord[]> {
+  return collectPages<MarksRecord>(apiClient, endpoints.marks.list, {
+    query: { exam_id: examId, student_id: studentId, page_size: MAX_PAGE_SIZE },
+  });
 }
 
 /** One row per (exam-subject, section) the caller may enter, with its counts and lock. */

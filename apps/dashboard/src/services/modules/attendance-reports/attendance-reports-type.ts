@@ -4,7 +4,8 @@ import type { AttendanceMode } from "@/services/modules/attendance-settings/atte
 /** The generated wire shapes (ADR-0017): every row carries its report's `kind` (ADR-0022). */
 export type AttendanceReportRow = ApiSchemas["AttendanceReportRow"];
 export type ReportKind = ApiSchemas["AttendanceReportQueryKindEnum"];
-export type ReportFormat = ApiSchemas["FormatEnum"];
+/** Shared with every report module (`services/shared/report-export.ts`). */
+export type { ReportFormat } from "@/services/shared/report-export";
 
 /** The row type of one report, narrowed on its `kind`. */
 export type ReportRowOf<K extends ReportKind> = Extract<AttendanceReportRow, { kind: K }>;

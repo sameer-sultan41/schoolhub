@@ -1,10 +1,5 @@
 import { isIsoDate, isUuid } from "@/lib/helpers";
-import type {
-  ReportFormat,
-  ReportKind,
-  ReportKindFields,
-  ReportQuery,
-} from "./attendance-reports-type";
+import type { ReportKind, ReportKindFields, ReportQuery } from "./attendance-reports-type";
 
 /** The attendance-reports module's constants. */
 
@@ -39,12 +34,6 @@ export const DEFAULT_DEFAULTER_THRESHOLD = "75";
 
 /** A range report opens on this many calendar days, today included. */
 export const REPORT_DEFAULT_RANGE_DAYS = 30;
-
-/** The export formats (`core.imports.tabular.FORMATS`), in the buttons' order. */
-export const REPORT_EXPORT_FORMATS: readonly ReportFormat[] = ["csv", "xlsx", "pdf"];
-
-/** The format a large inline run is built in: the API's default. */
-export const QUEUED_REPORT_FORMAT: ReportFormat = "csv";
 
 /** A rate and an average are shown to exactly one decimal place (day counts: `formatLeaveDays`). */
 export const REPORT_FRACTION_DIGITS = 1;

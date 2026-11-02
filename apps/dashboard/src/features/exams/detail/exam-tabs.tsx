@@ -11,6 +11,18 @@ import { hasPermission } from "@/lib/permissions";
 import type { ExamRecord } from "@/services";
 import { AdmitCardsTab } from "@/features/exams/admit-cards/admit-cards-tab";
 import { MarksTab } from "@/features/exams/marks/marks-tab";
+import { ReportCardsTab } from "@/features/exams/report-cards/report-cards-tab";
+import { ResultsTab } from "@/features/exams/results/results-tab";
+import { ADMIT_CARD_URL_FILTERS } from "@/services/modules/admit-cards/admit-cards-constant";
+import {
+  RESULT_URL_FILTERS,
+  RESULTS_TAB_ID,
+} from "@/services/modules/exam-results/exam-results-constant";
+import { EXAM_TAB_URL_KEY } from "@/services/modules/exams/exams-constant";
+import {
+  REPORT_CARD_URL_FILTERS,
+  REPORT_CARDS_TAB_ID,
+} from "@/services/modules/report-cards/report-cards-constant";
 import {
   MARKS_SECTION_URL_KEY,
   MARKS_SUBJECT_URL_KEY,
@@ -19,8 +31,14 @@ import {
 import { ScheduleTab } from "@/features/exams/schedule/schedule-tab";
 import { ExamSubjectsTable } from "@/features/exams/subjects/exam-subjects-table";
 
-/** The query-string key the open tab lives under (`?tab=`). */
-export const EXAM_TAB_URL_KEY = "tab";
+/** The URL keys a tab owns: its list filters, and the marks grid's subject and section. */
+const TAB_SCOPED_URL_KEYS = [
+  MARKS_SUBJECT_URL_KEY,
+  MARKS_SECTION_URL_KEY,
+  ...Object.keys(ADMIT_CARD_URL_FILTERS),
+  ...Object.keys(RESULT_URL_FILTERS),
+  ...Object.keys(REPORT_CARD_URL_FILTERS),
+];
 
 export interface ExamTabSpec {
   id: string;
@@ -28,18 +46,15 @@ export interface ExamTabSpec {
   permission: PermissionKey;
 }
 
-/**
- * Every tab an exam page will have, in order, each on its permission key. A tab draws only once
- * it has content in `EXAM_TAB_CONTENT`: the later screens (results, report cards) land in
- * their own changes, each adding its content below.
- */
+/** Every tab an exam page has, in order, each on its permission key. A tab draws only once it
+ * has content in `EXAM_TAB_CONTENT`. */
 export const EXAM_TABS = [
   { id: "subjects", permission: "exams.exam.view" },
   { id: "schedule", permission: "exams.schedule.view" },
   { id: "admit-cards", permission: "exams.admit-card.view" },
   { id: MARKS_TAB_ID, permission: "exams.marks.view" },
-  { id: "results", permission: "exams.result.view" },
-  { id: "report-cards", permission: "exams.report-card.view" },
+  { id: RESULTS_TAB_ID, permission: "exams.result.view" },
+  { id: REPORT_CARDS_TAB_ID, permission: "exams.report-card.view" },
 ] as const satisfies readonly ExamTabSpec[];
 
 export type ExamTabId = (typeof EXAM_TABS)[number]["id"];
@@ -50,6 +65,8 @@ export const EXAM_TAB_CONTENT: Partial<Record<ExamTabId, ComponentType<{ exam: E
   schedule: ScheduleTab,
   "admit-cards": AdmitCardsTab,
   [MARKS_TAB_ID]: MarksTab,
+  [RESULTS_TAB_ID]: ResultsTab,
+  [REPORT_CARDS_TAB_ID]: ReportCardsTab,
 };
 
 /** The exam's tabs, in `?tab=`. Shows only those with content whose key the viewer holds; an
@@ -72,13 +89,13 @@ export function ExamTabs({ exam }: { exam: ExamRecord }) {
     <Tabs
       value={active.id}
       onValueChange={(value) => {
-        // The first tab is the URL's default, so it leaves the key out. The marks grid's subject
-        // and section belong to that tab only: another tab must not read them (Admit cards would
-        // take `section` as its filter).
-        const leavingMarks = value !== MARKS_TAB_ID;
+        // The first tab is the URL's default, so it leaves the key out. Every other key belongs to
+        // the tab that wrote it (the marks grid's subject and section, a list's filters): the next
+        // tab must not read them, since Admit cards, Results and Report cards all take `section`
+        // as a filter and `status` means a different set of values on each.
         setParams({
           [EXAM_TAB_URL_KEY]: value === first.id ? null : value,
-          ...(leavingMarks ? { [MARKS_SUBJECT_URL_KEY]: null, [MARKS_SECTION_URL_KEY]: null } : {}),
+          ...Object.fromEntries(TAB_SCOPED_URL_KEYS.map((key) => [key, null])),
         });
       }}
       className="space-y-4"

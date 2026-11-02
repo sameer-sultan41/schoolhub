@@ -117,6 +117,33 @@ describe("marks-service", () => {
     expect(mockGet).toHaveBeenCalledWith("/exams/e1/marks-progress");
   });
 
+  it("reads one student's marks in one exam, following the cursor", async () => {
+    const { fetchStudentMarks } = await import("../marks-service");
+    mockGet
+      .mockResolvedValueOnce({
+        data: [{ id: "m1" }],
+        meta: { pagination: { next_cursor: "c2", has_more: true } },
+      })
+      .mockResolvedValueOnce({
+        data: [{ id: "m2" }],
+        meta: { pagination: { next_cursor: null, has_more: false } },
+      });
+
+    await expect(fetchStudentMarks("e1", "st1")).resolves.toEqual([{ id: "m1" }, { id: "m2" }]);
+    expect(mockGet).toHaveBeenNthCalledWith(
+      1,
+      "/marks",
+      expect.objectContaining({
+        query: expect.objectContaining({ exam_id: "e1", student_id: "st1" }),
+      }),
+    );
+    expect(mockGet).toHaveBeenNthCalledWith(
+      2,
+      "/marks",
+      expect.objectContaining({ query: expect.objectContaining({ cursor: "c2" }) }),
+    );
+  });
+
   it("locks and unlocks an exam-subject through its colon-actions", async () => {
     const { lockMarks, unlockMarks } = await import("../marks-service");
     mockPost

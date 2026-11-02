@@ -27,6 +27,7 @@ const mockFetchCurrentUser = Services.auth.fetchCurrentUser as jest.MockedFuncti
 
 const SCALE_VIEW: PermissionKey = "exams.grading-scale.view";
 const EXAM_VIEW: PermissionKey = "exams.exam.view";
+const RESULT_VIEW: PermissionKey = "exams.result.view";
 
 describe("exams sections", () => {
   beforeEach(() => {
@@ -37,6 +38,7 @@ describe("exams sections", () => {
     expect(EXAMS_SECTIONS.map((section) => [section.href, section.permission])).toEqual([
       ["/exams", EXAM_VIEW],
       ["/exams/grading-scales", SCALE_VIEW],
+      ["/exams/reports", RESULT_VIEW],
     ]);
   });
 
@@ -82,6 +84,17 @@ describe("exams sections", () => {
     );
   });
 
+  it("draws the Reports tab for a holder of the result view key", async () => {
+    mockFetchCurrentUser.mockResolvedValue(buildUser([RESULT_VIEW]));
+
+    renderWithProviders(<ModuleSectionNav sections={EXAMS_SECTIONS} namespace="exams" />);
+
+    expect(await screen.findByRole("link", { name: "Reports" })).toHaveAttribute(
+      "href",
+      "/exams/reports",
+    );
+  });
+
   it("draws no tab for a viewer without any section's key", async () => {
     mockFetchCurrentUser.mockResolvedValue(buildUser(["students.student.view"]));
 
@@ -108,6 +121,11 @@ describe("exams sections", () => {
       (item) => item.title === "Examinations",
     );
     expect(both?.children?.map((child) => child.title)).toEqual(["Exams", "Grading scales"]);
+
+    const reports = filterMenuByAccess(MENU_SIDEBAR, buildUser([RESULT_VIEW])).find(
+      (item) => item.title === "Examinations",
+    );
+    expect(reports?.children?.map((child) => child.title)).toEqual(["Reports"]);
 
     const hidden = filterMenuByAccess(MENU_SIDEBAR, buildUser(["students.student.view"])).find(
       (item) => item.title === "Examinations",

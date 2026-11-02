@@ -2,6 +2,8 @@ import type { PermissionKey } from "@schoolhub/types";
 
 import { Services } from "@/services";
 import { admitCardPage } from "@/services/modules/admit-cards/__tests__/admit-cards-fixtures";
+import { resultPage } from "@/services/modules/exam-results/__tests__/exam-results-fixtures";
+import { reportCardPage } from "@/services/modules/report-cards/__tests__/report-cards-fixtures";
 import { curriculumRecord } from "@/services/modules/curriculum/__tests__/curriculum-fixtures";
 import {
   examPage,
@@ -45,6 +47,18 @@ export const fetchProgress = mocked(Services.marks.fetchProgress);
 export const lockMarks = mocked(Services.marks.lockMarks);
 export const unlockMarks = mocked(Services.marks.unlockMarks);
 export const importMarks = mocked(Services.marks.importMarks);
+export const fetchStudentMarks = mocked(Services.marks.fetchStudentMarks);
+export const fetchResultsPage = mocked(Services.examResults.fetchResultsPage);
+export const processResults = mocked(Services.examResults.processResults);
+export const approveResults = mocked(Services.examResults.approveResults);
+export const sendResultsBack = mocked(Services.examResults.sendResultsBack);
+export const publishResults = mocked(Services.examResults.publishResults);
+export const withholdResult = mocked(Services.examResults.withholdResult);
+export const fetchReportCardsPage = mocked(Services.reportCards.fetchReportCardsPage);
+export const generateReportCards = mocked(Services.reportCards.generateReportCards);
+export const publishReportCards = mocked(Services.reportCards.publishReportCards);
+export const updateRemarks = mocked(Services.reportCards.updateRemarks);
+export const fetchReportCardDownloadUrl = mocked(Services.reportCards.fetchReportCardDownloadUrl);
 export const fetchSections = mocked(Services.schoolOrganization.fetchSections);
 export const fetchActiveRooms = mocked(Services.rooms.fetchActiveRooms);
 export const fetchAcademicSessions = mocked(Services.schoolOrganization.fetchAcademicSessions);
@@ -68,6 +82,9 @@ export function stubExamsServices(url = "/exams") {
   fetchConflicts.mockResolvedValue([]);
   fetchAdmitCardsPage.mockResolvedValue(admitCardPage([]));
   fetchProgress.mockResolvedValue([]);
+  fetchResultsPage.mockResolvedValue(resultPage([]));
+  fetchReportCardsPage.mockResolvedValue(reportCardPage([]));
+  fetchStudentMarks.mockResolvedValue([]);
   fetchSections.mockResolvedValue([]);
   fetchActiveRooms.mockResolvedValue([]);
   mocked(Services.staff.fetchTeachingStaffOptions).mockResolvedValue([]);

@@ -141,6 +141,10 @@ export const endpoints = {
   attendanceReports: {
     summary: "/reports/attendance-summary",
   },
+  /** `ExamReportView`: `GET` runs a report inline (a `202` + job past 1000 rows), `POST` exports. */
+  examReports: {
+    summary: "/reports/exam-summary",
+  },
   /** `apps/api/apps/attendance/urls.py`: the register is routed before the router; check-out
    * is a colon-action on the row. */
   staffAttendance: {
@@ -183,6 +187,29 @@ export const endpoints = {
     issueAdmitCards: (id: string) => `/exams/${id}:issue-admit-cards`,
     /** Per (exam-subject, section) entry counts, keyed `exams.marks.view`. */
     marksProgress: (id: string) => `/exams/${id}/marks-progress`,
+    /** Colon-actions on the exam's results: processing is `202` + a job (`exams.result.create`);
+     * approve and send back take `exams.result.approve`, publish `exams.result.publish`. */
+    processResults: (id: string) => `/exams/${id}:process-results`,
+    approveResults: (id: string) => `/exams/${id}:approve-results`,
+    sendResultsBack: (id: string) => `/exams/${id}:send-results-back`,
+    publishResults: (id: string) => `/exams/${id}:publish-results`,
+    /** Colon-actions on the exam's report cards: generating is `202` + a job
+     * (`exams.report-card.create`), publishing takes `exams.report-card.publish`. */
+    generateReportCards: (id: string) => `/exams/${id}:generate-report-cards`,
+    publishReportCards: (id: string) => `/exams/${id}:publish-report-cards`,
+  },
+  /** `/results`: an exam's processed results, keyed `exams.result.*`. */
+  results: {
+    list: "/results",
+    /** Colon-action, keyed `exams.result.publish`; the body carries the reason. */
+    withhold: (id: string) => `/results/${id}:withhold`,
+  },
+  /** `/report-cards`: an exam's cards, keyed `exams.report-card.*`; the PATCH writes remarks only. */
+  reportCards: {
+    list: "/report-cards",
+    detail: (id: string) => `/report-cards/${id}`,
+    /** Colon-action, keyed `exams.report-card.view`: a signed link to the card's own PDF. */
+    download: (id: string) => `/report-cards/${id}:download`,
   },
   /** `/admit-cards`: an exam's issued cards, keyed `exams.admit-card.*`. */
   admitCards: {
@@ -195,6 +222,8 @@ export const endpoints = {
   /** `/marks`: one section's grid (`exams.marks.view`), its whole-grid save (`exams.marks.create`)
    * and the sheet import (`exams.marks.import`, multipart, `202` + job). */
   marks: {
+    /** The entered marks, filtered (`exam_id`, `student_id`): a student's subject marks. */
+    list: "/marks",
     grid: "/marks/grid",
     bulkEntry: "/marks:bulk-entry",
     imports: "/marks-imports",
