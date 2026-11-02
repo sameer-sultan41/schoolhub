@@ -84,6 +84,8 @@ def render_admit_cards_task(self, *, tenant_id: str, job_id: str, actor_id: str)
 
         total = len(cards) or 1
         for index, card in enumerate(cards, start=1):
+            # Counted only after the block commits, so it is bound before it.
+            saved = 0
             try:
                 with tenant_atomic(uuid.UUID(tenant_id)):
                     document = documents.admit_card_html(
