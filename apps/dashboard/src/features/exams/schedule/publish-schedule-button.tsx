@@ -12,14 +12,11 @@ import { useConfirmAction } from "@/hooks/use-confirm-action";
 import { useInvalidateModule } from "@/hooks/use-invalidate-module";
 import { HTTP_STATUS_UNPROCESSABLE } from "@/lib/constants";
 import { keepServerMessage } from "@/lib/keep-server-message";
-import { queryKeys } from "@/lib/query-client";
 import { ApiError, Services, type ExamRecord } from "@/services";
-import {
-  EXAM_SCHEDULES_QUERY_MODULE,
-  SCHEDULE_CONFLICTS_RESOURCE,
-} from "@/services/modules/exam-schedules/exam-schedules-constant";
+import { EXAM_SCHEDULES_QUERY_MODULE } from "@/services/modules/exam-schedules/exam-schedules-constant";
 import { conflictsFromError } from "@/services/modules/exam-schedules/exam-schedules-helper";
 import { guardRefusal } from "@/features/exams/guard-refusal";
+import { scheduleConflictsKey } from "./use-schedule-conflicts";
 
 const BLOCKED_NOTE_ID = "publish-schedule-blocked";
 
@@ -56,12 +53,7 @@ function PublishScheduleDialog({
           ) {
             const refused = conflictsFromError(publishError);
             if (refused.length > 0) {
-              queryClient.setQueryData(
-                queryKeys.list(EXAM_SCHEDULES_QUERY_MODULE, SCHEDULE_CONFLICTS_RESOURCE, {
-                  examId: exam.id,
-                }),
-                refused,
-              );
+              queryClient.setQueryData(scheduleConflictsKey(exam.id), refused);
             }
             // Its sentence ("2 clashes must be resolved", "nothing to publish") is the reason.
             throw keepServerMessage(publishError);

@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { Button, EmptyState, Skeleton } from "@schoolhub/ui";
 import { CalendarDays, Plus } from "lucide-react";
@@ -10,12 +9,7 @@ import { LoadErrorCard } from "@/components/load-error-card";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { hasPermission } from "@/lib/permissions";
-import { queryKeys } from "@/lib/query-client";
-import { Services, type ExamConflict, type ExamRecord } from "@/services";
-import {
-  EXAM_SCHEDULES_QUERY_MODULE,
-  SCHEDULE_CONFLICTS_RESOURCE,
-} from "@/services/modules/exam-schedules/exam-schedules-constant";
+import type { ExamConflict, ExamRecord } from "@/services";
 import {
   conflictsBySitting,
   groupByDate,
@@ -28,6 +22,7 @@ import { ConflictPanel } from "./conflict-panel";
 import { PublishScheduleButton } from "./publish-schedule-button";
 import { ScheduleTable } from "./schedule-table";
 import { SittingFormDialog } from "./sitting-form-dialog";
+import { useScheduleConflicts } from "./use-schedule-conflicts";
 
 const NO_CONFLICTS: readonly ExamConflict[] = [];
 
@@ -53,12 +48,7 @@ export function ScheduleTab({ exam }: { exam: ExamRecord }) {
   const canPublish = canUpdate && isSchedulePublishable(exam.status);
 
   const sittingsQuery = useExamSittings(exam.id);
-  const conflictsQuery = useQuery({
-    queryKey: queryKeys.list(EXAM_SCHEDULES_QUERY_MODULE, SCHEDULE_CONFLICTS_RESOURCE, {
-      examId: exam.id,
-    }),
-    queryFn: () => Services.examSchedules.fetchConflicts(exam.id),
-  });
+  const conflictsQuery = useScheduleConflicts(exam.id);
 
   const conflicts = conflictsQuery.data ?? NO_CONFLICTS;
   const sittings = sittingsQuery.data;

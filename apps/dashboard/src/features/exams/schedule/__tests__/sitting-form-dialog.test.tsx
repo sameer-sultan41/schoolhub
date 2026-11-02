@@ -223,20 +223,25 @@ describe("SittingFormDialog", () => {
       expect(createSitting).not.toHaveBeenCalled();
     });
 
-    it("saves a sitting the server flags, closes, and reloads the clash list and the schedule", async () => {
+    it("saves a sitting the server flags, closes, shows the clash list from the answer and reloads the schedule", async () => {
       const clash = conflictRecord();
       createSitting.mockResolvedValue({ sitting: sittingRecord(), conflicts: [clash] });
-      fetchConflicts.mockResolvedValueOnce([]).mockResolvedValue([clash]);
+      fetchConflicts.mockResolvedValue([]);
       const { user, dialog } = await openAddDialog();
       await screen.findByText("No clashes found.");
       const sittingReads = fetchSittings.mock.calls.length;
+      const conflictReads = fetchConflicts.mock.calls.length;
 
       await fillRequired(user);
       await user.click(within(dialog).getByRole("button", { name: "Save" }));
 
+      // The list comes from `meta.conflicts`: the server would only send it again.
       expect(await screen.findByText(clash.message)).toBeInTheDocument();
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-      expect(fetchSittings.mock.calls.length).toBeGreaterThan(sittingReads);
+      await waitFor(() => {
+        expect(fetchSittings.mock.calls.length).toBeGreaterThan(sittingReads);
+      });
+      expect(fetchConflicts).toHaveBeenCalledTimes(conflictReads);
       expect(toast.success).toHaveBeenCalledWith("Sitting saved.");
     });
   });
@@ -323,6 +328,29 @@ describe("SittingFormDialog", () => {
         });
       });
       expect(createSitting).not.toHaveBeenCalled();
+    });
+
+    it("shows the clash list the reschedule answered with, without reading it again", async () => {
+      const clash = conflictRecord();
+      updateSitting.mockResolvedValue({ sitting: sittingRecord(), conflicts: [clash] });
+      fetchConflicts.mockResolvedValue([]);
+      const user = await renderTab();
+      await screen.findByText("No clashes found.");
+      const conflictReads = fetchConflicts.mock.calls.length;
+      const sittingReads = fetchSittings.mock.calls.length;
+
+      await user.click(
+        await screen.findByRole("button", { name: "Reschedule Mathematics, Grade 5 A" }),
+      );
+      const dialog = await screen.findByRole("dialog");
+      setInput("Ends", "12:00");
+      await user.click(within(dialog).getByRole("button", { name: "Save" }));
+
+      expect(await screen.findByText(clash.message)).toBeInTheDocument();
+      await waitFor(() => {
+        expect(fetchSittings.mock.calls.length).toBeGreaterThan(sittingReads);
+      });
+      expect(fetchConflicts).toHaveBeenCalledTimes(conflictReads);
     });
   });
 });

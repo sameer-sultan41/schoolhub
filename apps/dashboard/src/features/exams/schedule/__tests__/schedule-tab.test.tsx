@@ -291,14 +291,17 @@ describe("ScheduleTab", () => {
       asScheduler();
     });
 
-    it("calls a sitting off after a confirm: a status change, then the exam's reads reload", async () => {
+    it("calls a sitting off after a confirm: the clash list comes from the answer, the rest reloads", async () => {
+      const clash = conflictRecord();
       cancelSitting.mockResolvedValue({
         sitting: sittingRecord({ status: "cancelled" }),
-        conflicts: [],
+        conflicts: [clash],
       });
+      fetchConflicts.mockResolvedValue([]);
       const user = await renderTab();
-      await screen.findByText("Mathematics");
-      const reads = fetchConflicts.mock.calls.length;
+      await screen.findByText("No clashes found.");
+      const conflictReads = fetchConflicts.mock.calls.length;
+      const sittingReads = fetchSittings.mock.calls.length;
 
       await user.click(screen.getByRole("button", { name: "Cancel Mathematics, Grade 5 A" }));
       const dialog = await screen.findByRole("alertdialog");
@@ -307,16 +310,20 @@ describe("ScheduleTab", () => {
       await waitFor(() => {
         expect(cancelSitting).toHaveBeenCalledWith(SITTING_ID);
       });
+      expect(await screen.findByText(clash.message)).toBeInTheDocument();
       await waitFor(() => {
-        expect(fetchConflicts.mock.calls.length).toBeGreaterThan(reads);
+        expect(fetchSittings.mock.calls.length).toBeGreaterThan(sittingReads);
       });
+      expect(fetchConflicts).toHaveBeenCalledTimes(conflictReads);
       expect(deleteSitting).not.toHaveBeenCalled();
       expect(toast.success).toHaveBeenCalledWith("Sitting cancelled.");
     });
 
-    it("deletes a sitting after a confirm", async () => {
+    it("deletes a sitting after a confirm, then reloads the clash list: a delete answers with none", async () => {
       deleteSitting.mockResolvedValue(undefined);
       const user = await renderTab();
+      await screen.findByText("Mathematics");
+      const conflictReads = fetchConflicts.mock.calls.length;
 
       await user.click(
         await screen.findByRole("button", { name: "Delete Mathematics, Grade 5 A" }),
@@ -326,6 +333,9 @@ describe("ScheduleTab", () => {
 
       await waitFor(() => {
         expect(deleteSitting).toHaveBeenCalledWith(SITTING_ID);
+      });
+      await waitFor(() => {
+        expect(fetchConflicts.mock.calls.length).toBeGreaterThan(conflictReads);
       });
       expect(cancelSitting).not.toHaveBeenCalled();
     });
