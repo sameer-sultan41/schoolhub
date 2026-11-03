@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from decimal import Decimal
 
 from celery import shared_task
 from django.utils import timezone
@@ -967,7 +968,20 @@ def assemble_paper_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> 
                 .get(pk=payload["question_bank_id"])
             )
             school_name = Tenant.objects.get(pk=tenant_id).name
-            sections = services.select_paper_questions(bank=bank, sections=payload["sections"])
+            # The view stores `marks_each` as a string (a JSONB payload holds no
+            # Decimal), so it is a Decimal again before anything sums or prints it.
+            blueprint = [
+                {
+                    **section,
+                    "marks_each": (
+                        Decimal(section["marks_each"])
+                        if section.get("marks_each") is not None
+                        else None
+                    ),
+                }
+                for section in payload["sections"]
+            ]
+            sections = services.select_paper_questions(bank=bank, sections=blueprint)
             total_marks = sum(
                 (section.get("marks_each") or question.default_marks)
                 for section in sections
