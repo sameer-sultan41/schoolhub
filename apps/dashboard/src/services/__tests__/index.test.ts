@@ -51,6 +51,7 @@ describe("Services", () => {
       "marks",
       "periods",
       "promotions",
+      "questionBanks",
       "reportCards",
       "rooms",
       "schoolOrganization",
@@ -117,6 +118,17 @@ describe("Services", () => {
     expect(typeof Services.examReports.runReport).toBe("function");
     expect(typeof Services.examReports.exportReport).toBe("function");
     expect(typeof Services.schoolOrganization.fetchTerms).toBe("function");
+    expect(typeof Services.questionBanks.fetchBanksPage).toBe("function");
+    expect(typeof Services.questionBanks.fetchBank).toBe("function");
+    expect(typeof Services.questionBanks.createBank).toBe("function");
+    expect(typeof Services.questionBanks.updateBank).toBe("function");
+    expect(typeof Services.questionBanks.deleteBank).toBe("function");
+    expect(typeof Services.questionBanks.fetchQuestionsPage).toBe("function");
+    expect(typeof Services.questionBanks.createQuestion).toBe("function");
+    expect(typeof Services.questionBanks.updateQuestion).toBe("function");
+    expect(typeof Services.questionBanks.deleteQuestion).toBe("function");
+    expect(typeof Services.questionBanks.approveQuestion).toBe("function");
+    expect(typeof Services.questionBanks.assemblePaper).toBe("function");
     expect(typeof Services.gradingScales.fetchScalesPage).toBe("function");
     expect(typeof Services.gradingScales.fetchScale).toBe("function");
     expect(typeof Services.gradingScales.createScale).toBe("function");

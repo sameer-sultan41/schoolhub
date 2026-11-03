@@ -1801,7 +1801,8 @@
       "label": "Examinations sections",
       "exams": "Exams",
       "gradingScales": "Grading scales",
-      "reports": "Reports"
+      "reports": "Reports",
+      "questionBanks": "Question banks"
     },
     "title": "Exams",
     "summary": "Plan each exam, its subjects and its marks structure.",
@@ -2578,6 +2579,206 @@
         "approved": "Approved",
         "totalUses": "Used in a paper",
         "averageUses": "Average uses"
+      }
+    },
+    "questionBanks": {
+      "title": "Question banks",
+      "summary": "Each subject's questions, the approval AI drafts wait for, and papers assembled from a blueprint.",
+      "everyLevel": "Every level",
+      "status": {
+        "active": "Active",
+        "archived": "Archived"
+      },
+      "types": {
+        "mcq": "Multiple choice",
+        "true_false": "True or false",
+        "short_answer": "Short answer",
+        "long_answer": "Long answer",
+        "fill_blank": "Fill in the blank",
+        "numerical": "Numerical"
+      },
+      "difficulty": {
+        "easy": "Easy",
+        "medium": "Medium",
+        "hard": "Hard"
+      },
+      "difficultyInSentence": {
+        "easy": "easy",
+        "medium": "medium",
+        "hard": "hard"
+      },
+      "sources": {
+        "manual": "Written by staff",
+        "ai_generated": "AI-generated",
+        "imported": "Imported"
+      },
+      "columns": {
+        "name": "Name",
+        "subject": "Subject",
+        "class": "Class",
+        "questions": "Questions",
+        "status": "Status"
+      },
+      "list": {
+        "caption": "Question banks",
+        "emptyTitle": "No question banks yet",
+        "emptyDescription": "Add a bank for a subject, then its questions. A teacher sees the banks of the subjects they teach.",
+        "loadError": "The question banks couldn't be loaded.",
+        "searchPlaceholder": "Search by name or description",
+        "noMatches": "No question banks match these filters",
+        "noMatchesDescription": "Try a different search, or clear a filter."
+      },
+      "filters": {
+        "search": "Search question banks",
+        "clearSearch": "Clear search",
+        "subject": "Subject",
+        "status": "Status",
+        "all": "All"
+      },
+      "actions": {
+        "create": "New question bank",
+        "edit": "Edit",
+        "delete": "Remove",
+        "editRow": "Edit {name}",
+        "deleteRow": "Remove {name}",
+        "backToList": "Back to question banks"
+      },
+      "form": {
+        "createTitle": "New question bank",
+        "editTitle": "Edit this question bank",
+        "intro": "Add the questions once the bank exists.",
+        "name": "Name",
+        "subject": "Subject",
+        "selectSubject": "Select a subject",
+        "noSubjectAccess": "You can't list the school's subjects, so a bank can't be set up here.",
+        "class": "Class",
+        "everyLevel": "Every level",
+        "classHint": "Leave it at every level for questions any class may sit.",
+        "status": "Status",
+        "description": "Description"
+      },
+      "delete": {
+        "titleNamed": "Remove {name}",
+        "description": "Its questions go with it. Papers already downloaded are not affected."
+      },
+      "saved": "Question bank saved.",
+      "removed": "Question bank removed.",
+      "detail": {
+        "questionCount": "{count, plural, one {# question} other {# questions}}",
+        "notFoundTitle": "Question bank not found",
+        "notFoundDescription": "It may have been removed, or it belongs to a subject you don't teach.",
+        "loadError": "The question bank couldn't be loaded."
+      },
+      "questions": {
+        "caption": "Questions in this bank",
+        "pagination": "Question pages",
+        "loadError": "The questions couldn't be loaded.",
+        "emptyTitle": "No questions yet",
+        "emptyDescription": "Add questions to this bank, so a paper can be assembled from them.",
+        "noMatches": "No questions match these filters",
+        "noMatchesDescription": "Try a different topic, or clear a filter.",
+        "aiGenerated": "AI-generated",
+        "approved": "Approved",
+        "awaitingApproval": "Awaiting approval",
+        "approvedBy": "Approved by {name}",
+        "approvedToast": "Question approved: papers can now use it.",
+        "saved": "Question saved.",
+        "removed": "Question removed.",
+        "approvalFilter": {
+          "approved": "Approved",
+          "pending": "Awaiting approval"
+        },
+        "columns": {
+          "question": "Question",
+          "type": "Type",
+          "difficulty": "Difficulty",
+          "topic": "Topic",
+          "marks": "Marks",
+          "source": "Source",
+          "approval": "Approval",
+          "used": "Times used"
+        },
+        "filters": {
+          "search": "Search questions",
+          "searchPlaceholder": "Search the question or topic",
+          "clearSearch": "Clear search",
+          "topic": "Topic",
+          "difficulty": "Difficulty",
+          "type": "Type",
+          "source": "Source",
+          "approval": "Approval"
+        },
+        "actions": {
+          "create": "New question",
+          "approve": "Approve",
+          "approveRow": "Approve the question {question}",
+          "editRow": "Edit the question {question}",
+          "deleteRow": "Remove the question {question}",
+          "delete": "Remove"
+        },
+        "delete": {
+          "title": "Remove this question",
+          "description": "“{question}” leaves the bank, so later papers cannot use it. Papers already downloaded keep it."
+        },
+        "approve": {
+          "title": "Approve this AI-drafted question",
+          "description": "Read the whole question first: once approved, papers can use it, and approval cannot be undone.",
+          "question": "Question",
+          "choices": "Choices",
+          "answerKey": "Answer key",
+          "marks": "Marks",
+          "topic": "Topic"
+        },
+        "form": {
+          "createTitle": "New question",
+          "editTitle": "Edit this question",
+          "text": "Question",
+          "type": "Type",
+          "difficulty": "Difficulty",
+          "marks": "Marks",
+          "marksInvalid": "Enter marks above 0, with up to two decimal places.",
+          "topic": "Topic",
+          "topicHint": "A paper's section can draw from one topic.",
+          "options": "Choices",
+          "optionsHint": "One choice per line, in the order they print.",
+          "optionsNeeded": "Add at least two choices, one per line.",
+          "answer": "Answer",
+          "answerHintChoice": "The correct choice, as written above.",
+          "selectAnswer": "Select the answer",
+          "modelAnswer": "Model answer",
+          "trueFalse": {
+            "True": "True",
+            "False": "False"
+          }
+        }
+      },
+      "paper": {
+        "open": "Assemble paper",
+        "title": "Assemble a paper from {name}",
+        "intro": "Each section draws its questions from the bank's approved ones, the least used first.",
+        "downloadNow": "The paper downloads as soon as it is ready. Papers aren't kept on SchoolHub, so save the file then. You can close this; stay on the bank's page until it arrives.",
+        "paperTitle": "Paper title",
+        "section": "Section {number}",
+        "removeSection": "Remove section {number}",
+        "addSection": "Add section",
+        "sectionTitle": "Section heading",
+        "topic": "Topic",
+        "difficulty": "Difficulty",
+        "count": "Questions",
+        "marksEach": "Marks each",
+        "countInvalid": "Enter a whole number from 1 to 200.",
+        "marksInvalid": "Leave it blank, or enter marks above 0 with up to two decimal places.",
+        "submit": "Assemble paper",
+        "assembling": "Assembling the paper",
+        "progress": "Assembling the paper: {progress}%",
+        "stalled": "The paper is taking longer than usual.",
+        "keepWaiting": "Keep waiting",
+        "shortfall": "Section {number} asks for {requested, plural, one {# {difficulty} question} other {# {difficulty} questions}}; the bank has {available} approved.",
+        "shortfallTopic": "Section {number} asks for {requested, plural, one {# {difficulty} question} other {# {difficulty} questions}} on {topic}; the bank has {available} approved.",
+        "ready": "Paper downloaded: {questions, plural, one {# question} other {# questions}}, {marks} marks.",
+        "failed": "The paper couldn't be assembled.",
+        "timedOut": "The paper is still being assembled. Keep waiting, or try again later.",
+        "downloadFailed": "The paper couldn't be downloaded."
       }
     }
   },

@@ -175,6 +175,18 @@ export const endpoints = {
     bands: (scaleId: string) => `/grading-scales/${scaleId}/grade-bands`,
     band: (scaleId: string, bandId: string) => `/grading-scales/${scaleId}/grade-bands/${bandId}`,
   },
+  /** `/question-banks` (`exams.question-bank.*`), its nested questions and two colon-actions. */
+  questionBanks: {
+    list: "/question-banks",
+    detail: (id: string) => `/question-banks/${id}`,
+    /** Colon-action: `202` + a job rendering the paper PDF, keyed `exams.question-bank.update`. */
+    assemblePaper: (id: string) => `/question-banks/${id}:assemble-paper`,
+    questions: (bankId: string) => `/question-banks/${bankId}/questions`,
+    question: (bankId: string, id: string) => `/question-banks/${bankId}/questions/${id}`,
+    /** Colon-action keyed `exams.question.approve`: an AI draft into the bank's usable pool. */
+    approveQuestion: (bankId: string, id: string) =>
+      `/question-banks/${bankId}/questions/${id}:approve`,
+  },
   /** `/exams`: the exam, keyed `exams.exam.*`. */
   exams: {
     list: "/exams",

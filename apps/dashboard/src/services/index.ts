@@ -18,6 +18,7 @@ import { LeaveRequestsService } from "./modules/leave-requests";
 import { MarksService } from "./modules/marks";
 import { PeriodsService } from "./modules/periods";
 import { PromotionsService } from "./modules/promotions";
+import { QuestionBanksService } from "./modules/question-banks";
 import { ReportCardsService } from "./modules/report-cards";
 import { RoomsService } from "./modules/rooms";
 import { SchoolOrganizationService } from "./modules/school-organization";
@@ -229,6 +230,22 @@ export type {
   GradingScaleType,
 } from "./modules/grading-scales";
 
+export type {
+  PaperBlueprint,
+  PaperResult,
+  PaperShortfall,
+  QuestionBankInput,
+  QuestionBankPageQuery,
+  QuestionBankRecord,
+  QuestionBankStatus,
+  QuestionDifficulty,
+  QuestionInput,
+  QuestionPageQuery,
+  QuestionRecord,
+  QuestionSource,
+  QuestionType,
+} from "./modules/question-banks";
+
 export type { PeriodInput, PeriodPageQuery, PeriodRecord } from "./modules/periods";
 
 export type { RoomInput, RoomPageQuery, RoomRecord, RoomType } from "./modules/rooms";
@@ -318,6 +335,7 @@ export const Services = {
   marks: MarksService,
   examResults: ExamResultsService,
   examReports: ExamReportsService,
+  questionBanks: QuestionBanksService,
   reportCards: ReportCardsService,
   guardians: GuardiansService,
   staff: StaffService,
