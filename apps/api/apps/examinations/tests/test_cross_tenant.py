@@ -663,6 +663,15 @@ class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
     def test_listing_questions_under_a_foreign_bank_is_a_404(self) -> None:
         self.assert404(self.client.get(f"{BANKS}/{self.foreign_bank.pk}/questions"))
 
+    def test_adding_a_question_to_a_foreign_bank_is_a_404(self) -> None:
+        self.assert404(
+            self.client.post(
+                f"{BANKS}/{self.foreign_bank.pk}/questions",
+                {"question_text": "2 + 2?", "question_type": "short_answer"},
+                format="json",
+            )
+        )
+
     def test_a_foreign_question_addressed_under_our_own_bank_is_a_404(self) -> None:
         """A question id from another tenant, under a bank this caller does own
         — the shape a naive `pk` lookup would let through."""

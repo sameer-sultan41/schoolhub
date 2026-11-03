@@ -1822,6 +1822,24 @@ def publish_report_cards(*, exam: Exam, actor_id: uuid.UUID) -> dict:
 # --- §5.8 question banks and paper assembly -------------------------------
 
 
+def assert_creator_teaches_bank_subject(*, user, subject: Subject) -> None:
+    """§4 — an `assigned` creator's bank is in a subject they currently teach.
+
+    The write side of `QuestionBank.filter_assigned_to_user`, read from the same
+    `_assigned_teaching` allocations, so a teacher cannot create (or move) a bank
+    into a subject they would then be unable to see. `all` and `campus` callers
+    are unrestricted, as their reads are: a bank has no campus.
+    """
+    scopes = user_scopes(user)
+    if RecordScope.ALL in scopes or _campus_refs(scopes) or RecordScope.ASSIGNED not in scopes:
+        return
+    taught = {subject_id for _, _, subject_id, _ in _assigned_teaching(user).allocations}
+    if subject.pk not in taught:
+        raise DomainRuleViolation(
+            {"subject_id": "You can keep a question bank only in a subject you currently teach."}
+        )
+
+
 def assert_question_is_approvable(question: Question) -> None:
     """§7.2 — the gate AI output passes through.
 

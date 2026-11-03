@@ -1452,29 +1452,13 @@ class QuestionBank(TenantOwnedModel):
     def filter_assigned_to_user(cls, queryset, user):
         """Record scope `assigned` — the subjects a teacher currently teaches.
 
-        Through `academics.TeacherSubjectAllocation`, the same table
-        `Marks.filter_assigned_to_user` resolves entry rights through. §4 gives
-        `exams.question.approve` to a "`teacher` (assigned subject)", and this
-        is what makes "assigned subject" mean something.
+        Read from `_assigned_teaching`'s current allocations, the module's one
+        reading of "assigned". §4 gives `exams.question.approve` to a "`teacher`
+        (assigned subject)": a bank matches on its subject alone, whatever its
+        class, and a homeroom grants no bank.
         """
-        if user is None or not getattr(user, "is_authenticated", False):
-            return queryset.none()
-        from apps.academics.models import TeacherSubjectAllocation
-        from apps.staff_management.models import EmploymentStatus, Staff
-
-        staff_ids = list(
-            Staff.objects.alive()
-            .filter(user_id=user.pk, employment_status=EmploymentStatus.ACTIVE)
-            .values_list("pk", flat=True)
-        )
-        if not staff_ids:
-            return queryset.none()
-        subject_ids = (
-            TeacherSubjectAllocation.objects.alive()
-            .filter(staff_id__in=staff_ids, effective_to__isnull=True)
-            .values_list("subject_id", flat=True)
-        )
-        return queryset.filter(subject_id__in=list(subject_ids))
+        subject_ids = {subject_id for _, _, subject_id, _ in _assigned_teaching(user).allocations}
+        return queryset.filter(subject_id__in=subject_ids) if subject_ids else queryset.none()
 
 
 class Question(TenantOwnedModel):

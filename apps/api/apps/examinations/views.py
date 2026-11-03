@@ -104,6 +104,7 @@ from apps.examinations.serializers import (
     MarksProgressRowSerializer,
     MarksSerializer,
     MarksUnlockResultSerializer,
+    PaperAssemblyAcceptedSerializer,
     QuestionBankSerializer,
     QuestionSerializer,
     ReportCardSerializer,
@@ -157,6 +158,14 @@ def scoped_exam_subject(request: Request, pk) -> ExamSubject:
         campus_field=None,
     )
     return get_object_or_404(exam_subjects, pk=pk)
+
+
+def scoped_question_bank(request: Request, pk) -> QuestionBank:
+    """The bank a nested question route addresses, through `QuestionBankViewSet`'s record scope."""
+    banks = scope_queryset(
+        QuestionBank.objects.alive(), request.user, own_field=None, campus_field=None
+    )
+    return get_object_or_404(banks, pk=pk)
 
 
 STAFF_PERMISSIONS = [
@@ -1356,7 +1365,14 @@ class QuestionBankViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     serializer_class = QuestionBankSerializer
     filterset_class = QuestionBankFilterSet
     search_fields = ["name", "description"]
+    # Page numbers, not a cursor: one school's banks, which a reader navigates
+    # by position. api-architecture.md §2.4.
+    pagination_class = PageNumberPagination
     ordering_fields = ["name", "created_at"]
+    # QuestionBank.Meta.ordering, declared on the view because the
+    # `question_count` GROUP BY drops the model's; the ordering filter appends
+    # `pk`, since names repeat across subjects.
+    ordering = ["name"]
     scope_campus_field = None
     required_feature = FEATURE
     required_permission = "exams.question-bank.view"
@@ -1377,15 +1393,49 @@ class QuestionBankViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
             .annotate(question_count=Count("questions", filter=Q(questions__deleted_at=None)))
         )
 
-    @extend_schema(request=AssemblePaperSerializer, responses={202: None})
-    def assemble_paper(self, request: Request, pk: str | None = None):
-        """`POST /question-banks/{id}:assemble-paper` — 202 + a paper PDF (§16).
+    def perform_create(self, serializer) -> None:
+        services.assert_creator_teaches_bank_subject(
+            user=self.request.user, subject=serializer.validated_data["subject"]
+        )
+        super().perform_create(serializer)
 
-        The blueprint is checked for satisfiability **before** a job is created,
-        and every shortfall is reported at once: a teacher whose blueprint asks
-        for eight hard questions from a bank holding three needs to know that
-        about each section of the paper, not to fix one and resubmit.
+    def perform_update(self, serializer) -> None:
+        # A PATCH that leaves the subject alone keeps a bank the caller can already see.
+        subject = serializer.validated_data.get("subject")
+        if subject is not None:
+            services.assert_creator_teaches_bank_subject(user=self.request.user, subject=subject)
+        super().perform_update(serializer)
+
+    @extend_schema(
+        request=AssemblePaperSerializer,
+        responses={
+            202: OpenApiResponse(
+                response=PaperAssemblyAcceptedSerializer,
+                description=(
+                    "A job resource; poll GET /jobs/{id}. Its `result` is "
+                    "`{result_file_id, questions, total_marks}`."
+                ),
+            ),
+            422: OpenApiResponse(
+                description=(
+                    "A shortfall: `error.meta.sections` lists each section it cannot fill as "
+                    "`{index, difficulty, topic, requested, available}`."
+                )
+            ),
+        },
+    )
+    def assemble_paper(self, request: Request, pk: str | None = None):
+        """`POST /question-banks/{id}:assemble-paper` — 202 + a job rendering a paper PDF (§16).
+
+        The job's `result` is `{result_file_id, questions, total_marks}`: the
+        paper's file id, the number of questions used, and the total marks as a
+        decimal string. The blueprint is checked before a job is created, and a
+        blueprint the bank's approved questions cannot fill is a 422 listing
+        every short section in `error.meta.sections`.
         """
+        # Every shortfall is reported at once: a teacher whose blueprint asks
+        # for eight hard questions from a bank holding three needs to know that
+        # about each section of the paper, not to fix one and resubmit.
         bank = get_object_or_404(self.get_queryset(), pk=pk)
         serializer = AssemblePaperSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -1453,13 +1503,9 @@ class QuestionViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_bank(self) -> QuestionBank:
-        """The bank named in the URL, 404 if it is not this tenant's.
-
-        Resolved through the tenant-scoped manager, so a foreign bank id is a
-        404 and never a 403 — a 403 would confirm the bank exists (AGENTS.md
-        invariant 2).
-        """
-        return get_object_or_404(QuestionBank.objects.alive(), pk=self.kwargs["bank_pk"])
+        # Through the bank's record scope (L34): a foreign bank, or one outside
+        # an `assigned` teacher's subjects, is a 404, never a 403 (invariant 2).
+        return scoped_question_bank(self.request, self.kwargs["bank_pk"])
 
     def get_queryset(self):
         return super().get_queryset().filter(question_bank=self.get_bank())

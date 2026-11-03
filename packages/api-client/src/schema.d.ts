@@ -3498,12 +3498,13 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description `POST /question-banks/{id}:assemble-paper` — 202 + a paper PDF (§16).
+         * @description `POST /question-banks/{id}:assemble-paper` — 202 + a job rendering a paper PDF (§16).
          *
-         *     The blueprint is checked for satisfiability **before** a job is created,
-         *     and every shortfall is reported at once: a teacher whose blueprint asks
-         *     for eight hard questions from a bank holding three needs to know that
-         *     about each section of the paper, not to fix one and resubmit.
+         *     The job's `result` is `{result_file_id, questions, total_marks}`: the
+         *     paper's file id, the number of questions used, and the total marks as a
+         *     decimal string. The blueprint is checked before a job is created, and a
+         *     blueprint the bank's approved questions cannot fill is a 422 listing
+         *     every short section in `error.meta.sections`.
          */
         post: operations["question_banks_:assemble_paper_create"];
         delete?: never;
@@ -8634,9 +8635,10 @@ export interface components {
             data?: components["schemas"]["QuestionBank"][];
             meta?: {
                 pagination?: {
-                    next_cursor?: string | null;
-                    previous_cursor?: string | null;
+                    page?: number;
                     page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
                 };
             };
         };
@@ -8876,6 +8878,18 @@ export interface components {
                     page_size?: number;
                 };
             };
+        };
+        /**
+         * @description `:assemble-paper`'s 202: the job that renders the paper.
+         *
+         *     The job's `result` is `{result_file_id, questions, total_marks}`: the paper
+         *     PDF's file id, how many questions it used, and its total marks as a decimal
+         *     string.
+         */
+        PaperAssemblyAccepted: {
+            /** Format: uuid */
+            job_id: string;
+            status: string;
         };
         /** @description One section of §6's paper blueprint. */
         PaperSection: {
@@ -9737,6 +9751,9 @@ export interface components {
          *     `usage_count` is read-only for the same shape of reason: it is the only
          *     record that a question reached a paper (§15 gives assembled papers no
          *     table), so nothing but assembly may write it.
+         *
+         *     `source` is create-only: an update that changes it is a 422 on `source`,
+         *     so a PATCH cannot remove an AI draft's label.
          */
         PatchedQuestion: {
             /** Format: uuid */
@@ -9756,6 +9773,9 @@ export interface components {
             source?: components["schemas"]["QuestionSourceEnum"];
             /** @description False on creation for ai_generated; flipped by :approve. */
             readonly is_approved?: boolean;
+            /** Format: uuid */
+            readonly approved_by?: string | null;
+            readonly approved_by_name?: string | null;
             readonly usage_count?: number;
             /** Format: date-time */
             readonly created_at?: string;
@@ -9768,8 +9788,10 @@ export interface components {
             readonly id?: string;
             /** Format: uuid */
             subject_id?: string;
+            readonly subject_name?: string;
             /** Format: uuid */
             class_id?: string | null;
+            readonly class_name?: string | null;
             name?: string;
             description?: string | null;
             status?: components["schemas"]["QuestionBankStatusEnum"];
@@ -10402,6 +10424,9 @@ export interface components {
          *     `usage_count` is read-only for the same shape of reason: it is the only
          *     record that a question reached a paper (§15 gives assembled papers no
          *     table), so nothing but assembly may write it.
+         *
+         *     `source` is create-only: an update that changes it is a 422 on `source`,
+         *     so a PATCH cannot remove an AI draft's label.
          */
         Question: {
             /** Format: uuid */
@@ -10421,6 +10446,9 @@ export interface components {
             source?: components["schemas"]["QuestionSourceEnum"];
             /** @description False on creation for ai_generated; flipped by :approve. */
             readonly is_approved: boolean;
+            /** Format: uuid */
+            readonly approved_by: string | null;
+            readonly approved_by_name: string | null;
             readonly usage_count: number;
             /** Format: date-time */
             readonly created_at: string;
@@ -10433,8 +10461,10 @@ export interface components {
             readonly id: string;
             /** Format: uuid */
             subject_id: string;
+            readonly subject_name: string;
             /** Format: uuid */
             class_id?: string | null;
+            readonly class_name: string | null;
             name: string;
             description?: string | null;
             status?: components["schemas"]["QuestionBankStatusEnum"];
@@ -17557,10 +17587,10 @@ export interface operations {
         parameters: {
             query?: {
                 class_id?: string;
-                /** @description The pagination cursor value. */
-                cursor?: string;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
                 /** @description Number of results to return per page. */
                 page_size?: number;
                 /** @description A search term. */
@@ -17874,8 +17904,17 @@ export interface operations {
             };
         };
         responses: {
-            /** @description No response body */
+            /** @description A job resource; poll GET /jobs/{id}. Its `result` is `{result_file_id, questions, total_marks}`. */
             202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaperAssemblyAccepted"];
+                };
+            };
+            /** @description A shortfall: `error.meta.sections` lists each section it cannot fill as `{index, difficulty, topic, requested, available}`. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

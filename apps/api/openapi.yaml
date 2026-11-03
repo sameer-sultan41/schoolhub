@@ -7843,18 +7843,18 @@ paths:
         schema:
           type: string
           format: uuid
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
       - name: ordering
         required: false
         in: query
         description: Which field to use when ordering the results.
         schema:
           type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
       - name: page_size
         required: false
         in: query
@@ -8301,12 +8301,13 @@ paths:
     post:
       operationId: question_banks_:assemble_paper_create
       description: |-
-        `POST /question-banks/{id}:assemble-paper` — 202 + a paper PDF (§16).
+        `POST /question-banks/{id}:assemble-paper` — 202 + a job rendering a paper PDF (§16).
 
-        The blueprint is checked for satisfiability **before** a job is created,
-        and every shortfall is reported at once: a teacher whose blueprint asks
-        for eight hard questions from a bank holding three needs to know that
-        about each section of the paper, not to fix one and resubmit.
+        The job's `result` is `{result_file_id, questions, total_marks}`: the
+        paper's file id, the number of questions used, and the total marks as a
+        decimal string. The blueprint is checked before a job is created, and a
+        blueprint the bank's approved questions cannot fill is a 422 listing
+        every short section in `error.meta.sections`.
       parameters:
       - in: path
         name: id
@@ -8332,7 +8333,15 @@ paths:
       - jwtAuth: []
       responses:
         '202':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaperAssemblyAccepted'
+          description: A job resource; poll GET /jobs/{id}. Its `result` is `{result_file_id,
+            questions, total_marks}`.
+        '422':
+          description: 'A shortfall: `error.meta.sections` lists each section it cannot
+            fill as `{index, difficulty, topic, requested, available}`.'
   /api/v1/receipts:
     get:
       operationId: receipts_list
@@ -19458,13 +19467,13 @@ components:
             pagination:
               type: object
               properties:
-                next_cursor:
-                  type: string
-                  nullable: true
-                previous_cursor:
-                  type: string
-                  nullable: true
+                page:
+                  type: integer
                 page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
                   type: integer
     PaginatedQuestionList:
       type: object
@@ -19949,6 +19958,23 @@ components:
                   nullable: true
                 page_size:
                   type: integer
+    PaperAssemblyAccepted:
+      type: object
+      description: |-
+        `:assemble-paper`'s 202: the job that renders the paper.
+
+        The job's `result` is `{result_file_id, questions, total_marks}`: the paper
+        PDF's file id, how many questions it used, and its total marks as a decimal
+        string.
+      properties:
+        job_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+      required:
+      - job_id
+      - status
     PaperSection:
       type: object
       description: One section of §6's paper blueprint.
@@ -21603,6 +21629,9 @@ components:
         `usage_count` is read-only for the same shape of reason: it is the only
         record that a question reached a paper (§15 gives assembled papers no
         table), so nothing but assembly may write it.
+
+        `source` is create-only: an update that changes it is a 422 on `source`,
+        so a PATCH cannot remove an AI draft's label.
       properties:
         id:
           type: string
@@ -21638,6 +21667,15 @@ components:
           type: boolean
           readOnly: true
           description: False on creation for ai_generated; flipped by :approve.
+        approved_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        approved_by_name:
+          type: string
+          nullable: true
+          readOnly: true
         usage_count:
           type: integer
           readOnly: true
@@ -21660,9 +21698,16 @@ components:
         subject_id:
           type: string
           format: uuid
+        subject_name:
+          type: string
+          readOnly: true
         class_id:
           type: string
           format: uuid
+          nullable: true
+        class_name:
+          type: string
+          readOnly: true
           nullable: true
         name:
           type: string
@@ -22939,6 +22984,9 @@ components:
         `usage_count` is read-only for the same shape of reason: it is the only
         record that a question reached a paper (§15 gives assembled papers no
         table), so nothing but assembly may write it.
+
+        `source` is create-only: an update that changes it is a 422 on `source`,
+        so a PATCH cannot remove an AI draft's label.
       properties:
         id:
           type: string
@@ -22974,6 +23022,15 @@ components:
           type: boolean
           readOnly: true
           description: False on creation for ai_generated; flipped by :approve.
+        approved_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        approved_by_name:
+          type: string
+          nullable: true
+          readOnly: true
         usage_count:
           type: integer
           readOnly: true
@@ -22986,6 +23043,8 @@ components:
           format: date-time
           readOnly: true
       required:
+      - approved_by
+      - approved_by_name
       - created_at
       - id
       - is_approved
@@ -23005,9 +23064,16 @@ components:
         subject_id:
           type: string
           format: uuid
+        subject_name:
+          type: string
+          readOnly: true
         class_id:
           type: string
           format: uuid
+          nullable: true
+        class_name:
+          type: string
+          readOnly: true
           nullable: true
         name:
           type: string
@@ -23031,11 +23097,13 @@ components:
           format: date-time
           readOnly: true
       required:
+      - class_name
       - created_at
       - id
       - name
       - question_count
       - subject_id
+      - subject_name
       - updated_at
     QuestionBankStatusEnum:
       enum:

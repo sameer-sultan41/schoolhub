@@ -48,6 +48,7 @@ from apps.school_organization.models import AcademicSession, Class, Section, Sub
 from apps.staff_management.models import Staff
 from apps.student_management.models import StudentEnrollment
 from apps.timetable.models import Room
+from core.api.exceptions import DomainRuleViolation
 from core.api.serializers import UserNamesListSerializer, UserNamesModelSerializer
 from core.exports import tabular
 
@@ -521,12 +522,17 @@ class AdmitCardSerializer(serializers.ModelSerializer):
         return enrollment.section.name if enrollment else None
 
 
-class AdmitCardIssueAcceptedSerializer(serializers.Serializer):
-    """`:issue-admit-cards`' 202: the render job, and the cards this run added
-    beside the ones that already existed."""
+class JobAcceptedSerializer(serializers.Serializer):
+    """The `data` of `ActionResponse.accepted`'s 202: the queued job to poll."""
 
     job_id = serializers.UUIDField()
     status = serializers.CharField()
+
+
+class AdmitCardIssueAcceptedSerializer(JobAcceptedSerializer):
+    """`:issue-admit-cards`' 202: the render job, and the cards this run added
+    beside the ones that already existed."""
+
     added = serializers.IntegerField()
     existing = serializers.IntegerField()
 
@@ -920,7 +926,10 @@ class QuestionBankSerializer(serializers.ModelSerializer):
     """`question_banks` — §5.8."""
 
     subject_id = _fk(Subject, source="subject")
+    subject_name = serializers.CharField(source="subject.name", read_only=True)
     class_id = _fk(Class, source="school_class", required=False, allow_null=True)
+    # Null for a bank with no class, which covers every level.
+    class_name = serializers.CharField(source="school_class.name", read_only=True, allow_null=True)
     question_count = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
@@ -928,7 +937,9 @@ class QuestionBankSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "subject_id",
+            "subject_name",
             "class_id",
+            "class_name",
             "name",
             "description",
             "status",
@@ -939,7 +950,7 @@ class QuestionBankSerializer(serializers.ModelSerializer):
         read_only_fields = READ_ONLY_FIELDS
 
 
-class QuestionSerializer(serializers.ModelSerializer):
+class QuestionSerializer(UserNamesModelSerializer):
     """`questions` — §5.8, with §7.2's approval gate on the wire.
 
     `is_approved` and `approved_by` are **read-only**. §7.2 makes approval a
@@ -951,12 +962,17 @@ class QuestionSerializer(serializers.ModelSerializer):
     `usage_count` is read-only for the same shape of reason: it is the only
     record that a question reached a paper (§15 gives assembled papers no
     table), so nothing but assembly may write it.
+
+    `source` is create-only: an update that changes it is a 422 on `source`,
+    so a PATCH cannot remove an AI draft's label.
     """
 
     question_bank_id = serializers.UUIDField(read_only=True)
+    approved_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Question
+        list_serializer_class = UserNamesListSerializer
         fields = (
             "id",
             "question_bank_id",
@@ -969,13 +985,28 @@ class QuestionSerializer(serializers.ModelSerializer):
             "topic",
             "source",
             "is_approved",
+            "approved_by",
+            "approved_by_name",
             "usage_count",
             "created_at",
             "updated_at",
         )
-        read_only_fields = (*READ_ONLY_FIELDS, "is_approved", "usage_count")
+        read_only_fields = (*READ_ONLY_FIELDS, "is_approved", "approved_by", "usage_count")
+
+    def user_ids(self, instance: Question) -> Iterable[uuid.UUID | None]:
+        return (instance.approved_by,)
+
+    def get_approved_by_name(self, instance: Question) -> str | None:
+        return self.user_name(instance.approved_by)
 
     def validate(self, attrs: dict) -> dict:
+        # `source` is set once, on create: a PATCH to `manual` would strip an AI draft's label
+        # (ai-governance.md §8) and, with it, the approval gate's reason to exist.
+        source = attrs.get("source")
+        if self.instance is not None and source is not None and source != self.instance.source:
+            raise DomainRuleViolation(
+                {"source": "A question's source is fixed when it is created and cannot change."}
+            )
         question_type = _value(attrs, self.instance, "question_type")
         options = _value(attrs, self.instance, "options")
 
@@ -1025,6 +1056,15 @@ class AssemblePaperSerializer(serializers.Serializer):
 
     title = serializers.CharField(max_length=150)
     sections = serializers.ListField(child=PaperSectionSerializer(), allow_empty=False)
+
+
+class PaperAssemblyAcceptedSerializer(JobAcceptedSerializer):
+    """`:assemble-paper`'s 202: the job that renders the paper.
+
+    The job's `result` is `{result_file_id, questions, total_marks}`: the paper
+    PDF's file id, how many questions it used, and its total marks as a decimal
+    string.
+    """
 
 
 class ExamReportQuerySerializer(serializers.Serializer):
