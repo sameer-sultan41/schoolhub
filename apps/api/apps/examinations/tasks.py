@@ -19,6 +19,7 @@ from decimal import Decimal
 
 from celery import shared_task
 from django.utils import timezone
+from rest_framework.exceptions import APIException
 
 from core.imports.tabular import ROW_NUMBER_KEY
 from core.jobs.models import BackgroundJob
@@ -31,6 +32,23 @@ logger = logging.getLogger(__name__)
 # How often to report progress back to the job row. A batch is hundreds of
 # renders and a caller is watching a bar; every row would be a write per PDF.
 PROGRESS_EVERY = 25
+
+
+def _detail_messages(detail) -> list[str]:
+    """Every sentence in a DRF error detail, however it nests (field dict, list, string)."""
+    if isinstance(detail, dict):
+        return [message for value in detail.values() for message in _detail_messages(value)]
+    if isinstance(detail, list):
+        return [message for value in detail for message in _detail_messages(value)]
+    return [str(detail)]
+
+
+def _job_error(exc: Exception) -> str:
+    """A failed job's `error`, which a person reads: an API error's own sentences, not the repr
+    of its field dict (`{'sections': ErrorDetail(...)}`)."""
+    if isinstance(exc, APIException):
+        return " ".join(_detail_messages(exc.detail))
+    return str(exc)
 
 
 @shared_task(base=TenantAwareTask, bind=True)
@@ -1016,7 +1034,9 @@ def assemble_paper_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> 
             },
         )
     except Exception as exc:  # noqa: BLE001
-        mark_failed(job=job, error=str(exc))
+        # A mid-job shortfall (`select_paper_questions`) is a `DomainRuleViolation` on
+        # `sections`; the teacher sees its sentence.
+        mark_failed(job=job, error=_job_error(exc))
 
 
 @shared_task(base=TenantAwareTask, bind=True)
