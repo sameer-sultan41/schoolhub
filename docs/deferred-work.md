@@ -230,14 +230,6 @@ either this file or `project-status.md`.
     staff register marks (Present, Absent, Late, Half day), though the server accepts every
     staff status but `on_leave`. Neither the register nor a correction can record a staff day
     as a holiday from the dashboard; the school calendar's holidays refuse marking instead.
-- **One `examinations` lookup still finds its parent without the caller's record scope**:
-  the QuestionBank nested lookup (`get_bank` in `apps/api/apps/examinations/views.py`, which reads
-  `QuestionBank.objects.alive()` for the question routes), the pattern lesson L34 records. PR B
-  converted `:publish-schedule`, `:issue-admit-cards` and `schedule-conflicts`; PR C the marks
-  actions; PR D (results and report cards) `:process-results`, `:approve-results`,
-  `:send-results-back`, `:publish-results`, `/results/{id}:withhold`, `:generate-report-cards` and
-  `:publish-report-cards`, each with an out-of-scope 404 test. **PR E (question banks) converts
-  `get_bank`** through `QuestionBankViewSet`'s own scope.
 - **A list's debounced URL write can undo a click made inside the debounce.** Typing in a
   `useDataGridUrlState` search box and clicking a row link before the debounce fires navigates,
   then the late `replaceState` writes the list's `?search=` URL and the router returns to the list
@@ -322,6 +314,45 @@ either this file or `project-status.md`.
     names of whoever processed and approved them. The portal read should drop the four stamp fields
     (a portal serializer, or the restricted-principal branch of `ResultViewSet` picking one), with
     a test that a student's read carries none of them.
+- **The examinations dashboard's PR E (question banks, paper assembly) left these out:**
+  - **An assembled paper is not kept, and there is no past-papers list.** `:assemble-paper`
+    renders the PDF into a file and records the use on each question's `usage_count`, but §15
+    gives papers no table, so nothing lists a bank's earlier papers. The bank's page downloads
+    the file once its job succeeds (the job is held by the page, so closing the dialog mid-job
+    does not lose it; leaving the page does) and the dialog says to save it then; a lost
+    download means assembling again (deterministic, so the same blueprint over an unchanged bank
+    gives the same paper, with every question's `usage_count` raised a second time). A
+    `question_papers` table
+    (title, blueprint, file, who assembled it) with a list and its own `:download` is the fix.
+  - **The paper downloads through the generic job-file flow, so it carries audit C1.** The dialog
+    reads the job's `result_file_id` and fetches `POST /files/{id}:download` through
+    `useJobFileDownload`, keyed `platform.file.view` (every staff role) with no record scope
+    (`core/files` above; C1 in `07-quality/2026-09-module-audit-findings.md`): any staff member
+    who learns the id can fetch a paper before it is sat. The id reaches the dashboard only through
+    the assembling user's own job, which bounds it in the UI but not at the API. The examinations
+    plan's user ruling (2026-11-01) kept this flow for the paper, since papers have no row to hang
+    a `:download` on; the fix arrives with the table above (a `:download` on the paper, scoped by
+    its bank) or with C1's per-purpose check on `core/files`.
+  - **`:generate-questions` is not built; it waits on `core/ai`.** §16 lists
+    `POST /question-banks/{id}:generate-questions` (AI, job), but the AI gateway does not exist and
+    AGENTS.md hard rule 6 forbids a provider SDK in an app, so neither the endpoint nor a Generate
+    button exists. The rest of §7.2's gate is built and tested against drafts a client posts with
+    `source: "ai_generated"`: the draft is saved unapproved whatever the body says, carries the
+    "AI-generated" label (ai-governance.md §8) in the questions table before and after approval,
+    and Approve (`exams.question.approve`) is offered on an unapproved draft only, behind a
+    confirm showing the whole question, its choices, answer key, marks and topic, recording who
+    approved it. `source` is fixed at create (a PATCH changing it is a 422), so the label cannot
+    be removed.
+  - **A failed paper job's error is flattened by a local helper.** `assemble_paper_task` stores
+    an API error's own sentences (`_job_error` in `examinations/tasks.py`), the same idea as
+    `academics.promotions.services.failure_message`; the other tasks in the module, and in
+    `attendance`, `fees_finance`, `staff_management` and `student_management`, still store
+    `str(exc)`. Hoisting one helper into `core/jobs` and using it in every task is the fix.
+  - **A blueprint section cannot ask for a question type.** `PaperSectionSerializer` takes a
+    title, difficulty, topic, count and marks each, and `select_paper_questions` draws from every
+    type at that difficulty, so the dialog's sections offer no type either (a section of "two
+    multiple-choice questions" is not expressible). A `question_type` on the section, filtered in
+    both `assert_blueprint_is_satisfiable` and `select_paper_questions`, is the fix.
 - **Phase 2 Tier 2 is complete: academics, timetable and attendance are full-stack, their
   dashboards shipped.**
 - **Two dangling UUID columns became real foreign keys**:
@@ -383,16 +414,17 @@ either this file or `project-status.md`.
 - **No `node_modules` locally.** Nothing is installed, built, linted, or tested
   locally — CI is the source of truth.
 - **No module screens beyond the dashboard home + student-management +
-  staff-management + academics + timetable + attendance + examinations' setup.**
-  Fees, communication, parent-portal, … are untouched — the gap against
+  staff-management + academics + timetable + attendance + communication (#146, merged
+  with #145), and examinations' five open PRs.**
+  Fees, parent-portal, … are untouched — the gap against
   [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.md) tier 2+.
   Attendance's screens followed its API as three dashboard PRs (register, Records and
   Settings; the corrections and leave queues; staff attendance, reports and the import),
   once the dashboard shell had settled. Examinations' are five PRs (plan
-  `superpowers/plans/2026-11-01-examinations-dashboard.md`), of which PR A (grading scales,
-  exams and their subjects) and PR B (the Schedule and Admit cards tabs) are built; what
-  remains is **PR C** (the Marks tab), **PR D** (Results, Report cards and the Reports
-  section) and **PR E** (question banks and paper assembly).
+  `superpowers/plans/2026-11-01-examinations-dashboard.md`), built as a stack, all open: PR A
+  #147 (grading scales, exams and their subjects), PR B #149 (the Schedule and Admit cards
+  tabs), PR C #152 (the Marks tab), PR D #154 (Results, Report cards and the Reports section)
+  and PR E (question banks and paper assembly; number to follow). Full-stack once they merge.
 - **Tier 2's three modules are all in.** `apps/api/apps/` now also has
   `academics`, `timetable` and `attendance`, attendance with all three of its
   halves: marking, leave, and staff attendance with reports (see above).

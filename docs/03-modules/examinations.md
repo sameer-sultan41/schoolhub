@@ -243,14 +243,14 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - `GET /api/v1/exams/{id}/schedule-conflicts` (the clash list) · `POST /api/v1/exams/{id}:publish-schedule`
 - `GET /api/v1/results` (scoped) · `POST /api/v1/results/{id}:withhold` · `GET/PATCH /api/v1/report-cards` (remarks only) · `POST /api/v1/report-cards/{id}:download` · `GET /api/v1/admit-cards` · `POST /api/v1/exams/{id}:generate-report-cards` · `:issue-admit-cards` (jobs) · `:publish-report-cards` · `POST /api/v1/admit-cards/{id}:revoke` · `:download`
 - `GET/POST /api/v1/reports/exam-summary` — one `kind` per report, inline rows under a ceiling, a job above it and for every export
-- `GET/POST/PATCH /api/v1/question-banks` · `/api/v1/questions` · `POST /api/v1/questions/{id}:approve` · `POST /api/v1/question-banks/{id}:generate-questions` (AI, job) · `:assemble-paper` (job → paper PDF file)
+- `GET/POST/PATCH/DELETE /api/v1/question-banks` · `GET/POST/PATCH/DELETE /api/v1/question-banks/{id}/questions` · `POST /api/v1/question-banks/{bank}/questions/{id}:approve` · `POST /api/v1/question-banks/{id}:generate-questions` (AI, job) · `:assemble-paper` (job → paper PDF file)
 
 List and read shapes the dashboard depends on:
 
-- **Pagination.** `/exams` and `/grading-scales` page by number (`?page=`, `meta.pagination.total_count`), as
-  [`api-architecture.md`](../02-architecture/api-architecture.md) §2.4's bounded admin lists do: one school's exams
-  and its handful of scales are navigated by position. `/exams` is ordered `-starts_on, name, id` by default (`id` makes the order total),
-  `/grading-scales` by `name`. `/exam-subjects` keeps the cursor and is ordered by class, then subject, so a client
+- **Pagination.** `/exams`, `/grading-scales` and `/question-banks` page by number (`?page=`, `meta.pagination.total_count`), as
+  [`api-architecture.md`](../02-architecture/api-architecture.md) §2.4's bounded admin lists do: one school's exams,
+  its handful of scales and its banks are navigated by position. `/exams` is ordered `-starts_on, name, id` by default (`id` makes the order total),
+  `/grading-scales` and `/question-banks` by `name` (then `id`). A bank's `/questions` keeps the cursor. `/exam-subjects` keeps the cursor and is ordered by class, then subject, so a client
   grouping by class reads each class's rows together. A scale's `/grade-bands` is **unpaginated**, in display order
   (`sort_order`, then `-min_percent`): a scale has a handful of bands and a client needs all of them.
 - **Names on the row.** An exam carries `academic_session_name`, `term_name` (null without a term),
@@ -355,6 +355,31 @@ List and read shapes the dashboard depends on:
   under `exams.report-card.view` and the record scope, the admit card's shape (ADR-0021). A student or guardian
   reaches only their own **published** card; a card with no rendered file, or whose file is not `ready` or was
   soft-deleted, is a 404.
+- **A bank and a question carry their names.** `QuestionBank` reads `subject_name` and `class_name` (null for a
+  bank with no class, which covers every level), joined in the list's own query. `Question` reads `approved_by`
+  and `approved_by_name` (first and last name, never an email, one query per page), both read-only and null for
+  a question nobody approved: a teacher's own question is approved on save with no approver, and an AI draft
+  until `:approve` names one.
+- **Questions filter on the blueprint's own axes.** A bank's `/questions` (cursor, oldest first) takes
+  `topic` (matched whole, case-insensitively), `difficulty`, `question_type`, `source` and `is_approved`,
+  and `search` over the text and topic; `/question-banks` takes `subject_id`, `class_id`, `status` and
+  `search` over the name and description.
+- **The nested question routes are record-scoped.** `/question-banks/{id}/questions` and its `:approve` resolve
+  the bank through `QuestionBankViewSet`'s record scope (L34), so a bank outside an `assigned` teacher's subjects
+  is a 404 on every route, the list and a create included, exactly as a foreign bank is.
+- **An `assigned` creator's bank stays in a subject they teach.** On `POST /question-banks` and on a `PATCH`
+  that sends `subject_id`, a caller whose scope is `assigned` must hold a current allocation
+  (`_assigned_teaching`) in that subject, or it is a 422 on `subject_id`; `all` and `campus` callers are
+  unrestricted, as their reads are.
+- **A question's `source` is fixed at create.** A `PATCH` that changes it is a 422 on `source` (resending the
+  same value is accepted), so an AI draft's label cannot be removed.
+- **Assembly is a job with a typed result.** `:assemble-paper` takes `{title, sections}` and answers a `202`
+  (`PaperAssemblyAccepted`, `{job_id, status}`); its job's `result` is `{result_file_id, questions, total_marks}`:
+  the paper PDF's file id, the number of questions used, and the paper's total marks as a decimal string. A
+  blueprint the bank's approved questions cannot fill is a 422 `domain_rule_violation` before any job exists,
+  with every short section in `error.meta.sections` as `{index, difficulty, topic, requested, available}`. A
+  pool that shrinks between the check and the job fails the job rather than truncating the paper, and the
+  job's `error` is the plain sentence naming the section, not the error's field dict.
 - **Report rows are typed per `kind`.** `GET /reports/exam-summary` answers `ExamReportRow[]`, a `oneOf` keyed by
   each row's `kind` (`result-register`, `pass-fail-analysis`, `subject-performance`, `marks-entry-status`,
   `grade-distribution`, `question-bank-usage`), each row type mirroring its report function field for field
@@ -407,7 +432,7 @@ assembly. **The module is complete.**
 | Area | State |
 | ---- | ----- |
 | Entities | **All 11** of §15's tables — `grading_scales`, `grade_bands`, `exams`, `exam_subjects`, `exam_schedules`, `admit_cards`, `marks`, `results`, `report_cards`, `question_banks`, `questions` — tenant-owned with RLS policies |
-| §16 endpoints | `GET/POST/PATCH/DELETE /grading-scales`, `POST /grading-scales/{id}:set-default`, `GET/POST/PATCH/DELETE /grading-scales/{id}/grade-bands`, `GET/POST/PATCH/DELETE /exams`, `GET/POST/PATCH/DELETE /exam-subjects`, `GET/POST/PATCH/DELETE /exam-schedules` (every write returns `meta.conflicts`), `GET /exams/{id}/schedule-conflicts`, `POST /exams/{id}:publish-schedule`, `GET /admit-cards`, `POST /exams/{id}:issue-admit-cards` (202 + job, accepts `Idempotency-Key`), `POST /admit-cards/{id}:revoke` · `:download`, `GET /marks` (filters `exam_subject_id`, `exam_id`, `section_id`, `student_id`, `status`, `is_absent`, `is_exempt`), `GET /marks/grid`, `POST /marks:bulk-entry` (one `section_id`, accepts `Idempotency-Key`), `POST /exam-subjects/{id}:lock-marks` · `:unlock-marks`, `GET /exams/{id}/marks-progress`, `POST /marks-imports` (202 + job), `GET /results`, `POST /exams/{id}:process-results` (202 + job) · `:approve-results` · `:publish-results` · `:send-results-back`, `POST /results/{id}:withhold`, `GET/PATCH /report-cards` (remarks only), `POST /exams/{id}:generate-report-cards` (202 + job) · `:publish-report-cards`, `GET/POST /reports/exam-summary` (six report kinds, inline under 1,000 rows and a 202 job above), `GET/POST/PATCH/DELETE /question-banks`, `GET/POST/PATCH/DELETE /question-banks/{id}/questions`, `POST /question-banks/{bank}/questions/{id}:approve`, `POST /question-banks/{id}:assemble-paper` (202 + a paper PDF) |
+| §16 endpoints | `GET/POST/PATCH/DELETE /grading-scales`, `POST /grading-scales/{id}:set-default`, `GET/POST/PATCH/DELETE /grading-scales/{id}/grade-bands`, `GET/POST/PATCH/DELETE /exams`, `GET/POST/PATCH/DELETE /exam-subjects`, `GET/POST/PATCH/DELETE /exam-schedules` (every write returns `meta.conflicts`), `GET /exams/{id}/schedule-conflicts`, `POST /exams/{id}:publish-schedule`, `GET /admit-cards`, `POST /exams/{id}:issue-admit-cards` (202 + job, accepts `Idempotency-Key`), `POST /admit-cards/{id}:revoke` · `:download`, `GET /marks` (filters `exam_subject_id`, `exam_id`, `section_id`, `student_id`, `status`, `is_absent`, `is_exempt`), `GET /marks/grid`, `POST /marks:bulk-entry` (one `section_id`, accepts `Idempotency-Key`), `POST /exam-subjects/{id}:lock-marks` · `:unlock-marks`, `GET /exams/{id}/marks-progress`, `POST /marks-imports` (202 + job), `GET /results`, `POST /exams/{id}:process-results` (202 + job) · `:approve-results` · `:publish-results` · `:send-results-back`, `POST /results/{id}:withhold`, `GET/PATCH /report-cards` (remarks only), `POST /exams/{id}:generate-report-cards` (202 + job) · `:publish-report-cards`, `GET/POST /reports/exam-summary` (six report kinds, inline under 1,000 rows and a 202 job above), `GET/POST/PATCH/DELETE /question-banks`, `GET/POST/PATCH/DELETE /question-banks/{id}/questions`, `POST /question-banks/{bank}/questions/{id}:approve`, `POST /question-banks/{id}:assemble-paper` (202 + a job rendering a paper PDF) |
 | §4 permissions | `exams.exam.{view,create,update,delete}`, `exams.grading-scale.{view,create,update}`, `exams.schedule.{view,create,update}`, `exams.admit-card.{view,issue}`, `exams.marks.{view,create,update,import,lock}`, `exams.result.{view,create,approve,publish}`, `exams.report-card.{view,create,publish}`. `exams.question-bank.{view,create,update,delete}`, `exams.question.approve`, `exams.result.export`. **All of §4's keys are registered, and every one but `exams.marks.update` has an endpoint behind it:** `:bulk-entry` checks `exams.marks.create` for a new row and an update alike, so `.update` gates nothing yet (`docs/deferred-work.md`, lesson L36). `tests/test_endpoint_contracts.py` checks that every key a view names is registered, not the reverse |
 | §11 validations | Exam name unique per session · exam dates set together and ordered · dates within the named term, or the session where no term is named · a term must belong to the exam's session · the session must be writable · one `exam_subjects` row per (exam, class, subject) · `pass_marks ≤ max_marks` · a practical component requires a practical maximum · the subject must be in the class's curriculum for the session · grading bands contiguous, non-overlapping and covering 0–100% before an exam may use the scale |
 | §13 reports | All five — result register (ordered by rank, unranked last), pass/fail analysis per section, subject performance over `marks`, marks-entry status, grade distribution — plus question-bank usage, behind one `kind`-parameterised endpoint with a 202 export lane in all three of `core.exports.tabular`'s formats. Every one asserted at **one query** |
@@ -763,6 +788,57 @@ and a note says the per-exam reports need exam access (recorded in `deferred-wor
 The e2e seed's `e2e-principal@schoolhub.test` holds the results approver's keys (`exams.result.view`,
 `.approve`, `.publish`, `exams.report-card.view`, `.publish`, and the exam, schedule and marks reads), never
 `exams.result.create`, so it is never the processor.
+
+### The dashboard's Question banks section (examinations dashboard, PR E)
+
+`/exams/question-banks`, the last section of the Examinations tab bar and sidebar, shown to a holder of
+`exams.question-bank.view` (§4). The banks the viewer's record scope reaches, page-numbered by name and
+filtered by **subject** (for a holder of `school.subject.view`, since the filter reads `/subjects`) and
+**status** in the URL; each row shows the subject, the class or "Every level" (a bank with no class), its
+question count and status. An `assigned` teacher sees the banks of every subject they are allocated to, at
+any class, and a bank outside them is "not found" (the API's 404). **New question bank** (`.create`), **Edit**
+(`.update`) and **Remove** (`.delete`) are dialogs; the subject and class pickers read their lists only for
+a holder of their view keys.
+
+A bank's page, `/exams/question-banks/{id}`, heads it with its subject, level, count and status, then lists
+its questions cursor-paged in the bank's order, filtered in the URL by **topic** (applied on Enter, as the
+server matches it whole), **difficulty**, **type**, **source** and **approval**, with a search over the text
+and topic. Each row shows the type, difficulty, topic, marks, source, approval and times used. A question
+from `ai_generated` carries the **AI-generated** label (ai-governance.md §8) before and after approval, and
+once approved it says who approved it. **Approve** shows only on an unapproved AI draft, to a holder of
+`exams.question.approve` (invariant 5), and opens a confirm showing the whole question, its choices, answer
+key, marks and topic, saying approval cannot be undone; nothing is sent until Approve there, and a refusal
+stays in the dialog. The server refuses a manual question, and a teacher's own is usable on save. **New question** and **Edit** take each type's own fields: a multiple-choice question its choices,
+one per line (at least two), and the correct one; a true-or-false question True or False; a long answer a
+model answer; any other a short answer key.
+
+**Assemble paper** (`exams.question-bank.update`) takes a title and the blueprint's sections, each a
+heading, topic (blank draws from every topic), difficulty, count (1 to 200) and marks each (blank keeps each
+question's own). A blueprint the approved questions cannot fill is refused before any job, and the dialog
+lists **every** short section the server names (`error.meta.sections`), with what it asked for and what the
+bank holds. Otherwise the `202`'s job is polled (`useJobFileDownload`) and its `result_file_id` downloaded,
+with the server's question count and total marks in the toast. The job is held by the bank's page
+(`BankHeader`), not the dialog, so closing the dialog mid-job still downloads the paper while the page stays
+open, and reopening it shows the running job. Papers are not kept in a list, so the dialog says to save the
+file when it arrives; it holds Assemble while the job runs, and a stalled job is resumed rather than started
+again. `:generate-questions` is not built (`core/ai`; `deferred-work.md`).
+
+### E2E coverage of question banks (examinations dashboard, PR E)
+
+- **Mocked** (`e2e/tests/dashboard/exams-question-banks.spec.ts`, stub `e2e/src/mocks/domains/exams-question-banks.ts`):
+  an `assigned` teacher reaches the section from the sidebar, sees only their subject's bank and gets "not
+  found" for another; approves an AI draft, the one question Approve shows on, through its confirm (the
+  choices shown, nothing sent before Approve), and it keeps its label and names the approver; the exam staff,
+  holding every bank key but the approval, sees no Approve, creates a bank for every level, is shown both
+  short sections of an over-asking blueprint, then the server's sentence for a section asking two medium
+  questions where one is approved and one is an unapproved AI draft, and downloads a paper. The
+  stub enforces the record scope, the unapproved AI draft, the 409 on approving a manual question, and the
+  shortfall counted over approved questions only (lesson L5).
+- **Live API** (`e2e/tests/live/api/exams-question-banks.spec.ts`, on a run-unique subject): the seeded
+  `exam_staff` creates a bank for every level and its questions, an AI draft posted as approved is saved
+  unapproved, a two-section paper's job is awaited (`liveExamTimeout(1)`) and its file's signed link fetched,
+  and an over-asking blueprint is a 422 `domain_rule_violation` whose `error.meta.sections` names each short
+  section, the draft not counted. Rendering needs WeasyPrint in the API image (PR #151, open).
 
 ### The dashboard's setup contract (examinations dashboard, PR A)
 

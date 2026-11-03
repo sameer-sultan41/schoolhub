@@ -20,6 +20,7 @@ export * from "./dashboard/exams/marks.page";
 export * from "./dashboard/exams/results.page";
 export * from "./dashboard/exams/report-cards.page";
 export * from "./dashboard/exams/reports.page";
+export * from "./dashboard/exams/question-banks.page";
 export * from "./dashboard/login.page";
 export * from "./dashboard/staff.page";
 export * from "./dashboard/students.page";

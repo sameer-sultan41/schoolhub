@@ -766,3 +766,4 @@ Steps:
 - **Amendments after approval:**
   - 2026-11-02 (Task 9, Stop rule 3): the grid's Save draft sends the non-blank rows plus the rows with a saved record, and Submit needs every row filled and sends every row as `submitted`, instead of both sending every row. Sending a blank row would create a marks row with no mark, which progress counts as "entered".
   - 2026-11-02: `MARKS_IMPORT` also accepts `application/vnd.ms-excel`, because Windows browsers send `.csv` with it. Without it, enforcing the list in this PR would newly refuse uploads that work today. The parser dispatches on the file name, the `fees.settlement-file` precedent applies, and it is tested.
+  - Task 16: the paper blueprint section takes no question type — `PaperSectionSerializer` and `select_paper_questions` take none; recorded in deferred-work.md.
