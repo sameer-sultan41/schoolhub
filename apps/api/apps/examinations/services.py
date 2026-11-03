@@ -721,6 +721,31 @@ def assert_marks_window_open(exam_subject: ExamSubject) -> None:
     assert_marks_window_not_closed(exam_subject)
 
 
+def lock_subject_for_entry(exam_subject_id: uuid.UUID) -> ExamSubject:
+    """Every marks gate, read under the subject's row lock. Returns the fresh row.
+
+    The one place a *write* checks the gates. Checking them against an
+    `ExamSubject` read earlier — at the request, or when an import job started —
+    is a snapshot: a `:lock-marks` or a results approval that commits after it
+    goes unseen, and a queued import would keep writing into a subject that is
+    meant to be final. `lock_marks` and `unlock_marks` take this same lock
+    first, so a gate and the lock that invalidates it cannot interleave, and
+    every writer orders its locks subject-then-marks, so they cannot deadlock.
+
+    Must run inside the writing transaction; `select_for_update` refuses
+    otherwise.
+    """
+    exam_subject = (
+        ExamSubject.objects.alive()
+        .select_for_update(of=("self",))
+        .select_related("exam")
+        .get(pk=exam_subject_id)
+    )
+    assert_exam_accepts_marks(exam_subject.exam)
+    assert_marks_window_open(exam_subject)
+    return exam_subject
+
+
 def assert_exam_accepts_marks(exam: Exam) -> None:
     """§7.1 — marks may not be written once results are approved or published.
 
@@ -977,8 +1002,7 @@ def bulk_enter_marks(
     the same grid within milliseconds both read "no row" otherwise, and the
     unique index turns the loser into a 500 rather than an update.
     """
-    assert_exam_accepts_marks(exam_subject.exam)
-    assert_marks_window_open(exam_subject)
+    exam_subject = lock_subject_for_entry(exam_subject.pk)
     assert_marker_may_enter(user=user, exam_subject=exam_subject, section=section)
 
     eligible = _entry_students(exam_subject, section=section)
@@ -1181,7 +1205,12 @@ def lock_marks(*, exam_subject: ExamSubject, actor_id: uuid.UUID) -> dict:
     would grade a student on a half-entered grid.
 
     Idempotent: locking an already-locked subject is a retry, not a conflict.
+
+    The subject row is re-read under its lock first — the lock every marks
+    writer takes in `lock_subject_for_entry` — so an import row or a grid
+    submit in flight either commits before the lock or sees it.
     """
+    exam_subject = ExamSubject.objects.alive().select_for_update().get(pk=exam_subject.pk)
     if exam_subject.marks_locked_at is not None:
         return {"locked_rows": 0, "already_locked": True}
 
@@ -1207,7 +1236,15 @@ def unlock_marks(*, exam_subject: ExamSubject, actor_id: uuid.UUID) -> dict:
     Refused once results are approved. Unlocking then would let a mark change
     under a result a school has already given to a parent; §7.1's route for
     that is to send the results back, which returns the exam to `marks_entry`.
+
+    Takes the subject's row lock first, as `lock_marks` does.
     """
+    exam_subject = (
+        ExamSubject.objects.alive()
+        .select_for_update(of=("self",))
+        .select_related("exam")
+        .get(pk=exam_subject.pk)
+    )
     assert_exam_accepts_marks(exam_subject.exam)
 
     if exam_subject.marks_locked_at is None:
@@ -1301,7 +1338,18 @@ def import_marks_row(
     reject the entire file. These rows are this exam's marks arriving by a
     different door, and the window is exactly as relevant as it is to a teacher
     typing them.
+
+    **The gates are read per row, under the subject's lock**
+    (`lock_subject_for_entry`), not once for the file: a job can sit queued or
+    run for minutes, and a lock, a closed window or an approval that lands
+    meanwhile has to stop the rows after it. A refused row is reported like any
+    other, so the failed-rows re-import still works once entry reopens.
     """
+    try:
+        exam_subject = lock_subject_for_entry(exam_subject.pk)
+    except Conflict as exc:
+        return {"row": str(row_number), "field": "exam_subject", "issue": str(exc.detail)}
+
     admission_number = (row.get("admission_number") or "").strip()
     if not admission_number:
         return {"row": str(row_number), "field": "admission_number", "issue": "Missing."}

@@ -317,6 +317,11 @@ List and read shapes the dashboard depends on:
   content type outside the `exams.marks-import` purpose's MIME allowlist (`text/csv`, Windows' `application/vnd.ms-excel` CSV type and `.xlsx`; a 400 under
   `file`), and a caller who may enter no section of the exam-subject (a 422 on `exam_subject_id`); the job then
   checks each row's student against the importer's sections.
+- **Every imported row re-checks the entry gates, under the subject's lock.** The upload's check is a fail-fast;
+  the job reads the lock, the window and the exam's status again per row with the exam-subject row locked
+  (`lock_subject_for_entry`, which `:bulk-entry`, `:lock-marks` and `:unlock-marks` also take first). A subject locked,
+  closed or approved while the job is queued or running refuses the rows after it, each reported under
+  `exam_subject` with the grid's message, so a failed-rows re-import works once entry reopens (L35).
 
 ## 17. Integration Requirements
 
