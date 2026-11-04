@@ -8171,6 +8171,27 @@ paths:
               schema:
                 $ref: '#/components/schemas/UnreadCount'
           description: ''
+  /api/v1/parent-portal/dashboard:
+    get:
+      operationId: parent_portal_dashboard_retrieve
+      description: |-
+        Per-child summary cards plus the caller's unread counts.
+
+        The base permission stack (authenticated, module on, key held). Staff holding
+        the key are not refused: they simply own no children, so the list is empty.
+        Every card is read through its owning module's own visibility function.
+      summary: The parent portal dashboard
+      tags:
+      - parent-portal
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalDashboard'
+          description: ''
   /api/v1/payments:
     get:
       operationId: payments_list
@@ -14914,6 +14935,27 @@ components:
           type: string
       required:
       - download_url
+    AttendanceCard:
+      type: object
+      properties:
+        today:
+          allOf:
+          - $ref: '#/components/schemas/AttendanceStatusEnum'
+          nullable: true
+        month_percentage:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,1})?$
+          nullable: true
+        month_present_days:
+          type: integer
+        month_counted_days:
+          type: integer
+      required:
+      - month_counted_days
+      - month_percentage
+      - month_present_days
+      - today
     AttendanceCorrection:
       type: object
       description: |-
@@ -17468,6 +17510,23 @@ components:
       - student
       - student_name
       - voided_reason
+    FeesCard:
+      type: object
+      properties:
+        outstanding_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        outstanding_count:
+          type: integer
+        next_due_date:
+          type: string
+          format: date
+          nullable: true
+      required:
+      - next_due_date
+      - outstanding_count
+      - outstanding_total
     File:
       type: object
       properties:
@@ -18058,6 +18117,26 @@ components:
           minimum: 1
       required:
       - provider
+    LatestResultCard:
+      type: object
+      properties:
+        exam_name:
+          type: string
+        percentage:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+        grade:
+          type: string
+          nullable: true
+        published_at:
+          type: string
+          format: date-time
+      required:
+      - exam_name
+      - grade
+      - percentage
+      - published_at
     LeaveApproval:
       type: object
       description: One step of §7.2's chain, nested on the request it belongs to.
@@ -23221,6 +23300,91 @@ components:
       - sequence
       - start_time
       - updated_at
+    PortalChild:
+      type: object
+      properties:
+        student:
+          $ref: '#/components/schemas/PortalStudent'
+        attendance:
+          allOf:
+          - $ref: '#/components/schemas/AttendanceCard'
+          nullable: true
+        fees:
+          allOf:
+          - $ref: '#/components/schemas/FeesCard'
+          nullable: true
+        latest_result:
+          allOf:
+          - $ref: '#/components/schemas/LatestResultCard'
+          nullable: true
+      required:
+      - attendance
+      - fees
+      - latest_result
+      - student
+    PortalDashboard:
+      type: object
+      properties:
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortalChild'
+        unread_notifications:
+          type: integer
+        unread_threads:
+          type: integer
+          nullable: true
+        modules:
+          $ref: '#/components/schemas/PortalModules'
+      required:
+      - children
+      - modules
+      - unread_notifications
+      - unread_threads
+    PortalModules:
+      type: object
+      properties:
+        attendance:
+          type: boolean
+        fees:
+          type: boolean
+        examinations:
+          type: boolean
+        communication:
+          type: boolean
+        timetable:
+          type: boolean
+      required:
+      - attendance
+      - communication
+      - examinations
+      - fees
+      - timetable
+    PortalStudent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        first_name:
+          type: string
+        last_name:
+          type: string
+        admission_number:
+          type: string
+        class_name:
+          type: string
+          nullable: true
+        section_name:
+          type: string
+          nullable: true
+      required:
+      - admission_number
+      - class_name
+      - first_name
+      - id
+      - last_name
+      - section_name
     PriorityEnum:
       enum:
       - normal

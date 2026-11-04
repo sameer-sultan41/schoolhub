@@ -3566,6 +3566,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/parent-portal/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The parent portal dashboard
+         * @description Per-child summary cards plus the caller's unread counts.
+         *
+         *     The base permission stack (authenticated, module on, key held). Staff holding
+         *     the key are not refused: they simply own no children, so the list is empty.
+         *     Every card is read through its owning module's own visibility function.
+         */
+        get: operations["parent_portal_dashboard_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/payments": {
         parameters: {
             query?: never;
@@ -6513,6 +6537,13 @@ export interface components {
         AttachmentDownload: {
             download_url: string;
         };
+        AttendanceCard: {
+            today: components["schemas"]["AttendanceStatusEnum"] | null;
+            /** Format: decimal */
+            month_percentage: string | null;
+            month_present_days: number;
+            month_counted_days: number;
+        };
         /**
          * @description `attendance_corrections` — the request half. Decisions are colon-actions.
          *
@@ -7727,6 +7758,13 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
+        FeesCard: {
+            /** Format: decimal */
+            outstanding_total: string;
+            outstanding_count: number;
+            /** Format: date */
+            next_due_date: string | null;
+        };
         File: {
             /** Format: uuid */
             readonly id: string;
@@ -8025,6 +8063,14 @@ export interface components {
         IssueVoucher: {
             provider: components["schemas"]["VoucherProviderEnum"];
             validity_days?: number;
+        };
+        LatestResultCard: {
+            exam_name: string;
+            /** Format: decimal */
+            percentage: string;
+            grade: string | null;
+            /** Format: date-time */
+            published_at: string;
         };
         /** @description One step of §7.2's chain, nested on the request it belongs to. */
         LeaveApproval: {
@@ -10608,6 +10654,34 @@ export interface components {
             readonly created_at: string;
             /** Format: date-time */
             readonly updated_at: string;
+        };
+        PortalChild: {
+            student: components["schemas"]["PortalStudent"];
+            attendance: components["schemas"]["AttendanceCard"] | null;
+            fees: components["schemas"]["FeesCard"] | null;
+            latest_result: components["schemas"]["LatestResultCard"] | null;
+        };
+        PortalDashboard: {
+            children: components["schemas"]["PortalChild"][];
+            unread_notifications: number;
+            unread_threads: number | null;
+            modules: components["schemas"]["PortalModules"];
+        };
+        PortalModules: {
+            attendance: boolean;
+            fees: boolean;
+            examinations: boolean;
+            communication: boolean;
+            timetable: boolean;
+        };
+        PortalStudent: {
+            /** Format: uuid */
+            id: string;
+            first_name: string;
+            last_name: string;
+            admission_number: string;
+            class_name: string | null;
+            section_name: string | null;
         };
         /**
          * @description * `normal` - Normal
@@ -18140,6 +18214,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UnreadCount"];
+                };
+            };
+        };
+    };
+    parent_portal_dashboard_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalDashboard"];
                 };
             };
         };
