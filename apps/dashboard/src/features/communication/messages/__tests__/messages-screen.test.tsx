@@ -376,6 +376,14 @@ describe("MessagesScreen", () => {
     expect(screen.queryByRole("checkbox", { name: "Internal note" })).not.toBeInTheDocument();
   });
 
+  it("offers the internal-note flag to staff without the close key", async () => {
+    // The gate is the restricted-principal flag, not CLOSE_THREAD: any staff poster may note.
+    stubInbox([VIEW, CREATE_MESSAGE]);
+    await renderMessages();
+
+    expect(await screen.findByRole("checkbox", { name: "Internal note" })).toBeInTheDocument();
+  });
+
   it("posts internal note flag", async () => {
     stubInbox([VIEW, CREATE_MESSAGE, CLOSE_THREAD]);
     postMessage.mockResolvedValue(messageRecord());
