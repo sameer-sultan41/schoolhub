@@ -238,7 +238,7 @@ class GuardianInboxTests(ThreadAPITestCase):
             student=self.student,
         )
 
-        with self.captureOnCommitCallbacks(execute=True):
+        with self.captureOnCommitCallbacks(execute=True), tenant_context(self.tenant.id):
             post_message(
                 thread=thread,
                 sender=self.user,
