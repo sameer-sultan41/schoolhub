@@ -12216,6 +12216,8 @@ export interface components {
             readonly mfa_enabled: boolean;
             readonly permissions: string[];
             readonly roles: string[];
+            /** @description A student or guardian, so a client routes them to the portal rather than guessing. */
+            readonly is_restricted_principal: boolean;
         };
         /**
          * @description * `pending` - Pending
@@ -22567,6 +22569,8 @@ export interface operations {
                 academic_session_id?: string;
                 /** @description Apply confirmed substitutions for this date. Omitted = the base grid. */
                 date?: string;
+                /** @description A guardian's child to serve instead of every child at once. Refused for staff; a student who is not the caller's own is a 404. */
+                student_id?: string;
             };
             header?: never;
             path?: never;

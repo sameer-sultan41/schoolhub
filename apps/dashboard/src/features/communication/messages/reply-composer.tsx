@@ -8,7 +8,6 @@ import { Alert, Button, Checkbox, Label, Textarea } from "@schoolhub/ui";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { HTTP_STATUS_CONFLICT } from "@/lib/constants";
 import { foldUnknownFieldErrors, NON_FIELD, resolveErrorMessage } from "@/lib/error-message";
-import { hasPermission } from "@/lib/permissions";
 import { ApiError, Services } from "@/services";
 import { MESSAGE_BODY_MAX_LENGTH } from "@/services/modules/message-threads/message-threads-constant";
 
@@ -21,9 +20,9 @@ export interface ReplyComposerProps {
 }
 
 /**
- * The reply box under a conversation. `/auth/me` carries no restricted-principal flag, so the
- * "Internal note" flag is gated on the staff-only `communication.thread.close`; the server's
- * `422` for a guardian's or student's internal note stays the enforcement.
+ * The reply box under a conversation. The "Internal note" flag is offered to staff only,
+ * read from `/auth/me`'s `is_restricted_principal`; the server's `422` for a guardian's or
+ * student's internal note stays the enforcement.
  */
 export function ReplyComposer({ threadId, isClosed }: ReplyComposerProps) {
   const t = useTranslations("communication.messages.composer");
@@ -32,7 +31,7 @@ export function ReplyComposer({ threadId, isClosed }: ReplyComposerProps) {
   const invalidate = useInvalidateThreads();
   const [body, setBody] = useState("");
   const [isInternalNote, setIsInternalNote] = useState(false);
-  const canWriteInternalNote = hasPermission(user, "communication.thread.close");
+  const canWriteInternalNote = user?.is_restricted_principal === false;
 
   const send = useMutation({
     mutationFn: () =>

@@ -18,12 +18,14 @@ import {
   threadRecord,
 } from "@/test-fixtures/communication";
 import { pick, urlParam } from "@/test-fixtures/list-screen";
+import { buildUser } from "@/test-utils";
 
 import {
   CLOSE_THREAD,
   closeThread,
   CREATE_MESSAGE,
   downloadAttachment,
+  fetchCurrentUser,
   fetchThread,
   listMessages,
   listThreads,
@@ -364,6 +366,10 @@ describe("MessagesScreen", () => {
 
   it("offers the internal-note flag only to a staff poster", async () => {
     stubInbox([VIEW, CREATE_MESSAGE]);
+    fetchCurrentUser.mockResolvedValue({
+      ...buildUser([VIEW, CREATE_MESSAGE]),
+      is_restricted_principal: true,
+    });
     await renderMessages();
 
     expect(await screen.findByLabelText("Reply")).toBeInTheDocument();

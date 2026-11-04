@@ -14413,6 +14413,13 @@ paths:
           format: date
         description: Apply confirmed substitutions for this date. Omitted = the base
           grid.
+      - in: query
+        name: student_id
+        schema:
+          type: string
+          format: uuid
+        description: A guardian's child to serve instead of every child at once. Refused
+          for staff; a student who is not the caller's own is a 404.
       tags:
       - timetables
       security:
@@ -26603,12 +26610,18 @@ components:
           items:
             type: string
           readOnly: true
+        is_restricted_principal:
+          type: boolean
+          description: A student or guardian, so a client routes them to the portal
+            rather than guessing.
+          readOnly: true
       required:
       - email
       - first_name
       - full_name
       - id
       - is_platform
+      - is_restricted_principal
       - last_name
       - mfa_enabled
       - permissions

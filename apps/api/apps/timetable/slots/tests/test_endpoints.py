@@ -776,6 +776,83 @@ class MyTimetableTests(TimetableAPITestCase):
 
         self.assertEqual(self.client.get("/api/v1/timetables/my").json()["data"], [])
 
+    def _guardian_of_two_children(self):
+        """A guardian with a child in each of two sections, each with one published slot."""
+        slot_a = self.publish(self.make_slot())
+        slot_b = self.publish(self.make_slot(section=self.other_section, period=self.periods[1]))
+        child_a = self._enrolled_student()
+        child_b = self._enrolled_student(section=self.other_section)
+        user = UserFactory(tenant=self.tenant)
+        with tenant_context(self.tenant.id):
+            guardian = GuardianFactory(tenant=self.tenant, user_id=user.pk)
+            for child in (child_a, child_b):
+                StudentGuardianFactory(tenant=self.tenant, student=child, guardian=guardian)
+        grant(user, "timetable.timetable.view", is_restricted_principal=True)
+        authenticate(self.client, user)
+        return child_a, child_b, slot_a, slot_b
+
+    def test_timetable_for_one_child(self) -> None:
+        child_a, child_b, slot_a, slot_b = self._guardian_of_two_children()
+
+        both = self.client.get("/api/v1/timetables/my").json()["data"]
+        only_a = self.client.get(f"/api/v1/timetables/my?student_id={child_a.pk}").json()["data"]
+        only_b = self.client.get(f"/api/v1/timetables/my?student_id={child_b.pk}").json()["data"]
+
+        self.assertEqual({row["id"] for row in both}, {str(slot_a.pk), str(slot_b.pk)})
+        self.assertEqual([row["id"] for row in only_a], [str(slot_a.pk)])
+        self.assertEqual([row["id"] for row in only_b], [str(slot_b.pk)])
+
+    def test_timetable_for_unlinked_child_is_404(self) -> None:
+        self._guardian_of_two_children()
+        stranger = self._enrolled_student()
+        revoked = self._enrolled_student()
+        user = UserFactory(tenant=self.tenant)
+        with tenant_context(self.tenant.id):
+            guardian = GuardianFactory(tenant=self.tenant, user_id=user.pk)
+            StudentGuardianFactory(
+                tenant=self.tenant, student=revoked, guardian=guardian, has_portal_access=False
+            )
+        grant(user, "timetable.timetable.view", is_restricted_principal=True)
+        authenticate(self.client, user)
+
+        for child in (stranger, revoked):
+            with self.subTest(child=child.pk):
+                response = self.client.get(f"/api/v1/timetables/my?student_id={child.pk}")
+                self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_a_student_may_name_only_themselves(self) -> None:
+        self.publish(self.make_slot())
+        me = self._enrolled_student()
+        other = self._enrolled_student()
+        user = UserFactory(tenant=self.tenant)
+        with tenant_context(self.tenant.id):
+            me.user_id = user.pk
+            me.save(update_fields=["user_id"])
+        grant(user, "timetable.timetable.view", is_restricted_principal=True)
+        authenticate(self.client, user)
+
+        own = self.client.get(f"/api/v1/timetables/my?student_id={me.pk}")
+        foreign = self.client.get(f"/api/v1/timetables/my?student_id={other.pk}")
+
+        self.assertEqual(own.status_code, status.HTTP_200_OK, own.json())
+        self.assertEqual(foreign.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_staff_timetable_with_student_id_is_400(self) -> None:
+        student = self._enrolled_student()
+        self._teacher_client(self.teacher)
+
+        response = self.client.get(f"/api/v1/timetables/my?student_id={student.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.json())
+        self.assertIn("student_id", str(response.json()))
+
+    def test_a_malformed_student_id_is_400(self) -> None:
+        self._guardian_of_two_children()
+
+        response = self.client.get("/api/v1/timetables/my?student_id=not-a-uuid")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_a_withdrawn_enrollment_no_longer_shows_a_timetable(self) -> None:
         self.publish(self.make_slot())
         student = self._enrolled_student()
