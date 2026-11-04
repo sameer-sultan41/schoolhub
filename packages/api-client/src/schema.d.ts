@@ -8552,6 +8552,7 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        NoticeRead: components["schemas"]["Notice"] | components["schemas"]["PortalNotice"];
         /**
          * @description * `draft` - Draft
          *     * `pending_approval` - Pending approval
@@ -9022,8 +9023,8 @@ export interface components {
                 };
             };
         };
-        PaginatedNoticeList: {
-            data?: components["schemas"]["Notice"][];
+        PaginatedNoticeReadList: {
+            data?: components["schemas"]["NoticeRead"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -10673,6 +10674,28 @@ export interface components {
             examinations: boolean;
             communication: boolean;
             timetable: boolean;
+        };
+        /**
+         * @description A notice as a student or guardian sees it: explicit fields only.
+         *
+         *     The staff shape also carries `audience_filter` (a custom audience's user ids),
+         *     `approved_by`, `status` and `show_on_website`, none of which a recipient may read.
+         *     `acknowledged_at` is the caller's own, annotated by `NoticeViewSet.get_queryset`
+         *     so a page costs one query rather than one per row.
+         */
+        PortalNotice: {
+            /** Format: uuid */
+            readonly id: string;
+            /** @description Assigned at publish from the tenant sequence. */
+            readonly notice_no: string | null;
+            readonly title: string;
+            readonly body: string;
+            readonly notice_type: components["schemas"]["NoticeTypeEnum"];
+            /** Format: date-time */
+            readonly published_at: string | null;
+            readonly requires_acknowledgment: boolean;
+            /** Format: date-time */
+            readonly acknowledged_at: string | null;
         };
         PortalStudent: {
             /** Format: uuid */
@@ -17720,7 +17743,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedNoticeList"];
+                    "application/json": components["schemas"]["PaginatedNoticeReadList"];
                 };
             };
         };
@@ -17767,7 +17790,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Notice"];
+                    "application/json": components["schemas"]["NoticeRead"];
                 };
             };
         };

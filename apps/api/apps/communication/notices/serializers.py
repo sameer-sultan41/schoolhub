@@ -60,6 +60,7 @@ class PortalNoticeSerializer(serializers.ModelSerializer):
     acknowledged_at = serializers.DateTimeField(read_only=True, allow_null=True)
 
     class Meta:
+        ref_name = "PortalNotice"
         model = Notice
         fields = [
             "id",

@@ -7558,7 +7558,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedNoticeList'
+                $ref: '#/components/schemas/PaginatedNoticeReadList'
           description: ''
     post:
       operationId: notices_create
@@ -7617,7 +7617,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Notice'
+                $ref: '#/components/schemas/NoticeRead'
           description: ''
     patch:
       operationId: notices_partial_update
@@ -19162,6 +19162,10 @@ components:
       - status
       - title
       - updated_at
+    NoticeRead:
+      oneOf:
+      - $ref: '#/components/schemas/Notice'
+      - $ref: '#/components/schemas/PortalNotice'
     NoticeStatusEnum:
       enum:
       - draft
@@ -20141,13 +20145,13 @@ components:
                   nullable: true
                 page_size:
                   type: integer
-    PaginatedNoticeList:
+    PaginatedNoticeReadList:
       type: object
       properties:
         data:
           type: array
           items:
-            $ref: '#/components/schemas/Notice'
+            $ref: '#/components/schemas/NoticeRead'
         meta:
           type: object
           properties:
@@ -23367,6 +23371,57 @@ components:
       - examinations
       - fees
       - timetable
+    PortalNotice:
+      type: object
+      description: |-
+        A notice as a student or guardian sees it: explicit fields only.
+
+        The staff shape also carries `audience_filter` (a custom audience's user ids),
+        `approved_by`, `status` and `show_on_website`, none of which a recipient may read.
+        `acknowledged_at` is the caller's own, annotated by `NoticeViewSet.get_queryset`
+        so a page costs one query rather than one per row.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        notice_no:
+          type: string
+          readOnly: true
+          nullable: true
+          description: Assigned at publish from the tenant sequence.
+        title:
+          type: string
+          readOnly: true
+        body:
+          type: string
+          readOnly: true
+        notice_type:
+          allOf:
+          - $ref: '#/components/schemas/NoticeTypeEnum'
+          readOnly: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        requires_acknowledgment:
+          type: boolean
+          readOnly: true
+        acknowledged_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - acknowledged_at
+      - body
+      - id
+      - notice_no
+      - notice_type
+      - published_at
+      - requires_acknowledgment
+      - title
     PortalStudent:
       type: object
       properties:

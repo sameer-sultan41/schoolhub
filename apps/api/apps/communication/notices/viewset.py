@@ -20,7 +20,7 @@ from functools import cached_property
 
 from django.db.models import OuterRef, Subquery
 from django.http import HttpResponse
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import PolymorphicProxySerializer, extend_schema, extend_schema_view
 from rest_framework import viewsets
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -43,7 +43,19 @@ from core.audit.services import record_audit
 from core.notifications.models import Notification
 from core.rbac.permissions import is_restricted_principal
 
+# Which shape a caller gets depends on their role, not on a field in the row, so there is no
+# discriminator; the proxy only documents it (a student or guardian gets `PortalNotice`).
+NOTICE_READ_SCHEMA = PolymorphicProxySerializer(
+    component_name="NoticeRead",
+    serializers=[NoticeSerializer, PortalNoticeSerializer],
+    resource_type_field_name=None,
+)
 
+
+@extend_schema_view(
+    list=extend_schema(responses=NOTICE_READ_SCHEMA),
+    retrieve=extend_schema(responses=NOTICE_READ_SCHEMA),
+)
 class NoticeViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     """`/notices` — formal, sequence-numbered notices with a publish-approval gate.
 
