@@ -13,6 +13,7 @@ from core.api.pagination import CursorPagination
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.notifications.filters import NotificationFilterSet
 from core.notifications.models import Notification
+from core.notifications.permissions import NOTIFICATION_VIEW
 from core.notifications.serializers import (
     MarkAllReadRequestSerializer,
     MarkAllReadResultSerializer,
@@ -22,7 +23,7 @@ from core.notifications.serializers import (
 )
 from core.notifications.services import own_notifications, unread_notification_count
 
-VIEW_KEY = "platform.notification.view"
+VIEW_KEY = NOTIFICATION_VIEW
 
 
 class NotificationCursorPagination(CursorPagination):

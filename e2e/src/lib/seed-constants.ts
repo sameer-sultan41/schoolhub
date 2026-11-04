@@ -142,3 +142,18 @@ export const E2E_COMMS_GUARDIAN_EMAIL = "e2e-comms-guardian@schoolhub.test";
 export const E2E_COMMS_CLASS_TEACHER_EMAIL = "e2e-comms-class-teacher@schoolhub.test";
 /** The comms student's addressable attribute; ids are generated per seed run. */
 export const E2E_COMMS_STUDENT_ADMISSION_NUMBER = "E2E-STUDENT-COMMS";
+
+/**
+ * Mirrors the parent-portal fixtures `apps/parent_portal/management/commands/seed_e2e_portal.py`
+ * writes for the comms student (run by seed_e2e_data.py): one invoice for the session's first
+ * month, one published result, and one notice sent to the comms guardian alone. These are the
+ * values the dashboard summary must report back.
+ */
+export const E2E_PORTAL_FEE_AMOUNT = "2500.00";
+export const E2E_PORTAL_EXAM_NAME = "E2E Midterm";
+/** 78 out of 100 at full weight: the result's percentage, and band "B" on the seeded scale. */
+export const E2E_PORTAL_RESULT_PERCENTAGE = "78.00";
+export const E2E_PORTAL_RESULT_GRADE = "B";
+export const E2E_PORTAL_NOTICE_TITLE = "E2E Sports Day";
+/** The seeded baseline student nobody is linked to: a guardian naming it gets a 404. */
+export const E2E_UNLINKED_STUDENT_ADMISSION_NUMBER = "E2E-STUDENT-B";

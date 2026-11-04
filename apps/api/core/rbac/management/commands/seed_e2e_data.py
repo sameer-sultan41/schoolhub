@@ -15,6 +15,7 @@ import os
 import uuid
 from datetime import time, timedelta
 
+from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
@@ -50,7 +51,9 @@ from apps.timetable.models import (
     TeacherSubstitution,
     TimetableSlot,
 )
+from core.notifications.permissions import NOTIFICATION_VIEW
 from core.rbac.models import RecordScope
+from core.rbac.registry import registry
 from core.rbac.seeding import (
     ensure_role_with_permissions,
     ensure_school_owner_role,
@@ -289,6 +292,9 @@ E2E_SCHOOL_ADMIN_PERMISSIONS = [
     # The week grid's Subject and Teacher selects are the same two calls.
     "school.subject.view",
     "staff.staff.view",
+    # Every tenant role reads its own inbox (`ALL_TENANT_ROLES`); without it the bell's
+    # `GET /notifications` is a 403 for this identity.
+    NOTIFICATION_VIEW,
 ]
 # The approver half of §7.2. `principal` holds `academics.promotion.approve` (and, per §4,
 # does NOT hold `.execute` — execution is `school_admin`'s), plus the read keys the review
@@ -327,6 +333,7 @@ E2E_PRINCIPAL_PERMISSIONS = [
     "communication.thread.oversee",
     "communication.broadcast.send",
     "platform.job.view",
+    NOTIFICATION_VIEW,
 ]
 # A `class_teacher` identity, and it exists for one reason: **§4 grants
 # `attendance.student-attendance.mark` to `teacher`/`class_teacher` and to nobody
@@ -359,24 +366,28 @@ E2E_CLASS_TEACHER_PERMISSIONS = [
     # identity below holds this role too; it is the one a guardian's thread reaches.
     "communication.thread.view",
     "communication.message.create",
+    NOTIFICATION_VIEW,
 ]
 # A restricted principal (student, guardian) holds only own-scoped keys, narrowed via
 # RecordScope.OWN rather than the grant itself being unsafe.
 E2E_STUDENT_PERMISSIONS = ["students.student.view"]
-# The guardian half of attendance.md §4's leave rows (create + view, own children). It exists
-# because §11 makes the requester the student or a linked guardian, and
-# `services.assert_may_request_for_student` checks that link, not the key: the seeded owner
-# and school admin cannot submit leave for anyone. A live spec links this guardian to its own
-# run-unique students (e2e/src/lib/live-guardian.ts). No `approve`: guardians never decide.
-E2E_GUARDIAN_PERMISSIONS = [
-    "attendance.leave-request.create",
-    "attendance.leave-request.view",
-    # communication.md §4: every role starts and replies to threads, a guardian only about
-    # their own children (`threads/services/create.py` checks the link, not the key).
-    "communication.thread.view",
-    "communication.thread.create",
-    "communication.message.create",
-]
+# The guardian role holds what a real `guardian` gets: every key whose `default_roles`
+# name it (`registry.keys_for_role`), so the parent-portal journey meets the production
+# grant set rather than a hand-kept subset that drifts as modules add portal keys. Each
+# key is still `own`-scoped (the users below). Read when the command runs, not at import,
+# so every app's `permissions` module has registered first.
+#
+# Why each module matters here: leave create/view (attendance.md §11 makes the requester a
+# linked guardian; a live spec links the leave guardian to its own run-unique students via
+# e2e/src/lib/live-guardian.ts), thread create/reply (communication.md §4), and the portal's
+# own `parent-portal.dashboard.view` plus each card's read key.
+E2E_GUARDIAN_ROLE_SLUG = "guardian"
+
+
+def guardian_permissions() -> list[str]:
+    return registry.keys_for_role(E2E_GUARDIAN_ROLE_SLUG)
+
+
 # The `Guardian` person row's first name, last name and phone. The phone is the addressable
 # part, mirrored in e2e/src/lib/seed-constants.ts: ids are generated per seed run, and
 # `GET /guardians?search=` matches phone.
@@ -417,7 +428,9 @@ class Command(BaseCommand):
         "academics fixtures (subject, curriculum row, teaching staff, principal "
         "approver) the curriculum/allocation/promotion specs need, and the timetable "
         "fixtures (bell schedule, rooms, a published week and one proposed "
-        "substitution) the grid and substitution specs need."
+        "substitution) the grid and substitution specs need, and the parent-portal "
+        "fixtures (attendance, an outstanding invoice, a published result and a notice "
+        "for the comms guardian's child)."
     )
 
     @transaction.atomic
@@ -495,9 +508,9 @@ class Command(BaseCommand):
 
         guardian_role = ensure_role_with_permissions(
             tenant,
-            "guardian",
+            E2E_GUARDIAN_ROLE_SLUG,
             "Guardian",
-            E2E_GUARDIAN_PERMISSIONS,
+            guardian_permissions(),
             is_restricted_principal=True,
         )
         guardian_user = ensure_seed_user(
@@ -610,6 +623,7 @@ class Command(BaseCommand):
                 class_teacher=comms_class_teacher,
                 guardian_user_id=comms_guardian_user.id,
             )
+            self._ensure_portal_modules_enabled(tenant)
 
         # The *other* tenant needs the academics flag too, and for a reason easy to get
         # backwards: `TenantScopedViewSetMixin` checks `required_feature` *before*
@@ -630,6 +644,14 @@ class Command(BaseCommand):
             self._ensure_leave_types(other_tenant)
             # And for communication: the thread isolation probes must reach the lookup.
             self._ensure_communication_enabled(other_tenant)
+            # And for the portal and the two modules its cards read.
+            self._ensure_portal_modules_enabled(other_tenant)
+
+        # The parent portal's per-card records for the comms child (attendance, an
+        # outstanding invoice, a published result, a notice). They live in the portal app's
+        # own command, which reaches those modules through their services: `core` imports
+        # no app (ADR-0013, tests/test_import_boundaries.py). Same transaction as this one.
+        call_command("seed_e2e_portal", stdout=self.stdout)
 
         # TODO(website-cms): no public-content/CMS backend module exists yet
         # (apps/api/config/api_v1.py routes only core.rbac and
@@ -661,6 +683,21 @@ class Command(BaseCommand):
         row.academic = {**(row.academic or {}), "working_days": [0, 1, 2, 3, 4, 5, 6]}
         row.save(update_fields=["academic", "updated_at"])
 
+    def _ensure_feature_enabled(self, tenant: Tenant, key: str) -> None:
+        """Switch `key` on for `tenant`. Every module flag the live lane needs defaults off.
+
+        `update_or_create`, not `get_or_create`: a prior run (or someone poking at the
+        override in the admin) could have left this row `enabled=False`, and
+        `get_or_create` only sets `defaults` on *creation*, so it would leave a disabled
+        row disabled and reintroduce the `module_disabled` 403s this exists to prevent.
+        """
+        flag = FeatureFlag.objects.get(key=key)
+        TenantFeatureOverride.objects.update_or_create(
+            tenant=tenant,
+            feature_flag=flag,
+            defaults={"enabled": True, "reason": "e2e live-lane fixture"},
+        )
+
     def _ensure_students_module_enabled(self, tenant: Tenant) -> None:
         """`module.students` defaults off (features.py) — every endpoint 403s with
         `module_disabled` until a tenant is explicitly onboarded onto it, same recipe
@@ -672,12 +709,7 @@ class Command(BaseCommand):
         disabled row disabled forever, silently reintroducing the very `module_disabled`
         403s this seed step exists to prevent.
         """
-        flag = FeatureFlag.objects.get(key="module.students")
-        TenantFeatureOverride.objects.update_or_create(
-            tenant=tenant,
-            feature_flag=flag,
-            defaults={"enabled": True, "reason": "e2e live-lane fixture"},
-        )
+        self._ensure_feature_enabled(tenant, "module.students")
 
     def _ensure_academics_enabled(self, tenant: Tenant) -> None:
         """`module.academics` defaults off (apps/academics/features.py).
@@ -690,12 +722,7 @@ class Command(BaseCommand):
         a cross-tenant probe to reach the row lookup and answer 404 rather than being
         turned away by the feature gate first.
         """
-        flag = FeatureFlag.objects.get(key="module.academics")
-        TenantFeatureOverride.objects.update_or_create(
-            tenant=tenant,
-            feature_flag=flag,
-            defaults={"enabled": True, "reason": "e2e live-lane fixture"},
-        )
+        self._ensure_feature_enabled(tenant, "module.academics")
 
     def _ensure_timetable_enabled(self, tenant: Tenant) -> None:
         """`module.timetable` defaults off (apps/timetable/features.py).
@@ -704,12 +731,7 @@ class Command(BaseCommand):
         `_ensure_students_module_enabled` above. Called for *both* tenants (see
         `handle`) for the same reason `module.academics` is.
         """
-        flag = FeatureFlag.objects.get(key="module.timetable")
-        TenantFeatureOverride.objects.update_or_create(
-            tenant=tenant,
-            feature_flag=flag,
-            defaults={"enabled": True, "reason": "e2e live-lane fixture"},
-        )
+        self._ensure_feature_enabled(tenant, "module.timetable")
 
     def _ensure_attendance_enabled(self, tenant: Tenant) -> None:
         """`module.attendance` defaults off (apps/attendance/features.py).
@@ -718,12 +740,7 @@ class Command(BaseCommand):
         `_ensure_students_module_enabled`, and called for both tenants for the
         same 403-before-404 reason `_ensure_timetable_enabled` is.
         """
-        flag = FeatureFlag.objects.get(key="module.attendance")
-        TenantFeatureOverride.objects.update_or_create(
-            tenant=tenant,
-            feature_flag=flag,
-            defaults={"enabled": True, "reason": "e2e live-lane fixture"},
-        )
+        self._ensure_feature_enabled(tenant, "module.attendance")
 
     def _ensure_leave_types(self, tenant: Tenant) -> list[LeaveType]:
         """The two §6 names, one of which requires an attachment.
@@ -760,12 +777,7 @@ class Command(BaseCommand):
         teacher picker is the same call. Without this flag the seeded staff row exists
         but nothing can look it up, which is indistinguishable from not seeding it.
         """
-        flag = FeatureFlag.objects.get(key="module.staff")
-        TenantFeatureOverride.objects.update_or_create(
-            tenant=tenant,
-            feature_flag=flag,
-            defaults={"enabled": True, "reason": "e2e live-lane fixture"},
-        )
+        self._ensure_feature_enabled(tenant, "module.staff")
 
     def _ensure_communication_enabled(self, tenant: Tenant) -> None:
         """`module.communication` defaults off (apps/communication/features.py).
@@ -774,12 +786,7 @@ class Command(BaseCommand):
         `_ensure_students_module_enabled`, and called for both tenants for the same
         403-before-404 reason `_ensure_timetable_enabled` is.
         """
-        flag = FeatureFlag.objects.get(key="module.communication")
-        TenantFeatureOverride.objects.update_or_create(
-            tenant=tenant,
-            feature_flag=flag,
-            defaults={"enabled": True, "reason": "e2e live-lane fixture"},
-        )
+        self._ensure_feature_enabled(tenant, "module.communication")
 
     def _ensure_comms_student(
         self,
@@ -856,6 +863,19 @@ class Command(BaseCommand):
             },
         )
         return student
+
+    # ------------------------------------------------------------------
+    # Parent portal (docs/03-modules/parent-portal.md)
+    # ------------------------------------------------------------------
+
+    def _ensure_portal_modules_enabled(self, tenant: Tenant) -> None:
+        """The portal and the two modules whose cards it reads; all three default off.
+
+        Called for both tenants, so the other tenant's isolation probes reach the row
+        lookup (a 404 or an empty list) instead of a 403 `module_disabled`.
+        """
+        for key in ("module.parent_portal", "module.fees_finance", "module.examinations"):
+            self._ensure_feature_enabled(tenant, key)
 
     def _ensure_subject(self, tenant: Tenant) -> Subject:
         subject, _ = Subject.objects.get_or_create(

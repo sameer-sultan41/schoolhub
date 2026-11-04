@@ -10,7 +10,17 @@ from __future__ import annotations
 from django.core.management import call_command
 from django.test import TestCase
 
+from apps.attendance.models import AttendanceStatus, StudentAttendance
+from apps.communication.models import Notice, NoticeStatus
 from apps.communication.threads.routing import route_guardian_thread
+from apps.examinations.models import Exam, ExamStatus, Result, ResultStatus
+from apps.fees_finance.models import FeeInvoice, InvoiceStatus
+from apps.parent_portal.management.commands.seed_e2e_portal import (
+    E2E_EXAM_NAME,
+    E2E_EXAM_THEORY_MARKS,
+    E2E_FEE_MONTHLY_AMOUNT,
+    E2E_NOTICE_TITLE,
+)
 from apps.school_organization.models import (
     AcademicSession,
     Campus,
@@ -21,16 +31,18 @@ from apps.school_organization.models import (
 )
 from apps.staff_management.models import Staff
 from apps.student_management.models import Guardian, Student, StudentGuardian
+from core.notifications.models import Notification
+from core.notifications.permissions import NOTIFICATION_VIEW
 from core.rbac.management.commands.seed_e2e_data import (
     E2E_ADMIN_EMAIL,
     E2E_ADMIN_PASSWORD,
+    E2E_CLASS_TEACHER_PERMISSIONS,
     E2E_COMMS_CLASS_TEACHER_EMAIL,
     E2E_COMMS_CLASS_TEACHER_EMPLOYEE_NUMBER,
     E2E_COMMS_GUARDIAN_EMAIL,
     E2E_COMMS_STUDENT_ADMISSION_NUMBER,
     E2E_GUARDIAN_EMAIL,
     E2E_GUARDIAN_NAME,
-    E2E_GUARDIAN_PERMISSIONS,
     E2E_GUARDIAN_PHONE,
     E2E_OTHER_ADMIN_EMAIL,
     E2E_OTHER_TENANT_SLUG,
@@ -39,6 +51,7 @@ from core.rbac.management.commands.seed_e2e_data import (
     E2E_TENANT_SLUG,
 )
 from core.rbac.models import RecordScope, Role, RolePermission, User, UserRole
+from core.rbac.registry import registry
 from core.tenancy.context import tenant_context
 from core.tenancy.models import Tenant, TenantFeatureOverride, TenantSettings, TenantStatus
 
@@ -122,7 +135,7 @@ class SeedE2EDataTests(TestCase):
         """§4 grants it to `student` and `guardian` only, so the seed must not widen it."""
         self.assertNotIn("attendance.leave-request.create", E2E_SCHOOL_ADMIN_PERMISSIONS)
 
-    def test_seeds_a_restricted_guardian_holding_exactly_its_listed_keys(self) -> None:
+    def test_seeds_a_restricted_guardian_holding_a_real_guardians_keys(self) -> None:
         call_command("seed_e2e_data")
         tenant = Tenant.objects.get(slug=E2E_TENANT_SLUG)
 
@@ -136,7 +149,94 @@ class SeedE2EDataTests(TestCase):
         keys = set(
             RolePermission.objects.filter(role=role).values_list("permission__key", flat=True)
         )
-        self.assertEqual(keys, set(E2E_GUARDIAN_PERMISSIONS))
+        # Exactly what the registry gives a real `guardian`, so the portal keys arrive with it.
+        self.assertEqual(keys, set(registry.keys_for_role("guardian")))
+        for key in (
+            "parent-portal.dashboard.view",
+            NOTIFICATION_VIEW,
+            "communication.notice.view",
+            "communication.notice.acknowledge",
+            "attendance.student-attendance.view",
+            "fees.invoice.view",
+            "exams.result.view",
+            "timetable.timetable.view",
+            "attendance.leave-request.create",
+            "communication.thread.create",
+        ):
+            self.assertIn(key, keys)
+        self.assertNotIn("attendance.leave-request.approve", keys)
+
+    def test_staff_identities_can_read_their_own_inbox(self) -> None:
+        """Every tenant role holds the inbox key; a staff role without it 403s on the bell."""
+        for keys in (
+            E2E_SCHOOL_ADMIN_PERMISSIONS,
+            E2E_PRINCIPAL_PERMISSIONS,
+            E2E_CLASS_TEACHER_PERMISSIONS,
+        ):
+            self.assertIn(NOTIFICATION_VIEW, keys)
+
+    def test_portal_modules_are_enabled_on_both_tenants(self) -> None:
+        call_command("seed_e2e_data")
+
+        for slug in (E2E_TENANT_SLUG, E2E_OTHER_TENANT_SLUG):
+            tenant = Tenant.objects.get(slug=slug)
+            with tenant_context(tenant.id):
+                enabled = set(
+                    TenantFeatureOverride.objects.filter(
+                        tenant=tenant,
+                        enabled=True,
+                        feature_flag__key__in=[
+                            "module.parent_portal",
+                            "module.fees_finance",
+                            "module.examinations",
+                        ],
+                    ).values_list("feature_flag__key", flat=True)
+                )
+            self.assertEqual(
+                enabled,
+                {"module.parent_portal", "module.fees_finance", "module.examinations"},
+                slug,
+            )
+
+    def test_the_comms_child_has_a_record_behind_every_portal_card(self) -> None:
+        """Seeded twice: every fixture converges rather than piling up."""
+        call_command("seed_e2e_data")
+        call_command("seed_e2e_data")
+        tenant = Tenant.objects.get(slug=E2E_TENANT_SLUG)
+        guardian = User.objects.get(tenant=tenant, email=E2E_COMMS_GUARDIAN_EMAIL)
+
+        with tenant_context(tenant.id):
+            student = Student.objects.get(admission_number=E2E_COMMS_STUDENT_ADMISSION_NUMBER)
+
+            today = tenant.local_date()
+            marked_today = StudentAttendance.objects.alive().get(
+                student=student, attendance_date=today, period__isnull=True
+            )
+            self.assertEqual(marked_today.status, AttendanceStatus.PRESENT)
+
+            (invoice,) = FeeInvoice.objects.alive().filter(student=student)
+            self.assertEqual(invoice.status, InvoiceStatus.ISSUED)
+            self.assertEqual(invoice.balance_due, E2E_FEE_MONTHLY_AMOUNT)
+
+            exam = Exam.objects.alive().get(name=E2E_EXAM_NAME)
+            self.assertEqual(exam.status, ExamStatus.PUBLISHED)
+            result = Result.objects.alive().get(exam=exam, student=student)
+            self.assertEqual(result.status, ResultStatus.PUBLISHED)
+            self.assertIsNotNone(result.published_at)
+            self.assertEqual(result.percentage, E2E_EXAM_THEORY_MARKS)
+            self.assertEqual(result.grade_band.label, "B")
+            # Approved by someone other than the processor (§4).
+            self.assertNotEqual(result.approved_by, result.created_by)
+
+            (notice,) = Notice.objects.alive().filter(title=E2E_NOTICE_TITLE)
+            self.assertEqual(notice.status, NoticeStatus.PUBLISHED)
+            self.assertTrue(notice.requires_acknowledgment)
+            recipients = list(
+                Notification.objects.filter(source_type="notice", source_id=notice.pk).values_list(
+                    "user_id", flat=True
+                )
+            )
+        self.assertEqual(recipients, [guardian.id])
 
     def test_the_guardian_person_row_is_linked_to_the_login_and_not_duplicated(self) -> None:
         call_command("seed_e2e_data")
