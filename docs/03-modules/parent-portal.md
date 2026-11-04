@@ -42,6 +42,9 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 | `exams.result.view` *(scope `own`)* | View published results and report cards only | `guardian`, `student` |
 | `communication.thread.create` / `communication.message.create` *(scope `own`)* | Start/reply to a thread with the school about a linked child | `guardian`, `student` |
 | `communication.notification-preference.update` *(scope `own`)* | Manage own channel preferences | `guardian`, `student` |
+| `communication.notice.view` / `communication.notice.acknowledge` | Read and acknowledge published notices sent to the caller | `guardian`, `student` (and staff) |
+| `platform.notification.view` | Read and mark read the caller's own in-app notifications | every tenant role |
+| `timetable.timetable.view` *(scope `own`)* | A child's (or own) published week via `/timetables/my` | `guardian`, `student` (and staff) |
 
 ## 5. Main Features
 
@@ -154,13 +157,17 @@ Human-approval: none required for read-only Q&A; digest templates are tenant-app
 
 ## 16. API Requirements
 
-Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md). The portal consumes owning modules' endpoints under `own` scope, plus one aggregate:
+Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md). The portal consumes owning modules' endpoints under `own` scope, plus one aggregate. Filter names below are the ones the code accepts. A student id the caller does not own is `404` on every route (Invariant 2).
 
-- `GET /api/v1/parent-portal/dashboard` — per-child summary cards in one call (recommendation; avoids N calls on load).
-- `GET /api/v1/students?scope=own` · `GET /api/v1/students/{id}/guardians` — child list/links.
-- `GET /api/v1/student-attendance?student_id=…&month=…` — filters whitelisted: `student_id`, `date__gte/lte`, `status`.
-- `GET /api/v1/fee-invoices?student_id=…&status=open` · `POST /api/v1/fee-invoices/{id}:initiate-payment` (fees-finance; `Idempotency-Key` required) · `GET /api/v1/receipts/{id}` (PDF).
-- `GET /api/v1/results?student_id=…&status=published` · `GET /api/v1/report-cards/{id}` (PDF).
+- `GET /api/v1/parent-portal/dashboard` — `parent-portal.dashboard.view`, behind `module.parent_portal`. Returns `{children, unread_notifications, unread_threads, modules}`: one entry per child the caller owns (`student` plus the `attendance`, `fees` and `latest_result` cards), the caller's unread notification and thread counts, and `modules: {attendance, fees, examinations, communication, timetable}`. See §20 for each card's rule.
+- `GET /api/v1/auth/me` — `is_restricted_principal` tells a client to route the user to the portal ([ADR-0032](../decisions/0032-parent-portal-in-dashboard-route-group.md)).
+- `GET /api/v1/students` · `GET /api/v1/students/{id}` — the caller's own children (or self).
+- `GET /api/v1/student-attendance` — filters `student_id`, `section_id`, `class_id`, `academic_session_id`, `period_id`, `date`, `date__gte`, `date__lte`, `status`, `is_locked`.
+- `GET /api/v1/fee-invoices` — filters `student`, `academic_session_id`, `fee_structure_id`, `status`, `period_label`, `due_date__gte`, `due_date__lte`, `outstanding` (`true`: balance due and not canceled). A guardian or student never sees a draft invoice. `GET /api/v1/receipts` · `GET /api/v1/receipts/{id}/download` (fees-finance). Payment initiation is not built (§20).
+- `GET /api/v1/results` — filters `exam_id`, `student_id`, `section_id`, `status`, `outcome`; a guardian or student sees published results only. `GET /api/v1/report-cards` — filters `exam_id`, `term_id`, `student_id`; published only.
+- `GET /api/v1/timetables/my?student_id=…` — optional `student_id` (also `date`, `academic_session_id`): a guardian names one of their children, a student only themselves; a child they do not own is `404`, and a staff caller passing it is `400`.
+- `GET /api/v1/notices` · `GET /api/v1/notices/{id}` · `POST /api/v1/notices/{id}:acknowledge` — a guardian or student reads only published notices sent to them, in the `PortalNotice` shape (communication.md §16).
+- `GET /api/v1/notifications` (filters `read`, `category`) · `GET /api/v1/notifications/{id}` · `GET /api/v1/notifications:unread-count` · `POST /api/v1/notifications/{id}:mark-read` · `POST /api/v1/notifications:mark-all-read` — the caller's own inbox (communication.md §16).
 - `GET/POST /api/v1/message-threads`, `POST /api/v1/message-threads/{id}/messages` (communication).
 - `GET/PATCH /api/v1/notification-preferences` (communication).
 
@@ -188,3 +195,28 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - Cross-school guardians (children in two tenant schools) are separate accounts per [`multi-tenancy.md`](../02-architecture/multi-tenancy.md) §1; account linking is a future enhancement.
 - Whether guardians may edit emergency contacts directly or only request changes — default **request + staff approval** (recommendation).
 - Portal panels (fees, results, transport, library) individually toggleable per tenant feature flags (recommendation).
+
+## 20. Implementation status
+
+### Built (backend, PR 1)
+
+Plan: [`docs/superpowers/plans/2026-11-04-parent-portal.md`](../superpowers/plans/2026-11-04-parent-portal.md). The dashboard screens follow in PR 2 ([ADR-0032](../decisions/0032-parent-portal-in-dashboard-route-group.md)).
+
+| Area | State |
+| ---- | ----- |
+| App | `apps/api/apps/parent_portal/`: no models, no migration. Key `parent-portal.dashboard.view` (`PORTAL_ROLES`, declared once in `core/rbac/roles.py`), flag `module.parent_portal` (default off) |
+| Which children | `Student.filter_owned_by_user` (an active `student_guardians` link with `has_portal_access`, or the student themself) intersected with `students.student.view` scope. A school owner, who holds every key at scope `all` but owns no child, gets `children: []` |
+| Card rule | A card is `null` unless the caller holds its key (`effective_permission_keys`, cached) and the tenant has its module on (cached): attendance `attendance.student-attendance.view` + `module.attendance`; fees `fees.invoice.view` + `module.fees_finance`; `latest_result` `exams.result.view` + `module.examinations`; `unread_threads` `communication.thread.view` + `module.communication`. `modules.timetable` is `timetable.timetable.view` + `module.timetable` (no card) |
+| Visibility | Each card reads its owning module's own visibility function from that module's `services` (ADR-0013), the same one its list endpoint uses: `fees_finance.services.visible_invoices` and `outstanding_invoices` (no draft or canceled invoice), `examinations.services.visible_results` (published only), `communication.threads.services.access.unread_thread_count`, `core.notifications.services.unread_notification_count` |
+| Attendance card | `{today, month_percentage, month_present_days, month_counted_days}` from `attendance.services.student_month_summary` and `student_day_status`, so the figures are the §13 student summary's own. `month_percentage` is `null` when nothing is counted yet. "Today" is the tenant's local date (`Tenant.local_date()`) |
+| Fees card | `{outstanding_total, outstanding_count, next_due_date}` over outstanding invoices |
+| Results card | `{exam_name, percentage, grade, published_at}`: the newest published result |
+| Queries | A constant number per card, whatever the number of children (`test_query_count_constant_for_one_and_three_children`) |
+| Notices | Guardians and students hold `communication.notice.view`; `list`, `retrieve` and `:acknowledge` are portal-readable and return `PortalNotice` (published notices sent to the caller, with their own `acknowledged_at`). Expired notices are still listed (deferred) |
+| Timetable | `/timetables/my?student_id=` narrows to one owned child |
+| Inbox | `GET /notifications` and its actions (communication.md §20). **Revoked access:** notifications already delivered stay in the guardian's inbox (they are the user's own mail; a notification has no student column to filter on), while new ones stop, because every fan-out resolves the current links |
+| Routing flag | `/auth/me` and the login response carry `is_restricted_principal` |
+| Accounts | Only seeded guardians and students can log in until account onboarding ships ([`deferred-work.md`](../deferred-work.md)) |
+| Tests | `parent_portal/tests/test_dashboard.py`, `test_cross_tenant.py`; `communication/notices/tests/test_portal.py`; `timetable/slots/tests/test_endpoints.py` (`MyTimetableTests`); `core/rbac/tests/test_me.py`; `core/notifications/tests/test_inbox.py` |
+| Live lane | `e2e/tests/live/api/parent-portal.spec.ts` on `seed_e2e_data`'s comms fixture and the portal fixtures it runs (`parent_portal/management/commands/seed_e2e_portal.py`: attendance, an issued invoice, a result taken through marks entry, lock, processing, a second person's approval and publication, and a notice): the summary matches the seed and each module's own reads, an unlinked child is `404`, a staff reply reaches the inbox, a notice is listed and acknowledged, and the other tenant sees none of it |
+| Deferred | Pay now, account onboarding, the AI features, §13's guardian PDF summaries and the other entries in [`deferred-work.md`](../deferred-work.md)'s parent-portal section |

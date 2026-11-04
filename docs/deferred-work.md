@@ -950,11 +950,6 @@ either this file or `project-status.md`.
   suppression lists, SMS quotas, provider status webhooks, the SSE badge stream,
   and §6's full five-stage retry schedule.
 - **Communication PR C left these out** (`docs/03-modules/communication.md` §20, "Built (PR C)"):
-  - **No `GET /notifications` inbox or `:mark-read`.** §16 lists both (and the SSE badge
-    stream); `core.notifications` persists the rows but serves no endpoint, so a guardian has no
-    API to read a thread reply or a broadcast in-app yet. Earlier docs called it "the existing
-    inbox"; it is not. The live lane reads delivery from `/delivery-logs` instead. Parent-portal
-    needs it first.
   - **A per-broadcast live delivery board** (§7). The delivery dashboard can filter by
     `notification_id` and date, not by broadcast; the job's result carries only the counts.
   - **MFA step-up on `:emergency`** (§4's "MFA-recommended"). There is no MFA yet. The digest
@@ -1030,6 +1025,66 @@ either this file or `project-status.md`.
     `:preview`).
   - **A user's notification preferences** (`/notification-preferences`).
   - **The delivery logs and their summary report** (`/delivery-logs`, `:summary`).
+
+- **Parent portal PR 1 (backend) left these out** (`docs/03-modules/parent-portal.md` §20;
+  plan `docs/superpowers/plans/2026-11-04-parent-portal.md`). The summary, the inbox, guardian
+  notice browsing and the per-child timetable are built; the dashboard screens follow in PR 2.
+  - **Pay now.** `POST /fee-invoices/{id}:initiate-payment` under `fees.payment.create`, a
+    payment-gateway adapter and its webhook. The portal is read-only for fees (user decision):
+    there is no gateway in `core/integrations` to hand off to.
+  - **Account onboarding for staff, guardians and students** (parent-portal.md §3, §19).
+    **Until it ships, only seeded guardians and students can log in to the portal.** One shared
+    `core` invitation flow: an `invitations` table holding a hashed, single-use token with a 72h
+    expiry; `POST /auth/invitations:accept {token, password}` (API-driven, so a mobile app can
+    use it, Invariant 7); resend and revoke actions; email delivery through `notify()`. Staff
+    `:invite` adopts it, and `guardians/{id}:invite` and `students/{id}:invite` are added on
+    top. Self-registration stays deferred: §19 recommends invitation-only.
+  - **`platform.notification.view` for custom tenant roles.** The key's default roles are
+    `ALL_TENANT_ROLES`; a role a tenant defines later does not get it, so its holders get a 403
+    on the inbox until someone grants it. Role management has to grant it by default.
+  - **Guardian uploads**: an attachment on a guardian's thread message, and a guardian's leave
+    attachment. `platform.file.create` is staff-only.
+  - **Library and transport panels** (§5.8). Neither module is built.
+  - **Announcement browse** for guardians and students. Announcements reach them only as inbox
+    notifications.
+  - **Notice attachments** in the portal shape (agent-lessons L29: no attachment field ships
+    without its upload and download routes).
+  - **Admit-card download in the portal.**
+  - **A results trend chart** (§5.4's term-over-term view).
+  - **Attendance percentage for months other than the current one.** The summary computes the
+    current month only.
+  - **The combined calendar** (§6: exams, holidays, fee due dates).
+  - **Contact-field edits** (§11: request plus staff approval).
+  - **Locale selection** for a guardian (no `User.locale` field yet).
+  - **A guardian profile view** (§6).
+  - **A class-threshold comparison** on the attendance card (§6).
+  - **§13's guardian PDF summaries** (attendance summary, fee statement, result history).
+  - **An office-hours auto-notice** on a guardian's thread.
+  - **The SSE badge stream** for the unread count (api-architecture §3). The client polls
+    `GET /notifications:unread-count`.
+  - **AI-PAR-01, AI-PAR-02 and AI-PAR-03** (§14). No AI gateway exists yet.
+  - **The parent-engagement report** (§13, owned by reporting-analytics).
+  - **Per-panel tenant toggles** (§19). A panel shows when its module flag is on and the caller
+    holds its key; there is no separate portal toggle per panel.
+  - **Expired notices are still listed.** The portal lists every published notice a guardian
+    received, including one whose `valid_until` has passed: it is their received history, and
+    the spec is silent. Hiding expired notices (a `valid_until__gte=today` default on the
+    restricted-principal queryset) is deferred.
+  - **Attendance's "today" is UTC; the summary's is the tenant's.** Attendance marks and locks
+    with `timezone.localdate()` (`TIME_ZONE = "UTC"`, and nothing activates a tenant zone),
+    while the dashboard summary's "today" and "current month" use `Tenant.local_date()`. Near
+    midnight in a zone away from UTC the two disagree by a day. The fix is attendance itself
+    using `Tenant.local_date()`.
+  - **The outstanding-invoice rule is stated twice.** `fees_finance.services.outstanding_invoices`
+    is the rule the list filter and the summary share, but the aging report
+    (`fees_finance/reports.py`, around line 156) still restates `balance_due > 0` and not
+    canceled, because `reports` is imported by `services` and cannot import back without a
+    cycle. Move the rule to one `FeeInvoice` QuerySet method that reports, services and filters
+    all import.
+  - **The hand-written `AuthenticatedUser` drifts from the contract.** `packages/types`'
+    `AuthenticatedUser` is hand-written, not generated (ADR-0005 wants the generated `User`),
+    and the portal had to extend it with an optional `is_restricted_principal` because the
+    dashboard's auth store is typed by it (ADR-0017). Replace it with the generated type.
 
 - **`eslint-plugin-playwright` for `e2e/`** (planned in the engineering-standards spec, PR 4) was
   deferred: adding a dependency means `pnpm install`, which runs PR 3's `prepare` script and

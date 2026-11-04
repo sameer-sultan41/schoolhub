@@ -272,6 +272,20 @@
   `with CaptureQueriesContext(...)` block, before any other client request, and assert the
   list is non-empty before asserting on its contents.
 
+### L38. Grep the permission registry for every key a plan or brief names
+
+- **Mistake.** The parent-portal plan (`docs/superpowers/plans/2026-11-04-parent-portal.md`)
+  named its card keys from memory, and two did not exist: `examinations.result.view` is
+  `exams.result.view`, and `attendance.student_attendance.view` is
+  `attendance.student-attendance.view`. Task P2 caught both only while implementing; a key
+  copied unchecked into a permission map fails closed (403) or, in a doc, sends the next reader
+  to a key nobody holds. The same plan's carry-in said the exams marks chain was not on `main`
+  when it was, which would have pushed the seed onto a model-only fallback.
+- **Check.** Before a plan, brief or doc uses a permission key, grep for its
+  `registry.register(`/`register_crud(` call (`apps/*/permissions.py`, `core/*/permissions.py`)
+  and copy the exact string; reference a declared constant in code. Check "not on main yet"
+  claims with `git show origin/main:<path> | grep <name>` before choosing a fallback.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.

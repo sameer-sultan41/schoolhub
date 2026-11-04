@@ -68,8 +68,9 @@ erDiagram
      `get_queryset()` get this; a route declaring the read key itself gets one call. The read key
      is `required_permission`, or `scope_read_permission` where the class names another (the
      correction queue reads under `AnyOf(correction.create, correction.approve)`); an action in
-     `scope_read_exempt_actions` is scoped by its own key alone (a notice `:acknowledge`, which
-     guardians and students make without `communication.notice.view`). A target resolved outside
+     `scope_read_exempt_actions` is scoped by its own key alone (the marks `:lock-marks` and
+     `:unlock-marks`, which act on an exam subject and which `school_admin` makes without
+     `exams.marks.create`). A target resolved outside
      the mixin chains the same two calls itself, with the target's view key:
      `attendance.student-attendance.view` or `attendance.staff-attendance.view` for a
      correction's row, `students.student.view` or `staff.staff.view` for a nested route's parent,
