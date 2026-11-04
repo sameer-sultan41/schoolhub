@@ -770,6 +770,19 @@ class MarksImportTests(MarksTestCase):
         self.assertEqual(landed, 0)
         self.assertIn("send the results back", result["errors"][0]["issue"].lower())
 
+    def test_a_subject_deleted_mid_import_is_a_row_error_not_a_failed_job(self) -> None:
+        """The rows already written stay counted, and the report says why the rest stopped."""
+
+        def remove_subject():
+            self.exam_subject.deleted_at = timezone.now()
+            self.exam_subject.save(update_fields=["deleted_at"])
+
+        result, landed = self._queue_then(remove_subject, self._two_rows())
+
+        self.assertEqual(landed, 0)
+        self.assertEqual(result["failed"], 2)
+        self.assertIn("removed", result["errors"][0]["issue"])
+
     def test_a_non_spreadsheet_upload_is_refused(self) -> None:
         response = self.upload(b"not a sheet", name="notes.txt")
 
@@ -796,27 +809,31 @@ class MarksImportTests(MarksTestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
-def _first_data_statement(captured) -> str:
-    """The first statement that reads or writes a table — not a SAVEPOINT or a SET."""
-    return next(
+def _data_statements(captured) -> list[str]:
+    """The statements that read or write a table, without SAVEPOINT or SET."""
+    return [
         query["sql"]
         for query in captured.captured_queries
         if query["sql"].lstrip().upper().startswith(("SELECT", "INSERT", "UPDATE", "DELETE"))
-    )
+    ]
 
 
 class SubjectLockOrderTests(MarksTestCase):
-    """Every marks writer, and the lock itself, takes the subject's row lock first.
+    """Every marks writer, and the locker, locks the exam then the subject, before anything else.
 
-    That ordering is the whole fix: a gate read under the lock cannot miss a
-    `:lock-marks` that commits beside it, and writers that all lock
-    subject-then-marks cannot deadlock against the locker.
+    That order is the whole fix. A gate read under these locks cannot miss a
+    `:lock-marks` or a processing run that commits beside it. One order on
+    every path means no deadlock. The weak modes (`KEY SHARE`, `NO KEY UPDATE`)
+    keep sitting writes, which hold the exam and insert rows referencing the
+    subject, from deadlocking against them.
     """
 
     def assert_subject_lock_first(self, captured) -> None:
-        sql = _first_data_statement(captured)
-        self.assertIn('FROM "exam_subjects"', sql)
-        self.assertIn("FOR UPDATE", sql)
+        exam_lock, subject_lock = _data_statements(captured)[:2]
+        self.assertIn('FROM "exams"', exam_lock)
+        self.assertIn("FOR KEY SHARE", exam_lock)
+        self.assertIn('FROM "exam_subjects"', subject_lock)
+        self.assertIn("FOR NO KEY UPDATE", subject_lock)
 
     def test_the_grid_locks_the_subject_first(self) -> None:
         with tenant_context(self.tenant.id), CaptureQueriesContext(connection) as captured:

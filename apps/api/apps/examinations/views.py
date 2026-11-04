@@ -962,8 +962,8 @@ class MarksImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
         services.assert_marker_may_enter_some_section(user=request.user, exam_subject=exam_subject)
         # A fail-fast only: a clerk importing into a locked subject is told now
         # rather than by polling a job. The job re-checks every row under the
-        # subject's lock (`lock_subject_for_entry`), because this answer is stale
-        # by the time the job runs.
+        # exam's and subject's locks (`lock_subject_for_entry`), because this
+        # answer is stale by the time the job runs.
         services.assert_exam_accepts_marks(exam_subject.exam)
         services.assert_marks_window_open(exam_subject)
 
