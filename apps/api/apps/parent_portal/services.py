@@ -68,7 +68,7 @@ def module_access(user, *, tenant_id: uuid.UUID) -> dict[str, bool]:
 
 
 def portal_children(user) -> list[Student]:
-    """The students this caller sees in the portal, each with `active_enrollments` prefetched.
+    """The students this caller sees in the portal, each with its active enrolment prefetched.
 
     Own students (a student's own row, a guardian's portal-enabled children) **and**
     the record scope of `students.student.view`. Scope alone is wrong: a school owner
@@ -84,7 +84,8 @@ def portal_children(user) -> list[Student]:
         .order_by("-enrollment_date")
     )
     students = scope_queryset(owned, user, permission=STUDENT_VIEW_KEY).prefetch_related(
-        Prefetch("enrollments", queryset=enrollments, to_attr="active_enrollments")
+        # No `to_attr`: `.enrollments.all()` reads this filtered cache and stays typed.
+        Prefetch("enrollments", queryset=enrollments)
     )
     return list(students.order_by("first_name", "id"))
 
@@ -132,7 +133,8 @@ def build_dashboard(*, user, today: datetime.date | None = None) -> dict:
 
 
 def _student_summary(student: Student) -> dict:
-    enrollment = student.active_enrollments[0] if student.active_enrollments else None
+    # The prefetch holds only active enrolments, newest first.
+    enrollment = next(iter(student.enrollments.all()), None)
     return {
         "id": student.pk,
         "first_name": student.first_name,
@@ -150,12 +152,16 @@ def _attendance_cards(ids: list[uuid.UUID], *, today: datetime.date) -> dict[uui
     cards = {}
     for student_id in ids:
         row = month.get(student_id)
-        counted = row["counted_days"] if row else 0
+        if row is None:
+            present, counted, rate = 0, 0, None
+        else:
+            present, counted = row["present_days"], row["counted_days"]
+            # Nothing counted yet is "no rate", not 0% — a new month must not read as truancy.
+            rate = row["attendance_rate"] if counted else None
         cards[student_id] = {
             "today": statuses.get(student_id),
-            # Nothing counted yet is "no rate", not 0% — a new month must not read as truancy.
-            "month_percentage": row["attendance_rate"] if counted else None,
-            "month_present_days": row["present_days"] if row else 0,
+            "month_percentage": rate,
+            "month_present_days": present,
             "month_counted_days": counted,
         }
     return cards
