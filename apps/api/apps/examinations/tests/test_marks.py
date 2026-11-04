@@ -17,8 +17,10 @@ from __future__ import annotations
 
 import datetime
 from decimal import Decimal
+from unittest import mock
 
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -691,6 +693,96 @@ class MarksImportTests(MarksTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
 
+    def _queue_then(self, change, rows: list[str]):
+        """Upload while entry is open, apply `change` while the job is queued, then run it.
+
+        The gap the gates have to survive: the view's check passes, and the
+        subject changes before the task writes a row.
+        """
+        from core.jobs.models import BackgroundJob
+
+        with self.captureOnCommitCallbacks() as callbacks:
+            response = self.upload(self._sheet(rows))
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.json())
+        with tenant_context(self.tenant.id):
+            change()
+        for callback in callbacks:
+            callback()
+        with tenant_context(self.tenant.id):
+            job = BackgroundJob.objects.get(pk=response.json()["data"]["job_id"])
+            landed = Marks.objects.alive().filter(exam_subject=self.exam_subject).count()
+        return job.result, landed
+
+    def _two_rows(self) -> list[str]:
+        return [f"{student.admission_number},60,,,," for student in self.students[:2]]
+
+    def test_an_import_queued_before_a_lock_writes_nothing(self) -> None:
+        """The review's case: a clerk uploads while entry is open, an admin
+        locks the subject while the job is queued, and the import must not
+        write into a result set that is meant to be final."""
+        result, landed = self._queue_then(
+            lambda: services.lock_marks(exam_subject=self.exam_subject, actor_id=self.user.pk),
+            self._two_rows(),
+        )
+
+        self.assertEqual(landed, 0)
+        self.assertEqual(result["succeeded"], 0)
+        self.assertEqual({e["field"] for e in result["errors"]}, {"exam_subject"})
+        self.assertIn("unlock", result["errors"][0]["issue"].lower())
+
+    def test_a_lock_partway_through_an_import_refuses_the_rows_after_it(self) -> None:
+        original = services.import_marks_row
+        calls = []
+
+        def lock_after_first_row(**kwargs):
+            outcome = original(**kwargs)
+            calls.append(outcome)
+            if len(calls) == 1:
+                services.lock_marks(exam_subject=self.exam_subject, actor_id=self.user.pk)
+            return outcome
+
+        with mock.patch.object(services, "import_marks_row", side_effect=lock_after_first_row):
+            result, landed = self._queue_then(lambda: None, self._two_rows())
+
+        self.assertEqual(landed, 1)
+        self.assertEqual(result["succeeded"], 1)
+        self.assertEqual([e["field"] for e in result["errors"]], ["exam_subject"])
+
+    def test_an_import_after_the_window_closes_writes_nothing(self) -> None:
+        def close_window():
+            now = timezone.now()
+            self.exam_subject.marks_entry_opens_at = now - datetime.timedelta(days=2)
+            self.exam_subject.marks_entry_closes_at = now - datetime.timedelta(minutes=1)
+            self.exam_subject.save(update_fields=["marks_entry_opens_at", "marks_entry_closes_at"])
+
+        result, landed = self._queue_then(close_window, self._two_rows())
+
+        self.assertEqual(landed, 0)
+        self.assertIn("closed", result["errors"][0]["issue"].lower())
+
+    def test_an_import_after_results_are_approved_writes_nothing(self) -> None:
+        def approve():
+            self.exam.status = ExamStatus.APPROVED
+            self.exam.save(update_fields=["status"])
+
+        result, landed = self._queue_then(approve, self._two_rows())
+
+        self.assertEqual(landed, 0)
+        self.assertIn("send the results back", result["errors"][0]["issue"].lower())
+
+    def test_a_subject_deleted_mid_import_is_a_row_error_not_a_failed_job(self) -> None:
+        """The rows already written stay counted, and the report says why the rest stopped."""
+
+        def remove_subject():
+            self.exam_subject.deleted_at = timezone.now()
+            self.exam_subject.save(update_fields=["deleted_at"])
+
+        result, landed = self._queue_then(remove_subject, self._two_rows())
+
+        self.assertEqual(landed, 0)
+        self.assertEqual(result["failed"], 2)
+        self.assertIn("removed", result["errors"][0]["issue"])
+
     def test_a_non_spreadsheet_upload_is_refused(self) -> None:
         response = self.upload(b"not a sheet", name="notes.txt")
 
@@ -715,6 +807,73 @@ class MarksImportTests(MarksTestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+def _data_statements(captured) -> list[str]:
+    """The statements that read or write a table, without SAVEPOINT or SET."""
+    return [
+        query["sql"]
+        for query in captured.captured_queries
+        if query["sql"].lstrip().upper().startswith(("SELECT", "INSERT", "UPDATE", "DELETE"))
+    ]
+
+
+class SubjectLockOrderTests(MarksTestCase):
+    """Every marks writer, and the locker, locks the exam then the subject, before anything else.
+
+    That order is the whole fix. A gate read under these locks cannot miss a
+    `:lock-marks` or a processing run that commits beside it. One order on
+    every path means no deadlock. The weak modes (`KEY SHARE`, `NO KEY UPDATE`)
+    keep sitting writes, which hold the exam and insert rows referencing the
+    subject, from deadlocking against them.
+    """
+
+    def assert_subject_lock_first(self, captured) -> None:
+        exam_lock, subject_lock = _data_statements(captured)[:2]
+        self.assertIn('FROM "exams"', exam_lock)
+        self.assertIn("FOR KEY SHARE", exam_lock)
+        self.assertIn('FROM "exam_subjects"', subject_lock)
+        self.assertIn("FOR NO KEY UPDATE", subject_lock)
+
+    def test_the_grid_locks_the_subject_first(self) -> None:
+        with tenant_context(self.tenant.id), CaptureQueriesContext(connection) as captured:
+            services.bulk_enter_marks(
+                exam_subject=self.exam_subject,
+                section=self.section,
+                entries=[{"student_id": self.students[0].pk, "theory_marks": Decimal("60")}],
+                user=self.user,
+                actor_id=self.user.pk,
+            )
+
+        self.assert_subject_lock_first(captured)
+
+    def test_an_imported_row_locks_the_subject_first(self) -> None:
+        with tenant_context(self.tenant.id):
+            enrollments = services.import_candidates_by_admission_number(
+                exam_subject=self.exam_subject
+            )
+            with CaptureQueriesContext(connection) as captured:
+                services.import_marks_row(
+                    row={
+                        "admission_number": self.students[0].admission_number,
+                        "theory_marks": "60",
+                    },
+                    row_number=2,
+                    exam_subject=self.exam_subject,
+                    enrollments_by_number=enrollments,
+                    writable_section_ids=frozenset({self.section.pk}),
+                    actor_id=self.user.pk,
+                )
+
+        self.assert_subject_lock_first(captured)
+
+    def test_lock_and_unlock_lock_the_subject_first(self) -> None:
+        for change in (services.lock_marks, services.unlock_marks):
+            with self.subTest(change=change.__name__):
+                with tenant_context(self.tenant.id), CaptureQueriesContext(connection) as captured:
+                    change(exam_subject=self.exam_subject, actor_id=self.user.pk)
+
+                self.assert_subject_lock_first(captured)
 
 
 class NoDirectWriteTests(MarksTestCase):

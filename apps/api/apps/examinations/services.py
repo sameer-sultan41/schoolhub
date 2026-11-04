@@ -17,7 +17,7 @@ import uuid
 from collections.abc import Callable
 from decimal import Decimal
 
-from django.db import transaction
+from django.db import connection, transaction
 from django.utils import timezone
 
 from apps.examinations import conflicts, grading, processing, reports
@@ -721,6 +721,57 @@ def assert_marks_window_open(exam_subject: ExamSubject) -> None:
     assert_marks_window_not_closed(exam_subject)
 
 
+def _lock_exam_subject(exam_subject: ExamSubject) -> ExamSubject:
+    """Take the marks locks, in the one order every marks path uses. Returns the fresh row.
+
+    1. **The exam, `FOR KEY SHARE`.** `process_exam_results` is the only move
+       out of the marks-writable statuses, and it takes the exam `FOR UPDATE`
+       (`lock_exam`), which conflicts with this. So processing waits for an
+       entry in flight, and an entry that starts after processing reads its
+       committed status. Concurrent entries don't conflict with each other here,
+       nor with the grid's own status update (a plain UPDATE is `NO KEY UPDATE`).
+       Raw SQL because Django has no `FOR KEY SHARE`; RLS still applies.
+    2. **The exam-subject, `FOR NO KEY UPDATE`.** This serialises entry against
+       `:lock-marks`/`:unlock-marks`. It is the weak form so that inserting a
+       sitting that references the subject (a foreign-key `KEY SHARE`) is not
+       blocked; a plain `FOR UPDATE` here deadlocked against sitting writes,
+       which hold the exam and then insert.
+
+    Then the `marks` rows. One order on every path means no cycle. Must run
+    inside the writing transaction. A subject deleted meanwhile is a `Conflict`,
+    so an import reports it per row instead of failing the job with an ORM message.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(
+            'SELECT 1 FROM "exams" WHERE "id" = %s FOR KEY SHARE',
+            [exam_subject.exam_id],
+        )
+    try:
+        return (
+            ExamSubject.objects.alive()
+            .select_for_update(of=("self",), no_key=True)
+            .select_related("exam")
+            .get(pk=exam_subject.pk)
+        )
+    except ExamSubject.DoesNotExist:
+        raise Conflict("This exam-subject was removed, so it takes no more marks.") from None
+
+
+def lock_subject_for_entry(exam_subject: ExamSubject) -> ExamSubject:
+    """Every marks gate, read under `_lock_exam_subject`. Returns the fresh row.
+
+    The one place a *write* checks the gates. If they are checked against an
+    `ExamSubject` read earlier (at the request, or when an import job started),
+    a `:lock-marks`, a closed window or the exam moving to processing can commit
+    after that read, and a queued import would keep writing into a subject that
+    is meant to be final.
+    """
+    exam_subject = _lock_exam_subject(exam_subject)
+    assert_exam_accepts_marks(exam_subject.exam)
+    assert_marks_window_open(exam_subject)
+    return exam_subject
+
+
 def assert_exam_accepts_marks(exam: Exam) -> None:
     """§7.1 — marks may not be written once results are approved or published.
 
@@ -977,8 +1028,7 @@ def bulk_enter_marks(
     the same grid within milliseconds both read "no row" otherwise, and the
     unique index turns the loser into a 500 rather than an update.
     """
-    assert_exam_accepts_marks(exam_subject.exam)
-    assert_marks_window_open(exam_subject)
+    exam_subject = lock_subject_for_entry(exam_subject)
     assert_marker_may_enter(user=user, exam_subject=exam_subject, section=section)
 
     eligible = _entry_students(exam_subject, section=section)
@@ -1045,7 +1095,7 @@ def bulk_enter_marks(
         }
         if row is None:
             Marks.objects.create(
-                tenant=exam_subject.tenant,
+                tenant_id=exam_subject.tenant_id,
                 exam_subject=exam_subject,
                 student_id=entry["student_id"],
                 created_by=actor_id,
@@ -1181,7 +1231,12 @@ def lock_marks(*, exam_subject: ExamSubject, actor_id: uuid.UUID) -> dict:
     would grade a student on a half-entered grid.
 
     Idempotent: locking an already-locked subject is a retry, not a conflict.
+
+    Takes the same locks every marks writer takes (`_lock_exam_subject`), so
+    an import row or a grid submit in flight either commits before the lock or
+    sees it. Works on the fresh row it returns; the caller's instance is stale.
     """
+    exam_subject = _lock_exam_subject(exam_subject)
     if exam_subject.marks_locked_at is not None:
         return {"locked_rows": 0, "already_locked": True}
 
@@ -1207,7 +1262,10 @@ def unlock_marks(*, exam_subject: ExamSubject, actor_id: uuid.UUID) -> dict:
     Refused once results are approved. Unlocking then would let a mark change
     under a result a school has already given to a parent; §7.1's route for
     that is to send the results back, which returns the exam to `marks_entry`.
+
+    Takes `_lock_exam_subject`'s locks first, as `lock_marks` does.
     """
+    exam_subject = _lock_exam_subject(exam_subject)
     assert_exam_accepts_marks(exam_subject.exam)
 
     if exam_subject.marks_locked_at is None:
@@ -1301,7 +1359,18 @@ def import_marks_row(
     reject the entire file. These rows are this exam's marks arriving by a
     different door, and the window is exactly as relevant as it is to a teacher
     typing them.
+
+    **The gates are read per row, under the exam's and subject's locks**
+    (`lock_subject_for_entry`), not once for the file. A job can sit queued or
+    run for minutes, and a lock, a closed window or the exam moving to
+    processing in that time has to stop the rows after it. A refused row is reported like any
+    other, so the failed-rows re-import still works once entry reopens.
     """
+    try:
+        exam_subject = lock_subject_for_entry(exam_subject)
+    except Conflict as exc:
+        return {"row": str(row_number), "field": "exam_subject", "issue": str(exc.detail)}
+
     admission_number = (row.get("admission_number") or "").strip()
     if not admission_number:
         return {"row": str(row_number), "field": "admission_number", "issue": "Missing."}
@@ -1355,7 +1424,7 @@ def import_marks_row(
         return {"row": str(row_number), "field": field, "issue": str(issue)}
 
     Marks.objects.update_or_create(
-        tenant=exam_subject.tenant,
+        tenant_id=exam_subject.tenant_id,
         exam_subject=exam_subject,
         student=student,
         defaults={
