@@ -770,18 +770,44 @@ class MarksImportTests(MarksTestCase):
         self.assertEqual(landed, 0)
         self.assertIn("send the results back", result["errors"][0]["issue"].lower())
 
-    def test_a_subject_deleted_mid_import_is_a_row_error_not_a_failed_job(self) -> None:
+    def _remove_subject(self) -> None:
+        self.exam_subject.deleted_at = timezone.now()
+        self.exam_subject.save(update_fields=["deleted_at"])
+
+    def test_a_subject_removed_mid_import_is_a_row_error_not_a_failed_job(self) -> None:
         """The rows already written stay counted, and the report says why the rest stopped."""
+        original = services.import_marks_row
+        calls = []
 
-        def remove_subject():
-            self.exam_subject.deleted_at = timezone.now()
-            self.exam_subject.save(update_fields=["deleted_at"])
+        def remove_after_first_row(**kwargs):
+            outcome = original(**kwargs)
+            calls.append(outcome)
+            if len(calls) == 1:
+                self._remove_subject()
+            return outcome
 
-        result, landed = self._queue_then(remove_subject, self._two_rows())
+        with mock.patch.object(services, "import_marks_row", side_effect=remove_after_first_row):
+            result, landed = self._queue_then(lambda: None, self._two_rows())
 
-        self.assertEqual(landed, 0)
-        self.assertEqual(result["failed"], 2)
+        self.assertEqual(landed, 1)
+        self.assertEqual((result["succeeded"], result["failed"]), (1, 1))
         self.assertIn("removed", result["errors"][0]["issue"])
+
+    def test_a_subject_removed_while_queued_fails_the_job_in_a_sentence(self) -> None:
+        from core.jobs.models import BackgroundJob, JobStatus
+
+        with self.captureOnCommitCallbacks() as callbacks:
+            response = self.upload(self._sheet(self._two_rows()))
+        with tenant_context(self.tenant.id):
+            self._remove_subject()
+        for callback in callbacks:
+            callback()
+
+        with tenant_context(self.tenant.id):
+            job = BackgroundJob.objects.get(pk=response.json()["data"]["job_id"])
+        self.assertEqual(job.status, JobStatus.FAILED)
+        self.assertIn("was removed", job.error)
+        self.assertNotIn("matching query", job.error)
 
     def test_a_non_spreadsheet_upload_is_refused(self) -> None:
         response = self.upload(b"not a sheet", name="notes.txt")
