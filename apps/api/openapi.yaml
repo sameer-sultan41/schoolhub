@@ -8023,6 +8023,154 @@ paths:
               schema:
                 $ref: '#/components/schemas/NotificationTemplatePreview'
           description: ''
+  /api/v1/notifications:
+    get:
+      operationId: notifications_list
+      description: The caller's own notifications, the same rows for every role and
+        scope.
+      parameters:
+      - in: query
+        name: category
+        schema:
+          type: string
+          enum:
+          - academic
+          - attendance
+          - emergency
+          - exams
+          - fees
+          - general
+          - library
+          - transport
+        description: |-
+          * `attendance` - Attendance
+          * `fees` - Fees
+          * `exams` - Exams
+          * `library` - Library
+          * `transport` - Transport
+          * `academic` - Academic
+          * `general` - General
+          * `emergency` - Emergency
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: read
+        schema:
+          type: boolean
+        description: true = read, false = unread.
+      tags:
+      - notifications
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedNotificationList'
+          description: ''
+  /api/v1/notifications/{id}:
+    get:
+      operationId: notifications_retrieve
+      description: The caller's own notifications, the same rows for every role and
+        scope.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this notification.
+        required: true
+      tags:
+      - notifications
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+          description: ''
+  /api/v1/notifications/{id}:mark-read:
+    post:
+      operationId: notifications_:mark_read_create
+      description: '`POST /notifications/{id}:mark-read` — idempotent, keeps the first
+        `read_at`.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - notifications
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationMarkReadResult'
+          description: ''
+  /api/v1/notifications:mark-all-read:
+    post:
+      operationId: notifications:mark_all_read_create
+      description: |-
+        `POST /notifications:mark-all-read` — rows at or before `before` (default now).
+
+        The bound keeps a notification that arrived after the client rendered its list
+        unread, instead of marking it unseen.
+      tags:
+      - notifications:mark-all-read
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarkAllReadRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MarkAllReadRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MarkAllReadRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarkAllReadResult'
+          description: ''
+  /api/v1/notifications:unread-count:
+    get:
+      operationId: notifications:unread_count_retrieve
+      description: '`GET /notifications:unread-count`.'
+      tags:
+      - notifications:unread-count
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnreadCount'
+          description: ''
   /api/v1/payments:
     get:
       operationId: payments_list
@@ -18449,6 +18597,21 @@ components:
       - entry_date
       - lines
       - memo
+    MarkAllReadRequest:
+      type: object
+      properties:
+        before:
+          type: string
+          format: date-time
+          description: Only rows created at or before this moment are marked. Defaults
+            to now.
+    MarkAllReadResult:
+      type: object
+      properties:
+        marked:
+          type: integer
+      required:
+      - marked
     MarkReadResult:
       type: object
       description: '`:mark-read`''s result — how many messages it stamped.'
@@ -18937,6 +19100,69 @@ components:
         * `circular` - Circular
         * `event` - Event
         * `urgent` - Urgent
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        event_key:
+          type: string
+          readOnly: true
+          description: Producing event, e.g. 'attendance.student-absent'.
+        category:
+          allOf:
+          - $ref: '#/components/schemas/NotificationCategoryEnum'
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+          description: Rendered from the template.
+        body:
+          type: string
+          readOnly: true
+          description: Rendered from the template.
+        data:
+          readOnly: true
+          nullable: true
+          description: Deep-link payload (resource type/id, route).
+        source_type:
+          type: string
+          readOnly: true
+          nullable: true
+          description: Polymorphic origin, e.g. 'student'.
+        source_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: Origin row id, validated in the service layer.
+        priority:
+          allOf:
+          - $ref: '#/components/schemas/PriorityEnum'
+          readOnly: true
+        read_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - body
+      - category
+      - created_at
+      - data
+      - event_key
+      - id
+      - priority
+      - read_at
+      - source_id
+      - source_type
+      - title
     NotificationCategoryEnum:
       enum:
       - attendance
@@ -18971,6 +19197,14 @@ components:
         * `push` - Push
         * `in_app` - In-app
         * `whatsapp` - WhatsApp
+    NotificationMarkReadResult:
+      type: object
+      properties:
+        read_at:
+          type: string
+          format: date-time
+      required:
+      - read_at
     NotificationPreferenceRow:
       type: object
       description: One cell of the materialized category x channel matrix.
@@ -19828,6 +20062,27 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Notice'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedNotificationList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
         meta:
           type: object
           properties:
@@ -22966,6 +23221,16 @@ components:
       - sequence
       - start_time
       - updated_at
+    PriorityEnum:
+      enum:
+      - normal
+      - high
+      - emergency
+      type: string
+      description: |-
+        * `normal` - Normal
+        * `high` - High
+        * `emergency` - Emergency
     ProcessRefund:
       type: object
       description: ⚿ `:process` — how the money actually went back.
@@ -26117,6 +26382,13 @@ components:
         * `inter_campus` - Inter-campus
         * `outgoing` - Outgoing
         * `incoming` - Incoming
+    UnreadCount:
+      type: object
+      properties:
+        unread:
+          type: integer
+      required:
+      - unread
     User:
       type: object
       properties:

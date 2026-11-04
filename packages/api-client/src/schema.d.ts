@@ -3476,6 +3476,96 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The caller's own notifications, the same rows for every role and scope. */
+        get: operations["notifications_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The caller's own notifications, the same rows for every role and scope. */
+        get: operations["notifications_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/{id}:mark-read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `POST /notifications/{id}:mark-read` — idempotent, keeps the first `read_at`. */
+        post: operations["notifications_:mark_read_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications:mark-all-read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /notifications:mark-all-read` — rows at or before `before` (default now).
+         *
+         *     The bound keeps a notification that arrived after the client rendered its list
+         *     unread, instead of marking it unseen.
+         */
+        post: operations["notifications:mark_all_read_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications:unread-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET /notifications:unread-count`. */
+        get: operations["notifications:unread_count_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/payments": {
         parameters: {
             query?: never;
@@ -8194,6 +8284,16 @@ export interface components {
             memo: string;
             lines: components["schemas"]["LedgerLine"][];
         };
+        MarkAllReadRequest: {
+            /**
+             * Format: date-time
+             * @description Only rows created at or before this moment are marked. Defaults to now.
+             */
+            before?: string;
+        };
+        MarkAllReadResult: {
+            marked: number;
+        };
         /** @description `:mark-read`'s result — how many messages it stamped. */
         MarkReadResult: {
             marked: number;
@@ -8422,6 +8522,31 @@ export interface components {
          * @enum {string}
          */
         NoticeTypeEnum: "general" | "circular" | "event" | "urgent";
+        Notification: {
+            /** Format: uuid */
+            readonly id: string;
+            /** @description Producing event, e.g. 'attendance.student-absent'. */
+            readonly event_key: string;
+            readonly category: components["schemas"]["NotificationCategoryEnum"];
+            /** @description Rendered from the template. */
+            readonly title: string;
+            /** @description Rendered from the template. */
+            readonly body: string;
+            /** @description Deep-link payload (resource type/id, route). */
+            readonly data: unknown;
+            /** @description Polymorphic origin, e.g. 'student'. */
+            readonly source_type: string | null;
+            /**
+             * Format: uuid
+             * @description Origin row id, validated in the service layer.
+             */
+            readonly source_id: string | null;
+            readonly priority: components["schemas"]["PriorityEnum"];
+            /** Format: date-time */
+            readonly read_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
         /**
          * @description * `attendance` - Attendance
          *     * `fees` - Fees
@@ -8443,6 +8568,10 @@ export interface components {
          * @enum {string}
          */
         NotificationChannelEnum: "email" | "sms" | "push" | "in_app" | "whatsapp";
+        NotificationMarkReadResult: {
+            /** Format: date-time */
+            read_at: string;
+        };
         /** @description One cell of the materialized category x channel matrix. */
         NotificationPreferenceRow: {
             event_category: string;
@@ -8849,6 +8978,16 @@ export interface components {
         };
         PaginatedNoticeList: {
             data?: components["schemas"]["Notice"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedNotificationList: {
+            data?: components["schemas"]["Notification"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -10470,6 +10609,13 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /**
+         * @description * `normal` - Normal
+         *     * `high` - High
+         *     * `emergency` - Emergency
+         * @enum {string}
+         */
+        PriorityEnum: "normal" | "high" | "emergency";
         /** @description ⚿ `:process` — how the money actually went back. */
         ProcessRefund: {
             method: components["schemas"]["PaymentMethodEnum"];
@@ -11975,6 +12121,9 @@ export interface components {
          * @enum {string}
          */
         TransferTypeEnum: "inter_campus" | "outgoing" | "incoming";
+        UnreadCount: {
+            unread: number;
+        };
         User: {
             /** Format: uuid */
             readonly id: string;
@@ -17867,6 +18016,130 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NotificationTemplatePreview"];
+                };
+            };
+        };
+    };
+    notifications_list: {
+        parameters: {
+            query?: {
+                /**
+                 * @description * `attendance` - Attendance
+                 *     * `fees` - Fees
+                 *     * `exams` - Exams
+                 *     * `library` - Library
+                 *     * `transport` - Transport
+                 *     * `academic` - Academic
+                 *     * `general` - General
+                 *     * `emergency` - Emergency
+                 */
+                category?: "academic" | "attendance" | "emergency" | "exams" | "fees" | "general" | "library" | "transport";
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description true = read, false = unread. */
+                read?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedNotificationList"];
+                };
+            };
+        };
+    };
+    notifications_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this notification. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Notification"];
+                };
+            };
+        };
+    };
+    "notifications_:mark_read_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationMarkReadResult"];
+                };
+            };
+        };
+    };
+    "notifications:mark_all_read_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["MarkAllReadRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["MarkAllReadRequest"];
+                "multipart/form-data": components["schemas"]["MarkAllReadRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkAllReadResult"];
+                };
+            };
+        };
+    };
+    "notifications:unread_count_retrieve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnreadCount"];
                 };
             };
         };
