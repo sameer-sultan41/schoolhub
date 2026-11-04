@@ -8128,14 +8128,14 @@ paths:
           description: ''
   /api/v1/notifications:mark-all-read:
     post:
-      operationId: notifications:mark_all_read_create
+      operationId: notifications_mark_all_read
       description: |-
         `POST /notifications:mark-all-read` — rows at or before `before` (default now).
 
         The bound keeps a notification that arrived after the client rendered its list
         unread, instead of marking it unseen.
       tags:
-      - notifications:mark-all-read
+      - notifications
       requestBody:
         content:
           application/json:
@@ -8158,10 +8158,10 @@ paths:
           description: ''
   /api/v1/notifications:unread-count:
     get:
-      operationId: notifications:unread_count_retrieve
+      operationId: notifications_unread_count
       description: '`GET /notifications:unread-count`.'
       tags:
-      - notifications:unread-count
+      - notifications
       security:
       - jwtAuth: []
       responses:

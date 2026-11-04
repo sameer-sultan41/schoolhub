@@ -3542,7 +3542,7 @@ export interface paths {
          *     The bound keeps a notification that arrived after the client rendered its list
          *     unread, instead of marking it unseen.
          */
-        post: operations["notifications:mark_all_read_create"];
+        post: operations["notifications_mark_all_read"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3557,7 +3557,7 @@ export interface paths {
             cookie?: never;
         };
         /** @description `GET /notifications:unread-count`. */
-        get: operations["notifications:unread_count_retrieve"];
+        get: operations["notifications_unread_count"];
         put?: never;
         post?: never;
         delete?: never;
@@ -18100,7 +18100,7 @@ export interface operations {
             };
         };
     };
-    "notifications:mark_all_read_create": {
+    notifications_mark_all_read: {
         parameters: {
             query?: never;
             header?: never;
@@ -18125,7 +18125,7 @@ export interface operations {
             };
         };
     };
-    "notifications:unread_count_retrieve": {
+    notifications_unread_count: {
         parameters: {
             query?: never;
             header?: never;

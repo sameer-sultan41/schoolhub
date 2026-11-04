@@ -65,7 +65,12 @@ class NotificationInboxViewSet(
         """
         return Notification.objects.alive().filter(user_id=self.request.user.pk)
 
-    @extend_schema(request=None, responses={200: UnreadCountSerializer})
+    @extend_schema(
+        request=None,
+        responses={200: UnreadCountSerializer},
+        tags=["notifications"],
+        operation_id="notifications_unread_count",
+    )
     def unread_count(self, request: Request) -> Response:
         """`GET /notifications:unread-count`."""
         unread = self.get_queryset().filter(read_at__isnull=True).count()
@@ -83,7 +88,10 @@ class NotificationInboxViewSet(
         return ActionResponse.ok({"read_at": notification.read_at})
 
     @extend_schema(
-        request=MarkAllReadRequestSerializer, responses={200: MarkAllReadResultSerializer}
+        request=MarkAllReadRequestSerializer,
+        responses={200: MarkAllReadResultSerializer},
+        tags=["notifications"],
+        operation_id="notifications_mark_all_read",
     )
     def mark_all_read(self, request: Request) -> Response:
         """`POST /notifications:mark-all-read` — rows at or before `before` (default now).
