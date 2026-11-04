@@ -372,8 +372,17 @@ def import_marks_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> No
             exam_subject = (
                 ExamSubject.objects.alive()
                 .select_related("exam")
-                .get(pk=payload["exam_subject_id"])
+                .filter(pk=payload["exam_subject_id"])
+                .first()
             )
+            if exam_subject is None:
+                # Removed while the job was queued. The job error is shown to the user, so it is
+                # written as a sentence rather than the ORM's "matching query does not exist".
+                mark_failed(
+                    job=job,
+                    error="This exam-subject was removed, so its marks sheet was not imported.",
+                )
+                return
             # Built once for the whole file. Looked up per row it would be one
             # query each, and a six-hundred-row sheet is a real size.
             enrollments = services.import_candidates_by_admission_number(exam_subject=exam_subject)
