@@ -20,6 +20,7 @@ from core.notifications.serializers import (
     NotificationSerializer,
     UnreadCountSerializer,
 )
+from core.notifications.services import own_notifications, unread_notification_count
 
 VIEW_KEY = "platform.notification.view"
 
@@ -56,14 +57,8 @@ class NotificationInboxViewSet(
     http_method_names = ["get", "post", "head", "options"]
 
     def get_queryset(self):
-        """Own rows only, deliberately not `scope_queryset`.
-
-        A notification is its recipient's own mail, so membership is the authorisation
-        (ADR-0030). Record scope would let a scope-`all` admin read everyone's inbox, and
-        a restricted principal's scope-`own` has no `user_id` meaning for a student's row.
-        Another tenant's rows are already invisible to the tenant-scoped manager.
-        """
-        return Notification.objects.alive().filter(user_id=self.request.user.pk)
+        """Own rows only — `services.own_notifications` says why it is not `scope_queryset`."""
+        return own_notifications(self.request.user)
 
     @extend_schema(
         request=None,
@@ -73,8 +68,7 @@ class NotificationInboxViewSet(
     )
     def unread_count(self, request: Request) -> Response:
         """`GET /notifications:unread-count`."""
-        unread = self.get_queryset().filter(read_at__isnull=True).count()
-        return ActionResponse.ok({"unread": unread})
+        return ActionResponse.ok({"unread": unread_notification_count(request.user)})
 
     @extend_schema(request=None, responses={200: NotificationMarkReadResultSerializer})
     def mark_read(self, request: Request, pk: str | None = None) -> Response:

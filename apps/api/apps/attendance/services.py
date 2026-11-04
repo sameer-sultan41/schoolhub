@@ -16,6 +16,7 @@ from __future__ import annotations
 import datetime
 import logging
 import uuid
+from calendar import monthrange
 from decimal import Decimal
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
@@ -24,7 +25,7 @@ from django.db.models import F
 from django.db.models.functions import Length
 from django.utils import timezone
 
-from apps.attendance import uploads
+from apps.attendance import reports, uploads
 from apps.attendance.models import (
     ApprovalDecision,
     AttendanceCorrection,
@@ -2088,3 +2089,33 @@ def _parse_import_time(
             "field": field,
             "issue": f"'{value}' is not a time (HH:MM or HH:MM:SS).",
         }
+
+
+# ---------------------------------------------------------------- per-student summaries
+
+
+def student_month_summary(*, students, month: datetime.date) -> dict[uuid.UUID, dict]:
+    """§13's per-student summary for the calendar month containing `month`, keyed by student id.
+
+    `reports.student_summary` over the given students' rows, so the counting rules are
+    the report's own: derived days in period mode (ADR-0028), `PRESENT_STATUSES` over
+    the days not in `EXCLUDED_FROM_RATE`. `students` is ids or a `Student` queryset the
+    caller has already scoped; a student with no row in the month is absent from the
+    result. One query for any number of students.
+    """
+    first = month.replace(day=1)
+    last = month.replace(day=monthrange(month.year, month.month)[1])
+    rows = StudentAttendance.objects.alive().filter(student__in=students)
+    summary = reports.student_summary(rows, start_date=first, end_date=last)
+    return {row["student_id"]: row for row in summary}
+
+
+def student_day_status(*, students, on_date: datetime.date) -> dict[uuid.UUID, str]:
+    """Each student's derived status for one date — a daily row, or their periods' day.
+
+    The day `reports.derived_days` makes, so it agrees with `student_month_summary`.
+    A student with nothing marked that day is absent from the result. One query.
+    """
+    rows = StudentAttendance.objects.alive().filter(student__in=students)
+    days = reports.derived_days(rows, start_date=on_date, end_date=on_date)
+    return {day["student_id"]: day["status"] for day in days}
