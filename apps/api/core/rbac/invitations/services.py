@@ -24,6 +24,7 @@ from core.audit.services import record_task_security_event
 from core.rbac.account_links import account_link
 from core.rbac.auth_emails import INVITATION, send_auth_email
 from core.rbac.invitations.eligibility import is_eligible
+from core.rbac.invitations.exceptions import EmailInUse
 from core.rbac.models import Invitation, InvitationStatus, User
 from core.tenancy.context import tenant_atomic
 from core.tenancy.models import Tenant
@@ -42,6 +43,22 @@ def revoke_pending_invitations(user_id: uuid.UUID) -> int:
     return Invitation.objects.filter(
         user_id=user_id, accepted_at__isnull=True, revoked_at__isnull=True
     ).update(revoked_at=timezone.now(), updated_at=timezone.now())
+
+
+def assert_email_free(
+    *, tenant_id: uuid.UUID, email: str, own_user_id: uuid.UUID | None = None
+) -> None:
+    """Refuse an invite whose email already belongs to another account at this school.
+
+    Linking to that account instead would give one login two identities: a student invite
+    on a guardian's email would make the guardian the student. Case-insensitive, because
+    people type addresses either way.
+    """
+    taken = User.objects.filter(tenant_id=tenant_id, email__iexact=email, deleted_at__isnull=True)
+    if own_user_id is not None:
+        taken = taken.exclude(pk=own_user_id)
+    if taken.exists():
+        raise EmailInUse()
 
 
 def create_invitation(*, user: User, kind: str, actor_id: uuid.UUID | None) -> Invitation:

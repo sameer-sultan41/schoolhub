@@ -9,13 +9,18 @@ from __future__ import annotations
 import datetime
 
 from rest_framework import status
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.school_organization.tests.factories import ClassFactory, SectionFactory, UserFactory
+from apps.staff_management.models import EmploymentStatus, Staff
 from apps.staff_management.tests.base import StaffManagementAPITestCase
 from apps.staff_management.tests.factories import DEFAULT_JOINING_DATE, StaffFactory
 from core.rbac.cache import evict_rbac_caches
-from core.rbac.models import Permission, Role, RolePermission, User, UserRole
+from core.rbac.invitations.eligibility import is_eligible
+from core.rbac.models import Invitation, Permission, Role, RolePermission, User, UserRole
 from core.rbac.registry import registry
+from core.rbac.tests.link_helpers import invited_user
 from core.tenancy.context import tenant_context
 
 
@@ -117,6 +122,107 @@ class InviteTests(StaffManagementAPITestCase):
         response = self.client.post(f"/api/v1/staff/{staff.pk}:invite", {}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.json()["error"]["code"], "already_active")
+
+    def test_invite_creates_a_pending_staff_invitation(self) -> None:
+        self.allow("staff.staff.update", "staff.staff.view")
+        with tenant_context(self.tenant.id):
+            staff = StaffFactory(tenant=self.tenant, campus=self.campus, email="mail@example.test")
+
+        response = self.client.post(f"/api/v1/staff/{staff.pk}:invite", {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        with tenant_context(self.tenant.id):
+            staff.refresh_from_db()
+            invitation = Invitation.objects.get(user_id=staff.user_id)
+        self.assertEqual(invitation.kind, "staff")
+        self.assertIsNone(invitation.revoked_at)
+
+    def test_invite_existing_pending_staff_resends_ignoring_role_ids(self) -> None:
+        """Covers staff invited before invitations existed: inactive, unusable, no invitation."""
+        self.allow("staff.staff.update", "staff.staff.view")
+        with tenant_context(self.tenant.id):
+            user = invited_user(self.tenant, email="pending@example.test")
+            staff = StaffFactory(
+                tenant=self.tenant,
+                campus=self.campus,
+                email="pending@example.test",
+                user_id=user.pk,
+            )
+            role = Role.objects.create(tenant=self.tenant, slug="test-ignored", name="Ignored")
+
+        response = self.client.post(
+            f"/api/v1/staff/{staff.pk}:invite", {"role_ids": [str(role.pk)]}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        with tenant_context(self.tenant.id):
+            self.assertEqual(
+                Invitation.objects.filter(user=user, revoked_at__isnull=True).count(), 1
+            )
+        self.assertFalse(UserRole.objects.filter(user=user).exists())
+        self.assertEqual(User.objects.filter(tenant=self.tenant, email=user.email).count(), 1)
+
+    def test_staff_invite_on_guardian_email_is_409(self) -> None:
+        self.allow("staff.staff.update", "staff.staff.view")
+        guardian_account = invited_user(self.tenant, email="family@example.test")
+        with tenant_context(self.tenant.id):
+            staff = StaffFactory(
+                tenant=self.tenant, campus=self.campus, email="Family@example.test"
+            )
+
+        response = self.client.post(f"/api/v1/staff/{staff.pk}:invite", {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.json()["error"]["code"], "email_in_use")
+        with tenant_context(self.tenant.id):
+            staff.refresh_from_db()
+        self.assertIsNone(staff.user_id)
+        self.assertFalse(UserRole.objects.filter(user=guardian_account).exists())
+        self.assertEqual(
+            User.objects.filter(tenant=self.tenant, email__iexact=staff.email).count(), 1
+        )
+
+    def test_rehired_staff_reinvite_assigns_roles(self) -> None:
+        """No re-hire endpoint exists yet, so the status is set back directly."""
+        self.allow("staff.staff.update", "staff.staff.view", "staff.staff.delete")
+        with tenant_context(self.tenant.id):
+            staff = StaffFactory(tenant=self.tenant, campus=self.campus, email="back@example.test")
+            role = Role.objects.create(tenant=self.tenant, slug="test-rehire", name="Rehire")
+        invite_url = f"/api/v1/staff/{staff.pk}:invite"
+        self.assertEqual(self.client.post(invite_url, {}, format="json").status_code, 200)
+        with tenant_context(self.tenant.id):
+            staff.refresh_from_db()
+            user = User.objects.get(pk=staff.user_id)
+        user.set_password("test-password-old-life-123")
+        user.is_active = True
+        user.save()
+        exited = self.client.post(
+            f"/api/v1/staff/{staff.pk}:exit",
+            {"exit_date": "2026-06-01", "exit_reason": "Resigned."},
+            format="json",
+        )
+        self.assertEqual(exited.status_code, status.HTTP_200_OK, exited.json())
+        with tenant_context(self.tenant.id):
+            Staff.objects.filter(pk=staff.pk).update(
+                employment_status=EmploymentStatus.ACTIVE, exit_date=None, exit_reason=None
+            )
+
+        response = self.client.post(invite_url, {"role_ids": [str(role.pk)]}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        user.refresh_from_db()
+        self.assertFalse(user.is_active)
+        self.assertEqual(
+            list(UserRole.objects.filter(user=user).values_list("role_id", flat=True)), [role.pk]
+        )
+        with tenant_context(self.tenant.id):
+            self.assertEqual(
+                Invitation.objects.filter(
+                    user=user, accepted_at__isnull=True, revoked_at__isnull=True
+                ).count(),
+                1,
+            )
 
     def test_inviting_a_staff_member_with_no_email_is_rejected(self) -> None:
         self.allow("staff.staff.update", "staff.staff.view")
@@ -239,6 +345,48 @@ class ExitTests(StaffManagementAPITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class ExitRevocationTests(StaffManagementAPITestCase):
+    def test_exit_revokes_pending_invitation_and_tokens(self) -> None:
+        self.allow("staff.staff.update", "staff.staff.delete", "staff.staff.view")
+        with tenant_context(self.tenant.id):
+            staff = StaffFactory(
+                tenant=self.tenant, campus=self.campus, email="leaving@example.test"
+            )
+        self.client.post(f"/api/v1/staff/{staff.pk}:invite", {}, format="json")
+        with tenant_context(self.tenant.id):
+            staff.refresh_from_db()
+            user = User.objects.get(pk=staff.user_id)
+        # A refresh token from an earlier session, which must not outlive the exit.
+        user.is_active = True
+        user.save(update_fields=["is_active"])
+        jti = RefreshToken.for_user(user)["jti"]
+
+        response = self.client.post(
+            f"/api/v1/staff/{staff.pk}:exit",
+            {"exit_date": "2026-06-01", "exit_reason": "Resigned."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        user.refresh_from_db()
+        self.assertFalse(user.is_active)
+        with tenant_context(self.tenant.id):
+            self.assertFalse(
+                Invitation.objects.filter(
+                    user=user, accepted_at__isnull=True, revoked_at__isnull=True
+                ).exists()
+            )
+        self.assertTrue(BlacklistedToken.objects.filter(token__jti=jti).exists())
+
+    def test_an_exited_staff_member_is_no_longer_eligible_to_accept(self) -> None:
+        with tenant_context(self.tenant.id):
+            user = invited_user(self.tenant, email="eligible@example.test")
+            staff = StaffFactory(tenant=self.tenant, campus=self.campus, user_id=user.pk)
+            self.assertTrue(is_eligible(user, "staff"))
+            Staff.objects.filter(pk=staff.pk).update(employment_status=EmploymentStatus.RESIGNED)
+            self.assertFalse(is_eligible(user, "staff"))
 
 
 class DenyRestrictedPrincipalsTests(StaffManagementAPITestCase):

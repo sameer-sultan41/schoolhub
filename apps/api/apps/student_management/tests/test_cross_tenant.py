@@ -64,6 +64,14 @@ class CrossTenantAccessTests(APITestCase):
         response = self.client.delete(f"/api/v1/students/{self.foreign['students'].pk}")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_inviting_another_tenants_student_is_404(self) -> None:
+        response = self.client.post(
+            f"/api/v1/students/{self.foreign['students'].pk}:invite",
+            {"email": "someone@example.test"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
     def test_lists_never_include_another_tenants_rows(self) -> None:
         response = self.client.get("/api/v1/students")
         self.assertEqual(response.status_code, status.HTTP_200_OK)

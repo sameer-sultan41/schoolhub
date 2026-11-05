@@ -10,6 +10,28 @@ either this file or `project-status.md`.
 
 ## Deliberately NOT done
 
+- **Account invitations: what Task A2 left out** (PR A, `feat/account-invitations`;
+  [ADR-0033](decisions/0033-account-invitations-and-auth-email.md)).
+  - **Unrouted `student_management` package copies.** `guardians/viewset.py`,
+    `guardians/urls.py`, `student_guardians/services.py` and `transfers/services.py` are
+    not routed: `config/api_v1.py` reaches the flat `views.py` and `services.py` through
+    `student_management/urls.py`. They lack `:invite`, `update_guardian_link` and the
+    `sync_portal_account` calls on transfer-out. Delete them, or finish the ADR-0010
+    split onto them, before anything routes to them.
+  - **Guardian delete and link delete must call `sync_portal_account`.** Neither endpoint
+    exists yet. Removing a guardian's last portal-enabled link to an enrolled child ends their
+    eligibility, so whichever PR builds either delete calls
+    `portal_accounts.services.sync_portal_account(guardian.user_id)` after it, as
+    `update_guardian_link` does.
+  - **No re-hire path for staff.** `employment_status` moves only through `:exit`, so the
+    `invite_staff` branch for an inactive account with a usable password (re-hired after an
+    exit) is reachable only by changing the status outside the API. Its test sets it directly.
+  - **Suspended students keep their portal account.** Eligibility needs `status == active`
+    and an active enrollment, so accepting an invitation refuses a suspended student and
+    their guardian's link to them. Nothing sets `suspended`, though, so no hook deactivates
+    an account on suspension. Add a `sync_student_portal_accounts` call when a suspend
+    action is built.
+
 - **Record scope follow-ups left by per-role record scope** (PR A, `fix/per-role-record-scope`;
   [ADR-0031](decisions/0031-record-scope-per-role-assignment.md)). Each scope check now reads
   only the roles that grant its key. These were found on the way and left out:

@@ -104,9 +104,14 @@ def exit_staff(
     if staff.user_id is not None:
         # An exited employee must not keep portal access or role assignments —
         # UserRole has no soft-delete field, so it's removed outright rather
-        # than deactivated.
+        # than deactivated. A pending invitation and a held refresh token would each
+        # let them back in, so both go too (ADR-0033).
+        from core.rbac.invitations.services import revoke_pending_invitations
         from core.rbac.models import User, UserRole
+        from core.rbac.sessions import revoke_refresh_tokens
 
         User.objects.filter(pk=staff.user_id).update(is_active=False)
         UserRole.objects.filter(user_id=staff.user_id, tenant_id=staff.tenant_id).delete()
+        revoke_pending_invitations(staff.user_id)
+        revoke_refresh_tokens(staff.user_id)
     return staff

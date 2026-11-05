@@ -52,6 +52,9 @@ EXTRA_ACTIONS = frozenset(
         "request",
         "revoke",
         "oversee",
+        # `students.portal-account.invite`: emails a guardian or student their account link
+        # (ADR-0033).
+        "invite",
     }
 )
 

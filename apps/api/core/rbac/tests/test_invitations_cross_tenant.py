@@ -14,7 +14,12 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.school_organization.tests.factories import TenantFactory
-from core.rbac.tests.link_helpers import LINK_SETTINGS, invite, invited_user
+from core.rbac.tests.link_helpers import (
+    LINK_SETTINGS,
+    invite,
+    invited_user,
+    without_app_eligibility_hooks,
+)
 
 PREVIEW_URL = "/api/v1/auth/invitations:preview"
 ACCEPT_URL = "/api/v1/auth/invitations:accept"
@@ -29,6 +34,7 @@ class InvitationCrossTenantTests(APITestCase):
         self.school_a = TenantFactory()
         self.school_b = TenantFactory()
         self.user_b = invited_user(self.school_b, email="b-invitee@example.test")
+        without_app_eligibility_hooks(self)
 
     def test_other_tenants_token_is_400(self) -> None:
         _, token_b = invite(self, self.user_b)

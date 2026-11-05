@@ -157,9 +157,14 @@ class StaffViewSet(_StaffModuleViewSetMixin, viewsets.ModelViewSet):
         record_audit(self.request, "create", serializer.instance, after=serializer.data)
 
     @extend_schema(
-        summary="Create a portal account for this staff member and assign roles",
+        summary="Invite this staff member by email, creating their account if needed",
         request=InviteRequestSerializer,
-        responses={200: StaffSerializer, 409: OpenApiResponse(description="Already linked")},
+        responses={
+            200: StaffSerializer,
+            409: OpenApiResponse(
+                description="email_in_use, already_active, or the staff member has exited"
+            ),
+        },
     )
     def invite(self, request, pk=None) -> Response:
         staff = self.get_object()
@@ -172,7 +177,7 @@ class StaffViewSet(_StaffModuleViewSetMixin, viewsets.ModelViewSet):
             updated = invite_staff(staff=staff, role_ids=data["role_ids"], actor_id=request.user.pk)
             after = self.get_serializer(updated).data
             record_audit(request, "invite", updated, before=before, after=after)
-            return ActionResponse.ok(after, message="Account created and linked.")
+            return ActionResponse.ok(after, message="Invitation sent.")
 
         return replay_or_execute(
             tenant_id=request.tenant.pk,

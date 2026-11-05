@@ -2404,6 +2404,29 @@ export interface paths {
         patch: operations["guardians_partial_update"];
         trace?: never;
     };
+    "/api/v1/guardians/{id}:invite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Invite this guardian to the portal at their email on file, or resend
+         * @description Guardian persons (module doc §16). No destroy — a guardian with no
+         *
+         *     remaining student links simply stops appearing in any student's roster;
+         *     hard removal is a retention operation, not documented as an API action.
+         */
+        post: operations["guardians_:invite_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/holiday-calendar": {
         parameters: {
             query?: never;
@@ -4912,7 +4935,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create a portal account for this staff member and assign roles
+         * Invite this staff member by email, creating their account if needed
          * @description Staff master records (module doc §5.1).
          */
         post: operations["staff_:invite_create"];
@@ -5796,6 +5819,26 @@ export interface paths {
          * @description Student master records (module doc §5.1-2).
          */
         post: operations["students_:enroll_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/students/{id}:invite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Invite this student to the portal by email, or resend their invitation
+         * @description Student master records (module doc §5.1-2).
+         */
+        post: operations["students_:invite_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8063,6 +8106,7 @@ export interface components {
              * @description users(id) — portal account, tenant-checked at write time.
              */
             user_id?: string | null;
+            readonly portal_status: components["schemas"]["PortalStatusEnum"];
             first_name: string;
             last_name: string;
             /** @description Primary contact; indexed for duplicate matching. */
@@ -8163,9 +8207,9 @@ export interface components {
             expires_at: string;
         };
         /**
-         * @description No email is sent (§17 gap — no notification infrastructure exists yet,
-         *     see services/invite.py's ``invite_staff`` docstring); this only creates and
-         *     links the account plus assigns the requested roles.
+         * @description ``role_ids`` apply when the account is created or re-invited after an exit;
+         *
+         *     a resend to a pending invitee ignores them (services/invite.py's ``invite_staff``).
          */
         InviteRequest: {
             role_ids?: string[];
@@ -10074,6 +10118,7 @@ export interface components {
              * @description users(id) — portal account, tenant-checked at write time.
              */
             user_id?: string | null;
+            readonly portal_status?: components["schemas"]["PortalStatusEnum"];
             first_name?: string;
             last_name?: string;
             /** @description Primary contact; indexed for duplicate matching. */
@@ -10527,6 +10572,7 @@ export interface components {
              * @description users(id) — portal account, tenant-checked at write time.
              */
             user_id?: string | null;
+            readonly portal_status?: components["schemas"]["PortalStatusEnum"];
             first_name?: string;
             last_name?: string;
             preferred_name?: string | null;
@@ -10793,6 +10839,9 @@ export interface components {
             unread_threads: number | null;
             modules: components["schemas"]["PortalModules"];
         };
+        PortalInviteResponse: {
+            readonly portal_status: components["schemas"]["PortalStatusEnum"];
+        };
         PortalModules: {
             attendance: boolean;
             fees: boolean;
@@ -10822,6 +10871,16 @@ export interface components {
             /** Format: date-time */
             readonly acknowledged_at: string | null;
         };
+        /**
+         * @description * `none` - No account
+         *     * `invited` - Invited
+         *     * `expired` - Invitation expired
+         *     * `send_failed` - Invitation not delivered
+         *     * `active` - Active
+         *     * `inactive` - Inactive
+         * @enum {string}
+         */
+        PortalStatusEnum: "none" | "invited" | "expired" | "send_failed" | "active" | "inactive";
         PortalStudent: {
             /** Format: uuid */
             id: string;
@@ -11678,6 +11737,7 @@ export interface components {
              * @description users(id) — portal account, tenant-checked at write time.
              */
             user_id?: string | null;
+            readonly portal_status: components["schemas"]["PortalStatusEnum"];
             first_name: string;
             last_name: string;
             preferred_name?: string | null;
@@ -11874,6 +11934,15 @@ export interface components {
         StudentImportRequest: {
             /** Format: uri */
             file: string;
+        };
+        /**
+         * @description A student has no email on file, so the address comes with the invite.
+         *
+         *     It is stored only on the new account. A resend goes to the existing account's address.
+         */
+        StudentInviteRequest: {
+            /** Format: email */
+            email: string;
         };
         /** @description `reports.student_late_arrivals`: late days and their minutes, most late days first. */
         StudentLateArrivalsReportRow: {
@@ -16793,6 +16862,34 @@ export interface operations {
             };
         };
     };
+    "guardians_:invite_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalInviteResponse"];
+                };
+            };
+            /** @description portal_disabled, email_in_use, not_eligible or already_active */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     holiday_calendar_retrieve: {
         parameters: {
             query?: never;
@@ -20625,7 +20722,7 @@ export interface operations {
                     "application/json": components["schemas"]["Staff"];
                 };
             };
-            /** @description Already linked */
+            /** @description email_in_use, already_active, or the staff member has exited */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -21747,6 +21844,40 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["StudentEnrollment"];
                 };
+            };
+        };
+    };
+    "students_:invite_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StudentInviteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["StudentInviteRequest"];
+                "multipart/form-data": components["schemas"]["StudentInviteRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalInviteResponse"];
+                };
+            };
+            /** @description portal_disabled, email_in_use, not_eligible or already_active */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

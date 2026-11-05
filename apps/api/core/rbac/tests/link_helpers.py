@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import re
+from unittest import mock
 from urllib.parse import parse_qs, urlsplit
 
 from django.core import mail
 from django.test import TestCase
 
+from core.rbac.invitations import eligibility
 from core.rbac.invitations.services import create_invitation
 from core.rbac.models import Invitation, User
 from core.tenancy.context import tenant_context
@@ -48,3 +50,14 @@ def invited_user(tenant, email: str = "invitee@example.test") -> User:
     user.set_unusable_password()
     user.save(update_fields=["password"])
     return user
+
+
+def without_app_eligibility_hooks(test: TestCase) -> None:
+    """Clear the apps' eligibility hooks for one test, so it exercises core's mechanism alone.
+
+    The staff hook needs a `Staff` row linked to the user; these tests invite bare users.
+    Each app's own tests cover its hook.
+    """
+    patcher = mock.patch.dict(eligibility._hooks, clear=True)
+    patcher.start()
+    test.addCleanup(patcher.stop)

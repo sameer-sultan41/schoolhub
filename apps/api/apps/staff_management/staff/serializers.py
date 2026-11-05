@@ -142,9 +142,9 @@ class StaffSerializer(serializers.ModelSerializer):
 
 
 class InviteRequestSerializer(serializers.Serializer):
-    """No email is sent (§17 gap — no notification infrastructure exists yet,
-    see services/invite.py's ``invite_staff`` docstring); this only creates and
-    links the account plus assigns the requested roles.
+    """``role_ids`` apply when the account is created or re-invited after an exit;
+
+    a resend to a pending invitee ignores them (services/invite.py's ``invite_staff``).
     """
 
     role_ids = serializers.ListField(

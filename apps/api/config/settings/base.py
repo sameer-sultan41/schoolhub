@@ -290,6 +290,8 @@ SPECTACULAR_SETTINGS = {
         # hash suffix.
         "StudentEnrollmentStatusEnum": "apps.student_management.models.EnrollmentStatus",
         "StudentTransferStatusEnum": "apps.student_management.models.TransferStatus",
+        # A guardian's or student's portal account state (ADR-0033), on both serializers.
+        "PortalStatusEnum": "apps.student_management.portal_accounts.services.PortalStatus",
         # Same reasoning for examinations, which adds three more `status`/type
         # sets. Registered as each module PR ships the enum, not all at once —
         # an override pointing at a symbol that does not exist yet fails schema

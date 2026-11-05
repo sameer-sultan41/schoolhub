@@ -161,6 +161,12 @@ registry.register(
 )
 
 registry.register(
+    "students.portal-account.invite",
+    "Invite a guardian or student to the portal by email, or resend the invitation.",
+    ("school_admin", "principal"),
+)
+
+registry.register(
     "students.id-card.generate",
     "Generate student ID cards (single or batch).",
     STUDENT_IO,

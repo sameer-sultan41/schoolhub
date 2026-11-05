@@ -31,6 +31,7 @@ from apps.student_management.models import (
     StudentTransfer,
     TransferStatus,
 )
+from apps.student_management.portal_accounts.serializers import PortalStatusField
 from core.files.models import File
 from core.files.serializers import SignedFileURLField
 from core.files.services import assert_file_usable
@@ -95,6 +96,7 @@ class StudentSerializer(serializers.ModelSerializer):
     campus_name = serializers.CharField(source="campus.name", read_only=True)
     # Nullable: a student need not be in a house.
     house_name = serializers.CharField(source="house.name", read_only=True, allow_null=True)
+    portal_status = PortalStatusField()
 
     class Meta:
         model = Student
@@ -102,6 +104,7 @@ class StudentSerializer(serializers.ModelSerializer):
             "id",
             "admission_number",
             "user_id",
+            "portal_status",
             "first_name",
             "last_name",
             "preferred_name",
@@ -237,12 +240,14 @@ class GuardianSerializer(serializers.ModelSerializer):
     photo_file_id = _fk(File, source="photo_file", required=False, allow_null=True)
     # Same purpose-gated pattern as StudentSerializer.photo_url — see that field's own comment.
     photo_url = SignedFileURLField(source="photo_file", expected_purpose=uploads.GUARDIAN_PHOTO.key)
+    portal_status = PortalStatusField()
 
     class Meta:
         model = Guardian
         fields = (
             "id",
             "user_id",
+            "portal_status",
             "first_name",
             "last_name",
             "phone",

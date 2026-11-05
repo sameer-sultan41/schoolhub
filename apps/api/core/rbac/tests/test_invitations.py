@@ -24,7 +24,13 @@ from core.rbac.auth_emails import MAX_EMAIL_RETRIES
 from core.rbac.invitations import eligibility
 from core.rbac.invitations.services import create_invitation
 from core.rbac.models import Invitation, InvitationStatus
-from core.rbac.tests.link_helpers import LINK_SETTINGS, emailed_link, invite, invited_user
+from core.rbac.tests.link_helpers import (
+    LINK_SETTINGS,
+    emailed_link,
+    invite,
+    invited_user,
+    without_app_eligibility_hooks,
+)
 from core.tenancy.context import tenant_context
 
 PREVIEW_URL = "/api/v1/auth/invitations:preview"
@@ -42,6 +48,7 @@ class InvitationTests(APITestCase):
         cache.clear()
         self.tenant = TenantFactory()
         self.user = invited_user(self.tenant)
+        without_app_eligibility_hooks(self)
 
     def accept(self, token: str, password: str = STRONG_PASSWORD, school: str | None = None):
         return self.client.post(

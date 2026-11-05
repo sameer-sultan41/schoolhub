@@ -587,7 +587,10 @@ def failure_message(exc: Exception) -> str:
 
 
 def _execute_one(*, row: StudentPromotion, tenant_id: uuid.UUID, actor_id: uuid.UUID, report: dict):
-    from apps.student_management.services import enroll_student
+    from apps.student_management.services import (
+        close_graduated_portal_accounts,
+        enroll_student,
+    )
     from core.tenancy.context import tenant_atomic
 
     with tenant_atomic(tenant_id):
@@ -631,6 +634,9 @@ def _execute_one(*, row: StudentPromotion, tenant_id: uuid.UUID, actor_id: uuid.
 
         if row.decision == PromotionDecision.GRADUATED:
             _close_source_enrollment(row, EnrollmentStatus.GRADUATED, actor_id)
+            # A graduate's portal account, and a guardian's with no other enrolled child,
+            # ends with the enrollment (ADR-0033).
+            close_graduated_portal_accounts(student_id=row.student_id, actor_id=actor_id)
             _mark_executed(row, actor_id)
             report["graduated"].append({"student_id": str(row.student_id)})
             return

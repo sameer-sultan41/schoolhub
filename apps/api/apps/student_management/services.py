@@ -36,6 +36,10 @@ from apps.student_management.models import (
     TransferStatus,
     TransferType,
 )
+from apps.student_management.portal_accounts.services import (
+    sync_portal_account,
+    sync_student_portal_accounts,
+)
 from core.api.exceptions import Conflict, DomainRuleViolation
 from core.exports.tabular import spreadsheet_safe_row
 from core.files.services import assert_file_usable
@@ -413,6 +417,32 @@ def set_primary_guardian(
     return link
 
 
+@transaction.atomic
+def update_guardian_link(
+    *, link: StudentGuardian, changes: Mapping[str, object], actor_id: uuid.UUID
+) -> StudentGuardian:
+    """`PATCH /student-guardians/{id}`: apply the flag changes, then re-check portal access.
+
+    Promoting to primary goes through `set_primary_guardian` first (the partial unique
+    index allows one primary). Turning `has_portal_access` off, or moving the link to
+    another guardian, may end the original guardian's last portal-enabled link, so that
+    guardian's account is re-checked in the same transaction.
+    """
+    previous_user_id = link.guardian.user_id
+    remaining = dict(changes)
+    if remaining.get("is_primary"):
+        del remaining["is_primary"]
+        link = set_primary_guardian(student=link.student, link=link, actor_id=actor_id)
+    if remaining:
+        for field, value in remaining.items():
+            setattr(link, field, value)
+        link.updated_by = actor_id
+        link.save(update_fields=[*remaining.keys(), "updated_by", "updated_at"])
+    if changes.get("has_portal_access") is False or "guardian" in changes:
+        sync_portal_account(previous_user_id, actor_id=actor_id)
+    return link
+
+
 def add_emergency_contact(
     *,
     student: Student,
@@ -715,6 +745,7 @@ def withdraw_student(
     student.status = StudentStatus.WITHDRAWN
     student.updated_by = actor_id
     student.save(update_fields=["status", "updated_by", "updated_at"])
+    sync_student_portal_accounts(student_id=student.pk, actor_id=actor_id)
     return student
 
 
@@ -902,12 +933,23 @@ def complete_transfer(
         student.status = StudentStatus.TRANSFERRED
         student.updated_by = actor_id
         student.save(update_fields=["status", "updated_by", "updated_at"])
+        sync_student_portal_accounts(student_id=student.pk, actor_id=actor_id)
     # incoming: no automated side effect — see the docstring.
 
     transfer.status = TransferStatus.COMPLETED
     transfer.updated_by = actor_id
     transfer.save(update_fields=["status", "updated_by", "updated_at"])
     return transfer
+
+
+def close_graduated_portal_accounts(*, student_id: uuid.UUID, actor_id: uuid.UUID) -> None:
+    """For academics' promotion execute: a graduated student's enrollment has just closed.
+
+    Graduation leaves `Student.status` as it is, so the closed enrollment is what ends
+    eligibility; this deactivates the student's account and any guardian's whose only
+    enrolled child this was (ADR-0013: academics calls this module's services).
+    """
+    sync_student_portal_accounts(student_id=student_id, actor_id=actor_id)
 
 
 def build_history(student: Student) -> list[dict]:
