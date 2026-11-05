@@ -61,9 +61,10 @@ export function PortalAttendance() {
   }, [days]);
 
   // The server's card is for the current month; any other month has no server percentage.
-  const monthPercentage = isSameMonth(month, new Date())
-    ? child?.attendance?.month_percentage
-    : null;
+  const monthPercentage =
+    month !== undefined && currentMonth !== undefined && isSameMonth(month, currentMonth)
+      ? child?.attendance?.month_percentage
+      : null;
 
   function body() {
     if (month === undefined || records.isPending) return <Skeleton className="h-72 w-full" />;
