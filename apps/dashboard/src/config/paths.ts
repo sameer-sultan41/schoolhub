@@ -51,6 +51,8 @@ export const Paths = {
   PORTAL_CHILD: (studentId: string) => `/portal/${studentId}`,
   PORTAL_ATTENDANCE: (studentId: string) => `/portal/${studentId}/attendance`,
   PORTAL_FEES: (studentId: string) => `/portal/${studentId}/fees`,
+  PORTAL_INVOICE: (studentId: string, invoiceId: string) =>
+    `/portal/${studentId}/fees/${invoiceId}`,
   PORTAL_RESULTS: (studentId: string) => `/portal/${studentId}/results`,
   /** One child's week, or (no id) the portal-level page that picks a child. */
   PORTAL_TIMETABLE: (studentId?: string) =>

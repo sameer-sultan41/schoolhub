@@ -2119,6 +2119,103 @@
       "notices": "نوٹس",
       "notifications": "اطلاعات",
       "settings": "ترتیبات"
+    },
+    "home": {
+      "title": "آپ کے بچے",
+      "emptyTitle": "ابھی کوئی بچہ منسلک نہیں",
+      "emptyDescription": "جب اسکول کسی بچے کو آپ کے اکاؤنٹ سے منسلک کرے گا تو وہ یہاں نظر آئے گا۔",
+      "notFoundTitle": "بچہ نہیں ملا",
+      "notFoundDescription": "یہ بچہ آپ کے اکاؤنٹ سے منسلک نہیں ہے۔ اوپر فہرست سے کسی کو منتخب کریں۔",
+      "attendance": {
+        "title": "آج کی حاضری",
+        "notMarked": "ابھی درج نہیں ہوئی",
+        "month": "اس ماہ {value}%"
+      },
+      "fees": {
+        "title": "واجب الادا فیس",
+        "none": "کچھ واجب نہیں",
+        "count": "{count, plural, one {# رسید} other {# رسیدیں}}",
+        "nextDue": "اگلی تاریخ {date}"
+      },
+      "result": {
+        "title": "تازہ ترین نتیجہ"
+      }
+    },
+    "attendance": {
+      "title": "حاضری",
+      "loadError": "ہم حاضری لوڈ نہیں کر سکے۔ براہ کرم دوبارہ کوشش کریں۔",
+      "legend": "حاضری کی حالتیں",
+      "emptyTitle": "اس ماہ کوئی حاضری نہیں",
+      "emptyDescription": "اس ماہ کی ابھی کوئی حاضری درج نہیں ہوئی۔",
+      "caption": "{month} کی حاضری",
+      "monthPercentage": "اس ماہ کی حاضری: {value}%",
+      "status": {
+        "present": "حاضر",
+        "absent": "غیر حاضر",
+        "late": "تاخیر سے",
+        "half_day": "آدھا دن",
+        "excused": "معذرت منظور",
+        "on_leave": "چھٹی پر"
+      }
+    },
+    "fees": {
+      "title": "فیس",
+      "loadError": "ہم فیس لوڈ نہیں کر سکے۔ براہ کرم دوبارہ کوشش کریں۔",
+      "dueOn": "آخری تاریخ {date}",
+      "downloadReceipt": "رسید {number}",
+      "receiptFailed": "ہم رسید ڈاؤن لوڈ نہیں کر سکے۔ براہ کرم دوبارہ کوشش کریں۔",
+      "status": {
+        "draft": "مسودہ",
+        "issued": "جاری",
+        "partially_paid": "جزوی ادا",
+        "paid": "ادا شدہ",
+        "overdue": "مقررہ تاریخ گزر چکی",
+        "canceled": "منسوخ"
+      },
+      "outstanding": {
+        "title": "واجب الادا",
+        "emptyTitle": "کچھ واجب الادا نہیں",
+        "emptyDescription": "تمام فیس ادا ہو چکی ہے۔"
+      },
+      "paid": {
+        "title": "ادا شدہ",
+        "emptyTitle": "کوئی ادا شدہ رسید نہیں",
+        "emptyDescription": "ادا شدہ فیس اور ان کی رسیدیں یہاں نظر آئیں گی۔"
+      },
+      "detail": {
+        "back": "فیس پر واپس",
+        "title": "انوائس {number}",
+        "dates": "اجرا {issued}، آخری تاریخ {due}",
+        "loadError": "ہم یہ انوائس لوڈ نہیں کر سکے۔ براہ کرم دوبارہ کوشش کریں۔",
+        "linesCaption": "انوائس کی مدات",
+        "description": "تفصیل",
+        "amount": "رقم",
+        "net": "خالص",
+        "subtotal": "ذیلی کل",
+        "discount": "رعایت",
+        "fine": "جرمانہ",
+        "paid": "ادا شدہ",
+        "balance": "واجب الادا بقیہ",
+        "receipts": "رسیدیں",
+        "noReceiptsTitle": "ابھی کوئی رسید نہیں",
+        "noReceiptsDescription": "ادائیگی درج ہونے کے بعد رسید یہاں نظر آئے گی۔"
+      }
+    },
+    "results": {
+      "title": "نتائج",
+      "loadError": "ہم نتائج لوڈ نہیں کر سکے۔ براہ کرم دوبارہ کوشش کریں۔",
+      "emptyTitle": "کوئی نتیجہ شائع نہیں ہوا",
+      "emptyDescription": "اسکول کے شائع کرنے پر نتائج یہاں نظر آئیں گے۔",
+      "published": "شائع شدہ {date}",
+      "unpublishedDate": "نتیجہ",
+      "marks": "{max} میں سے {obtained} نمبر",
+      "rank": "سیکشن میں {rank} واں نمبر",
+      "outcome": {
+        "pass": "کامیاب",
+        "fail": "ناکام",
+        "absent": "غیر حاضر",
+        "withheld": "روکا گیا"
+      }
     }
   }
 }
