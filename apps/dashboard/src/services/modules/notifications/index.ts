@@ -1,6 +1,5 @@
 import {
   listNotifications,
-  fetchNotification,
   fetchUnreadCount,
   markNotificationRead,
   markAllNotificationsRead,
@@ -8,7 +7,6 @@ import {
 
 export const NotificationsService = {
   listNotifications,
-  fetchNotification,
   fetchUnreadCount,
   markNotificationRead,
   markAllNotificationsRead,

@@ -51,7 +51,6 @@ describe("Services", () => {
       "periods",
       "promotions",
       "receipts",
-      "reportCards",
       "results",
       "rooms",
       "schoolOrganization",
@@ -160,7 +159,6 @@ describe("Services", () => {
     expect(typeof Services.receipts.listReceipts).toBe("function");
     expect(typeof Services.receipts.downloadReceipt).toBe("function");
     expect(typeof Services.results.listResults).toBe("function");
-    expect(typeof Services.reportCards.listReportCards).toBe("function");
     expect(typeof Services.timetableSlots.fetchMyTimetable).toBe("function");
     expect(typeof Services.timetableSlots.fetchTeacherClassesOn).toBe("function");
 

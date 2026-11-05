@@ -10,8 +10,3 @@ export async function listResults(query: ResultsQuery = {}): Promise<Page<Result
     query: toResultsQueryParams(query),
   });
 }
-
-export async function fetchResult(id: string): Promise<ResultRecord> {
-  const { data } = await apiClient.get<ResultRecord>(endpoints.results.detail(id));
-  return data;
-}

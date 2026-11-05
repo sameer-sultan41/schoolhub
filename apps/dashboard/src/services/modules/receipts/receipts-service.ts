@@ -11,11 +11,6 @@ export async function listReceipts(query: ReceiptsQuery = {}): Promise<Page<Rece
   });
 }
 
-export async function fetchReceipt(id: string): Promise<ReceiptRecord> {
-  const { data } = await apiClient.get<ReceiptRecord>(endpoints.receipts.detail(id));
-  return data;
-}
-
 /** A receipt's PDF, streamed with the bearer token (a bare anchor would send none). */
 export async function downloadReceipt(id: string, format: ReceiptFormat = "pdf"): Promise<Blob> {
   return apiClient.downloadBlob(endpoints.receipts.download(id), { query: { format } });

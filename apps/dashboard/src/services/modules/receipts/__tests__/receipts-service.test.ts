@@ -48,15 +48,6 @@ describe("receipts-service", () => {
     );
   });
 
-  it("fetchReceipt GETs the detail path", async () => {
-    const { fetchReceipt } = await import("../receipts-service");
-    mockGet.mockResolvedValue({ data: { id: "x1" } });
-
-    await fetchReceipt("x1");
-
-    expect(mockGet).toHaveBeenCalledWith("/receipts/x1");
-  });
-
   it("downloadReceipt streams the download path with the format", async () => {
     const { downloadReceipt } = await import("../receipts-service");
     const blob = new Blob(["%PDF"]);

@@ -48,15 +48,6 @@ describe("notifications-service", () => {
     );
   });
 
-  it("fetchNotification GETs the detail path", async () => {
-    const { fetchNotification } = await import("../notifications-service");
-    mockGet.mockResolvedValue({ data: { id: "n1" } });
-
-    await fetchNotification("n1");
-
-    expect(mockGet).toHaveBeenCalledWith("/notifications/n1");
-  });
-
   it("fetchUnreadCount GETs the colon-action path", async () => {
     const { fetchUnreadCount } = await import("../notifications-service");
     mockGet.mockResolvedValue({ data: { unread: 3 } });

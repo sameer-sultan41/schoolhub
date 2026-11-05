@@ -5,7 +5,6 @@ import { NotificationPreferencesService } from "./modules/notification-preferenc
 import { NotificationsService } from "./modules/notifications";
 import { ParentPortalService } from "./modules/parent-portal";
 import { ReceiptsService } from "./modules/receipts";
-import { ReportCardsService } from "./modules/report-cards";
 import { ResultsService } from "./modules/results";
 import { AttendanceCorrectionsService } from "./modules/attendance-corrections";
 import { AttendanceReportsService } from "./modules/attendance-reports";
@@ -220,7 +219,6 @@ export type {
 export type { FeeInvoiceRecord } from "./modules/fee-invoices";
 export type { ReceiptFormat, ReceiptRecord } from "./modules/receipts";
 export type { ResultRecord } from "./modules/results";
-export type { ReportCardRecord } from "./modules/report-cards";
 
 /**
  * Every domain's API calls, aggregated behind one object. A component imports `Services`
@@ -266,5 +264,4 @@ export const Services = {
   feeInvoices: FeeInvoicesService,
   receipts: ReceiptsService,
   results: ResultsService,
-  reportCards: ReportCardsService,
 } as const;

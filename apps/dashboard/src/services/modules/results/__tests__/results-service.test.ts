@@ -47,13 +47,4 @@ describe("results-service", () => {
       expect.objectContaining({ query: { student_id: "s1", page_size: 20 } }),
     );
   });
-
-  it("fetchResult GETs the detail path", async () => {
-    const { fetchResult } = await import("../results-service");
-    mockGet.mockResolvedValue({ data: { id: "x1" } });
-
-    await fetchResult("x1");
-
-    expect(mockGet).toHaveBeenCalledWith("/results/x1");
-  });
 });

@@ -270,7 +270,6 @@ export const endpoints = {
    * (`apps/api/core/notifications/urls.py`). */
   notifications: {
     list: "/notifications",
-    detail: (id: string) => `/notifications/${id}`,
     markRead: (id: string) => `/notifications/${id}:mark-read`,
     markAllRead: "/notifications:mark-all-read",
     unreadCount: "/notifications:unread-count",
@@ -293,17 +292,10 @@ export const endpoints = {
   /** `/receipts`; `download` streams a PDF (`?format=pdf|thermal`). */
   receipts: {
     list: "/receipts",
-    detail: (id: string) => `/receipts/${id}`,
     download: (id: string) => `/receipts/${id}/download`,
   },
   /** `/results`: a guardian sees published results only. */
   results: {
     list: "/results",
-    detail: (id: string) => `/results/${id}`,
-  },
-  /** `/report-cards`: a guardian sees published cards only. */
-  reportCards: {
-    list: "/report-cards",
-    detail: (id: string) => `/report-cards/${id}`,
   },
 } as const;

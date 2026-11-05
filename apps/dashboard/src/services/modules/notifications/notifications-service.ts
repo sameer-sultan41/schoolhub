@@ -22,12 +22,6 @@ export async function listNotifications(
   });
 }
 
-/** One inbox row. */
-export async function fetchNotification(id: string): Promise<NotificationRecord> {
-  const { data } = await apiClient.get<NotificationRecord>(endpoints.notifications.detail(id));
-  return data;
-}
-
 /** The unread badge's count. */
 export async function fetchUnreadCount(): Promise<UnreadCount> {
   const { data } = await apiClient.get<UnreadCount>(endpoints.notifications.unreadCount);
