@@ -16,9 +16,9 @@
  * against Next's file-system router, so every call site imports this object instead of
  * writing its own copy.
  *
- * `FORGOT_PASSWORD` and `RESET_PASSWORD` have no page yet — `proxy.ts` already carves
- * them out as public paths in anticipation of the auth module growing those two screens,
- * so their constants live here now rather than being invented twice later.
+ * `FORGOT_PASSWORD`, `RESET_PASSWORD` and `ACCEPT_INVITE` are the unauthenticated
+ * account pages (ADR-0033); the last two open from an emailed link that carries its token
+ * in the URL fragment.
  */
 export const Paths = {
   DASHBOARD: "/dashboard",
@@ -49,6 +49,7 @@ export const Paths = {
   LOGIN: "/login",
   FORGOT_PASSWORD: "/forgot-password",
   RESET_PASSWORD: "/reset-password",
+  ACCEPT_INVITE: "/accept-invite",
 } as const;
 
 /** One promotion batch's review page, under the promotions list. */

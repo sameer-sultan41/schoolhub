@@ -13,6 +13,7 @@ import type {
   EmergencyContactRecord,
   EnrollStudentInput,
   IdCardGenerateBody,
+  PortalInviteResult,
   StudentDocumentRecord,
   StudentEnrollmentRecord,
   StudentHistoryEvent,
@@ -38,6 +39,8 @@ export type {
   EnrollStudentInput,
   IdCardGenerateBody,
   IdCardJobResult,
+  PortalInviteResult,
+  PortalStatus,
   StudentDocumentRecord,
   StudentEnrollmentRecord,
   StudentHistoryEvent,
@@ -246,4 +249,22 @@ export async function generateIdCards(studentIds: string[]): Promise<{ jobId: st
   const body: IdCardGenerateBody = { student_ids: studentIds };
   const { data } = await apiClient.post<JobAccepted>(endpoints.idCards.generate, body);
   return { jobId: data.job_id };
+}
+
+/**
+ * `POST /students/{id}:invite` (ADR-0033). A student has no email column, so the address
+ * is always sent; on a resend the server ignores it and uses the account's own.
+ * `idempotencyKey`: one per intent, reused on a retry of the same attempt.
+ */
+export async function inviteStudent(
+  id: string,
+  email: string,
+  idempotencyKey: string,
+): Promise<PortalInviteResult> {
+  const { data } = await apiClient.post<PortalInviteResult>(
+    endpoints.students.invite(id),
+    { email },
+    { idempotencyKey },
+  );
+  return data;
 }

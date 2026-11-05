@@ -114,6 +114,17 @@ export const EXIT_TYPE_OPTIONS = [
   { value: "terminated", label: "Terminated" },
 ];
 
+/** An exited staff member's `employment_status`: the exit types. `:invite` refuses them. */
+export const STAFF_EXITED_STATUSES: readonly string[] = EXIT_TYPE_OPTIONS.map(
+  (option) => option.value,
+);
+
+/** The key `POST /staff/{id}:invite` needs (`staff.staff.update`, `staff_management/permissions.py`). */
+export const STAFF_INVITE_PERMISSION = "staff.staff.update";
+
+/** The 409 codes a staff invite can refuse with (`core/rbac/invitations/exceptions.py`). */
+export const STAFF_INVITE_CONFLICT_CODES = ["already_active", "email_in_use"] as const;
+
 export const EXIT_REASON_MAX_LENGTH = 300;
 
 /** The download-name hint for the staff CSV export (see `downloadFile`). */

@@ -1,5 +1,5 @@
 import type { StudentRecord } from "@/services";
-import { toStudentRow } from "../students-helper";
+import { portalInviteAction, portalInviteConflict, toStudentRow } from "../students-helper";
 
 function studentRecord(overrides: Partial<StudentRecord> = {}): StudentRecord {
   return {
@@ -54,5 +54,26 @@ describe("toStudentRow", () => {
     );
 
     expect(row.signedPhotoUrl).toBe("https://files.example.com/students/stu-1/photo.jpg?sig=abc");
+  });
+});
+
+describe("portalInviteAction", () => {
+  it.each([
+    ["none", "invite"],
+    ["inactive", "invite"],
+    ["invited", "resend"],
+    ["expired", "resend"],
+    ["send_failed", "resend"],
+    ["active", null],
+  ] as const)("%s -> %s", (status, action) => {
+    expect(portalInviteAction(status)).toBe(action);
+  });
+});
+
+describe("portalInviteConflict", () => {
+  it("recognises the invite 409 codes and nothing else", () => {
+    expect(portalInviteConflict("email_in_use")).toBe("email_in_use");
+    expect(portalInviteConflict("not_eligible")).toBe("not_eligible");
+    expect(portalInviteConflict("conflict")).toBeNull();
   });
 });

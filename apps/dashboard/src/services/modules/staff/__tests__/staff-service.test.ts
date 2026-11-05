@@ -446,6 +446,7 @@ describe("StaffService", () => {
       const { fetchStaffById } = await import("../staff-service");
       const detail = {
         id: "st-1",
+        user_id: null,
         employee_number: "EMP-001",
         first_name: "Ayesha",
         last_name: "Khan",
@@ -472,6 +473,20 @@ describe("StaffService", () => {
 
       expect(mockGet).toHaveBeenCalledWith("/staff/st-1");
       expect(result).toEqual(detail);
+    });
+  });
+
+  describe("inviteStaff", () => {
+    it("posts no body to the colon-action path with an Idempotency-Key", async () => {
+      const { inviteStaff } = await import("../staff-service");
+      mockPost.mockResolvedValue({ data: { id: "st-1", user_id: "u-9" } });
+
+      const result = await inviteStaff("st-1", "key-s");
+
+      expect(mockPost).toHaveBeenCalledWith("/staff/st-1:invite", undefined, {
+        idempotencyKey: "key-s",
+      });
+      expect(result).toEqual({ id: "st-1", user_id: "u-9" });
     });
   });
 });

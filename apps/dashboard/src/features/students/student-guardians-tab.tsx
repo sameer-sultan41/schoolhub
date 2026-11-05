@@ -19,6 +19,8 @@ import type { GuardianLinkRecord, GuardianRecord } from "@/services";
 import { GuardianFormDialog } from "./guardian-form-dialog";
 import { GuardianLinkFlagsDialog } from "./guardian-link-flags-dialog";
 import { GuardianPickerDialog } from "./guardian-picker-dialog";
+import { PortalInviteButton } from "./portal-invite-button";
+import { PortalStatusBadge } from "./portal-status-badge";
 
 const FLAG_LABELS: { key: keyof GuardianLinkRecord; labelKey: string }[] = [
   { key: "is_fee_responsible", labelKey: "feeResponsible" },
@@ -227,6 +229,22 @@ export function StudentGuardiansTab({ studentId, canCreate, canUpdate }: Student
                     </Badge>
                   ))}
                 </div>
+                {guardian && (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">{t("portal.title")}</span>
+                      <PortalStatusBadge status={guardian.portal_status} />
+                    </div>
+                    <PortalInviteButton
+                      target={{
+                        kind: "guardian",
+                        id: guardian.id,
+                        name: `${guardian.first_name} ${guardian.last_name}`,
+                      }}
+                      portalStatus={guardian.portal_status}
+                    />
+                  </div>
+                )}
                 {canUpdate && (
                   <div className="flex gap-2">
                     <Button
