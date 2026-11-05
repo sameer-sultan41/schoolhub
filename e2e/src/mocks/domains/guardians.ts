@@ -122,6 +122,23 @@ export function guardiansModule(options: GuardiansOptions = {}): MockModule {
       return ok(match);
     });
 
+    // `POST /guardians/{id}:invite` (ADR-0033): no body; the email on file, or a 400 on
+    // `email` when there is none. The colon action rides in the captured segment.
+    api.post("/guardians/:guardianAction", (request) => {
+      const [guardianId, action] = (request.params["guardianAction"] ?? "").split(":");
+      const match = guardians.find((g) => g.id === guardianId);
+      if (!match || action !== "invite") return fail(404, "Not found.");
+      if (!match.email) {
+        return fail(400, "Invalid input.", {
+          details: [
+            { field: "email", issue: "An email address is required to invite this person." },
+          ],
+        });
+      }
+      match.portal_status = "invited";
+      return ok({ portal_status: match.portal_status });
+    });
+
     api.get("/students/:studentId/guardians", (request) => {
       const studentLinks = links.filter((l) => l.student_id === request.params["studentId"]);
       return paginated(studentLinks);
