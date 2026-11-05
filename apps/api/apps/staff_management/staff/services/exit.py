@@ -105,20 +105,22 @@ def exit_staff(
         update_fields=["employment_status", "exit_date", "exit_reason", "updated_by", "updated_at"]
     )
     if staff.user_id is not None:
-        _end_staff_access(staff)
+        _end_staff_access(staff, actor_id=actor_id)
     return staff
 
 
-def _end_staff_access(staff: Staff) -> None:
+def _end_staff_access(staff: Staff, *, actor_id: uuid.UUID) -> None:
     """Deactivate the exited employee's login, unless it is someone else's too.
 
     An exited employee must not keep portal access or role assignments. UserRole has no
     soft-delete field, so it's removed outright. A pending invitation and a held refresh
     token would each let them back in, so both go too (ADR-0033). A login also linked to
     a guardian or student (linked before `user_id` became read-only, or by hand) is that
-    person's account: the staff row is unlinked and the account left alone.
+    person's account: only its staff roles are removed, the staff row is unlinked, and
+    its portal roles, active flag, invitations and tokens are left alone.
     """
     from apps.student_management.models import Guardian, Student
+    from core.rbac.cache import evict_rbac_caches
     from core.rbac.invitations.services import revoke_pending_invitations
     from core.rbac.models import User, UserRole
     from core.rbac.sessions import revoke_refresh_tokens
@@ -131,13 +133,18 @@ def _end_staff_access(staff: Staff) -> None:
         or Student.objects.alive().filter(user_id=user_id).exists()
     ):
         logger.warning(
-            "staff %s exited: its login %s is also a guardian or student account; unlinked, "
-            "not deactivated",
+            "staff %s exited: its login %s is also a guardian or student account; staff "
+            "roles removed and unlinked, not deactivated",
             staff.pk,
             user_id,
         )
+        UserRole.objects.filter(
+            user_id=user_id, tenant_id=staff.tenant_id, role__is_restricted_principal=False
+        ).delete()
+        evict_rbac_caches([user_id])
         staff.user_id = None
-        staff.save(update_fields=["user_id", "updated_at"])
+        staff.updated_by = actor_id
+        staff.save(update_fields=["user_id", "updated_by", "updated_at"])
         return
 
     User.objects.filter(pk=user_id).update(is_active=False)

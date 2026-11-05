@@ -18115,7 +18115,7 @@ components:
           format: uuid
           readOnly: true
           nullable: true
-          description: users(id) — portal account, tenant-checked at write time.
+          description: users(id) — portal account; set only by :invite (ADR-0033).
         portal_status:
           allOf:
           - $ref: '#/components/schemas/PortalStatusEnum'
@@ -22181,7 +22181,7 @@ components:
           format: uuid
           readOnly: true
           nullable: true
-          description: users(id) — portal account, tenant-checked at write time.
+          description: users(id) — portal account; set only by :invite (ADR-0033).
         portal_status:
           allOf:
           - $ref: '#/components/schemas/PortalStatusEnum'
@@ -22914,7 +22914,7 @@ components:
           format: uuid
           readOnly: true
           nullable: true
-          description: users(id) — portal account, tenant-checked at write time.
+          description: users(id) — portal account; set only by :invite (ADR-0033).
         first_name:
           type: string
           maxLength: 100
@@ -23087,7 +23087,7 @@ components:
           format: uuid
           readOnly: true
           nullable: true
-          description: users(id) — portal account, tenant-checked at write time.
+          description: users(id) — portal account; set only by :invite (ADR-0033).
         portal_status:
           allOf:
           - $ref: '#/components/schemas/PortalStatusEnum'
@@ -25034,7 +25034,7 @@ components:
           format: uuid
           readOnly: true
           nullable: true
-          description: users(id) — portal account, tenant-checked at write time.
+          description: users(id) — portal account; set only by :invite (ADR-0033).
         first_name:
           type: string
           maxLength: 100
@@ -25549,7 +25549,7 @@ components:
           format: uuid
           readOnly: true
           nullable: true
-          description: users(id) — portal account, tenant-checked at write time.
+          description: users(id) — portal account; set only by :invite (ADR-0033).
         portal_status:
           allOf:
           - $ref: '#/components/schemas/PortalStatusEnum'

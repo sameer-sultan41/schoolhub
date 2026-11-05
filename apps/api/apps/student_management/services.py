@@ -72,27 +72,6 @@ _ANY_BRACE_TOKEN = re.compile(r"\{[^}]*\}")
 _DEFAULT_PATTERN = "{year}-{seq:04d}"
 
 
-def resolve_tenant_user_id(*, user_id: uuid.UUID | None, tenant_id: uuid.UUID) -> uuid.UUID | None:
-    """Tenant-checked resolution of a portal-account link.
-
-    ``Student.user_id`` is a plain UUID column rather than a ForeignKey — see the
-    model docstring — precisely so this check exists explicitly instead of being
-    implied by a queryset that would happily resolve another tenant's user.
-    """
-    if user_id is None:
-        return None
-
-    from core.rbac.models import User
-
-    # User.objects (UserManager) is deliberately unfiltered — see the model's own
-    # docstring — so the explicit tenant_id= filter here is the entire safety
-    # check; there is no all_tenants manager to fall back on for this model.
-    exists = User.objects.filter(pk=user_id, tenant_id=tenant_id).exists()
-    if not exists:
-        raise DomainRuleViolation({"user_id": "No user with this id exists for your school."})
-    return user_id
-
-
 def assert_pattern_tokens_valid(pattern: str) -> None:
     """Reject a pattern containing a `{...}` block that isn't a known token.
 
@@ -297,7 +276,6 @@ def create_student(
     gender: str,
     house=None,
     preferred_name: str | None = None,
-    user_id: uuid.UUID | None = None,
     photo_file=None,
     blood_group: str | None = None,
     nationality: str | None = None,
@@ -312,9 +290,9 @@ def create_student(
 ) -> Student:
     """Create a student, allocating its admission number in the same transaction.
 
-    The order matters: duplicate check -> user_id tenant check -> number
-    allocation -> insert. Number allocation happens last among the checks so a
-    rejected create never consumes a sequence value.
+    The order matters: duplicate check -> number allocation -> insert. Number
+    allocation happens last among the checks so a rejected create never consumes a
+    sequence value.
     """
     assert_not_duplicate(
         tenant_id=tenant_id,
@@ -323,7 +301,6 @@ def create_student(
         date_of_birth=date_of_birth,
         override_reason=duplicate_override_reason,
     )
-    checked_user_id = resolve_tenant_user_id(user_id=user_id, tenant_id=tenant_id)
     if photo_file is not None:
         assert_file_usable(file=photo_file, purpose=uploads.STUDENT_PHOTO.key)
 
@@ -334,7 +311,6 @@ def create_student(
     return Student.objects.create(
         tenant_id=tenant_id,
         admission_number=admission_number,
-        user_id=checked_user_id,
         first_name=first_name,
         last_name=last_name,
         preferred_name=preferred_name,

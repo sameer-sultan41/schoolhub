@@ -421,6 +421,7 @@ class StaffLoginLinkTests(StaffManagementAPITestCase):
         self.allow("staff.staff.delete", "staff.staff.view")
         parent = UserFactory(tenant=self.tenant)
         role = grant(parent, "students.student.view", is_restricted_principal=True)
+        staff_role = grant(parent, "staff.staff.view")
         with tenant_context(self.tenant.id):
             GuardianFactory(tenant=self.tenant, user_id=parent.pk)
             staff = StaffFactory(tenant=self.tenant, campus=self.campus, user_id=parent.pk)
@@ -436,10 +437,35 @@ class StaffLoginLinkTests(StaffManagementAPITestCase):
         parent.refresh_from_db()
         self.assertTrue(parent.is_active)
         self.assertTrue(UserRole.objects.filter(user=parent, role=role).exists())
+        self.assertFalse(
+            UserRole.objects.filter(user=parent, role=staff_role).exists(),
+            "the staff role must go with the exit",
+        )
         self.assertFalse(BlacklistedToken.objects.filter(token__jti=jti).exists())
         with tenant_context(self.tenant.id):
             staff.refresh_from_db()
         self.assertIsNone(staff.user_id, "the exited staff row no longer names the login")
+
+
+class StaffInviteOnPortalLoginTests(StaffManagementAPITestCase):
+    def test_staff_invite_on_a_portal_linked_login_is_409(self) -> None:
+        """A staff row linked by hand to a guardian's login must not hand it staff roles."""
+        self.allow("staff.staff.update", "staff.staff.view")
+        parent = invited_user(self.tenant, email="parent-staff@example.test")
+        with tenant_context(self.tenant.id):
+            GuardianFactory(tenant=self.tenant, user_id=parent.pk)
+            staff = StaffFactory(tenant=self.tenant, campus=self.campus, user_id=parent.pk)
+            role = Role.objects.create(tenant=self.tenant, slug="test-not-given", name="No")
+
+        response = self.client.post(
+            f"/api/v1/staff/{staff.pk}:invite", {"role_ids": [str(role.pk)]}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.json()["error"]["code"], "email_in_use")
+        self.assertFalse(UserRole.objects.filter(user=parent).exists())
+        with tenant_context(self.tenant.id):
+            self.assertFalse(Invitation.objects.filter(user=parent).exists())
 
 
 class DenyRestrictedPrincipalsTests(StaffManagementAPITestCase):

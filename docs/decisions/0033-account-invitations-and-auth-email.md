@@ -112,5 +112,7 @@ or delivery log, by design: the audit trail records `auth.invitation.sent`,
 `auth.invitation.send_failed`, `auth.invitation.accepted` and `auth.password.reset` instead.
 
 No migration seeds a tenant's `guardian` or `student` role, so the first portal invite at a
-school creates it (restricted, holding the registry's keys for the slug, through
-`ensure_role_with_permissions`) unless the school or the platform already has one.
+school creates it (restricted, holding the registry's keys for the slug, synced by
+`core.rbac.seeding.sync_role_permissions`) unless the school or the platform already has a live
+one. A soft-deleted role is never reused, which is why the lookup is local rather than
+`ensure_role_with_permissions`, whose `get_or_create` ignores `deleted_at`.

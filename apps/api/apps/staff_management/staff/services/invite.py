@@ -12,13 +12,14 @@ from apps.staff_management import notifications
 from apps.staff_management.models import EmploymentStatus, Staff
 from core.api.exceptions import Conflict, DomainRuleViolation
 from core.rbac.cache import evict_rbac_caches
-from core.rbac.invitations.exceptions import AlreadyActive
+from core.rbac.invitations.exceptions import AlreadyActive, EmailInUse
 from core.rbac.invitations.services import (
     assert_email_free,
     create_invitation,
     create_invited_user,
 )
 from core.rbac.models import InvitationKind, Role, User, UserRole
+from core.rbac.permissions import live_restricted_role_assignments
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,8 @@ def invite_staff(*, staff: Staff, role_ids: list[uuid.UUID], actor_id: uuid.UUID
     - Inactive account, no usable password (invited, never accepted, including staff
       invited before invitations existed): resend. ``role_ids`` is ignored; roles change
       through role management.
+    - Account that is a guardian's or student's login, or holds a restricted role: 409
+      ``email_in_use``, nothing assigned.
     - Inactive account with a usable password (re-hired after an exit, which removed its
       roles): assign ``role_ids`` and invite again. Accepting sets a fresh password.
     - Active account: 409 ``already_active``.
@@ -67,6 +70,10 @@ def invite_staff(*, staff: Staff, role_ids: list[uuid.UUID], actor_id: uuid.UUID
         ).first()
 
     if user is not None:
+        if _is_portal_login(user):
+            # Someone else's guardian or student login, linked before `user_id` was
+            # read-only: inviting would hand staff roles to a portal account.
+            raise EmailInUse()
         if user.is_active:
             raise AlreadyActive()
         if user.has_usable_password():
@@ -96,6 +103,17 @@ def invite_staff(*, staff: Staff, role_ids: list[uuid.UUID], actor_id: uuid.UUID
     create_invitation(user=user, kind=InvitationKind.STAFF, actor_id=actor_id)
     _notify_invited(staff=staff, user_id=user.pk)
     return staff
+
+
+def _is_portal_login(user: User) -> bool:
+    """Whether ``user`` is a guardian's or student's login, or holds a restricted role."""
+    from apps.student_management.models import Guardian, Student
+
+    return (
+        Guardian.objects.alive().filter(user_id=user.pk).exists()
+        or Student.objects.alive().filter(user_id=user.pk).exists()
+        or live_restricted_role_assignments().filter(user_id=user.pk).exists()
+    )
 
 
 def _assign_roles(*, user: User, role_ids: list[uuid.UUID], tenant_id: uuid.UUID) -> None:

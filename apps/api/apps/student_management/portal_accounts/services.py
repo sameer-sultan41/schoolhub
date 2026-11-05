@@ -58,10 +58,9 @@ from core.rbac.invitations.services import (
 )
 from core.rbac.models import Invitation, InvitationKind, Role, User, UserRole
 from core.rbac.registry import registry
-from core.rbac.seeding import ensure_role_with_permissions
+from core.rbac.seeding import sync_role_permissions
 from core.rbac.sessions import revoke_refresh_tokens
 from core.tenancy.features import is_feature_enabled
-from core.tenancy.models import Tenant
 
 logger = logging.getLogger(__name__)
 
@@ -244,16 +243,23 @@ def is_portal_account(user_id: uuid.UUID, *, kind: str) -> bool:
     return not (
         Staff.objects.alive().filter(user_id=user_id).exists()
         or other.objects.alive().filter(user_id=user_id).exists()
-        or UserRole.objects.filter(user_id=user_id, role__is_restricted_principal=False).exists()
+        or UserRole.objects.filter(
+            user_id=user_id,
+            deleted_at__isnull=True,
+            role__deleted_at__isnull=True,
+            role__is_restricted_principal=False,
+        ).exists()
     )
 
 
 def _portal_role(*, tenant_id: uuid.UUID, slug: str) -> Role:
-    """The school's ``guardian``/``student`` role, created from the registry if missing.
+    """The school's live ``guardian``/``student`` role, created from the registry if missing.
 
-    A school's own role of that slug wins over a platform default. No migration seeds
-    these roles, so the first invite creates the tenant's one, restricted, holding
-    exactly the keys the registry gives the slug (ADR-0033).
+    A school's own live role of that slug wins over a live platform default; a
+    soft-deleted role is never reused. No migration seeds these roles, so the first
+    invite creates the tenant's one, restricted, holding exactly the keys the registry
+    gives the slug (ADR-0033). The lookup is local rather than
+    ``ensure_role_with_permissions``, whose ``get_or_create`` ignores ``deleted_at``.
     """
     role = (
         Role.objects.filter(slug=slug, deleted_at__isnull=True, tenant_id=tenant_id).first()
@@ -261,13 +267,15 @@ def _portal_role(*, tenant_id: uuid.UUID, slug: str) -> Role:
     )
     if role is not None:
         return role
-    return ensure_role_with_permissions(
-        Tenant.objects.get(pk=tenant_id),
-        slug,
-        slug.title(),
-        registry.keys_for_role(slug),
-        is_restricted_principal=True,
+    role, created = Role.objects.get_or_create(
+        tenant_id=tenant_id,
+        slug=slug,
+        deleted_at=None,
+        defaults={"name": slug.title(), "is_default": True, "is_restricted_principal": True},
     )
+    if created:
+        sync_role_permissions(role, registry.keys_for_role(slug))
+    return role
 
 
 def _assign_portal_role(*, user: User, slug: str, tenant_id: uuid.UUID) -> None:
@@ -324,7 +332,10 @@ def sync_portal_account(user_id: uuid.UUID | None, *, actor_id: uuid.UUID | None
     if not User.objects.filter(pk=user_id, tenant_id=tenant_id).exists():
         return
 
-    # Invitations before the user row: the order `accept_invitation` locks them in.
+    # Invitations before the user row, the order `accept_invitation` locks them in.
+    # `create_invitation` locks the user row first and then writes invitations, so a sync
+    # racing an invite for the same user can deadlock; Postgres aborts one of the two
+    # transactions with a deadlock error. Rare, and deferred rather than fixed here.
     revoked = revoke_pending_invitations(user_id)
     user = User.objects.select_for_update().get(pk=user_id)
     was_active = user.is_active

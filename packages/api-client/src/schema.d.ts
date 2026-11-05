@@ -8103,7 +8103,7 @@ export interface components {
             readonly id: string;
             /**
              * Format: uuid
-             * @description users(id) — portal account, tenant-checked at write time.
+             * @description users(id) — portal account; set only by :invite (ADR-0033).
              */
             readonly user_id: string | null;
             readonly portal_status: components["schemas"]["PortalStatusEnum"];
@@ -10115,7 +10115,7 @@ export interface components {
             readonly id?: string;
             /**
              * Format: uuid
-             * @description users(id) — portal account, tenant-checked at write time.
+             * @description users(id) — portal account; set only by :invite (ADR-0033).
              */
             readonly user_id?: string | null;
             readonly portal_status?: components["schemas"]["PortalStatusEnum"];
@@ -10494,7 +10494,7 @@ export interface components {
             employee_number?: string;
             /**
              * Format: uuid
-             * @description users(id) — portal account, tenant-checked at write time.
+             * @description users(id) — portal account; set only by :invite (ADR-0033).
              */
             readonly user_id?: string | null;
             first_name?: string;
@@ -10569,7 +10569,7 @@ export interface components {
             admission_number?: string;
             /**
              * Format: uuid
-             * @description users(id) — portal account, tenant-checked at write time.
+             * @description users(id) — portal account; set only by :invite (ADR-0033).
              */
             readonly user_id?: string | null;
             readonly portal_status?: components["schemas"]["PortalStatusEnum"];
@@ -11506,7 +11506,7 @@ export interface components {
             employee_number?: string;
             /**
              * Format: uuid
-             * @description users(id) — portal account, tenant-checked at write time.
+             * @description users(id) — portal account; set only by :invite (ADR-0033).
              */
             readonly user_id: string | null;
             first_name: string;
@@ -11734,7 +11734,7 @@ export interface components {
             admission_number?: string;
             /**
              * Format: uuid
-             * @description users(id) — portal account, tenant-checked at write time.
+             * @description users(id) — portal account; set only by :invite (ADR-0033).
              */
             readonly user_id: string | null;
             readonly portal_status: components["schemas"]["PortalStatusEnum"];
