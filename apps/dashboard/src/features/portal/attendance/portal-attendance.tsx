@@ -18,6 +18,7 @@ import {
   ATTENDANCE_STATUS_SEVERITY,
 } from "./attendance-status";
 import { useRangeAttendance } from "./use-range-attendance";
+import { enumLabel } from "@/features/portal/enum-label";
 
 const STATUSES = Object.keys(ATTENDANCE_STATUS_LABEL_KEY) as AttendanceStatus[];
 
@@ -94,7 +95,7 @@ export function PortalAttendance() {
             {STATUSES.map((status) => (
               <li key={status}>
                 <Badge variant="outline" size="sm">
-                  {t(ATTENDANCE_STATUS_LABEL_KEY[status])}
+                  {enumLabel(t, ATTENDANCE_STATUS_LABEL_KEY, status)}
                 </Badge>
               </li>
             ))}
@@ -120,7 +121,9 @@ export function PortalAttendance() {
                     <th scope="row" className="py-2 text-start font-normal">
                       {formatDate(date, locale)}
                     </th>
-                    <td className="py-2 text-end">{t(ATTENDANCE_STATUS_LABEL_KEY[status])}</td>
+                    <td className="py-2 text-end">
+                      {enumLabel(t, ATTENDANCE_STATUS_LABEL_KEY, status)}
+                    </td>
                   </tr>
                 ))}
               </tbody>

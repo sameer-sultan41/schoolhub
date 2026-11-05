@@ -9,6 +9,7 @@ import { formatDate } from "@/lib/helpers";
 import type { PortalChild } from "@/services";
 import { ATTENDANCE_STATUS_LABEL_KEY } from "@/features/portal/attendance/attendance-status";
 import { formatDecimal } from "@/features/portal/format-decimal";
+import { enumLabel } from "@/features/portal/enum-label";
 
 /** One child's summary: the cards the server sent, and none it left `null` (a module that is
  * off or a key the viewer lacks leaves its card out, not blank). */
@@ -49,7 +50,7 @@ export function ChildCard({ child, linked = true }: { child: PortalChild; linked
               <p className="text-xs text-muted-foreground">{t("attendance.title")}</p>
               <p className="font-medium">
                 {attendance.today
-                  ? tAttendance(ATTENDANCE_STATUS_LABEL_KEY[attendance.today])
+                  ? enumLabel(tAttendance, ATTENDANCE_STATUS_LABEL_KEY, attendance.today)
                   : t("attendance.notMarked")}
               </p>
               {attendance.month_percentage ? (

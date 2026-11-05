@@ -17,6 +17,7 @@ import { formatDecimal } from "@/features/portal/format-decimal";
 import { FEE_STATUS_BADGE, FEE_STATUS_LABEL_KEY } from "./fee-status";
 import { ReceiptDownloadButton } from "./receipt-download-button";
 import { useReceiptsByInvoice } from "./use-fees-data";
+import { enumBadge, enumLabel } from "@/features/portal/enum-label";
 
 /** One invoice with its lines, the totals the server computed, and its receipts. */
 export function PortalInvoiceDetail() {
@@ -80,8 +81,11 @@ export function PortalInvoiceDetail() {
             <h1 className="font-heading text-xl font-semibold text-foreground">
               {t("detail.title", { number: invoice.invoice_no })}
             </h1>
-            <Badge variant={FEE_STATUS_BADGE[invoice.status]} appearance="light">
-              {t(FEE_STATUS_LABEL_KEY[invoice.status])}
+            <Badge
+              variant={enumBadge(FEE_STATUS_BADGE, invoice.status, "secondary")}
+              appearance="light"
+            >
+              {enumLabel(t, FEE_STATUS_LABEL_KEY, invoice.status)}
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground">

@@ -15,6 +15,7 @@ import { Services, type NoticeRead } from "@/services";
 import { NOTICES_QUERY_MODULE } from "@/services/modules/notices/notices-constant";
 import { isPortalNotice } from "@/services/modules/notices/notices-helper";
 import { NOTICE_TYPE_BADGE, NOTICE_TYPE_LABEL_KEY } from "./notice-type";
+import { enumBadge, enumLabel } from "@/features/portal/enum-label";
 
 const NOTICES_PAGE_SIZE = 20;
 
@@ -60,11 +61,11 @@ export function PortalNotices() {
                       {notice.title}
                     </Link>
                     <Badge
-                      variant={NOTICE_TYPE_BADGE[notice.notice_type]}
+                      variant={enumBadge(NOTICE_TYPE_BADGE, notice.notice_type, "secondary")}
                       appearance="light"
                       size="sm"
                     >
-                      {t(NOTICE_TYPE_LABEL_KEY[notice.notice_type])}
+                      {enumLabel(t, NOTICE_TYPE_LABEL_KEY, notice.notice_type)}
                     </Badge>
                     {notice.requires_acknowledgment && notice.acknowledged_at === null && (
                       <Badge variant="warning" appearance="light" size="sm">

@@ -17,6 +17,7 @@ import { ApiError, Services } from "@/services";
 import { NOTICES_QUERY_MODULE } from "@/services/modules/notices/notices-constant";
 import { isPortalNotice } from "@/services/modules/notices/notices-helper";
 import { NOTICE_TYPE_BADGE, NOTICE_TYPE_LABEL_KEY } from "./notice-type";
+import { enumBadge, enumLabel } from "@/features/portal/enum-label";
 
 /** One notice, with Acknowledge when it asks for one and the viewer has not given it yet. */
 export function PortalNoticeDetail({ noticeId }: { noticeId: string }) {
@@ -81,8 +82,12 @@ export function PortalNoticeDetail({ noticeId }: { noticeId: string }) {
         <CardContent className="space-y-3 p-5">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="font-heading text-xl font-semibold text-foreground">{notice.title}</h1>
-            <Badge variant={NOTICE_TYPE_BADGE[notice.notice_type]} appearance="light" size="sm">
-              {t(NOTICE_TYPE_LABEL_KEY[notice.notice_type])}
+            <Badge
+              variant={enumBadge(NOTICE_TYPE_BADGE, notice.notice_type, "secondary")}
+              appearance="light"
+              size="sm"
+            >
+              {enumLabel(t, NOTICE_TYPE_LABEL_KEY, notice.notice_type)}
             </Badge>
           </div>
           {notice.published_at && (

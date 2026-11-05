@@ -21,6 +21,7 @@ import {
 } from "@/services/modules/notification-preferences/notification-preferences-constant";
 import { NOTIFICATION_CATEGORY_LABEL_KEY } from "@/features/portal/notifications/notification-labels";
 import { NOTIFICATION_CHANNEL_LABEL_KEY } from "./preference-labels";
+import { enumLabel } from "@/features/portal/enum-label";
 
 const cellKey = (category: string, channel: string) => `${category}:${channel}`;
 
@@ -92,7 +93,7 @@ export function PortalPreferences() {
               </th>
               {NOTIFICATION_CHANNELS.map((channel) => (
                 <th key={channel} scope="col" className="p-2 text-center font-medium">
-                  {t(NOTIFICATION_CHANNEL_LABEL_KEY[channel])}
+                  {enumLabel(t, NOTIFICATION_CHANNEL_LABEL_KEY, channel)}
                 </th>
               ))}
             </tr>
@@ -101,7 +102,7 @@ export function PortalPreferences() {
             {NOTIFICATION_CATEGORIES.map((category) => (
               <tr key={category} className="border-b border-border">
                 <th scope="row" className="p-2 text-start font-normal text-foreground">
-                  {tNotifications(NOTIFICATION_CATEGORY_LABEL_KEY[category])}
+                  {enumLabel(tNotifications, NOTIFICATION_CATEGORY_LABEL_KEY, category)}
                 </th>
                 {NOTIFICATION_CHANNELS.map((channel) => {
                   const locked = isLocked(category);
@@ -110,8 +111,12 @@ export function PortalPreferences() {
                     <td key={channel} className="p-2 text-center">
                       <Checkbox
                         aria-label={t("cellLabel", {
-                          category: tNotifications(NOTIFICATION_CATEGORY_LABEL_KEY[category]),
-                          channel: t(NOTIFICATION_CHANNEL_LABEL_KEY[channel]),
+                          category: enumLabel(
+                            tNotifications,
+                            NOTIFICATION_CATEGORY_LABEL_KEY,
+                            category,
+                          ),
+                          channel: enumLabel(t, NOTIFICATION_CHANNEL_LABEL_KEY, channel),
                         })}
                         checked={locked || (enabled.get(key) ?? true)}
                         // One save at a time, so responses cannot land out of order.

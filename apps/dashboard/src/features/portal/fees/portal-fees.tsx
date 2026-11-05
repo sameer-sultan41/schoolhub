@@ -14,6 +14,7 @@ import { useSelectedChild } from "@/features/portal/shell/use-selected-child";
 import { FEE_STATUS_BADGE, FEE_STATUS_LABEL_KEY } from "./fee-status";
 import { ReceiptDownloadButton } from "./receipt-download-button";
 import { useChildInvoices, useReceiptsByInvoice } from "./use-fees-data";
+import { enumBadge, enumLabel } from "@/features/portal/enum-label";
 
 interface InvoiceListProps {
   kind: "outstanding" | "paid";
@@ -63,8 +64,12 @@ function InvoiceList({ kind, studentId, receipts }: InvoiceListProps) {
                   .filter(Boolean)
                   .join(" · ")}
               </p>
-              <Badge variant={FEE_STATUS_BADGE[invoice.status]} appearance="light" size="sm">
-                {t(FEE_STATUS_LABEL_KEY[invoice.status])}
+              <Badge
+                variant={enumBadge(FEE_STATUS_BADGE, invoice.status, "secondary")}
+                appearance="light"
+                size="sm"
+              >
+                {enumLabel(t, FEE_STATUS_LABEL_KEY, invoice.status)}
               </Badge>
             </div>
             <div className="flex flex-col items-end gap-2">

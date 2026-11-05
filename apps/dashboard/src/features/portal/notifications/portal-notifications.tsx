@@ -20,6 +20,7 @@ import {
 } from "./notification-labels";
 import { inboxListKey } from "./notification-query-keys";
 import { useMarkNotificationRead } from "./use-mark-notification-read";
+import { enumBadge, enumLabel } from "@/features/portal/enum-label";
 
 const INBOX_PAGE_SIZE = 20;
 type ReadFilter = "" | "unread" | "read";
@@ -149,15 +150,19 @@ export function PortalNotifications() {
                           </Badge>
                         )}
                         <Badge variant="secondary" appearance="light" size="sm">
-                          {t(NOTIFICATION_CATEGORY_LABEL_KEY[notification.category])}
+                          {enumLabel(t, NOTIFICATION_CATEGORY_LABEL_KEY, notification.category)}
                         </Badge>
                         {notification.priority !== "normal" && (
                           <Badge
-                            variant={NOTIFICATION_PRIORITY_BADGE[notification.priority]}
+                            variant={enumBadge(
+                              NOTIFICATION_PRIORITY_BADGE,
+                              notification.priority,
+                              "secondary",
+                            )}
                             appearance="light"
                             size="sm"
                           >
-                            {t(NOTIFICATION_PRIORITY_LABEL_KEY[notification.priority])}
+                            {enumLabel(t, NOTIFICATION_PRIORITY_LABEL_KEY, notification.priority)}
                           </Badge>
                         )}
                       </span>

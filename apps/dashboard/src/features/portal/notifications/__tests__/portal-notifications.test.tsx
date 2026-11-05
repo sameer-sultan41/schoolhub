@@ -105,6 +105,22 @@ describe("PortalNotifications", () => {
     );
   });
 
+  it("shows a category and priority the dashboard does not know yet as humanised text", async () => {
+    // A row the server sends with values added after this build: Object.assign keeps the
+    // record's type while the runtime values are new.
+    const row = Object.assign(notificationRecord(FIRST), {
+      category: "lost_and_found",
+      priority: "critical",
+    });
+    mockList.mockResolvedValue(cursorPage([row]));
+
+    renderWithProviders(<PortalNotifications />);
+
+    expect(await screen.findByText("Lost and found")).toBeInTheDocument();
+    expect(screen.getByText("Critical")).toBeInTheDocument();
+    expect(screen.queryByText(/categories\./)).not.toBeInTheDocument();
+  });
+
   it("does not mark an already-read notification", async () => {
     mockList.mockResolvedValue(
       cursorPage([notificationRecord(FIRST, { read_at: "2026-11-03T10:00:00Z" })]),

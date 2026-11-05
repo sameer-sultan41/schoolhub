@@ -15,6 +15,7 @@ import { fetchAllPages } from "@/features/portal/fetch-all-pages";
 import { formatDecimal } from "@/features/portal/format-decimal";
 import { useSelectedChild } from "@/features/portal/shell/use-selected-child";
 import { RESULT_OUTCOME_BADGE, RESULT_OUTCOME_LABEL_KEY } from "./result-outcome";
+import { enumBadge, enumLabel } from "@/features/portal/enum-label";
 
 interface TermGroup {
   term: string | null;
@@ -111,8 +112,11 @@ export function PortalResults() {
                           {t("percentage", { value: formatDecimal(locale, result.percentage, 1) })}
                         </span>
                         {result.grade ? <Badge variant="primary">{result.grade}</Badge> : null}
-                        <Badge variant={RESULT_OUTCOME_BADGE[result.outcome]} appearance="light">
-                          {t(RESULT_OUTCOME_LABEL_KEY[result.outcome])}
+                        <Badge
+                          variant={enumBadge(RESULT_OUTCOME_BADGE, result.outcome, "secondary")}
+                          appearance="light"
+                        >
+                          {enumLabel(t, RESULT_OUTCOME_LABEL_KEY, result.outcome)}
                         </Badge>
                       </div>
                     </CardContent>
