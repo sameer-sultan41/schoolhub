@@ -72,9 +72,6 @@ export function PortalPreferences() {
   const enabled = new Map(
     matrix.data.map((row) => [cellKey(row.event_category, row.channel), row.is_enabled]),
   );
-  const pendingKey = update.isPending
-    ? cellKey(update.variables.category, update.variables.channel)
-    : null;
 
   return (
     <section className="space-y-4">
@@ -117,7 +114,8 @@ export function PortalPreferences() {
                           channel: t(NOTIFICATION_CHANNEL_LABEL_KEY[channel]),
                         })}
                         checked={locked || (enabled.get(key) ?? true)}
-                        disabled={locked || pendingKey === key}
+                        // One save at a time, so responses cannot land out of order.
+                        disabled={locked || update.isPending}
                         onCheckedChange={(checked) => {
                           update.mutate({ category, channel, enabled: checked === true });
                         }}

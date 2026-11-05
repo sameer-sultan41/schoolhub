@@ -2,6 +2,8 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { Services } from "@/services";
+import { NOTIFICATION_CHANNELS } from "@/services/modules/notification-preferences/notification-preferences-constant";
+import { NOTIFICATION_CATEGORIES } from "@/services/modules/notifications/notifications-constant";
 import { renderWithProviders } from "@/test-utils";
 
 import { PortalPreferences } from "../portal-preferences";
@@ -25,14 +27,23 @@ const mockUpdate = Services.notificationPreferences
   typeof Services.notificationPreferences.updateNotificationPreferences
 >;
 
+/** The full category x channel matrix, as `materialize_preference_matrix` answers (all enabled
+ * unless overridden as `"category:channel"`). */
+function fullMatrix(disabled: readonly string[] = []) {
+  return NOTIFICATION_CATEGORIES.flatMap((event_category) =>
+    NOTIFICATION_CHANNELS.map((channel) => ({
+      event_category,
+      channel,
+      is_enabled: !disabled.includes(`${event_category}:${channel}`),
+    })),
+  );
+}
+
 describe("PortalPreferences", () => {
   beforeEach(() => {
     mockFetch.mockReset();
     mockUpdate.mockReset();
-    mockFetch.mockResolvedValue([
-      { event_category: "fees", channel: "email", is_enabled: true },
-      { event_category: "fees", channel: "sms", is_enabled: false },
-    ]);
+    mockFetch.mockResolvedValue(fullMatrix(["fees:sms"]));
   });
 
   it("emergency preference cannot be turned off", async () => {
@@ -65,10 +76,7 @@ describe("PortalPreferences", () => {
   });
 
   it("sends only the changed cell and shows the answered matrix", async () => {
-    mockUpdate.mockResolvedValue([
-      { event_category: "fees", channel: "email", is_enabled: false },
-      { event_category: "fees", channel: "sms", is_enabled: false },
-    ]);
+    mockUpdate.mockResolvedValue(fullMatrix(["fees:email", "fees:sms"]));
     const user = userEvent.setup();
 
     renderWithProviders(<PortalPreferences />);
