@@ -8,7 +8,7 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 
-from apps.school_organization.models import SessionStatus
+from apps.school_organization.models import AcademicSession, SessionStatus
 from apps.staff_management.models import EmploymentStatus, StaffType
 from apps.student_management.models import EnrollmentStatus
 from apps.timetable.models import SlotStatus, SubstitutionStatus, TimetableSlot
@@ -819,6 +819,21 @@ class MyTimetableTests(TimetableAPITestCase):
             with self.subTest(child=child.pk):
                 response = self.client.get(f"/api/v1/timetables/my?student_id={child.pk}")
                 self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_unlinked_child_is_404_even_without_a_current_session(self) -> None:
+        """Access is checked before the session lookup, so a school with no current
+        session cannot turn a foreign `student_id` into a 422."""
+        stranger = self._enrolled_student()
+        user = UserFactory(tenant=self.tenant)
+        with tenant_context(self.tenant.id):
+            AcademicSession.objects.alive().update(is_current=False)
+            GuardianFactory(tenant=self.tenant, user_id=user.pk)
+        grant(user, "timetable.timetable.view", is_restricted_principal=True)
+        authenticate(self.client, user)
+
+        response = self.client.get(f"/api/v1/timetables/my?student_id={stranger.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND, response.json())
 
     def test_a_student_may_name_only_themselves(self) -> None:
         self.publish(self.make_slot())
