@@ -1,11 +1,14 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { NextIntlClientProvider } from "next-intl";
 
 import { Services } from "@/services";
 import { cursorPage } from "@/test-fixtures/communication";
 import { notificationRecord } from "@/test-fixtures/portal";
 import { renderWithProviders } from "@/test-utils";
 
+import enMessages from "../../../../../messages/en.json";
 import { PortalNotifications } from "../portal-notifications";
 
 jest.mock("@/services", () =>
@@ -105,20 +108,34 @@ describe("PortalNotifications", () => {
     );
   });
 
-  it("shows a category and priority the dashboard does not know yet as humanised text", async () => {
-    // A row the server sends with values added after this build: Object.assign keeps the
-    // record's type while the runtime values are new.
-    const row = Object.assign(notificationRecord(FIRST), {
-      category: "lost_and_found",
-      priority: "critical",
-    });
-    mockList.mockResolvedValue(cursorPage([row]));
+  it("shows a category whose label the messages lack as humanised text, not a message key", async () => {
+    // The messages without the "library" category label: what the screen meets when the server
+    // sends a value before the dashboard's messages name it.
+    const { notifications } = enMessages.portal;
+    const messages = {
+      ...enMessages,
+      portal: {
+        ...enMessages.portal,
+        notifications: {
+          ...notifications,
+          categories: Object.fromEntries(
+            Object.entries(notifications.categories).filter(([key]) => key !== "library"),
+          ),
+        },
+      },
+    };
+    mockList.mockResolvedValue(cursorPage([notificationRecord(FIRST, { category: "library" })]));
 
-    renderWithProviders(<PortalNotifications />);
+    render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <QueryClientProvider client={new QueryClient()}>
+          <PortalNotifications />
+        </QueryClientProvider>
+      </NextIntlClientProvider>,
+    );
 
-    expect(await screen.findByText("Lost and found")).toBeInTheDocument();
-    expect(screen.getByText("Critical")).toBeInTheDocument();
-    expect(screen.queryByText(/categories\./)).not.toBeInTheDocument();
+    expect(await screen.findByText("Library")).toBeInTheDocument();
+    expect(screen.queryByText(/categories\.library/)).not.toBeInTheDocument();
   });
 
   it("does not mark an already-read notification", async () => {

@@ -29,10 +29,11 @@ describe("enumLabel", () => {
 });
 
 describe("enumBadge", () => {
-  const variants: Record<string, "success" | "secondary"> = { paid: "success" };
+  type Variant = "success" | "secondary";
+  const variants: Record<string, Variant> = { paid: "success" };
 
   it("uses the mapped variant, and the fallback for an unknown value", () => {
-    expect(enumBadge(variants, "paid", "secondary")).toBe("success");
-    expect(enumBadge(variants, "refunded", "secondary")).toBe("secondary");
+    expect(enumBadge<string, Variant>(variants, "paid", "secondary")).toBe("success");
+    expect(enumBadge<string, Variant>(variants, "refunded", "secondary")).toBe("secondary");
   });
 });
