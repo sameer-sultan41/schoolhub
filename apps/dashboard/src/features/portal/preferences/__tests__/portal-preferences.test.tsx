@@ -48,6 +48,22 @@ describe("PortalPreferences", () => {
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 
+  it("in-app preference can be turned off for a non-emergency category", async () => {
+    mockUpdate.mockResolvedValue([
+      { event_category: "fees", channel: "in_app", is_enabled: false },
+    ]);
+    const user = userEvent.setup();
+
+    renderWithProviders(<PortalPreferences />);
+    const feesInApp = await screen.findByRole("checkbox", { name: "Fees by In-app" });
+    expect(feesInApp).toBeEnabled();
+    await user.click(feesInApp);
+
+    expect(mockUpdate).toHaveBeenCalledWith([
+      { event_category: "fees", channel: "in_app", is_enabled: false },
+    ]);
+  });
+
   it("sends only the changed cell and shows the answered matrix", async () => {
     mockUpdate.mockResolvedValue([
       { event_category: "fees", channel: "email", is_enabled: false },

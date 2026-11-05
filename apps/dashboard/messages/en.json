@@ -2276,7 +2276,7 @@
       "category": "Category",
       "loadError": "We couldn't load your settings. Please try again.",
       "saveFailed": "We couldn't save that change. Please try again.",
-      "lockedExplanation": "Emergency notices and the in-app inbox are always on, so they can't be turned off.",
+      "lockedExplanation": "Emergency notifications are always on, so they can't be turned off.",
       "cellLabel": "{category} by {channel}",
       "channels": {
         "in_app": "In-app",

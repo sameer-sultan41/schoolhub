@@ -16,7 +16,6 @@ import {
 import { NOTIFICATION_CATEGORIES } from "@/services/modules/notifications/notifications-constant";
 import {
   LOCKED_CATEGORY,
-  MANDATORY_CHANNEL,
   NOTIFICATION_CHANNELS,
   NOTIFICATION_PREFERENCES_QUERY_MODULE,
 } from "@/services/modules/notification-preferences/notification-preferences-constant";
@@ -25,9 +24,9 @@ import { NOTIFICATION_CHANNEL_LABEL_KEY } from "./preference-labels";
 
 const cellKey = (category: string, channel: string) => `${category}:${channel}`;
 
-/** The two cells the server never gates: every channel of an emergency, and the in-app inbox. */
-function isLocked(category: NotificationCategory, channel: NotificationChannel): boolean {
-  return category === LOCKED_CATEGORY || channel === MANDATORY_CHANNEL;
+/** Only the emergency category is locked, on every channel: the server refuses to disable it. */
+function isLocked(category: NotificationCategory): boolean {
+  return category === LOCKED_CATEGORY;
 }
 
 /** `/portal/settings`: the viewer's category x channel notification matrix. */
@@ -108,7 +107,7 @@ export function PortalPreferences() {
                   {tNotifications(NOTIFICATION_CATEGORY_LABEL_KEY[category])}
                 </th>
                 {NOTIFICATION_CHANNELS.map((channel) => {
-                  const locked = isLocked(category, channel);
+                  const locked = isLocked(category);
                   const key = cellKey(category, channel);
                   return (
                     <td key={channel} className="p-2 text-center">

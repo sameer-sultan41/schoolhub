@@ -12,8 +12,5 @@ export const NOTIFICATION_CHANNELS = [
   "whatsapp",
 ] as const satisfies readonly NotificationChannel[];
 
-/** The channel that is never gated: the inbox itself (`catalog.MANDATORY_CHANNEL`). */
-export const MANDATORY_CHANNEL: NotificationChannel = "in_app";
-
 /** The category that is never gated, on any channel (the server's emergency floor). */
 export const LOCKED_CATEGORY = "emergency";
