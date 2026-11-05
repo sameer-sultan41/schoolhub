@@ -7,6 +7,8 @@ function translator(messages: Record<string, string>) {
   return t;
 }
 
+// A wire value is typed as the enum, but at runtime it can be one this build has never seen;
+// the explicit `string` key type models that, as `enumBadge<string, Variant>` does below.
 describe("enumLabel", () => {
   const keys: Record<string, string> = {
     present: "status.present",
@@ -14,15 +16,17 @@ describe("enumLabel", () => {
   };
 
   it("translates a value the map and the messages know", () => {
-    expect(enumLabel(translator({ "status.present": "Present" }), keys, "present")).toBe("Present");
+    expect(enumLabel<string>(translator({ "status.present": "Present" }), keys, "present")).toBe(
+      "Present",
+    );
   });
 
   it("humanises a value the map does not know, never showing a message key", () => {
-    expect(enumLabel(translator({}), keys, "on_leave")).toBe("On leave");
+    expect(enumLabel<string>(translator({}), keys, "on_leave")).toBe("On leave");
   });
 
   it("humanises a mapped value the messages lack", () => {
-    expect(enumLabel(translator({ "status.present": "Present" }), keys, "half_day")).toBe(
+    expect(enumLabel<string>(translator({ "status.present": "Present" }), keys, "half_day")).toBe(
       "Half day",
     );
   });
