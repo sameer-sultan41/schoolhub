@@ -1075,6 +1075,11 @@ either this file or `project-status.md`.
     while the dashboard summary's "today" and "current month" use `Tenant.local_date()`. Near
     midnight in a zone away from UTC the two disagree by a day. The fix is attendance itself
     using `Tenant.local_date()`.
+  - **The "all staff" role tuple is duplicated nine times.** An identical `ALL_STAFF` tuple
+    (17 staff slugs) is declared in `core/files/permissions.py`, `core/jobs/permissions.py` and
+    the `permissions.py` of `attendance`, `academics`, `examinations`, `student_management`,
+    `staff_management`, `timetable` and `school_organization`. It should be declared once in
+    `core/rbac/roles.py` beside the portal role tuples and imported from there.
   - **The outstanding-invoice rule is stated twice.** `fees_finance.services.outstanding_invoices`
     is the rule the list filter and the summary share, but the aging report
     (`fees_finance/reports.py`, around line 156) still restates `balance_due > 0` and not

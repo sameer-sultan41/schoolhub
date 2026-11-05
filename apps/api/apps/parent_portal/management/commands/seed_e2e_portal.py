@@ -72,9 +72,10 @@ from core.tenancy.models import Tenant
 # card reads what production would; attendance rows are written directly (see
 # `_ensure_portal_attendance`). Mirrored in e2e/src/lib/seed-constants.ts.
 #
-# Fees: one active structure for the baseline class billed once, for the session's first
-# month. The period label is the idempotency key (`generate_invoices` skips a student
-# already billed for it), so a re-seed bills nobody twice.
+# Fees: one active structure for the baseline class, billed for the session's first month
+# to every active enrolment in that class, not only the comms child. The period label is the
+# idempotency key (`generate_invoices` skips a student already billed for it), so a re-seed
+# bills nobody twice.
 E2E_FEE_HEAD_CODE = "E2E-TUITION"
 E2E_FEE_HEAD_NAME = "E2E Tuition"
 E2E_FEE_STRUCTURE_NAME = "E2E Grade 1 Fees"
@@ -211,12 +212,14 @@ class Command(BaseCommand):
         campus: Campus,
         actor: User,
     ) -> None:
-        """One issued, unpaid invoice per enrolled baseline-class student, via `fees_finance`.
+        """One issued, unpaid invoice for every active baseline-class enrolment, via `fees_finance`.
 
-        The structure, head and schedule are configuration and are found again by their
-        natural keys; the invoice itself comes from `generate_invoices` for the session's
-        first month, whose duplicate guard skips a student already billed for that
-        period. So a re-seed bills nobody twice, and the comms child always owes exactly
+        `generate_invoices` bills the whole structure's class, so every student enrolled in
+        the baseline class gets an invoice, the comms child among them; nothing here narrows
+        it to that one child. The structure, head and schedule are configuration and are
+        found again by their natural keys; the invoices come from `generate_invoices` for
+        the session's first month, whose duplicate guard skips a student already billed for
+        that period. So a re-seed bills nobody twice, and the comms child owes exactly
         `E2E_FEE_MONTHLY_AMOUNT` on one invoice.
         """
         accounts = fee_services.ensure_system_accounts(tenant_id=tenant.id)
