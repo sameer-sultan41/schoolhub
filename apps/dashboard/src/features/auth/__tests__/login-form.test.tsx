@@ -6,16 +6,21 @@ import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactElement } from "react";
 import messages from "../../../../messages/en.json";
+import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
+import { buildUser } from "@/test-utils";
 import { LoginForm } from "../login-form";
 
 function renderLoginForm(ui: ReactElement = <LoginForm />) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <NextIntlClientProvider locale="en" messages={messages}>
-      <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
-    </NextIntlClientProvider>,
-  );
+  return {
+    queryClient,
+    ...render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+      </NextIntlClientProvider>,
+    ),
+  };
 }
 
 function makeLoginResponse(): LoginResponse {
@@ -119,6 +124,24 @@ describe("LoginForm", () => {
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledWith("/portal");
     });
+  });
+
+  it("a guardian logging in after a staff sign-out lands in the portal", async () => {
+    const response = makeLoginResponse();
+    mockLogin.mockResolvedValue({
+      ...response,
+      user: { ...response.user, is_restricted_principal: true },
+    });
+
+    const { queryClient } = renderLoginForm();
+    // The previous staff user is still cached under the key the audience gate reads.
+    queryClient.setQueryData(queryKeys.currentUser(), buildUser([]));
+    await fillAndSubmit("guardian@cityschool.test", "secret123");
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/portal");
+    });
+    expect(queryClient.getQueryData(queryKeys.currentUser())).toBeUndefined();
   });
 
   it("redirects to a same-origin next param when present", async () => {

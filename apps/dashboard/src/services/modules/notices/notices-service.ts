@@ -18,7 +18,7 @@ export async function fetchNotice(id: string): Promise<NoticeRead> {
   return data;
 }
 
-/** Idempotent: acknowledging twice is not an error. Answers no body. */
+/** Idempotent: acknowledging twice is not an error. Answers an enveloped 200 (`Acknowledged.`). */
 export async function acknowledgeNotice(id: string): Promise<void> {
   await apiClient.post<unknown>(endpoints.notices.acknowledge(id));
 }

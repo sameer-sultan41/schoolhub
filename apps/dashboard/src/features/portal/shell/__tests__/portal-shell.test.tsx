@@ -15,10 +15,11 @@ import { PortalShell } from "../portal-shell";
 
 const mockPush = jest.fn();
 const mockUseParams = jest.fn();
+const mockPathname = jest.fn();
 
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush, replace: jest.fn() }),
-  usePathname: () => `/portal/${AYESHA_ID}`,
+  usePathname: () => mockPathname() as string,
   useParams: () => mockUseParams() as unknown,
 }));
 
@@ -35,6 +36,7 @@ describe("PortalShell", () => {
     mockPush.mockReset();
     mockFetchDashboard.mockReset();
     mockUseParams.mockReturnValue({ studentId: AYESHA_ID });
+    mockPathname.mockReturnValue(`/portal/${AYESHA_ID}`);
   });
 
   it("child switcher lists only summary children", async () => {
@@ -89,6 +91,32 @@ describe("PortalShell", () => {
     expect(await screen.findByRole("link", { name: "Fees" })).toHaveAttribute(
       "href",
       `/portal/${AYESHA_ID}/fees`,
+    );
+  });
+
+  it("marks only one tab current on a child's subpage", async () => {
+    mockPathname.mockReturnValue(`/portal/${AYESHA_ID}/fees`);
+    mockFetchDashboard.mockResolvedValue(portalDashboard());
+
+    renderWithProviders(<PortalShell>content</PortalShell>);
+
+    expect(await screen.findByRole("link", { name: "Fees" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    const nav = screen.getByRole("navigation", { name: "Portal sections" });
+    expect(within(nav).getAllByRole("link", { current: "page" })).toHaveLength(1);
+    expect(within(nav).getByRole("link", { name: "Overview" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("marks Overview current on the child's own page", async () => {
+    mockFetchDashboard.mockResolvedValue(portalDashboard());
+
+    renderWithProviders(<PortalShell>content</PortalShell>);
+
+    expect(await screen.findByRole("link", { name: "Overview" })).toHaveAttribute(
+      "aria-current",
+      "page",
     );
   });
 

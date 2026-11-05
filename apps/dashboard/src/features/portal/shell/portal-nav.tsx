@@ -28,7 +28,11 @@ export function PortalNav({ modules, studentId }: PortalNavProps) {
     <nav aria-label={t("label")} className="border-b border-border">
       <ul className="-mb-px flex gap-1 overflow-x-auto">
         {portalNavItems(modules, studentId).map((item) => {
-          const isCurrent = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          // Overview is the parent of every child tab, so it matches exactly; the rest by prefix.
+          const isCurrent =
+            item.labelKey === "overview"
+              ? pathname === item.href
+              : pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
             <li key={item.href}>
               <Link

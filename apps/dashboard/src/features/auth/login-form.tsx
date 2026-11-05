@@ -15,7 +15,7 @@ import {
   FormMessage,
   Input,
 } from "@schoolhub/ui";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff } from "lucide-react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
@@ -25,7 +25,7 @@ import { Paths } from "@/config/paths";
 import { env } from "@/lib/env";
 import { homePathFor } from "@/lib/home-path";
 import { parseTenantSlug } from "@/lib/host";
-import { getQueryClient, queryKeys } from "@/lib/query-client";
+import { queryKeys } from "@/lib/query-client";
 import { ApiError, Services } from "@/services";
 import { loginSchema, type LoginValues } from "@/services/modules/auth/auth.schema";
 
@@ -33,6 +33,7 @@ export function LoginForm() {
   const t = useTranslations("auth.login");
   const tErrors = useTranslations("errors");
   const router = useRouter();
+  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const [passwordVisible, setPasswordVisible] = useState(false);
 
@@ -46,7 +47,9 @@ export function LoginForm() {
     mutationFn: Services.auth.login,
     onSuccess: (data) => {
       // Fire-and-forget: the redirect below does not need the cache to have settled first.
-      void getQueryClient().invalidateQueries({ queryKey: queryKeys.session() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.session() });
+      // A fresh login never reads a previous identity: the gate would route on a stale user.
+      queryClient.removeQueries({ queryKey: queryKeys.currentUser() });
       const next = searchParams.get("next");
       // The auth layout's own logo links to /dashboard (unconditionally, next= or not),
       // so Next's Router Cache may already hold that route resolving to the pre-login

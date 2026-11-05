@@ -222,6 +222,21 @@ describe("decimalFormat", () => {
 });
 
 describe("saveBlob", () => {
+  // jsdom has neither method, so restoring means putting back whatever descriptor (or none) was there.
+  const original = {
+    createObjectURL: Object.getOwnPropertyDescriptor(URL, "createObjectURL"),
+    revokeObjectURL: Object.getOwnPropertyDescriptor(URL, "revokeObjectURL"),
+  };
+
+  afterEach(() => {
+    for (const [name, descriptor] of Object.entries(original)) {
+      if (descriptor) Object.defineProperty(URL, name, descriptor);
+      else Reflect.deleteProperty(URL, name);
+    }
+    jest.restoreAllMocks();
+    jest.useRealTimers();
+  });
+
   it("saves the blob under the given filename through a transient object URL", () => {
     jest.useFakeTimers();
     const createObjectURL = jest.fn().mockReturnValue("blob:receipt");
@@ -242,7 +257,5 @@ describe("saveBlob", () => {
     expect(revokeObjectURL).not.toHaveBeenCalled();
     jest.runAllTimers();
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:receipt");
-    click.mockRestore();
-    jest.useRealTimers();
   });
 });

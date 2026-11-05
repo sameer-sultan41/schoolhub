@@ -3,11 +3,9 @@
 import type { ReactNode } from "react";
 import { Badge, Button } from "@schoolhub/ui";
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
 
 import { LoadErrorCard } from "@/components/load-error-card";
-import { Paths } from "@/config/paths";
-import { Services } from "@/services";
+import { useSignOut } from "@/hooks/use-sign-out";
 import { usePortalSummary } from "@/features/portal/use-portal-summary";
 import { ChildSwitcher } from "./child-switcher";
 import { PortalNav } from "./portal-nav";
@@ -17,21 +15,9 @@ import { useSelectedChild } from "./use-selected-child";
  * Kept apart from the staff `Shell`: no sidebar, and every tab comes from `summary.modules`. */
 export function PortalShell({ children }: { children: ReactNode }) {
   const t = useTranslations("portal.shell");
-  const router = useRouter();
+  const signOut = useSignOut();
   const summary = usePortalSummary();
   const { studentId } = useSelectedChild(summary.data?.children);
-
-  function signOut() {
-    // `logout` rethrows anything unexpected; the user still always reaches /login.
-    void Services.auth
-      .logout()
-      .catch((error: unknown) => {
-        console.error("Sign-out request failed unexpectedly:", error);
-      })
-      .finally(() => {
-        router.replace(Paths.LOGIN);
-      });
-  }
 
   const unread = summary.data?.unread_notifications ?? 0;
 
