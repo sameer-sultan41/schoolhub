@@ -47,7 +47,7 @@ class ModuleCard(NamedTuple):
 
 #: Each tab's module, the list/view key its owning module reads it under, and its flag.
 MODULE_CARDS: dict[str, ModuleCard] = {
-    "attendance": ModuleCard("attendance.student-attendance.view", "module.attendance"),
+    "attendance": ModuleCard(attendance_services.STUDENT_ATTENDANCE_VIEW_KEY, "module.attendance"),
     "fees": ModuleCard(fees_services.INVOICE_VIEW_KEY, "module.fees_finance"),
     "examinations": ModuleCard(examinations_services.RESULT_VIEW_KEY, "module.examinations"),
     "communication": ModuleCard("communication.thread.view", COMMUNICATION_FEATURE),
@@ -108,7 +108,7 @@ def build_dashboard(*, user, today: datetime.date | None = None) -> dict:
     children = portal_children(user)
     ids = [child.pk for child in children]
 
-    attendance = _attendance_cards(ids, today=today) if modules["attendance"] else None
+    attendance = _attendance_cards(user, ids, today=today) if modules["attendance"] else None
     fees = _fees_cards(user, ids) if modules["fees"] else None
     results = _latest_results(user, ids) if modules["examinations"] else None
 
@@ -145,10 +145,14 @@ def _student_summary(student: Student) -> dict:
     }
 
 
-def _attendance_cards(ids: list[uuid.UUID], *, today: datetime.date) -> dict[uuid.UUID, dict]:
-    """Today's status and the month's rate, counted by attendance's own report. Two queries."""
-    month = attendance_services.student_month_summary(students=ids, month=today)
-    statuses = attendance_services.student_day_status(students=ids, on_date=today)
+def _attendance_cards(user, ids: list[uuid.UUID], *, today: datetime.date) -> dict[uuid.UUID, dict]:
+    """Today's status and the month's rate, over the rows attendance itself shows the caller.
+
+    Counted by attendance's own report. Two queries.
+    """
+    rows = attendance_services.visible_attendance(user)
+    month = attendance_services.student_month_summary(rows=rows, students=ids, month=today)
+    statuses = attendance_services.student_day_status(rows=rows, students=ids, on_date=today)
     cards = {}
     for student_id in ids:
         row = month.get(student_id)

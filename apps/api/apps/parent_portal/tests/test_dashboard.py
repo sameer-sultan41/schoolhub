@@ -25,7 +25,12 @@ from apps.examinations.tests.factories import ResultFactory
 from apps.fees_finance.models import InvoiceStatus
 from apps.fees_finance.tests.factories import FeeInvoiceFactory
 from apps.parent_portal.tests.base import GUARDIAN_KEYS, TODAY, URL, ParentPortalTestCase
-from apps.school_organization.tests.factories import UserFactory, authenticate, grant
+from apps.school_organization.tests.factories import (
+    CampusFactory,
+    UserFactory,
+    authenticate,
+    grant,
+)
 from apps.student_management.models import StudentGuardian
 from apps.timetable.tests.factories import PeriodFactory, disable_feature
 from core.rbac.models import RecordScope
@@ -312,6 +317,34 @@ class AttendanceCardTests(ParentPortalTestCase):
 
         self.assertEqual(
             card,
+            {
+                "today": None,
+                "month_percentage": None,
+                "month_present_days": 0,
+                "month_counted_days": 0,
+            },
+        )
+
+    def test_attendance_card_respects_attendance_scope(self) -> None:
+        # The attendance key at another campus's scope: the module is readable, the child is not.
+        with tenant_context(self.tenant.id):
+            other_campus = CampusFactory(tenant=self.tenant)
+        keys = tuple(key for key in GUARDIAN_KEYS if key != "attendance.student-attendance.view")
+        user = self.make_guardian(self.students[0], keys=keys)
+        grant(
+            user,
+            "attendance.student-attendance.view",
+            scope=RecordScope.CAMPUS,
+            scope_ref=other_campus.pk,
+            is_restricted_principal=True,
+        )
+        self.mark(TODAY, AttendanceStatus.PRESENT)
+
+        data = self.dashboard(user)
+
+        self.assertTrue(data["modules"]["attendance"])
+        self.assertEqual(
+            data["children"][0]["attendance"],
             {
                 "today": None,
                 "month_percentage": None,

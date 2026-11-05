@@ -198,9 +198,9 @@ class StudentAttendanceViewSet(
     # owns it and takes precedence over this fallback, which is left None so a
     # mistaken single-column reading cannot silently apply instead.
     scope_own_field = None
-    scope_campus_field = "section__campus_id"
+    scope_campus_field = services.STUDENT_ATTENDANCE_CAMPUS_FIELD
     required_feature = FEATURE
-    required_permission = "attendance.student-attendance.view"
+    required_permission = services.STUDENT_ATTENDANCE_VIEW_KEY
     # The register and `my-registers` are the marking screen's reads, so they take
     # the marking key: a reader who cannot submit has no use for the roster form.
     required_permission_map = {
@@ -227,11 +227,13 @@ class StudentAttendanceViewSet(
         return super().get_permissions()
 
     def get_queryset(self):
-        return (
+        queryset = (
             super()
             .get_queryset()
             .select_related("student", "section", "academic_session", "period")
         )
+        # One visibility rule, shared with the parent portal's attendance card.
+        return services.visible_attendance(self.request.user, queryset=queryset)
 
     @extend_schema(
         summary="Mark a section's register for one date",
@@ -517,7 +519,7 @@ class AttendanceCorrectionViewSet(
         """
         rows = StudentAttendance.objects.alive().select_related("student", "period", "section")
         for permission in (
-            "attendance.student-attendance.view",
+            services.STUDENT_ATTENDANCE_VIEW_KEY,
             route_permission(self.request, self),
         ):
             rows = scope_queryset(
