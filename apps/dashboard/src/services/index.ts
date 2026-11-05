@@ -207,6 +207,7 @@ export type {
 
 export type {
   NotificationCategory,
+  NotificationPriority,
   NotificationRecord,
   NotificationsQuery,
 } from "./modules/notifications";
