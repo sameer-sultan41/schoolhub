@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Badge, Calendar, Card, CardContent, EmptyState, Skeleton } from "@schoolhub/ui";
-import { endOfMonth, format, isSameMonth, parseISO, startOfMonth } from "date-fns";
+import { endOfMonth, isSameMonth, parseISO, startOfMonth } from "date-fns";
 import { CalendarDays } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -108,7 +108,11 @@ export function PortalAttendance() {
           ) : (
             <table className="w-full text-sm">
               <caption className="sr-only">
-                {t("caption", { month: format(month, "MMMM yyyy") })}
+                {t("caption", {
+                  month: new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(
+                    month,
+                  ),
+                })}
               </caption>
               <tbody>
                 {dayList.map(([date, status]) => (

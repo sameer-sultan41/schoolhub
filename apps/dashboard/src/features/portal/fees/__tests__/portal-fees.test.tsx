@@ -1,3 +1,4 @@
+import { ApiError } from "@schoolhub/api-client";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -28,6 +29,7 @@ jest.mock("@/lib/helpers", () => ({
 }));
 
 jest.mock("@/services", () => ({
+  ApiError: jest.requireActual<{ ApiError: unknown }>("@schoolhub/api-client").ApiError,
   Services: {
     feeInvoices: { listFeeInvoices: jest.fn(), fetchFeeInvoice: jest.fn() },
     receipts: { listReceipts: jest.fn(), downloadReceipt: jest.fn() },
@@ -147,7 +149,34 @@ describe("PortalFees", () => {
 
     renderWithProviders(<PortalInvoiceDetail />);
 
-    expect(await screen.findByText(/couldn't load this invoice/)).toBeInTheDocument();
+    expect(await screen.findByText("Invoice not found")).toBeInTheDocument();
+    expect(screen.queryByText(/couldn't load this invoice/)).not.toBeInTheDocument();
     expect(screen.queryByText("Tuition")).not.toBeInTheDocument();
+  });
+
+  it("says not found, without a retry, when the invoice answers 404", async () => {
+    mockFetchInvoice.mockRejectedValue(
+      new ApiError({
+        code: "not_found",
+        message: "Not found.",
+        status: 404,
+        url: "/fee-invoices/x",
+      }),
+    );
+
+    renderWithProviders(<PortalInvoiceDetail />);
+
+    expect(await screen.findByText("Invoice not found")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+  });
+
+  it("offers Try again for a transport failure", async () => {
+    mockFetchInvoice.mockRejectedValue(new Error("network down"));
+
+    renderWithProviders(<PortalInvoiceDetail />);
+
+    expect(await screen.findByText(/couldn't load this invoice/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.queryByText("Invoice not found")).not.toBeInTheDocument();
   });
 });

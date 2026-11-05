@@ -11,7 +11,7 @@ import { LoadErrorCard } from "@/components/load-error-card";
 import { Paths } from "@/config/paths";
 import { formatDate } from "@/lib/helpers";
 import { queryKeys } from "@/lib/query-client";
-import { Services } from "@/services";
+import { ApiError, Services } from "@/services";
 import { PARENT_PORTAL_QUERY_MODULE } from "@/services/modules/parent-portal/parent-portal-constant";
 import { formatDecimal } from "@/features/portal/format-decimal";
 import { FEE_STATUS_BADGE, FEE_STATUS_LABEL_KEY } from "./fee-status";
@@ -30,7 +30,21 @@ export function PortalInvoiceDetail() {
   });
 
   if (query.isPending) return <Skeleton className="h-64 w-full" />;
-  if (query.isError || query.data.student !== studentId) {
+  // A missing invoice, or one that is another child's, is "not found" (never confirm it exists);
+  // only a transport failure is worth retrying.
+  const notFound =
+    (query.isError && query.error instanceof ApiError && query.error.isNotFound) ||
+    (query.isSuccess && query.data.student !== studentId);
+  if (notFound) {
+    return (
+      <EmptyState
+        icon={Receipt}
+        title={t("detail.notFoundTitle")}
+        description={t("detail.notFoundDescription")}
+      />
+    );
+  }
+  if (query.isError) {
     return (
       <LoadErrorCard
         message={t("detail.loadError")}

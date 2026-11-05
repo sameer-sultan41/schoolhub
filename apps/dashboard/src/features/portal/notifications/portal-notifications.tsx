@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Alert, Badge, Button, Card, CardContent, EmptyState, Skeleton } from "@schoolhub/ui";
 import { Bell } from "lucide-react";
@@ -69,7 +69,11 @@ export function PortalNotifications() {
     onSuccess: invalidate,
   });
   const newest = newestCreatedAt(rows);
-  const formatter = new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" });
+  const hasUnread = rows.some((row) => row.read_at === null);
+  const formatter = useMemo(
+    () => new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }),
+    [locale],
+  );
 
   return (
     <section className="space-y-4">
@@ -91,7 +95,7 @@ export function PortalNotifications() {
           />
           <Button
             variant="outline"
-            disabled={newest === undefined}
+            disabled={!hasUnread}
             isLoading={markAll.isPending}
             loadingLabel={t("markingAll")}
             onClick={() => {

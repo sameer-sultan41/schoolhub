@@ -2138,7 +2138,8 @@
         "nextDue": "next due {date}"
       },
       "result": {
-        "title": "Latest result"
+        "title": "Latest result",
+        "percentage": "{value}%"
       }
     },
     "attendance": {
@@ -2188,6 +2189,8 @@
         "title": "Invoice {number}",
         "dates": "Issued {issued}, due {due}",
         "loadError": "We couldn't load this invoice. Please try again.",
+        "notFoundTitle": "Invoice not found",
+        "notFoundDescription": "This invoice doesn't exist or isn't one of this child's.",
         "linesCaption": "Invoice lines",
         "description": "Description",
         "amount": "Amount",
@@ -2208,6 +2211,7 @@
       "emptyTitle": "No results published",
       "emptyDescription": "Results appear here once the school publishes them.",
       "published": "Published {date}",
+      "percentage": "{value}%",
       "marks": "{obtained} of {max} marks",
       "rank": "rank {rank} in section",
       "outcome": {

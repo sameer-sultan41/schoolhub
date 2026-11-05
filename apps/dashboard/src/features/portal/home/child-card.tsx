@@ -88,7 +88,7 @@ export function ChildCard({ child, linked = true }: { child: PortalChild; linked
               <p className="text-xs text-muted-foreground">{t("result.title")}</p>
               <p className="font-medium">{result.exam_name}</p>
               <p className="text-xs text-muted-foreground tabular-nums">
-                {formatDecimal(locale, result.percentage, 1)}%
+                {t("result.percentage", { value: formatDecimal(locale, result.percentage, 1) })}
                 {result.grade ? ` · ${result.grade}` : ""}
               </p>
             </Link>

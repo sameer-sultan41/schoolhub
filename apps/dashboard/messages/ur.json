@@ -2138,7 +2138,8 @@
         "nextDue": "اگلی تاریخ {date}"
       },
       "result": {
-        "title": "تازہ ترین نتیجہ"
+        "title": "تازہ ترین نتیجہ",
+        "percentage": "{value}%"
       }
     },
     "attendance": {
@@ -2188,6 +2189,8 @@
         "title": "انوائس {number}",
         "dates": "اجرا {issued}، آخری تاریخ {due}",
         "loadError": "ہم یہ انوائس لوڈ نہیں کر سکے۔ براہ کرم دوبارہ کوشش کریں۔",
+        "notFoundTitle": "انوائس نہیں ملی",
+        "notFoundDescription": "یہ انوائس موجود نہیں ہے یا اس بچے کی نہیں ہے۔",
         "linesCaption": "انوائس کی مدات",
         "description": "تفصیل",
         "amount": "رقم",
@@ -2208,6 +2211,7 @@
       "emptyTitle": "کوئی نتیجہ شائع نہیں ہوا",
       "emptyDescription": "اسکول کے شائع کرنے پر نتائج یہاں نظر آئیں گے۔",
       "published": "شائع شدہ {date}",
+      "percentage": "{value}%",
       "marks": "{max} میں سے {obtained} نمبر",
       "rank": "سیکشن میں {rank} واں نمبر",
       "outcome": {

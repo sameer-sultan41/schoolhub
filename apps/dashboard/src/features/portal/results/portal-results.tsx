@@ -108,7 +108,7 @@ export function PortalResults() {
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-lg font-semibold tabular-nums">
-                          {formatDecimal(locale, result.percentage, 1)}%
+                          {t("percentage", { value: formatDecimal(locale, result.percentage, 1) })}
                         </span>
                         {result.grade ? <Badge variant="primary">{result.grade}</Badge> : null}
                         <Badge variant={RESULT_OUTCOME_BADGE[result.outcome]} appearance="light">

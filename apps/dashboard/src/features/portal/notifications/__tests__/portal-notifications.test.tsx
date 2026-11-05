@@ -100,6 +100,17 @@ describe("PortalNotifications", () => {
     });
   });
 
+  it("disables Mark all read when nothing on screen is unread", async () => {
+    mockList.mockResolvedValue(
+      cursorPage([notificationRecord(FIRST, { read_at: "2026-11-04T10:00:00Z" })]),
+    );
+
+    renderWithProviders(<PortalNotifications />);
+
+    await screen.findByRole("button", { name: /Invoice issued/ });
+    expect(screen.getByRole("button", { name: "Mark all read" })).toBeDisabled();
+  });
+
   it("filters by read state", async () => {
     mockList.mockResolvedValue(cursorPage([notificationRecord(FIRST)]));
     const user = userEvent.setup();
