@@ -27,6 +27,8 @@ import {
  * (`apps/parent_portal/management/commands/seed_e2e_portal.py`): the comms guardian is
  * linked to the comms student, who has attendance for today, one outstanding invoice, one
  * published result and one notice needing acknowledgement.
+ * The "today" attendance row is dated on seeding, so on a long-lived local DB it goes stale
+ * until the next re-seed.
  *
  * Endpoints covered: `GET /parent-portal/dashboard`, `GET /timetables/my?student_id=`,
  * `GET /notifications`, `GET /notifications:unread-count`, `POST /notifications/{id}:mark-read`,
@@ -154,12 +156,12 @@ test.describe("parent portal (live API)", () => {
     expect(attendance.month_present_days).toBe(row.present_days);
     expect(Number(attendance.month_percentage)).toBe(row.attendance_rate);
 
-    // The inbox count on the summary is the inbox's own figure. Other tests in this file can
-    // add a reply notification at any moment, so it is read as a lower bound, not equality.
+    // Other tests in this file add and mark-read notifications in parallel, so the two counts
+    // are not compared; both read the same service (`unread_notification_count`) server-side.
     const unread = (await guardian.get<UnreadCount>("/notifications:unread-count")).data.unread;
     // The seeded notice's notification is never marked read, so there is at least one.
     expect(dashboard.unread_notifications).toBeGreaterThan(0);
-    expect(dashboard.unread_notifications).toBeLessThanOrEqual(unread);
+    expect(unread).toBeGreaterThan(0);
   });
 
   test("a child the guardian is not linked to is a 404, and their own child's week is served", async ({
