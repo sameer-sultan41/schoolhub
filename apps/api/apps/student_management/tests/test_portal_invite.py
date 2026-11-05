@@ -304,7 +304,11 @@ class PortalInviteTests(StudentManagementAPITestCase):
         second = self.client.post(f"/api/v1/guardians/{self.guardian.pk}:invite", **headers)
 
         self.assertEqual(first.status_code, status.HTTP_200_OK, first.json())
-        self.assertEqual(second.json(), first.json())
+        # A replay is a new request, so its envelope carries a fresh request_id; the
+        # payload and message are what it repeats (as the other replay tests compare).
+        self.assertEqual(second.status_code, status.HTTP_200_OK, second.json())
+        self.assertEqual(second.json()["data"], first.json()["data"])
+        self.assertEqual(second.json()["meta"]["message"], first.json()["meta"]["message"])
         with tenant_context(self.tenant.id):
             self.guardian.refresh_from_db()
             self.assertEqual(Invitation.objects.filter(user_id=self.guardian.user_id).count(), 1)
@@ -366,8 +370,13 @@ class PortalInviteTests(StudentManagementAPITestCase):
             self.assertEqual(response.status_code, status.HTTP_200_OK)
             return len(captured)
 
+        urls = ("/api/v1/guardians", "/api/v1/students")
         add_rows()
-        baseline = {url: queries(url) for url in ("/api/v1/guardians", "/api/v1/students")}
+        # Warm the RBAC and feature-flag caches first: the first request of a test pays
+        # for those lookups, which would make the baseline larger than any later count.
+        for url in urls:
+            queries(url)
+        baseline = {url: queries(url) for url in urls}
         for _ in range(3):
             add_rows()
 
