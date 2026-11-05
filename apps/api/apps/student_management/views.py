@@ -449,8 +449,8 @@ class GuardianViewSet(
         "partial_update": "students.guardian.update",
         "invite": PORTAL_INVITE,
     }
-    # `principal` holds the invite key but not `students.guardian.view`, so `:invite`
-    # finds the guardian under its own key's scope alone.
+    # `:invite` finds the guardian under its own key's scope alone, so a role holding the
+    # invite key without `students.guardian.view` can still invite.
     scope_read_exempt_actions = frozenset({"invite"})
     # A guardian has no campus of its own; scope through the students they are
     # linked to. distinct() because that traversal is one-to-many.

@@ -287,13 +287,18 @@ class PortalInviteTests(StudentManagementAPITestCase):
         self.assertEqual(self.invite_guardian().status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(self.invite_student().status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_principal_can_invite_a_guardian_without_the_guardian_view_key(self) -> None:
-        """§4 grants the invite key to `principal`, who does not hold `students.guardian.view`."""
+    def test_principal_can_view_a_guardian_and_invite_them_from_it(self) -> None:
+        """§4 gives `principal` both keys the Guardians tab's invite button needs."""
         grant_default_role(self.user, "principal")
+
+        detail = self.client.get(f"/api/v1/guardians/{self.guardian.pk}")
+        self.assertEqual(detail.status_code, status.HTTP_200_OK, detail.json())
+        self.assertEqual(detail.json()["data"]["portal_status"], "none")
 
         response = self.invite_guardian()
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json()["data"], {"portal_status": "invited"})
 
     def test_foreign_guardian_invite_is_404(self) -> None:
         self.allow(INVITE_KEY)

@@ -147,7 +147,9 @@ registry.register(
 registry.register(
     "students.guardian.view",
     "View guardians and their links to students.",
-    (*GUARDIAN_MANAGERS, "reception"),
+    # `principal` too, so the Guardians tab, where the guardian portal invite lives, reaches
+    # the role that holds `students.portal-account.invite`.
+    (*GUARDIAN_MANAGERS, "reception", "principal"),
 )
 registry.register(
     "students.guardian.create",

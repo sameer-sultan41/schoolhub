@@ -45,7 +45,7 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 | `students.student.withdraw` | Initiate withdrawal | `school_admin` |
 | `students.withdrawal.approve` | Approve withdrawal after clearance checks | `principal`, `school_owner` |
 | `students.document.view` / `.create` / `.verify` / `.delete` | Manage & verify student documents | `school_admin`, `admission_staff`; view & verify also `principal` (dev/e2e-seeded tenants only — see docs/deferred-work.md) |
-| `students.guardian.view` / `.create` / `.update` | Manage guardians & links | `school_admin`, `admission_staff`, `reception` (view) |
+| `students.guardian.view` / `.create` / `.update` | Manage guardians & links | `school_admin`, `admission_staff`; `reception`, `principal` (view) |
 | `students.portal-account.invite` | Invite a guardian or student to the portal by email, or resend the invitation | `school_admin`, `principal` |
 | `students.id-card.generate` | Generate student ID cards (single/batch) | `school_admin`, `it_admin` |
 
@@ -389,9 +389,8 @@ student sheet's Profile tab has a **Portal account** row and each guardian card 
 tab shows its own: a `portal_status` badge (labelled through `students.portal.status`, never the
 raw value) and, for a holder of `students.portal-account.invite`, **Invite to portal** (`none`,
 `inactive`) or **Resend invitation** (`invited`, `expired`, `send_failed`); none once `active`. A
-guardian's invite is one click; a student's asks for the email. The guardian's button lives only
-on the Guardians tab, which needs `students.guardian.view`: `principal` holds the invite key but not
-that one today, so the API lets a principal invite a guardian while the dashboard shows them no
-button (pending a decision on the principal's grants). The 409 codes are mapped by string
+guardian's invite is one click; a student's asks for the email. The guardian's button lives on the
+Guardians tab, which needs `students.guardian.view`; `principal` holds that key and the invite key,
+so principals see the Guardians tab and the guardian invite button. The 409 codes are mapped by string
 (they are not in `API_ERROR_CODES`, the `audience_changed` precedent). Mocked Playwright coverage
 is `e2e/tests/dashboard/account-invitations.spec.ts`; what was left out is in `deferred-work.md`.

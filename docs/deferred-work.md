@@ -73,10 +73,6 @@ either this file or `project-status.md`.
     account that was once active keeps its own address. `portal_status` cannot tell those two
     `inactive` cases apart, so the dialog's hint names both; a status that did would let the
     dialog skip the field for the second.
-  - **A principal sees no guardian invite button.** `principal` holds
-    `students.portal-account.invite` but not `students.guardian.view`, and the button lives only
-    on the Guardians tab, which needs the latter. The API accepts the principal's invite. Waiting
-    on the user's decision whether `principal` gets `students.guardian.view` or the button moves.
   - **SSO** (Google or Microsoft sign-in for a school). Accounts sign in with a password only.
   - **Students sign in with the username on their ID card** (`auth.login.identifierHint`), but
     an invited student sets a password for their email address; nothing issues or resets a
