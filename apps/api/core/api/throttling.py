@@ -59,7 +59,7 @@ class PublicFormThrottle(SimpleRateThrottle):
 
 
 class PasswordResetIPThrottle(SimpleRateThrottle):
-    """Per-IP bucket for the emailed-link endpoints (password reset, invitation accept/preview).
+    """Per-IP bucket for password reset and its confirm.
 
     Separate from `AuthEndpointThrottle` so a burst here cannot lock a school out of login.
     """
@@ -70,11 +70,24 @@ class PasswordResetIPThrottle(SimpleRateThrottle):
         return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
 
 
+class InvitationIPThrottle(SimpleRateThrottle):
+    """Per-IP bucket for invitation preview and accept, apart from the reset buckets.
+
+    Sized for a school onboarding many people behind one NAT (a campus network, a mobile
+    carrier), and separate so a burst of reset requests cannot block invite acceptance.
+    """
+
+    scope = "invitation_ip"
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
+
+
 class PasswordResetEmailThrottle(SimpleRateThrottle):
     """Per-account bucket: caps reset emails to one address at one school, from any IP.
 
     The key is a SHA-256 of the school slug and the normalised email, so the cache never
-    holds an address. A body with no email (accept, preview, confirm) is not counted here.
+    holds an address. Applied to the reset request only.
     """
 
     scope = "password_reset_email"

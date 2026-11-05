@@ -17,19 +17,16 @@ escapes the HTML part.
 
 from __future__ import annotations
 
-import smtplib
-
 from core.notifications.adapters import RenderedMessage, get_adapter
 from core.notifications.models import NotificationChannel
 from core.notifications.templates import NotificationTemplate
 
-# Worth another try in the send tasks: the mail server or the network was briefly
-# unavailable. Anything else (a template error, a bug) fails at once.
-TRANSIENT_EMAIL_ERRORS: tuple[type[BaseException], ...] = (
-    smtplib.SMTPException,
-    ConnectionError,
-    TimeoutError,
-)
+# Worth another try in the send tasks: the mail server, DNS or the network was briefly
+# unavailable. `OSError` covers all of them: `smtplib.SMTPException`, `ConnectionError`,
+# `TimeoutError` and the socket DNS-lookup error are its subclasses. A permanent SMTP refusal is
+# retried too, which costs three attempts before `send_failed`. Anything else (a template
+# error, a bug) fails at once.
+TRANSIENT_EMAIL_ERRORS: tuple[type[BaseException], ...] = (OSError,)
 MAX_EMAIL_RETRIES = 3
 
 INVITATION = NotificationTemplate(

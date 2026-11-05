@@ -6,6 +6,7 @@ from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.response import Response
 
+from core.api.throttling import PasswordResetEmailThrottle, PasswordResetIPThrottle
 from core.audit.services import record_security_event
 from core.rbac.account_links import tenant_for_slug
 from core.rbac.link_views import EmailedLinkView
@@ -18,7 +19,14 @@ from core.tenancy.context import tenant_context
 
 
 class PasswordResetView(EmailedLinkView):
-    """204 for every well-formed body, so the answer says nothing about the address."""
+    """Ask for a password-reset link by email.
+
+    Unauthenticated. Answers 204 to every well-formed body, whether or not the address
+    has an account, so the answer reveals nothing; a link goes only to an active member
+    of the named school.
+    """
+
+    throttle_classes = [PasswordResetIPThrottle, PasswordResetEmailThrottle]
 
     @extend_schema(request=PasswordResetRequestSerializer, responses={204: None})
     def post(self, request):
@@ -32,6 +40,15 @@ class PasswordResetView(EmailedLinkView):
 
 
 class PasswordResetConfirmView(EmailedLinkView):
+    """Set a new password from a reset link, and sign out every device.
+
+    Unauthenticated. A password the validators refuse is 400 `validation_error`; an
+    unusable link (wrong school, used or expired token, inactive account) is 400
+    `invalid_link`.
+    """
+
+    throttle_classes = [PasswordResetIPThrottle]
+
     @extend_schema(request=PasswordResetConfirmSerializer, responses={204: None})
     def post(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)

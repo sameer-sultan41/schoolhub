@@ -467,10 +467,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description ``AllowAny`` plus throttles, like ``LoginView``, but tenant-bound.
+         * @description Accept an invitation: set a password and activate the account.
          *
-         *     ``TenantMiddleware`` binds nothing for an anonymous caller, so the view resolves the
-         *     body's ``school`` and runs every lookup inside ``tenant_context(tenant.id)``.
+         *     Unauthenticated. A password the validators refuse is 400 `validation_error`; any
+         *     unusable link is 400 `invalid_link`.
          */
         post: operations["auth_invitations:accept_create"];
         delete?: never;
@@ -489,10 +489,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description ``AllowAny`` plus throttles, like ``LoginView``, but tenant-bound.
+         * @description Show who an invitation is for and which school sent it, before a password is set.
          *
-         *     ``TenantMiddleware`` binds nothing for an anonymous caller, so the view resolves the
-         *     body's ``school`` and runs every lookup inside ``tenant_context(tenant.id)``.
+         *     Unauthenticated. Any unusable link (unknown school, unknown, used, revoked or expired
+         *     token) is 400 `invalid_link`.
          */
         post: operations["auth_invitations:preview_create"];
         delete?: never;
@@ -559,7 +559,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description 204 for every well-formed body, so the answer says nothing about the address. */
+        /**
+         * @description Ask for a password-reset link by email.
+         *
+         *     Unauthenticated. Answers 204 to every well-formed body, whether or not the address
+         *     has an account, so the answer reveals nothing; a link goes only to an active member
+         *     of the named school.
+         */
         post: operations["auth_password_reset_create"];
         delete?: never;
         options?: never;
@@ -577,10 +583,11 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description ``AllowAny`` plus throttles, like ``LoginView``, but tenant-bound.
+         * @description Set a new password from a reset link, and sign out every device.
          *
-         *     ``TenantMiddleware`` binds nothing for an anonymous caller, so the view resolves the
-         *     body's ``school`` and runs every lookup inside ``tenant_context(tenant.id)``.
+         *     Unauthenticated. A password the validators refuse is 400 `validation_error`; an
+         *     unusable link (wrong school, used or expired token, inactive account) is 400
+         *     `invalid_link`.
          */
         post: operations["auth_password_reset:confirm_create"];
         delete?: never;

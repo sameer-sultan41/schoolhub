@@ -79,7 +79,9 @@ def _user_from_uid(tenant: Tenant, uid: str) -> User | None:
         user_id = uuid.UUID(force_str(urlsafe_base64_decode(uid)))
     except ValueError, TypeError:
         return None
-    return _active_members(tenant.id).filter(pk=user_id).first()
+    # Locked: a concurrent confirm with the same token waits, then sees the new password
+    # hash, which the token no longer matches, so a link is spent once.
+    return _active_members(tenant.id).select_for_update().filter(pk=user_id).first()
 
 
 def confirm_password_reset(*, tenant: Tenant, uid: str, token: str, new_password: str) -> User:

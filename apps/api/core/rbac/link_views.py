@@ -6,7 +6,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 
 from core.api.exceptions import InvalidLink
-from core.api.throttling import PasswordResetEmailThrottle, PasswordResetIPThrottle
+from core.api.throttling import PasswordResetIPThrottle
 from core.rbac.account_links import tenant_for_slug
 from core.tenancy.models import Tenant
 
@@ -19,7 +19,8 @@ class EmailedLinkView(APIView):
     """
 
     permission_classes = [AllowAny]
-    throttle_classes = [PasswordResetIPThrottle, PasswordResetEmailThrottle]
+    # Each endpoint declares its own buckets (ADR-0033 §8); this is only the fallback.
+    throttle_classes = [PasswordResetIPThrottle]
 
     def link_tenant(self, request, slug: str) -> Tenant:
         """The school the link names; an unknown one is the same 400 as a bad token."""

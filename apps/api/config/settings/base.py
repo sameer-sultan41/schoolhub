@@ -196,9 +196,11 @@ THROTTLE_RATES: dict[str, str] = {
     "anon": "20/min",
     "auth": "10/min",
     "public_form": "5/min",
-    # Emailed-link endpoints (password reset, invitation accept/preview): ADR-0033.
+    # Emailed-link endpoints (ADR-0033): reset per account and per IP, and a roomier
+    # per-IP bucket for invitations so onboarding behind one NAT is not starved.
     "password_reset_email": "5/hour",
     "password_reset_ip": "20/hour",
+    "invitation_ip": "60/hour",
 }
 
 REST_FRAMEWORK = {

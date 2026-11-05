@@ -29,6 +29,9 @@ from core.tenancy.context import tenant_context
 
 PREVIEW_URL = "/api/v1/auth/invitations:preview"
 ACCEPT_URL = "/api/v1/auth/invitations:accept"
+RESET_URL = "/api/v1/auth/password-reset"
+# `password_reset_ip` in THROTTLE_RATES (20/hour).
+RESET_IP_LIMIT = 20
 STRONG_PASSWORD = "test-password-accept-12345"
 
 
@@ -169,6 +172,32 @@ class InvitationTests(APITestCase):
                 PREVIEW_URL, {"school": "no-such-school", "token": token}, format="json"
             )
         )
+
+    def test_reset_burst_does_not_throttle_invitation_accept(self) -> None:
+        # One address (a school's NAT) spends its whole reset bucket; accepting an
+        # invitation from it still works, because invitations have their own bucket.
+        _, token = invite(self, self.user)
+        same_ip = {"REMOTE_ADDR": "203.0.113.7"}
+        for index in range(RESET_IP_LIMIT):
+            response = self.client.post(
+                RESET_URL,
+                {"school": self.tenant.slug, "email": f"person{index}@example.test"},
+                **same_ip,
+            )
+            self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        throttled = self.client.post(
+            RESET_URL, {"school": self.tenant.slug, "email": "one-more@example.test"}, **same_ip
+        )
+        self.assertEqual(throttled.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+        response = self.client.post(
+            ACCEPT_URL,
+            {"school": self.tenant.slug, "token": token, "password": STRONG_PASSWORD},
+            format="json",
+            **same_ip,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT, response.data)
 
     def test_unknown_token_is_400_invalid_link(self) -> None:
         self.assert_invalid_link(self.accept("not-a-real-token"))

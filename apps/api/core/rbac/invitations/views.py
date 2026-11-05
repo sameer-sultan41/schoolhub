@@ -6,6 +6,7 @@ from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.response import Response
 
+from core.api.throttling import InvitationIPThrottle
 from core.audit.services import record_security_event
 from core.rbac.invitations import services
 from core.rbac.invitations.serializers import (
@@ -18,6 +19,14 @@ from core.tenancy.context import tenant_context
 
 
 class InvitationPreviewView(EmailedLinkView):
+    """Show who an invitation is for and which school sent it, before a password is set.
+
+    Unauthenticated. Any unusable link (unknown school, unknown, used, revoked or expired
+    token) is 400 `invalid_link`.
+    """
+
+    throttle_classes = [InvitationIPThrottle]
+
     @extend_schema(request=InvitationLinkSerializer, responses={200: InvitationPreviewSerializer})
     def post(self, request):
         serializer = InvitationLinkSerializer(data=request.data)
@@ -31,6 +40,14 @@ class InvitationPreviewView(EmailedLinkView):
 
 
 class InvitationAcceptView(EmailedLinkView):
+    """Accept an invitation: set a password and activate the account.
+
+    Unauthenticated. A password the validators refuse is 400 `validation_error`; any
+    unusable link is 400 `invalid_link`.
+    """
+
+    throttle_classes = [InvitationIPThrottle]
+
     @extend_schema(request=InvitationAcceptSerializer, responses={204: None})
     def post(self, request):
         serializer = InvitationAcceptSerializer(data=request.data)

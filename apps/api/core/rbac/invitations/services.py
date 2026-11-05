@@ -52,6 +52,9 @@ def create_invitation(*, user: User, kind: str, actor_id: uuid.UUID | None) -> I
     """
     from core.rbac.invitations.tasks import send_invitation_email
 
+    # Serialises invites for one user: a concurrent second invite waits here, then its
+    # revoke sees this one's committed row, so only one invitation is ever pending.
+    User.objects.select_for_update().filter(pk=user.pk).first()
     revoke_pending_invitations(user.id)
     invitation = Invitation.objects.create(
         tenant_id=user.tenant_id,
