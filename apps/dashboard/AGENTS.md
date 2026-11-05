@@ -81,7 +81,10 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 | Validated public env | `src/lib/env.ts` |
 | Tenant branding → CSS variables | Not rebuilt since the shell reset: `Services.tenant` fetches branding, nothing applies it yet (`docs/metronic-dashboard-shell.md` backlog) |
 | Locale resolution (no locale routing) | `src/i18n/request.ts`, `messages/*.json` |
-| Route groups | `src/app/(auth)/…` unauthenticated · `src/app/(app)/…` authenticated |
+| Route groups | `src/app/(auth)/…` unauthenticated · `src/app/(app)/…` authenticated staff · `src/app/(portal)/portal/…` authenticated students and guardians ([ADR-0032](../../docs/decisions/0032-parent-portal-in-dashboard-route-group.md)) |
+| Which shell a user belongs in (staff `(app)` or portal) | `AudienceGate` in `src/components/audience-gate.tsx` wraps both layouts: it renders nothing until `/auth/me` resolves, then `router.replace`s the wrong audience to `homePathFor(user)` (`src/lib/home-path.ts`) from `/auth/me`'s `is_restricted_principal` — never sniff role slugs. The portal's chrome, nav (from the summary's `modules`, not `canAccessModule`) and child switcher are in `src/features/portal/shell/`; a portal route must never import a staff-only feature module |
+| Signing out | `useSignOut` in `src/hooks/use-sign-out.ts` (logout, clear the query cache, then `/login`), used by both shells, so the next user never sees the previous user's cached account |
+| A streamed file (a receipt PDF) | `ApiClient.downloadBlob` through a service (`Services.receipts.downloadReceipt`), then `saveBlob` in `src/lib/helpers.ts` — a bare anchor sends no bearer header |
 | Imports | `@/…` alias only — ESLint bans `../` parent-relative imports, and bans `@schoolhub/api-client` in `src/app`, `src/features`, `src/components`, `src/hooks` (import `ApiError` from `@/services`) |
 | Lint baseline | `eslint-suppressions.json` freezes existing violations and may only shrink (ADR-0014); fixing one means pruning its entry |
 

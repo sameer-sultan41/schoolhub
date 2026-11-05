@@ -1091,6 +1091,22 @@ either this file or `project-status.md`.
     and the portal had to extend it with an optional `is_restricted_principal` because the
     dashboard's auth store is typed by it (ADR-0017). Replace it with the generated type.
 
+- **Parent portal PR 2 (dashboard) left these out** (`docs/03-modules/parent-portal.md` §20 "Built
+  (dashboard, PR 2)"). The portal screens are built; the live lane needs no new journey.
+  - **Portal report-card download button.** It waits on PR #154's
+    `POST /report-cards/{id}:download`; the portal lists no report cards until then.
+  - **Receipt `format` query param.** `GET /receipts/{id}/download` takes a `format`
+    (`pdf` or `thermal`) that is not in the OpenAPI contract, because the view declares no
+    `OpenApiParameter`. The dashboard hand-types `ReceiptFormat` until it does.
+  - **Urdu review.** The `portal` namespace in `apps/dashboard/messages/ur.json` was written
+    without a native speaker and needs their review.
+  - **Inbox mark-all-read scope.** On page 2 and later, Mark all read sends that page's newest
+    `created_at` as `before`. Derive `before` from page 1 instead, so it covers everything
+    that was on screen.
+  - **Attendance legend.** The legend badges carry the status name but no colour swatch.
+  - **Receipts lookup.** Receipts are fetched tenant-wide (up to 2000) and matched to invoices
+    by `invoice_no`. Filter by student once `/receipts` supports it.
+
 - **`eslint-plugin-playwright` for `e2e/`** (planned in the engineering-standards spec, PR 4) was
   deferred: adding a dependency means `pnpm install`, which runs PR 3's `prepare` script and
   turns the hooks on mid-PR, so pre-commit would reject the rule commit before its baseline
