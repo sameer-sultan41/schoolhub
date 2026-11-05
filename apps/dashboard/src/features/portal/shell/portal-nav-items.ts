@@ -1,6 +1,22 @@
 import { Paths } from "@/config/paths";
 import type { PortalModules } from "@/services";
 
+/** Every module off: the nav when the summary could not be read, so only the module-free tabs
+ * (notifications, settings) remain. */
+export const NO_PORTAL_MODULES: PortalModules = {
+  attendance: false,
+  fees: false,
+  examinations: false,
+  communication: false,
+  timetable: false,
+};
+
+/** Portal pages that read nothing from the summary, so a failed summary never blocks them. */
+export const SUMMARY_FREE_PATHS: readonly string[] = [
+  Paths.PORTAL_NOTIFICATIONS,
+  Paths.PORTAL_SETTINGS,
+];
+
 export interface PortalNavItem {
   /** The key under `portal.nav` in the messages. */
   labelKey:

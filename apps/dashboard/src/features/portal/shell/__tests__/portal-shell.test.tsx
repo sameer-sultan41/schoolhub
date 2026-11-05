@@ -1,3 +1,4 @@
+import { ApiError } from "@schoolhub/api-client";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -24,6 +25,7 @@ jest.mock("next/navigation", () => ({
 }));
 
 jest.mock("@/services", () => ({
+  ApiError: jest.requireActual<{ ApiError: unknown }>("@schoolhub/api-client").ApiError,
   Services: {
     parentPortal: { fetchPortalDashboard: jest.fn() },
     notifications: { fetchUnreadCount: jest.fn() },
@@ -151,5 +153,37 @@ describe("PortalShell", () => {
     await waitFor(() => {
       expect(screen.getByRole("link", { name: "Fees" })).toBeInTheDocument();
     });
+  });
+
+  it("says the portal is not enabled, with no retry, when the module is off", async () => {
+    mockFetchDashboard.mockRejectedValue(
+      new ApiError({
+        code: "module_disabled",
+        message: "This module is not enabled for your school.",
+        status: 403,
+        url: "/parent-portal/dashboard",
+      }),
+    );
+
+    renderWithProviders(<PortalShell>page body</PortalShell>);
+
+    expect(
+      await screen.findByText("The parent portal isn't enabled for your school"),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+    expect(screen.queryByText("page body")).not.toBeInTheDocument();
+  });
+
+  it("still renders the inbox, and its tab, when the summary fails", async () => {
+    mockUseParams.mockReturnValue({});
+    mockPathname.mockReturnValue("/portal/notifications");
+    mockFetchDashboard.mockRejectedValue(new Error("boom"));
+
+    renderWithProviders(<PortalShell>inbox page</PortalShell>);
+
+    expect(await screen.findByRole("link", { name: "Notifications" })).toBeInTheDocument();
+    expect(screen.getByText("inbox page")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Fees" })).not.toBeInTheDocument();
   });
 });

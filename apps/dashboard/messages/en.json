@@ -2102,7 +2102,9 @@
       "title": "Parent portal",
       "signOut": "Sign out",
       "unread": "{count, plural, one {# unread notification} other {# unread notifications}}",
-      "loadFailed": "We couldn't load your portal. Please try again."
+      "loadFailed": "We couldn't load your portal. Please try again.",
+      "disabledTitle": "The parent portal isn't enabled for your school",
+      "disabledDescription": "Your school hasn't turned the parent portal on yet. Please contact the school office."
     },
     "switcher": {
       "label": "Child",
