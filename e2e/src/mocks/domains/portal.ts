@@ -75,9 +75,15 @@ export function portalModule(store: PortalStore): MockModule {
       if (!store.receipts.some((row) => row.id === request.params["receiptId"])) {
         return fail(404, NOT_FOUND);
       }
-      // Recorded here rather than read off the browser's request: a spec cannot see a
-      // cross-origin request's own headers reliably, and the bearer is the point of the download.
-      store.downloadAuthorizations.push(request.headers["authorization"]);
+      // Like the real API, refuse an anonymous request. The dashboard keeps its token in memory
+      // and only gets one through a 401 and a refresh, which a stub that always answers 200 never
+      // provokes, so the client's own 401, refresh and replay runs here. The header each attempt
+      // carried is recorded for the spec.
+      const authorization = request.headers["authorization"];
+      store.downloadAuthorizations.push(authorization);
+      if (!authorization || !/^Bearer \S+/.test(authorization)) {
+        return fail(401, "Authentication credentials were not provided.");
+      }
       return { status: 200, body: PDF_BODY, headers: { "content-type": "application/pdf" } };
     });
 

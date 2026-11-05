@@ -154,10 +154,12 @@ test.describe("a guardian's child pages", () => {
     const sent = await request;
     expect(new URL(sent.url()).pathname).toContain(`/receipts/${PORTAL_IDS.receipt}/download`);
     expect(new URL(sent.url()).searchParams.get("format")).toBe("pdf");
-    // The header the stub saw on that GET: Playwright's own view of a cross-origin request's
-    // headers is not reliable, and a preflight (never recorded) carries none.
-    expect(store.downloadAuthorizations).toHaveLength(1);
-    expect(store.downloadAuthorizations[0]).toMatch(/^Bearer \S+/);
+    // The mocked lane holds no access token until a 401 forces a refresh, so the first attempt
+    // is anonymous, the stub refuses it, and the client refreshes and replays with the bearer.
+    expect(mockApi.countCalls("POST", "/auth/refresh")).toBe(1);
+    expect(store.downloadAuthorizations).toHaveLength(2);
+    expect(store.downloadAuthorizations[0]).toBeUndefined();
+    expect(store.downloadAuthorizations[1]).toMatch(/^Bearer \S+/);
   });
 
   test("results lists the child's published results under their term", async ({
