@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 from rest_framework import status
 
 from apps.communication.models import AudienceType, Notice, NoticeStatus
@@ -60,8 +61,8 @@ class PortalNoticeTests(CommunicationAPITestCase):
             )
             return publish_notice(notice, actor_id=self.approver.pk)
 
-    def listed_ids(self) -> list[str]:
-        response = self.client.get("/api/v1/notices")
+    def listed_ids(self, params: dict | None = None) -> list[str]:
+        response = self.client.get("/api/v1/notices", params or {})
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         return [row["id"] for row in response.data["data"]]
 
@@ -108,6 +109,43 @@ class PortalNoticeTests(CommunicationAPITestCase):
 
         self.assertEqual(mine.status_code, status.HTTP_200_OK, mine.data)
         self.assertEqual(theirs.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_guardian_cannot_filter_on_hidden_fields(self) -> None:
+        """`status` and `audience_type` are not in the portal shape, so they filter nothing."""
+        self.publish_to(self.guardian)
+        self.publish_to(self.guardian, requires_acknowledgment=True)
+        authenticate(self.client, self.guardian)
+        unfiltered = self.listed_ids()
+
+        # Every received notice is a published `custom` one, so a staff filter would empty these.
+        by_audience = self.listed_ids({"audience_type": AudienceType.ALL})
+        by_status = self.listed_ids({"status": NoticeStatus.DRAFT})
+
+        self.assertEqual(len(unfiltered), 2)
+        self.assertEqual(sorted(by_audience), sorted(unfiltered))
+        self.assertEqual(sorted(by_status), sorted(unfiltered))
+
+    def test_guardian_still_filters_on_portal_fields(self) -> None:
+        self.publish_to(self.guardian)
+        needs_ack = self.publish_to(self.guardian, requires_acknowledgment=True)
+        authenticate(self.client, self.guardian)
+
+        ids = self.listed_ids({"requires_acknowledgment": "true"})
+
+        self.assertEqual(ids, [str(needs_ack.pk)])
+
+    def test_soft_deleted_delivery_no_longer_grants_the_notice(self) -> None:
+        received = self.publish_to(self.guardian)
+        with tenant_context(self.tenant.id):
+            Notification.objects.filter(
+                user_id=self.guardian.pk, source_type="notice", source_id=received.pk
+            ).update(deleted_at=timezone.now())
+        authenticate(self.client, self.guardian)
+
+        response = self.client.get(f"/api/v1/notices/{received.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(self.listed_ids(), [])
 
     def test_portal_notice_omits_audience_and_approver(self) -> None:
         received = self.publish_to(self.guardian)

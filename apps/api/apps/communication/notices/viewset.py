@@ -27,7 +27,7 @@ from rest_framework.response import Response
 
 from apps.communication.models import Notice, NoticeStatus
 from apps.communication.notices import documents
-from apps.communication.notices.filters import NoticeFilterSet
+from apps.communication.notices.filters import NoticeFilterSet, PortalNoticeFilterSet
 from apps.communication.notices.serializers import NoticeSerializer, PortalNoticeSerializer
 from apps.communication.notices.services.acknowledge import acknowledge_notice
 from apps.communication.notices.services.publish import publish_notice
@@ -67,7 +67,6 @@ class NoticeViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     permission_classes = STAFF_PERMISSIONS
     queryset = Notice.objects
     serializer_class = NoticeSerializer
-    filterset_class = NoticeFilterSet
     search_fields = ["title", "body", "notice_no"]
     ordering_fields = ["publish_at", "created_at"]
     scope_campus_field = None
@@ -102,6 +101,11 @@ class NoticeViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
             return PortalNoticeSerializer
         return NoticeSerializer
 
+    @property
+    def filterset_class(self):
+        # Chosen like the serializer: a recipient filters only on fields they can read.
+        return PortalNoticeFilterSet if self.restricted else NoticeFilterSet
+
     def get_queryset(self):
         queryset = super().get_queryset()
         user = self.request.user
@@ -110,7 +114,8 @@ class NoticeViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         # A recipient reads published notices that reached them, whatever scope their role
         # carries, each with their own acknowledgement time in the same query.
         own_ack = (
-            Notification.objects.filter(
+            Notification.objects.alive()
+            .filter(
                 tenant_id=user.tenant_id,
                 user_id=user.pk,
                 source_type="notice",
