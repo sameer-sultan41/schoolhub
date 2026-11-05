@@ -95,6 +95,7 @@ from apps.attendance.serializers import (
     StaffRegisterQuerySerializer,
     StudentAttendanceSerializer,
 )
+from apps.attendance.services import STUDENT_ATTENDANCE_VIEW_KEY
 from apps.school_organization.models import AcademicSession, Department, Section
 from apps.timetable.models import Period
 from core.api.exceptions import DomainRuleViolation
@@ -200,7 +201,7 @@ class StudentAttendanceViewSet(
     scope_own_field = None
     scope_campus_field = services.STUDENT_ATTENDANCE_CAMPUS_FIELD
     required_feature = FEATURE
-    required_permission = services.STUDENT_ATTENDANCE_VIEW_KEY
+    required_permission = STUDENT_ATTENDANCE_VIEW_KEY
     # The register and `my-registers` are the marking screen's reads, so they take
     # the marking key: a reader who cannot submit has no use for the roster form.
     required_permission_map = {
@@ -519,7 +520,7 @@ class AttendanceCorrectionViewSet(
         """
         rows = StudentAttendance.objects.alive().select_related("student", "period", "section")
         for permission in (
-            services.STUDENT_ATTENDANCE_VIEW_KEY,
+            STUDENT_ATTENDANCE_VIEW_KEY,
             route_permission(self.request, self),
         ):
             rows = scope_queryset(
