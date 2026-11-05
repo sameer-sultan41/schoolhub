@@ -26,7 +26,15 @@ from apps.student_management.tests.factories import GuardianFactory
 from core.audit.models import AuditLog
 from core.rbac.cache import evict_rbac_caches
 from core.rbac.invitations.eligibility import is_eligible
-from core.rbac.models import Invitation, Permission, Role, RolePermission, User, UserRole
+from core.rbac.models import (
+    Invitation,
+    Permission,
+    RecordScope,
+    Role,
+    RolePermission,
+    User,
+    UserRole,
+)
 from core.rbac.registry import registry
 from core.rbac.seeding import ensure_role_with_permissions
 from core.rbac.tests.link_helpers import invited_user
@@ -578,6 +586,82 @@ class InviteRoleGrantTests(StaffManagementAPITestCase):
         with tenant_context(self.tenant.id):
             staff.refresh_from_db()
         self.assertTrue(UserRole.objects.filter(user_id=staff.user_id, role=narrower).exists())
+
+    def test_a_key_held_only_at_campus_scope_cannot_be_granted_school_wide(self) -> None:
+        """The new assignment is scope `all`, so the inviter must hold each key at `all`."""
+        self.allow("staff.staff.update", "staff.staff.view")
+        grant(
+            self.user,
+            "students.student.view",
+            scope=RecordScope.CAMPUS,
+            scope_ref=self.campus.pk,
+        )
+        reader = grant(UserFactory(tenant=self.tenant), "students.student.view")
+        with tenant_context(self.tenant.id):
+            staff = StaffFactory(tenant=self.tenant, campus=self.campus, email="c@example.test")
+
+        response = self.invite(staff, reader)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN, response.json())
+        self.assertEqual(
+            response.json()["error"]["message"],
+            "You can't give a role with permissions you don't hold yourself.",
+        )
+        with tenant_context(self.tenant.id):
+            staff.refresh_from_db()
+        self.assertIsNone(staff.user_id)
+        self.assertFalse(User.objects.filter(tenant=self.tenant, email=staff.email).exists())
+
+    def test_the_same_key_held_school_wide_can_be_granted(self) -> None:
+        """Positive control for the campus case: only the scope differs."""
+        self.allow("staff.staff.update", "staff.staff.view")
+        grant(self.user, "students.student.view", scope=RecordScope.ALL)
+        reader = grant(UserFactory(tenant=self.tenant), "students.student.view")
+        with tenant_context(self.tenant.id):
+            staff = StaffFactory(tenant=self.tenant, campus=self.campus, email="a@example.test")
+
+        response = self.invite(staff, reader)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        with tenant_context(self.tenant.id):
+            staff.refresh_from_db()
+        self.assertTrue(UserRole.objects.filter(user_id=staff.user_id, role=reader).exists())
+
+    def test_a_rehire_reinvite_refuses_a_role_beyond_the_inviter(self) -> None:
+        """The re-hire branch assigns roles too, so it runs the same check."""
+        self.allow("staff.staff.update", "staff.staff.view", "staff.staff.delete")
+        wider = grant(UserFactory(tenant=self.tenant), "exams.exam.view")
+        with tenant_context(self.tenant.id):
+            staff = StaffFactory(tenant=self.tenant, campus=self.campus, email="re@example.test")
+        invite_url = f"/api/v1/staff/{staff.pk}:invite"
+        self.assertEqual(self.client.post(invite_url, {}, format="json").status_code, 200)
+        with tenant_context(self.tenant.id):
+            staff.refresh_from_db()
+            user = User.objects.get(pk=staff.user_id)
+        user.set_password("test-password-old-life-456")
+        user.is_active = True
+        user.save()
+        exited = self.client.post(
+            f"/api/v1/staff/{staff.pk}:exit",
+            {"exit_date": "2026-06-01", "exit_reason": "Resigned."},
+            format="json",
+        )
+        self.assertEqual(exited.status_code, status.HTTP_200_OK, exited.json())
+        with tenant_context(self.tenant.id):
+            Staff.objects.filter(pk=staff.pk).update(
+                employment_status=EmploymentStatus.ACTIVE, exit_date=None, exit_reason=None
+            )
+
+        response = self.invite(staff, wider)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN, response.json())
+        self.assertFalse(UserRole.objects.filter(user=user, role=wider).exists())
+        with tenant_context(self.tenant.id):
+            self.assertFalse(
+                Invitation.objects.filter(
+                    user=user, accepted_at__isnull=True, revoked_at__isnull=True
+                ).exists()
+            )
 
 
 class InviteReaddressTests(StaffManagementAPITestCase):

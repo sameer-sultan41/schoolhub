@@ -21,8 +21,8 @@ from core.rbac.invitations.services import (
     create_invited_user,
     readdress_pending_account,
 )
-from core.rbac.models import InvitationKind, Permission, Role, User, UserRole
-from core.rbac.permissions import effective_permission_keys, live_restricted_role_assignments
+from core.rbac.models import InvitationKind, Permission, RecordScope, Role, User, UserRole
+from core.rbac.permissions import live_restricted_role_assignments, scope_grants
 
 if TYPE_CHECKING:
     from django.contrib.auth.base_user import AbstractBaseUser
@@ -142,8 +142,10 @@ def _grantable_roles(
 
     A role_id may name either a tenant-custom role or a platform-seeded default role
     (Role.tenant is null for those); both are valid targets. A student or guardian role is
-    never a staff role, and a role carrying a key the actor does not hold would let the
-    actor grant more than they have, so either is a 403.
+    never a staff role, and a role carrying a key the actor does not hold at scope ``all``
+    would let the actor grant more than they have, so either is a 403. Scope ``all`` because
+    the new assignment is made at ``all``: a campus-scoped holder of a key cannot hand out
+    the whole school's reach of it.
     """
     roles = list(
         Role.objects.filter(pk__in=role_ids).filter(Q(tenant_id=tenant_id) | Q(tenant__isnull=True))
@@ -155,7 +157,10 @@ def _grantable_roles(
     if any(role.is_restricted_principal for role in roles):
         raise PermissionDenied("A student or guardian role can't be given to a staff member.")
     granted = set(Permission.objects.filter(roles__in=roles).values_list("key", flat=True))
-    if granted - effective_permission_keys(actor):
+    held_school_wide = {
+        key for key, by_scope in scope_grants(actor).items() if RecordScope.ALL in by_scope
+    }
+    if granted - held_school_wide:
         raise PermissionDenied("You can't give a role with permissions you don't hold yourself.")
     return roles
 
