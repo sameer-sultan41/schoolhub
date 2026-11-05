@@ -3,7 +3,8 @@
 The first holds its transaction open after creating the account; the second must wait on
 the staff row lock, then find that account and resend. Without the lock the second reads
 no account, passes the email check against uncommitted data, inserts a second user with
-the same email, and fails with an IntegrityError once the first commits.
+the same email, waits on the unique index instead, and is refused (`email_in_use`) once
+the first commits.
 """
 
 from __future__ import annotations

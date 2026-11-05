@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from rest_framework import serializers
 
 from apps.student_management.portal_accounts.services import PortalStatus, portal_status_of
@@ -14,11 +16,11 @@ class PortalStatusField(serializers.ChoiceField):
     costs one query, through the same expression.
     """
 
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, **kwargs: Any) -> None:
         super().__init__(choices=PortalStatus.choices, read_only=True, source="*", **kwargs)
 
-    def to_representation(self, value) -> str:
-        status = getattr(value, "portal_status", None)
+    def to_representation(self, value: Any) -> str:
+        status: str | None = getattr(value, "portal_status", None)
         return status if status is not None else portal_status_of(value)
 
 

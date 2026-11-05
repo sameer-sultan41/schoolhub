@@ -16,6 +16,7 @@ from rest_framework import status
 from apps.school_organization.tests.factories import (
     TenantFactory,
     UserFactory,
+    grant,
     grant_default_role,
 )
 from apps.student_management.models import Guardian
@@ -34,6 +35,8 @@ from apps.student_management.tests.portal_helpers import (
     linked_guardian,
     portal_account,
 )
+from core.rbac.invitations.exceptions import EmailInUse
+from core.rbac.invitations.services import create_invited_user
 from core.rbac.models import Invitation, User, UserRole
 from core.rbac.tests.link_helpers import LINK_SETTINGS
 from core.tenancy.context import tenant_atomic, tenant_context
@@ -235,6 +238,77 @@ class PortalInviteTests(StudentManagementAPITestCase):
             foreign.refresh_from_db()
         self.assertIsNone(foreign.user_id)
 
+    def test_patch_ignores_user_id(self) -> None:
+        """Only `:invite` links an account; a PATCH could point a person at someone's login."""
+        self.allow(
+            "students.guardian.update", GUARDIAN_VIEW, "students.student.update", STUDENT_VIEW
+        )
+        owner = UserFactory(tenant=self.tenant)
+
+        for url in (
+            f"/api/v1/guardians/{self.guardian.pk}",
+            f"/api/v1/students/{self.student.pk}",
+        ):
+            with self.subTest(url=url):
+                response = self.client.patch(
+                    url, {"user_id": str(owner.pk), "first_name": "Renamed"}, format="json"
+                )
+                self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+                self.assertIsNone(response.json()["data"]["user_id"])
+        with tenant_context(self.tenant.id):
+            self.guardian.refresh_from_db()
+            self.student.refresh_from_db()
+        self.assertIsNone(self.guardian.user_id)
+        self.assertIsNone(self.student.user_id)
+
+    def test_student_invite_on_a_guardian_linked_user_is_409_and_adds_no_role(self) -> None:
+        """A link made before `user_id` was read-only gets no portal role from `:invite`."""
+        self.allow(INVITE_KEY, STUDENT_VIEW)
+        with tenant_context(self.tenant.id):
+            guardian_user = portal_account(self.guardian, active=False)
+            self.student.user_id = guardian_user.pk
+            self.student.save(update_fields=["user_id"])
+        roles_before = list(UserRole.objects.filter(user=guardian_user).values_list("pk"))
+
+        response = self.invite_student()
+
+        self.assert_conflict(response, "email_in_use")
+        self.assertEqual(
+            list(UserRole.objects.filter(user=guardian_user).values_list("pk")), roles_before
+        )
+        with tenant_context(self.tenant.id):
+            self.assertFalse(Invitation.objects.filter(user=guardian_user).exists())
+
+    def test_invite_on_a_staff_role_holder_is_409(self) -> None:
+        self.allow(INVITE_KEY)
+        with tenant_context(self.tenant.id):
+            staff_user = portal_account(self.guardian, active=False)
+        grant(staff_user, "students.student.view")
+
+        self.assert_conflict(self.invite_guardian(), "email_in_use")
+
+    def test_a_lost_email_race_is_409_not_500(self) -> None:
+        """Two invites for different people with one address both pass the free-email check."""
+        UserFactory(tenant=self.tenant, email="taken@example.test")
+
+        with self.assertRaises(EmailInUse):
+            create_invited_user(
+                tenant_id=self.tenant.id, email="taken@example.test", first_name="A", last_name="B"
+            )
+
+    def test_invite_replays_with_the_same_idempotency_key(self) -> None:
+        self.allow(INVITE_KEY)
+        headers = {"HTTP_IDEMPOTENCY_KEY": "invite-guardian-once"}
+
+        first = self.client.post(f"/api/v1/guardians/{self.guardian.pk}:invite", **headers)
+        second = self.client.post(f"/api/v1/guardians/{self.guardian.pk}:invite", **headers)
+
+        self.assertEqual(first.status_code, status.HTTP_200_OK, first.json())
+        self.assertEqual(second.json(), first.json())
+        with tenant_context(self.tenant.id):
+            self.guardian.refresh_from_db()
+            self.assertEqual(Invitation.objects.filter(user_id=self.guardian.user_id).count(), 1)
+
     def test_portal_status_reports_each_account_state(self) -> None:
         self.allow(GUARDIAN_VIEW)
         now = timezone.now()
@@ -340,8 +414,8 @@ class ConcurrentPortalInviteTests(TransactionTestCase):
 
     The first holds its transaction open after creating the account; the second must wait
     on the guardian row lock and then resend. Without the lock the second reads no account,
-    inserts a second user with the same email, waits on the unique index instead, and
-    fails with an IntegrityError once the first commits.
+    inserts a second user with the same email, waits on the unique index instead, and is
+    refused (`email_in_use`, from the unique index) once the first commits.
     """
 
     def setUp(self) -> None:

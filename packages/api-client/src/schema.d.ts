@@ -8105,7 +8105,7 @@ export interface components {
              * Format: uuid
              * @description users(id) — portal account, tenant-checked at write time.
              */
-            user_id?: string | null;
+            readonly user_id: string | null;
             readonly portal_status: components["schemas"]["PortalStatusEnum"];
             first_name: string;
             last_name: string;
@@ -10117,7 +10117,7 @@ export interface components {
              * Format: uuid
              * @description users(id) — portal account, tenant-checked at write time.
              */
-            user_id?: string | null;
+            readonly user_id?: string | null;
             readonly portal_status?: components["schemas"]["PortalStatusEnum"];
             first_name?: string;
             last_name?: string;
@@ -10571,7 +10571,7 @@ export interface components {
              * Format: uuid
              * @description users(id) — portal account, tenant-checked at write time.
              */
-            user_id?: string | null;
+            readonly user_id?: string | null;
             readonly portal_status?: components["schemas"]["PortalStatusEnum"];
             first_name?: string;
             last_name?: string;
@@ -11736,7 +11736,7 @@ export interface components {
              * Format: uuid
              * @description users(id) — portal account, tenant-checked at write time.
              */
-            user_id?: string | null;
+            readonly user_id: string | null;
             readonly portal_status: components["schemas"]["PortalStatusEnum"];
             first_name: string;
             last_name: string;

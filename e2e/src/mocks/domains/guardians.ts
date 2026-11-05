@@ -5,6 +5,7 @@ import type { MockModule } from "../router";
 export interface Guardian {
   id: string;
   user_id: string | null;
+  portal_status: "none" | "invited" | "expired" | "send_failed" | "active" | "inactive";
   first_name: string;
   last_name: string;
   phone: string;
@@ -42,6 +43,7 @@ export function buildGuardian(overrides: Partial<Guardian> = {}): Guardian {
   return {
     id: id("guardian"),
     user_id: null,
+    portal_status: "none",
     first_name: "Ayesha",
     last_name: "Raza",
     phone: "0300-0000000",

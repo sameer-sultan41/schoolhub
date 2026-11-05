@@ -65,6 +65,7 @@ function guardianRecord(overrides: Partial<GuardianRecord> = {}): GuardianRecord
   return {
     id: "g1",
     user_id: null,
+    portal_status: "none",
     first_name: "Ayesha",
     last_name: "Raza",
     phone: "0300-0000000",

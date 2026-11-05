@@ -18113,6 +18113,7 @@ components:
         user_id:
           type: string
           format: uuid
+          readOnly: true
           nullable: true
           description: users(id) — portal account, tenant-checked at write time.
         portal_status:
@@ -18182,6 +18183,7 @@ components:
       - photo_url
       - portal_status
       - updated_at
+      - user_id
     HolidayCalendar:
       type: object
       description: |-
@@ -22177,6 +22179,7 @@ components:
         user_id:
           type: string
           format: uuid
+          readOnly: true
           nullable: true
           description: users(id) — portal account, tenant-checked at write time.
         portal_status:
@@ -23081,6 +23084,7 @@ components:
         user_id:
           type: string
           format: uuid
+          readOnly: true
           nullable: true
           description: users(id) — portal account, tenant-checked at write time.
         portal_status:
@@ -25540,6 +25544,7 @@ components:
         user_id:
           type: string
           format: uuid
+          readOnly: true
           nullable: true
           description: users(id) — portal account, tenant-checked at write time.
         portal_status:
@@ -25639,6 +25644,7 @@ components:
       - portal_status
       - status
       - updated_at
+      - user_id
     StudentAttendance:
       type: object
       description: '`student_attendance` — read shape. Rows are written by `:bulk-mark`.'

@@ -110,3 +110,7 @@ account also calls `revoke_pending_invitations` and `revoke_refresh_tokens`. The
 English-only until `User` gains a locale, and they are not visible in the notification inbox
 or delivery log, by design: the audit trail records `auth.invitation.sent`,
 `auth.invitation.send_failed`, `auth.invitation.accepted` and `auth.password.reset` instead.
+
+No migration seeds a tenant's `guardian` or `student` role, so the first portal invite at a
+school creates it (restricted, holding the registry's keys for the slug, through
+`ensure_role_with_permissions`) unless the school or the platform already has one.

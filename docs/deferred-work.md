@@ -26,6 +26,11 @@ either this file or `project-status.md`.
   - **No re-hire path for staff.** `employment_status` moves only through `:exit`, so the
     `invite_staff` branch for an inactive account with a usable password (re-hired after an
     exit) is reachable only by changing the status outside the API. Its test sets it directly.
+  - **Account emails are unique per school only case-sensitively.** `users_unique_email_per_tenant`
+    is on `email` as typed, while invites check `email__iexact`. Two invites racing with
+    differently cased spellings of one address can both succeed; the same spelling is caught
+    by the index and reported as 409 `email_in_use` (`create_invited_user`). The fix is a
+    unique constraint on `Lower("email")` per tenant, after deduplicating existing rows.
   - **Suspended students keep their portal account.** Eligibility needs `status == active`
     and an active enrollment, so accepting an invitation refuses a suspended student and
     their guardian's link to them. Nothing sets `suspended`, though, so no hook deactivates

@@ -14,13 +14,16 @@ back in, and accepting re-checks eligibility.
 
 from __future__ import annotations
 
+import logging
 import uuid
+from collections.abc import Callable
 
 from django.db import transaction
 from django.db.models import (
     Case,
     CharField,
     Exists,
+    F,
     OuterRef,
     QuerySet,
     Subquery,
@@ -41,24 +44,26 @@ from apps.student_management.models import (
     StudentStatus,
 )
 from core.audit.services import record_task_security_event
-from core.rbac.invitations.exceptions import AlreadyActive, NotEligible, PortalDisabled
+from core.rbac.invitations.exceptions import (
+    AlreadyActive,
+    EmailInUse,
+    NotEligible,
+    PortalDisabled,
+)
 from core.rbac.invitations.services import (
     assert_email_free,
     create_invitation,
+    create_invited_user,
     revoke_pending_invitations,
 )
-from core.rbac.models import (
-    Invitation,
-    InvitationKind,
-    Permission,
-    Role,
-    RolePermission,
-    User,
-    UserRole,
-)
+from core.rbac.models import Invitation, InvitationKind, Role, User, UserRole
 from core.rbac.registry import registry
+from core.rbac.seeding import ensure_role_with_permissions
 from core.rbac.sessions import revoke_refresh_tokens
 from core.tenancy.features import is_feature_enabled
+from core.tenancy.models import Tenant
+
+logger = logging.getLogger(__name__)
 
 DEACTIVATED_EVENT = "auth.account.deactivated"
 
@@ -95,6 +100,8 @@ def student_is_eligible(student: Student) -> bool:
 
 
 def guardian_is_eligible(guardian: Guardian) -> bool:
+    if guardian.deleted_at is not None:
+        return False
     return (
         StudentGuardian.objects.alive()
         .filter(
@@ -125,7 +132,6 @@ def student_invitation_eligible(user: User) -> bool:
 # ---------------------------------------------------------------------------
 
 
-@transaction.atomic
 def invite_to_portal(
     *, person: Guardian | Student, actor_id: uuid.UUID, email: str | None = None
 ) -> User:
@@ -137,12 +143,45 @@ def invite_to_portal(
     comes from ``Guardian.email``. Once an account is linked, a resend goes to that
     account's own address and ``email`` is not used.
     """
-    is_guardian = isinstance(person, Guardian)
-    model = Guardian if is_guardian else Student
-    person = model.objects.select_for_update().get(pk=person.pk)
-    tenant_id = person.tenant_id
-    kind = InvitationKind.GUARDIAN if is_guardian else InvitationKind.STUDENT
+    if isinstance(person, Guardian):
+        return _invite_guardian(guardian=person, actor_id=actor_id)
+    return _invite_student(student=person, actor_id=actor_id, email=email)
 
+
+@transaction.atomic
+def _invite_guardian(*, guardian: Guardian, actor_id: uuid.UUID) -> User:
+    locked = Guardian.objects.select_for_update().get(pk=guardian.pk)
+    return _invite(
+        person=locked,
+        kind=InvitationKind.GUARDIAN,
+        address=locked.email,
+        eligible=lambda: guardian_is_eligible(locked),
+        actor_id=actor_id,
+    )
+
+
+@transaction.atomic
+def _invite_student(*, student: Student, actor_id: uuid.UUID, email: str | None) -> User:
+    locked = Student.objects.select_for_update().get(pk=student.pk)
+    return _invite(
+        person=locked,
+        kind=InvitationKind.STUDENT,
+        address=email,
+        eligible=lambda: student_is_eligible(locked),
+        actor_id=actor_id,
+    )
+
+
+def _invite(
+    *,
+    person: Guardian | Student,
+    kind: str,
+    address: str | None,
+    eligible: Callable[[], bool],
+    actor_id: uuid.UUID,
+) -> User:
+    """The shared steps, on a ``person`` already locked by the caller."""
+    tenant_id: uuid.UUID = person.tenant_id
     if not is_feature_enabled(PORTAL_FEATURE, tenant_id=tenant_id):
         raise PortalDisabled()
 
@@ -152,37 +191,36 @@ def invite_to_portal(
             pk=person.user_id, tenant_id=tenant_id, deleted_at__isnull=True
         ).first()
 
-    address = ""
+    resolved = (address or "").strip()
     if user is None:
-        address = ((person.email if is_guardian else email) or "").strip()
-        if not address:
+        if not resolved:
             raise serializers.ValidationError(
                 {"email": ["An email address is required to invite this person."]}
             )
-        assert_email_free(tenant_id=tenant_id, email=address)
+        assert_email_free(tenant_id=tenant_id, email=resolved)
+    elif not is_portal_account(user.pk, kind=kind):
+        # Linked to staff, to the other kind of person, or holding a staff role: inviting
+        # would add a restricted role to someone else's login.
+        raise EmailInUse()
 
-    eligible = guardian_is_eligible(person) if is_guardian else student_is_eligible(person)
-    if not eligible:
+    if not eligible():
         raise NotEligible()
 
     if user is not None:
         if user.is_active:
             raise AlreadyActive()
-        _assign_portal_role(user=user, slug=kind)
+        _assign_portal_role(user=user, slug=kind, tenant_id=tenant_id)
         create_invitation(user=user, kind=kind, actor_id=actor_id)
         return user
 
-    user = User.objects.create(
+    user = create_invited_user(
         tenant_id=tenant_id,
-        email=address,
+        email=resolved,
         first_name=person.first_name,
         last_name=person.last_name,
         phone=getattr(person, "phone", "") or "",
-        is_active=False,
     )
-    user.set_unusable_password()
-    user.save(update_fields=["password"])
-    _assign_portal_role(user=user, slug=kind)
+    _assign_portal_role(user=user, slug=kind, tenant_id=tenant_id)
 
     person.user_id = user.pk
     person.updated_by = actor_id
@@ -192,12 +230,30 @@ def invite_to_portal(
     return user
 
 
+def is_portal_account(user_id: uuid.UUID, *, kind: str) -> bool:
+    """Whether ``user_id`` is purely a ``kind`` portal login, safe to invite or deactivate.
+
+    Not if it is linked to a staff row or to a person of the other kind, or holds any role
+    that is not a restricted principal. Since ``user_id`` became read-only this only
+    guards rows linked before that, or by hand; deactivating or adding a role to such an account
+    would act on someone else's login.
+    """
+    from apps.staff_management.models import Staff
+
+    other: type[Guardian] | type[Student] = Student if kind == InvitationKind.GUARDIAN else Guardian
+    return not (
+        Staff.objects.alive().filter(user_id=user_id).exists()
+        or other.objects.alive().filter(user_id=user_id).exists()
+        or UserRole.objects.filter(user_id=user_id, role__is_restricted_principal=False).exists()
+    )
+
+
 def _portal_role(*, tenant_id: uuid.UUID, slug: str) -> Role:
     """The school's ``guardian``/``student`` role, created from the registry if missing.
 
     A school's own role of that slug wins over a platform default. No migration seeds
     these roles, so the first invite creates the tenant's one, restricted, holding
-    exactly the keys the registry gives the slug (as ``grant_default_role`` does in tests).
+    exactly the keys the registry gives the slug (ADR-0033).
     """
     role = (
         Role.objects.filter(slug=slug, deleted_at__isnull=True, tenant_id=tenant_id).first()
@@ -205,31 +261,19 @@ def _portal_role(*, tenant_id: uuid.UUID, slug: str) -> Role:
     )
     if role is not None:
         return role
-    role, created = Role.objects.get_or_create(
-        tenant_id=tenant_id,
-        slug=slug,
-        deleted_at=None,
-        defaults={
-            "name": slug.title(),
-            "is_default": True,
-            "is_restricted_principal": True,
-        },
+    return ensure_role_with_permissions(
+        Tenant.objects.get(pk=tenant_id),
+        slug,
+        slug.title(),
+        registry.keys_for_role(slug),
+        is_restricted_principal=True,
     )
-    if created:
-        RolePermission.objects.bulk_create(
-            [
-                RolePermission(role=role, permission=permission)
-                for permission in Permission.objects.filter(key__in=registry.keys_for_role(slug))
-            ],
-            ignore_conflicts=True,
-        )
-    return role
 
 
-def _assign_portal_role(*, user: User, slug: str) -> None:
-    role = _portal_role(tenant_id=user.tenant_id, slug=slug)
+def _assign_portal_role(*, user: User, slug: str, tenant_id: uuid.UUID) -> None:
+    role = _portal_role(tenant_id=tenant_id, slug=slug)
     if not UserRole.objects.filter(user=user, role=role).exists():
-        UserRole.objects.create(user=user, role=role, tenant_id=user.tenant_id)
+        UserRole.objects.create(user=user, role=role, tenant_id=tenant_id)
 
 
 # ---------------------------------------------------------------------------
@@ -237,21 +281,30 @@ def _assign_portal_role(*, user: User, slug: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _person_of[P: (Guardian, Student)](model: type[P], user_id: uuid.UUID) -> P | None:
+    """The row linked to ``user_id``, a live one first; a deleted one still counts."""
+    return (
+        model.objects.filter(user_id=user_id)
+        .order_by(F("deleted_at").asc(nulls_first=True))
+        .first()
+    )
+
+
 @transaction.atomic
 def sync_portal_account(user_id: uuid.UUID | None, *, actor_id: uuid.UUID | None = None) -> None:
     """Deactivate ``user_id``'s portal account if its guardian or student lost eligibility.
 
     Deactivates, revokes pending invitations and blacklists refresh tokens. Never
-    reactivates: a person who becomes eligible again is re-invited. A user who is neither
-    a guardian nor a student here (staff) is left alone. Call it with the tenant bound,
-    after the change that may have ended eligibility.
+    reactivates: a person who becomes eligible again is re-invited. A user who is not
+    purely a guardian or student login (staff, or both kinds) is left alone and logged.
+    Call it with the tenant bound, after the change that may have ended eligibility.
     """
     if user_id is None:
         return
-    guardian = Guardian.objects.alive().filter(user_id=user_id).first()
-    student = None if guardian else Student.objects.alive().filter(user_id=user_id).first()
+    guardian = _person_of(Guardian, user_id)
+    student = None if guardian else _person_of(Student, user_id)
     if guardian is not None:
-        if guardian_is_eligible(guardian):
+        if guardian.deleted_at is None and guardian_is_eligible(guardian):
             return
         tenant_id, kind = guardian.tenant_id, InvitationKind.GUARDIAN
     elif student is not None:
@@ -261,14 +314,23 @@ def sync_portal_account(user_id: uuid.UUID | None, *, actor_id: uuid.UUID | None
     else:
         return
 
-    user = User.objects.select_for_update().filter(pk=user_id, tenant_id=tenant_id).first()
-    if user is None:
+    if not is_portal_account(user_id, kind=kind):
+        logger.warning(
+            "portal sync skipped user %s: linked to staff or to another person, or holds a "
+            "staff role",
+            user_id,
+        )
         return
+    if not User.objects.filter(pk=user_id, tenant_id=tenant_id).exists():
+        return
+
+    # Invitations before the user row: the order `accept_invitation` locks them in.
+    revoked = revoke_pending_invitations(user_id)
+    user = User.objects.select_for_update().get(pk=user_id)
     was_active = user.is_active
     if was_active:
         user.is_active = False
         user.save(update_fields=["is_active", "updated_at"])
-    revoked = revoke_pending_invitations(user.pk)
     revoke_refresh_tokens(user.pk)
     if was_active or revoked:
         record_task_security_event(
@@ -286,8 +348,8 @@ def sync_student_portal_accounts(
 ) -> None:
     """Re-check the student's own account and every linked guardian's after a change.
 
-    For withdrawal, outgoing transfer and graduation: the student loses eligibility, and
-    a guardian whose only portal-enabled child this was does too.
+    For withdrawal, outgoing transfer, graduation and deletion: the student loses
+    eligibility, and a guardian whose only portal-enabled child this was does too.
     """
     student_user = Student.objects.filter(pk=student_id).values_list("user_id", flat=True)
     guardian_users = (

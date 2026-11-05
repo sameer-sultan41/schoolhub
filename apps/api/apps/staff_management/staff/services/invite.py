@@ -11,8 +11,13 @@ from django.db.models import Q
 from apps.staff_management import notifications
 from apps.staff_management.models import EmploymentStatus, Staff
 from core.api.exceptions import Conflict, DomainRuleViolation
+from core.rbac.cache import evict_rbac_caches
 from core.rbac.invitations.exceptions import AlreadyActive
-from core.rbac.invitations.services import assert_email_free, create_invitation
+from core.rbac.invitations.services import (
+    assert_email_free,
+    create_invitation,
+    create_invited_user,
+)
 from core.rbac.models import InvitationKind, Role, User, UserRole
 
 logger = logging.getLogger(__name__)
@@ -75,16 +80,13 @@ def invite_staff(*, staff: Staff, role_ids: list[uuid.UUID], actor_id: uuid.UUID
         )
     assert_email_free(tenant_id=staff.tenant_id, email=staff.email)
 
-    user = User.objects.create(
+    user = create_invited_user(
         tenant_id=staff.tenant_id,
         email=staff.email,
         first_name=staff.first_name,
         last_name=staff.last_name,
         phone=staff.phone,
-        is_active=False,
     )
-    user.set_unusable_password()
-    user.save(update_fields=["password"])
     _assign_roles(user=user, role_ids=role_ids, tenant_id=staff.tenant_id)
 
     staff.user_id = user.pk
@@ -114,6 +116,8 @@ def _assign_roles(*, user: User, role_ids: list[uuid.UUID], tenant_id: uuid.UUID
             if role.pk not in held
         ]
     )
+    # `bulk_create` sends no post_save, so core/rbac/signals.py never hears of these.
+    evict_rbac_caches([user.pk])
 
 
 def _notify_invited(*, staff: Staff, user_id: uuid.UUID) -> None:

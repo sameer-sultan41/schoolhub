@@ -17,7 +17,7 @@ from rest_framework import status
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.school_organization.tests.factories import UserFactory
+from apps.school_organization.tests.factories import UserFactory, grant
 from apps.student_management.models import StudentGuardian, TransferType
 from apps.student_management.services import (
     approve_transfer,
@@ -181,6 +181,32 @@ class PortalRevocationTests(StudentManagementAPITestCase):
 
         self.assert_deactivated(self.student_user)
         self.assert_deactivated(self.guardian_user)
+
+    def test_deleting_a_student_deactivates(self) -> None:
+        self.allow("students.student.delete", "students.student.view")
+
+        response = self.client.delete(f"/api/v1/students/{self.student.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assert_deactivated(self.student_user)
+        self.assert_deactivated(self.guardian_user)
+
+    def test_sync_leaves_a_staff_user_linked_to_a_guardian_active(self) -> None:
+        """A link made before `user_id` became read-only must never deactivate staff."""
+        self.allow(*GUARDIAN_UPDATE)
+        staff_user = UserFactory(tenant=self.tenant)
+        grant(staff_user, "students.student.view")
+        with tenant_context(self.tenant.id):
+            self.guardian.user_id = staff_user.pk
+            self.guardian.save(update_fields=["user_id"])
+        jti = RefreshToken.for_user(staff_user)["jti"]
+
+        response = self.revoke_link(self.link)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        staff_user.refresh_from_db()
+        self.assertTrue(staff_user.is_active)
+        self.assertFalse(BlacklistedToken.objects.filter(token__jti=jti).exists())
 
     def test_reinvite_after_deactivation_reenables_on_accept(self) -> None:
         self.allow(*GUARDIAN_UPDATE, INVITE_KEY)

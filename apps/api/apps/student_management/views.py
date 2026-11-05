@@ -76,6 +76,7 @@ from apps.student_management.services import (
     link_guardian,
     reject_transfer,
     request_transfer,
+    sync_student_portal_accounts,
     update_guardian_link,
     verify_document,
     withdraw_student,
@@ -227,7 +228,6 @@ class StudentViewSet(TenantModelViewSet):
             last_name=data["last_name"],
             preferred_name=data.get("preferred_name"),
             gender=data["gender"],
-            user_id=data.get("user_id"),
             photo_file=data.get("photo_file"),
             blood_group=data.get("blood_group"),
             nationality=data.get("nationality"),
@@ -358,8 +358,8 @@ class StudentViewSet(TenantModelViewSet):
                 and self.holds_key_for_row(request.user, WITHDRAWAL_APPROVE, student),
                 actor_id=request.user.pk,
             )
-            # The row's `portal_status` was annotated before the withdrawal deactivated it.
-            vars(withdrawn).pop("portal_status", None)
+            # Re-read: the row's `portal_status` annotation predates the deactivation.
+            withdrawn = self.get_queryset().get(pk=withdrawn.pk)
             after = self.get_serializer(withdrawn).data
             record_audit(
                 request,
@@ -387,10 +387,25 @@ class StudentViewSet(TenantModelViewSet):
         student = self.get_object()
         payload = StudentInviteRequestSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
-        invite_to_portal(
-            person=student, actor_id=request.user.pk, email=payload.validated_data["email"]
+
+        def execute() -> Response:
+            invite_to_portal(
+                person=student, actor_id=request.user.pk, email=payload.validated_data["email"]
+            )
+            return _invite_response(request, student)
+
+        return replay_or_execute(
+            tenant_id=request.tenant.pk,
+            key=request.headers.get("Idempotency-Key"),
+            endpoint="students:invite",
+            request_data=request.data,
+            execute=execute,
         )
-        return _invite_response(request, student)
+
+    def perform_destroy(self, instance: Student) -> None:
+        """Soft-delete, then end the portal accounts that hung on this student (ADR-0033)."""
+        super().perform_destroy(instance)
+        sync_student_portal_accounts(student_id=instance.pk, actor_id=self.request.user.pk)
 
     @extend_schema(
         summary="Assemble a student's chronological history",
@@ -451,8 +466,18 @@ class GuardianViewSet(
     )
     def invite(self, request, pk=None) -> Response:
         guardian = self.get_object()
-        invite_to_portal(person=guardian, actor_id=request.user.pk)
-        return _invite_response(request, guardian)
+
+        def execute() -> Response:
+            invite_to_portal(person=guardian, actor_id=request.user.pk)
+            return _invite_response(request, guardian)
+
+        return replay_or_execute(
+            tenant_id=request.tenant.pk,
+            key=request.headers.get("Idempotency-Key"),
+            endpoint="guardians:invite",
+            request_data=request.data,
+            execute=execute,
+        )
 
 
 def _invite_response(request: Request, person: Guardian | Student) -> Response:

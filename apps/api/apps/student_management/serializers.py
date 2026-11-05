@@ -134,7 +134,9 @@ class StudentSerializer(serializers.ModelSerializer):
         # drop it before validate() ever saw it).
         # status: moves only through the enroll/change-section/withdraw
         # colon-actions added in a later PR, not a plain PATCH.
-        read_only_fields = (*READ_ONLY_FIELDS, "status")
+        # user_id: set only by `:invite` (ADR-0033). A writable link let a caller point a
+        # student at someone else's login, which invite and revocation then acted on.
+        read_only_fields = (*READ_ONLY_FIELDS, "status", "user_id")
         list_serializer_class = StudentListSerializer
 
     def validate_admission_number(self, value: str) -> str:
@@ -149,20 +151,6 @@ class StudentSerializer(serializers.ModelSerializer):
         if value is not None and value.pk != getattr(self.instance, "photo_file_id", None):
             assert_file_usable(file=value, purpose=uploads.STUDENT_PHOTO.key)
         return value
-
-    def validate_user_id(self, value: uuid.UUID | None) -> uuid.UUID | None:
-        """Re-run on every write, not just create.
-
-        ``TenantScopedViewSetMixin.perform_update`` saves a PATCH straight through
-        with no tenant-ownership recheck of its own (unlike ``perform_create``,
-        which every model here bypasses in favor of a service function precisely
-        so this kind of check has somewhere to live). ``user_id`` is a plain UUID
-        column, not a ForeignKey — see the model docstring — so without this,
-        DRF's auto-generated field accepts any syntactically valid UUID, including
-        another tenant's user id.
-        """
-        tenant = self.context["request"].tenant
-        return services.resolve_tenant_user_id(user_id=value, tenant_id=tenant.pk)
 
     # No validate() override for cross-row create-time rules (duplicates,
     # admission-number allocation): those need a transaction and an actor id a
@@ -263,7 +251,8 @@ class GuardianSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
-        read_only_fields = READ_ONLY_FIELDS
+        # user_id: set only by `:invite` (ADR-0033), never by a plain write.
+        read_only_fields = (*READ_ONLY_FIELDS, "user_id")
 
     def validate_photo_file_id(self, value: File | None) -> File | None:
         # Mirrors Student.photo_file/StudentDocument.file: a resolved File still

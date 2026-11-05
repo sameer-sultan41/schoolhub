@@ -15,7 +15,7 @@ from datetime import timedelta
 
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -45,20 +45,41 @@ def revoke_pending_invitations(user_id: uuid.UUID) -> int:
     ).update(revoked_at=timezone.now(), updated_at=timezone.now())
 
 
-def assert_email_free(
-    *, tenant_id: uuid.UUID, email: str, own_user_id: uuid.UUID | None = None
-) -> None:
-    """Refuse an invite whose email already belongs to another account at this school.
+def assert_email_free(*, tenant_id: uuid.UUID, email: str) -> None:
+    """Refuse an invite whose email already belongs to an account at this school.
 
     Linking to that account instead would give one login two identities: a student invite
     on a guardian's email would make the guardian the student. Case-insensitive, because
     people type addresses either way.
     """
     taken = User.objects.filter(tenant_id=tenant_id, email__iexact=email, deleted_at__isnull=True)
-    if own_user_id is not None:
-        taken = taken.exclude(pk=own_user_id)
     if taken.exists():
         raise EmailInUse()
+
+
+def create_invited_user(
+    *, tenant_id: uuid.UUID, email: str, first_name: str, last_name: str, phone: str = ""
+) -> User:
+    """An inactive account with no usable password, waiting for its invitation.
+
+    Two invites for different people with one address can both pass `assert_email_free`;
+    the unique index then refuses the second, which is reported as the same 409.
+    """
+    try:
+        with transaction.atomic():
+            user = User.objects.create(
+                tenant_id=tenant_id,
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+                phone=phone,
+                is_active=False,
+            )
+    except IntegrityError as exc:
+        raise EmailInUse() from exc
+    user.set_unusable_password()
+    user.save(update_fields=["password"])
+    return user
 
 
 def create_invitation(*, user: User, kind: str, actor_id: uuid.UUID | None) -> Invitation:
