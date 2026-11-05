@@ -37,6 +37,37 @@ either this file or `project-status.md`.
     an account on suspension. Add a `sync_student_portal_accounts` call when a suspend
     action is built.
 
+- **Account invitations: what Task A3 (the dashboard) left out** (PR A,
+  `feat/account-invitations`; [ADR-0033](decisions/0033-account-invitations-and-auth-email.md)).
+  - **An admin screen listing invitations, with revoke.** Invitations are rows with a status,
+    but no endpoint lists them and nothing revokes one except a resend (which revokes the
+    earlier one) or ending the person's eligibility. A school sees an invite's state only as a
+    student's or guardian's `portal_status` badge.
+  - **The staff record has no pending signal.** `StaffSerializer` exposes `user_id` but not
+    whether that account is still pending, so the staff sheet reads "Resend invitation" for any
+    linked account and lets the API's 409 `already_active` say when it is not. A
+    `portal_status`-style field on staff would let the sheet show the state up front.
+  - **Staff invites assign no roles from the dashboard.** `:invite` takes `role_ids`, but the
+    dashboard has no role picker or role-management screen yet, so it sends none: a staff member
+    invited from the sheet can sign in but holds no role until one is assigned through the API.
+    Add the picker to the invite (or the role screen) when role management is built.
+  - **A student resend asks for an email the server ignores.** `StudentInviteRequest.email` is
+    required on every call, but a resend goes to the account's own address. The dialog says
+    so; making `email` optional when an account is already linked would drop the field.
+  - **SSO** (Google or Microsoft sign-in for a school). Accounts sign in with a password only.
+  - **Students sign in with the username on their ID card** (`auth.login.identifierHint`), but
+    an invited student sets a password for their email address; nothing issues or resets a
+    username-based login.
+  - **A staff member who is also a parent needs two accounts.** A guardian invite on a staff
+    email is a 409 `email_in_use` (the user's decision, plan "Shared email"), so the parent uses
+    a second address. Merging the two into one login with both role sets is not built.
+  - **The emailed journey has no live-lane test.** `config/settings/dev.py` hard-codes the
+    console email backend, so the compose stack never reaches Mailpit and
+    `e2e/tests/live/api/account-invitations.spec.ts` can only prove what an anonymous caller
+    sees. Make `EMAIL_BACKEND` env-driven (SMTP to Mailpit in compose and the e2e-live job),
+    then add a live journey that invites, reads the link from Mailpit's API, accepts and signs
+    in. That is an env-config change, which needs the user's go-ahead (`.env` rule).
+
 - **Record scope follow-ups left by per-role record scope** (PR A, `fix/per-role-record-scope`;
   [ADR-0031](decisions/0031-record-scope-per-role-assignment.md)). Each scope check now reads
   only the roles that grant its key. These were found on the way and left out:
@@ -865,6 +896,9 @@ either this file or `project-status.md`.
   is the onboarding flow, not the notification layer — adding
   `NotificationChannel.EMAIL` to the trigger is a one-line change once it
   lands. Documented in the same style as `core.files.File.av_scanned_at`.
+  (Since closed by [ADR-0033](decisions/0033-account-invitations-and-auth-email.md):
+  `:invite` emails a single-use set-password link through `core/rbac/auth_emails.py`, not
+  `notify()`, and the in-app `staff.invited` notification stays.)
   Two pre-existing gaps this module unblocks were also closed in the same PR:
   `Student.filter_assigned_to_user` now does the real
   `enrollments→section.class_teacher_staff_id→staff.user_id` join instead of
@@ -1059,13 +1093,6 @@ either this file or `project-status.md`.
   - **Pay now.** `POST /fee-invoices/{id}:initiate-payment` under `fees.payment.create`, a
     payment-gateway adapter and its webhook. The portal is read-only for fees (user decision):
     there is no gateway in `core/integrations` to hand off to.
-  - **Account onboarding for staff, guardians and students** (parent-portal.md §3, §19).
-    **Until it ships, only seeded guardians and students can log in to the portal.** One shared
-    `core` invitation flow: an `invitations` table holding a hashed, single-use token with a 72h
-    expiry; `POST /auth/invitations:accept {token, password}` (API-driven, so a mobile app can
-    use it, Invariant 7); resend and revoke actions; email delivery through `notify()`. Staff
-    `:invite` adopts it, and `guardians/{id}:invite` and `students/{id}:invite` are added on
-    top. Self-registration stays deferred: §19 recommends invitation-only.
   - **`platform.notification.view` for custom tenant roles.** The key's default roles are
     `ALL_TENANT_ROLES`; a role a tenant defines later does not get it, so its holders get a 403
     on the inbox until someone grants it. Role management has to grant it by default.

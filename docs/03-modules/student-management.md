@@ -46,6 +46,7 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 | `students.withdrawal.approve` | Approve withdrawal after clearance checks | `principal`, `school_owner` |
 | `students.document.view` / `.create` / `.verify` / `.delete` | Manage & verify student documents | `school_admin`, `admission_staff`; view & verify also `principal` (dev/e2e-seeded tenants only — see docs/deferred-work.md) |
 | `students.guardian.view` / `.create` / `.update` | Manage guardians & links | `school_admin`, `admission_staff`, `reception` (view) |
+| `students.portal-account.invite` | Invite a guardian or student to the portal by email, or resend the invitation | `school_admin`, `principal` |
 | `students.id-card.generate` | Generate student ID cards (single/batch) | `school_admin`, `it_admin` |
 
 ## 5. Main Features
@@ -198,6 +199,7 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - `GET/POST /api/v1/student-transfers` — filters: `student_id`. `POST /api/v1/student-transfers/{id}:approve` · `:reject` · `:complete`.
 - `GET /api/v1/students/{id}/history` — assembled timeline; documented response shape (`StudentHistoryEvent`, a discriminated union — see [ADR-0022](../decisions/0022-polymorphic-history-response-via-dict-dispatch.md)).
 - `POST /api/v1/student-imports` → `202` + job; `POST /api/v1/id-cards:generate` → `202` + job (batch PDF).
+- `POST /api/v1/guardians/{id}:invite` (no body; the guardian's email on file, a 400 on `email` when there is none) · `POST /api/v1/students/{id}:invite` (`{email}` required: a student has no email column, and a resend ignores it) — under `students.portal-account.invite`, `Idempotency-Key` supported, `{data: {portal_status}}` back. 409 `portal_disabled` (`module.parent_portal` off), `email_in_use`, `already_active` or `not_eligible`. Students and guardians carry a read-only `portal_status` (`none`, `invited`, `expired`, `send_failed`, `active`, `inactive`) and a read-only `user_id` ([ADR-0033](../decisions/0033-account-invitations-and-auth-email.md)).
 
 ## 17. Integration Requirements
 
@@ -370,3 +372,20 @@ sections is dropped once they load. Any change to search, a filter, the sort or 
 back to page 1, and a link to a page past the end gets the API's 404 and lands on page 1. Row
 selection, the dialogs and the detail sheet stay local, and the requests the directory sends are
 unchanged. Mocked Playwright coverage is `e2e/tests/dashboard/list-url-state.spec.ts`.
+
+**Portal accounts (as shipped, account-invitations PR A).** A guardian or student gets a portal
+login only through `:invite` ([ADR-0033](../decisions/0033-account-invitations-and-auth-email.md)):
+the `portal_accounts/` package creates an inactive account with the tenant's `guardian` or
+`student` role and emails a single-use link; accepting it at `/accept-invite` sets the password.
+A guardian is eligible while they hold a `has_portal_access` link to an enrolled student; a student
+while active and enrolled. Withdrawal, transfer-out, graduation and turning a link's portal access
+off re-check it, and an account that is no longer eligible is deactivated, its refresh tokens and
+pending invitations revoked. An email already on another account in the school is a 409
+`email_in_use`, so a student invite on the guardian's address links nothing. On the dashboard, the
+student sheet's Profile tab has a **Portal account** row and each guardian card on the Guardians
+tab shows its own: a `portal_status` badge (labelled through `students.portal.status`, never the
+raw value) and, for a holder of `students.portal-account.invite`, **Invite to portal** (`none`,
+`inactive`) or **Resend invitation** (`invited`, `expired`, `send_failed`); none once `active`. A
+guardian's invite is one click; a student's asks for the email. The 409 codes are mapped by string
+(they are not in `API_ERROR_CODES`, the `audience_changed` precedent). Mocked Playwright coverage
+is `e2e/tests/dashboard/account-invitations.spec.ts`; what was left out is in `deferred-work.md`.

@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-05
-- **Enforced by:** `apps/api/core/rbac/tests/test_invitations.py` (`test_invitation_token_stored_hashed_and_link_emailed`, `test_accept_refused_when_person_no_longer_eligible`, `test_send_failure_marks_invitation_send_failed`, `test_auth_email_ignores_tenant_template_override`); `core/rbac/tests/test_invitations_cross_tenant.py`; `core/rbac/tests/test_password_reset.py` (`test_reset_unknown_inactive_and_platform_email_all_204_no_email`, `test_reset_confirm_refuses_inactive_user`, `test_reset_throttled_per_email`); `core/rbac/tests/test_sessions.py` (`test_revoke_refresh_tokens_covers_a_rotated_token`); `core/rbac/tests/test_concurrency.py` (one pending invitation, one spend per reset link); `tests/test_celery_routing.py`; `tests/test_throttle_rates.py`; `tests/test_rls_coverage.py` (the `invitations` policy)
+- **Enforced by:** `apps/api/core/rbac/tests/test_invitations.py` (`test_invitation_token_stored_hashed_and_link_emailed`, `test_accept_refused_when_person_no_longer_eligible`, `test_send_failure_marks_invitation_send_failed`, `test_auth_email_ignores_tenant_template_override`); `core/rbac/tests/test_invitations_cross_tenant.py`; `core/rbac/tests/test_password_reset.py` (`test_reset_unknown_inactive_and_platform_email_all_204_no_email`, `test_reset_confirm_refuses_inactive_user`, `test_reset_throttled_per_email`); `core/rbac/tests/test_sessions.py` (`test_revoke_refresh_tokens_covers_a_rotated_token`); `core/rbac/tests/test_concurrency.py` (one pending invitation, one spend per reset link); `tests/test_celery_routing.py`; `tests/test_throttle_rates.py`; `tests/test_rls_coverage.py` (the `invitations` policy); the dashboard's `features/auth/__tests__/accept-invite-form.test.tsx` and `reset-password-form.test.tsx` (the token is cleared from the URL) and `src/__tests__/proxy.test.ts` (an emailed-link page is never redirected); `e2e/tests/live/api/account-invitations.spec.ts` (an unknown email is a 204, every unusable link the same `invalid_link`)
 
 ## Context
 
@@ -46,7 +46,10 @@ from a future mobile app (Invariant 7). Decided in plan
 6. **Links come from settings, and the token sits in the fragment.**
    `<DASHBOARD_URL_SCHEME>://<slug>.app.<PLATFORM_DOMAIN>[:<DASHBOARD_URL_PORT>]<path>#school=<slug>&token=…`.
    Browsers never send a fragment, so the token stays out of access logs and `Referer`; the
-   host never comes from the request's `Host` header.
+   host never comes from the request's `Host` header. The dashboard page reads the fragment
+   once and clears it with `history.replaceState`, so the token is not left in the address bar
+   or history; the pages set a `no-referrer` policy; and the auth proxy never redirects a
+   signed-in visitor off them, since a redirect would carry the fragment to the new URL.
 7. **Security emails do not go through `notify()`.** They are platform-only templates in
    `core/rbac/auth_emails.py`, rendered with `NotificationTemplate.render` (the same literal
    substitution) and sent through the email adapter from a Celery task on the `transactional`

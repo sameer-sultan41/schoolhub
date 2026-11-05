@@ -37,7 +37,7 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 | Permission key | Description | Default roles |
 | -------------- | ----------- | ------------- |
 | `staff.staff.view` | View staff profiles (scopes: `own`, `campus`, `all`; salary-adjacent fields masked without hr permissions) | all staff (own); `hr_staff`, `school_admin`, `principal` (all) |
-| `staff.staff.create` / `.update` / `.delete` | Manage staff records (delete = soft; exit workflow preferred) | `hr_staff`, `school_admin` |
+| `staff.staff.create` / `.update` / `.delete` | Manage staff records (delete = soft; exit workflow preferred). `.update` also guards `:invite` | `hr_staff`, `school_admin` |
 | `staff.staff.import` / `.export` | Bulk import/export (audited) | `hr_staff`, `it_admin` |
 | `staff.designation.view` / `.create` / `.update` / `.delete` | Manage designation catalog | view: all staff; manage: `school_admin`, `hr_staff` |
 | `staff.qualification.view` / `.create` / `.update` / `.verify` | Manage & verify qualifications | `hr_staff`; verify also `principal`; own-create: all staff |
@@ -132,7 +132,7 @@ Exit workflow (summary): initiate with reason + last working day → clearance c
 
 | Event | Recipients | Channels | Template ref |
 | ----- | ---------- | -------- | ------------ |
-| Account invite | New staff member | email, SMS | `staff.portal-invite` |
+| Account invite | New staff member | email (security email, not through `notify()`: [ADR-0033](../decisions/0033-account-invitations-and-auth-email.md)); in-app `staff.invited` | `core/rbac/auth_emails.py` invitation |
 | Onboarding checklist incomplete (T+7 days) | `hr_staff` | in-app | `staff.onboarding-reminder` |
 | Document/qualification verified or rejected | Staff member | in-app, email | `staff.document-status` |
 | Document expiring (T-30 days) | Staff member; `hr_staff` | in-app, email | `staff.document-expiry` |
@@ -177,7 +177,7 @@ Performance reviews are stored as structured records; see §19 for the proposed 
 Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 
 - `GET/POST /api/v1/staff` · `GET/PATCH/DELETE /api/v1/staff/{id}` — filters: `campus_id`, `department_id`, `designation_id`, `staff_type`, `employment_status`, `search`.
-- `POST /api/v1/staff/{id}:invite` (account invite) · `POST /api/v1/staff/{id}:exit` (exit workflow, colon-actions, audited).
+- `POST /api/v1/staff/{id}:invite` (account invite, [ADR-0033](../decisions/0033-account-invitations-and-auth-email.md): creates an inactive account with `role_ids` and emails a single-use link, or resends while the account is pending, ignoring `role_ids`; 409 `already_active` for an active account, `email_in_use` for an address on another account or a linked guardian/student login; `Idempotency-Key` supported) · `POST /api/v1/staff/{id}:exit` (exit workflow, colon-actions, audited; also revokes the account's refresh tokens and pending invitations). `user_id` is read-only: only `:invite` links an account.
 - `GET/POST /api/v1/designations` · `GET/PATCH/DELETE /api/v1/designations/{id}`.
 - `GET/POST /api/v1/staff/{id}/qualifications` · `POST /api/v1/staff-qualifications/{id}:verify`.
 - `GET/POST /api/v1/staff/{id}/documents` · `POST /api/v1/staff-documents/{id}:verify`.
@@ -268,3 +268,16 @@ before it is written and sent, as before. Each change replaces the address in pl
 leaves the screen; a value outside the known set falls back to the default; a link to a page past
 the end gets the API's 404 and lands on page 1. Row selection, the dialogs, column order and
 pinning stay local. Mocked Playwright coverage is `e2e/tests/dashboard/list-url-state.spec.ts`.
+
+**Account invitations (as shipped, account-invitations PR A).** `:invite` adopts the shared
+invitation flow ([ADR-0033](../decisions/0033-account-invitations-and-auth-email.md)): the
+account is created inactive with an unusable password, and only accepting the emailed link at
+`/accept-invite` sets the password and activates it. The staff row is locked for the call, so two
+concurrent invites resend rather than create two users. A staff member invited before this shipped
+(inactive, unusable password, no invitation) is simply re-sent one. Exit revokes the account's
+pending invitations and refresh tokens, and the eligibility hook refuses an accept once the staff
+member has exited. On the dashboard, the staff detail sheet shows **Send invitation** while the
+record has no account and **Resend invitation** once one is linked, under `staff.staff.update`,
+and hides it for an exited staff member. The record does not say whether a linked account is
+still pending, so an active one is told by the API's 409 `already_active`; the dashboard sends no
+`role_ids` (there is no role picker yet). Both are in `deferred-work.md`.

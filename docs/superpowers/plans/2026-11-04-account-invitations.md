@@ -441,3 +441,61 @@ Starts when #156 PR 2 (`feat/parent-portal-dashboard`) is pushed; uses its shell
     the #156 session.
   - **Mailpit:** an env-driven `EMAIL_BACKEND` so the live lane can read Mailpit needs the user's go-ahead
     (`.env` rule); it's deferred until then.
+
+## Execution rulings
+
+Decisions taken while executing PR A, where the plan was silent, ambiguous or overtaken. Each
+names its cost if wrong. From the execution ledger.
+
+1. **Invitation status values.** The plan listed them twice; the later list wins: pending,
+   accepted, revoked, expired, send_failed. Cost: one enum value.
+2. **Accepting for a person no longer eligible** is the same 400 `invalid_link` as any other
+   unusable link, so an anonymous caller learns nothing. Cost: less specific copy.
+3. **Forgot/reset pages "if present".** They were not; A3 created them on the existing
+   `Paths.FORGOT_PASSWORD`/`RESET_PASSWORD` and `PUBLIC_PATHS` entries.
+4. **No local test, lint or typecheck runs** (ADR-0007 and the user's rule override the SDD
+   template's "run tests"). CI on the draft PR is the evidence. Cost: a slower red/green loop.
+5. **Throttle env overrides held back.** The `dev.py` `THROTTLE_RATE_*` reads, compose,
+   e2e-live job env and `.env.example` wiring wait for the user's OK on `.env.example`; the fixed
+   rates apply everywhere (patch kept as `task-A1-throttle-env.patch` in the SDD folder). Cost:
+   live and dev runs could hit the reset throttle.
+6. **A third throttle.** Invitation preview and accept get their own `invitation_ip` bucket
+   (60/hour); reset request and confirm keep `password_reset_ip` (20/hour); the per-email reset
+   throttle is unchanged. Onboarding behind a school's NAT must not starve, and a reset burst
+   must not block invites (ADR-0033 §8). Cost: a looser IP bound on 256-bit tokens (negligible).
+7. **A1 review minors.** Locking the user row in `create_invitation`, `select_for_update` on
+   reset confirm, `OSError` among the transient send errors and public OpenAPI descriptions were
+   folded into fix round 1; an anonymous actor on accept/reset audit events and
+   no-notification-row tests for the reset emails were left to the final review.
+8. **Eligibility.** A student is eligible while `active` with an active enrollment; a guardian
+   while they hold a `has_portal_access` link to an eligible student. Withdrawal, transfer-out
+   and graduation all close the enrollment; promotions change nothing. Cost: an admitted but
+   unenrolled student cannot be invited until enrolled.
+9. **Student `:invite` takes a required `email`** (there is no `Student.email` column; it is
+   stored only on the user); a guardian's comes from `Guardian.email` and the body is not
+   accepted. Cost: an extra field on the student invite form.
+10. **Re-hired staff branch** implemented as specified; its test sets the status directly, and
+    `deferred-work.md` records that no API path re-hires. Cost: unreachable until re-hire exists.
+11. **Invite 409 codes** are `Conflict` subclasses in `core/rbac/invitations/exceptions.py`, left
+    out of `API_ERROR_CODES` (the `audience_changed` precedent); the dashboard maps them by
+    string. Cost: the client cannot narrow on them by type.
+12. **Suspended students** keep portal access until withdrawn: a `deferred-work.md` entry, no
+    hook now, since nothing sets `suspended`.
+13. **A2 review round 1 minors folded in:** `IntegrityError` → `email_in_use` (with the
+    `Lower(email)` constraint deferred), `replay_or_execute` on the portal `:invite`, one lock
+    order (revoke invitations before locking the user), the shared role helper and RBAC cache
+    eviction after `bulk_create`. Cost: a larger fix diff.
+14. **Staff `user_id` is read-only.** A writable link plus exit's new token and invitation
+    revocation was the same lockout class as the guardian/student finding; exit now deactivates
+    only a user linked to this staff row alone. Cost: the staff `user_id` edit flow is gone.
+15. **Exit on a shared login** deletes only the staff (non-restricted) roles and evicts the RBAC
+    caches: staff access ends, portal access stays. This overrides round 2's "never strips
+    roles", which meant portal roles. Cost: a dual-role login loses its staff roles on exit
+    (intended).
+16. **A2 review round 3 minors folded in:** `deleted_at` filters in `is_portal_account`, no
+    deleted role reused for a portal role, the residual deadlock risk stated in the lock-order
+    comment, `updated_by` on unlink, `invite_staff` refusing a linked portal login with 409
+    `email_in_use`, and dead `user_id` parameters dropped. Idempotency endpoint names without a
+    pk are a pre-existing pattern, deferred.
+17. **CI failures after review** go back to the task's implementer as a CI-fix round outside
+    the five-round review cap.
