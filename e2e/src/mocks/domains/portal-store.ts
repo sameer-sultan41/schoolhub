@@ -34,6 +34,7 @@ export const PORTAL_IDS = {
   paidInvoice: "00000000-0000-4000-b000-000000000022",
   bilalInvoice: "00000000-0000-4000-b000-000000000023",
   receipt: "00000000-0000-4000-b000-000000000031",
+  payment: "00000000-0000-4000-b000-000000000032",
   midTerm: "00000000-0000-4000-b000-000000000041",
   annual: "00000000-0000-4000-b000-000000000042",
   bilalResult: "00000000-0000-4000-b000-000000000043",
@@ -171,7 +172,7 @@ export function buildReceipt(overrides: Partial<PortalReceipt> = {}): PortalRece
   return {
     id: PORTAL_IDS.receipt,
     receipt_no: "RCP-0001",
-    payment: PORTAL_IDS.session,
+    payment: PORTAL_IDS.payment,
     invoice_no: "INV-0002",
     student_name: "Ayesha Khan",
     amount: "9000.00",
@@ -273,6 +274,8 @@ export class PortalStore {
   /** Ids the guardian opened (`:mark-read`), and the `before` each `:mark-all-read` carried. */
   readonly markedRead: string[] = [];
   readonly markAllBefore: (string | undefined)[] = [];
+  /** The `Authorization` header each receipt download carried (undefined when it sent none). */
+  readonly downloadAuthorizations: (string | undefined)[] = [];
   /** Notices acknowledged (`:acknowledge`). */
   readonly acknowledged: string[] = [];
 

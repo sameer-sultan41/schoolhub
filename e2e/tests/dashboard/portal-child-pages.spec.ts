@@ -135,7 +135,7 @@ test.describe("a guardian's child pages", () => {
     portalChildPage,
     signedIn: _signedIn,
   }) => {
-    stubFamily(mockApi);
+    const store = stubFamily(mockApi);
     await portalPage.goto();
     await portalPage.tab("Fees").click();
 
@@ -154,7 +154,10 @@ test.describe("a guardian's child pages", () => {
     const sent = await request;
     expect(new URL(sent.url()).pathname).toContain(`/receipts/${PORTAL_IDS.receipt}/download`);
     expect(new URL(sent.url()).searchParams.get("format")).toBe("pdf");
-    expect(await sent.headerValue("authorization")).toMatch(/^Bearer \S+/);
+    // The header the stub saw on that GET: Playwright's own view of a cross-origin request's
+    // headers is not reliable, and a preflight (never recorded) carries none.
+    expect(store.downloadAuthorizations).toHaveLength(1);
+    expect(store.downloadAuthorizations[0]).toMatch(/^Bearer \S+/);
   });
 
   test("results lists the child's published results under their term", async ({

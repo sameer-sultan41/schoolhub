@@ -75,6 +75,9 @@ export function portalModule(store: PortalStore): MockModule {
       if (!store.receipts.some((row) => row.id === request.params["receiptId"])) {
         return fail(404, NOT_FOUND);
       }
+      // Recorded here rather than read off the browser's request: a spec cannot see a
+      // cross-origin request's own headers reliably, and the bearer is the point of the download.
+      store.downloadAuthorizations.push(request.headers["authorization"]);
       return { status: 200, body: PDF_BODY, headers: { "content-type": "application/pdf" } };
     });
 
