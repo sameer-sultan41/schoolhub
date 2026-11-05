@@ -54,5 +54,14 @@ REST_FRAMEWORK = {
         "anon": env.str("THROTTLE_RATE_ANON", default=THROTTLE_RATES["anon"]),
         "auth": env.str("THROTTLE_RATE_AUTH", default=THROTTLE_RATES["auth"]),
         "public_form": env.str("THROTTLE_RATE_PUBLIC_FORM", default=THROTTLE_RATES["public_form"]),
+        "password_reset_email": env.str(
+            "THROTTLE_RATE_PASSWORD_RESET_EMAIL", default=THROTTLE_RATES["password_reset_email"]
+        ),
+        "password_reset_ip": env.str(
+            "THROTTLE_RATE_PASSWORD_RESET_IP", default=THROTTLE_RATES["password_reset_ip"]
+        ),
+        "invitation_ip": env.str(
+            "THROTTLE_RATE_INVITATION_IP", default=THROTTLE_RATES["invitation_ip"]
+        ),
     },
 }
