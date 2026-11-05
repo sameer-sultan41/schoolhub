@@ -51,9 +51,11 @@ either this file or `project-status.md`.
     dashboard has no role picker or role-management screen yet, so it sends none: a staff member
     invited from the sheet can sign in but holds no role until one is assigned through the API.
     Add the picker to the invite (or the role screen) when role management is built.
-  - **A student resend asks for an email the server ignores.** `StudentInviteRequest.email` is
-    required on every call, but a resend goes to the account's own address. The dialog says
-    so; making `email` optional when an account is already linked would drop the field.
+  - **A student invite with an account already linked asks for an email the server ignores.**
+    `StudentInviteRequest.email` is required on every call, but a resend (`invited`, `expired`,
+    `send_failed`) and a fresh invite of an `inactive` student (which always has a linked
+    account) both go to the account's own address. The dialog says the field isn't used;
+    making `email` optional when an account is linked would drop it.
   - **SSO** (Google or Microsoft sign-in for a school). Accounts sign in with a password only.
   - **Students sign in with the username on their ID card** (`auth.login.identifierHint`), but
     an invited student sets a password for their email address; nothing issues or resets a

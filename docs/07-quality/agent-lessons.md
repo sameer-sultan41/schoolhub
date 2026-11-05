@@ -91,7 +91,7 @@
   Read the mypy error, then restructure; a suppressor is not the fix (AGENTS.md stop rule 2).
 - **Mistake (again, account-invitations PR A, Task A2 fix round 3).** While clearing hook
   rejections a subagent ran `ruff check`/`ruff format` by hand instead of letting the commit
-  hooks reformat, which is the local lint run ADR-0007 forbids.
+  hooks report and fixing the named files, which is the local lint run ADR-0007 forbids.
 - **Check.** Apply the fix the hook prints, on exactly the files it lists. The hooks run ruff,
   eslint and prettier; never run them yourself. The pre-commit checks only report, so edit the
   named files by hand, re-stage them and commit again. Delete an unused `noqa` rather than re-adding it, reword a flagged word rather than growing `.cspell/project-words.txt`, and never use `--no-verify`. Keep the reason a removed `noqa` carried as a plain comment. When a hook prints no detail (the pre-push mypy check), run the command it names once and read the error before editing; two guessed fixes in a row failed before the real cause (a class variable overridden by an annotated attribute) was read.
