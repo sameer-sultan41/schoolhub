@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-import logging
 import uuid
 from datetime import date
 
 from django.db import transaction
 
 from apps.staff_management.models import EmploymentStatus, Staff
+from apps.staff_management.staff.services.access import end_staff_access
 from core.api.exceptions import Conflict, DomainRuleViolation
-
-logger = logging.getLogger(__name__)
 
 
 def is_sole_class_teacher(*, staff: Staff) -> bool:
@@ -104,50 +102,5 @@ def exit_staff(
     staff.save(
         update_fields=["employment_status", "exit_date", "exit_reason", "updated_by", "updated_at"]
     )
-    if staff.user_id is not None:
-        _end_staff_access(staff, actor_id=actor_id)
+    end_staff_access(staff, actor_id=actor_id, reason="exit")
     return staff
-
-
-def _end_staff_access(staff: Staff, *, actor_id: uuid.UUID) -> None:
-    """Deactivate the exited employee's login, unless it is someone else's too.
-
-    An exited employee must not keep portal access or role assignments. UserRole has no
-    soft-delete field, so it's removed outright. A pending invitation and a held refresh
-    token would each let them back in, so both go too (ADR-0033). A login also linked to
-    a guardian or student (linked before `user_id` became read-only, or by hand) is that
-    person's account: only its staff roles are removed, the staff row is unlinked, and
-    its portal roles, active flag, invitations and tokens are left alone.
-    """
-    from apps.student_management.models import Guardian, Student
-    from core.rbac.cache import evict_rbac_caches
-    from core.rbac.invitations.services import revoke_pending_invitations
-    from core.rbac.models import User, UserRole
-    from core.rbac.sessions import revoke_refresh_tokens
-
-    user_id = staff.user_id
-    if user_id is None:
-        return
-    if (
-        Guardian.objects.alive().filter(user_id=user_id).exists()
-        or Student.objects.alive().filter(user_id=user_id).exists()
-    ):
-        logger.warning(
-            "staff %s exited: its login %s is also a guardian or student account; staff "
-            "roles removed and unlinked, not deactivated",
-            staff.pk,
-            user_id,
-        )
-        UserRole.objects.filter(
-            user_id=user_id, tenant_id=staff.tenant_id, role__is_restricted_principal=False
-        ).delete()
-        evict_rbac_caches([user_id])
-        staff.user_id = None
-        staff.updated_by = actor_id
-        staff.save(update_fields=["user_id", "updated_by", "updated_at"])
-        return
-
-    User.objects.filter(pk=user_id).update(is_active=False)
-    UserRole.objects.filter(user_id=user_id, tenant_id=staff.tenant_id).delete()
-    revoke_pending_invitations(user_id)
-    revoke_refresh_tokens(user_id)

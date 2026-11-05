@@ -17,15 +17,18 @@ from apps.school_organization.tests.factories import (
     SectionFactory,
     UserFactory,
     grant,
+    grant_default_role,
 )
 from apps.staff_management.models import EmploymentStatus, Staff
 from apps.staff_management.tests.base import StaffManagementAPITestCase
 from apps.staff_management.tests.factories import DEFAULT_JOINING_DATE, StaffFactory
 from apps.student_management.tests.factories import GuardianFactory
+from core.audit.models import AuditLog
 from core.rbac.cache import evict_rbac_caches
 from core.rbac.invitations.eligibility import is_eligible
 from core.rbac.models import Invitation, Permission, Role, RolePermission, User, UserRole
 from core.rbac.registry import registry
+from core.rbac.seeding import ensure_role_with_permissions
 from core.rbac.tests.link_helpers import invited_user
 from core.tenancy.context import tenant_context
 
@@ -384,7 +387,11 @@ class ExitRevocationTests(StaffManagementAPITestCase):
                     user=user, accepted_at__isnull=True, revoked_at__isnull=True
                 ).exists()
             )
+            event = AuditLog.objects.get(action="auth.account.deactivated", resource_id=user.pk)
         self.assertTrue(BlacklistedToken.objects.filter(token__jti=jti).exists())
+        self.assertEqual(event.actor_id, self.user.pk)
+        self.assertEqual(event.after["kind"], "staff")
+        self.assertEqual(event.after["reason"], "exit")
 
     def test_an_exited_staff_member_is_no_longer_eligible_to_accept(self) -> None:
         with tenant_context(self.tenant.id):
@@ -511,3 +518,173 @@ class DenyRestrictedPrincipalsTests(StaffManagementAPITestCase):
         response = self.client.get("/api/v1/staff")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+
+class InviteRoleGrantTests(StaffManagementAPITestCase):
+    """`:invite` assigns only roles the inviter could hold: no escalation through role_ids."""
+
+    def invite(self, staff: Staff, role: Role):
+        return self.client.post(
+            f"/api/v1/staff/{staff.pk}:invite", {"role_ids": [str(role.pk)]}, format="json"
+        )
+
+    def assert_nothing_given(self, staff: Staff, role: Role) -> None:
+        with tenant_context(self.tenant.id):
+            staff.refresh_from_db()
+            self.assertIsNone(staff.user_id)
+            self.assertFalse(Invitation.objects.exists())
+        self.assertFalse(UserRole.objects.filter(role=role).exists())
+        self.assertFalse(User.objects.filter(tenant=self.tenant, email=staff.email).exists())
+
+    def test_hr_staff_cannot_invite_someone_as_school_admin(self) -> None:
+        grant_default_role(self.user, "hr_staff")
+        keys = [spec.key for spec in registry.all() if "school_admin" in spec.default_roles]
+        school_admin = ensure_role_with_permissions(self.tenant, "school_admin", "Admin", keys)
+        with tenant_context(self.tenant.id):
+            staff = StaffFactory(tenant=self.tenant, campus=self.campus, email="hr@example.test")
+
+        response = self.invite(staff, school_admin)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN, response.json())
+        self.assertEqual(
+            response.json()["error"]["message"],
+            "You can't give a role with permissions you don't hold yourself.",
+        )
+        self.assert_nothing_given(staff, school_admin)
+
+    def test_a_restricted_role_cannot_be_given_through_a_staff_invite(self) -> None:
+        self.allow("staff.staff.update", "staff.staff.view")
+        restricted = Role.objects.create(
+            tenant=self.tenant, slug="test-guardian", name="Guardian", is_restricted_principal=True
+        )
+        with tenant_context(self.tenant.id):
+            staff = StaffFactory(tenant=self.tenant, campus=self.campus, email="g@example.test")
+
+        response = self.invite(staff, restricted)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN, response.json())
+        self.assert_nothing_given(staff, restricted)
+
+    def test_a_role_within_the_inviters_own_keys_is_assigned(self) -> None:
+        """Positive control: the 403s above are the escalation check, not the invite itself."""
+        self.allow("staff.staff.update", "staff.staff.view")
+        narrower = grant(UserFactory(tenant=self.tenant), "staff.staff.view")
+        with tenant_context(self.tenant.id):
+            staff = StaffFactory(tenant=self.tenant, campus=self.campus, email="ok@example.test")
+
+        response = self.invite(staff, narrower)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        with tenant_context(self.tenant.id):
+            staff.refresh_from_db()
+        self.assertTrue(UserRole.objects.filter(user_id=staff.user_id, role=narrower).exists())
+
+
+class InviteReaddressTests(StaffManagementAPITestCase):
+    """A resend to an account nobody has activated goes to the corrected `Staff.email`."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.allow("staff.staff.update", "staff.staff.view")
+        with tenant_context(self.tenant.id):
+            self.staff = StaffFactory(
+                tenant=self.tenant, campus=self.campus, email="tpyo@example.test"
+            )
+        first = self.client.post(f"/api/v1/staff/{self.staff.pk}:invite", {}, format="json")
+        self.assertEqual(first.status_code, status.HTTP_200_OK, first.json())
+        with tenant_context(self.tenant.id):
+            self.staff.refresh_from_db()
+            self.user = User.objects.get(pk=self.staff.user_id)
+            self.first_invitation = Invitation.objects.get(user=self.user)
+
+    def correct_email(self, email: str):
+        with tenant_context(self.tenant.id):
+            Staff.objects.filter(pk=self.staff.pk).update(email=email)
+        return self.client.post(f"/api/v1/staff/{self.staff.pk}:invite", {}, format="json")
+
+    def test_resend_after_correcting_the_email_goes_to_the_new_address(self) -> None:
+        response = self.correct_email("typo.fixed@example.test")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, "typo.fixed@example.test")
+        with tenant_context(self.tenant.id):
+            self.first_invitation.refresh_from_db()
+            pending = Invitation.objects.get(
+                user=self.user, accepted_at__isnull=True, revoked_at__isnull=True
+            )
+        self.assertIsNotNone(self.first_invitation.revoked_at)
+        self.assertNotEqual(pending.pk, self.first_invitation.pk)
+
+    def test_resend_to_an_address_another_account_holds_is_409(self) -> None:
+        UserFactory(tenant=self.tenant, email="taken@example.test")
+
+        response = self.correct_email("Taken@example.test")
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.json()["error"]["code"], "email_in_use")
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, "tpyo@example.test")
+        with tenant_context(self.tenant.id):
+            self.first_invitation.refresh_from_db()
+        self.assertIsNone(self.first_invitation.revoked_at, "a refused resend changes nothing")
+
+
+class StaffDeleteEndsAccessTests(StaffManagementAPITestCase):
+    """`DELETE /staff/{id}` ends the login exactly as `:exit` does."""
+
+    def test_delete_deactivates_the_login_and_revokes_invitations_and_tokens(self) -> None:
+        self.allow("staff.staff.update", "staff.staff.delete", "staff.staff.view")
+        with tenant_context(self.tenant.id):
+            staff = StaffFactory(tenant=self.tenant, campus=self.campus, email="gone@example.test")
+        self.client.post(f"/api/v1/staff/{staff.pk}:invite", {}, format="json")
+        with tenant_context(self.tenant.id):
+            staff.refresh_from_db()
+            user = User.objects.get(pk=staff.user_id)
+        staff_role = grant(user, "staff.staff.view")
+        user.is_active = True
+        user.save(update_fields=["is_active"])
+        jti = RefreshToken.for_user(user)["jti"]
+
+        response = self.client.delete(f"/api/v1/staff/{staff.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        user.refresh_from_db()
+        self.assertFalse(user.is_active)
+        self.assertFalse(UserRole.objects.filter(user=user, role=staff_role).exists())
+        self.assertTrue(BlacklistedToken.objects.filter(token__jti=jti).exists())
+        with tenant_context(self.tenant.id):
+            self.assertFalse(
+                Invitation.objects.filter(
+                    user=user, accepted_at__isnull=True, revoked_at__isnull=True
+                ).exists()
+            )
+            self.assertTrue(
+                AuditLog.objects.filter(
+                    action="auth.account.deactivated", resource_id=user.pk
+                ).exists()
+            )
+            self.assertFalse(is_eligible(user, "staff"))
+
+    def test_delete_keeps_a_shared_guardian_login_active(self) -> None:
+        self.allow("staff.staff.delete", "staff.staff.view")
+        parent = UserFactory(tenant=self.tenant)
+        portal_role = grant(parent, "students.student.view", is_restricted_principal=True)
+        staff_role = grant(parent, "staff.staff.view")
+        with tenant_context(self.tenant.id):
+            GuardianFactory(tenant=self.tenant, user_id=parent.pk)
+            staff = StaffFactory(tenant=self.tenant, campus=self.campus, user_id=parent.pk)
+        jti = RefreshToken.for_user(parent)["jti"]
+
+        response = self.client.delete(f"/api/v1/staff/{staff.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        parent.refresh_from_db()
+        self.assertTrue(parent.is_active)
+        self.assertTrue(UserRole.objects.filter(user=parent, role=portal_role).exists())
+        self.assertFalse(UserRole.objects.filter(user=parent, role=staff_role).exists())
+        self.assertFalse(BlacklistedToken.objects.filter(token__jti=jti).exists())
+        with tenant_context(self.tenant.id):
+            staff.refresh_from_db()
+        self.assertIsNone(staff.user_id)
+        self.assertIsNotNone(staff.deleted_at)

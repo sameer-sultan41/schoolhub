@@ -6,6 +6,7 @@ the broker or to the database in raw form.
 
 from __future__ import annotations
 
+import smtplib
 import uuid
 
 from celery import shared_task
@@ -23,8 +24,23 @@ class InvitationEmailTask(TenantAwareTask):
         services.mark_send_failed(
             tenant_id=uuid.UUID(str(kwargs["tenant_id"])),
             invitation_id=uuid.UUID(str(kwargs["invitation_id"])),
-            error=f"{type(exc).__name__}: {exc}",
+            error=send_error_summary(exc),
         )
+
+
+def send_error_summary(exc: BaseException) -> str:
+    """The exception class and any SMTP status codes, never the message.
+
+    An SMTP error's message can name the recipient (`SMTPRecipientsRefused` holds the
+    refused addresses), and the audit row must not store that address.
+    """
+    codes: set[int] = set()
+    if isinstance(exc, smtplib.SMTPResponseException):
+        codes.add(exc.smtp_code)
+    if isinstance(exc, smtplib.SMTPRecipientsRefused):
+        codes.update(code for code, _message in exc.recipients.values())
+    name = type(exc).__name__
+    return f"{name} {','.join(str(code) for code in sorted(codes))}" if codes else name
 
 
 @shared_task(

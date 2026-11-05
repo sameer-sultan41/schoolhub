@@ -54,6 +54,7 @@ from core.rbac.invitations.services import (
     assert_email_free,
     create_invitation,
     create_invited_user,
+    readdress_pending_account,
     revoke_pending_invitations,
 )
 from core.rbac.models import Invitation, InvitationKind, Role, User, UserRole
@@ -139,8 +140,9 @@ def invite_to_portal(
     ``person`` is re-read under a row lock, so two concurrent invites for one person run
     in turn: the second finds the first's account and resends rather than creating a
     second user. ``email`` is the student's address from the request body; a guardian's
-    comes from ``Guardian.email``. Once an account is linked, a resend goes to that
-    account's own address and ``email`` is not used.
+    comes from ``Guardian.email``. A resend to an account nobody has activated goes to that
+    current address, so correcting a mistyped one and resending recovers the invite
+    (``readdress_pending_account``). An account that was once active keeps its own address.
     """
     if isinstance(person, Guardian):
         return _invite_guardian(guardian=person, actor_id=actor_id)
@@ -208,6 +210,7 @@ def _invite(
     if user is not None:
         if user.is_active:
             raise AlreadyActive()
+        readdress_pending_account(user=user, email=resolved)
         _assign_portal_role(user=user, slug=kind, tenant_id=tenant_id)
         create_invitation(user=user, kind=kind, actor_id=actor_id)
         return user

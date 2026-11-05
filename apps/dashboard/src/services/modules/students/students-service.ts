@@ -253,7 +253,8 @@ export async function generateIdCards(studentIds: string[]): Promise<{ jobId: st
 
 /**
  * `POST /students/{id}:invite` (ADR-0033). A student has no email column, so the address
- * is always sent; on a resend the server ignores it and uses the account's own.
+ * is always sent. A resend to an account nobody has activated goes to it (correcting a typo);
+ * an account that was once active keeps its own address.
  * `idempotencyKey`: one per intent, reused on a retry of the same attempt.
  */
 export async function inviteStudent(

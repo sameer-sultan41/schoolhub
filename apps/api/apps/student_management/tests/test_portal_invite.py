@@ -187,6 +187,79 @@ class PortalInviteTests(StudentManagementAPITestCase):
         self.assertEqual(User.objects.filter(tenant=self.tenant, email=user.email).count(), 1)
         self.assertEqual(UserRole.objects.filter(user=user).count(), 1)
 
+    def test_guardian_resend_after_fixing_a_typo_goes_to_the_corrected_address(self) -> None:
+        self.allow(INVITE_KEY)
+        with tenant_context(self.tenant.id):
+            Guardian.objects.filter(pk=self.guardian.pk).update(email="prent@example.test")
+        self.assertEqual(self.invite_guardian().status_code, status.HTTP_200_OK)
+        with tenant_context(self.tenant.id):
+            self.guardian.refresh_from_db()
+            user = User.objects.get(pk=self.guardian.user_id)
+            first = pending(user).get()
+            Guardian.objects.filter(pk=self.guardian.pk).update(email="parent@example.test")
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.invite_guardian()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        user.refresh_from_db()
+        self.assertEqual(user.email, "parent@example.test")
+        with tenant_context(self.tenant.id):
+            first.refresh_from_db()
+            self.assertEqual(pending(user).count(), 1)
+        self.assertIsNotNone(first.revoked_at)
+        self.assertEqual(mail.outbox[-1].to, ["parent@example.test"])
+
+    def test_student_resend_goes_to_the_address_entered(self) -> None:
+        self.allow(INVITE_KEY, STUDENT_VIEW)
+        self.assertEqual(self.invite_student(email="pupl@example.test").status_code, 200)
+
+        response = self.invite_student(email="pupil@example.test")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        with tenant_context(self.tenant.id):
+            self.student.refresh_from_db()
+            user = User.objects.get(pk=self.student.user_id)
+            self.assertEqual(pending(user).count(), 1)
+        self.assertEqual(user.email, "pupil@example.test")
+
+    def test_resend_to_another_accounts_address_is_409_and_keeps_the_old_one(self) -> None:
+        self.allow(INVITE_KEY, STUDENT_VIEW)
+        self.assertEqual(self.invite_student(email="pupl@example.test").status_code, 200)
+        UserFactory(tenant=self.tenant, email="sibling@example.test")
+
+        response = self.invite_student(email="Sibling@example.test")
+
+        self.assert_conflict(response, "email_in_use")
+        with tenant_context(self.tenant.id):
+            self.student.refresh_from_db()
+            user = User.objects.get(pk=self.student.user_id)
+            self.assertEqual(pending(user).count(), 1)
+        self.assertEqual(user.email, "pupl@example.test")
+
+    def test_an_account_once_active_keeps_its_address_on_reinvite(self) -> None:
+        """Re-addressing is for accounts nobody has signed in to; this one has."""
+        self.allow(INVITE_KEY)
+        with tenant_context(self.tenant.id):
+            user = portal_account(self.guardian, active=True)
+            Invitation.objects.create(
+                tenant=self.tenant,
+                user=user,
+                kind="guardian",
+                expires_at=timezone.now(),
+                accepted_at=timezone.now(),
+            )
+        user.is_active = False
+        user.save(update_fields=["is_active"])
+        original = user.email
+
+        response = self.invite_guardian()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        user.refresh_from_db()
+        self.assertEqual(user.email, original)
+        self.assertNotEqual(original, self.guardian.email)
+
     def test_guardian_without_a_portal_enabled_link_is_409_not_eligible(self) -> None:
         self.allow(INVITE_KEY)
         with tenant_context(self.tenant.id):

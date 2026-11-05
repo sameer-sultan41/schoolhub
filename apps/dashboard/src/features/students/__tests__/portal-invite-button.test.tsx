@@ -186,27 +186,44 @@ describe("PortalInviteButton", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
-  it("says the typed email isn't used for an inactive account either", async () => {
+  it("says an inactive account uses the typed email only if nobody ever signed in", async () => {
     renderButton(STUDENT, "inactive");
 
     await userEvent.setup().click(screen.getByRole("button", { name: /invite to portal/i }));
 
     expect(
       await screen.findByText(
-        "This goes to the address the student's first invitation used; the email entered here isn't used.",
+        "If the student has never signed in, the invitation goes to the address entered here. If they have, it goes to their account's existing address.",
       ),
     ).toBeInTheDocument();
   });
 
-  it("tells the admin a resend goes to the address the first invitation used", async () => {
+  it.each<PortalStatus>(["invited", "expired", "send_failed"])(
+    "tells the admin a %s invite is re-sent to the address entered",
+    async (portalStatus) => {
+      renderButton(STUDENT, portalStatus);
+
+      await userEvent.setup().click(screen.getByRole("button", { name: /resend invitation/i }));
+
+      expect(
+        await screen.findByText(
+          "The invitation is sent again, to the address entered here. Use this to correct a mistyped address.",
+        ),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it("sends a resend to the corrected address typed in the dialog", async () => {
+    mockInviteStudent.mockResolvedValue({ portal_status: "invited" });
     renderButton(STUDENT, "send_failed");
+    const user = userEvent.setup();
 
-    await userEvent.setup().click(screen.getByRole("button", { name: /resend invitation/i }));
+    await user.click(screen.getByRole("button", { name: /resend invitation/i }));
+    await user.type(await screen.findByLabelText(/^student's email/i), "fixed@example.com");
+    await user.click(screen.getByRole("button", { name: "Send invitation" }));
 
-    expect(
-      await screen.findByText(
-        "This goes to the address the student's first invitation used; the email entered here isn't used.",
-      ),
-    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(mockInviteStudent).toHaveBeenCalledWith("s1", "fixed@example.com", expect.any(String));
+    });
   });
 });

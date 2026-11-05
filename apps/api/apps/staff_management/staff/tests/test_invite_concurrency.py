@@ -55,13 +55,13 @@ class ConcurrentStaffInviteTests(TransactionTestCase):
             try:
                 with tenant_atomic(self.tenant.id):
                     stale = Staff.objects.get(pk=self.staff.pk)
-                    return invite_staff(staff=stale, role_ids=[], actor_id=self.actor.pk)
+                    return invite_staff(staff=stale, role_ids=[], actor=self.actor)
             finally:
                 connections.close_all()
 
         with ThreadPoolExecutor(max_workers=1) as pool:
             with tenant_atomic(self.tenant.id):
-                first = invite_staff(staff=self.staff, role_ids=[], actor_id=self.actor.pk)
+                first = invite_staff(staff=self.staff, role_ids=[], actor=self.actor)
                 contending = pool.submit(contender)
                 self.wait_until_blocked(contending)
             second = contending.result(timeout=LOCK_WAIT_SECONDS)

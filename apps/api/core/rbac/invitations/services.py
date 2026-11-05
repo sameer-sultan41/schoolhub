@@ -45,16 +45,49 @@ def revoke_pending_invitations(user_id: uuid.UUID) -> int:
     ).update(revoked_at=timezone.now(), updated_at=timezone.now())
 
 
-def assert_email_free(*, tenant_id: uuid.UUID, email: str) -> None:
+def assert_email_free(
+    *, tenant_id: uuid.UUID, email: str, exclude_user_id: uuid.UUID | None = None
+) -> None:
     """Refuse an invite whose email already belongs to an account at this school.
 
     Linking to that account instead would give one login two identities: a student invite
     on a guardian's email would make the guardian the student. Case-insensitive, because
-    people type addresses either way.
+    people type addresses either way. ``exclude_user_id`` is the account being re-addressed,
+    which may keep its own address.
     """
     taken = User.objects.filter(tenant_id=tenant_id, email__iexact=email, deleted_at__isnull=True)
+    if exclude_user_id is not None:
+        taken = taken.exclude(pk=exclude_user_id)
     if taken.exists():
         raise EmailInUse()
+
+
+def never_activated(user: User) -> bool:
+    """Inactive, no usable password and no accepted invitation: nobody has ever signed in."""
+    return (
+        not user.is_active
+        and not user.has_usable_password()
+        and not Invitation.objects.filter(user_id=user.pk, accepted_at__isnull=False).exists()
+    )
+
+
+def readdress_pending_account(*, user: User, email: str | None) -> None:
+    """Point a never-activated account at ``email`` before its invitation is re-sent.
+
+    How a school recovers from a mistyped address: it corrects the person's email and resends.
+    An account someone has activated keeps its address, since changing it would move their
+    login. Another account's address is a 409 ``email_in_use``, as on a first invite.
+    """
+    address = (email or "").strip()
+    if not address or address == user.email or not never_activated(user):
+        return
+    assert_email_free(tenant_id=user.tenant_id, email=address, exclude_user_id=user.pk)
+    user.email = address
+    try:
+        with transaction.atomic():
+            user.save(update_fields=["email", "updated_at"])
+    except IntegrityError as exc:
+        raise EmailInUse() from exc
 
 
 def create_invited_user(

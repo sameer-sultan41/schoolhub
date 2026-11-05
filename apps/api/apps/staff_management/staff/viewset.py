@@ -5,7 +5,8 @@ endpoints (module doc §16).
 
 Thin by design: every rule that needs to look at more than the request body
 lives in `services/<action>.py` (`services/create.py`, `services/invite.py`,
-`services/exit.py`, `services/import_staff.py`, `services/export_staff.py`).
+`services/exit.py`, `services/access.py`, `services/import_staff.py`,
+`services/export_staff.py`).
 See `apps.staff_management.views`' module docstring for why every staff
 endpoint layers `DenyRestrictedPrincipals` on top of the base tenant-scoped
 permission stack (`_StaffModuleViewSetMixin`, defined there and reused here)
@@ -31,6 +32,7 @@ from apps.staff_management.staff.serializers import (
     StaffImportRequestSerializer,
     StaffSerializer,
 )
+from apps.staff_management.staff.services.access import end_staff_access
 from apps.staff_management.staff.services.create import create_staff
 from apps.staff_management.staff.services.exit import exit_staff
 from apps.staff_management.staff.services.invite import invite_staff
@@ -155,6 +157,11 @@ class StaffViewSet(_StaffModuleViewSetMixin, viewsets.ModelViewSet):
         )
         record_audit(self.request, "create", serializer.instance, after=serializer.data)
 
+    def perform_destroy(self, instance: Staff) -> None:
+        """Soft-delete, then end the login as `:exit` does, so a deleted record signs nobody in."""
+        super().perform_destroy(instance)
+        end_staff_access(instance, actor_id=self.request.user.pk, reason="delete")
+
     @extend_schema(
         summary="Invite this staff member by email, creating their account if needed",
         request=InviteRequestSerializer,
@@ -173,7 +180,7 @@ class StaffViewSet(_StaffModuleViewSetMixin, viewsets.ModelViewSet):
 
         def execute() -> Response:
             before = self.get_serializer(staff).data
-            updated = invite_staff(staff=staff, role_ids=data["role_ids"], actor_id=request.user.pk)
+            updated = invite_staff(staff=staff, role_ids=data["role_ids"], actor=request.user)
             after = self.get_serializer(updated).data
             record_audit(request, "invite", updated, before=before, after=after)
             return ActionResponse.ok(after, message="Invitation sent.")

@@ -20,14 +20,15 @@ import {
   createStudentInviteSchema,
   type StudentInviteValues,
 } from "@/services/modules/students/students.schema";
+import type { PortalStatus } from "@/services/modules/students/students-type";
 import type { PortalInviteTarget, usePortalInvite } from "./use-portal-invite";
 
 export interface StudentInviteDialogProps {
   target: PortalInviteTarget;
   isResend: boolean;
-  /** The student already has an account (`inactive` or a pending invite): the server sends to
-   * its address and does not use the one typed here. */
-  hasAccount: boolean;
+  /** Picks the hint: a pending invite is re-sent to the address typed here; an `inactive`
+   * account uses it only if nobody ever signed in to it. */
+  portalStatus: PortalStatus;
   invite: ReturnType<typeof usePortalInvite>;
   onOpenChange: (open: boolean) => void;
 }
@@ -37,15 +38,22 @@ function emailIssueOf(error: unknown): string | undefined {
   return error instanceof ApiError ? error.fieldErrors()["email"] : undefined;
 }
 
+/** The hint under the title: where the server sends the invitation for this status. */
+function emailHintKey(portalStatus: PortalStatus) {
+  if (portalStatus === "none") return "studentEmailHint";
+  if (portalStatus === "inactive") return "inactiveAccountEmailHint";
+  return "pendingAccountEmailHint";
+}
+
 /**
- * Asks for the student's email (a student has no email on file). The API requires it on a
- * resend too but sends the resend to the account's own address, which the copy says.
- * Mounted only while open, so each open is a fresh form.
+ * Asks for the student's email (a student has no email on file). A resend to an account nobody
+ * has activated goes to the address typed here, so it corrects a typo; an account that was once
+ * active keeps its own. Mounted only while open, so each open is a fresh form.
  */
 export function StudentInviteDialog({
   target,
   isResend,
-  hasAccount,
+  portalStatus,
   invite,
   onOpenChange,
 }: StudentInviteDialogProps) {
@@ -62,7 +70,7 @@ export function StudentInviteDialog({
       open
       onOpenChange={onOpenChange}
       title={t(isResend ? "resendTitle" : "inviteTitle", { name: target.name })}
-      description={t(hasAccount ? "existingAccountEmailHint" : "studentEmailHint")}
+      description={t(emailHintKey(portalStatus))}
       form={form}
       formError={formError}
       isPending={invite.mutation.isPending}

@@ -199,7 +199,7 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - `GET/POST /api/v1/student-transfers` — filters: `student_id`. `POST /api/v1/student-transfers/{id}:approve` · `:reject` · `:complete`.
 - `GET /api/v1/students/{id}/history` — assembled timeline; documented response shape (`StudentHistoryEvent`, a discriminated union — see [ADR-0022](../decisions/0022-polymorphic-history-response-via-dict-dispatch.md)).
 - `POST /api/v1/student-imports` → `202` + job; `POST /api/v1/id-cards:generate` → `202` + job (batch PDF).
-- `POST /api/v1/guardians/{id}:invite` (no body; the guardian's email on file, a 400 on `email` when there is none) · `POST /api/v1/students/{id}:invite` (`{email}` required: a student has no email column, and a resend ignores it) — under `students.portal-account.invite`, `Idempotency-Key` supported, `{data: {portal_status}}` back. 409 `portal_disabled` (`module.parent_portal` off), `email_in_use`, `already_active` or `not_eligible`. Students and guardians carry a read-only `portal_status` (`none`, `invited`, `expired`, `send_failed`, `active`, `inactive`) and a read-only `user_id` ([ADR-0033](../decisions/0033-account-invitations-and-auth-email.md)).
+- `POST /api/v1/guardians/{id}:invite` (no body; the guardian's email on file, a 400 on `email` when there is none) · `POST /api/v1/students/{id}:invite` (`{email}` required: a student has no email column) — under `students.portal-account.invite`, `Idempotency-Key` supported, `{data: {portal_status}}` back. 409 `portal_disabled` (`module.parent_portal` off), `email_in_use`, `already_active` or `not_eligible`. Students and guardians carry a read-only `portal_status` (`none`, `invited`, `expired`, `send_failed`, `active`, `inactive`) and a read-only `user_id` ([ADR-0033](../decisions/0033-account-invitations-and-auth-email.md)).
 
 ## 17. Integration Requirements
 
@@ -381,11 +381,17 @@ A guardian is eligible while they hold a `has_portal_access` link to an enrolled
 while active and enrolled. Withdrawal, transfer-out, graduation and turning a link's portal access
 off re-check it, and an account that is no longer eligible is deactivated, its refresh tokens and
 pending invitations revoked. An email already on another account in the school is a 409
-`email_in_use`, so a student invite on the guardian's address links nothing. On the dashboard, the
+`email_in_use`, so a student invite on the guardian's address links nothing. A resend to an account
+nobody has activated goes to the current address (`Guardian.email`, or the student's request
+body), after the same free-address check, so correcting a mistyped address and resending
+recovers the invite; an account that was once active keeps its own address. On the dashboard, the
 student sheet's Profile tab has a **Portal account** row and each guardian card on the Guardians
 tab shows its own: a `portal_status` badge (labelled through `students.portal.status`, never the
 raw value) and, for a holder of `students.portal-account.invite`, **Invite to portal** (`none`,
 `inactive`) or **Resend invitation** (`invited`, `expired`, `send_failed`); none once `active`. A
-guardian's invite is one click; a student's asks for the email. The 409 codes are mapped by string
+guardian's invite is one click; a student's asks for the email. The guardian's button lives only
+on the Guardians tab, which needs `students.guardian.view`: `principal` holds the invite key but not
+that one today, so the API lets a principal invite a guardian while the dashboard shows them no
+button (pending a decision on the principal's grants). The 409 codes are mapped by string
 (they are not in `API_ERROR_CODES`, the `audience_changed` precedent). Mocked Playwright coverage
 is `e2e/tests/dashboard/account-invitations.spec.ts`; what was left out is in `deferred-work.md`.

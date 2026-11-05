@@ -27,7 +27,9 @@ class PortalStatusField(serializers.ChoiceField):
 class StudentInviteRequestSerializer(serializers.Serializer):
     """A student has no email on file, so the address comes with the invite.
 
-    It is stored only on the new account. A resend goes to the existing account's address.
+    It is stored only on the student's account. A resend to an account nobody has activated
+    goes to this address, which corrects a mistyped one; an account that was once active keeps
+    its own address.
     """
 
     email = serializers.EmailField(max_length=254)

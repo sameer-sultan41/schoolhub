@@ -232,6 +232,26 @@ class InvitationTests(APITestCase):
             ).exists()
         )
 
+    def test_send_failure_audit_keeps_the_smtp_code_but_not_the_address(self) -> None:
+        """`SMTPRecipientsRefused` carries the refused address; the audit row must not."""
+        adapter = mock.Mock()
+        adapter.send.side_effect = smtplib.SMTPRecipientsRefused(
+            {self.user.email: (550, f"5.1.1 <{self.user.email}> unknown".encode())}
+        )
+
+        with (
+            mock.patch("core.rbac.auth_emails.get_adapter", return_value=adapter),
+            self.captureOnCommitCallbacks(execute=True),
+            tenant_context(self.tenant.id),
+        ):
+            invitation = create_invitation(user=self.user, kind="staff", actor_id=None)
+
+        event = AuditLog.objects.get(
+            action="auth.invitation.send_failed", resource_id=invitation.id
+        )
+        self.assertEqual(event.after["error"], "SMTPRecipientsRefused 550")
+        self.assertNotIn(self.user.email, json.dumps(event.after))
+
     def test_auth_email_ignores_tenant_template_override(self) -> None:
         previous = templates._override_resolver
         self.addCleanup(templates.set_override_resolver, previous)
