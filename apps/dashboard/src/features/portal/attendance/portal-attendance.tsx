@@ -8,10 +8,10 @@ import { useLocale, useTranslations } from "next-intl";
 
 import { LoadErrorCard } from "@/components/load-error-card";
 import { formatDate } from "@/lib/helpers";
-import type { AttendanceStatus, StudentAttendanceRecord } from "@/services";
+import type { AttendanceStatus, PortalChild, StudentAttendanceRecord } from "@/services";
 import { formatDecimal } from "@/features/portal/format-decimal";
 import { usePortalSummary } from "@/features/portal/use-portal-summary";
-import { useSelectedChild } from "@/features/portal/shell/use-selected-child";
+import { ChildGate } from "@/features/portal/shell/child-gate";
 import {
   ATTENDANCE_STATUS_DAY_CLASS,
   ATTENDANCE_STATUS_LABEL_KEY,
@@ -20,7 +20,14 @@ import {
 import { useRangeAttendance } from "./use-range-attendance";
 import { enumLabel } from "@/features/portal/enum-label";
 
-const STATUSES = Object.keys(ATTENDANCE_STATUS_LABEL_KEY) as AttendanceStatus[];
+function isStatus(key: string): key is AttendanceStatus {
+  return key in ATTENDANCE_STATUS_LABEL_KEY;
+}
+
+/** Every status, from the exhaustive label map (L32), with no cast. */
+const STATUSES: readonly AttendanceStatus[] = Object.keys(ATTENDANCE_STATUS_LABEL_KEY).filter(
+  isStatus,
+);
 
 /** One status per day: a day with several rows (period mode) shows its most concerning one. */
 function statusByDate(records: readonly StudentAttendanceRecord[]): Map<string, AttendanceStatus> {
@@ -40,15 +47,23 @@ function statusByDate(records: readonly StudentAttendanceRecord[]): Map<string, 
 /** One child's attendance: a month on the calendar, a day-by-day list for the same month, and
  * (this month only) the percentage the server computed for the summary card. */
 export function PortalAttendance() {
+  return <ChildGate>{(child) => <ChildAttendance child={child} />}</ChildGate>;
+}
+
+function ChildAttendance({ child }: { child: PortalChild }) {
   const t = useTranslations("portal.attendance");
   const locale = useLocale();
   const summary = usePortalSummary();
-  const { studentId, child } = useSelectedChild(summary.data?.children);
+  const studentId = child.student.id;
   // "This month" is the month of the date the server built the summary for (the school's
   // local date); the viewer's own clock is never consulted.
   const asOf = summary.data?.as_of;
   const currentMonth = asOf === undefined ? undefined : startOfMonth(parseISO(asOf));
   const [picked, setPicked] = useState<Date | null>(null);
+  const monthFormatter = useMemo(
+    () => new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }),
+    [locale],
+  );
   const month = picked ?? currentMonth;
 
   const records = useRangeAttendance(studentId, month && { from: month, to: endOfMonth(month) });
@@ -64,7 +79,7 @@ export function PortalAttendance() {
   // The server's card is for the current month; any other month has no server percentage.
   const monthPercentage =
     month !== undefined && currentMonth !== undefined && isSameMonth(month, currentMonth)
-      ? child?.attendance?.month_percentage
+      ? child.attendance?.month_percentage
       : null;
 
   function body() {
@@ -109,11 +124,7 @@ export function PortalAttendance() {
           ) : (
             <table className="w-full text-sm">
               <caption className="sr-only">
-                {t("caption", {
-                  month: new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(
-                    month,
-                  ),
-                })}
+                {t("caption", { month: monthFormatter.format(month) })}
               </caption>
               <tbody>
                 {dayList.map(([date, status]) => (

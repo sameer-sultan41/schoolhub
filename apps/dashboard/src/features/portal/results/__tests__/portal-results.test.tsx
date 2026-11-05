@@ -1,18 +1,27 @@
 import { screen } from "@testing-library/react";
 
 import { Services } from "@/services";
-import { AYESHA_ID, portalResult } from "@/test-fixtures/portal";
+import { AYESHA_ID, portalDashboard, portalResult } from "@/test-fixtures/portal";
 import { renderWithProviders } from "@/test-utils";
 
 import { PortalResults } from "../portal-results";
 
+const mockUseParams = jest.fn();
+
 jest.mock("next/navigation", () => ({
-  useParams: () => ({ studentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }),
+  useParams: () => mockUseParams() as unknown,
 }));
 
 jest.mock("@/services", () => ({
-  Services: { results: { listResults: jest.fn() } },
+  Services: {
+    parentPortal: { fetchPortalDashboard: jest.fn() },
+    results: { listResults: jest.fn() },
+  },
 }));
+
+const mockFetchDashboard = Services.parentPortal.fetchPortalDashboard as jest.MockedFunction<
+  typeof Services.parentPortal.fetchPortalDashboard
+>;
 
 const mockListResults = Services.results.listResults as jest.MockedFunction<
   typeof Services.results.listResults
@@ -21,6 +30,17 @@ const mockListResults = Services.results.listResults as jest.MockedFunction<
 describe("PortalResults", () => {
   beforeEach(() => {
     mockListResults.mockReset();
+    mockUseParams.mockReturnValue({ studentId: AYESHA_ID });
+    mockFetchDashboard.mockResolvedValue(portalDashboard());
+  });
+
+  it("a student id that is not one of the viewer's children is not found, and never fetched", async () => {
+    mockUseParams.mockReturnValue({ studentId: "99999999-9999-4999-8999-999999999999" });
+
+    renderWithProviders(<PortalResults />);
+
+    expect(await screen.findByText("Child not found")).toBeInTheDocument();
+    expect(mockListResults).not.toHaveBeenCalled();
   });
 
   it("results lists only what the API returns", async () => {

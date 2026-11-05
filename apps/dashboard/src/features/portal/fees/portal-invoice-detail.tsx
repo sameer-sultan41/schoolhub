@@ -143,6 +143,8 @@ export function PortalInvoiceDetail() {
                 void receipts.refetch();
               }}
             />
+          ) : receipts.isPending ? (
+            <Skeleton className="h-10 w-full" />
           ) : invoiceReceipts.length === 0 ? (
             <EmptyState
               icon={Receipt}

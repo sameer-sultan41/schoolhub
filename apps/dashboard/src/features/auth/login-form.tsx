@@ -25,7 +25,6 @@ import { Paths } from "@/config/paths";
 import { env } from "@/lib/env";
 import { homePathFor } from "@/lib/home-path";
 import { parseTenantSlug } from "@/lib/host";
-import { queryKeys } from "@/lib/query-client";
 import { ApiError, Services } from "@/services";
 import { loginSchema, type LoginValues } from "@/services/modules/auth/auth.schema";
 
@@ -46,10 +45,9 @@ export function LoginForm() {
   const mutation = useMutation({
     mutationFn: Services.auth.login,
     onSuccess: (data) => {
-      // Fire-and-forget: the redirect below does not need the cache to have settled first.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.session() });
-      // A fresh login never reads a previous identity: the gate would route on a stale user.
-      queryClient.removeQueries({ queryKey: queryKeys.currentUser() });
+      // A new identity starts from an empty cache: nothing a previous user read (their
+      // `/auth/me`, a staff list, another family's portal) may be shown or routed on.
+      queryClient.clear();
       const next = searchParams.get("next");
       // The auth layout's own logo links to /dashboard (unconditionally, next= or not),
       // so Next's Router Cache may already hold that route resolving to the pre-login

@@ -54,9 +54,7 @@ export const Paths = {
   PORTAL_INVOICE: (studentId: string, invoiceId: string) =>
     `/portal/${studentId}/fees/${invoiceId}`,
   PORTAL_RESULTS: (studentId: string) => `/portal/${studentId}/results`,
-  /** One child's week, or (no id) the portal-level page that picks a child. */
-  PORTAL_TIMETABLE: (studentId?: string) =>
-    studentId === undefined ? "/portal/timetable" : `/portal/${studentId}/timetable`,
+  PORTAL_TIMETABLE: (studentId: string) => `/portal/${studentId}/timetable`,
   PORTAL_MESSAGES: "/portal/messages",
   PORTAL_NOTICES: "/portal/notices",
   PORTAL_NOTICE: (noticeId: string) => `/portal/notices/${noticeId}`,

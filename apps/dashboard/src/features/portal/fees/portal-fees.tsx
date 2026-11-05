@@ -10,7 +10,7 @@ import { Paths } from "@/config/paths";
 import { formatDate } from "@/lib/helpers";
 import type { FeeInvoiceRecord, ReceiptRecord } from "@/services";
 import { formatDecimal } from "@/features/portal/format-decimal";
-import { useSelectedChild } from "@/features/portal/shell/use-selected-child";
+import { ChildGate } from "@/features/portal/shell/child-gate";
 import { FEE_STATUS_BADGE, FEE_STATUS_LABEL_KEY } from "./fee-status";
 import { ReceiptDownloadButton } from "./receipt-download-button";
 import { useChildInvoices, useReceiptsByInvoice } from "./use-fees-data";
@@ -106,8 +106,11 @@ function InvoiceList({ kind, studentId, receipts }: InvoiceListProps) {
 /** One child's fees: what is outstanding, what has been paid (with its receipts). Read-only:
  * there is no way to pay from here. */
 export function PortalFees() {
+  return <ChildGate>{(child) => <ChildFees studentId={child.student.id} />}</ChildGate>;
+}
+
+function ChildFees({ studentId }: { studentId: string }) {
   const t = useTranslations("portal.fees");
-  const { studentId } = useSelectedChild(undefined);
   const receipts = useReceiptsByInvoice();
 
   return (

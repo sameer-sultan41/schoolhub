@@ -1,12 +1,9 @@
 "use client";
 
 import { MyTimetable } from "@/features/timetable/my/my-timetable";
-import { useSelectedChild } from "@/features/portal/shell/use-selected-child";
+import { ChildGate } from "@/features/portal/shell/child-gate";
 
-/** One child's published week: the staff `MyTimetable`, told which child (the server
- * answers 404 for a student who is not the viewer's own). */
+/** One child's published week: the staff `MyTimetable`, told which child. */
 export function PortalTimetable() {
-  const { studentId } = useSelectedChild(undefined);
-  if (studentId === undefined) return null;
-  return <MyTimetable studentId={studentId} />;
+  return <ChildGate>{(child) => <MyTimetable studentId={child.student.id} />}</ChildGate>;
 }

@@ -134,14 +134,20 @@ describe("LoginForm", () => {
     });
 
     const { queryClient } = renderLoginForm();
-    // The previous staff user is still cached under the key the audience gate reads.
+    // The previous staff user is still cached under the key the audience gate reads, along
+    // with whatever that user's screens read.
     queryClient.setQueryData(queryKeys.currentUser(), buildUser([]));
+    queryClient.setQueryData(queryKeys.list("students", "students", { page: 1 }), { items: [] });
     await fillAndSubmit("guardian@cityschool.test", "secret123");
 
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledWith("/portal");
     });
+    // The whole cache is cleared, not only the current user.
     expect(queryClient.getQueryData(queryKeys.currentUser())).toBeUndefined();
+    expect(
+      queryClient.getQueryData(queryKeys.list("students", "students", { page: 1 })),
+    ).toBeUndefined();
   });
 
   it("redirects to a same-origin next param when present", async () => {

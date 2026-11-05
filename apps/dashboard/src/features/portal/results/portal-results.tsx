@@ -13,7 +13,7 @@ import { Services, type ResultRecord } from "@/services";
 import { PARENT_PORTAL_QUERY_MODULE } from "@/services/modules/parent-portal/parent-portal-constant";
 import { fetchAllPages } from "@/features/portal/fetch-all-pages";
 import { formatDecimal } from "@/features/portal/format-decimal";
-import { useSelectedChild } from "@/features/portal/shell/use-selected-child";
+import { ChildGate } from "@/features/portal/shell/child-gate";
 import { RESULT_OUTCOME_BADGE, RESULT_OUTCOME_LABEL_KEY } from "./result-outcome";
 import { enumBadge, enumLabel } from "@/features/portal/enum-label";
 
@@ -41,12 +41,14 @@ function groupByTerm(results: readonly ResultRecord[]): TermGroup[] {
 /** One child's published results, newest first. What the API returns is what is shown: it
  * answers a guardian with published results only, so there is no client-side filter. */
 export function PortalResults() {
+  return <ChildGate>{(child) => <ChildResults studentId={child.student.id} />}</ChildGate>;
+}
+
+function ChildResults({ studentId }: { studentId: string }) {
   const t = useTranslations("portal.results");
   const locale = useLocale();
-  const { studentId } = useSelectedChild(undefined);
   const query = useQuery({
     queryKey: queryKeys.list(PARENT_PORTAL_QUERY_MODULE, "results", { studentId }),
-    enabled: studentId !== undefined,
     queryFn: () =>
       fetchAllPages((cursor) => Services.results.listResults({ studentId, cursor, pageSize: 100 })),
   });

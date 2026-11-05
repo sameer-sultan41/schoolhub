@@ -9,6 +9,7 @@ import {
   INVOICE_ID,
   PAID_INVOICE_ID,
   RECEIPT_ID,
+  portalDashboard,
   portalInvoice,
   portalReceipt,
 } from "@/test-fixtures/portal";
@@ -31,11 +32,15 @@ jest.mock("@/lib/helpers", () => ({
 jest.mock("@/services", () => ({
   ApiError: jest.requireActual<{ ApiError: unknown }>("@schoolhub/api-client").ApiError,
   Services: {
+    parentPortal: { fetchPortalDashboard: jest.fn() },
     feeInvoices: { listFeeInvoices: jest.fn(), fetchFeeInvoice: jest.fn() },
     receipts: { listReceipts: jest.fn(), downloadReceipt: jest.fn() },
   },
 }));
 
+const mockFetchDashboard = Services.parentPortal.fetchPortalDashboard as jest.MockedFunction<
+  typeof Services.parentPortal.fetchPortalDashboard
+>;
 const mockListInvoices = Services.feeInvoices.listFeeInvoices as jest.MockedFunction<
   typeof Services.feeInvoices.listFeeInvoices
 >;
@@ -66,6 +71,7 @@ describe("PortalFees", () => {
     mockListReceipts.mockReset();
     mockDownload.mockReset();
     mockUseParams.mockReturnValue({ studentId: AYESHA_ID, invoiceId: INVOICE_ID });
+    mockFetchDashboard.mockResolvedValue(portalDashboard());
     mockListInvoices.mockImplementation((query) =>
       Promise.resolve({ items: query?.outstanding ? [outstanding] : [paid] }),
     );
@@ -140,6 +146,26 @@ describe("PortalFees", () => {
     expect(lines.getByText("Tuition")).toBeInTheDocument();
     expect(mockFetchInvoice).toHaveBeenCalledWith(INVOICE_ID);
     expect(await screen.findByRole("button", { name: /Receipt RCP-0001/ })).toBeInTheDocument();
+  });
+
+  it("does not say there are no receipts while the receipts are still loading", async () => {
+    mockFetchInvoice.mockResolvedValue(paid);
+    type ReceiptsPage = Awaited<ReturnType<typeof Services.receipts.listReceipts>>;
+    let resolveReceipts: (page: ReceiptsPage) => void = () => {};
+    mockListReceipts.mockReturnValue(
+      new Promise<ReceiptsPage>((resolve) => {
+        resolveReceipts = resolve;
+      }),
+    );
+
+    renderWithProviders(<PortalInvoiceDetail />);
+
+    expect(await screen.findByRole("heading", { name: "Invoice INV-0002" })).toBeInTheDocument();
+    expect(screen.queryByText("No receipts yet")).not.toBeInTheDocument();
+
+    resolveReceipts({ items: [portalReceipt()] });
+    expect(await screen.findByRole("button", { name: /Receipt RCP-0001/ })).toBeInTheDocument();
+    expect(screen.queryByText("No receipts yet")).not.toBeInTheDocument();
   });
 
   it("does not show another child's invoice under this child's address", async () => {
