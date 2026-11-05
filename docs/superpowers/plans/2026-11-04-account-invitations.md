@@ -455,10 +455,9 @@ names its cost if wrong. From the execution ledger.
    `Paths.FORGOT_PASSWORD`/`RESET_PASSWORD` and `PUBLIC_PATHS` entries.
 4. **No local test, lint or typecheck runs** (ADR-0007 and the user's rule override the SDD
    template's "run tests"). CI on the draft PR is the evidence. Cost: a slower red/green loop.
-5. **Throttle env overrides held back.** The `dev.py` `THROTTLE_RATE_*` reads, compose,
-   e2e-live job env and `.env.example` wiring wait for the user's OK on `.env.example`; the fixed
-   rates apply everywhere (patch kept as `task-A1-throttle-env.patch` in the SDD folder). Cost:
-   live and dev runs could hit the reset throttle.
+5. **Throttle env overrides landed last.** The `dev.py` `THROTTLE_RATE_*` reads, compose,
+   e2e-live job env and `.env.example` wiring were held back until the user approved the
+   `.env.example` edit (2026-11-05), then landed in PR A's final commits.
 6. **A third throttle.** Invitation preview and accept get their own `invitation_ip` bucket
    (60/hour); reset request and confirm keep `password_reset_ip` (20/hour); the per-email reset
    throttle is unchanged. Onboarding behind a school's NAT must not starve, and a reset burst
