@@ -25,6 +25,9 @@ import type { PortalInviteTarget, usePortalInvite } from "./use-portal-invite";
 export interface StudentInviteDialogProps {
   target: PortalInviteTarget;
   isResend: boolean;
+  /** The student already has an account (`inactive` or a pending invite): the server sends to
+   * its address and does not use the one typed here. */
+  hasAccount: boolean;
   invite: ReturnType<typeof usePortalInvite>;
   onOpenChange: (open: boolean) => void;
 }
@@ -42,6 +45,7 @@ function emailIssueOf(error: unknown): string | undefined {
 export function StudentInviteDialog({
   target,
   isResend,
+  hasAccount,
   invite,
   onOpenChange,
 }: StudentInviteDialogProps) {
@@ -58,7 +62,7 @@ export function StudentInviteDialog({
       open
       onOpenChange={onOpenChange}
       title={t(isResend ? "resendTitle" : "inviteTitle", { name: target.name })}
-      description={t(isResend ? "resendEmailHint" : "studentEmailHint")}
+      description={t(hasAccount ? "existingAccountEmailHint" : "studentEmailHint")}
       form={form}
       formError={formError}
       isPending={invite.mutation.isPending}

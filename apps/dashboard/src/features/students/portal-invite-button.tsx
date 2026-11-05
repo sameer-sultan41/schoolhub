@@ -61,6 +61,8 @@ export function PortalInviteButton({ target, portalStatus }: PortalInviteButtonP
         <StudentInviteDialog
           target={target}
           isResend={action === "resend"}
+          // `inactive` always has a linked account; `none` never does.
+          hasAccount={portalStatus !== "none"}
           invite={invite}
           onOpenChange={(open) => {
             if (!open) setDialogOpen(false);

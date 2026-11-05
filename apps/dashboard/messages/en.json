@@ -576,7 +576,7 @@
       "resendTitle": "Resend {name}'s invitation",
       "studentEmail": "Student's email",
       "studentEmailHint": "The invitation link goes to this address.",
-      "resendEmailHint": "A resend goes to the address the first invitation used. Enter it again to confirm.",
+      "existingAccountEmailHint": "This goes to the address the student's first invitation used; the email entered here isn't used.",
       "studentEmailNote": "Students have no email on file, so this is kept only on their portal account.",
       "invalidEmail": "Enter a valid email address.",
       "send": "Send invitation",

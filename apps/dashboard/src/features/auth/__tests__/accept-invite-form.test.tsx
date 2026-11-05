@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
 
 import { Services } from "@/services";
-import { renderWithProviders } from "@/test-utils";
+import { renderWithClient, renderWithProviders } from "@/test-utils";
 
 import { AcceptInviteForm } from "../accept-invite-form";
 import { apiError, openLink } from "./link-test-support";
@@ -59,6 +59,17 @@ describe("AcceptInviteForm", () => {
     expect(window.location.hash).toBe("");
     expect(window.location.href).not.toContain("tok-secret-1");
     expect(window.location.pathname).toBe("/accept-invite");
+  });
+
+  it("never puts the token in a query key", async () => {
+    openLink(LINK);
+    const { queryClient } = renderWithClient(<AcceptInviteForm />);
+
+    await screen.findByText("Choose a password for parent@example.com at City School.");
+    const queries = queryClient.getQueryCache().getAll();
+    const keys = queries.map((query) => JSON.stringify(query.queryKey));
+    expect(keys.length).toBeGreaterThan(0);
+    expect(keys.some((key) => key.includes("tok-secret-1"))).toBe(false);
   });
 
   it("shows who the invitation is for and which school sent it", async () => {

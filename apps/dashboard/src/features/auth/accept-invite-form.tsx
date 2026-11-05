@@ -32,11 +32,14 @@ export function AcceptInviteForm() {
   const link = useLinkFragment(INVITATION_LINK_KEYS);
   const [linkRejected, setLinkRejected] = useState(false);
 
+  // A fixed key, never the token: the token lives only in `link` and the request body, and
+  // `gcTime: 0` drops the cached preview as soon as the page unmounts.
   const preview = useQuery({
-    queryKey: queryKeys.detail("auth", "invitation-preview", link?.token ?? ""),
+    queryKey: queryKeys.detail("auth", "invitation-preview", "current"),
     queryFn: () => Services.auth.previewInvitation(link as NonNullable<typeof link>),
     enabled: Boolean(link),
     retry: false,
+    gcTime: 0,
   });
 
   if (link === undefined) return <Skeleton className="h-64 w-full" />;

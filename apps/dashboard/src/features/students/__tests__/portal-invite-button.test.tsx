@@ -186,6 +186,18 @@ describe("PortalInviteButton", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
+  it("says the typed email isn't used for an inactive account either", async () => {
+    renderButton(STUDENT, "inactive");
+
+    await userEvent.setup().click(screen.getByRole("button", { name: /invite to portal/i }));
+
+    expect(
+      await screen.findByText(
+        "This goes to the address the student's first invitation used; the email entered here isn't used.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("tells the admin a resend goes to the address the first invitation used", async () => {
     renderButton(STUDENT, "send_failed");
 
@@ -193,7 +205,7 @@ describe("PortalInviteButton", () => {
 
     expect(
       await screen.findByText(
-        "A resend goes to the address the first invitation used. Enter it again to confirm.",
+        "This goes to the address the student's first invitation used; the email entered here isn't used.",
       ),
     ).toBeInTheDocument();
   });
