@@ -12,6 +12,8 @@ const ACKNOWLEDGED = "Acknowledged.";
 
 /** What a streamed receipt carries in the stub: a PDF header is all the download needs. */
 const PDF_BODY = "%PDF-1.4 e2e receipt";
+/** `assert_preference_may_be_saved`'s refusal, word for word. */
+const EMERGENCY_LOCKED = "The emergency notification category cannot be disabled.";
 
 /** `InvoiceFilter.outstanding`: issued, partially paid or overdue, none of them settled. */
 const OUTSTANDING_STATUSES: readonly string[] = ["issued", "partially_paid", "overdue"];
@@ -149,6 +151,10 @@ export function portalModule(store: PortalStore): MockModule {
     api.patch("/notification-preferences", (request) => {
       const body = request.json() as
         { event_category: string; channel: string; is_enabled: boolean }[] | null;
+      // The server's emergency floor (`preferences/services/save.py`): the whole save is refused.
+      if ((body ?? []).some((c) => c.event_category === "emergency" && !c.is_enabled)) {
+        return fail(422, EMERGENCY_LOCKED, { code: "domain_rule_violation" });
+      }
       for (const change of body ?? []) {
         store.setPreference(change.event_category, change.channel, change.is_enabled);
       }
