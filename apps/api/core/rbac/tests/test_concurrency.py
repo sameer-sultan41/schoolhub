@@ -18,16 +18,24 @@ from concurrent.futures import Future, ThreadPoolExecutor
 
 from django.db import connection, connections
 from django.test import TransactionTestCase
+from django.utils import timezone
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
 from apps.school_organization.tests.factories import TenantFactory, UserFactory
 from core.api.exceptions import InvalidLink
-from core.rbac.invitations.services import create_invitation
+from core.rbac.invitations.exceptions import AlreadyActive
+from core.rbac.invitations.services import (
+    INVITATION_TTL,
+    accept_invitation,
+    create_invitation,
+    hash_token,
+    readdress_pending_account,
+)
 from core.rbac.models import Invitation, User
 from core.rbac.password_reset.services import confirm_password_reset
 from core.rbac.password_reset.tokens import reset_token_generator
-from core.rbac.tests.link_helpers import invited_user
+from core.rbac.tests.link_helpers import invited_user, without_app_eligibility_hooks
 from core.tenancy.context import tenant_atomic
 
 LOCK_WAIT_SECONDS = 10
@@ -116,3 +124,53 @@ class ConcurrentWriteTests(TransactionTestCase):
         self.assertIs(outcome, InvalidLink)
         user.refresh_from_db()
         self.assertTrue(user.check_password("test-password-first-13579"))
+
+    def test_resend_racing_an_accept_never_readdresses_the_activated_account(self) -> None:
+        """A resend that read the account before an accept committed must not move its login.
+
+        Guarded by the outcome, not the wait: without the lock the resend still waits, on
+        the accept's UPDATE of the user row, then overwrites the email and issues a new link.
+        """
+        without_app_eligibility_hooks(self)
+        raw = "race-accept-token"
+        user = invited_user(self.tenant, email="original@example.test")
+        with tenant_atomic(self.tenant.id):
+            Invitation.objects.create(
+                tenant=self.tenant,
+                user=user,
+                kind="staff",
+                token_hash=hash_token(raw),
+                sent_at=timezone.now(),
+                expires_at=timezone.now() + INVITATION_TTL,
+            )
+
+        def resend() -> type[Exception] | None:
+            try:
+                with tenant_atomic(self.tenant.id):
+                    stale = User.objects.get(pk=user.pk)
+                    readdress_pending_account(user=stale, email="corrected@example.test")
+                    create_invitation(user=stale, kind="staff", actor_id=None)
+                return None
+            except AlreadyActive:
+                return AlreadyActive
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            with tenant_atomic(self.tenant.id):
+                accept_invitation(
+                    tenant=self.tenant, raw_token=raw, password="test-password-accepted-97531"
+                )
+                contending = pool.submit(resend)
+                self.wait_until_blocked(contending)
+            outcome = contending.result(timeout=LOCK_WAIT_SECONDS)
+
+        self.assertIs(outcome, AlreadyActive)
+        user.refresh_from_db()
+        self.assertTrue(user.is_active)
+        self.assertEqual(user.email, "original@example.test")
+        with tenant_atomic(self.tenant.id):
+            pending = Invitation.objects.filter(
+                user=user, accepted_at__isnull=True, revoked_at__isnull=True
+            ).count()
+        self.assertEqual(pending, 0)

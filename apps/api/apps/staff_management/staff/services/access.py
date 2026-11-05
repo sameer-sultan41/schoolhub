@@ -5,11 +5,14 @@ from __future__ import annotations
 import logging
 import uuid
 
+from django.db import transaction
+
 from apps.staff_management.models import Staff
 
 logger = logging.getLogger(__name__)
 
 
+@transaction.atomic
 def end_staff_access(staff: Staff, *, actor_id: uuid.UUID, reason: str) -> None:
     """Deactivate a departed staff member's login, unless it is someone else's too.
 

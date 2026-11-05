@@ -24,7 +24,7 @@ from core.audit.services import record_task_security_event
 from core.rbac.account_links import account_link
 from core.rbac.auth_emails import INVITATION, send_auth_email
 from core.rbac.invitations.eligibility import is_eligible
-from core.rbac.invitations.exceptions import EmailInUse
+from core.rbac.invitations.exceptions import AlreadyActive, EmailInUse
 from core.rbac.models import Invitation, InvitationStatus, User
 from core.tenancy.context import tenant_atomic
 from core.tenancy.models import Tenant
@@ -77,19 +77,30 @@ def readdress_pending_account(*, user: User, email: str | None) -> None:
     How a school recovers from a mistyped address: it corrects the person's email and resends.
     An account someone has activated keeps its address, since changing it would move their
     login. Another account's address is a 409 ``email_in_use``, as on a first invite.
+
+    The decision is made on the user row re-read under a lock, the same user-then-invitations
+    order `create_invitation` takes: ``user`` may be stale, and an accept committing in between
+    would otherwise have its new login re-addressed and re-invited. An account that became
+    active meanwhile is a 409 ``already_active``.
     """
     address = (email or "").strip()
     tenant_id = user.tenant_id
     # A platform account (no school) is never invited, so it is never re-addressed.
-    if tenant_id is None or not address or address == user.email or not never_activated(user):
+    if tenant_id is None or not address or address == user.email:
         return
-    assert_email_free(tenant_id=tenant_id, email=address, exclude_user_id=user.pk)
-    user.email = address
+    locked = User.objects.select_for_update().get(pk=user.pk)
+    if locked.is_active:
+        raise AlreadyActive()
+    if not never_activated(locked):
+        return
+    assert_email_free(tenant_id=tenant_id, email=address, exclude_user_id=locked.pk)
+    locked.email = address
     try:
         with transaction.atomic():
-            user.save(update_fields=["email", "updated_at"])
+            locked.save(update_fields=["email", "updated_at"])
     except IntegrityError as exc:
         raise EmailInUse() from exc
+    user.email = address
 
 
 def create_invited_user(
