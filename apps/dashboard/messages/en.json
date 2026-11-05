@@ -2096,5 +2096,29 @@
     "requestId": "Reference: {requestId}",
     "pageErrorTitle": "Something went wrong",
     "pageErrorBody": "This page hit an unexpected error. Try again, or contact support if it keeps happening."
+  },
+  "portal": {
+    "shell": {
+      "title": "Parent portal",
+      "signOut": "Sign out",
+      "unread": "{count, plural, one {# unread notification} other {# unread notifications}}",
+      "loadFailed": "We couldn't load your portal. Please try again."
+    },
+    "switcher": {
+      "label": "Child",
+      "placeholder": "Choose a child"
+    },
+    "nav": {
+      "label": "Portal sections",
+      "overview": "Overview",
+      "attendance": "Attendance",
+      "fees": "Fees",
+      "results": "Results",
+      "timetable": "Timetable",
+      "messages": "Messages",
+      "notices": "Notices",
+      "notifications": "Notifications",
+      "settings": "Settings"
+    }
   }
 }

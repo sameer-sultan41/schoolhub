@@ -2096,5 +2096,29 @@
     "requestId": "حوالہ: {requestId}",
     "pageErrorTitle": "کچھ غلط ہو گیا",
     "pageErrorBody": "اس صفحے پر ایک غیر متوقع خرابی پیش آئی۔ دوبارہ کوشش کریں، یا اگر مسئلہ برقرار رہے تو سپورٹ سے رابطہ کریں۔"
+  },
+  "portal": {
+    "shell": {
+      "title": "والدین کا پورٹل",
+      "signOut": "سائن آؤٹ",
+      "unread": "{count, plural, one {# نہ پڑھی گئی اطلاع} other {# نہ پڑھی گئی اطلاعات}}",
+      "loadFailed": "آپ کا پورٹل لوڈ نہیں ہو سکا۔ براہ کرم دوبارہ کوشش کریں۔"
+    },
+    "switcher": {
+      "label": "بچہ",
+      "placeholder": "بچہ منتخب کریں"
+    },
+    "nav": {
+      "label": "پورٹل کے حصے",
+      "overview": "خلاصہ",
+      "attendance": "حاضری",
+      "fees": "فیس",
+      "results": "نتائج",
+      "timetable": "ٹائم ٹیبل",
+      "messages": "پیغامات",
+      "notices": "نوٹس",
+      "notifications": "اطلاعات",
+      "settings": "ترتیبات"
+    }
   }
 }

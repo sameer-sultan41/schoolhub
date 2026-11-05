@@ -262,4 +262,48 @@ export const endpoints = {
     preview: "/broadcasts:preview",
     emergency: "/broadcasts:emergency",
   },
+  /** `GET /parent-portal/dashboard`: the guardian's or student's home summary. */
+  parentPortal: {
+    dashboard: "/parent-portal/dashboard",
+  },
+  /** `/notifications`: the caller's own inbox; the actions are colon-actions
+   * (`apps/api/core/notifications/urls.py`). */
+  notifications: {
+    list: "/notifications",
+    detail: (id: string) => `/notifications/${id}`,
+    markRead: (id: string) => `/notifications/${id}:mark-read`,
+    markAllRead: "/notifications:mark-all-read",
+    unreadCount: "/notifications:unread-count",
+  },
+  /** `/notification-preferences`: the caller's category x channel matrix (`GET`, `PATCH`). */
+  notificationPreferences: {
+    list: "/notification-preferences",
+  },
+  /** `/notices`: a guardian reads and acknowledges; staff manage (not called here). */
+  notices: {
+    list: "/notices",
+    detail: (id: string) => `/notices/${id}`,
+    acknowledge: (id: string) => `/notices/${id}:acknowledge`,
+  },
+  /** `/fee-invoices`: read-only for a guardian (published, non-draft rows only). */
+  feeInvoices: {
+    list: "/fee-invoices",
+    detail: (id: string) => `/fee-invoices/${id}`,
+  },
+  /** `/receipts`; `download` streams a PDF (`?format=pdf|thermal`). */
+  receipts: {
+    list: "/receipts",
+    detail: (id: string) => `/receipts/${id}`,
+    download: (id: string) => `/receipts/${id}/download`,
+  },
+  /** `/results`: a guardian sees published results only. */
+  results: {
+    list: "/results",
+    detail: (id: string) => `/results/${id}`,
+  },
+  /** `/report-cards`: a guardian sees published cards only. */
+  reportCards: {
+    list: "/report-cards",
+    detail: (id: string) => `/report-cards/${id}`,
+  },
 } as const;

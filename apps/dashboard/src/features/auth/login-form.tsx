@@ -23,6 +23,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { Paths } from "@/config/paths";
 import { env } from "@/lib/env";
+import { homePathFor } from "@/lib/home-path";
 import { parseTenantSlug } from "@/lib/host";
 import { getQueryClient, queryKeys } from "@/lib/query-client";
 import { ApiError, Services } from "@/services";
@@ -43,7 +44,7 @@ export function LoginForm() {
 
   const mutation = useMutation({
     mutationFn: Services.auth.login,
-    onSuccess: () => {
+    onSuccess: (data) => {
       // Fire-and-forget: the redirect below does not need the cache to have settled first.
       void getQueryClient().invalidateQueries({ queryKey: queryKeys.session() });
       const next = searchParams.get("next");
@@ -54,7 +55,8 @@ export function LoginForm() {
       // forced to re-check the proxy for real instead of serving that stale cached
       // redirect straight from the client with no new request at all.
       router.refresh();
-      router.replace(next?.startsWith("/") ? next : Paths.DASHBOARD);
+      // A student or guardian lands on the portal; the staff shell would only bounce them there.
+      router.replace(next?.startsWith("/") ? next : homePathFor(data.user));
     },
     onError: (error: unknown) => {
       if (!(error instanceof ApiError)) return;

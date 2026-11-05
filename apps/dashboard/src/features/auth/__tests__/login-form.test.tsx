@@ -106,6 +106,21 @@ describe("LoginForm", () => {
     );
   });
 
+  it("lands a restricted principal on the portal when there is no next param", async () => {
+    const response = makeLoginResponse();
+    mockLogin.mockResolvedValue({
+      ...response,
+      user: { ...response.user, is_restricted_principal: true },
+    });
+
+    renderLoginForm();
+    await fillAndSubmit("guardian@cityschool.test", "secret123");
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/portal");
+    });
+  });
+
   it("redirects to a same-origin next param when present", async () => {
     mockGet.mockReturnValue("/students");
     mockLogin.mockResolvedValue(makeLoginResponse());

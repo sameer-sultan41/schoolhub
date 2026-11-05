@@ -1,4 +1,12 @@
 import { BroadcastsService } from "./modules/broadcasts";
+import { FeeInvoicesService } from "./modules/fee-invoices";
+import { NoticesService } from "./modules/notices";
+import { NotificationPreferencesService } from "./modules/notification-preferences";
+import { NotificationsService } from "./modules/notifications";
+import { ParentPortalService } from "./modules/parent-portal";
+import { ReceiptsService } from "./modules/receipts";
+import { ReportCardsService } from "./modules/report-cards";
+import { ResultsService } from "./modules/results";
 import { AttendanceCorrectionsService } from "./modules/attendance-corrections";
 import { AttendanceReportsService } from "./modules/attendance-reports";
 import { AttendanceSettingsService } from "./modules/attendance-settings";
@@ -189,6 +197,27 @@ export type {
   UpdateGuardianLinkInput,
 } from "./modules/guardians";
 
+export type {
+  PortalChild,
+  PortalDashboard,
+  PortalModuleKey,
+  PortalModules,
+  PortalStudent,
+} from "./modules/parent-portal";
+
+export type {
+  NotificationCategory,
+  NotificationRecord,
+  NotificationsQuery,
+} from "./modules/notifications";
+
+export type { NoticeRead, NoticeType, PortalNoticeRecord } from "./modules/notices";
+export type { NotificationPreferenceRow } from "./modules/notification-preferences";
+export type { FeeInvoiceRecord } from "./modules/fee-invoices";
+export type { ReceiptFormat, ReceiptRecord } from "./modules/receipts";
+export type { ResultRecord } from "./modules/results";
+export type { ReportCardRecord } from "./modules/report-cards";
+
 /**
  * Every domain's API calls, aggregated behind one object. A component imports `Services`
  * and calls `Services.<domain>.<action>(...)` — never `apiClient` and never a service
@@ -226,4 +255,12 @@ export const Services = {
   messageThreads: MessageThreadsService,
   threadOversight: ThreadOversightService,
   broadcasts: BroadcastsService,
+  parentPortal: ParentPortalService,
+  notifications: NotificationsService,
+  notificationPreferences: NotificationPreferencesService,
+  notices: NoticesService,
+  feeInvoices: FeeInvoicesService,
+  receipts: ReceiptsService,
+  results: ResultsService,
+  reportCards: ReportCardsService,
 } as const;

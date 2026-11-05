@@ -46,6 +46,19 @@ export const Paths = {
   COMMUNICATION_MESSAGES: "/communication/messages",
   COMMUNICATION_OVERSIGHT: "/communication/oversight",
   COMMUNICATION_BROADCAST: "/communication/broadcast",
+  /** The parent/student portal (`app/(portal)/portal`). A child is the `[studentId]` segment. */
+  PORTAL: "/portal",
+  PORTAL_CHILD: (studentId: string) => `/portal/${studentId}`,
+  PORTAL_ATTENDANCE: (studentId: string) => `/portal/${studentId}/attendance`,
+  PORTAL_FEES: (studentId: string) => `/portal/${studentId}/fees`,
+  PORTAL_RESULTS: (studentId: string) => `/portal/${studentId}/results`,
+  /** One child's week, or (no id) the portal-level page that picks a child. */
+  PORTAL_TIMETABLE: (studentId?: string) =>
+    studentId === undefined ? "/portal/timetable" : `/portal/${studentId}/timetable`,
+  PORTAL_MESSAGES: "/portal/messages",
+  PORTAL_NOTICES: "/portal/notices",
+  PORTAL_NOTIFICATIONS: "/portal/notifications",
+  PORTAL_SETTINGS: "/portal/settings",
   LOGIN: "/login",
   FORGOT_PASSWORD: "/forgot-password",
   RESET_PASSWORD: "/reset-password",
