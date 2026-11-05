@@ -2,8 +2,13 @@
 
 `TransactionTestCase`, as in `core/jobs/tests/test_claim.py`: each race holds a real
 transaction open on this connection while a second thread's call runs on its own, and
-`pg_locks` shows when that second call is waiting. Without the lock, the second call
-never waits and the "returned without waiting" assertion fails.
+`pg_locks` shows when that second call is waiting.
+
+What fails without the lock differs per test. Without `create_invitation`'s user-row lock the
+second invite waits on nothing, so the "returned without waiting" assertion fails. Without
+reset confirm's `select_for_update` the second confirm still waits, on the first's UPDATE of
+the user row, then overwrites the password once it commits; that test is guarded by its
+outcome assertion (`InvalidLink`, first password kept), not by the wait.
 """
 
 from __future__ import annotations
@@ -35,7 +40,11 @@ class ConcurrentWriteTests(TransactionTestCase):
         self.tenant = TenantFactory()
 
     def wait_until_blocked(self, contending: Future) -> None:
-        """Poll `pg_locks` until a backend waits on a lock, i.e. the contender is blocked."""
+        """Poll `pg_locks` until some backend waits on a lock, i.e. the contender is blocked.
+
+        It does not say which lock: a contender blocked on a plain UPDATE passes too, so a
+        test whose unlocked version would also wait needs its own outcome assertion.
+        """
         deadline = time.monotonic() + LOCK_WAIT_SECONDS
         while time.monotonic() < deadline:
             with connection.cursor() as cursor:
