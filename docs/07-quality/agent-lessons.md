@@ -326,6 +326,24 @@
   mock in the same commit. A hand-written record type the change touches (for example
   `StaffDetailRecord` gaining `user_id`) gets the same sweep.
 
+### L42. An action that assigns roles checks the actor may grant them
+
+- **Mistake.** Account-invitations PR A's staff `:invite` assigned any `role_ids` under
+  `staff.staff.update` alone. Once invitations could activate an account, `hr_staff` could mint
+  a `school_admin` login; the final review caught it.
+- **Check.** Wherever a request hands roles or keys to another account, refuse (403) a
+  restricted-principal role and any role holding a key outside
+  `effective_permission_keys(actor)`. Test it with a narrower real role (`grant_default_role`)
+  granting a wider one, plus a positive control.
+
+### L43. Every path that ends a record ends its login
+
+- **Mistake.** PR A ended a departing staff member's access in `:exit` only; `DELETE /staff/{id}`
+  soft-deleted the row and left the login active with its roles and tokens.
+- **Check.** When a record owns a login, list every route that ends the record (`:exit`,
+  `:withdraw`, `DELETE`, imports) and route each through one access-ending service. Test the
+  `DELETE` as well as the colon-action.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.

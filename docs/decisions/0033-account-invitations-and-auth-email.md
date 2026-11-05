@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-05
-- **Enforced by:** `apps/api/core/rbac/tests/test_invitations.py` (`test_invitation_token_stored_hashed_and_link_emailed`, `test_accept_refused_when_person_no_longer_eligible`, `test_send_failure_marks_invitation_send_failed`, `test_auth_email_ignores_tenant_template_override`); `core/rbac/tests/test_invitations_cross_tenant.py`; `core/rbac/tests/test_password_reset.py` (`test_reset_unknown_inactive_and_platform_email_all_204_no_email`, `test_reset_confirm_refuses_inactive_user`, `test_reset_throttled_per_email`); `core/rbac/tests/test_sessions.py` (`test_revoke_refresh_tokens_covers_a_rotated_token`); `core/rbac/tests/test_concurrency.py` (one pending invitation, one spend per reset link); `tests/test_celery_routing.py`; `tests/test_throttle_rates.py`; `tests/test_rls_coverage.py` (the `invitations` policy); the dashboard's `features/auth/__tests__/accept-invite-form.test.tsx` and `reset-password-form.test.tsx` (the token is cleared from the URL) and `src/__tests__/proxy.test.ts` (an emailed-link page is never redirected); `e2e/tests/live/api/account-invitations.spec.ts` (an unknown email is a 204, every unusable link the same `invalid_link`)
+- **Enforced by:** `apps/api/core/rbac/tests/test_invitations.py` (`test_invitation_token_stored_hashed_and_link_emailed`, `test_accept_refused_when_person_no_longer_eligible`, `test_send_failure_marks_invitation_send_failed`, `test_auth_email_ignores_tenant_template_override`); `core/rbac/tests/test_invitations_cross_tenant.py`; `core/rbac/tests/test_password_reset.py` (`test_reset_unknown_inactive_and_platform_email_all_204_no_email`, `test_reset_confirm_refuses_inactive_user`, `test_reset_throttled_per_email`); `core/rbac/tests/test_invitations.py`'s `test_reset_burst_does_not_throttle_invitation_accept` (the separate invitation throttle bucket); `core/rbac/tests/test_sessions.py` (`test_revoke_refresh_tokens_covers_a_rotated_token`); `core/rbac/tests/test_concurrency.py` (one pending invitation, one spend per reset link); `tests/test_celery_routing.py`; `tests/test_throttle_rates.py`; `tests/test_rls_coverage.py` (the `invitations` policy); the dashboard's `features/auth/__tests__/accept-invite-form.test.tsx` and `reset-password-form.test.tsx` (the token is cleared from the URL) and `src/__tests__/proxy.test.ts` (an emailed-link page is never redirected); `e2e/tests/live/api/account-invitations.spec.ts` (an unknown email is a 204, every unusable link the same `invalid_link`)
 
 ## Context
 
@@ -54,8 +54,12 @@ from a future mobile app (Invariant 7). Decided in plan
    `core/rbac/auth_emails.py`, rendered with `NotificationTemplate.render` (the same literal
    substitution) and sent through the email adapter from a Celery task on the `transactional`
    queue (`core.rbac.*.tasks.*`). They are never registered in the template registry and never
-   looked up through `templates.resolve()`, so no school can override them. Transient SMTP and
-   connection errors are retried three times.
+   looked up through `templates.resolve()`, so no school can override them. Any `OSError` is
+   retried three times: connection and timeout errors, and every SMTP error, since `smtplib`'s
+   exceptions subclass it. That includes a permanent 5xx refusal, which costs three wasted
+   attempts before `send_failed`; anything else (a template error, a bug) fails at once. The
+   audit row for a final failure stores only the exception class and SMTP status code, because
+   an SMTP error's message can carry the recipient's address.
 8. **Three throttles of their own, none shared with login.**
    - `PasswordResetEmailThrottle` (5/hour, keyed on the SHA-256 of the school slug and the
      normalised email) guards the reset request.
@@ -68,7 +72,7 @@ from a future mobile app (Invariant 7). Decided in plan
    None of them is `AuthEndpointThrottle`, so a burst here cannot lock a school out of login.
 9. **Revoking sessions is one helper.** `core/rbac/sessions.py`'s
    `revoke_refresh_tokens(user_id)` blacklists every unexpired `OutstandingToken` of the user.
-   It is used by reset, and by account deactivation and staff exit.
+   It is used by reset, and by account deactivation, staff exit and staff delete.
 
 ### What simplejwt 5.5.1 does with rotated tokens
 

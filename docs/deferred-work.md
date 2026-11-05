@@ -37,6 +37,22 @@ either this file or `project-status.md`.
     an account on suspension. Add a `sync_student_portal_accounts` call when a suspend
     action is built.
 
+- **Account invitations: left by the PR A final review** (PR A, `feat/account-invitations`;
+  [ADR-0033](decisions/0033-account-invitations-and-auth-email.md)).
+  - **Accept and reset audit events have no actor.** `auth.invitation.accepted` and
+    `auth.password.reset` are written by an anonymous request, so `actor_id` is empty and the
+    account is identified only by the user id in `after`. Set `actor_id` to that user.
+  - **No test that the reset and password-changed emails create no notification rows.** The
+    invitation email has one; the two reset emails go through the same `send_auth_email` but
+    are not asserted to leave no `Notification` or `DeliveryLog` row.
+  - **Idempotency endpoint names omit the record.** `replay_or_execute` is keyed on names
+    like `staff:invite`, not `staff:{pk}:invite`, across the repo, so one key reused on two
+    records replays the first record's answer. Fix repo-wide, not per endpoint.
+  - **A residual deadlock between an invite and a sync or accept for one user.**
+    `create_invitation` locks the user row, then writes invitations; `sync_portal_account` and
+    `accept_invitation` touch invitations, then the user row. Racing on one user, Postgres
+    aborts one with a deadlock error, a retryable 500. Rare; one lock order fixes it.
+
 - **Account invitations: what Task A3 (the dashboard) left out** (PR A,
   `feat/account-invitations`; [ADR-0033](decisions/0033-account-invitations-and-auth-email.md)).
   - **An admin screen listing invitations, with revoke.** Invitations are rows with a status,
@@ -51,11 +67,16 @@ either this file or `project-status.md`.
     dashboard has no role picker or role-management screen yet, so it sends none: a staff member
     invited from the sheet can sign in but holds no role until one is assigned through the API.
     Add the picker to the invite (or the role screen) when role management is built.
-  - **A student invite with an account already linked asks for an email the server ignores.**
-    `StudentInviteRequest.email` is required on every call, but a resend (`invited`, `expired`,
-    `send_failed`) and a fresh invite of an `inactive` student (which always has a linked
-    account) both go to the account's own address. The dialog says the field isn't used;
-    making `email` optional when an account is linked would drop it.
+  - **A student invite to a once-active account asks for an email the server ignores.**
+    `StudentInviteRequest.email` is required on every call. A resend to an account nobody has
+    activated goes to it (that is how a mistyped address is corrected), but an `inactive`
+    account that was once active keeps its own address. `portal_status` cannot tell those two
+    `inactive` cases apart, so the dialog's hint names both; a status that did would let the
+    dialog skip the field for the second.
+  - **A principal sees no guardian invite button.** `principal` holds
+    `students.portal-account.invite` but not `students.guardian.view`, and the button lives only
+    on the Guardians tab, which needs the latter. The API accepts the principal's invite. Waiting
+    on the user's decision whether `principal` gets `students.guardian.view` or the button moves.
   - **SSO** (Google or Microsoft sign-in for a school). Accounts sign in with a password only.
   - **Students sign in with the username on their ID card** (`auth.login.identifierHint`), but
     an invited student sets a password for their email address; nothing issues or resets a
