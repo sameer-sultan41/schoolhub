@@ -1105,7 +1105,8 @@ either this file or `project-status.md`.
     that was on screen.
   - **Attendance legend.** The legend badges carry the status name but no colour swatch.
   - **Receipts lookup.** Receipts are fetched tenant-wide (up to 2000) and matched to invoices
-    by `invoice_no`. Filter by student once `/receipts` supports it.
+    by `invoice_no`; a partial payment's receipt is reachable only from the invoice detail, since
+    the fees list offers receipts on paid rows only. Filter by student once `/receipts` supports it.
 
 - **`eslint-plugin-playwright` for `e2e/`** (planned in the engineering-standards spec, PR 4) was
   deferred: adding a dependency means `pnpm install`, which runs PR 3's `prepare` script and

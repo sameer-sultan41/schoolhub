@@ -223,7 +223,8 @@
 ### L32. Never render a raw API enum value as user-visible text
 
 - **Mistake.** The broadcast preview listed channels by their API ids (`in_app`, `sms`), which reached the screen as written (fixed in `a7e49cb5`).
-- **Check.** Every enum a user can see (channel, status, type, role) goes through an i18n label map in both locale files, with a fallback for a value the map lacks, and a spec asserts the label, not the id.
+- **Mistake (again, parent portal PR 2).** `NOTIFICATION_CATEGORIES` was a hand-kept array that a new enum member did not break, and every portal label map (category, priority, channel, notice type, fee status, result outcome, attendance status) indexed the messages directly with no fallback, so a value the server adds first would render a raw message key. Fixed by deriving the list from a `Record` over the generated enum and routing every label through one helper (`features/portal/enum-label.ts`).
+- **Check.** Every enum a user can see (channel, status, type, role) goes through an i18n label map in both locale files, and both halves hold: (1) any runtime list of the values (columns, legend, filter options) is derived from a `Record<GeneratedEnum, …>`, never a hand-kept array or an `as` cast, so a new member fails to compile; (2) rendering falls back to the humanised value when the map or the messages lack it (`t.has(key) ? t(key) : humanizeSnakeCase(value)`), because the server can ship a value before the dashboard does. A spec asserts the label, not the id.
 
 ### L33. A "do it once" guard must be released when the call fails
 
