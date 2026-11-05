@@ -135,7 +135,7 @@ describe("PortalShell", () => {
     const user = userEvent.setup();
 
     renderWithProviders(<PortalShell>page body</PortalShell>);
-    await user.click(await screen.findByRole("button", { name: "Retry" }));
+    await user.click(await screen.findByRole("button", { name: "Try again" }));
 
     await waitFor(() => {
       expect(screen.getByRole("link", { name: "Fees" })).toBeInTheDocument();
