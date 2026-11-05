@@ -27,3 +27,5 @@ export * from "./domains/attendance-staff-reports";
 export * from "./domains/attendance-reports-import";
 export * from "./domains/communication-store";
 export * from "./domains/communication";
+export * from "./domains/portal-store";
+export * from "./domains/portal";
