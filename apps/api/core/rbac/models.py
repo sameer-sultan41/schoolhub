@@ -11,9 +11,10 @@ import uuid
 
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
+from django.utils import timezone
 
 from core.tenancy.managers import AllTenantsManager
-from core.tenancy.models import TimestampedModel
+from core.tenancy.models import TenantOwnedModel, TimestampedModel
 
 
 class RecordScope(models.TextChoices):
@@ -223,3 +224,64 @@ class UserRole(TimestampedModel):
             ),
         ]
         indexes = [models.Index(fields=["user", "tenant"])]
+
+
+class InvitationKind(models.TextChoices):
+    """Who an account invitation is for; each kind has its own eligibility hook."""
+
+    STAFF = "staff", "Staff"
+    GUARDIAN = "guardian", "Guardian"
+    STUDENT = "student", "Student"
+
+
+class InvitationStatus(models.TextChoices):
+    PENDING = "pending", "Pending"
+    ACCEPTED = "accepted", "Accepted"
+    REVOKED = "revoked", "Revoked"
+    EXPIRED = "expired", "Expired"
+    SEND_FAILED = "send_failed", "Send failed"
+
+
+class Invitation(TenantOwnedModel):
+    """A single-use link that lets an invited person set a password and activate (ADR-0033).
+
+    Only the SHA-256 of the token is stored. The raw token is created inside the send
+    task, emailed, and never persisted or passed through the broker. ``token_hash`` is
+    blank until the first send, and blank again once a send has finally failed.
+    """
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="invitations")
+    kind = models.CharField(max_length=20, choices=InvitationKind.choices)
+    # Blank until the first send; unique among the non-blank ones (the constraint below).
+    token_hash = models.CharField(max_length=64, blank=True, default="")
+    expires_at = models.DateTimeField()
+    sent_at = models.DateTimeField(null=True, blank=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    send_failed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "invitations"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["token_hash"],
+                name="invitations_unique_token_hash",
+                condition=~models.Q(token_hash=""),
+            ),
+        ]
+        indexes = [models.Index(fields=["tenant", "user"])]
+
+    def __str__(self) -> str:
+        return f"{self.kind} invitation for {self.user_id}"
+
+    @property
+    def status(self) -> str:
+        if self.accepted_at is not None:
+            return InvitationStatus.ACCEPTED
+        if self.revoked_at is not None:
+            return InvitationStatus.REVOKED
+        if self.send_failed_at is not None:
+            return InvitationStatus.SEND_FAILED
+        if self.expires_at <= timezone.now():
+            return InvitationStatus.EXPIRED
+        return InvitationStatus.PENDING

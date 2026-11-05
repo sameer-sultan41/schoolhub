@@ -25,6 +25,11 @@ ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.
 # Apex domain for tenant wildcard subdomains: `<slug>.<PLATFORM_DOMAIN>`. Mirrors
 # apps/website's NEXT_PUBLIC_PLATFORM_DOMAIN — same concept, backend side.
 PLATFORM_DOMAIN = env("PLATFORM_DOMAIN", default="localhost")
+# Emailed account links (invitations, password reset) point at the dashboard on
+# `<slug>.app.<PLATFORM_DOMAIN>`, built from these and never from the request's Host
+# header (host-header poisoning). An empty port means the scheme's default.
+DASHBOARD_URL_SCHEME = "https"
+DASHBOARD_URL_PORT = ""
 
 # Object storage (core.files) — matches infra/compose's MinIO service in dev, real S3 in
 # prod. Empty S3_ENDPOINT_URL selects NullPresigner (core.files.storage.get_presigner),
@@ -175,6 +180,9 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
+# A reset link lives one hour (ADR-0033); Django's default is three days.
+PASSWORD_RESET_TIMEOUT = 3600
+
 PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.Argon2PasswordHasher",
     "django.contrib.auth.hashers.PBKDF2PasswordHasher",
@@ -188,6 +196,9 @@ THROTTLE_RATES: dict[str, str] = {
     "anon": "20/min",
     "auth": "10/min",
     "public_form": "5/min",
+    # Emailed-link endpoints (password reset, invitation accept/preview): ADR-0033.
+    "password_reset_email": "5/hour",
+    "password_reset_ip": "20/hour",
 }
 
 REST_FRAMEWORK = {
@@ -419,6 +430,8 @@ CELERY_TASK_ROUTES = {
     # `core.notifications.services._dispatch`). Bulk shaping arrives with
     # per-tenant rate limits.
     "core.notifications.tasks.*": {"queue": "transactional"},
+    # Invitation and password-reset emails: someone is waiting at a sign-in screen.
+    "core.rbac.*.tasks.*": {"queue": "transactional"},
     # notifications.md §5's always-warm lane: a school-closure broadcast must not
     # queue behind a term's invoice run or a morning of absence alerts.
     "apps.communication.tasks.send_emergency_broadcast_task": {"queue": EMERGENCY_QUEUE},

@@ -953,6 +953,66 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/auth/invitations:accept:
+    post:
+      operationId: auth_invitations:accept_create
+      description: |-
+        ``AllowAny`` plus throttles, like ``LoginView``, but tenant-bound.
+
+        ``TenantMiddleware`` binds nothing for an anonymous caller, so the view resolves the
+        body's ``school`` and runs every lookup inside ``tenant_context(tenant.id)``.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationAccept'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/InvitationAccept'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/InvitationAccept'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/auth/invitations:preview:
+    post:
+      operationId: auth_invitations:preview_create
+      description: |-
+        ``AllowAny`` plus throttles, like ``LoginView``, but tenant-bound.
+
+        ``TenantMiddleware`` binds nothing for an anonymous caller, so the view resolves the
+        body's ``school`` and runs every lookup inside ``tenant_context(tenant.id)``.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationLink'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/InvitationLink'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/InvitationLink'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationPreview'
+          description: ''
   /api/v1/auth/login:
     post:
       operationId: auth_login_create
@@ -1006,6 +1066,59 @@ paths:
               schema:
                 $ref: '#/components/schemas/User'
           description: ''
+  /api/v1/auth/password-reset:
+    post:
+      operationId: auth_password_reset_create
+      description: 204 for every well-formed body, so the answer says nothing about
+        the address.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/auth/password-reset:confirm:
+    post:
+      operationId: auth_password_reset:confirm_create
+      description: |-
+        ``AllowAny`` plus throttles, like ``LoginView``, but tenant-bound.
+
+        ``TenantMiddleware`` binds nothing for an anonymous caller, so the view resolves the
+        body's ``school`` and runs every lookup inside ``tenant_context(tenant.id)``.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirm'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirm'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirm'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
   /api/v1/auth/refresh:
     post:
       operationId: auth_refresh_create
@@ -18101,6 +18214,53 @@ components:
           minItems: 1
       required:
       - student_ids
+    InvitationAccept:
+      type: object
+      properties:
+        school:
+          type: string
+          description: Tenant slug, from the link's `school` fragment.
+          pattern: ^[-a-zA-Z0-9_]+$
+        token:
+          type: string
+          description: From the link's `token` fragment.
+          maxLength: 128
+        password:
+          type: string
+          writeOnly: true
+      required:
+      - password
+      - school
+      - token
+    InvitationLink:
+      type: object
+      properties:
+        school:
+          type: string
+          description: Tenant slug, from the link's `school` fragment.
+          pattern: ^[-a-zA-Z0-9_]+$
+        token:
+          type: string
+          description: From the link's `token` fragment.
+          maxLength: 128
+      required:
+      - school
+      - token
+    InvitationPreview:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        school_name:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+      required:
+      - email
+      - expires_at
+      - school_name
     InviteRequest:
       type: object
       description: |-
@@ -20821,6 +20981,43 @@ components:
       required:
       - count
       - difficulty
+    PasswordResetConfirm:
+      type: object
+      properties:
+        school:
+          type: string
+          description: Tenant slug, from the link's `school` fragment.
+          pattern: ^[-a-zA-Z0-9_]+$
+        uid:
+          type: string
+          description: From the link's `uid` fragment.
+          maxLength: 64
+        token:
+          type: string
+          description: From the link's `token` fragment.
+          maxLength: 128
+        new_password:
+          type: string
+          writeOnly: true
+      required:
+      - new_password
+      - school
+      - token
+      - uid
+    PasswordResetRequest:
+      type: object
+      properties:
+        school:
+          type: string
+          description: 'Tenant slug. Required: one email can hold accounts at two
+            schools.'
+          pattern: ^[-a-zA-Z0-9_]+$
+        email:
+          type: string
+          format: email
+      required:
+      - email
+      - school
     PatchedAcademicSession:
       type: object
       properties:

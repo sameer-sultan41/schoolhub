@@ -457,6 +457,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/invitations:accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``AllowAny`` plus throttles, like ``LoginView``, but tenant-bound.
+         *
+         *     ``TenantMiddleware`` binds nothing for an anonymous caller, so the view resolves the
+         *     body's ``school`` and runs every lookup inside ``tenant_context(tenant.id)``.
+         */
+        post: operations["auth_invitations:accept_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/invitations:preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``AllowAny`` plus throttles, like ``LoginView``, but tenant-bound.
+         *
+         *     ``TenantMiddleware`` binds nothing for an anonymous caller, so the view resolves the
+         *     body's ``school`` and runs every lookup inside ``tenant_context(tenant.id)``.
+         */
+        post: operations["auth_invitations:preview_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -500,6 +544,45 @@ export interface paths {
         get: operations["auth_me_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 204 for every well-formed body, so the answer says nothing about the address. */
+        post: operations["auth_password_reset_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password-reset:confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``AllowAny`` plus throttles, like ``LoginView``, but tenant-bound.
+         *
+         *     ``TenantMiddleware`` binds nothing for an anonymous caller, so the view resolves the
+         *     body's ``school`` and runs every lookup inside ``tenant_context(tenant.id)``.
+         */
+        post: operations["auth_password_reset:confirm_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8052,6 +8135,26 @@ export interface components {
         IdCardGenerateRequest: {
             student_ids: string[];
         };
+        InvitationAccept: {
+            /** @description Tenant slug, from the link's `school` fragment. */
+            school: string;
+            /** @description From the link's `token` fragment. */
+            token: string;
+            password: string;
+        };
+        InvitationLink: {
+            /** @description Tenant slug, from the link's `school` fragment. */
+            school: string;
+            /** @description From the link's `token` fragment. */
+            token: string;
+        };
+        InvitationPreview: {
+            /** Format: email */
+            email: string;
+            school_name: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
         /**
          * @description No email is sent (§17 gap — no notification infrastructure exists yet,
          *     see services/invite.py's ``invite_staff`` docstring); this only creates and
@@ -9350,6 +9453,21 @@ export interface components {
             count: number;
             /** Format: decimal */
             marks_each?: string | null;
+        };
+        PasswordResetConfirm: {
+            /** @description Tenant slug, from the link's `school` fragment. */
+            school: string;
+            /** @description From the link's `uid` fragment. */
+            uid: string;
+            /** @description From the link's `token` fragment. */
+            token: string;
+            new_password: string;
+        };
+        PasswordResetRequest: {
+            /** @description Tenant slug. Required: one email can hold accounts at two schools. */
+            school: string;
+            /** Format: email */
+            email: string;
         };
         PatchedAcademicSession: {
             /** Format: uuid */
@@ -12986,6 +13104,55 @@ export interface operations {
             };
         };
     };
+    "auth_invitations:accept_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvitationAccept"];
+                "application/x-www-form-urlencoded": components["schemas"]["InvitationAccept"];
+                "multipart/form-data": components["schemas"]["InvitationAccept"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "auth_invitations:preview_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvitationLink"];
+                "application/x-www-form-urlencoded": components["schemas"]["InvitationLink"];
+                "multipart/form-data": components["schemas"]["InvitationLink"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationPreview"];
+                };
+            };
+        };
+    };
     auth_login_create: {
         parameters: {
             query?: never;
@@ -13045,6 +13212,54 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["User"];
                 };
+            };
+        };
+    };
+    auth_password_reset_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PasswordResetRequest"];
+                "multipart/form-data": components["schemas"]["PasswordResetRequest"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "auth_password_reset:confirm_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetConfirm"];
+                "application/x-www-form-urlencoded": components["schemas"]["PasswordResetConfirm"];
+                "multipart/form-data": components["schemas"]["PasswordResetConfirm"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
