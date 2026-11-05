@@ -12,10 +12,16 @@ from rest_framework import status
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.school_organization.tests.factories import ClassFactory, SectionFactory, UserFactory
+from apps.school_organization.tests.factories import (
+    ClassFactory,
+    SectionFactory,
+    UserFactory,
+    grant,
+)
 from apps.staff_management.models import EmploymentStatus, Staff
 from apps.staff_management.tests.base import StaffManagementAPITestCase
 from apps.staff_management.tests.factories import DEFAULT_JOINING_DATE, StaffFactory
+from apps.student_management.tests.factories import GuardianFactory
 from core.rbac.cache import evict_rbac_caches
 from core.rbac.invitations.eligibility import is_eligible
 from core.rbac.models import Invitation, Permission, Role, RolePermission, User, UserRole
@@ -387,6 +393,53 @@ class ExitRevocationTests(StaffManagementAPITestCase):
             self.assertTrue(is_eligible(user, "staff"))
             Staff.objects.filter(pk=staff.pk).update(employment_status=EmploymentStatus.RESIGNED)
             self.assertFalse(is_eligible(user, "staff"))
+
+
+class StaffLoginLinkTests(StaffManagementAPITestCase):
+    def test_staff_patch_ignores_user_id(self) -> None:
+        """Only `:invite` links a login; a PATCH could point staff at someone else's."""
+        self.allow("staff.staff.update", "staff.staff.view")
+        owner = UserFactory(tenant=self.tenant)
+        with tenant_context(self.tenant.id):
+            staff = StaffFactory(tenant=self.tenant, campus=self.campus)
+
+        response = self.client.patch(
+            f"/api/v1/staff/{staff.pk}",
+            {"user_id": str(owner.pk), "first_name": "Renamed"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertIsNone(response.json()["data"]["user_id"])
+        with tenant_context(self.tenant.id):
+            staff.refresh_from_db()
+        self.assertIsNone(staff.user_id)
+        self.assertEqual(staff.first_name, "Renamed")
+
+    def test_exit_does_not_deactivate_a_user_linked_to_a_guardian(self) -> None:
+        """A link made before `user_id` was read-only must not let `:exit` end a parent's login."""
+        self.allow("staff.staff.delete", "staff.staff.view")
+        parent = UserFactory(tenant=self.tenant)
+        role = grant(parent, "students.student.view", is_restricted_principal=True)
+        with tenant_context(self.tenant.id):
+            GuardianFactory(tenant=self.tenant, user_id=parent.pk)
+            staff = StaffFactory(tenant=self.tenant, campus=self.campus, user_id=parent.pk)
+        jti = RefreshToken.for_user(parent)["jti"]
+
+        response = self.client.post(
+            f"/api/v1/staff/{staff.pk}:exit",
+            {"exit_date": "2026-06-01", "exit_reason": "Resigned."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        parent.refresh_from_db()
+        self.assertTrue(parent.is_active)
+        self.assertTrue(UserRole.objects.filter(user=parent, role=role).exists())
+        self.assertFalse(BlacklistedToken.objects.filter(token__jti=jti).exists())
+        with tenant_context(self.tenant.id):
+            staff.refresh_from_db()
+        self.assertIsNone(staff.user_id, "the exited staff row no longer names the login")
 
 
 class DenyRestrictedPrincipalsTests(StaffManagementAPITestCase):

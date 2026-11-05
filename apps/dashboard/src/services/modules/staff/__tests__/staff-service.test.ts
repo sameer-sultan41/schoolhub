@@ -220,7 +220,7 @@ describe("StaffService", () => {
         phone: "+92-300-0000000",
         departmentId: "dept-1",
         email: "ayesha@example.com",
-        // designationId, reportsToStaffId, userId, photoFileId, gender, dateOfBirth,
+        // designationId, reportsToStaffId, photoFileId, gender, dateOfBirth,
         // employmentType, nationalId, publicBio and address are all left out.
       });
 
@@ -251,7 +251,6 @@ describe("StaffService", () => {
         departmentId: "dept-1",
         designationId: "des-1",
         reportsToStaffId: "staff-1",
-        userId: "user-1",
         photoFileId: "file-1",
         gender: "female",
         dateOfBirth: "1990-01-01",
@@ -268,7 +267,6 @@ describe("StaffService", () => {
           department_id: "dept-1",
           designation_id: "des-1",
           reports_to_staff_id: "staff-1",
-          user_id: "user-1",
           photo_file_id: "file-1",
           gender: "female",
           date_of_birth: "1990-01-01",
@@ -347,7 +345,6 @@ describe("StaffService", () => {
         departmentId: "dept-2",
         designationId: "des-2",
         reportsToStaffId: "staff-2",
-        userId: "user-2",
         photoFileId: "file-2",
         gender: "female",
         dateOfBirth: "1990-01-01",
@@ -369,7 +366,6 @@ describe("StaffService", () => {
           department_id: "dept-2",
           designation_id: "des-2",
           reports_to_staff_id: "staff-2",
-          user_id: "user-2",
           photo_file_id: "file-2",
           gender: "female",
           date_of_birth: "1990-01-01",

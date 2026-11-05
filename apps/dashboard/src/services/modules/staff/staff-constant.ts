@@ -160,7 +160,6 @@ export const STAFF_BODY_FIELDS: ReadonlyArray<
   ["departmentId", "department_id", "defined"],
   ["designationId", "designation_id", "defined"],
   ["reportsToStaffId", "reports_to_staff_id", "defined"],
-  ["userId", "user_id", "defined"],
   ["photoFileId", "photo_file_id", "defined"],
   ["gender", "gender", "defined"],
   ["dateOfBirth", "date_of_birth", "defined"],

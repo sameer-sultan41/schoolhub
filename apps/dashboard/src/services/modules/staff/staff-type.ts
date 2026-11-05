@@ -57,7 +57,6 @@ export interface CreateStaffInput {
   departmentId?: string | null;
   designationId?: string | null;
   reportsToStaffId?: string | null;
-  userId?: string;
   photoFileId?: string;
   gender?: string;
   dateOfBirth?: string;

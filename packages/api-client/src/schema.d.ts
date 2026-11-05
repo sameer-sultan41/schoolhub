@@ -10496,7 +10496,7 @@ export interface components {
              * Format: uuid
              * @description users(id) — portal account, tenant-checked at write time.
              */
-            user_id?: string | null;
+            readonly user_id?: string | null;
             first_name?: string;
             last_name?: string;
             gender?: components["schemas"]["GenderEnum"];
@@ -11508,7 +11508,7 @@ export interface components {
              * Format: uuid
              * @description users(id) — portal account, tenant-checked at write time.
              */
-            user_id?: string | null;
+            readonly user_id: string | null;
             first_name: string;
             last_name: string;
             gender?: components["schemas"]["GenderEnum"];

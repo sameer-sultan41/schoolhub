@@ -22912,6 +22912,7 @@ components:
         user_id:
           type: string
           format: uuid
+          readOnly: true
           nullable: true
           description: users(id) — portal account, tenant-checked at write time.
         first_name:
@@ -25031,6 +25032,7 @@ components:
         user_id:
           type: string
           format: uuid
+          readOnly: true
           nullable: true
           description: users(id) — portal account, tenant-checked at write time.
         first_name:
@@ -25147,6 +25149,7 @@ components:
       - photo_url
       - staff_type
       - updated_at
+      - user_id
     StaffAttendance:
       type: object
       description: |-

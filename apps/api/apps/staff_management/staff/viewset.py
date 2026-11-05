@@ -141,7 +141,6 @@ class StaffViewSet(_StaffModuleViewSetMixin, viewsets.ModelViewSet):
             last_name=data["last_name"],
             staff_type=data["staff_type"],
             phone=data["phone"],
-            user_id=data.get("user_id"),
             photo_file=data.get("photo_file"),
             gender=data.get("gender"),
             date_of_birth=data.get("date_of_birth"),
