@@ -24,15 +24,25 @@ jest.mock("next/navigation", () => ({
 }));
 
 jest.mock("@/services", () => ({
-  Services: { parentPortal: { fetchPortalDashboard: jest.fn() }, auth: { logout: jest.fn() } },
+  Services: {
+    parentPortal: { fetchPortalDashboard: jest.fn() },
+    notifications: { fetchUnreadCount: jest.fn() },
+    auth: { logout: jest.fn() },
+  },
 }));
 
 const mockFetchDashboard = Services.parentPortal.fetchPortalDashboard as jest.MockedFunction<
   typeof Services.parentPortal.fetchPortalDashboard
 >;
 
+const mockFetchUnread = Services.notifications.fetchUnreadCount as jest.MockedFunction<
+  typeof Services.notifications.fetchUnreadCount
+>;
+
 describe("PortalShell", () => {
   beforeEach(() => {
+    mockFetchUnread.mockReset();
+    mockFetchUnread.mockResolvedValue({ unread: 0 });
     mockPush.mockReset();
     mockFetchDashboard.mockReset();
     mockUseParams.mockReturnValue({ studentId: AYESHA_ID });
@@ -121,7 +131,8 @@ describe("PortalShell", () => {
   });
 
   it("shows the unread count and the page content", async () => {
-    mockFetchDashboard.mockResolvedValue(portalDashboard({ unread_notifications: 3 }));
+    mockFetchDashboard.mockResolvedValue(portalDashboard());
+    mockFetchUnread.mockResolvedValue({ unread: 3 });
 
     renderWithProviders(<PortalShell>page body</PortalShell>);
 

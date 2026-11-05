@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { LoadErrorCard } from "@/components/load-error-card";
 import { useSignOut } from "@/hooks/use-sign-out";
+import { useUnreadCount } from "@/features/portal/notifications/use-unread-count";
 import { usePortalSummary } from "@/features/portal/use-portal-summary";
 import { ChildSwitcher } from "./child-switcher";
 import { PortalNav } from "./portal-nav";
@@ -19,7 +20,9 @@ export function PortalShell({ children }: { children: ReactNode }) {
   const summary = usePortalSummary();
   const { studentId } = useSelectedChild(summary.data?.children);
 
-  const unread = summary.data?.unread_notifications ?? 0;
+  // The badge is the inbox's own `:unread-count`, so a mark-read refreshes it (the summary's
+  // count is only as fresh as the summary).
+  const unread = useUnreadCount().data?.unread ?? 0;
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">

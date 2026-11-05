@@ -212,7 +212,10 @@ export type {
 } from "./modules/notifications";
 
 export type { NoticeRead, NoticeType, PortalNoticeRecord } from "./modules/notices";
-export type { NotificationPreferenceRow } from "./modules/notification-preferences";
+export type {
+  NotificationChannel,
+  NotificationPreferenceRow,
+} from "./modules/notification-preferences";
 export type { FeeInvoiceRecord } from "./modules/fee-invoices";
 export type { ReceiptFormat, ReceiptRecord } from "./modules/receipts";
 export type { ResultRecord } from "./modules/results";

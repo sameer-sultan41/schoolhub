@@ -2216,6 +2216,75 @@
         "absent": "غیر حاضر",
         "withheld": "روکا گیا"
       }
+    },
+    "notices": {
+      "title": "نوٹس",
+      "emptyTitle": "کوئی نوٹس نہیں",
+      "emptyDescription": "اسکول نے ابھی تک کوئی نوٹس شائع نہیں کیا۔",
+      "loadError": "ہم نوٹس لوڈ نہیں کر سکے۔ دوبارہ کوشش کریں۔",
+      "notFoundTitle": "نوٹس نہیں ملا",
+      "notFoundDescription": "یہ نوٹس موجود نہیں یا آپ کے لیے دستیاب نہیں۔",
+      "back": "نوٹس پر واپس",
+      "publishedOn": "شائع شدہ {date}",
+      "needsAcknowledgment": "تصدیق درکار ہے",
+      "acknowledge": "تصدیق کریں",
+      "acknowledging": "تصدیق ہو رہی ہے",
+      "acknowledged": "تصدیق ہو گئی",
+      "acknowledgeFailed": "ہم آپ کی تصدیق درج نہیں کر سکے۔ دوبارہ کوشش کریں۔",
+      "types": {
+        "urgent": "فوری",
+        "general": "عمومی",
+        "circular": "سرکلر",
+        "event": "تقریب"
+      }
+    },
+    "notifications": {
+      "title": "اطلاعات",
+      "emptyTitle": "کوئی اطلاع نہیں",
+      "emptyDescription": "آپ سب دیکھ چکے ہیں۔",
+      "loadError": "ہم آپ کی اطلاعات لوڈ نہیں کر سکے۔ دوبارہ کوشش کریں۔",
+      "markAllRead": "سب پڑھی ہوئی کریں",
+      "markingAll": "نشان لگ رہا ہے",
+      "markAllFailed": "ہم سب کو پڑھی ہوئی نشان نہیں کر سکے۔ دوبارہ کوشش کریں۔",
+      "markReadFailed": "ہم اس اطلاع کو پڑھی ہوئی نشان نہیں کر سکے۔ دوبارہ کھول کر کوشش کریں۔",
+      "unreadBadge": "نہ پڑھی ہوئی",
+      "filter": {
+        "label": "دکھائیں",
+        "all": "سب",
+        "unread": "نہ پڑھی ہوئی",
+        "read": "پڑھی ہوئی"
+      },
+      "categories": {
+        "attendance": "حاضری",
+        "fees": "فیس",
+        "exams": "امتحانات",
+        "library": "لائبریری",
+        "transport": "ٹرانسپورٹ",
+        "academic": "تعلیمی",
+        "general": "عمومی",
+        "emergency": "ہنگامی"
+      },
+      "priorities": {
+        "normal": "عام",
+        "high": "اہم",
+        "emergency": "ہنگامی"
+      }
+    },
+    "preferences": {
+      "title": "اطلاعات کی ترتیبات",
+      "caption": "کون سی اطلاعات کس ذریعے سے آپ تک پہنچتی ہیں",
+      "category": "زمرہ",
+      "loadError": "ہم آپ کی ترتیبات لوڈ نہیں کر سکے۔ دوبارہ کوشش کریں۔",
+      "saveFailed": "ہم یہ تبدیلی محفوظ نہیں کر سکے۔ دوبارہ کوشش کریں۔",
+      "lockedExplanation": "ہنگامی اطلاعات اور ان-ایپ ان باکس ہمیشہ فعال رہتے ہیں، اس لیے انہیں بند نہیں کیا جا سکتا۔",
+      "cellLabel": "{category} بذریعہ {channel}",
+      "channels": {
+        "in_app": "ان-ایپ",
+        "email": "ای میل",
+        "sms": "ایس ایم ایس",
+        "push": "پش",
+        "whatsapp": "واٹس ایپ"
+      }
     }
   }
 }

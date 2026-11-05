@@ -8,6 +8,7 @@ export const NotificationPreferencesService = {
   updateNotificationPreferences,
 };
 export type {
+  NotificationChannel,
   NotificationPreferenceRow,
   NotificationPreferenceUpdate,
 } from "./notification-preferences-type";

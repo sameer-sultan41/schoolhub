@@ -31,7 +31,8 @@ import {
   type NewThreadFormValues,
 } from "./new-thread-form-schema";
 import { RecipientPicker } from "./recipient-picker";
-import { StudentPicker } from "./student-picker";
+import { ChildStudentSelect } from "./child-student-select";
+import { StudentPicker, type PickedStudent } from "./student-picker";
 import { useInvalidateThreads } from "./use-invalidate-threads";
 
 export interface NewThreadDialogProps {
@@ -39,13 +40,16 @@ export interface NewThreadDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Called with the new thread's id, so the screen can open it. */
   onCreated: (threadId: string) => void;
+  /** The parent portal: the guardian's own children are the only choice, and the thread is
+   * always a guardian-school one, so there is no type or recipient picker. */
+  students?: readonly PickedStudent[];
 }
 
 /**
  * Starts a conversation with its first message. Mounted by the screen only while open, so each
  * open is a fresh form.
  */
-export function NewThreadDialog({ open, onOpenChange, onCreated }: NewThreadDialogProps) {
+export function NewThreadDialog({ open, onOpenChange, onCreated, students }: NewThreadDialogProps) {
   const t = useTranslations("communication.messages.newThread");
   const invalidate = useInvalidateThreads();
 
@@ -92,13 +96,15 @@ export function NewThreadDialog({ open, onOpenChange, onCreated }: NewThreadDial
       submittingLabel={t("submitting")}
       submitLabel={t("submit")}
     >
-      <FormSelectField
-        form={form}
-        name="thread_type"
-        label={t("type")}
-        placeholder={t("type")}
-        options={NEW_THREAD_TYPES.map((type) => ({ id: type, name: t(`types.${type}`) }))}
-      />
+      {students === undefined && (
+        <FormSelectField
+          form={form}
+          name="thread_type"
+          label={t("type")}
+          placeholder={t("type")}
+          options={NEW_THREAD_TYPES.map((type) => ({ id: type, name: t(`types.${type}`) }))}
+        />
+      )}
       {threadType === "guardian_school" ? (
         <FormField
           control={form.control}
@@ -106,7 +112,15 @@ export function NewThreadDialog({ open, onOpenChange, onCreated }: NewThreadDial
           render={({ field }) => (
             <FormItem>
               <FormLabel>{t("student")}</FormLabel>
-              <StudentPicker value={field.value} onChange={field.onChange} />
+              {students === undefined ? (
+                <StudentPicker value={field.value} onChange={field.onChange} />
+              ) : (
+                <ChildStudentSelect
+                  students={students}
+                  value={field.value}
+                  onChange={field.onChange}
+                />
+              )}
               <FormMessage />
             </FormItem>
           )}

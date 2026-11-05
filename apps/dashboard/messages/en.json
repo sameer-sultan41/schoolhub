@@ -2216,6 +2216,75 @@
         "absent": "Absent",
         "withheld": "Withheld"
       }
+    },
+    "notices": {
+      "title": "Notices",
+      "emptyTitle": "No notices",
+      "emptyDescription": "The school has not published any notices yet.",
+      "loadError": "We couldn't load the notices. Please try again.",
+      "notFoundTitle": "Notice not found",
+      "notFoundDescription": "This notice doesn't exist or isn't available to you.",
+      "back": "Back to notices",
+      "publishedOn": "Published {date}",
+      "needsAcknowledgment": "Acknowledgment needed",
+      "acknowledge": "Acknowledge",
+      "acknowledging": "Acknowledging",
+      "acknowledged": "Acknowledged",
+      "acknowledgeFailed": "We couldn't record your acknowledgment. Please try again.",
+      "types": {
+        "urgent": "Urgent",
+        "general": "General",
+        "circular": "Circular",
+        "event": "Event"
+      }
+    },
+    "notifications": {
+      "title": "Notifications",
+      "emptyTitle": "No notifications",
+      "emptyDescription": "You're all caught up.",
+      "loadError": "We couldn't load your notifications. Please try again.",
+      "markAllRead": "Mark all read",
+      "markingAll": "Marking",
+      "markAllFailed": "We couldn't mark everything read. Please try again.",
+      "markReadFailed": "We couldn't mark that notification read. Open it again to retry.",
+      "unreadBadge": "Unread",
+      "filter": {
+        "label": "Show",
+        "all": "All",
+        "unread": "Unread",
+        "read": "Read"
+      },
+      "categories": {
+        "attendance": "Attendance",
+        "fees": "Fees",
+        "exams": "Exams",
+        "library": "Library",
+        "transport": "Transport",
+        "academic": "Academic",
+        "general": "General",
+        "emergency": "Emergency"
+      },
+      "priorities": {
+        "normal": "Normal",
+        "high": "High priority",
+        "emergency": "Emergency"
+      }
+    },
+    "preferences": {
+      "title": "Notification settings",
+      "caption": "Which notifications reach you on which channel",
+      "category": "Category",
+      "loadError": "We couldn't load your settings. Please try again.",
+      "saveFailed": "We couldn't save that change. Please try again.",
+      "lockedExplanation": "Emergency notices and the in-app inbox are always on, so they can't be turned off.",
+      "cellLabel": "{category} by {channel}",
+      "channels": {
+        "in_app": "In-app",
+        "email": "Email",
+        "sms": "SMS",
+        "push": "Push",
+        "whatsapp": "WhatsApp"
+      }
     }
   }
 }

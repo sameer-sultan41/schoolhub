@@ -59,6 +59,7 @@ export const Paths = {
     studentId === undefined ? "/portal/timetable" : `/portal/${studentId}/timetable`,
   PORTAL_MESSAGES: "/portal/messages",
   PORTAL_NOTICES: "/portal/notices",
+  PORTAL_NOTICE: (noticeId: string) => `/portal/notices/${noticeId}`,
   PORTAL_NOTIFICATIONS: "/portal/notifications",
   PORTAL_SETTINGS: "/portal/settings",
   LOGIN: "/login",

@@ -1,5 +1,7 @@
 import type {
   FeeInvoiceRecord,
+  NotificationRecord,
+  PortalNoticeRecord,
   PortalChild,
   PortalDashboard,
   PortalModules,
@@ -143,6 +145,44 @@ export function portalResult(overrides: Partial<ResultRecord> = {}): ResultRecor
     published_at: "2026-10-20T09:00:00Z",
     created_at: "2026-10-19T08:00:00Z",
     updated_at: "2026-10-20T09:00:00Z",
+    ...overrides,
+  };
+}
+
+export const NOTICE_ID = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+
+/** A published notice that asks for an acknowledgment nobody has given yet. */
+export function portalNotice(overrides: Partial<PortalNoticeRecord> = {}): PortalNoticeRecord {
+  return {
+    id: NOTICE_ID,
+    notice_no: "N-0001",
+    title: "Sports day",
+    body: "Sports day is on Friday.",
+    notice_type: "event",
+    published_at: "2026-11-02T08:00:00Z",
+    requires_acknowledgment: true,
+    acknowledged_at: null,
+    ...overrides,
+  };
+}
+
+/** An unread, normal-priority fees notification; override what a test needs. */
+export function notificationRecord(
+  id: string,
+  overrides: Partial<NotificationRecord> = {},
+): NotificationRecord {
+  return {
+    id,
+    event_key: "fees.invoice_issued",
+    category: "fees",
+    title: "Invoice issued",
+    body: "Invoice INV-0001 is due on 30 November.",
+    data: {},
+    source_type: null,
+    source_id: null,
+    priority: "normal",
+    read_at: null,
+    created_at: "2026-11-03T09:00:00Z",
     ...overrides,
   };
 }
