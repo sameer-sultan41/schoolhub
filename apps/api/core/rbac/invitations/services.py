@@ -79,9 +79,11 @@ def readdress_pending_account(*, user: User, email: str | None) -> None:
     login. Another account's address is a 409 ``email_in_use``, as on a first invite.
     """
     address = (email or "").strip()
-    if not address or address == user.email or not never_activated(user):
+    tenant_id = user.tenant_id
+    # A platform account (no school) is never invited, so it is never re-addressed.
+    if tenant_id is None or not address or address == user.email or not never_activated(user):
         return
-    assert_email_free(tenant_id=user.tenant_id, email=address, exclude_user_id=user.pk)
+    assert_email_free(tenant_id=tenant_id, email=address, exclude_user_id=user.pk)
     user.email = address
     try:
         with transaction.atomic():
