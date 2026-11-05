@@ -2,15 +2,14 @@
 
 import { useQuery } from "@tanstack/react-query";
 
-import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
-import { NOTIFICATIONS_QUERY_MODULE } from "@/services/modules/notifications/notifications-constant";
+import { UNREAD_COUNT_KEY } from "./notification-query-keys";
 
-/** The inbox's unread count (`:unread-count`), for the shell's badge. A mark-read or
- * mark-all-read invalidates the whole notifications module, so this refetches with the list. */
+/** The inbox's unread count (`:unread-count`), for the shell's badge. A mark-read invalidates
+ * this key; a mark-all-read invalidates the whole notifications module, list included. */
 export function useUnreadCount() {
   return useQuery({
-    queryKey: queryKeys.detail(NOTIFICATIONS_QUERY_MODULE, "unread-count", "current"),
+    queryKey: UNREAD_COUNT_KEY,
     queryFn: () => Services.notifications.fetchUnreadCount(),
   });
 }

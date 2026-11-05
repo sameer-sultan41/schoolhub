@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { Services } from "@/services";
@@ -66,6 +66,43 @@ describe("PortalNotifications", () => {
     await user.click(row);
     await user.click(row);
     expect(mockMarkRead).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps an opened notification visible under the unread filter after it is marked read", async () => {
+    let marked = false;
+    // The server drops a read row from the unread filter, so a list refetch would hide it.
+    mockList.mockImplementation((query) =>
+      Promise.resolve(
+        cursorPage(query?.read === false && marked ? [] : [notificationRecord(FIRST)]),
+      ),
+    );
+    mockMarkRead.mockImplementation(() => {
+      marked = true;
+      return Promise.resolve({ read_at: "2026-11-04T10:00:00Z" });
+    });
+    const user = userEvent.setup();
+
+    renderWithProviders(<PortalNotifications />);
+    await screen.findByRole("button", { name: /Invoice issued/ });
+    await user.click(screen.getByRole("combobox", { name: "Show" }));
+    await user.click(await screen.findByRole("option", { name: "Unread" }));
+    await waitFor(() => {
+      expect(mockList).toHaveBeenLastCalledWith(expect.objectContaining({ read: false }));
+    });
+
+    const row = await screen.findByRole("button", { name: /Invoice issued/ });
+    await user.click(row);
+
+    // The cached row takes the answered read_at: its Unread flag goes, and the row stays.
+    await waitFor(() => {
+      expect(within(row).queryByText("Unread")).not.toBeInTheDocument();
+    });
+    expect(mockMarkRead).toHaveBeenCalledWith(FIRST);
+    expect(screen.getByText(/Invoice INV-0001/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Invoice issued/ })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
   });
 
   it("does not mark an already-read notification", async () => {

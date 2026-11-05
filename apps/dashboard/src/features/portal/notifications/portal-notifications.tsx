@@ -11,7 +11,6 @@ import { LoadErrorCard } from "@/components/load-error-card";
 import { useCursorList } from "@/hooks/use-cursor-list";
 import { useInvalidateModule } from "@/hooks/use-invalidate-module";
 import { resolveErrorMessage } from "@/lib/error-message";
-import { queryKeys } from "@/lib/query-client";
 import { Services, type NotificationRecord } from "@/services";
 import { NOTIFICATIONS_QUERY_MODULE } from "@/services/modules/notifications/notifications-constant";
 import {
@@ -19,6 +18,7 @@ import {
   NOTIFICATION_PRIORITY_BADGE,
   NOTIFICATION_PRIORITY_LABEL_KEY,
 } from "./notification-labels";
+import { inboxListKey } from "./notification-query-keys";
 import { useMarkNotificationRead } from "./use-mark-notification-read";
 
 const INBOX_PAGE_SIZE = 20;
@@ -54,7 +54,7 @@ export function PortalNotifications() {
 
   const { query, rows, stack, nextCursor, retry } = useCursorList<NotificationRecord>({
     resetKey: filter,
-    queryKey: (cursor) => queryKeys.list(NOTIFICATIONS_QUERY_MODULE, "inbox", { filter, cursor }),
+    queryKey: (cursor) => inboxListKey({ filter, cursor }),
     queryFn: (cursor) =>
       Services.notifications.listNotifications({
         read: READ_PARAM[filter],
