@@ -133,12 +133,19 @@ def create_invitation(*, user: User, kind: str, actor_id: uuid.UUID | None) -> I
 
     The token does not exist yet: the send task creates it, so it never sits in this row
     or in the broker message.
+
+    Every caller invites an inactive account, but ``user`` may be stale: an accept can commit
+    after the caller read it. The decision is made on the row re-read under a lock, and an
+    account active there is a 409 ``already_active`` with nothing revoked or created, so no
+    live link ever points at an active login.
     """
     from core.rbac.invitations.tasks import send_invitation_email
 
     # Serialises invites for one user: a concurrent second invite waits here, then its
     # revoke sees this one's committed row, so only one invitation is ever pending.
-    User.objects.select_for_update().filter(pk=user.pk).first()
+    locked = User.objects.select_for_update().get(pk=user.pk)
+    if locked.is_active:
+        raise AlreadyActive()
     revoke_pending_invitations(user.id)
     invitation = Invitation.objects.create(
         tenant_id=user.tenant_id,
@@ -232,6 +239,9 @@ def _usable_invitation(tenant: Tenant, raw_token: str, *, lock: bool) -> Invitat
         raise InvalidLink()
     user = invitation.user
     if user.tenant_id != tenant.id or user.is_platform or user.deleted_at is not None:
+        raise InvalidLink()
+    # An invitation activates an account; one left pending on an active account is spent.
+    if user.is_active:
         raise InvalidLink()
     if not is_eligible(user, invitation.kind):
         raise InvalidLink()

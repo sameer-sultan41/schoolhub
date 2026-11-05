@@ -122,6 +122,17 @@ class InvitationTests(APITestCase):
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password(STRONG_PASSWORD))
 
+    def test_a_pending_link_on_an_active_account_is_400_invalid_link(self) -> None:
+        """A link left pending on an account activated some other way must not set its password."""
+        _, token = invite(self, self.user)
+        self.user.set_password("test-password-already-active-31")
+        self.user.is_active = True
+        self.user.save(update_fields=["password", "is_active"])
+
+        self.assert_invalid_link(self.accept(token, password="another-long-passphrase-88"))
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("test-password-already-active-31"))
+
     def test_expired_invitation_is_400(self) -> None:
         invitation, token = invite(self, self.user)
         with tenant_context(self.tenant.id):

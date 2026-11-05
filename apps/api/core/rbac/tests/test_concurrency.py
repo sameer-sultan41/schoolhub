@@ -174,3 +174,52 @@ class ConcurrentWriteTests(TransactionTestCase):
                 user=user, accepted_at__isnull=True, revoked_at__isnull=True
             ).count()
         self.assertEqual(pending, 0)
+
+    def test_same_address_resend_racing_an_accept_issues_no_link(self) -> None:
+        """A resend with nothing to re-address still must not invite a just-activated account.
+
+        Guarded by the outcome: without `create_invitation`'s locked re-read the resend still
+        waits, on the user-row lock the accept holds, then creates a live pending link.
+        """
+        without_app_eligibility_hooks(self)
+        raw = "race-same-address-token"
+        user = invited_user(self.tenant, email="same@example.test")
+        with tenant_atomic(self.tenant.id):
+            Invitation.objects.create(
+                tenant=self.tenant,
+                user=user,
+                kind="staff",
+                token_hash=hash_token(raw),
+                sent_at=timezone.now(),
+                expires_at=timezone.now() + INVITATION_TTL,
+            )
+
+        def resend() -> type[Exception] | None:
+            try:
+                with tenant_atomic(self.tenant.id):
+                    stale = User.objects.get(pk=user.pk)
+                    readdress_pending_account(user=stale, email="same@example.test")
+                    create_invitation(user=stale, kind="staff", actor_id=None)
+                return None
+            except AlreadyActive:
+                return AlreadyActive
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            with tenant_atomic(self.tenant.id):
+                accept_invitation(
+                    tenant=self.tenant, raw_token=raw, password="test-password-accepted-86420"
+                )
+                contending = pool.submit(resend)
+                self.wait_until_blocked(contending)
+            outcome = contending.result(timeout=LOCK_WAIT_SECONDS)
+
+        self.assertIs(outcome, AlreadyActive)
+        user.refresh_from_db()
+        self.assertTrue(user.is_active)
+        with tenant_atomic(self.tenant.id):
+            pending = Invitation.objects.filter(
+                user=user, accepted_at__isnull=True, revoked_at__isnull=True
+            ).count()
+        self.assertEqual(pending, 0)

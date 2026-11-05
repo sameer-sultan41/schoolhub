@@ -58,8 +58,9 @@ def invite_staff(*, staff: Staff, role_ids: list[uuid.UUID], actor: Actor) -> St
     duplicate user.
 
     ``role_ids`` that are assigned must be grantable by ``actor``: no student or guardian
-    role, and no role holding a key ``actor`` lacks (403, nothing assigned or sent).
-    Otherwise ``staff.staff.update`` alone could mint a login stronger than the inviter's.
+    role, and no role holding a key ``actor`` does not hold at scope ``all``, the scope the
+    new assignment gets (403, nothing assigned or sent). Otherwise ``staff.staff.update``
+    alone could mint a login stronger than the inviter's.
 
     - No account: create an inactive one with no usable password, assign ``role_ids``,
       link it and invite. An email already on another account here is a 409.
