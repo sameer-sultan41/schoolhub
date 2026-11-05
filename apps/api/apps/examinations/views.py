@@ -775,7 +775,11 @@ class ResultViewSet(
         return [permission() for permission in STAFF_PERMISSIONS]
 
     def get_queryset(self):
-        queryset = super().get_queryset().select_related("student", "grade_band", "section")
+        queryset = (
+            super()
+            .get_queryset()
+            .select_related("student", "grade_band", "section", "exam", "exam__term")
+        )
         # §5.6's published-only rule for a student or guardian lives in services,
         # so the parent portal reads the same set.
         return services.visible_results(self.request.user, queryset=queryset)

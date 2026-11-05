@@ -513,6 +513,11 @@ class ResultSerializer(serializers.ModelSerializer):
     exam_id = serializers.UUIDField(read_only=True)
     student_id = serializers.UUIDField(read_only=True)
     section_id = serializers.UUIDField(read_only=True)
+    # What a parent reads a result by; the viewset joins `exam` and its term, so no N+1.
+    exam_name = serializers.CharField(source="exam.name", read_only=True)
+    term_name = serializers.CharField(
+        source="exam.term.name", read_only=True, allow_null=True, default=None
+    )
     grade = serializers.CharField(source="grade_band.label", read_only=True, default=None)
 
     class Meta:
@@ -520,6 +525,8 @@ class ResultSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "exam_id",
+            "exam_name",
+            "term_name",
             "student_id",
             "section_id",
             "total_max_marks",

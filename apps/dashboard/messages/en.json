@@ -2163,6 +2163,7 @@
       "loadError": "We couldn't load the fees. Please try again.",
       "dueOn": "due {date}",
       "downloadReceipt": "Receipt {number}",
+      "receiptsLoadError": "We couldn't load the receipts. Please try again.",
       "receiptFailed": "We couldn't download the receipt. Please try again.",
       "status": {
         "draft": "Draft",
@@ -2207,7 +2208,6 @@
       "emptyTitle": "No results published",
       "emptyDescription": "Results appear here once the school publishes them.",
       "published": "Published {date}",
-      "unpublishedDate": "Result",
       "marks": "{obtained} of {max} marks",
       "rank": "rank {rank} in section",
       "outcome": {

@@ -55,6 +55,8 @@ class PortalModulesSerializer(serializers.Serializer):
 
 
 class PortalDashboardSerializer(serializers.Serializer):
+    # The school's local date the summary was built for; "this month" is this date's month.
+    as_of = serializers.DateField()
     children = PortalChildSerializer(many=True)
     unread_notifications = serializers.IntegerField()
     unread_threads = serializers.IntegerField(allow_null=True)

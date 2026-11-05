@@ -108,6 +108,14 @@ export function PortalFees() {
   return (
     <section className="space-y-4">
       <h1 className="font-heading text-xl font-semibold text-foreground">{t("title")}</h1>
+      {receipts.isError ? (
+        <LoadErrorCard
+          message={t("receiptsLoadError")}
+          onRetry={() => {
+            void receipts.refetch();
+          }}
+        />
+      ) : null}
       <InvoiceList kind="outstanding" studentId={studentId} receipts={receipts.data} />
       <InvoiceList kind="paid" studentId={studentId} receipts={receipts.data} />
     </section>

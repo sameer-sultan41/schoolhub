@@ -107,6 +107,18 @@ describe("PortalFees", () => {
     expect(saveBlob).not.toHaveBeenCalled();
   });
 
+  it("shows a retry when the receipts fail to load rather than hiding the buttons", async () => {
+    mockListReceipts.mockRejectedValueOnce(new Error("boom"));
+    const user = userEvent.setup();
+
+    renderWithProviders(<PortalFees />);
+
+    expect(await screen.findByText(/couldn't load the receipts/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(await screen.findByRole("button", { name: /Receipt RCP-0001/ })).toBeInTheDocument();
+  });
+
   it("shows the empty states when nothing is outstanding or paid", async () => {
     mockListInvoices.mockResolvedValue({ items: [] });
 

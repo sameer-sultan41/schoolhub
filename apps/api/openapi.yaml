@@ -23336,6 +23336,9 @@ components:
     PortalDashboard:
       type: object
       properties:
+        as_of:
+          type: string
+          format: date
         children:
           type: array
           items:
@@ -23348,6 +23351,7 @@ components:
         modules:
           $ref: '#/components/schemas/PortalModules'
       required:
+      - as_of
       - children
       - modules
       - unread_notifications
@@ -24259,6 +24263,13 @@ components:
           type: string
           format: uuid
           readOnly: true
+        exam_name:
+          type: string
+          readOnly: true
+        term_name:
+          type: string
+          readOnly: true
+          nullable: true
         student_id:
           type: string
           format: uuid
@@ -24335,6 +24346,7 @@ components:
       - approved_at
       - created_at
       - exam_id
+      - exam_name
       - gpa
       - grace_marks
       - grade
@@ -24347,6 +24359,7 @@ components:
       - section_id
       - status
       - student_id
+      - term_name
       - total_max_marks
       - total_obtained_marks
       - updated_at

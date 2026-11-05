@@ -118,7 +118,14 @@ export function PortalInvoiceDetail() {
           <h2 className="font-heading text-base font-semibold text-foreground">
             {t("detail.receipts")}
           </h2>
-          {invoiceReceipts.length === 0 ? (
+          {receipts.isError ? (
+            <LoadErrorCard
+              message={t("receiptsLoadError")}
+              onRetry={() => {
+                void receipts.refetch();
+              }}
+            />
+          ) : invoiceReceipts.length === 0 ? (
             <EmptyState
               icon={Receipt}
               title={t("detail.noReceiptsTitle")}

@@ -10663,6 +10663,8 @@ export interface components {
             latest_result: components["schemas"]["LatestResultCard"] | null;
         };
         PortalDashboard: {
+            /** Format: date */
+            as_of: string;
             children: components["schemas"]["PortalChild"][];
             unread_notifications: number;
             unread_threads: number | null;
@@ -11097,6 +11099,8 @@ export interface components {
             readonly id: string;
             /** Format: uuid */
             readonly exam_id: string;
+            readonly exam_name: string;
+            readonly term_name: string | null;
             /** Format: uuid */
             readonly student_id: string;
             /** Format: uuid */

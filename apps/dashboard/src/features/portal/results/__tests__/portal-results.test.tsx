@@ -29,6 +29,8 @@ describe("PortalResults", () => {
         portalResult(),
         portalResult({
           id: "66666666-6666-4666-8666-000000000002",
+          exam_name: "Finals",
+          term_name: null,
           percentage: "40.00",
           grade: "F",
           outcome: "fail",
@@ -41,6 +43,9 @@ describe("PortalResults", () => {
     renderWithProviders(<PortalResults />);
 
     expect(await screen.findAllByRole("listitem")).toHaveLength(2);
+    expect(screen.getByText("Mid-term")).toBeInTheDocument();
+    expect(screen.getByText("Finals")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Term 1" })).toBeInTheDocument();
     expect(screen.getByText("81.5%")).toBeInTheDocument();
     expect(screen.getByText("40%")).toBeInTheDocument();
     expect(screen.getByText("Pass")).toBeInTheDocument();

@@ -10,17 +10,20 @@ import { fetchAllPages } from "@/features/portal/fetch-all-pages";
 
 const ISO = "yyyy-MM-dd";
 
-/** One child's attendance rows between `from` and `to` (inclusive). */
-export function useRangeAttendance(studentId: string | undefined, from: Date, to: Date) {
-  const dateFrom = format(from, ISO);
-  const dateTo = format(to, ISO);
+/** One child's attendance rows over `range` (inclusive); nothing is asked until it is known. */
+export function useRangeAttendance(
+  studentId: string | undefined,
+  range: { from: Date; to: Date } | undefined,
+) {
+  const dateFrom = range && format(range.from, ISO);
+  const dateTo = range && format(range.to, ISO);
   return useQuery({
     queryKey: queryKeys.list(PARENT_PORTAL_QUERY_MODULE, "attendance", {
       studentId,
       dateFrom,
       dateTo,
     }),
-    enabled: studentId !== undefined,
+    enabled: studentId !== undefined && range !== undefined,
     queryFn: () =>
       fetchAllPages((cursor) =>
         Services.studentAttendance.fetchAttendancePage({

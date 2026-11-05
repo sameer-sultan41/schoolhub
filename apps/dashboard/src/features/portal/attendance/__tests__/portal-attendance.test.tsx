@@ -27,11 +27,10 @@ const mockFetchPage = Services.studentAttendance.fetchAttendancePage as jest.Moc
 
 describe("PortalAttendance", () => {
   beforeEach(() => {
-    // Mid-November: `advanceTimers` keeps Testing Library's polling and react-query moving.
-    jest.useFakeTimers({ now: new Date("2026-11-15T10:00:00"), advanceTimers: true });
     mockFetchDashboard.mockReset();
     mockFetchPage.mockReset();
-    mockFetchDashboard.mockResolvedValue(portalDashboard());
+    // The summary's `as_of` (2026-11-15) says which month is the current one.
+    mockFetchDashboard.mockResolvedValue(portalDashboard({ as_of: "2026-11-15" }));
     mockFetchPage.mockResolvedValue({
       items: [
         attendanceRecord({ id: "r1", attendance_date: "2026-11-02", status: "present" }),
@@ -39,10 +38,6 @@ describe("PortalAttendance", () => {
         attendanceRecord({ id: "r3", attendance_date: "2026-11-04", status: "half_day" }),
       ],
     });
-  });
-
-  afterEach(() => {
-    jest.useRealTimers();
   });
 
   it("attendance grid renders statuses and shows the percentage only for the current month", async () => {

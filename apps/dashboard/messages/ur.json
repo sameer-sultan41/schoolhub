@@ -2163,6 +2163,7 @@
       "loadError": "ہم فیس لوڈ نہیں کر سکے۔ براہ کرم دوبارہ کوشش کریں۔",
       "dueOn": "آخری تاریخ {date}",
       "downloadReceipt": "رسید {number}",
+      "receiptsLoadError": "ہم رسیدیں لوڈ نہیں کر سکے۔ براہ کرم دوبارہ کوشش کریں۔",
       "receiptFailed": "ہم رسید ڈاؤن لوڈ نہیں کر سکے۔ براہ کرم دوبارہ کوشش کریں۔",
       "status": {
         "draft": "مسودہ",
@@ -2207,7 +2208,6 @@
       "emptyTitle": "کوئی نتیجہ شائع نہیں ہوا",
       "emptyDescription": "اسکول کے شائع کرنے پر نتائج یہاں نظر آئیں گے۔",
       "published": "شائع شدہ {date}",
-      "unpublishedDate": "نتیجہ",
       "marks": "{max} میں سے {obtained} نمبر",
       "rank": "سیکشن میں {rank} واں نمبر",
       "outcome": {

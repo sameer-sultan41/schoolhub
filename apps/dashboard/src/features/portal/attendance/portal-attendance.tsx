@@ -43,9 +43,14 @@ export function PortalAttendance() {
   const locale = useLocale();
   const summary = usePortalSummary();
   const { studentId, child } = useSelectedChild(summary.data?.children);
-  const [month, setMonth] = useState(() => startOfMonth(new Date()));
+  // "This month" is the month of the date the server built the summary for (the school's
+  // local date); the viewer's own clock is never consulted.
+  const asOf = summary.data?.as_of;
+  const currentMonth = asOf === undefined ? undefined : startOfMonth(parseISO(asOf));
+  const [picked, setPicked] = useState<Date | null>(null);
+  const month = picked ?? currentMonth;
 
-  const records = useRangeAttendance(studentId, month, endOfMonth(month));
+  const records = useRangeAttendance(studentId, month && { from: month, to: endOfMonth(month) });
   const days = useMemo(() => statusByDate(records.data ?? []), [records.data]);
   const dayList = useMemo(() => [...days.entries()].sort(([a], [b]) => a.localeCompare(b)), [days]);
   const modifiers = useMemo(() => {
@@ -61,7 +66,7 @@ export function PortalAttendance() {
     : null;
 
   function body() {
-    if (records.isPending) return <Skeleton className="h-72 w-full" />;
+    if (month === undefined || records.isPending) return <Skeleton className="h-72 w-full" />;
     if (records.isError) {
       return (
         <LoadErrorCard
@@ -78,7 +83,7 @@ export function PortalAttendance() {
           <Calendar
             month={month}
             onMonthChange={(next) => {
-              setMonth(startOfMonth(next));
+              setPicked(startOfMonth(next));
             }}
             showOutsideDays={false}
             modifiers={modifiers}

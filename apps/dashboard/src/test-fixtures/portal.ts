@@ -54,6 +54,7 @@ export function portalChild(
 
 export function portalDashboard(overrides: Partial<PortalDashboard> = {}): PortalDashboard {
   return {
+    as_of: "2026-11-15",
     children: [portalChild(AYESHA_ID, "Ayesha", "Khan"), portalChild(BILAL_ID, "Bilal", "Khan")],
     unread_notifications: 0,
     unread_threads: 0,
@@ -124,6 +125,8 @@ export function portalResult(overrides: Partial<ResultRecord> = {}): ResultRecor
   return {
     id: "66666666-6666-4666-8666-666666666666",
     exam_id: "55555555-5555-4555-8555-555555555555",
+    exam_name: "Mid-term",
+    term_name: "Term 1",
     student_id: AYESHA_ID,
     section_id: "44444444-4444-4444-8444-444444444444",
     total_max_marks: "400.00",
