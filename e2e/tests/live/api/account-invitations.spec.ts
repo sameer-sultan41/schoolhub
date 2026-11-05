@@ -8,9 +8,9 @@ import { createAnonymousLiveClient } from "@/lib/live-api";
  *
  * The emailed-link endpoints (ADR-0033) are unauthenticated and resolve the school from
  * the body's `school` slug, so what only the real stack can prove is that they leak
- * nothing: an unknown email gets the same `204` as a real one, and every unusable link —
- * a made-up token, an unknown school, or one school's account named under another school's
- * slug — is the same `400 invalid_link`.
+ * nothing: an unknown email gets the same `204` as a real one, and a made-up token, an
+ * unknown school, or another school's account under this slug all get the same
+ * `400 invalid_link` a junk link does.
  *
  * Not covered here: the full emailed journey (invite → email → accept → sign in). `dev.py`
  * uses the console email backend, so the live stack never reaches Mailpit; the journey is
@@ -56,15 +56,17 @@ test.describe("account links (live API)", () => {
     ).rejects.toMatchObject({ status: 400, code: "invalid_link" });
   });
 
-  test("one school's account under another school's slug is the same invalid_link", async ({
+  test("another school's account under this slug gets the same answer as a junk link", async ({
     liveApiClient,
   }) => {
     const anonymous = createAnonymousLiveClient();
     const { data: me } = await liveApiClient.get<AuthenticatedUser>("/auth/me");
 
-    // The admin is a real, active account of LIVE_TENANT_SLUG. Under the other school's
-    // slug the lookup runs in that tenant's context, where RLS hides the account, so the
-    // answer must not differ from a junk link's.
+    // The admin is a real, active account of LIVE_TENANT_SLUG; the token is junk, since a
+    // real one is unreachable without Mailpit. So this proves only that the response doesn't
+    // differ from a junk link's. That a valid token is refused at another school (the lookup
+    // filters on the named tenant; `users` has no RLS) is proven by
+    // `apps/api/core/rbac/tests/test_password_reset.py::test_reset_confirm_at_another_school_is_400`.
     await expect(
       anonymous.post("/auth/password-reset:confirm", {
         school: env.LIVE_OTHER_TENANT_SLUG,
