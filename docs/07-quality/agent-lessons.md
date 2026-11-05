@@ -286,6 +286,17 @@
   and copy the exact string; reference a declared constant in code. Check "not on main yet"
   claims with `git show origin/main:<path> | grep <name>` before choosing a fallback.
 
+### L39. Never compare two reads of state a parallel sibling test mutates
+
+- **Mistake.** `e2e/tests/live/api/parent-portal.spec.ts` asserted
+  `dashboard.unread_notifications <= unread-count` for the seeded comms guardian, while another
+  test in the same `fullyParallel` file added a notification and marked it read for that same
+  guardian. Either read order could flake; the final branch review caught it (fixed in
+  `test(e2e): drop the parallel-unsafe unread comparison in the portal live spec`).
+- **Check.** In a live spec, never assert a relation between two reads of state that a sibling
+  test changes for the same identity: assert each read on its own (`> 0`), or give the test its
+  own identity. Pin exact equality in a backend unit test, where nothing runs alongside.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.
