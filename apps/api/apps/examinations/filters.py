@@ -20,6 +20,7 @@ from apps.examinations.models import (
     AdmitCard,
     Exam,
     ExamSchedule,
+    ExamStatus,
     ExamSubject,
     GradingScale,
     Marks,
@@ -105,7 +106,11 @@ class AdmitCardFilterSet(django_filters.FilterSet):
         if not value:
             return queryset
         today = self.request.tenant.local_date()
-        return queryset.filter(Q(exam__ends_on__isnull=True) | Q(exam__ends_on__gte=today))
+        # A deleted or archived exam is never current, whatever its dates.
+        live = queryset.filter(exam__deleted_at__isnull=True).exclude(
+            exam__status=ExamStatus.ARCHIVED
+        )
+        return live.filter(Q(exam__ends_on__isnull=True) | Q(exam__ends_on__gte=today))
 
     def filter_section_id(self, queryset, name, value):
         # One `.filter()` call, so every condition lands on the same enrollment

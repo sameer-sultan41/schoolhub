@@ -126,12 +126,17 @@ if TYPE_CHECKING:
 FEATURE = "module.examinations"
 
 
-def scoped_exam(request: Request, pk: str | None) -> Exam:
+def scoped_exam(request: Request, view: object, pk: str | None) -> Exam:
     """The exam an action addresses by id, through `ExamViewSet`'s record scope.
 
-    An exam outside the caller's scope is a 404, exactly as a foreign id is.
+    Narrowed by the exam read key and then the route's own key (ADR-0031 decision 3),
+    so an exam outside the caller's scope is a 404, exactly as a foreign id is.
     """
-    exams = scope_queryset(Exam.objects.alive(), request.user, own_field=None, campus_field=None)
+    exams = Exam.objects.alive()
+    for permission in ("exams.exam.view", route_permission(request, view)):
+        exams = scope_queryset(
+            exams, request.user, permission=permission, own_field=None, campus_field=None
+        )
     return get_object_or_404(exams, pk=pk)
 
 
@@ -544,7 +549,7 @@ class ExamScheduleViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         *exam* that moves state: a schedule is published as a whole, not sitting
         by sitting, and §6 calls it "schedule publish to portals".
         """
-        exam = scoped_exam(request, pk)
+        exam = scoped_exam(request, self, pk)
         outcome = services.publish_exam_schedule(exam=exam, actor_id=request.user.pk)
         record_audit(request, "publish", exam, after={"status": outcome["status"]})
 
@@ -569,7 +574,7 @@ class ExamScheduleViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         # client opening the schedule sees exactly what publishing would refuse
         # without saving a sitting to learn it. Staff-only: a clash list names
         # rooms, invigilators and other sections, which no portal reader needs.
-        exam = scoped_exam(request, pk)
+        exam = scoped_exam(request, self, pk)
         return ActionResponse.ok(conflicts.detect_conflicts(exam=exam))
 
 
@@ -650,7 +655,7 @@ class AdmitCardViewSet(
         action should replay the first answer rather than start a second render
         of three hundred documents.
         """
-        exam = scoped_exam(request, pk)
+        exam = scoped_exam(request, self, pk)
 
         def execute():
             outcome = services.issue_admit_cards(exam=exam, actor_id=request.user.pk)
@@ -977,7 +982,7 @@ class ResultViewSet(
         outstanding. In the job it is what actually holds, because marks can
         change between the request and the worker picking it up.
         """
-        exam = scoped_exam(request, pk)
+        exam = scoped_exam(request, self, pk)
         services.assert_exam_is_recomputable(exam)
         processing.assert_ready_to_process(processing.collect(exam=exam))
 
@@ -1160,7 +1165,7 @@ class ReportCardViewSet(
     @extend_schema(request=None, responses={202: None})
     def generate(self, request: Request, pk: str | None = None):
         """`POST /exams/{id}:generate-report-cards` — 202 + a job (§16)."""
-        exam = scoped_exam(request, pk)
+        exam = scoped_exam(request, self, pk)
         services.assert_report_cards_are_generatable(exam)
 
         def execute():
