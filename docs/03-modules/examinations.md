@@ -320,7 +320,7 @@ List and read shapes the dashboard depends on:
   pairs `may_enter_marks` allows; the exam resolves through `ExamViewSet`'s record scope (out of scope is a 404).
 - **Lock and unlock are typed and scoped.** `:lock-marks` answers `{locked_rows, already_locked}` and
   `:unlock-marks` `{unlocked_rows, already_unlocked}`; a repeat is a retry, not a conflict. The exam-subject
-  resolves through `ExamSubjectViewSet`'s record scope (L34), and an unlock once results are approved is a 409.
+  resolves through `ExamSubjectViewSet`'s record scope (L46), and an unlock once results are approved is a 409.
 - **The marks import checks the file's type and the importer's sections.** `POST /marks-imports` refuses a
   content type outside the `exams.marks-import` purpose's MIME allowlist (`text/csv`, Windows' `application/vnd.ms-excel` CSV type and `.xlsx`; a 400 under
   `file`), and a caller who may enter no section of the exam-subject (a 422 on `exam_subject_id`); the job then
@@ -332,7 +332,7 @@ List and read shapes the dashboard depends on:
   `:bulk-entry`, `:lock-marks` and `:unlock-marks` take the same two locks, in the same order, before anything
   else. If the subject is locked, closed, removed, or its exam moves past marks entry while the job is queued
   or running, the rows after that point are refused. Each refused row is reported under `exam_subject` with the
-  grid's message, so a failed-rows re-import works once entry reopens (L35).
+  grid's message, so a failed-rows re-import works once entry reopens (L47).
 - **A result carries its names and its processor.** `Result` reads `student_name`, `admission_number`,
   `section_name` (the section recorded at processing time), `processed_by` and `processed_by_name` (who ran the
   latest processing), and `approved_by` and `approved_by_name` (null until approved). Names are first and last,
@@ -348,7 +348,7 @@ List and read shapes the dashboard depends on:
   `{created, updated, students}`. `:generate-report-cards` is a `202` too, its job's `result`
   `{rendered, failed, cards}`. `:process-results`, `:approve-results`, `:send-results-back` and
   `:publish-results` resolve the exam through `ExamViewSet`'s record scope, and `:withhold` the result
-  through `/results`' own (L34): out of scope is a 404.
+  through `/results`' own (L46): out of scope is a 404.
 - **A report card carries its student, section and figures.** `ReportCard` reads `student_name`,
   `admission_number`, and from its result `section_id`, `section_name`, `percentage` and `grade` (all four null on
   a term-consolidated card, which has no single result). `/report-cards` filters on `exam_id`, `term_id`,
@@ -373,7 +373,7 @@ List and read shapes the dashboard depends on:
   and `search` over the text and topic; `/question-banks` takes `subject_id`, `class_id`, `status` and
   `search` over the name and description.
 - **The nested question routes are record-scoped.** `/question-banks/{id}/questions` and its `:approve` resolve
-  the bank through `QuestionBankViewSet`'s record scope (L34), so a bank outside an `assigned` teacher's subjects
+  the bank through `QuestionBankViewSet`'s record scope (L46), so a bank outside an `assigned` teacher's subjects
   is a 404 on every route, the list and a create included, exactly as a foreign bank is.
 - **An `assigned` creator's bank stays in a subject they teach.** On `POST /question-banks` and on a `PATCH`
   that sends `subject_id`, a caller whose scope is `assigned` must hold a current allocation
@@ -441,13 +441,13 @@ assembly. **The module is complete.**
 | ---- | ----- |
 | Entities | **All 11** of §15's tables — `grading_scales`, `grade_bands`, `exams`, `exam_subjects`, `exam_schedules`, `admit_cards`, `marks`, `results`, `report_cards`, `question_banks`, `questions` — tenant-owned with RLS policies |
 | §16 endpoints | `GET/POST/PATCH/DELETE /grading-scales`, `POST /grading-scales/{id}:set-default`, `GET/POST/PATCH/DELETE /grading-scales/{id}/grade-bands`, `GET/POST/PATCH/DELETE /exams`, `GET/POST/PATCH/DELETE /exam-subjects`, `GET/POST/PATCH/DELETE /exam-schedules` (every write returns `meta.conflicts`), `GET /exams/{id}/schedule-conflicts`, `POST /exams/{id}:publish-schedule`, `GET /admit-cards`, `POST /exams/{id}:issue-admit-cards` (202 + job, accepts `Idempotency-Key`), `POST /admit-cards/{id}:revoke` · `:download`, `GET /marks` (filters `exam_subject_id`, `exam_id`, `section_id`, `student_id`, `status`, `is_absent`, `is_exempt`), `GET /marks/grid`, `POST /marks:bulk-entry` (one `section_id`, accepts `Idempotency-Key`), `POST /exam-subjects/{id}:lock-marks` · `:unlock-marks`, `GET /exams/{id}/marks-progress`, `POST /marks-imports` (202 + job), `GET /results`, `POST /exams/{id}:process-results` (202 + job) · `:approve-results` · `:publish-results` · `:send-results-back`, `POST /results/{id}:withhold`, `GET/PATCH /report-cards` (remarks only), `POST /exams/{id}:generate-report-cards` (202 + job) · `:publish-report-cards`, `GET/POST /reports/exam-summary` (six report kinds, inline under 1,000 rows and a 202 job above), `GET/POST/PATCH/DELETE /question-banks`, `GET/POST/PATCH/DELETE /question-banks/{id}/questions`, `POST /question-banks/{bank}/questions/{id}:approve`, `POST /question-banks/{id}:assemble-paper` (202 + a job rendering a paper PDF) |
-| §4 permissions | `exams.exam.{view,create,update,delete}`, `exams.grading-scale.{view,create,update}`, `exams.schedule.{view,create,update}`, `exams.admit-card.{view,issue}`, `exams.marks.{view,create,update,import,lock}`, `exams.result.{view,create,approve,publish}`, `exams.report-card.{view,create,publish}`. `exams.question-bank.{view,create,update,delete}`, `exams.question.approve`, `exams.result.export`. **All of §4's keys are registered, and every one but `exams.marks.update` has an endpoint behind it:** `:bulk-entry` checks `exams.marks.create` for a new row and an update alike, so `.update` gates nothing yet (`docs/deferred-work.md`, lesson L36). `tests/test_endpoint_contracts.py` checks that every key a view names is registered, not the reverse |
+| §4 permissions | `exams.exam.{view,create,update,delete}`, `exams.grading-scale.{view,create,update}`, `exams.schedule.{view,create,update}`, `exams.admit-card.{view,issue}`, `exams.marks.{view,create,update,import,lock}`, `exams.result.{view,create,approve,publish}`, `exams.report-card.{view,create,publish}`. `exams.question-bank.{view,create,update,delete}`, `exams.question.approve`, `exams.result.export`. **All of §4's keys are registered, and every one but `exams.marks.update` has an endpoint behind it:** `:bulk-entry` checks `exams.marks.create` for a new row and an update alike, so `.update` gates nothing yet (`docs/deferred-work.md`, lesson L48). `tests/test_endpoint_contracts.py` checks that every key a view names is registered, not the reverse |
 | §11 validations | Exam name unique per session · exam dates set together and ordered · dates within the named term, or the session where no term is named · a term must belong to the exam's session · the session must be writable · one `exam_subjects` row per (exam, class, subject) · `pass_marks ≤ max_marks` · a practical component requires a practical maximum · the subject must be in the class's curriculum for the session · grading bands contiguous, non-overlapping and covering 0–100% before an exam may use the scale |
 | §13 reports | All five — result register (ordered by rank, unranked last), pass/fail analysis per section, subject performance over `marks`, marks-entry status, grade distribution — plus question-bank usage, behind one `kind`-parameterised endpoint with a 202 export lane in all three of `core.exports.tabular`'s formats. Every one asserted at **one query** |
 | §5.8 question banks | Banks per subject (class optional — null means every level), questions with §7.2's approval gate, and deterministic blueprint assembly ordered by `usage_count` so reuse spreads and a re-run produces the same paper |
 | §5.5 processing | `processing.py` — totals with subject weightage on *both* sides of the fraction, percentage, grade band, GPA, dense ranks, and outcome. Five queries for a whole school; the per-student loop never queries |
 | §11 processing | Blocked while any exam-subject has marks outstanding, measured against the **expected roll** rather than rows that happen to exist: a 409 with its own code, `marks_outstanding`, naming the subjects. Recompute is idempotent and refused once approved (a plain `conflict`) |
-| §5.6 approval | Per-row `status` and per-exam status both move. **The approver cannot be the processor** — compared against `results.processed_by`, which every processing run re-stamps on every pending row of the exam (a re-process after a send-back included), not `created_by`, which names only the first run (lesson L38). Publishing releases approved, non-withheld rows only; withholding is a per-student `outcome` |
+| §5.6 approval | Per-row `status` and per-exam status both move. **The approver cannot be the processor** — compared against `results.processed_by`, which every processing run re-stamps on every pending row of the exam (a re-process after a send-back included), not `created_by`, which names only the first run (lesson L50). Publishing releases approved, non-withheld rows only; withholding is a per-student `outcome` |
 | §5.7 report cards | Versioned on regeneration, remarks preserved, stale file cleared. Attendance is a JSONB **snapshot** from `attendance.reports.student_summary` — one query for the whole cohort |
 | §11 marks | One row per (exam-subject, student) · nothing negative and absent-excludes-a-mark at the **database**; `0 ≤ mark ≤ max_marks` in `services`, because a CHECK cannot read `exam_subjects.max_marks` · absent and exempt are mutually exclusive · a practical mark on a theory-only subject is refused · only students on the submitted section's active roll in the exam's session, in a section of the exam-subject's class |
 | §5.4 lifecycle | `draft → submitted → locked` on the row, plus `exam_subjects.marks_locked_at` on the *window*. Four gates on every write, each with its own message because each has a different remedy: the exam's status (§7.1), the entry window (§6), the subject lock, and the teacher's allocation (§4). An **unset** window means always open |
@@ -576,7 +576,7 @@ assembly. **The module is complete.**
   of `approved`. A send-back returns every unpublished row to `processing`, and
   the next run moves every one of them back to pending approval, including a row
   it did not recompute (a student withdrawn since); approval refuses with 409
-  while any row is still `processing` (lesson L40).
+  while any row is still `processing` (lesson L51).
 - **A withheld result survives a recompute, and a revoked admit card survives a
   re-issue.** The same rule twice: a decision someone took is not undone by a
   batch operation running again.
@@ -875,7 +875,7 @@ came with these server changes:
   the campus of the section the student's enrolment in the exam's session names, as `may_enter_marks`
   reads `section.campus_id`.
 - **A closed session's marks leave the teacher with the enrolment.** The assigned read requires the
-  enrolment to be `active`, deliberately unlike L33's historical reads: once a session's students are
+  enrolment to be `active`, deliberately unlike L45's historical reads: once a session's students are
   promoted, their subject and class teachers can no longer read that session's marks, exactly as they can
   no longer write them. Leadership (`all`/`campus` scope) still reads them; a teacher's history view is
   results, not raw marks.

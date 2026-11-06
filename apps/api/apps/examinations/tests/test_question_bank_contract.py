@@ -1,6 +1,6 @@
 """The question-bank wire contract: names on the row, page numbers, flat query
 counts, `:assemble-paper`'s job result as §16 documents it, and the agreement
-between the bank scope and the nested question routes (L37)."""
+between the bank scope and the nested question routes (L49)."""
 
 from __future__ import annotations
 
@@ -236,7 +236,7 @@ class AssemblyResultTests(QuestionBankTestCase):
 
 
 class BankScopeAgreementTests(QuestionBankTestCase):
-    """L37: the bank list, the hook and the nested routes' bank lookup are one predicate."""
+    """L49: the bank list, the hook and the nested routes' bank lookup are one predicate."""
 
     def setUp(self) -> None:
         super().setUp()

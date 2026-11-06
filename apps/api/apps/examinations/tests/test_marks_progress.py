@@ -164,7 +164,7 @@ class ProgressBySectionTests(GridTestCase):
 
 class LockScopeTests(GridTestCase):
     def test_locking_or_unlocking_an_out_of_scope_exam_subject_is_a_404(self) -> None:
-        """L34: the exam-subject resolves through its record scope, not by bare id."""
+        """L46: the exam-subject resolves through its record scope, not by bare id."""
         with tenant_context(self.tenant.id):
             stranger = UserFactory(tenant=self.tenant)
         client = self.client_for(stranger, "exams.marks.lock")

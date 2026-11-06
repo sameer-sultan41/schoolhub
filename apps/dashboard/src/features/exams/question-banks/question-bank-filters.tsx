@@ -24,7 +24,7 @@ export interface QuestionBankFiltersProps {
 }
 
 /** The banks list's search box and its subject and status filters. The subject filter reads
- * `/subjects`, so it shows only to a holder of `school.subject.view` (L36). */
+ * `/subjects`, so it shows only to a holder of `school.subject.view` (L48). */
 export function QuestionBankFilters({
   searchInput,
   onSearchInputChange,
