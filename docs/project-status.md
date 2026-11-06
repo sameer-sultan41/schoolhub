@@ -385,7 +385,10 @@ with its reasoning. Read the entry for the area you are about to touch before re
    issue with the server's counts, download through `:download`, revoke with a reason), with
    the clash-list read, the typed publish, the admit card's student and section, and
    `:download` behind them (§16, §20), and E2E coverage in `tests/dashboard/exams-schedule.spec.ts`
-   and `tests/live/api/exams-schedule.spec.ts`.
+   and `tests/live/api/exams-schedule.spec.ts`. Its review round (#149) re-reads a sitting under
+   the schedule lock before an edit or delete, so a concurrent cancel is not overwritten, and
+   resolves every exam colon action under the hosting view's read key and then its own
+   (ADR-0031 decision 3; plan `docs/superpowers/plans/2026-11-07-exams-dashboard-per-role-scope.md`).
    **`parent-portal` is in review as two stacked PRs** (plan
    `docs/superpowers/plans/2026-11-04-parent-portal.md`; module doc §20). PR 1
    (`feat/parent-portal-api`) is the backend: the per-child dashboard summary, the
