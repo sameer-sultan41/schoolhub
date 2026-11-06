@@ -844,21 +844,26 @@ class MarksViewSet(
         query.is_valid(raise_exception=True)
         exam_subject = scoped_exam_subject(request, self, query.validated_data["exam_subject_id"])
         section = get_object_or_404(Section.objects.alive(), pk=query.validated_data["section_id"])
+        read = route_permission(request, self)
+        # The submit's own key and section gate, so the flag can't drift from `:bulk-entry`.
+        write = self.required_permission_map["bulk_entry"]
+        teaching = services.marker_teaching(request.user, read, write)
         # Out of the caller's sections reads as absent, like any out-of-scope row.
         if not services.may_enter_marks(
             user=request.user,
             exam_subject=exam_subject,
             section=section,
-            permission=route_permission(request, self),
+            permission=read,
+            teaching=teaching,
         ):
             raise NotFound
         entries = services.marks_grid(exam_subject=exam_subject, section=section)
-        # The submit's own key and section gate, so the flag can't drift from `:bulk-entry`.
         blocked = services.marks_grid_writability(
             user=request.user,
             exam_subject=exam_subject,
             section=section,
-            write_permission=self.required_permission_map["bulk_entry"],
+            write_permission=write,
+            teaching=teaching,
         )
         return Response(
             {
@@ -895,7 +900,11 @@ class MarksViewSet(
         """
         serializer = BulkMarksEntrySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        exam_subject = serializer.validated_data["exam_subject"]
+        # Under the marks read key and this route's: out of scope is a 404, not a 422 that
+        # would say whether the posted section is in the exam-subject's class.
+        exam_subject = scoped_exam_subject(
+            request, self, str(serializer.validated_data["exam_subject"].pk)
+        )
 
         def execute():
             outcome = services.bulk_enter_marks(
@@ -991,7 +1000,10 @@ class MarksImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
 
         serializer = MarksImportRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        exam_subject = serializer.validated_data["exam_subject"]
+        # Out of the import key's record scope is a 404, as for any exam-subject by id.
+        exam_subject = scoped_exam_subject(
+            request, self, str(serializer.validated_data["exam_subject"].pk)
+        )
         upload = serializer.validated_data["file"]
 
         # This route's key, checked here and carried to the job, which checks each row's.

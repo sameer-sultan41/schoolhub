@@ -446,7 +446,7 @@ def remind_tenant_marks_entry(tenant_id: uuid.UUID) -> int:
     from apps.academics.models import TeacherSubjectAllocation
     from apps.examinations import notifications
     from apps.examinations.models import Exam, ExamStatus
-    from apps.examinations.services import marks_entry_progress
+    from apps.examinations.services import all_marks_entry_progress
     from core.notifications.services import Recipient, notify
     from core.tenancy.context import tenant_atomic
     from core.tenancy.models import Tenant
@@ -465,7 +465,7 @@ def remind_tenant_marks_entry(tenant_id: uuid.UUID) -> int:
         for exam in exams:
             due = [
                 entry
-                for entry in marks_entry_progress(exam=exam, user=None, permission=None)
+                for entry in all_marks_entry_progress(exam=exam)
                 if not entry["is_locked"]
                 and entry["closes_at"] is not None
                 and now <= entry["closes_at"] <= horizon

@@ -277,7 +277,10 @@ List and read shapes the dashboard depends on:
   action role cannot reach an exam the caller's view role hides, and a schedule reader without
   `exams.exam.view` keeps the clash list. **An exam-subject addressed by id follows the same two-key rule**
   (`scoped_exam_subject`, with `ExamSubjectViewSet`'s scope settings): the grid under `exams.marks.view`
-  alone, `:lock-marks` and `:unlock-marks` under `exams.marks.view` and then `exams.marks.lock`.
+  alone, `:lock-marks` and `:unlock-marks` under `exams.marks.view` and then `exams.marks.lock`,
+  `:bulk-entry` under `exams.marks.view` and then `exams.marks.create`, and `POST /marks-imports` under
+  `exams.marks.import`. An exam-subject outside that reach is a 404 before any section is looked at, so a
+  caller who teaches none of it cannot learn which sections are in its class.
 - **The publish is typed.** `:publish-schedule` answers `{status, conflicts}` (`ExamSchedulePublish`): the
   exam's new status, `scheduled`, and the soft findings that did not block it. A hard finding is a 422
   `domain_rule_violation` carrying the **whole** list in `error.meta.conflicts` (never flattened into
@@ -314,8 +317,9 @@ List and read shapes the dashboard depends on:
   refuses them under `exams.marks.view`, is a 404.
 - **Bulk entry names its section and refuses whole.** `POST /marks:bulk-entry` takes `exam_subject_id`,
   `section_id` and `entries`, with an `Idempotency-Key`. In order: the serializer (a mark on an absent row, or
-  absent with exempt, is a 400 under `entries.N.<field>`; a student twice is a 400); the exam's status, the
-  lock and the entry window (409s, each with its own sentence); the section gate (a 422 on `section_id`); then
+  absent with exempt, is a 400 under `entries.N.<field>`; a student twice is a 400); the exam-subject's record
+  scope (a 404, above); the exam's status, the lock and the entry window (409s, each with its own
+  sentence); the section gate (a 422 on `section_id`); then
   every row (on the section's roll, at most `max_marks`). Any refused row refuses the grid: a 422
   `domain_rule_violation`, "N of M rows were rejected; nothing was saved.", with each row in
   `error.meta.rows` as `{index, student_id, field, issue}`, and nothing written. The 200 is
