@@ -14,7 +14,7 @@ The examinations dashboard is five stacked PRs: #147 (setup) ← #149 (schedule)
 - **Changed exam code on main.** #150 also edited `apps/examinations` itself:
   - `assert_marker_may_enter` reads `scopes_for(user, MARKS_CREATE)`.
   - `_entry_students` scopes the posted student ids.
-  - `bulk_enter_marks` resolves its exam-subject through scope.
+  - `bulk_enter_marks` scopes the posted students per student (its exam-subject is still resolved tenant-wide, by the serializer).
   - `tasks.py`'s import and export jobs carry the route's scope key in the payload and fail closed without it.
 
 #147 already has `main` merged (`efb02650`) and passes its typecheck, because its own code has no old-API calls. #149, #152, #154 and #155 add code that does. Until `main` is carried through, those four PRs cannot merge, and CI on #149 does not run because the PR conflicts.
@@ -67,7 +67,7 @@ Main's code is the precedent (`attendance/register.py:88,221`, `attendance/views
 8. **Main's other exam edits, kept as written, with the stack's call sites updated:**
    - `build_report_rows(permission=route_permission(...))`, at stack `views.py:1581` and `tasks.py:1081`.
    - The export job's `scope_permission` and its fail-closed check.
-   - The scoped bulk-entry exam-subject.
+   - The per-student scoping of bulk entry. (Main resolves the bulk-entry exam-subject tenant-wide; #152 additionally resolves it through `_reachable`, so an out-of-scope exam-subject is a 404.)
 9. **Mechanics.**
    - Carry `main` down the stack branch by branch, merge commits only, no force push: #147 (done) → #149 → #152 → #154 → #155.
    - Each **merge commit is resolution only**: the minimum that makes main's API compile, behaviour left as it was.
