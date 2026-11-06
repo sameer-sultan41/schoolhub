@@ -266,7 +266,7 @@ either this file or `project-status.md`.
     as a holiday from the dashboard; the school calendar's holidays refuse marking instead.
 - **Seven `examinations` actions still look up their parent without the caller's record scope**
   (`get_object_or_404(<Model>.objects.alive(), ...)` in `apps/api/apps/examinations/views.py`),
-  the pattern lesson L46 records: `:approve-results`, `:send-results-back`, `:publish-results`
+  the pattern lesson L51 records: `:approve-results`, `:send-results-back`, `:publish-results`
   and `:publish-report-cards` (exam), `results/{id}:withhold` (result), and the nested grade-band
   and question routes' parent scale and bank. PR B converted `:publish-schedule`,
   `:issue-admit-cards`, `schedule-conflicts`, `:process-results` and `:generate-report-cards`; PR C
@@ -287,7 +287,7 @@ either this file or `project-status.md`.
   - **`exams.marks.update` gates nothing.** It is registered for `teacher` and `exam_staff`, but
     `:bulk-entry` writes a new row and an update alike under `exams.marks.create`, so no role is
     ever refused for want of it (the audit's suggestion in
-    `07-quality/2026-09-module-audit-findings.md`, lesson L48). Either the update half of a
+    `07-quality/2026-09-module-audit-findings.md`, lesson L55). Either the update half of a
     submission checks it, which needs a ruling on what a teacher holding `.create` alone may do to
     a row they already saved, or the key is dropped from the registry, the seed and §4.
   - **`attendance.import`'s CSV allowlist rejects Windows' `application/vnd.ms-excel` type.** A
