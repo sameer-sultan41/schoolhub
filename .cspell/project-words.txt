@@ -352,3 +352,4 @@ fileobj
 dedup
 regen
 uncleareable
+harfbuzz
