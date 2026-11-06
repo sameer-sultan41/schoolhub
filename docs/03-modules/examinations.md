@@ -368,13 +368,16 @@ List and read shapes the dashboard depends on:
   code, `marks_outstanding`, while any exam-subject has marks outstanding; its job's `result` is
   `{created, updated, students}`. `:generate-report-cards` is a `202` too, its job's `result`
   `{rendered, failed, cards}`. `:process-results`, `:approve-results`, `:send-results-back` and
-  `:publish-results` resolve the exam through `ExamViewSet`'s record scope, and `:withhold` the result
-  through `/results`' own (L46): out of scope is a 404.
+  `:publish-results` resolve the exam through `ExamViewSet`'s record scope under two keys, `exams.result.view`
+  then the action's own, as every exam colon action does; `:withhold` resolves the result through `/results`'
+  own (L46). Out of scope is a 404, so an `all` approve or publish role cannot reach an exam the caller's
+  results view role hides.
 - **A report card carries its student, section and figures.** `ReportCard` reads `student_name`,
   `admission_number`, and from its result `section_id`, `section_name`, `percentage` and `grade` (all four null on
   a term-consolidated card, which has no single result). `/report-cards` filters on `exam_id`, `term_id`,
   `student_id`, `section_id` (the result's section) and `status`. `:generate-report-cards` and
-  `:publish-report-cards` resolve the exam through `ExamViewSet`'s record scope; `:publish-report-cards` answers
+  `:publish-report-cards` resolve the exam through `ExamViewSet`'s record scope under `exams.report-card.view`
+  and then their own key; `:publish-report-cards` answers
   `{published, published_ids}`.
 - **Remarks are written per field.** `PATCH /report-cards/{id}` takes `class_teacher_remarks` (needs
   `exams.report-card.create`) and `principal_remarks` (needs `exams.report-card.publish`), each held for this
