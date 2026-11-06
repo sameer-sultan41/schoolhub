@@ -1469,9 +1469,10 @@ class QuestionBankViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         super().perform_create(serializer)
 
     def perform_update(self, serializer) -> None:
-        # A PATCH that leaves the subject alone keeps a bank the caller can already see.
+        # A PATCH that leaves the subject alone (omitted or re-sent) keeps a bank the caller
+        # can already see.
         subject = serializer.validated_data.get("subject")
-        if subject is not None:
+        if subject is not None and subject.pk != serializer.instance.subject_id:
             services.assert_creator_teaches_bank_subject(
                 user=self.request.user,
                 subject=subject,

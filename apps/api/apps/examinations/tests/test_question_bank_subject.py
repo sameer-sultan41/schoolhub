@@ -113,6 +113,19 @@ class MixedRoleBankSubjectTests(QuestionBankTestCase):
             response.json()["error"]["details"], [{"field": "subject_id", "issue": REFUSAL}]
         )
 
+    def test_an_own_only_create_grant_is_refused(self) -> None:
+        """`own` reaches no bank (no owner column), so it creates none either: fails closed."""
+        grant(self.subject_teacher_user, "exams.question-bank.create", scope=RecordScope.OWN)
+
+        response = self.create_in_stranger_subject()
+
+        self.assertEqual(
+            response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY, response.json()
+        )
+        self.assertEqual(
+            response.json()["error"]["details"], [{"field": "subject_id", "issue": REFUSAL}]
+        )
+
     def test_a_campus_grant_of_the_create_key_can_create_in_any_subject(self) -> None:
         """The union: `assigned` alone would refuse, the `campus` grant passes."""
         grant(self.subject_teacher_user, "exams.question-bank.create", scope=RecordScope.ASSIGNED)
