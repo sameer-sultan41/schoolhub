@@ -34,7 +34,7 @@ All monetary amounts are stored as `numeric(12,2)` in the tenant's configured cu
 
 ## 4. Permissions
 
-Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/auth-and-rbac.md). Permission keys use `<module>.<resource>.<action>`. This module declares two namespaces — `fees.*` and `payroll.*` — and the module-specific verbs `collect`, `refund`, and `waive`. Financial mutations require record-level scope ≠ `own` and are always audited with before/after amounts.
+Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/auth-and-rbac.md). Permission keys use `<module>.<resource>.<action>`. This module declares two namespaces — `fees.*` and `payroll.*` — and the module-specific verbs `collect`, `refund`, `waive`, `pay-online` and `manage`. Financial mutations require record-level scope ≠ `own` and are always audited with before/after amounts. The one exception is `fees.payment.pay-online`: a guardian or student pays their own child's invoice online, at scope `own`, because it moves money *in* and only for the caller's own child.
 
 | Permission key | Description | Default roles |
 | -------------- | ----------- | ------------- |
@@ -45,6 +45,8 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 | `fees.payment.collect` | Record payments and issue receipts | `accountant`, `finance_staff` |
 | `fees.payment.refund` | Request a refund | `accountant`, `finance_staff` |
 | `fees.refund.approve` | Approve/reject refund requests | `accountant`, `school_owner` |
+| `fees.payment.pay-online` | Pay one's own invoice online through the school's payment gateway | `guardian`, `student` (scoped `own`) |
+| `fees.gateway.manage` | Configure the school's payment gateway account; resolve gateway reconciliation issues | `school_owner`, `accountant` |
 | `fees.discount.create` / `fees.scholarship.create` | Grant discounts/scholarships | `accountant`, `school_admin` |
 | `fees.discount.waive` / `fees.fine.waive` | Waive fines or invoice lines | `accountant`, `school_owner` |
 | `fees.fee-structure.view` † | View fee heads, structures and schedules | `school_admin`, `accountant`, `finance_staff`, `principal`, `school_owner` |
