@@ -272,6 +272,16 @@
   `with CaptureQueriesContext(...)` block, before any other client request, and assert the
   list is non-empty before asserting on its contents.
 
+### L55. A fake whose state lives in process memory cannot be driven by the live lane
+
+- **Mistake.** The online-payments fake provider (`core/integrations/payments/fake.py`) kept its
+  transactions in memory, filled by tests with `add_transaction`. The callback re-fetches from
+  it, so the planned live spec (`e2e/tests/live/api/online-payments.spec.ts`) could sign a
+  callback but never get it confirmed: nothing outside the API process can fill that store.
+- **Check.** Before planning a live spec against a fake, trace how the spec puts the fake into
+  the state the assertion needs, across the process boundary. If it cannot, give the fake a
+  dev-only behaviour behind a setting that tests leave off (`PAYMENT_FAKE_SETTLES_ON_INITIATE`).
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.
