@@ -1,7 +1,6 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { MAX_PAGE_SIZE } from "@schoolhub/api-client";
 
 import { queryKeys } from "@/lib/query-client";
 import { Services, type LedgerAccountType } from "@/services";
@@ -15,8 +14,7 @@ import {
 } from "@/services/modules/fee-heads/fee-heads-constant";
 
 /**
- * The lists a picker or a name lookup reads: the first `MAX_PAGE_SIZE` records, one cache entry
- * per filter set. A write to the module invalidates them with its lists.
+ * The lists a picker or a name lookup reads: every record, one cache entry per filter set. A write to the module invalidates them with its lists.
  */
 
 export interface LedgerAccountOptionsParams {
@@ -36,14 +34,7 @@ export function useLedgerAccountOptions({
       accountType,
       isActive,
     }),
-    queryFn: () =>
-      Services.ledgerAccounts.listLedgerAccounts({
-        accountType,
-        isActive,
-        ordering: "code",
-        pageSize: MAX_PAGE_SIZE,
-      }),
-    select: (page) => page.items,
+    queryFn: () => Services.ledgerAccounts.fetchLedgerAccountOptions({ accountType, isActive }),
     enabled,
   });
 }
@@ -51,8 +42,7 @@ export function useLedgerAccountOptions({
 export function useFeeHeadOptions({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: queryKeys.list(FEE_HEADS_QUERY_MODULE, FEE_HEADS_OPTIONS_RESOURCE),
-    queryFn: () => Services.feeHeads.listFeeHeads({ ordering: "code", pageSize: MAX_PAGE_SIZE }),
-    select: (page) => page.items,
+    queryFn: () => Services.feeHeads.fetchFeeHeadOptions(),
     enabled,
   });
 }

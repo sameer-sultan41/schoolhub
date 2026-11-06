@@ -14,9 +14,9 @@ import { EMPTY_VALUE } from "@/lib/constants";
 import { hasPermission } from "@/lib/permissions";
 import type { FeeStructureRecord } from "@/services";
 import { isStructureEditable } from "@/services/modules/fee-structures/fee-structures-helper";
-import { StructureStatusBadge } from "../../shared/structure-status-badge";
-import { useStructureReferences } from "../../shared/use-structure-references";
-import { StructureFormDialog } from "../structure-form-dialog";
+import { StructureStatusBadge } from "@/features/fees/shared/structure-status-badge";
+import { useStructureReferences } from "@/features/fees/shared/use-structure-references";
+import { StructureFormDialog } from "@/features/fees/structures/structure-form-dialog";
 import { DeleteStructureDialog } from "./delete-structure-dialog";
 import {
   StructureLifecycleDialog,

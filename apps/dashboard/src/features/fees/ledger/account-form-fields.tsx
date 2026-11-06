@@ -14,9 +14,9 @@ import {
   NO_PARENT_OPTION,
 } from "@/services/modules/ledger-accounts/ledger-accounts-constant";
 import type { LedgerAccountFormValues } from "@/services/modules/ledger-accounts/ledger-accounts.schema";
-import { LEDGER_ACCOUNT_TYPE_LABEL_KEY } from "../shared/fee-setup-labels";
-import { FormSwitchField } from "../shared/form-switch-field";
-import { useLedgerAccountOptions } from "../shared/use-fee-options";
+import { LEDGER_ACCOUNT_TYPE_LABEL_KEY } from "@/features/fees/shared/fee-setup-labels";
+import { FormSwitchField } from "@/features/fees/shared/form-switch-field";
+import { useLedgerAccountOptions } from "@/features/fees/shared/use-fee-options";
 
 export interface AccountFormFieldsProps {
   form: UseFormReturn<LedgerAccountFormValues>;

@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 
 import { Toolbar, ToolbarHeading } from "@/app/(app)/shell/toolbar";
 import { LEDGER_ACCOUNTS_FILTER_KEYS } from "@/services/modules/ledger-accounts/ledger-accounts-constant";
-import { FeesTabs, type FeesTabSpec } from "../shared/fees-tabs";
+import { FeesTabs, type FeesTabSpec } from "@/features/fees/shared/fees-tabs";
 import { AccountsTab } from "./accounts-tab";
 
 /**

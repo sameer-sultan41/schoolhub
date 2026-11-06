@@ -10,7 +10,7 @@ import { EMPTY_VALUE } from "@/lib/constants";
 import { enumLabel } from "@/lib/enum-label";
 import type { FeeHeadRecord } from "@/services";
 import { FEE_HEADS_ACTIONS_COLUMN_ID } from "@/services/modules/fee-heads/fee-heads-constant";
-import { FEE_HEAD_CATEGORY_LABEL_KEY } from "../shared/fee-setup-labels";
+import { FEE_HEAD_CATEGORY_LABEL_KEY } from "@/features/fees/shared/fee-setup-labels";
 
 export interface FeeHeadRowActions {
   canUpdate: boolean;

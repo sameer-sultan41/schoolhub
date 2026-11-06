@@ -21,8 +21,8 @@ import type { FeeScheduleRecord, FeeStructureRecord } from "@/services";
 import { FEE_FREQUENCIES } from "@/services/modules/fee-schedules/fee-schedules-constant";
 import { dueRuleFor } from "@/services/modules/fee-schedules/fee-schedules-helper";
 import type { FeeScheduleFormValues } from "@/services/modules/fee-schedules/fee-schedules.schema";
-import { FEE_FREQUENCY_LABEL_KEY } from "../../shared/fee-setup-labels";
-import { useFeeHeadOptions } from "../../shared/use-fee-options";
+import { FEE_FREQUENCY_LABEL_KEY } from "@/features/fees/shared/fee-setup-labels";
+import { useFeeHeadOptions } from "@/features/fees/shared/use-fee-options";
 
 export interface ScheduleFormFieldsProps {
   form: UseFormReturn<FeeScheduleFormValues>;

@@ -32,9 +32,12 @@ import type { FeeScheduleRecord, FeeStructureRecord } from "@/services";
 import { DEFAULT_FEE_FREQUENCY } from "@/services/modules/fee-schedules/fee-schedules-constant";
 import { dueRuleFor } from "@/services/modules/fee-schedules/fee-schedules-helper";
 import { isStructureEditable } from "@/services/modules/fee-structures/fee-structures-helper";
-import { FEE_FREQUENCY_LABEL_KEY, STRUCTURE_STATUS_LABEL_KEY } from "../../shared/fee-setup-labels";
-import { FeesTabHeader } from "../../shared/fees-tab-header";
-import { useFeeHeadOptions } from "../../shared/use-fee-options";
+import {
+  FEE_FREQUENCY_LABEL_KEY,
+  STRUCTURE_STATUS_LABEL_KEY,
+} from "@/features/fees/shared/fee-setup-labels";
+import { FeesTabHeader } from "@/features/fees/shared/fees-tab-header";
+import { useFeeHeadOptions } from "@/features/fees/shared/use-fee-options";
 import { DeleteScheduleDialog } from "./delete-schedule-dialog";
 import { ScheduleFormDialog } from "./schedule-form-dialog";
 

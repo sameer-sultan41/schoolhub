@@ -28,8 +28,8 @@ import {
   feeHeadActiveFilterToFlag,
   feeHeadCategoryFilter,
 } from "@/services/modules/fee-heads/fee-heads-helper";
-import { FeesTabHeader } from "../shared/fees-tab-header";
-import { useLedgerAccountOptions } from "../shared/use-fee-options";
+import { FeesTabHeader } from "@/features/fees/shared/fees-tab-header";
+import { useLedgerAccountOptions } from "@/features/fees/shared/use-fee-options";
 import { DeleteFeeHeadDialog } from "./delete-fee-head-dialog";
 import { useFeeHeadColumns } from "./fee-head-columns";
 import { FeeHeadFilters } from "./fee-head-filters";

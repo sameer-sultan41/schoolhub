@@ -9,8 +9,8 @@ import {
   HEADS_TAB_ID,
   STRUCTURES_TAB_ID,
 } from "@/services/modules/fee-structures/fee-structures-constant";
-import { FeeHeadsTab } from "../heads/fee-heads-tab";
-import { FeesTabs, type FeesTabSpec } from "../shared/fees-tabs";
+import { FeeHeadsTab } from "@/features/fees/heads/fee-heads-tab";
+import { FeesTabs, type FeesTabSpec } from "@/features/fees/shared/fees-tabs";
 import { StructuresTab } from "./structures-tab";
 
 const SCOPED_KEYS = [

@@ -10,7 +10,7 @@ import {
   FEE_HEAD_ACTIVE_FILTERS,
   FEE_HEAD_CATEGORIES,
 } from "@/services/modules/fee-heads/fee-heads-constant";
-import { FEE_HEAD_CATEGORY_LABEL_KEY } from "../shared/fee-setup-labels";
+import { FEE_HEAD_CATEGORY_LABEL_KEY } from "@/features/fees/shared/fee-setup-labels";
 
 /** The URL filter keys this component writes (`FEE_HEADS_URL_FILTERS`). */
 export interface FeeHeadFilterValues {

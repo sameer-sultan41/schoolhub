@@ -11,7 +11,7 @@ import {
   LEDGER_ACTIVE_FILTERS,
   LEDGER_SYSTEM_FILTERS,
 } from "@/services/modules/ledger-accounts/ledger-accounts-constant";
-import { LEDGER_ACCOUNT_TYPE_LABEL_KEY } from "../shared/fee-setup-labels";
+import { LEDGER_ACCOUNT_TYPE_LABEL_KEY } from "@/features/fees/shared/fee-setup-labels";
 
 /** The URL filter keys this component writes (`LEDGER_ACCOUNTS_URL_FILTERS`). */
 export interface AccountFilterValues {

@@ -27,8 +27,8 @@ import {
   FEE_STRUCTURES_URL_FILTERS,
 } from "@/services/modules/fee-structures/fee-structures-constant";
 import { feeStructureStatusFilter } from "@/services/modules/fee-structures/fee-structures-helper";
-import { FeesTabHeader } from "../shared/fees-tab-header";
-import { useStructureReferences } from "../shared/use-structure-references";
+import { FeesTabHeader } from "@/features/fees/shared/fees-tab-header";
+import { useStructureReferences } from "@/features/fees/shared/use-structure-references";
 import { useStructureColumns } from "./structure-columns";
 import { StructureFilters } from "./structure-filters";
 import { StructureFormDialog } from "./structure-form-dialog";

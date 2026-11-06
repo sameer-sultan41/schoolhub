@@ -9,7 +9,7 @@ import { RowEditRemoveActions } from "@/components/row-edit-remove-actions";
 import { enumLabel } from "@/lib/enum-label";
 import type { LedgerAccountRecord } from "@/services";
 import { LEDGER_ACCOUNTS_ACTIONS_COLUMN_ID } from "@/services/modules/ledger-accounts/ledger-accounts-constant";
-import { LEDGER_ACCOUNT_TYPE_LABEL_KEY } from "../shared/fee-setup-labels";
+import { LEDGER_ACCOUNT_TYPE_LABEL_KEY } from "@/features/fees/shared/fee-setup-labels";
 
 export interface AccountRowActions {
   canWrite: boolean;

@@ -22,9 +22,9 @@ import {
   FEE_HEAD_NAME_MAX,
 } from "@/services/modules/fee-heads/fee-heads-constant";
 import type { FeeHeadFormValues } from "@/services/modules/fee-heads/fee-heads.schema";
-import { FEE_HEAD_CATEGORY_LABEL_KEY } from "../shared/fee-setup-labels";
-import { FormSwitchField } from "../shared/form-switch-field";
-import { useLedgerAccountOptions } from "../shared/use-fee-options";
+import { FEE_HEAD_CATEGORY_LABEL_KEY } from "@/features/fees/shared/fee-setup-labels";
+import { FormSwitchField } from "@/features/fees/shared/form-switch-field";
+import { useLedgerAccountOptions } from "@/features/fees/shared/use-fee-options";
 
 /**
  * The fee head form's inputs. The account picker lists only income accounts (the server refuses

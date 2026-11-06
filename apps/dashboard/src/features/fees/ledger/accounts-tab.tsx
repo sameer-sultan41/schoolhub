@@ -29,8 +29,8 @@ import {
   ledgerTypeFilter,
   systemFilterToFlag,
 } from "@/services/modules/ledger-accounts/ledger-accounts-helper";
-import { FeesTabHeader } from "../shared/fees-tab-header";
-import { useLedgerAccountOptions } from "../shared/use-fee-options";
+import { FeesTabHeader } from "@/features/fees/shared/fees-tab-header";
+import { useLedgerAccountOptions } from "@/features/fees/shared/use-fee-options";
 import { AccountFilters } from "./account-filters";
 import { AccountFormDialog } from "./account-form-dialog";
 import { useAccountColumns } from "./account-columns";

@@ -15,7 +15,7 @@ import {
 import { FormSelectField } from "@/components/form-select-field";
 import { FEE_STRUCTURE_NAME_MAX } from "@/services/modules/fee-structures/fee-structures-constant";
 import type { FeeStructureFormValues } from "@/services/modules/fee-structures/fee-structures.schema";
-import { useStructureReferences } from "../shared/use-structure-references";
+import { useStructureReferences } from "@/features/fees/shared/use-structure-references";
 
 /** The scope selects' empty choice: a structure for every class or campus. */
 const EVERY_OPTION = "every";

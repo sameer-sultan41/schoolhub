@@ -12,7 +12,7 @@ import { EMPTY_VALUE } from "@/lib/constants";
 import type { FeeStructureRecord } from "@/services";
 import { FEE_STRUCTURES_ACTIONS_COLUMN_ID } from "@/services/modules/fee-structures/fee-structures-constant";
 import { isStructureEditable } from "@/services/modules/fee-structures/fee-structures-helper";
-import { StructureStatusBadge } from "../shared/structure-status-badge";
+import { StructureStatusBadge } from "@/features/fees/shared/structure-status-badge";
 
 export interface StructureRowActions {
   canUpdate: boolean;

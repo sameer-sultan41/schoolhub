@@ -7,8 +7,8 @@ import { SearchInput } from "@/components/search-input";
 import { FILTER_ALL } from "@/lib/constants";
 import { enumLabel } from "@/lib/enum-label";
 import { FEE_STRUCTURE_STATUSES } from "@/services/modules/fee-structures/fee-structures-constant";
-import { STRUCTURE_STATUS_LABEL_KEY } from "../shared/fee-setup-labels";
-import { useStructureReferences } from "../shared/use-structure-references";
+import { STRUCTURE_STATUS_LABEL_KEY } from "@/features/fees/shared/fee-setup-labels";
+import { useStructureReferences } from "@/features/fees/shared/use-structure-references";
 
 /** The URL filter keys this component writes (`FEE_STRUCTURES_URL_FILTERS`). */
 export interface StructureFilterValues {
