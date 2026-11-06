@@ -2441,3 +2441,52 @@ def build_report_rows(
     if kind == "pass-fail-analysis":
         return reports.pass_fail_analysis(scoped, exam_id=exam_id, limit=limit)
     return reports.grade_distribution(scoped, exam_id=exam_id, limit=limit)
+
+
+# ---------------------------------------------------------------- visibility
+
+#: A result or report card has no campus of its own; its student's is the one scope reads.
+RESULT_CAMPUS_FIELD = "student__campus_id"
+RESULT_VIEW_KEY = "exams.result.view"
+REPORT_CARD_VIEW_KEY = "exams.report-card.view"
+
+
+def visible_results(user, *, queryset: QuerySet[Result] | None = None) -> QuerySet[Result]:
+    """The results `user` may read: record scope, then published-only for a student or guardian.
+
+    Two narrowings that answer different questions. Record scope answers *whose*
+    result a caller may see; this adds *when*: §5.6 makes releasing a separate,
+    permissioned act from computing, so a restricted principal sees a result only
+    once it is published. `queryset` is a caller's already-scoped set
+    (`ResultViewSet` passes its own); without one, the view key's scope is applied.
+    """
+    from core.rbac.permissions import is_restricted_principal, scope_queryset
+
+    if queryset is None:
+        queryset = scope_queryset(
+            Result.objects.alive(),
+            user,
+            permission=RESULT_VIEW_KEY,
+            campus_field=RESULT_CAMPUS_FIELD,
+        )
+    if is_restricted_principal(user):
+        return queryset.filter(status=ResultStatus.PUBLISHED)
+    return queryset
+
+
+def visible_report_cards(
+    user, *, queryset: QuerySet[ReportCard] | None = None
+) -> QuerySet[ReportCard]:
+    """The report cards `user` may read — the same two narrowings as `visible_results`."""
+    from core.rbac.permissions import is_restricted_principal, scope_queryset
+
+    if queryset is None:
+        queryset = scope_queryset(
+            ReportCard.objects.alive(),
+            user,
+            permission=REPORT_CARD_VIEW_KEY,
+            campus_field=RESULT_CAMPUS_FIELD,
+        )
+    if is_restricted_principal(user):
+        return queryset.filter(status=ReportCardStatus.PUBLISHED)
+    return queryset

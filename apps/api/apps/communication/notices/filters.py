@@ -16,3 +16,18 @@ class NoticeFilterSet(django_filters.FilterSet):
     class Meta:
         model = Notice
         fields: list[str] = []
+
+
+class PortalNoticeFilterSet(django_filters.FilterSet):
+    """A student's or guardian's filters: only fields `PortalNoticeSerializer` shows.
+
+    Filtering on a hidden field (`status`, `audience_type`) would reveal it by which
+    rows come back, so a restricted caller has no such filter.
+    """
+
+    notice_type = django_filters.CharFilter(field_name="notice_type", lookup_expr="exact")
+    requires_acknowledgment = django_filters.BooleanFilter(field_name="requires_acknowledgment")
+
+    class Meta:
+        model = Notice
+        fields: list[str] = []

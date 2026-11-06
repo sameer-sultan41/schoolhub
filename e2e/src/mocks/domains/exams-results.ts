@@ -18,6 +18,8 @@ export function buildResult(overrides: Partial<ExamResult> = {}): ExamResult {
   return {
     id: uuid(),
     exam_id: "",
+    exam_name: "Mid-term",
+    term_name: "Term 1",
     student_id: uuid(),
     student_name: "Ali Raza",
     admission_number: "ADM-001",

@@ -4,10 +4,16 @@ import type { ExamStatus } from "@/services/modules/exams/exams-type";
 import {
   ADMIT_CARD_QUERY_FIELDS,
   ADMIT_CARD_STATUSES,
+  ADMIT_CARD_STATUS_ISSUED,
   ADMIT_CARD_STATUS_REVOKED,
   NOT_ISSUABLE_EXAM_STATUS,
 } from "./admit-cards-constant";
-import type { AdmitCardPageQuery, AdmitCardRecord, AdmitCardStatus } from "./admit-cards-type";
+import type {
+  AdmitCardPageQuery,
+  AdmitCardRecord,
+  AdmitCardStatus,
+  CurrentAdmitCardQuery,
+} from "./admit-cards-type";
 
 /** The admit-cards module's pure helpers: plain data in, plain data out. */
 
@@ -22,6 +28,19 @@ export function toAdmitCardQueryParams(
     params,
   );
   return params as Record<string, string | number | undefined>;
+}
+
+/** A child's issued cards for exams not yet over (`current`, by the school's own today). */
+export function toCurrentAdmitCardQueryParams(
+  query: CurrentAdmitCardQuery,
+): Record<string, string | number | undefined> {
+  return {
+    student_id: query.studentId,
+    status: ADMIT_CARD_STATUS_ISSUED,
+    current: "true",
+    cursor: query.cursor,
+    page_size: query.pageSize,
+  };
 }
 
 /** Cards print the schedule, so they are issued once it is published: any status past draft. */

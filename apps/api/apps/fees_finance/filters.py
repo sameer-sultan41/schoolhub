@@ -23,7 +23,6 @@ from apps.fees_finance.models import (
     FeeStructure,
     FeeVoucher,
     Fine,
-    InvoiceStatus,
     LedgerAccount,
     LedgerEntry,
     Payment,
@@ -32,6 +31,7 @@ from apps.fees_finance.models import (
     Scholarship,
     VoucherCollectionImport,
 )
+from apps.fees_finance.services import outstanding_invoices
 
 
 class LedgerAccountFilterSet(django_filters.FilterSet):
@@ -120,7 +120,7 @@ class FeeInvoiceFilterSet(django_filters.FilterSet):
         if value is None:
             return queryset
         if value:
-            return queryset.filter(balance_due__gt=0).exclude(status=InvoiceStatus.CANCELED)
+            return outstanding_invoices(queryset)
         return queryset.filter(balance_due__lte=0)
 
 

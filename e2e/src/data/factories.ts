@@ -271,6 +271,32 @@ export const COMMUNICATION_BROADCAST_PERMISSIONS: PermissionKey[] = [
   "school.section.view",
 ];
 
+/**
+ * A guardian's keys, as the seeded `guardian` role holds them: the portal
+ * summary, the inbox, notices, threads, and the fees, exam, attendance and timetable reads that
+ * `filter_owned_by_user` then narrows to their own children. `fees.payment.view` is the receipts
+ * and vouchers key; the leave keys and `platform.file.create` (a leave or thread attachment) are
+ * what a guardian submits and uploads with.
+ */
+export const GUARDIAN_PERMISSIONS: PermissionKey[] = [
+  "parent-portal.dashboard.view",
+  "platform.notification.view",
+  "communication.notice.view",
+  "communication.notice.acknowledge",
+  "communication.thread.view",
+  "communication.thread.create",
+  "communication.message.create",
+  "exams.result.view",
+  "attendance.student-attendance.view",
+  "attendance.leave-request.view",
+  "attendance.leave-request.create",
+  "platform.file.create",
+  "timetable.timetable.view",
+  "fees.invoice.view",
+  "fees.payment.view",
+  "students.student.view",
+];
+
 /** A module this user must *not* see, for the negative half of a filtering assertion. */
 export const MODULE_WITHOUT_PERMISSION = "Fees & Finance";
 
@@ -307,6 +333,21 @@ export function buildLoginResponse(overrides: Partial<LoginResponse> = {}): Logi
     user: buildUser(),
     ...overrides,
   };
+}
+
+/**
+ * A signed-in guardian: scope `own`, and `is_restricted_principal: true`, which is what sends
+ * them to `/portal` and keeps them out of the staff dashboard (ADR-0032).
+ */
+export function buildGuardianUser(overrides: Partial<AuthenticatedUser> = {}): AuthenticatedUser {
+  return buildUser({
+    email: "guardian@cityschool.test",
+    full_name: "Sana Khan",
+    roles: [buildRole({ slug: "guardian", name: "Guardian", scope: "own" })],
+    permissions: GUARDIAN_PERMISSIONS,
+    is_restricted_principal: true,
+    ...overrides,
+  });
 }
 
 /**

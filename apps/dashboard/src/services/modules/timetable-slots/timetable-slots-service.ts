@@ -85,11 +85,18 @@ export async function publishSection(
 /**
  * The viewer's own week: a teacher's classes (and cover they give), a student's or guardian's
  * section. With a `date`, the version in force that day with confirmed cover applied; without
- * one, the current week. One list, not paged: the API answers the week whole.
+ * one, the current week. A guardian passes `studentId` to read one child's week. One list, not paged: the API answers the week whole.
  */
-export async function fetchMyTimetable(date?: string): Promise<EffectiveSlotRecord[]> {
+export async function fetchMyTimetable(
+  date?: string,
+  studentId?: string,
+): Promise<EffectiveSlotRecord[]> {
   const { data } = await apiClient.get<EffectiveSlotRecord[]>(endpoints.timetableSlots.my, {
-    query: date === undefined ? {} : { date },
+    query: {
+      ...(date === undefined ? {} : { date }),
+      // A guardian's child; refused for staff and a non-owned id is a 404.
+      ...(studentId === undefined ? {} : { student_id: studentId }),
+    },
   });
   return data;
 }

@@ -2,13 +2,14 @@ import { fetchPage } from "@schoolhub/api-client";
 import type { Page } from "@schoolhub/types";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
-import { toAdmitCardQueryParams } from "./admit-cards-helper";
+import { toAdmitCardQueryParams, toCurrentAdmitCardQueryParams } from "./admit-cards-helper";
 import type {
   AdmitCardDownload,
   AdmitCardIssue,
   AdmitCardIssueAccepted,
   AdmitCardPageQuery,
   AdmitCardRecord,
+  CurrentAdmitCardQuery,
 } from "./admit-cards-type";
 
 /** The admit-card API calls (`/admit-cards`, `/exams/{id}:issue-admit-cards`), reached through
@@ -20,6 +21,16 @@ export async function fetchAdmitCardsPage(
 ): Promise<Page<AdmitCardRecord>> {
   return fetchPage<AdmitCardRecord>(apiClient, endpoints.admitCards.list, {
     query: toAdmitCardQueryParams(query),
+  });
+}
+
+/** One cursor page of a child's issued cards for exams that have not ended; the record scope
+ * keeps a guardian to their own children. */
+export async function fetchCurrentAdmitCardsPage(
+  query: CurrentAdmitCardQuery,
+): Promise<Page<AdmitCardRecord>> {
+  return fetchPage<AdmitCardRecord>(apiClient, endpoints.admitCards.list, {
+    query: toCurrentAdmitCardQueryParams(query),
   });
 }
 

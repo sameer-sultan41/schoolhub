@@ -86,6 +86,7 @@ MODULE_APPS = [
     "apps.examinations",
     "apps.fees_finance",
     "apps.communication",
+    "apps.parent_portal",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + CORE_APPS + MODULE_APPS
@@ -195,6 +196,9 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_RENDERER_CLASSES": ("core.api.renderers.EnvelopeJSONRenderer",),
+    # JSON only, so DRF's `?format=` renderer override buys nothing, and it would 404
+    # the documents' own `?format=pdf|thermal` before the view runs.
+    "URL_FORMAT_OVERRIDE": None,
     "DEFAULT_PAGINATION_CLASS": "core.api.pagination.CursorPagination",
     "PAGE_SIZE": 25,
     "DEFAULT_FILTER_BACKENDS": (
