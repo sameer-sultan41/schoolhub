@@ -9,20 +9,19 @@ import { toast } from "sonner";
 import { useJobPolling } from "@/hooks/use-job-polling";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { downloadFile } from "@/lib/helpers";
-import { ApiError, Services, type AttendanceMode } from "@/services";
-import { ATTENDANCE_REPORTS_QUERY_MODULE } from "@/services/modules/attendance-reports/attendance-reports-constant";
-import {
-  jobResultFileId,
-  jobResultMode,
-} from "@/services/modules/attendance-reports/attendance-reports-helper";
+import { ApiError, Services } from "@/services";
+import { jobResultFileId } from "@/services/shared/report-export";
 
 export interface ReportJobPanelProps {
+  /** Namespaces the job's polling query key (the report module's query-key module). */
+  module: string;
   /** The job a too-large inline run answered with. */
   jobId: string;
   /** The downloaded file's name hint. */
   filename: string;
-  /** Told the tenant's mode once the finished job reports it. */
-  onModeKnown: (mode: AttendanceMode) => void;
+  /** Told the finished job's `result`, once: for a module that reads more than the file from it
+   * (attendance's `attendance_mode`). */
+  onSucceeded?: (result: Record<string, unknown> | null) => void;
   /** Runs the report again: for a job the server no longer answers for. */
   onRestart: () => void;
 }
@@ -32,25 +31,28 @@ export interface ReportJobPanelProps {
  * the job's progress, then a button for the file. A failure says so; a timeout or a transient
  * poll error can check again (the job may well still be running); a refused poll (a 404 or 403)
  * has no job left to watch, so it offers to run the report again, as `useJobFileDownload` does.
+ * Its copy is the shared `reports` namespace; the attendance and exam reports use it.
  */
-export function ReportJobPanel({ jobId, filename, onModeKnown, onRestart }: ReportJobPanelProps) {
-  const t = useTranslations("attendance");
+export function ReportJobPanel({
+  module,
+  jobId,
+  filename,
+  onSucceeded,
+  onRestart,
+}: ReportJobPanelProps) {
+  const t = useTranslations("reports");
   const tErrors = useTranslations("errors");
-  const { job, isPolling, isTimedOut, isError, error, resume } = useJobPolling(
-    ATTENDANCE_REPORTS_QUERY_MODULE,
-    jobId,
-  );
-  const succeeded = job?.status === "succeeded";
-  const fileId = succeeded ? jobResultFileId(job.result) : null;
-  const mode = succeeded ? jobResultMode(job.result) : null;
+  const { job, isPolling, isTimedOut, isError, error, resume } = useJobPolling(module, jobId);
+  const result = job?.status === "succeeded" ? job.result : undefined;
+  const fileId = result === undefined ? null : jobResultFileId(result);
   const isPollRefused = isError && !(error instanceof ApiError && error.isTransient);
 
-  const reportMode = useEffectEvent((known: AttendanceMode) => {
-    onModeKnown(known);
+  const reportSucceeded = useEffectEvent((finished: Record<string, unknown> | null) => {
+    onSucceeded?.(finished);
   });
   useEffect(() => {
-    if (mode !== null) reportMode(mode);
-  }, [mode]);
+    if (result !== undefined) reportSucceeded(result);
+  }, [result]);
 
   const download = useMutation({
     mutationFn: (id: string) => Services.jobs.fetchFileDownloadUrl(id),
@@ -58,27 +60,27 @@ export function ReportJobPanel({ jobId, filename, onModeKnown, onRestart }: Repo
       downloadFile(url, filename);
     },
     onError: (downloadError: unknown) => {
-      toast.error(resolveErrorMessage(downloadError, tErrors, t("reports.queued.downloadFailed")));
+      toast.error(resolveErrorMessage(downloadError, tErrors, t("queued.downloadFailed")));
     },
   });
 
   return (
     <Card>
       <div className="flex flex-col items-start gap-3 p-6">
-        <p className="font-medium text-foreground">{t("reports.queued.title")}</p>
-        <p className="text-sm text-muted-foreground">{t("reports.queued.description")}</p>
+        <p className="font-medium text-foreground">{t("queued.title")}</p>
+        <p className="text-sm text-muted-foreground">{t("queued.description")}</p>
         {isPolling && (
           <div className="w-full max-w-md space-y-1.5">
             <Progress value={job?.progress ?? 0} />
             <p className="text-xs text-muted-foreground">
-              {t("reports.queued.progress", { progress: job?.progress ?? 0 })}
+              {t("queued.progress", { progress: job?.progress ?? 0 })}
             </p>
           </div>
         )}
         {fileId !== null && (
           <>
             <p className="text-sm text-foreground" role="status">
-              {t("reports.queued.ready")}
+              {t("queued.ready")}
             </p>
             <Button
               variant="primary"
@@ -87,24 +89,24 @@ export function ReportJobPanel({ jobId, filename, onModeKnown, onRestart }: Repo
                 download.mutate(fileId);
               }}
             >
-              {download.isPending ? t("reports.queued.downloading") : t("reports.queued.download")}
+              {download.isPending ? t("queued.downloading") : t("queued.download")}
             </Button>
           </>
         )}
         {job?.status === "failed" && (
           <Alert variant="destructive">
-            <AlertDescription>{job.error ?? t("reports.queued.failed")}</AlertDescription>
+            <AlertDescription>{job.error ?? t("queued.failed")}</AlertDescription>
           </Alert>
         )}
         {isPollRefused ? (
           <>
             <Alert variant="destructive">
               <AlertDescription>
-                {resolveErrorMessage(error, tErrors, t("reports.queued.pollFailed"))}
+                {resolveErrorMessage(error, tErrors, t("queued.pollFailed"))}
               </AlertDescription>
             </Alert>
             <Button variant="outline" onClick={onRestart}>
-              {t("reports.queued.runAgain")}
+              {t("queued.runAgain")}
             </Button>
           </>
         ) : (
@@ -112,11 +114,11 @@ export function ReportJobPanel({ jobId, filename, onModeKnown, onRestart }: Repo
             <>
               <Alert variant={isError ? "destructive" : "warning"}>
                 <AlertDescription>
-                  {isError ? t("reports.queued.pollFailed") : t("reports.queued.timedOut")}
+                  {isError ? t("queued.pollFailed") : t("queued.timedOut")}
                 </AlertDescription>
               </Alert>
               <Button variant="outline" onClick={resume}>
-                {t("reports.queued.checkAgain")}
+                {t("queued.checkAgain")}
               </Button>
             </>
           )

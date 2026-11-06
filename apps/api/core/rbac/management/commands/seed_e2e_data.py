@@ -323,6 +323,18 @@ E2E_PRINCIPAL_PERMISSIONS = [
     # stops the escalation being theatre.
     "attendance.leave-request.view",
     "attendance.leave-request.approve",
+    # The examinations approver: §4 bars the processor of the latest run from
+    # approving it, so the results journey needs a second identity to approve,
+    # publish and write principal remarks on the report cards. The schedule key
+    # feeds the Results and Report cards tabs' section filter (`/exam-schedules`).
+    "exams.exam.view",
+    "exams.schedule.view",
+    "exams.marks.view",
+    "exams.result.view",
+    "exams.result.approve",
+    "exams.result.publish",
+    "exams.report-card.view",
+    "exams.report-card.publish",
     # Communication (communication.md §4). `thread.oversee` is the audited read of every
     # thread, which §4 gives `school_owner` and `principal` only; the live thread journey
     # proves it as this identity, not as the owner who holds every key anyway. `thread.view`
@@ -425,7 +437,7 @@ E2E_EXAM_STAFF_READS = (
 # allocation is seeded, so the teacher sees nothing until a spec gives them one.
 E2E_TEACHER_LOGIN_EMPLOYEE_NUMBER = "E2E-TEACHER-LOGIN"
 E2E_TEACHER_LOGIN_NAME = ("E2E", "Subject Teacher")
-E2E_TEACHER_LOGIN_PHONE = "+15550000003"
+E2E_TEACHER_LOGIN_PHONE = "+15550000004"
 
 
 def _exams_keys_for(role: str) -> list[str]:

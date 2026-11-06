@@ -35,8 +35,10 @@ suppression.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 from core.tenancy.models import TenantOwnedModel
@@ -162,6 +164,9 @@ class GradingScale(TenantOwnedModel):
         return queryset
 
 
+PERCENT_VALIDATORS = [MinValueValidator(Decimal("0")), MaxValueValidator(Decimal("100"))]
+
+
 class GradeBand(TenantOwnedModel):
     """One band within a scale — §5.5.
 
@@ -177,8 +182,19 @@ class GradeBand(TenantOwnedModel):
 
     grading_scale = models.ForeignKey(GradingScale, on_delete=models.CASCADE, related_name="bands")
     label = models.CharField(max_length=10, help_text="e.g. A+, B, Pass.")
-    min_percent = models.DecimalField(max_digits=5, decimal_places=2, help_text="Inclusive.")
-    max_percent = models.DecimalField(max_digits=5, decimal_places=2, help_text="Inclusive.")
+    # Validators answer an out-of-range bound with a field error before the CHECK can 409.
+    min_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        validators=PERCENT_VALIDATORS,
+        help_text="Inclusive.",
+    )
+    max_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        validators=PERCENT_VALIDATORS,
+        help_text="Inclusive.",
+    )
     grade_point = models.DecimalField(
         max_digits=4, decimal_places=2, null=True, blank=True, help_text="For GPA scales."
     )
@@ -243,12 +259,6 @@ class AssignedTeaching:
     allocations: tuple[tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID], ...] = ()
     homerooms: frozenset[tuple[uuid.UUID, uuid.UUID]] = frozenset()
     staff_ids: frozenset[uuid.UUID] = frozenset()
-
-    @property
-    def homeroom_section_ids(self) -> frozenset[uuid.UUID]:
-        # `Marks` scopes by section through the student's active enrollment,
-        # which already pins the session; it needs only the ids.
-        return frozenset(section_id for section_id, _session_id in self.homerooms)
 
     @property
     def is_empty(self) -> bool:
@@ -961,6 +971,22 @@ class Marks(TenantOwnedModel):
         return queryset.filter(student__in=visible)
 
     @classmethod
+    def filter_by_campus(cls, queryset, campus_ids):
+        """Record scope `campus` — the campus of the section the row belongs to.
+
+        The section is the student's enrollment in the exam's own session, the one
+        `services.may_enter_marks` checks `section.campus_id` on. Any status (L50),
+        so a promoted session's marks stay readable to its campus.
+        """
+        return queryset.filter(
+            student__enrollments__section__campus_id__in=campus_ids,
+            student__enrollments__academic_session_id=models.F(
+                "exam_subject__exam__academic_session_id"
+            ),
+            student__enrollments__deleted_at__isnull=True,
+        )
+
+    @classmethod
     def filter_assigned_to_user(cls, queryset, user):
         """Record scope `assigned` — §4's marks-entry rights.
 
@@ -976,9 +1002,12 @@ class Marks(TenantOwnedModel):
           different thing from teaching the subject.
 
         Narrowing to either alone would hide half of what each role needs. Both
-        halves come from `_assigned_teaching`, which `Exam` and `ExamSubject`
-        resolve through too; only allocations' (section, subject) is used here,
-        as it always was.
+        halves come from `_assigned_teaching`, and both match only in the
+        exam's session, through the student's active enrollment there — the
+        same rule `services.may_enter_marks` applies to the grid *read*.
+        **Entry is narrower:** `services.assert_marker_may_enter` counts the
+        allocations only, so a homeroom-only class teacher reads their class's
+        marks but does not enter them.
         """
         from apps.student_management.models import EnrollmentStatus
 
@@ -986,21 +1015,25 @@ class Marks(TenantOwnedModel):
         if teaching.is_empty:
             return queryset.none()
 
+        enrolled = {
+            "student__enrollments__status": EnrollmentStatus.ACTIVE,
+            "student__enrollments__deleted_at__isnull": True,
+        }
         predicate = models.Q(pk__in=[])
-        for section_id, _class_id, subject_id, _session_id in teaching.allocations:
-            # Marks name a student and an exam-subject, so "the section I teach"
-            # resolves through the student's active enrollment in it.
+        for section_id, _class_id, subject_id, session_id in teaching.allocations:
             predicate |= models.Q(
                 exam_subject__subject_id=subject_id,
+                exam_subject__exam__academic_session_id=session_id,
                 student__enrollments__section_id=section_id,
-                student__enrollments__status=EnrollmentStatus.ACTIVE,
-                student__enrollments__deleted_at__isnull=True,
+                student__enrollments__academic_session_id=session_id,
+                **enrolled,
             )
-        if teaching.homeroom_section_ids:
+        for section_id, session_id in teaching.homerooms:
             predicate |= models.Q(
-                student__enrollments__section_id__in=teaching.homeroom_section_ids,
-                student__enrollments__status=EnrollmentStatus.ACTIVE,
-                student__enrollments__deleted_at__isnull=True,
+                exam_subject__exam__academic_session_id=session_id,
+                student__enrollments__section_id=section_id,
+                student__enrollments__academic_session_id=session_id,
+                **enrolled,
             )
         return queryset.filter(predicate).distinct()
 
@@ -1061,10 +1094,11 @@ class Result(TenantOwnedModel):
     and resolving the section through the enrolment at read time would do
     exactly that.
 
-    `created_by` is the processing initiator, and `approved_by` must differ from
-    it — §4's closing line and auth-and-rbac §2.4's segregation of duties. That
-    is checked in `services`, not here, because a CHECK cannot compare a column
-    against another row's author and the rule has to hold for any caller.
+    `processed_by` is whoever ran the latest processing, re-stamped on every run
+    (a re-process after a send-back included), and `approved_by` must differ
+    from it — §4's closing line and auth-and-rbac §2.4's segregation of duties.
+    `created_by` names only the first run, so it cannot carry the rule. That is
+    checked in `services`, not here, because the rule has to hold for any caller.
     """
 
     exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name="results")
@@ -1096,8 +1130,13 @@ class Result(TenantOwnedModel):
     status = models.CharField(
         max_length=20, choices=ResultStatus.choices, default=ResultStatus.PROCESSING
     )
+    processed_by = models.UUIDField(
+        null=True,
+        blank=True,
+        help_text="users(id) of the latest processing run; re-stamped on every run.",
+    )
     approved_by = models.UUIDField(
-        null=True, blank=True, help_text="Must differ from the processing initiator (§4)."
+        null=True, blank=True, help_text="Must differ from `processed_by` (§4)."
     )
     approved_at = models.DateTimeField(null=True, blank=True)
     published_at = models.DateTimeField(null=True, blank=True)
@@ -1431,29 +1470,13 @@ class QuestionBank(TenantOwnedModel):
     def filter_assigned_to_user(cls, queryset, user):
         """Record scope `assigned` — the subjects a teacher currently teaches.
 
-        Through `academics.TeacherSubjectAllocation`, the same table
-        `Marks.filter_assigned_to_user` resolves entry rights through. §4 gives
-        `exams.question.approve` to a "`teacher` (assigned subject)", and this
-        is what makes "assigned subject" mean something.
+        Read from `_assigned_teaching`'s current allocations, the module's one
+        reading of "assigned". §4 gives `exams.question.approve` to a "`teacher`
+        (assigned subject)": a bank matches on its subject alone, whatever its
+        class, and a homeroom grants no bank.
         """
-        if user is None or not getattr(user, "is_authenticated", False):
-            return queryset.none()
-        from apps.academics.models import TeacherSubjectAllocation
-        from apps.staff_management.models import EmploymentStatus, Staff
-
-        staff_ids = list(
-            Staff.objects.alive()
-            .filter(user_id=user.pk, employment_status=EmploymentStatus.ACTIVE)
-            .values_list("pk", flat=True)
-        )
-        if not staff_ids:
-            return queryset.none()
-        subject_ids = (
-            TeacherSubjectAllocation.objects.alive()
-            .filter(staff_id__in=staff_ids, effective_to__isnull=True)
-            .values_list("subject_id", flat=True)
-        )
-        return queryset.filter(subject_id__in=list(subject_ids))
+        subject_ids = {subject_id for _, _, subject_id, _ in _assigned_teaching(user).allocations}
+        return queryset.filter(subject_id__in=subject_ids) if subject_ids else queryset.none()
 
 
 class Question(TenantOwnedModel):

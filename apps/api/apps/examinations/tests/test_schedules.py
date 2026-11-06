@@ -10,13 +10,14 @@ race; everything about *overlap* lives here or nowhere.
 from __future__ import annotations
 
 import datetime
+from unittest import mock
 
 from django.db import IntegrityError, connection, transaction
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 
-from apps.examinations import conflicts
-from apps.examinations.models import ExamStatus, ScheduleStatus
+from apps.examinations import conflicts, services
+from apps.examinations.models import ExamSchedule, ExamStatus, ScheduleStatus
 from apps.examinations.tests.base import ExaminationsAPITestCase
 from apps.examinations.tests.factories import (
     AFTERNOON,
@@ -707,8 +708,78 @@ class SittingWriteLockTests(ScheduleTestCase):
         self.assert_school_lock_first(sql, before=exam_lock_at)
 
 
+class SittingStaleReadTests(ScheduleTestCase):
+    """The state check runs on the row re-read under the school lock, not on
+    the one the view read before it.
+
+    A cancel committed between the view's read and the lock is simulated by
+    writing it inside the school-lock call, the first step under the lock. That
+    write shares the request's transaction, so the 409 rolls it back too: the
+    proof is the refusal and that the stale write never landed.
+    """
+
+    URL = ScheduleEndpointTests.URL
+
+    def _cancel_when_the_lock_is_taken(self, sitting):
+        real_lock = services.lock_school_schedule
+
+        def lock_then_cancel(tenant_id) -> None:
+            real_lock(tenant_id)
+            ExamSchedule.objects.filter(pk=sitting.pk).update(status=ScheduleStatus.CANCELLED)
+
+        return mock.patch.object(services, "lock_school_schedule", side_effect=lock_then_cancel)
+
+    def test_a_patch_read_before_a_cancel_does_not_write_scheduled_back(self) -> None:
+        with tenant_context(self.tenant.id):
+            sitting = self.sitting()
+
+        with self._cancel_when_the_lock_is_taken(sitting):
+            response = self.client.patch(
+                f"{self.URL}/{sitting.pk}", {"room_id": str(self.room.pk)}, format="json"
+            )
+
+        self.assertEqual(response.status_code, 409, response.json())
+        with tenant_context(self.tenant.id):
+            sitting.refresh_from_db()
+        self.assertIsNone(sitting.room_id)
+
+    def test_a_delete_read_before_a_cancel_leaves_the_sitting(self) -> None:
+        with tenant_context(self.tenant.id):
+            sitting = self.sitting()
+
+        with self._cancel_when_the_lock_is_taken(sitting):
+            response = self.client.delete(f"{self.URL}/{sitting.pk}")
+
+        self.assertEqual(response.status_code, 409, response.json())
+        with tenant_context(self.tenant.id):
+            sitting.refresh_from_db()
+        self.assertIsNone(sitting.deleted_at)
+
+    def test_update_re_reads_the_sitting_after_the_school_lock(self) -> None:
+        with tenant_context(self.tenant.id):
+            sitting = self.sitting()
+
+        with CaptureQueriesContext(connection) as captured:
+            response = self.client.patch(
+                f"{self.URL}/{sitting.pk}", {"room_id": str(self.room.pk)}, format="json"
+            )
+
+        self.assertEqual(response.status_code, 200, response.json())
+        sql = [query["sql"] for query in captured.captured_queries]
+        school_lock = next(
+            i for i, q in enumerate(sql) if _is_school_schedule_lock(q, self.tenant.pk)
+        )
+        re_read = next(
+            i for i, q in enumerate(sql) if "FOR UPDATE" in q and '"exam_schedules"' in q
+        )
+        write = next(i for i, q in enumerate(sql) if q.startswith('UPDATE "exam_schedules"'))
+        self.assertLess(school_lock, re_read)
+        self.assertLess(re_read, write)
+
+
 def _is_exam_lock(query: str) -> bool:
-    return "FOR UPDATE" in query and '"exams"' in query
+    # A lock *on* the exam row, not a FOR UPDATE OF another table that joins `exams`.
+    return "FOR UPDATE" in query and 'FROM "exams"' in query
 
 
 def _is_school_schedule_lock(query: str, tenant_id) -> bool:
@@ -940,7 +1011,8 @@ class ScheduleConflictsEndpointTests(ScheduleTestCase):
 
 class ExamLookupScopeTests(ScheduleTestCase):
     """The exam an action addresses by id resolves through `ExamViewSet`'s
-    record scope: out of scope is a 404, as a foreign id is."""
+    record scope, under the hosting view's read key and the route's own: out of
+    scope is a 404, as a foreign id is."""
 
     def client_for(self, user, *keys: str):
         from rest_framework.test import APIClient
@@ -988,6 +1060,42 @@ class ExamLookupScopeTests(ScheduleTestCase):
         with tenant_context(self.tenant.id):
             self.exam.refresh_from_db()
         self.assertEqual(self.exam.status, ExamStatus.DRAFT)
+
+    def test_a_colon_action_cannot_reach_an_exam_its_view_role_hides(self) -> None:
+        """L36's mixed user: the view key on an unallocated `assigned` role, the
+        action key at `all`. The route reaches the exam under both, so a 404."""
+        from apps.examinations.tests.factories import grant
+        from core.rbac.models import RecordScope
+
+        with tenant_context(self.tenant.id):
+            self.sitting(room=self.room)
+        user = self.unassigned_teacher()
+        grant(user, "exams.schedule.update", scope=RecordScope.ALL)
+        client = self.client_for(user, "exams.schedule.view")
+
+        response = client.post(f"/api/v1/exams/{self.exam.pk}:publish-schedule")
+
+        self.assertEqual(response.status_code, 404)
+        with tenant_context(self.tenant.id):
+            self.exam.refresh_from_db()
+        self.assertEqual(self.exam.status, ExamStatus.DRAFT)
+
+    def test_schedule_conflicts_stays_readable_to_schedule_readers(self) -> None:
+        """The lookup reads under the hosting view's key, not `ExamViewSet`'s, so a
+        schedule reader without `exams.exam.view` keeps the clash list."""
+        from rest_framework.test import APIClient
+
+        from apps.examinations.tests.factories import UserFactory, authenticate, grant
+
+        with tenant_context(self.tenant.id):
+            user = UserFactory(tenant=self.tenant)
+        grant(user, "exams.schedule.view")
+        client = APIClient()
+        authenticate(client, user)
+
+        response = client.get(f"/api/v1/exams/{self.exam.pk}/schedule-conflicts")
+
+        self.assertEqual(response.status_code, 200, response.json())
 
 
 class PublishScheduleContractTests(ScheduleTestCase):

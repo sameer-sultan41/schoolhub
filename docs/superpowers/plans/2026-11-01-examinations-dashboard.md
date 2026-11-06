@@ -535,7 +535,7 @@ Steps:
   - roll, name, admission number, then theory, practical (with `has_practical`), absent, exempt, remarks;
   - absent and exempt clear and disable the marks;
   - an out-of-range hint against `max_marks`;
-  - **Save draft** and **Submit** send every row as `draft` or `submitted`, with `section_id`;
+  - **Save draft** sends the non-blank rows plus the rows with a saved record (so a cleared row is cleared) as `draft`; **Submit** needs every row filled (a mark, absent or exempt) and sends every row as `submitted`; both with `section_id`. A blank row is never sent: it would count as "entered" in progress;
   - read-only with the server's message when `writable` is false.
 - [ ] `use-marks-grid-form` regenerates the idempotency key on every edit and after each success.
 - [ ] Import through `BulkImportDialog`, per exam-subject.
@@ -763,3 +763,7 @@ Steps:
   21. **Per-field 403.** An ADR-0027 amendment; the §2.4 count updated.
   22. **Permissions and seed keys.** The table fixed; `exams.marks.view` for the principal; picker reads for the exam staff.
 - **Unresolved:** none. The reviewer's four open questions (the processor stamp, the paper download, the MIME fix, the live teacher) were decided by the user on 2026-11-01.
+- **Amendments after approval:**
+  - 2026-11-02 (Task 9, Stop rule 3): the grid's Save draft sends the non-blank rows plus the rows with a saved record, and Submit needs every row filled and sends every row as `submitted`, instead of both sending every row. Sending a blank row would create a marks row with no mark, which progress counts as "entered".
+  - 2026-11-02: `MARKS_IMPORT` also accepts `application/vnd.ms-excel`, because Windows browsers send `.csv` with it. Without it, enforcing the list in this PR would newly refuse uploads that work today. The parser dispatches on the file name, the `fees.settlement-file` precedent applies, and it is tested.
+  - Task 16: the paper blueprint section takes no question type — `PaperSectionSerializer` and `select_paper_questions` take none; recorded in deferred-work.md.

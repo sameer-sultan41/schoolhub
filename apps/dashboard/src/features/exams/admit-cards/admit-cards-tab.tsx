@@ -1,10 +1,8 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
-import { toast } from "sonner";
 import { EmptyState } from "@schoolhub/ui";
 import { IdCard } from "lucide-react";
 
@@ -13,8 +11,6 @@ import { useCurrentUser } from "@/hooks/use-current-user";
 import { useCursorList } from "@/hooks/use-cursor-list";
 import { hideableColumnIds, useDataGridUrlState } from "@/hooks/use-data-grid-url-state";
 import { FILTER_ALL } from "@/lib/constants";
-import { resolveErrorMessage } from "@/lib/error-message";
-import { downloadFile } from "@/lib/helpers";
 import { hasPermission } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-client";
 import { Services, type AdmitCardRecord, type ExamRecord } from "@/services";
@@ -32,6 +28,7 @@ import {
   isExamIssuable,
   statusFilterToStatus,
 } from "@/services/modules/admit-cards/admit-cards-helper";
+import { useCardDownload } from "@/features/exams/use-card-download";
 import { useAdmitCardColumns } from "./admit-card-columns";
 import { AdmitCardFilters } from "./admit-card-filters";
 import { IssueAdmitCardsButton } from "./issue-admit-cards-button";
@@ -45,7 +42,6 @@ import { RevokeAdmitCardDialog } from "./revoke-admit-card-dialog";
  */
 export function AdmitCardsTab({ exam }: { exam: ExamRecord }) {
   const t = useTranslations("exams");
-  const tErrors = useTranslations("errors");
   const { data: user } = useCurrentUser();
   const canIssue = hasPermission(user, "exams.admit-card.issue");
   const issuable = isExamIssuable(exam.status);
@@ -55,32 +51,15 @@ export function AdmitCardsTab({ exam }: { exam: ExamRecord }) {
     setRevoking(card);
   }, []);
 
-  const {
-    mutate: download,
-    isPending: isDownloading,
-    variables: downloading,
-  } = useMutation({
-    mutationFn: async (card: AdmitCardRecord) => ({
-      card,
-      url: await Services.admitCards.fetchAdmitCardDownloadUrl(card.id),
-    }),
-    onSuccess: ({ card, url }) => {
-      downloadFile(url, admitCardFilename(card));
-    },
-    onError: (error: unknown) => {
-      toast.error(resolveErrorMessage(error, tErrors, t("admitCards.download.failed")));
-    },
+  const { download: handleDownload, downloadingId } = useCardDownload({
+    fetchUrl: (id) => Services.admitCards.fetchAdmitCardDownloadUrl(id),
+    filename: admitCardFilename,
+    failedMessage: t("admitCards.download.failed"),
   });
-  const handleDownload = useCallback(
-    (card: AdmitCardRecord) => {
-      download(card);
-    },
-    [download],
-  );
 
   const columns = useAdmitCardColumns({
     canRevoke: canIssue,
-    downloadingId: isDownloading ? downloading.id : null,
+    downloadingId,
     onDownload: handleDownload,
     onRevoke: handleRevoke,
   });
@@ -92,7 +71,8 @@ export function AdmitCardsTab({ exam }: { exam: ExamRecord }) {
       sortableIds: ADMIT_CARD_SORTABLE_IDS,
       defaultSorting: ADMIT_CARD_DEFAULT_SORTING,
       hideableIds,
-      trimSearch: true,
+      // No search box: nothing to trim.
+      trimSearch: false,
     });
   const hasActiveFilter = filters.section !== "" || filters.status !== FILTER_ALL;
 

@@ -21,8 +21,6 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
 from django.db import IntegrityError, transaction
-from django.db.models import F
-from django.db.models.functions import Length
 from django.utils import timezone
 
 from apps.attendance import reports, uploads
@@ -48,6 +46,7 @@ from apps.school_organization import calendar
 from apps.school_organization.models import AcademicSession
 from apps.school_organization.services import assert_session_writable
 from apps.student_management.models import EnrollmentStatus, Student, StudentEnrollment
+from apps.student_management.services import enrollment_roll_order
 from apps.timetable.slots.services import effective_slots_for
 from core.api.exceptions import Conflict, DomainRuleViolation
 from core.files.services import assert_file_usable
@@ -414,12 +413,7 @@ def roster_enrollments(*, section: Section, session: AcademicSession) -> list[St
             student__deleted_at__isnull=True,
         )
         .select_related("student")
-        .order_by(
-            Length("roll_number").asc(nulls_last=True),
-            F("roll_number").asc(nulls_last=True),
-            "student__first_name",
-            "student__last_name",
-        )
+        .order_by(*enrollment_roll_order())
     )
 
 

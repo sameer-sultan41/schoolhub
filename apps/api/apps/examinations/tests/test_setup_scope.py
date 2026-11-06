@@ -14,20 +14,16 @@ be the hook's doing.
 
 from __future__ import annotations
 
-from django.db import models
 from rest_framework import status
 
-from apps.examinations.models import Exam, ExamSubject, Marks
+from apps.examinations.models import Exam, ExamSubject
 from apps.examinations.tests.base import ExaminationsAPITestCase
 from apps.examinations.tests.factories import (
     AcademicSessionFactory,
     ClassFactory,
     ExamFactory,
     ExamSubjectFactory,
-    MarksFactory,
     SectionFactory,
-    StudentEnrollmentFactory,
-    StudentFactory,
     SubjectFactory,
     TeacherAllocationFactory,
     authenticate,
@@ -228,92 +224,9 @@ class GradingScaleAssignedScopeTests(SetupScopeTestCase):
         self.assertEqual(len(bands), 5)
 
 
-def _legacy_marks_scope(queryset, user):
-    """`Marks.filter_assigned_to_user` as it was before `_assigned_teaching`.
-
-    Copied verbatim so the parity test below compares the switched hook with
-    the code it replaced, not with a second reading of the rule.
-    """
-    from apps.academics.models import TeacherSubjectAllocation
-    from apps.staff_management.models import EmploymentStatus, Staff
-    from apps.student_management.models import EnrollmentStatus, StudentEnrollment
-
-    staff_ids = list(
-        Staff.objects.alive()
-        .filter(user_id=user.pk, employment_status=EmploymentStatus.ACTIVE)
-        .values_list("pk", flat=True)
-    )
-    if not staff_ids:
-        return queryset.none()
-    allocations = list(
-        TeacherSubjectAllocation.objects.alive()
-        .filter(staff_id__in=staff_ids, effective_to__isnull=True)
-        .values_list("section_id", "subject_id")
-    )
-    homeroom_sections = list(
-        StudentEnrollment.objects.alive()
-        .filter(status=EnrollmentStatus.ACTIVE, section__class_teacher_staff_id__in=staff_ids)
-        .values_list("section_id", flat=True)
-        .distinct()
-    )
-    predicate = models.Q(pk__in=[])
-    for section_id, subject_id in allocations:
-        predicate |= models.Q(
-            exam_subject__subject_id=subject_id,
-            student__enrollments__section_id=section_id,
-            student__enrollments__status=EnrollmentStatus.ACTIVE,
-            student__enrollments__deleted_at__isnull=True,
-        )
-    if homeroom_sections:
-        predicate |= models.Q(
-            student__enrollments__section_id__in=homeroom_sections,
-            student__enrollments__status=EnrollmentStatus.ACTIVE,
-            student__enrollments__deleted_at__isnull=True,
-        )
-    return queryset.filter(predicate).distinct()
-
-
-class MarksScopeParityTests(SetupScopeTestCase):
-    def test_marks_scope_is_unchanged_by_the_shared_helper(self) -> None:
-        with tenant_context(self.tenant.id):
-            sibling = ExamSubjectFactory(
-                tenant=self.tenant,
-                exam=self.taught,
-                school_class=self.school_class,
-                subject=self.other_subject,
-            )
-            outsider = StudentFactory(tenant=self.tenant, campus=self.campus)
-            StudentEnrollmentFactory(
-                tenant=self.tenant,
-                student=outsider,
-                academic_session=self.session,
-                school_class=self.school_class,
-                section=self.other_section,
-            )
-            for exam_subject in (self.taught_subject, sibling):
-                for student in [*self.students, outsider]:
-                    MarksFactory(
-                        tenant=self.tenant,
-                        exam_subject=exam_subject,
-                        student=student,
-                        entered_by=self.user.pk,
-                    )
-
-            for user in (self.subject_teacher_user, self.teacher_user, self.user):
-                with self.subTest(user=user.email):
-                    old = set(_legacy_marks_scope(Marks.objects.alive(), user).values_list("pk"))
-                    new = set(
-                        Marks.filter_assigned_to_user(Marks.objects.alive(), user).values_list("pk")
-                    )
-                    self.assertEqual(new, old)
-            # Not vacuous: each teacher sees a different, non-empty slice.
-            subject_side = Marks.filter_assigned_to_user(
-                Marks.objects.alive(), self.subject_teacher_user
-            )
-            homeroom_side = Marks.filter_assigned_to_user(Marks.objects.alive(), self.teacher_user)
-            self.assertEqual(subject_side.count(), len(self.students))
-            self.assertEqual(homeroom_side.count(), 2 * len(self.students))
-
+class ScopeHookAgreementTests(SetupScopeTestCase):
+    # `Marks`' hook is pinned to `services.may_enter_marks` by
+    # `test_marks_import_scope.PredicateAgreementTests`, across sessions.
     def test_exam_and_exam_subject_hooks_agree(self) -> None:
         """An exam is visible exactly when one of its subjects is."""
         with tenant_context(self.tenant.id):

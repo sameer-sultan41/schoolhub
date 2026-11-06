@@ -15,10 +15,12 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Callable
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
-from django.db import transaction
+from django.db import connection, transaction
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
 from apps.examinations import conflicts, grading, processing, reports
@@ -26,6 +28,7 @@ from apps.examinations.models import (
     OCCUPYING_SCHEDULE_STATUSES,
     AdmitCard,
     AdmitCardStatus,
+    AssignedTeaching,
     Exam,
     ExamSchedule,
     ExamStatus,
@@ -43,6 +46,7 @@ from apps.examinations.models import (
     ResultOutcome,
     ResultStatus,
     ScheduleStatus,
+    _assigned_teaching,
 )
 from apps.school_organization.models import (
     AcademicSession,
@@ -55,12 +59,12 @@ from apps.school_organization.models import (
 from core.api.exceptions import Conflict, DomainRuleViolation
 from core.imports.tabular import parse_rows
 from core.rbac.models import RecordScope
+from core.rbac.permissions import scopes_for
 from core.tenancy.locks import AdvisoryLockNamespace, advisory_xact_lock
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
 
-    from apps.academics.models import TeacherSubjectAllocation
     from core.rbac.permissions import AnyOf
 
 # §7.1's lifecycle. An exam may only be *configured* — subjects added, marks
@@ -79,6 +83,8 @@ DELETABLE_STATUSES = frozenset({ExamStatus.DRAFT})
 # The key that enters marks: `MarksViewSet` declares it, and the allocation check
 # reads the scopes of the roles granting it.
 MARKS_CREATE = "exams.marks.create"
+# The key that reads the marks grid and progress (`MarksViewSet`'s read key).
+MARKS_VIEW = "exams.marks.view"
 
 
 def assert_session_is_writable(session: AcademicSession) -> None:
@@ -319,6 +325,17 @@ def default_scale() -> GradingScale | None:
 # --- §5.2 scheduling -------------------------------------------------------
 
 
+# Every `*_name` on the sitting serializer rides on these joins.
+SCHEDULE_DISPLAY_RELATIONS = (
+    "exam_subject__exam",
+    "exam_subject__subject",
+    "exam_subject__school_class",
+    "section",
+    "room",
+    "invigilator_staff",
+)
+
+
 def assert_schedule_is_editable(schedule: ExamSchedule) -> None:
     """A completed sitting is history; a cancelled one is a decision already made.
 
@@ -376,12 +393,11 @@ def save_schedule_with_conflicts(
     *,
     exam_subject: ExamSubject,
     save: Callable[[], object],
-    previous_exam_subject: ExamSubject | None = None,
 ) -> list[dict]:
     """Persist a sitting write and return the exam's whole clash list.
 
-    **Locks first**: the school's schedule lock, then the parent exam (both
-    exams, when an update moves the sitting to another exam's subject).
+    **Locks first**: the school's schedule lock, then the parent exam
+    (`update_schedule` also locks the exam a moved sitting leaves).
     `publish_exam_schedule` reads the clash list under the same school lock, so
     a sitting saved concurrently, in this exam or any other, either commits
     before publish reads or waits for it: publish can no longer move the exam
@@ -397,21 +413,55 @@ def save_schedule_with_conflicts(
     lock_school_schedule(exam_subject.tenant_id)
     # The exam rows still serialise this write against status transitions
     # (results, admit cards) that never take the schedule lock.
-    lock_exams(
-        exam_subject.exam_id,
-        previous_exam_subject.exam_id if previous_exam_subject else None,
+    lock_exams(exam_subject.exam_id)
+    save()
+    return conflicts.detect_conflicts(exam=exam_subject.exam)
+
+
+def lock_editable_schedule(schedule: ExamSchedule) -> ExamSchedule:
+    """Take the school lock, re-read the sitting `FOR UPDATE`, and re-check its state.
+
+    The caller's row was read before any lock, so a cancel or complete that
+    committed since would pass a check on it, and saving it would write
+    `scheduled` back. Returns the locked row; a sitting deleted meanwhile is a 404.
+    """
+    lock_school_schedule(schedule.tenant_id)
+    current = get_object_or_404(
+        ExamSchedule.objects.alive()
+        .select_related(*SCHEDULE_DISPLAY_RELATIONS)
+        .select_for_update(of=("self",)),
+        pk=schedule.pk,
     )
+    assert_schedule_is_editable(current)
+    return current
+
+
+@transaction.atomic
+def update_schedule(
+    *,
+    schedule: ExamSchedule,
+    validate: Callable[[ExamSchedule], ExamSubject],
+    save: Callable[[], object],
+) -> list[dict]:
+    """Update a sitting under the locks a create takes, checked on the locked row.
+
+    `validate` binds the write to the re-read row and returns the exam-subject
+    the sitting ends up in; both exams, that one and the one it leaves, are
+    locked before `save`.
+    """
+    current = lock_editable_schedule(schedule)
+    exam_subject = validate(current)
+    lock_exams(exam_subject.exam_id, current.exam_subject.exam_id)
     save()
     return conflicts.detect_conflicts(exam=exam_subject.exam)
 
 
 @transaction.atomic
-def delete_schedule(*, schedule: ExamSchedule, delete: Callable[[], object]) -> None:
-    """Delete a sitting under the locks the save takes, for the same reason."""
-    lock_school_schedule(schedule.tenant_id)
-    lock_exams(schedule.exam_subject.exam_id)
-    assert_schedule_is_editable(schedule)
-    delete()
+def delete_schedule(*, schedule: ExamSchedule, delete: Callable[[ExamSchedule], object]) -> None:
+    """Delete a sitting under the locks the save takes, checked on the locked row."""
+    current = lock_editable_schedule(schedule)
+    lock_exams(current.exam_subject.exam_id)
+    delete(current)
 
 
 @transaction.atomic
@@ -686,6 +736,32 @@ MARKS_WRITE_FIELDS = (
 )
 
 
+def assert_marks_not_locked(exam_subject: ExamSubject) -> None:
+    """§5.4 — a locked subject takes no marks until `:unlock-marks`."""
+    if exam_subject.marks_locked_at is not None:
+        raise Conflict(
+            "Marks for this subject are locked. They can only be changed after an unlock, "
+            "which is audited."
+        )
+
+
+def assert_marks_window_started(exam_subject: ExamSubject) -> None:
+    """§6 — entry before the window opens is refused."""
+    opens = exam_subject.marks_entry_opens_at
+    if opens and timezone.now() < opens:
+        raise Conflict(f"Marks entry for this subject opens {opens:%Y-%m-%d %H:%M}.")
+
+
+def assert_marks_window_not_closed(exam_subject: ExamSubject) -> None:
+    """§6 — entry after the window closes is refused."""
+    closes = exam_subject.marks_entry_closes_at
+    if closes and timezone.now() > closes:
+        raise Conflict(
+            f"Marks entry for this subject closed {closes:%Y-%m-%d %H:%M}. Ask for the window "
+            "to be reopened."
+        )
+
+
 def assert_marks_window_open(exam_subject: ExamSubject) -> None:
     """§6's entry window and §5.4's lock, as one gate.
 
@@ -698,22 +774,60 @@ def assert_marks_window_open(exam_subject: ExamSubject) -> None:
     entry dates has not asked to be gated, and refusing on a null would make
     the window mandatory — which §6 does not say and no migration set.
     """
-    if exam_subject.marks_locked_at is not None:
-        raise Conflict(
-            "Marks for this subject are locked. They can only be changed after an unlock, "
-            "which is audited."
-        )
+    assert_marks_not_locked(exam_subject)
+    assert_marks_window_started(exam_subject)
+    assert_marks_window_not_closed(exam_subject)
 
-    now = timezone.now()
-    if exam_subject.marks_entry_opens_at and now < exam_subject.marks_entry_opens_at:
-        opens = exam_subject.marks_entry_opens_at
-        raise Conflict(f"Marks entry for this subject opens {opens:%Y-%m-%d %H:%M}.")
-    if exam_subject.marks_entry_closes_at and now > exam_subject.marks_entry_closes_at:
-        raise Conflict(
-            f"Marks entry for this subject closed "
-            f"{exam_subject.marks_entry_closes_at:%Y-%m-%d %H:%M}. Ask for the window to be "
-            "reopened."
+
+def _lock_exam_subject(exam_subject: ExamSubject) -> ExamSubject:
+    """Take the marks locks, in the one order every marks path uses. Returns the fresh row.
+
+    1. **The exam, `FOR KEY SHARE`.** `process_exam_results` is the only move
+       out of the marks-writable statuses, and it takes the exam `FOR UPDATE`
+       (`lock_exam`), which conflicts with this. So processing waits for an
+       entry in flight, and an entry that starts after processing reads its
+       committed status. Concurrent entries don't conflict with each other here,
+       nor with the grid's own status update (a plain UPDATE is `NO KEY UPDATE`).
+       Raw SQL because Django has no `FOR KEY SHARE`; RLS still applies.
+    2. **The exam-subject, `FOR NO KEY UPDATE`.** This serialises entry against
+       `:lock-marks`/`:unlock-marks`. It is the weak form so that inserting a
+       sitting that references the subject (a foreign-key `KEY SHARE`) is not
+       blocked; a plain `FOR UPDATE` here deadlocked against sitting writes,
+       which hold the exam and then insert.
+
+    Then the `marks` rows. One order on every path means no cycle. Must run
+    inside the writing transaction. A subject deleted meanwhile is a `Conflict`,
+    so an import reports it per row instead of failing the job with an ORM message.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(
+            'SELECT 1 FROM "exams" WHERE "id" = %s FOR KEY SHARE',
+            [exam_subject.exam_id],
         )
+    try:
+        return (
+            ExamSubject.objects.alive()
+            .select_for_update(of=("self",), no_key=True)
+            .select_related("exam")
+            .get(pk=exam_subject.pk)
+        )
+    except ExamSubject.DoesNotExist:
+        raise Conflict("This exam-subject was removed, so it takes no more marks.") from None
+
+
+def lock_subject_for_entry(exam_subject: ExamSubject) -> ExamSubject:
+    """Every marks gate, read under `_lock_exam_subject`. Returns the fresh row.
+
+    The one place a *write* checks the gates. If they are checked against an
+    `ExamSubject` read earlier (at the request, or when an import job started),
+    a `:lock-marks`, a closed window or the exam moving to processing can commit
+    after that read, and a queued import would keep writing into a subject that
+    is meant to be final.
+    """
+    exam_subject = _lock_exam_subject(exam_subject)
+    assert_exam_accepts_marks(exam_subject.exam)
+    assert_marks_window_open(exam_subject)
+    return exam_subject
 
 
 def assert_exam_accepts_marks(exam: Exam) -> None:
@@ -768,81 +882,210 @@ def assert_marks_within_maximum(
         )
 
 
-def _current_allocations(
-    *, staff_ids: Any, exam_subject: ExamSubject
-) -> QuerySet[TeacherSubjectAllocation]:
-    """The current allocations of these staff rows to this exam-subject's class-subject.
+def _allocated_section_ids(teaching: AssignedTeaching, exam_subject: ExamSubject) -> frozenset:
+    """The sections `teaching` is currently allocated this exam-subject's subject in, in the
+    exam's session.
 
-    One row per section taught. Shared by the allocation gate and the `assigned`
-    student filter, so "allocated" means the same thing in both.
+    The one reading of "allocated" for marks (`_assigned_teaching`'s current rows): the
+    section gate, the per-student filter, the grid's flag, the import and the read
+    predicate all come through it, so they cannot disagree about who teaches a section.
     """
-    from apps.academics.models import TeacherSubjectAllocation
-
-    return TeacherSubjectAllocation.objects.alive().filter(
-        staff_id__in=staff_ids,
-        subject_id=exam_subject.subject_id,
-        section__school_class_id=exam_subject.school_class_id,
-        effective_to__isnull=True,
+    session_id = exam_subject.exam.academic_session_id
+    return frozenset(
+        section_id
+        for section_id, class_id, subject_id, allocated_session in teaching.allocations
+        if class_id == exam_subject.school_class_id
+        and subject_id == exam_subject.subject_id
+        and allocated_session == session_id
     )
 
 
-def assert_marker_may_enter(*, user, exam_subject: ExamSubject) -> None:
-    """§4 — may this caller enter marks for this exam-subject at all?
+def _campus_refs(scopes: dict) -> frozenset:
+    """The campus ids a `campus` grant names; empty when there is none."""
+    return frozenset(ref for ref in scopes.get(RecordScope.CAMPUS, []) if ref)
 
-    The subject-level gate. *Which* students they may mark is the row-level
-    question, answered by `_entry_students`, and a student outside it is a
-    rejected row.
 
-    - `all` passes. Many `exam_staff` and admin users have no `Staff` row, so
-      requiring an allocation would break the legitimate case, the same reason
-      `attendance.register.may_mark_register` gives.
-    - `campus` passes here but is not a wildcard: `_entry_students` keeps only
-      the students on a held campus (plus, with `assigned`, those in an allocated
-      section), so a campus-A marker's campus-B rows are rejected.
-    - `assigned` alone must hold a current `academics.TeacherSubjectAllocation`
-      for this class-subject; `_entry_students` then narrows to its sections.
-    - `own` alone cannot enter marks.
+@dataclass(frozen=True)
+class _SectionReach:
+    """The sections of one exam-subject's class a key reaches, read once per call.
 
-    The scope is read from the roles that grant `MARKS_CREATE` only (`scopes_for`):
-    an `assigned` teacher who also holds an `all` role for some other key is still
-    held to their allocations.
+    ADR-0031 decision 7's union: `all` reaches every section; otherwise a section is
+    reached when a `campus` grant covers the section's campus **or** an `assigned`
+    grant's teaching covers the section. No type decides alone.
     """
-    from apps.staff_management.models import EmploymentStatus, Staff
-    from core.rbac.permissions import scopes_for
 
-    scopes = scopes_for(user, MARKS_CREATE)
-    if RecordScope.ALL in scopes or RecordScope.CAMPUS in scopes:
-        return
+    every_section: bool = False
+    campus_ids: frozenset = frozenset()
+    taught_section_ids: frozenset = frozenset()
+    assigned: bool = False
+    has_staff: bool = False
+
+    def covers(self, section: Section) -> bool:
+        return (
+            self.every_section
+            or section.campus_id in self.campus_ids
+            or section.pk in self.taught_section_ids
+        )
+
+
+def _section_reach(
+    *,
+    user,
+    exam_subject: ExamSubject,
+    permission: str | AnyOf,
+    homeroom: bool,
+    teaching: AssignedTeaching | None = None,
+) -> _SectionReach:
+    """`permission`'s reach over the exam-subject's sections (`scopes_for`: only the
+    roles granting it count).
+
+    `assigned` is the caller's current allocations for this subject in the exam's
+    session; with `homeroom` (the grid *read*), also the sections they class-teach in
+    that session, matching `Marks.filter_assigned_to_user`. Entry never counts the
+    homeroom: a class teacher reviews the class's marks, the subject teacher enters them.
+    `teaching` lets a caller checking many exam-subjects resolve it once.
+    """
+    scopes = scopes_for(user, permission)
+    if RecordScope.ALL in scopes:
+        return _SectionReach(every_section=True)
+    campus_ids = _campus_refs(scopes)
     if RecordScope.ASSIGNED not in scopes:
-        # `own` alone cannot enter marks: a student scoring their own paper is
-        # not a workflow §5 describes.
-        raise DomainRuleViolation(
-            {"exam_subject_id": "You are not assigned to enter marks for this subject."}
-        )
-
-    staff_ids = list(
-        Staff.objects.alive()
-        .filter(user_id=user.pk, employment_status=EmploymentStatus.ACTIVE)
-        .values_list("pk", flat=True)
+        # `own` alone enters nothing: a student scoring their own paper is not §5.
+        return _SectionReach(campus_ids=campus_ids)
+    if teaching is None:
+        teaching = _assigned_teaching(user)
+    taught = _allocated_section_ids(teaching, exam_subject)
+    if homeroom:
+        session_id = exam_subject.exam.academic_session_id
+        taught |= {
+            section_id
+            for section_id, homeroom_session in teaching.homerooms
+            if homeroom_session == session_id
+        }
+    return _SectionReach(
+        campus_ids=campus_ids,
+        taught_section_ids=frozenset(taught),
+        assigned=True,
+        has_staff=bool(teaching.staff_ids),
     )
-    if not staff_ids:
-        raise DomainRuleViolation(
-            {
-                "exam_subject_id": (
-                    "Marks entry is scoped to the class-subjects you teach, and this account "
-                    "has no active staff record."
-                )
-            }
-        )
 
-    if not _current_allocations(staff_ids=staff_ids, exam_subject=exam_subject).exists():
+
+def marker_teaching(user, *permissions: str | AnyOf) -> AssignedTeaching | None:
+    """`user`'s teaching, resolved once per request, when any of `permissions` is held at
+    `assigned`; else None (no gate under those keys reads it).
+
+    The marks gates take it as `teaching=` so a grid open or a submit reads the
+    caller's allocations once, not once per gate.
+    """
+    for key in permissions:
+        if RecordScope.ASSIGNED in scopes_for(user, key):
+            return _assigned_teaching(user)
+    return None
+
+
+def _in_exam_class(*, exam_subject: ExamSubject, section: Section) -> bool:
+    return section.deleted_at is None and section.school_class_id == exam_subject.school_class_id
+
+
+def may_enter_marks(
+    *,
+    user,
+    exam_subject: ExamSubject,
+    section: Section,
+    permission: str | AnyOf,
+    teaching: AssignedTeaching | None = None,
+) -> bool:
+    """§4 — may `user` *read* `exam_subject`'s marks grid for `section` under `permission`?
+
+    The read side, passed the route's key (`exams.marks.view`): the union of `all`,
+    the section's campus, the caller's allocations **and their homeroom** in the
+    exam's session, so it agrees with `Marks.filter_assigned_to_user`. Writing is
+    `assert_marker_may_enter`, which does not count the homeroom. A deleted section, or
+    one outside the exam-subject's class, is never reachable.
+    """
+    if not _in_exam_class(exam_subject=exam_subject, section=section):
+        return False
+    return _section_reach(
+        user=user,
+        exam_subject=exam_subject,
+        permission=permission,
+        homeroom=True,
+        teaching=teaching,
+    ).covers(section)
+
+
+def assert_marker_may_enter(
+    *,
+    user,
+    exam_subject: ExamSubject,
+    section: Section,
+    permission: str | AnyOf,
+    teaching: AssignedTeaching | None = None,
+) -> None:
+    """§4 — may `user` *enter* `exam_subject`'s marks for `section` under `permission`?
+
+    A 422 on `section_id` naming why not. `all` passes; otherwise the section's campus
+    under a `campus` grant **or** a current allocation for (section, subject) in the
+    exam's session under an `assigned` grant (ADR-0031 decision 7). The homeroom does
+    not count for entry. The grid's `writable` flag runs this same gate.
+    """
+    # `section_id` resolves through the tenant manager, so a deleted section reaches here.
+    if section.deleted_at is not None:
+        raise DomainRuleViolation({"section_id": "This section has been deleted."})
+    if section.school_class_id != exam_subject.school_class_id:
         raise DomainRuleViolation(
-            {
-                "exam_subject_id": (
-                    "You are not currently allocated to teach this subject to this class, so "
-                    "you cannot enter its marks."
-                )
-            }
+            {"section_id": "This section is not in the class this exam-subject covers."}
+        )
+    reach = _section_reach(
+        user=user,
+        exam_subject=exam_subject,
+        permission=permission,
+        homeroom=False,
+        teaching=teaching,
+    )
+    if reach.covers(section):
+        return
+    if reach.campus_ids and not reach.assigned:
+        message = "This section is outside your campus."
+    elif reach.assigned and not reach.has_staff:
+        message = (
+            "Marks entry is scoped to the sections you teach, and this account has no active "
+            "staff record."
+        )
+    else:
+        message = (
+            "You are not currently allocated to teach this subject to this section in the "
+            "exam's session, so you cannot enter its marks."
+        )
+    raise DomainRuleViolation({"section_id": message})
+
+
+def enterable_section_ids(
+    *,
+    user,
+    exam_subject: ExamSubject,
+    permission: str | AnyOf,
+    teaching: AssignedTeaching | None = None,
+) -> frozenset[uuid.UUID]:
+    """The live sections of the exam-subject's class `user` may enter under `permission`."""
+    reach = _section_reach(
+        user=user,
+        exam_subject=exam_subject,
+        permission=permission,
+        homeroom=False,
+        teaching=teaching,
+    )
+    sections = Section.objects.alive().filter(school_class_id=exam_subject.school_class_id)
+    return frozenset(section.pk for section in sections if reach.covers(section))
+
+
+def assert_marker_may_enter_some_section(
+    *, user, exam_subject: ExamSubject, permission: str | AnyOf
+) -> None:
+    """The import's gate: the caller may enter this exam-subject in at least one section."""
+    if not enterable_section_ids(user=user, exam_subject=exam_subject, permission=permission):
+        raise DomainRuleViolation(
+            {"exam_subject_id": "You may not enter marks for any section of this exam-subject."}
         )
 
 
@@ -854,24 +1097,40 @@ def _class_enrollments(exam_subject: ExamSubject) -> QuerySet[Any]:
         academic_session_id=exam_subject.exam.academic_session_id,
         school_class_id=exam_subject.school_class_id,
         status=EnrollmentStatus.ACTIVE,
+        # A soft-deleted student can keep a live enrollment; nothing cascades it.
+        student__deleted_at__isnull=True,
     )
 
 
-def _entry_students(*, exam_subject: ExamSubject, user) -> dict:
-    """The students this caller may enter marks for in this exam-subject, by id.
+def _by_student(enrollments: QuerySet[Any]) -> dict:
+    """`{student_id: StudentEnrollment}` in roll order, each with its student and section."""
+    from apps.student_management.services import enrollment_roll_order
 
-    Two narrowings. **Eligibility** is an active enrollment in a section of the
-    exam-subject's class, in the exam's session: a withdrawn student is not
-    marked, and a student from another year group is not accepted because their
-    id was posted. **Record scope** is `MARKS_CREATE`'s, over `STUDENT_SCOPE`
-    (ADR-0013: the student app's settings, not a copy): `campus` keeps the held
-    campuses' students, and `assigned` keeps the students enrolled in a section
-    the caller is currently allocated this subject in, rather than the class
-    teacher's homeroom that `Student`'s own hook reads. A student outside either
-    is rejected exactly as an ineligible one is, so a campus-B id is never
-    written by a campus-A marker.
+    ordered = enrollments.select_related("student", "section").order_by(*enrollment_roll_order())
+    return {enrollment.student_id: enrollment for enrollment in ordered}
+
+
+def _entry_students(
+    *,
+    exam_subject: ExamSubject,
+    user,
+    permission: str | AnyOf,
+    section: Section | None = None,
+    teaching: AssignedTeaching | None = None,
+) -> dict:
+    """The enrollments `user` may enter marks for under `permission`, by student id.
+
+    Three narrowings. **Eligibility** is an active enrollment in a section of the
+    exam-subject's class, in the exam's session (and in `section` when given). The
+    **section** must be one `enterable_section_ids` allows; with `section` given, the
+    caller has already run `assert_marker_may_enter` on it, so the class-wide check is
+    skipped. The **student** must be
+    within `permission`'s record scope over `STUDENT_SCOPE` (ADR-0013: the student
+    app's settings, not a copy): `campus` keeps the held campuses' students and
+    `assigned` the students in an allocated section, not the homeroom `Student`'s own
+    hook reads. A student outside any of them is rejected exactly as an ineligible one
+    is, so a row never says whether an out-of-scope student exists.
     """
-    from apps.staff_management.models import EmploymentStatus, Staff
     from apps.student_management.models import Student
     from apps.student_management.services import STUDENT_SCOPE
     from core.rbac.permissions import scope_queryset
@@ -879,31 +1138,106 @@ def _entry_students(*, exam_subject: ExamSubject, user) -> dict:
     enrolled = _class_enrollments(exam_subject)
 
     def in_allocated_sections(queryset: QuerySet[Any], marker: Any) -> QuerySet[Any]:
-        staff_ids = (
-            Staff.objects.alive()
-            .filter(user_id=marker.pk, employment_status=EmploymentStatus.ACTIVE)
-            .values("pk")
-        )
-        sections = _current_allocations(staff_ids=staff_ids, exam_subject=exam_subject).values(
-            "section_id"
-        )
+        resolved = teaching if teaching is not None else _assigned_teaching(marker)
+        sections = _allocated_section_ids(resolved, exam_subject)
         return queryset.filter(pk__in=enrolled.filter(section_id__in=sections).values("student_id"))
 
     scoped = scope_queryset(
         Student.objects.alive().filter(pk__in=enrolled.values("student_id")),
         user,
-        permission=MARKS_CREATE,
+        permission=permission,
         assigned_filter=in_allocated_sections,
         **STUDENT_SCOPE,
     )
-    return {student.pk: student for student in scoped}
+    entry = enrolled.filter(student_id__in=scoped.values("pk"))
+    if section is not None:
+        return _by_student(entry.filter(section=section))
+    sections = enterable_section_ids(
+        user=user, exam_subject=exam_subject, permission=permission, teaching=teaching
+    )
+    return _by_student(entry.filter(section_id__in=sections))
+
+
+# `meta.unwritable_reason` on the grid, one per gate `bulk_enter_marks` runs.
+UNWRITABLE_NO_PERMISSION = "no_permission"
+UNWRITABLE_EXAM_STATUS = "exam_status"
+UNWRITABLE_LOCKED = "locked"
+UNWRITABLE_WINDOW_NOT_OPEN = "window_not_open"
+UNWRITABLE_WINDOW_CLOSED = "window_closed"
+NO_PERMISSION_MESSAGE = "You can read these marks but not enter them."
+
+
+def marks_grid_writability(
+    *,
+    user,
+    exam_subject: ExamSubject,
+    section: Section,
+    write_permission: str,
+    teaching: AssignedTeaching | None = None,
+) -> tuple[str, str] | None:
+    """None when a grid the caller may read is also writable; else `(reason, message)`.
+
+    Runs the gates `bulk_enter_marks` runs, so the grid never offers a write the
+    submit refuses: the section write gate itself (`assert_marker_may_enter` under
+    `write_permission`, the submit endpoint's key passed in by the view), then the
+    exam, lock and window gates, each with its own sentence.
+    """
+    try:
+        assert_marker_may_enter(
+            user=user,
+            exam_subject=exam_subject,
+            section=section,
+            permission=write_permission,
+            teaching=teaching,
+        )
+    except DomainRuleViolation:
+        return UNWRITABLE_NO_PERMISSION, NO_PERMISSION_MESSAGE
+    gates = (
+        (UNWRITABLE_EXAM_STATUS, lambda: assert_exam_accepts_marks(exam_subject.exam)),
+        (UNWRITABLE_LOCKED, lambda: assert_marks_not_locked(exam_subject)),
+        (UNWRITABLE_WINDOW_NOT_OPEN, lambda: assert_marks_window_started(exam_subject)),
+        (UNWRITABLE_WINDOW_CLOSED, lambda: assert_marks_window_not_closed(exam_subject)),
+    )
+    for reason, gate in gates:
+        try:
+            gate()
+        except Conflict as exc:
+            return reason, str(exc.detail)
+    return None
+
+
+def marks_grid(*, exam_subject: ExamSubject, section: Section) -> list[dict]:
+    """A section's roll for one exam-subject, each student with their marks row or None.
+
+    The section's whole roll: the view has already passed the section through the
+    read predicate (`may_enter_marks`), which is section-level like `Marks`' own
+    campus hook. Two queries: the roll and its marks.
+    """
+    roll = _by_student(_class_enrollments(exam_subject).filter(section=section))
+    rows = Marks.objects.alive().filter(exam_subject=exam_subject, student_id__in=list(roll))
+    marks = {row.student_id: row for row in rows}
+    return [
+        {
+            "student_id": student_id,
+            "student_name": enrollment.student.full_name,
+            "admission_number": enrollment.student.admission_number,
+            "roll_number": enrollment.roll_number,
+            "marks": marks.get(student_id),
+        }
+        for student_id, enrollment in roll.items()
+    ]
 
 
 @transaction.atomic
 def bulk_enter_marks(
-    *, exam_subject: ExamSubject, entries: list[dict], user, actor_id: uuid.UUID
+    *,
+    exam_subject: ExamSubject,
+    section: Section,
+    entries: list[dict],
+    user,
+    actor_id: uuid.UUID,
 ) -> dict:
-    """§16's `POST /marks:bulk-entry` — one exam-subject's grid.
+    """§16's `POST /marks:bulk-entry` — one section's grid for one exam-subject.
 
     **Upsert, not insert.** §16 calls this an "idempotent grid submit", and a
     teacher's browser genuinely does re-send: `bulk_create` would hit
@@ -917,15 +1251,31 @@ def bulk_enter_marks(
     and actually saved thirty-nine is worse off than one who is told which cell
     is wrong. Partial commit is never the outcome.
 
+    **The section is gated once**, then every entry's student must be on that
+    section's roll — so an assigned teacher cannot write a section of their
+    class they do not teach by naming its students.
+
     `select_for_update` on the rows that already exist: two devices submitting
     the same grid within milliseconds both read "no row" otherwise, and the
     unique index turns the loser into a 500 rather than an update.
     """
-    assert_exam_accepts_marks(exam_subject.exam)
-    assert_marks_window_open(exam_subject)
-    assert_marker_may_enter(user=user, exam_subject=exam_subject)
+    exam_subject = lock_subject_for_entry(exam_subject)
+    teaching = marker_teaching(user, MARKS_CREATE)
+    assert_marker_may_enter(
+        user=user,
+        exam_subject=exam_subject,
+        section=section,
+        permission=MARKS_CREATE,
+        teaching=teaching,
+    )
 
-    eligible = _entry_students(exam_subject=exam_subject, user=user)
+    eligible = _entry_students(
+        exam_subject=exam_subject,
+        user=user,
+        permission=MARKS_CREATE,
+        section=section,
+        teaching=teaching,
+    )
     rejected: list[dict] = []
     accepted: list[dict] = []
 
@@ -994,7 +1344,7 @@ def bulk_enter_marks(
         }
         if row is None:
             Marks.objects.create(
-                tenant=exam_subject.tenant,
+                tenant_id=exam_subject.tenant_id,
                 exam_subject=exam_subject,
                 student_id=entry["student_id"],
                 created_by=actor_id,
@@ -1019,13 +1369,42 @@ def bulk_enter_marks(
     return {"entered": created, "updated": updated, "rows": len(accepted)}
 
 
-def marks_entry_progress(*, exam: Exam) -> list[dict]:
+def marks_entry_progress(*, exam: Exam, user, permission: str | AnyOf) -> list[dict]:
+    """§6's missing-entries dashboard for one caller: only the sections `permission`
+    (the route's key) reaches under the read predicate `may_enter_marks` uses.
+
+    The caller's teaching is resolved once for the whole exam, and only when an
+    `assigned` grant needs it.
+    """
+    teaching = marker_teaching(user, permission)
+
+    def reach_for(subject: ExamSubject) -> _SectionReach:
+        return _section_reach(
+            user=user,
+            exam_subject=subject,
+            permission=permission,
+            homeroom=True,
+            teaching=teaching,
+        )
+
+    return _marks_entry_progress(exam=exam, reach_for=reach_for)
+
+
+def all_marks_entry_progress(*, exam: Exam) -> list[dict]:
+    """Every (exam-subject, section) progress row, for the reminder sweep, which has no caller."""
+    return _marks_entry_progress(exam=exam, reach_for=None)
+
+
+def _marks_entry_progress(
+    *, exam: Exam, reach_for: Callable[[ExamSubject], _SectionReach] | None
+) -> list[dict]:
     """§13's marks-entry status report, and §6's missing-entries dashboard.
 
-    Two queries flat, whatever the size of the exam: one for the expected roll
-    per exam-subject and one for what has been entered. The obvious shape — for
-    each subject, count its marks — is a query per subject, and an exam covers
-    every subject in every year group.
+    One row per (exam-subject, section with an active roll), in class, subject
+    and section order, narrowed by `reach_for(subject)` when given.
+
+    Flat in the size of the exam: the exam-subjects, the roll counts, the
+    sections and the marks counts are one query each.
     """
     from django.db.models import Count, Q
 
@@ -1034,53 +1413,81 @@ def marks_entry_progress(*, exam: Exam) -> list[dict]:
     subjects = list(
         ExamSubject.objects.alive()
         .filter(exam=exam)
-        .select_related("school_class", "subject")
-        .annotate(
-            entered=Count("marks", filter=Q(marks__deleted_at__isnull=True)),
-            submitted=Count(
-                "marks",
-                filter=Q(
-                    marks__deleted_at__isnull=True,
-                    marks__status__in=[MarksStatus.SUBMITTED, MarksStatus.LOCKED],
-                ),
-            ),
-        )
+        .select_related("exam", "school_class", "subject")
+        .order_by("school_class__name", "subject__name", "pk")
     )
-
-    expected_by_class: dict = {}
-    counts = (
+    rolls = (
         StudentEnrollment.objects.alive()
         .filter(
             academic_session_id=exam.academic_session_id,
             status=EnrollmentStatus.ACTIVE,
+            student__deleted_at__isnull=True,
             school_class_id__in=[subject.school_class_id for subject in subjects],
         )
-        .values("school_class_id")
+        .values("school_class_id", "section_id")
         .annotate(total=Count("student_id", distinct=True))
+        .order_by()
     )
-    for row in counts:
-        expected_by_class[row["school_class_id"]] = row["total"]
+    expected: dict[tuple, int] = {}
+    sections_by_class: dict[uuid.UUID, list[uuid.UUID]] = {}
+    for row in rolls:
+        expected[(row["school_class_id"], row["section_id"])] = row["total"]
+        sections_by_class.setdefault(row["school_class_id"], []).append(row["section_id"])
+    sections = Section.objects.in_bulk({sid for ids in sections_by_class.values() for sid in ids})
 
-    return [
-        {
-            "exam_subject_id": subject.pk,
-            # `class_id` and `subject_id` are carried, not only their names, so
-            # a caller acting on a row — the reminder sweep resolving which
-            # teachers to notify — does not have to re-fetch the exam-subject
-            # per row. That re-fetch is the N+1 shape review caught twice in
-            # PR B, and the fix belongs here rather than at each call site.
-            "class_id": subject.school_class_id,
-            "subject_id": subject.subject_id,
-            "class_name": subject.school_class.name,
-            "subject_name": subject.subject.name,
-            "expected": expected_by_class.get(subject.school_class_id, 0),
-            "entered": subject.entered,
-            "submitted": subject.submitted,
-            "is_locked": subject.marks_locked_at is not None,
-            "closes_at": subject.marks_entry_closes_at,
-        }
-        for subject in subjects
-    ]
+    # Marks counted per (exam-subject, section) through each student's active roll row.
+    counts = (
+        Marks.objects.alive()
+        .filter(
+            exam_subject__exam=exam,
+            student__enrollments__academic_session_id=exam.academic_session_id,
+            student__enrollments__status=EnrollmentStatus.ACTIVE,
+            student__enrollments__deleted_at__isnull=True,
+        )
+        .values("exam_subject_id", "student__enrollments__section_id")
+        .annotate(
+            entered=Count("pk", distinct=True),
+            submitted=Count(
+                "pk",
+                distinct=True,
+                filter=Q(status__in=[MarksStatus.SUBMITTED, MarksStatus.LOCKED]),
+            ),
+        )
+        .order_by()
+    )
+    tallies = {
+        (row["exam_subject_id"], row["student__enrollments__section_id"]): row for row in counts
+    }
+
+    rows = []
+    for subject in subjects:
+        class_sections = sorted(
+            (sections[sid] for sid in sections_by_class.get(subject.school_class_id, [])),
+            key=lambda section: (section.name, section.pk),
+        )
+        reach = None if reach_for is None else reach_for(subject)
+        for section in class_sections:
+            if reach is not None and not reach.covers(section):
+                continue
+            tally = tallies.get((subject.pk, section.pk), {})
+            rows.append(
+                {
+                    "exam_subject_id": subject.pk,
+                    "subject_name": subject.subject.name,
+                    "class_name": subject.school_class.name,
+                    "section_id": section.pk,
+                    "section_name": section.name,
+                    "expected": expected[(subject.school_class_id, section.pk)],
+                    "entered": tally.get("entered", 0),
+                    "submitted": tally.get("submitted", 0),
+                    "is_locked": subject.marks_locked_at is not None,
+                    # Not in the response; the reminder sweep reads them per row.
+                    "class_id": subject.school_class_id,
+                    "subject_id": subject.subject_id,
+                    "closes_at": subject.marks_entry_closes_at,
+                }
+            )
+    return rows
 
 
 @transaction.atomic
@@ -1093,7 +1500,12 @@ def lock_marks(*, exam_subject: ExamSubject, actor_id: uuid.UUID) -> dict:
     would grade a student on a half-entered grid.
 
     Idempotent: locking an already-locked subject is a retry, not a conflict.
+
+    Takes the same locks every marks writer takes (`_lock_exam_subject`), so
+    an import row or a grid submit in flight either commits before the lock or
+    sees it. Works on the fresh row it returns; the caller's instance is stale.
     """
+    exam_subject = _lock_exam_subject(exam_subject)
     if exam_subject.marks_locked_at is not None:
         return {"locked_rows": 0, "already_locked": True}
 
@@ -1119,7 +1531,10 @@ def unlock_marks(*, exam_subject: ExamSubject, actor_id: uuid.UUID) -> dict:
     Refused once results are approved. Unlocking then would let a mark change
     under a result a school has already given to a parent; §7.1's route for
     that is to send the results back, which returns the exam to `marks_entry`.
+
+    Takes `_lock_exam_subject`'s locks first, as `lock_marks` does.
     """
+    exam_subject = _lock_exam_subject(exam_subject)
     assert_exam_accepts_marks(exam_subject.exam)
 
     if exam_subject.marks_locked_at is None:
@@ -1185,10 +1600,14 @@ def import_marks_row(
     row: dict[str, str],
     row_number: int,
     exam_subject: ExamSubject,
-    students_by_number: dict,
+    enrollments_by_number: dict,
     actor_id: uuid.UUID,
 ) -> dict[str, str] | None:
     """Write one imported marks row. Returns None, or a row-level error.
+
+    `enrollments_by_number` is `import_candidates_by_admission_number`'s roll: only
+    the students the importer may enter, so a row outside their sections or record
+    scope reads exactly as an unknown admission number does.
 
     The error's `row` is stringified, matching
     `attendance.import_attendance_row`. Not because a number is wrong in JSON,
@@ -1208,13 +1627,24 @@ def import_marks_row(
     reject the entire file. These rows are this exam's marks arriving by a
     different door, and the window is exactly as relevant as it is to a teacher
     typing them.
+
+    **The gates are read per row, under the exam's and subject's locks**
+    (`lock_subject_for_entry`), not once for the file. A job can sit queued or
+    run for minutes, and a lock, a closed window or the exam moving to
+    processing in that time has to stop the rows after it. A refused row is reported like any
+    other, so the failed-rows re-import still works once entry reopens.
     """
+    try:
+        exam_subject = lock_subject_for_entry(exam_subject)
+    except Conflict as exc:
+        return {"row": str(row_number), "field": "exam_subject", "issue": str(exc.detail)}
+
     admission_number = (row.get("admission_number") or "").strip()
     if not admission_number:
         return {"row": str(row_number), "field": "admission_number", "issue": "Missing."}
 
-    student = students_by_number.get(admission_number)
-    if student is None:
+    enrollment = enrollments_by_number.get(admission_number)
+    if enrollment is None:
         return {
             "row": str(row_number),
             "field": "admission_number",
@@ -1225,6 +1655,7 @@ def import_marks_row(
                 "covers that you may import marks for."
             ),
         }
+    student = enrollment.student
 
     theory, error = _import_decimal(row.get("theory_marks", ""), "theory_marks")
     if error:
@@ -1258,7 +1689,7 @@ def import_marks_row(
         return {"row": str(row_number), "field": field, "issue": str(issue)}
 
     Marks.objects.update_or_create(
-        tenant=exam_subject.tenant,
+        tenant_id=exam_subject.tenant_id,
         exam_subject=exam_subject,
         student=student,
         defaults={
@@ -1282,30 +1713,26 @@ def import_marks_row(
 def import_candidates_by_admission_number(
     *, exam_subject: ExamSubject, user, permission: str | AnyOf
 ) -> dict:
-    """The students the importer may write, keyed by admission number.
+    """The enrollments the importer may write, keyed by admission number.
 
-    The class roll narrowed by `permission`'s record scope over `STUDENT_SCOPE`:
-    `permission` is the key the enqueuing request was admitted on, so a
-    campus-A importer's campus-B rows find no student and are reported as an
-    unknown admission number is, without saying the student exists.
+    `_entry_students` under `permission`, the key the enqueuing request was admitted
+    on: the sections the importer may enter, narrowed per student by that key's record
+    scope. A campus-A importer's campus-B row, or an assigned importer's row in a
+    section they do not teach, finds no enrollment and is reported as an unknown
+    admission number is, without saying the student exists.
 
     Keyed by admission number because that is what a spreadsheet carries — a
     school transcribing a marks sheet has the number on the paper, not a UUID.
     Built once per file rather than looked up per row, which is what keeps a
     six-hundred-row import from being six hundred queries.
     """
-    from apps.student_management.models import Student
-    from apps.student_management.services import STUDENT_SCOPE
-    from core.rbac.permissions import scope_queryset
-
-    enrolled = _class_enrollments(exam_subject).values("student_id")
-    scoped = scope_queryset(
-        Student.objects.alive().filter(pk__in=enrolled),
-        user,
+    entry = _entry_students(
+        exam_subject=exam_subject,
+        user=user,
         permission=permission,
-        **STUDENT_SCOPE,
+        teaching=marker_teaching(user, permission),
     )
-    return {student.admission_number: student for student in scoped}
+    return {enrollment.student.admission_number: enrollment for enrollment in entry.values()}
 
 
 # --- §5.5 processing, §5.6 approval and publishing -------------------------
@@ -1375,12 +1802,13 @@ def assert_approver_is_not_the_processor(*, results: list, approver_id: uuid.UUI
     module's: it has to hold when a later caller approves through some other
     door.
 
-    Compared against `created_by` on the result rows, which `processing.write`
-    stamps with the processing initiator. Reading it from the rows rather than
-    from the exam is deliberate: the exam's `updated_by` is whoever touched it
-    last, which after a rename is not the processor at all.
+    Compared against `processed_by` on the result rows, which every
+    `processing.write` re-stamps. Not `created_by`: that names the *first* run,
+    so after a send-back and a re-process by someone else it would refuse the
+    original processor and let the new one approve their own figures. Nor the
+    exam's `updated_by`, which is whoever touched it last.
     """
-    processors = {row.created_by for row in results if row.created_by is not None}
+    processors = {row.processed_by for row in results if row.processed_by is not None}
     if approver_id in processors:
         raise DomainRuleViolation(
             {
@@ -1432,6 +1860,14 @@ def approve_exam_results(*, exam: Exam, approver_id: uuid.UUID) -> dict:
         raise Conflict(
             f"This exam is {exam.get_status_display().lower()}. Only processed results can "
             "be approved."
+        )
+
+    # Backstop: a row still in `processing` was never processed, and approving the exam would
+    # strand it unapproved for good.
+    if Result.objects.alive().filter(exam=exam, status=ResultStatus.PROCESSING).exists():
+        raise Conflict(
+            "Some results on this exam have not been processed yet. Process the exam again "
+            "before approving."
         )
 
     pending = list(
@@ -1513,7 +1949,12 @@ def withhold_result(*, result: Result, reason: str, actor_id: uuid.UUID) -> Resu
     """
     # The row, not the exam: withholding is per student, and locking the exam
     # would serialise every guardian's hold against every other one.
-    result = Result.objects.select_for_update().get(pk=result.pk)
+    # Joined for the caller's serializer, but only the result row is locked.
+    result = (
+        Result.objects.select_related("student", "section", "grade_band")
+        .select_for_update(of=("self",))
+        .get(pk=result.pk)
+    )
     if result.status == ResultStatus.PUBLISHED:
         raise Conflict(
             "This result is already published, so it cannot be withheld. Reprocess the exam "
@@ -1732,6 +2173,28 @@ def publish_report_cards(*, exam: Exam, actor_id: uuid.UUID) -> dict:
 
 
 # --- §5.8 question banks and paper assembly -------------------------------
+
+
+def assert_creator_teaches_bank_subject(*, user, subject: Subject, permission: str | AnyOf) -> None:
+    """§4 — a bank written under `permission` (the route's key) lands where that key reads.
+
+    The write side of `QuestionBankViewSet`'s scope, so a creator cannot create (or move)
+    a bank into a subject they would then be unable to see. ADR-0031 decision 7's union
+    over the roles granting `permission` (`scopes_for`): `all`, or a `campus` grant (a
+    bank has no campus), passes; otherwise an `assigned` grant passes for a subject the
+    caller currently teaches (`QuestionBank.filter_assigned_to_user`). No type decides
+    alone, and an unrelated key's `all` role lifts nothing.
+    """
+    scopes = scopes_for(user, permission)
+    if RecordScope.ALL in scopes or _campus_refs(scopes):
+        return
+    if RecordScope.ASSIGNED in scopes:
+        taught = {subject_id for _, _, subject_id, _ in _assigned_teaching(user).allocations}
+        if subject.pk in taught:
+            return
+    raise DomainRuleViolation(
+        {"subject_id": "You can keep a question bank only in a subject you currently teach."}
+    )
 
 
 def assert_question_is_approvable(question: Question) -> None:

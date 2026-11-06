@@ -1,3 +1,5 @@
+import type { PermissionKey } from "@schoolhub/types";
+
 /**
  * Mirrors identifiers `apps/api/core/rbac/management/commands/seed_e2e_data.py` seeds.
  * There is no cross-language build-time coupling between the two — keep these in sync
@@ -53,6 +55,33 @@ export const E2E_GUARDIAN_PHONE = "+15550000010";
  * `created_by`): that rule cannot be proven with one identity, only refused.
  */
 export const E2E_PRINCIPAL_EMAIL = "e2e-principal@schoolhub.test";
+
+/** Mirrors seed_e2e_data.py's E2E_PRINCIPAL_PERMISSIONS, in its order: the mocked lane's
+ * `principal` holds exactly these, so a mocked screen never passes on a key the live approver
+ * lacks (L5, L27). */
+export const E2E_PRINCIPAL_PERMISSIONS: PermissionKey[] = [
+  "academics.promotion.view",
+  "academics.promotion.approve",
+  "academics.curriculum.view",
+  "academics.teacher-allocation.view",
+  "students.student.view",
+  "students.transfer.approve",
+  "school.campus.view",
+  "school.academic-session.view",
+  "school.class.view",
+  "school.section.view",
+  "school.house.view",
+  "attendance.leave-request.view",
+  "attendance.leave-request.approve",
+  "exams.exam.view",
+  "exams.schedule.view",
+  "exams.marks.view",
+  "exams.result.view",
+  "exams.result.approve",
+  "exams.result.publish",
+  "exams.report-card.view",
+  "exams.report-card.publish",
+];
 
 /**
  * Mirrors seed_e2e_data.py's baseline school_organization data — the admission->enrollment

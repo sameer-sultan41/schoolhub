@@ -8,7 +8,6 @@ import {
   entryIssuesFromError,
   isMarkableStatus,
   lockFilterToIsLocked,
-  rowIssuesFromError,
   shiftIsoDate,
   statusFilterToStatus,
   toAttendanceMode,
@@ -20,21 +19,13 @@ import {
 } from "../student-attendance-helper";
 import {
   attendanceRecord,
-  ISSUE_DUPLICATE,
-  ISSUE_NOT_ENROLLED,
-  ISSUE_ON_LEAVE,
-  ISSUE_SYSTEM_ONLY,
-  ON_LEAVE_REFUSED_MESSAGE,
-  onLeaveBulkMark,
   OTHER_STUDENT_ID,
   PERIOD_ID,
-  refusedBulkMark,
   registerEntry,
   registerMetaWire,
   SECTION_ID,
   SESSION_ID,
   STUDENT_ID,
-  THIRD_STUDENT_ID,
 } from "./student-attendance-fixtures";
 
 describe("MARKABLE_STATUSES", () => {
@@ -183,58 +174,6 @@ describe("toBulkMarkMeta", () => {
   it("counts a missing or non-numeric value as 0", () => {
     expect(toBulkMarkMeta(undefined)).toEqual({ marked: 0, updated: 0, alertsQueued: 0 });
     expect(toBulkMarkMeta({ marked: "3" })).toMatchObject({ marked: 0 });
-  });
-});
-
-describe("rowIssuesFromError", () => {
-  it("maps each refused student to the server's sentence, from error.meta.rows", () => {
-    const error = refusedBulkMark([
-      { student_id: STUDENT_ID, issue: ISSUE_NOT_ENROLLED },
-      { student_id: OTHER_STUDENT_ID, issue: ISSUE_DUPLICATE },
-    ]);
-
-    const issues = rowIssuesFromError(error);
-
-    expect([...issues.entries()]).toEqual([
-      [STUDENT_ID, ISSUE_NOT_ENROLLED],
-      [OTHER_STUDENT_ID, ISSUE_DUPLICATE],
-    ]);
-  });
-
-  it("reads the on-leave refusal, which comes with its own sentence", () => {
-    const error = onLeaveBulkMark([OTHER_STUDENT_ID]);
-
-    expect(error.fieldErrors().entries).toBe(ON_LEAVE_REFUSED_MESSAGE);
-    expect(rowIssuesFromError(error).get(OTHER_STUDENT_ID)).toBe(ISSUE_ON_LEAVE);
-  });
-
-  it("carries the system-only status sentence for an on_leave row", () => {
-    const error = refusedBulkMark([{ student_id: THIRD_STUDENT_ID, issue: ISSUE_SYSTEM_ONLY }]);
-
-    expect(rowIssuesFromError(error).get(THIRD_STUDENT_ID)).toBe(ISSUE_SYSTEM_ONLY);
-  });
-
-  it("keeps the first issue when a student is named twice", () => {
-    const error = refusedBulkMark([
-      { student_id: THIRD_STUDENT_ID, issue: ISSUE_DUPLICATE },
-      { student_id: THIRD_STUDENT_ID, issue: ISSUE_NOT_ENROLLED },
-    ]);
-
-    expect(rowIssuesFromError(error).get(THIRD_STUDENT_ID)).toBe(ISSUE_DUPLICATE);
-  });
-
-  it("is empty for an error without rows, malformed rows, or a non-API error", () => {
-    const conflict = new ApiError({
-      code: "conflict",
-      message: "Some of these records are locked and must be changed through a correction request.",
-      status: 409,
-      url: "/student-attendance:bulk-mark",
-    });
-
-    expect(rowIssuesFromError(conflict).size).toBe(0);
-    expect(rowIssuesFromError(refusedBulkMark("nope")).size).toBe(0);
-    expect(rowIssuesFromError(refusedBulkMark([{ student_id: STUDENT_ID }, null])).size).toBe(0);
-    expect(rowIssuesFromError(new Error("network")).size).toBe(0);
   });
 });
 

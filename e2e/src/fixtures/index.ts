@@ -19,7 +19,11 @@ import {
   CurriculumPage,
   DashboardPage,
   ExamAdmitCardsPage,
+  ExamMarksPage,
   ExamPage,
+  ExamReportCardsPage,
+  ExamReportsPage,
+  ExamResultsPage,
   ExamSchedulePage,
   ExamsPage,
   GradingScalesPage,
@@ -33,6 +37,7 @@ import {
   PromotionBatchPage,
   PromotionsPage,
   PublicSitePage,
+  QuestionBanksPage,
   StaffAttendancePage,
   StaffPage,
   StudentCreateStepperPage,
@@ -121,7 +126,12 @@ export interface E2EFixtures {
   examPage: ExamPage;
   examSchedulePage: ExamSchedulePage;
   examAdmitCardsPage: ExamAdmitCardsPage;
+  examMarksPage: ExamMarksPage;
+  examResultsPage: ExamResultsPage;
+  examReportCardsPage: ExamReportCardsPage;
+  examReportsPage: ExamReportsPage;
   gradingScalesPage: GradingScalesPage;
+  questionBanksPage: QuestionBanksPage;
   /**
    * Signs a **second** identity in, on its own browser context, and hands back that
    * context's page objects.
@@ -348,8 +358,28 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
     await use(new ExamAdmitCardsPage(page));
   },
 
+  examMarksPage: async ({ page }, use) => {
+    await use(new ExamMarksPage(page));
+  },
+
+  examResultsPage: async ({ page }, use) => {
+    await use(new ExamResultsPage(page));
+  },
+
+  examReportCardsPage: async ({ page }, use) => {
+    await use(new ExamReportCardsPage(page));
+  },
+
+  examReportsPage: async ({ page }, use) => {
+    await use(new ExamReportsPage(page));
+  },
+
   gradingScalesPage: async ({ page }, use) => {
     await use(new GradingScalesPage(page));
+  },
+
+  questionBanksPage: async ({ page }, use) => {
+    await use(new QuestionBanksPage(page));
   },
 
   signInAsSecondIdentity: async ({ browser }, use) => {

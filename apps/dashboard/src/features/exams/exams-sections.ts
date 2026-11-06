@@ -21,4 +21,16 @@ export const EXAMS_SECTIONS = [
     menuTitle: "Grading scales",
     permission: "exams.grading-scale.view",
   },
+  {
+    href: Paths.EXAMS_REPORTS,
+    labelKey: "nav.reports",
+    menuTitle: "Reports",
+    permission: "exams.result.view",
+  },
+  {
+    href: Paths.EXAMS_QUESTION_BANKS,
+    labelKey: "nav.questionBanks",
+    menuTitle: "Question banks",
+    permission: "exams.question-bank.view",
+  },
 ] as const satisfies readonly ModuleSection[];

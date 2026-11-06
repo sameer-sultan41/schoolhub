@@ -8,6 +8,14 @@ import type { ExamInput, ExamPageQuery, ExamStatus, ExamType } from "./exams-typ
 export const EXAMS_QUERY_MODULE = "exams";
 export const EXAMS_LIST_RESOURCE = "list";
 export const EXAMS_DETAIL_RESOURCE = "exam";
+/** A picker's read of the exams (the Reports section): one page at the API's maximum, newest
+ * first, so a school's recent exams are all there; an older one past the cap is left out. */
+export const EXAMS_OPTIONS_RESOURCE = "options";
+export const EXAMS_OPTIONS_PAGE_SIZE = 100;
+export const EXAMS_OPTIONS_ORDERING = "-starts_on";
+
+/** The query-string key an exam page's open tab lives under (`?tab=`). */
+export const EXAM_TAB_URL_KEY = "tab";
 
 /**
  * Where each status sits in the lifecycle, typed over every generated status so a status the

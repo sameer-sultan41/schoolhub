@@ -10,6 +10,17 @@ either this file or `project-status.md`.
 
 ## Deliberately NOT done
 
+- **`notify_results_pending_approval` picks recipients by "holds `exams.result.approve` anywhere".**
+  It predates ADR-0031 and is on `main` too (`apps/examinations/tasks.py`). It sends only an exam name and a
+  count, so nothing leaks beyond the exam's existence, but a campus-scoped approver of another campus is
+  notified about an exam they cannot open. Narrow it with `holds_key_for` per recipient when the approver
+  inbox lands.
+
+- **A result carried over by a re-process keeps its earlier figures and ranks.** A student
+  withdrawn between `:send-results-back` and the re-process is not recomputed (they are no
+  longer on the active roll), so their row returns to pending approval with the numbers and
+  `rank_in_*` of the earlier run, and its rank can equal a recomputed student's. Recomputing
+  withdrawn students needs a decision on which section they rank in.
 - **Record scope follow-ups left by per-role record scope** (PR A, `fix/per-role-record-scope`;
   [ADR-0031](decisions/0031-record-scope-per-role-assignment.md)). Each scope check now reads
   only the roles that grant its key. These were found on the way and left out:
@@ -259,16 +270,41 @@ either this file or `project-status.md`.
     staff register marks (Present, Absent, Late, Half day), though the server accepts every
     staff status but `on_leave`. Neither the register nor a correction can record a staff day
     as a holiday from the dashboard; the school calendar's holidays refuse marking instead.
-- **Ten older `examinations` actions look up their parent without the caller's record scope**
-  (`get_object_or_404(<Model>.objects.alive(), ...)` in `apps/api/apps/examinations/views.py`),
-  the pattern lesson L51 records: `:lock-marks` and `:unlock-marks` (exam-subject),
-  `marks-progress`, `:approve-results`, `:send-results-back`, `:publish-results` and
-  `:publish-report-cards` (exam), `results/{id}:withhold` (result), and the nested grade-band and
-  question routes' parent scale and bank. PR B fixed five (`:publish-schedule`,
-  `:issue-admit-cards`, `schedule-conflicts`, `:process-results`, `:generate-report-cards`); the
-  rest are gated by write keys teachers do not hold, so the exposure is narrow, but each should
-  resolve through `scope_queryset` with an out-of-scope 404 test. The marks, results and
-  report-card PRs (C, D) touch most of them and should convert each as they go.
+- **A list's debounced URL write can undo a click made inside the debounce.** Typing in a
+  `useDataGridUrlState` search box and clicking a row link before the debounce fires navigates,
+  then the late `replaceState` writes the list's `?search=` URL and the router returns to the list
+  (seen in e2e-live run 41476591369's trace). The live results journey now waits for the filter
+  to land. The fix belongs in `useUrlParams`/`useDataGridUrlState`: drop a pending write once a
+  navigation starts, or flush it on the link's click.
+- **An `assigned` holder of `exams.result.approve` or `.publish` acts on the whole exam.** PR D
+  resolves `:approve-results`, `:send-results-back`, `:publish-results` and `:publish-report-cards`
+  through `scoped_exam`, which admits a caller who teaches *any* section of the exam; the action
+  then approves or publishes every section's rows. No default role grants a teacher those keys
+  (only `principal`, `vice_principal` and `school_admin` hold them by default), so this is latent. A
+  tenant that grants one to an `assigned` role needs a section-level gate first: approve and
+  publish only the caller's sections' rows, or refuse a caller without `all` scope.
+- **The examinations dashboard's PR C (marks) left these out:**
+  - **A student whose campus differs from their section's campus.** The marks write gate and the
+    grid's `writable` flag read the *section's* campus; the per-student filter in `_entry_students`
+    keeps `STUDENT_SCOPE`'s *student* campus. A campus-scoped marker therefore sees a grid as
+    writable and is refused that one student on submit, with the unknown-number wording. Resolving
+    it needs a ruling on which campus is authoritative for marks (the section's, as `Marks`' read
+    hook uses, or the student's); plan `2026-11-07-exams-dashboard-per-role-scope.md` §2.
+  - **`class.name` in the marks-entry reminder carries "Class Section".** The reminder goes per
+    section, so the variable is the class and section joined. A tenant override that words
+    `class.name` as a whole class reads oddly; a separate `section.name` variable is the fix.
+  - **`exams.marks.update` gates nothing.** It is registered for `teacher` and `exam_staff`, but
+    `:bulk-entry` writes a new row and an update alike under `exams.marks.create`, so no role is
+    ever refused for want of it (the audit's suggestion in
+    `07-quality/2026-09-module-audit-findings.md`, lesson L55). Either the update half of a
+    submission checks it, which needs a ruling on what a teacher holding `.create` alone may do to
+    a row they already saved, or the key is dropped from the registry, the seed and §4.
+  - **`attendance.import`'s CSV allowlist rejects Windows' `application/vnd.ms-excel` type.** A
+    browser on Windows with Excel installed commonly sends a `.csv` as `application/vnd.ms-excel`.
+    `exams.marks-import` (PR C, which began enforcing its list on the direct upload) and
+    `fees.settlement-file` accept it; `attendance.import` lists `text/csv` and `.xlsx` only, and
+    is enforced only through `POST /files`, its own multipart import still skipping the check (the
+    audit's attendance Minor). Widen it when that check is added.
 - **The examinations dashboard's PR A (grading scales, exams, their subjects) left these out:**
   - **`Section`, `Class` and `AcademicSession` have no `assigned`-scope hooks.** An
     `assigned` teacher can read the exams they teach, but the reference lists a picker reads
@@ -289,13 +325,80 @@ either this file or `project-status.md`.
     and §8's exam-staff journey starts by cloning last year's.
     There is no endpoint (`:clone`, as `/class-subjects:clone` and `/academic-sessions:clone`
     have) and no screen action; an author re-creates the exam and its subjects by hand.
-  - **Portal roles would see a Reports tab that refuses them.** `student` and `guardian`
-    hold `exams.result.view` and `exams.report-card.view` (§4), so when PR D adds the
-    Reports section, keyed on a key they hold, a portal user signed in to the dashboard would
-    see the tab and get a 403 from the report endpoint, which is staff-only. The attendance
-    Leave tab is the precedent (above): hiding portal users from staff screens is
-    parent-portal's decision, so PR D should key the section on a staff-only key rather than
-    leave a tab that 403s.
+  - **Portal roles see a Reports tab that refuses them.** `student` and `guardian` hold
+    `exams.result.view` and `exams.report-card.view` (§4). PR D's Reports section
+    (`/exams/reports`) is keyed on `exams.result.view`, the key §4 gives it, so a portal user
+    signed in to the dashboard sees the tab and gets a 403 from `ExamReportView`, which is
+    staff-only. The attendance Leave tab is the precedent (above): the dashboard is a staff tool,
+    and hiding portal users from staff screens is parent-portal's decision. A staff-only view key
+    for the reports (or a staff gate on the section) is the fix if it should not wait for it.
+- **The examinations dashboard's PR D (results, report cards, reports) left these out:**
+  - **Most Reports viewers cannot run the per-exam reports.** `exams.result.view`, which opens the
+    Reports section, is granted to every staff role, but picking an exam reads `GET /exams`
+    (`exams.exam.view`, held only by the exam roles: `exam_staff`, `school_admin`, `principal`,
+    `vice_principal`, `teacher`, `class_teacher`). The screen therefore offers a viewer without
+    `exams.exam.view` question-bank usage alone, with a note, though `ExamReportView` would serve
+    them the other five (L55). An exam-name source readable with `exams.result.view` (a slim
+    `/exams` options read keyed on either key, or exam names in a results-side endpoint) would
+    open those reports to the `school_owner`, `accountant` and the other result-viewing roles.
+  - **The Reports section's exam picker lists the newest 100 exams.** It reads one page of
+    `/exams` at the API's maximum page size, ordered by `-starts_on`
+    (`features/exams/use-exam-options.ts`), as the exam form's grading-scale picker does. A school
+    with more than 100 exams cannot pick an older one there; a link naming its id still runs it.
+    A session filter on the picker, or a search-as-you-type picker, is the fix.
+  - **The live lane does not sign in as a student or guardian to read published results.**
+    `ResultViewSet` narrows a restricted principal to `published` rows, and the Django suite covers
+    it (`test_processing.py`'s `test_a_student_sees_their_own_result_once_published` and its two
+    neighbours); the e2e results specs stop at the staff side. Proving it live would enrol the one
+    seeded student into a run-unique section per test, and parallel workers would race on that
+    student's single active enrolment. A per-run student with its own login (one more login per
+    worker, `AuthEndpointThrottle`) would close it, once parent-portal gives that student a screen
+    to read results on.
+  - **The portal's result read carries the staff stamps.** `ResultSerializer` serves the
+    restricted principals too, so a student or guardian reading their published results receives
+    `processed_by`, `processed_by_name`, `approved_by` and `approved_by_name`: the staff ids and
+    names of whoever processed and approved them. The portal read should drop the four stamp fields
+    (a portal serializer, or the restricted-principal branch of `ResultViewSet` picking one), with
+    a test that a student's read carries none of them.
+- **The examinations dashboard's PR E (question banks, paper assembly) left these out:**
+  - **An assembled paper is not kept, and there is no past-papers list.** `:assemble-paper`
+    renders the PDF into a file and records the use on each question's `usage_count`, but §15
+    gives papers no table, so nothing lists a bank's earlier papers. The bank's page downloads
+    the file once its job succeeds (the job is held by the page, so closing the dialog mid-job
+    does not lose it; leaving the page does) and the dialog says to save it then; a lost
+    download means assembling again (deterministic, so the same blueprint over an unchanged bank
+    gives the same paper, with every question's `usage_count` raised a second time). A
+    `question_papers` table
+    (title, blueprint, file, who assembled it) with a list and its own `:download` is the fix.
+  - **The paper downloads through the generic job-file flow, so it carries audit C1.** The dialog
+    reads the job's `result_file_id` and fetches `POST /files/{id}:download` through
+    `useJobFileDownload`, keyed `platform.file.view` (every staff role) with no record scope
+    (`core/files` above; C1 in `07-quality/2026-09-module-audit-findings.md`): any staff member
+    who learns the id can fetch a paper before it is sat. The id reaches the dashboard only through
+    the assembling user's own job, which bounds it in the UI but not at the API. The examinations
+    plan's user ruling (2026-11-01) kept this flow for the paper, since papers have no row to hang
+    a `:download` on; the fix arrives with the table above (a `:download` on the paper, scoped by
+    its bank) or with C1's per-purpose check on `core/files`.
+  - **`:generate-questions` is not built; it waits on `core/ai`.** §16 lists
+    `POST /question-banks/{id}:generate-questions` (AI, job), but the AI gateway does not exist and
+    AGENTS.md hard rule 6 forbids a provider SDK in an app, so neither the endpoint nor a Generate
+    button exists. The rest of §7.2's gate is built and tested against drafts a client posts with
+    `source: "ai_generated"`: the draft is saved unapproved whatever the body says, carries the
+    "AI-generated" label (ai-governance.md §8) in the questions table before and after approval,
+    and Approve (`exams.question.approve`) is offered on an unapproved draft only, behind a
+    confirm showing the whole question, its choices, answer key, marks and topic, recording who
+    approved it. `source` is fixed at create (a PATCH changing it is a 422), so the label cannot
+    be removed.
+  - **A failed paper job's error is flattened by a local helper.** `assemble_paper_task` stores
+    an API error's own sentences (`_job_error` in `examinations/tasks.py`), the same idea as
+    `academics.promotions.services.failure_message`; the other tasks in the module, and in
+    `attendance`, `fees_finance`, `staff_management` and `student_management`, still store
+    `str(exc)`. Hoisting one helper into `core/jobs` and using it in every task is the fix.
+  - **A blueprint section cannot ask for a question type.** `PaperSectionSerializer` takes a
+    title, difficulty, topic, count and marks each, and `select_paper_questions` draws from every
+    type at that difficulty, so the dialog's sections offer no type either (a section of "two
+    multiple-choice questions" is not expressible). A `question_type` on the section, filtered in
+    both `assert_blueprint_is_satisfiable` and `select_paper_questions`, is the fix.
 - **Phase 2 Tier 2 is complete: academics, timetable and attendance are full-stack, their
   dashboards shipped.**
 - **Two dangling UUID columns became real foreign keys**:
@@ -357,16 +460,17 @@ either this file or `project-status.md`.
 - **No `node_modules` locally.** Nothing is installed, built, linted, or tested
   locally — CI is the source of truth.
 - **No module screens beyond the dashboard home + student-management +
-  staff-management + academics + timetable + attendance + examinations' setup.**
-  Fees, communication, parent-portal, … are untouched — the gap against
+  staff-management + academics + timetable + attendance + communication (#146, merged
+  with #145), and examinations' five open PRs.**
+  Fees, parent-portal, … are untouched — the gap against
   [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.md) tier 2+.
   Attendance's screens followed its API as three dashboard PRs (register, Records and
   Settings; the corrections and leave queues; staff attendance, reports and the import),
   once the dashboard shell had settled. Examinations' are five PRs (plan
-  `superpowers/plans/2026-11-01-examinations-dashboard.md`), of which PR A (grading scales,
-  exams and their subjects) and PR B (the Schedule and Admit cards tabs) are built; what
-  remains is **PR C** (the Marks tab), **PR D** (Results, Report cards and the Reports
-  section) and **PR E** (question banks and paper assembly).
+  `superpowers/plans/2026-11-01-examinations-dashboard.md`), built as a stack, all open: PR A
+  #147 (grading scales, exams and their subjects), PR B #149 (the Schedule and Admit cards
+  tabs), PR C #152 (the Marks tab), PR D #154 (Results, Report cards and the Reports section)
+  and PR E #155 (question banks and paper assembly). Full-stack once they merge.
 - **Tier 2's three modules are all in.** `apps/api/apps/` now also has
   `academics`, `timetable` and `attendance`, attendance with all three of its
   halves: marking, leave, and staff attendance with reports (see above).

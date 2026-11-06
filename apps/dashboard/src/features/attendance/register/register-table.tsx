@@ -28,9 +28,9 @@ import {
 } from "@/services/modules/student-attendance/student-attendance-constant";
 import {
   entryIssuesFromError,
-  rowIssuesFromError,
   withSavedRecords,
 } from "@/services/modules/student-attendance/student-attendance-helper";
+import { rowIssuesFromError } from "@/services/shared/row-issues";
 import { RegisterRow } from "./register-row";
 import { RegisterSummary } from "./register-summary";
 import { useRegisterForm } from "./use-register-form";

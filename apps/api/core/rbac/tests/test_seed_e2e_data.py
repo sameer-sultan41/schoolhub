@@ -374,6 +374,26 @@ class SeedE2EExaminationsTests(TestCase):
             [RecordScope.ASSIGNED],
         )
 
+    def test_the_principal_holds_the_results_approver_s_exams_keys(self) -> None:
+        """The approver half of the results journey: approve, publish and principal
+        remarks, never processing or generation, and nothing the real role lacks."""
+        keys = {key for key in self.role_keys("principal") if key.startswith("exams.")}
+
+        self.assertEqual(
+            keys,
+            {
+                "exams.exam.view",
+                "exams.schedule.view",
+                "exams.marks.view",
+                "exams.result.view",
+                "exams.result.approve",
+                "exams.result.publish",
+                "exams.report-card.view",
+                "exams.report-card.publish",
+            },
+        )
+        self.assert_no_wider_than("principal", keys)
+
     def test_the_teacher_login_has_an_active_teaching_staff_row(self) -> None:
         user = User.objects.get(tenant=self.tenant, email=E2E_TEACHER_EMAIL)
 

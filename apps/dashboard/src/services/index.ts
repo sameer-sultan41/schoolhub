@@ -1,5 +1,4 @@
 import { AdmitCardsService } from "./modules/admit-cards";
-import { BroadcastsService } from "./modules/broadcasts";
 import { FeeInvoicesService } from "./modules/fee-invoices";
 import { NoticesService } from "./modules/notices";
 import { NotificationPreferencesService } from "./modules/notification-preferences";
@@ -12,8 +11,11 @@ import { AttendanceCorrectionsService } from "./modules/attendance-corrections";
 import { AttendanceReportsService } from "./modules/attendance-reports";
 import { AttendanceSettingsService } from "./modules/attendance-settings";
 import { AuthService } from "./modules/auth";
+import { BroadcastsService } from "./modules/broadcasts";
 import { CurriculumService } from "./modules/curriculum";
 import { DashboardService } from "./modules/dashboard";
+import { ExamReportsService } from "./modules/exam-reports";
+import { ExamResultsService } from "./modules/exam-results";
 import { ExamSchedulesService } from "./modules/exam-schedules";
 import { ExamSubjectsService } from "./modules/exam-subjects";
 import { ExamsService } from "./modules/exams";
@@ -22,8 +24,11 @@ import { GradingScalesService } from "./modules/grading-scales";
 import { GuardiansService } from "./modules/guardians";
 import { JobsService } from "./modules/jobs";
 import { LeaveRequestsService } from "./modules/leave-requests";
+import { MarksService } from "./modules/marks";
 import { PeriodsService } from "./modules/periods";
 import { PromotionsService } from "./modules/promotions";
+import { QuestionBanksService } from "./modules/question-banks";
+import { ReportCardsService } from "./modules/report-cards";
 import { RoomsService } from "./modules/rooms";
 import { SchoolOrganizationService } from "./modules/school-organization";
 import { StaffService } from "./modules/staff";
@@ -62,6 +67,41 @@ export type {
   AdmitCardRecord,
   AdmitCardStatus,
 } from "./modules/admit-cards";
+
+export type {
+  BulkMarksEntryInput,
+  BulkMarksEntryResult,
+  MarksEntryInput,
+  MarksEntryStatus,
+  MarksGrid,
+  MarksGridEntry,
+  MarksGridMeta,
+  MarksGridQuery,
+  MarksLockResult,
+  MarksProgressRow,
+  MarksRecord,
+  MarksUnlockResult,
+  MarksUnwritableReason,
+} from "./modules/marks";
+
+export type {
+  ResultOutcome,
+  ResultPageQuery,
+  ResultRecord,
+  ResultsApproved,
+  ResultsPublished,
+  ResultsSentBack,
+  ResultStatus,
+} from "./modules/exam-results";
+
+export type {
+  ReportCardPageQuery,
+  ReportCardRecord,
+  ReportCardRemarkField,
+  ReportCardRemarksInput,
+  ReportCardsPublished,
+  ReportCardStatus,
+} from "./modules/report-cards";
 
 export type {
   ConflictSeverity as ExamConflictSeverity,
@@ -123,6 +163,17 @@ export type {
 } from "./modules/attendance-corrections";
 
 export type {
+  ExamInlineReport,
+  ExamQueuedReport,
+  ExamReportFormValues,
+  ExamReportKind,
+  ExamReportQuery,
+  ExamReportRow,
+  ExamReportRowOf,
+  ExamReportRun,
+} from "./modules/exam-reports";
+
+export type {
   AttendanceReportRow,
   InlineReport,
   QueuedReport,
@@ -163,10 +214,12 @@ export type {
   RegisterMeta,
   RegisterQuery,
   RegisterResult,
-  RowIssue,
   StudentAttendanceRecord,
   UnmarkableReason,
 } from "./modules/student-attendance";
+
+/** One refused row of a whole-grid submission (attendance's `:bulk-mark`, marks' `:bulk-entry`). */
+export type { RowIssue } from "./shared/row-issues";
 
 export type {
   MarkableStaffStatus,
@@ -188,6 +241,22 @@ export type {
   GradingScaleRecord,
   GradingScaleType,
 } from "./modules/grading-scales";
+
+export type {
+  PaperBlueprint,
+  PaperResult,
+  PaperShortfall,
+  QuestionBankInput,
+  QuestionBankPageQuery,
+  QuestionBankRecord,
+  QuestionBankStatus,
+  QuestionDifficulty,
+  QuestionInput,
+  QuestionPageQuery,
+  QuestionRecord,
+  QuestionSource,
+  QuestionType,
+} from "./modules/question-banks";
 
 export type { PeriodInput, PeriodPageQuery, PeriodRecord } from "./modules/periods";
 
@@ -263,7 +332,6 @@ export type {
 export type { FeeInvoiceRecord } from "./modules/fee-invoices";
 export type { ReceiptFormat, ReceiptRecord } from "./modules/receipts";
 export type { VoucherFormat, VoucherRecord, VoucherStatus } from "./modules/vouchers";
-export type { ResultRecord } from "./modules/results";
 
 /**
  * Every domain's API calls, aggregated behind one object. A component imports `Services`
@@ -300,6 +368,11 @@ export const Services = {
   examSubjects: ExamSubjectsService,
   examSchedules: ExamSchedulesService,
   admitCards: AdmitCardsService,
+  marks: MarksService,
+  examResults: ExamResultsService,
+  examReports: ExamReportsService,
+  questionBanks: QuestionBanksService,
+  reportCards: ReportCardsService,
   guardians: GuardiansService,
   staff: StaffService,
   students: StudentsService,

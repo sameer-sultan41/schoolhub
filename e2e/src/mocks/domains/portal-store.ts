@@ -194,14 +194,17 @@ export function buildReceipt(overrides: Partial<PortalReceipt> = {}): PortalRece
   };
 }
 
-export function buildResult(overrides: Partial<PortalResult> = {}): PortalResult {
+export function buildPortalResult(overrides: Partial<PortalResult> = {}): PortalResult {
   return {
     id: PORTAL_IDS.midTerm,
     exam_id: PORTAL_IDS.midTerm,
     exam_name: "Mid-term",
     term_name: "Term 1",
     student_id: PORTAL_IDS.ayesha,
+    student_name: "Ayesha Khan",
+    admission_number: "ADM-001",
     section_id: PORTAL_IDS.section,
+    section_name: "A",
     total_max_marks: "400.00",
     total_obtained_marks: "326.00",
     percentage: "81.50",
@@ -212,6 +215,10 @@ export function buildResult(overrides: Partial<PortalResult> = {}): PortalResult
     outcome: "pass",
     grace_marks: "0.00",
     status: "published",
+    processed_by: null,
+    processed_by_name: null,
+    approved_by: null,
+    approved_by_name: null,
     approved_at: "2026-10-19T09:00:00Z",
     published_at: "2026-10-20T09:00:00Z",
     created_at: "2026-10-19T08:00:00Z",

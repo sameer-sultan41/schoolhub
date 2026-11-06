@@ -6,13 +6,22 @@ import userEvent from "@testing-library/user-event";
 import { Services } from "@/services";
 import { EXAM_ID, examRecord } from "@/services/modules/exams/__tests__/exams-fixtures";
 import { EXAM_STATUSES } from "@/services/modules/exams/exams-constant";
+import {
+  EXAM_SUBJECT_ID,
+  marksGrid,
+  SECTION_ID,
+} from "@/services/modules/marks/__tests__/marks-fixtures";
 import { buildUser, renderWithProviders, setUrl } from "@/test-utils";
 import { USER_LOADED, UserLoaded } from "@/test-fixtures/user-loaded";
 
 import {
   asUser,
+  fetchAdmitCardsPage,
   fetchExam,
   fetchExamSubjects,
+  fetchGrid,
+  fetchReportCardsPage,
+  lastArg,
   mocked,
   stubExamsServices,
   updateExam,
@@ -36,6 +45,8 @@ jest.mock("@/services", () =>
     .requireActual<{ examsServicesMock: () => unknown }>("../../__tests__/exams-services-mock")
     .examsServicesMock(),
 );
+
+const TAB_NAMES = ["Subjects", "Schedule", "Admit cards", "Marks", "Results", "Report cards"];
 
 const FROZEN = "This exam is marks entry and its configuration is frozen.";
 
@@ -196,21 +207,67 @@ describe("ExamTabs", () => {
       ["subjects", "exams.exam.view"],
       ["schedule", "exams.schedule.view"],
       ["admit-cards", "exams.admit-card.view"],
-      ["marks", "exams.marks.create"],
+      ["marks", "exams.marks.view"],
       ["results", "exams.result.view"],
       ["report-cards", "exams.report-card.view"],
     ]);
   });
 
-  it("draws only the tabs that have content: Subjects, Schedule and Admit cards now, whatever other keys the viewer holds", async () => {
-    asUser("exams.schedule.view", "exams.admit-card.view", "exams.result.view");
+  it("draws every tab whose key the viewer holds", async () => {
+    asUser(
+      "exams.schedule.view",
+      "exams.admit-card.view",
+      "exams.marks.view",
+      "exams.result.view",
+      "exams.report-card.view",
+    );
 
     await renderTabs();
 
-    expect(await screen.findAllByRole("tab")).toHaveLength(3);
-    expect(screen.getByRole("tab", { name: "Subjects" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Schedule" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Admit cards" })).toBeInTheDocument();
+    expect(await screen.findAllByRole("tab")).toHaveLength(EXAM_TABS.length);
+    for (const name of TAB_NAMES) {
+      expect(screen.getByRole("tab", { name })).toBeInTheDocument();
+    }
+  });
+
+  it("gates the Results and Report cards tabs on their view keys", async () => {
+    asUser("exams.result.create", "exams.report-card.create");
+
+    await renderTabs();
+
+    expect(await screen.findByRole("tab", { name: "Subjects" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Results" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Report cards" })).not.toBeInTheDocument();
+  });
+
+  it("drops a list's filters when moving to another tab, which reads `section` and `status` too", async () => {
+    asUser("exams.result.view", "exams.report-card.view");
+    setUrl(`/exams/${EXAM_ID}?tab=results&section=${SECTION_ID}&outcome=pass&status=approved`);
+
+    await renderTabs();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("tab", { name: "Report cards" }));
+
+    expect(urlParam("tab")).toBe("report-cards");
+    expect(urlParam("section")).toBeNull();
+    expect(urlParam("outcome")).toBeNull();
+    expect(urlParam("status")).toBeNull();
+    await waitFor(() => {
+      expect(fetchReportCardsPage).toHaveBeenCalled();
+    });
+    expect(lastArg(fetchReportCardsPage)).toMatchObject({
+      sectionId: undefined,
+      status: undefined,
+    });
+  });
+
+  it("gates the Marks tab on the marks view key, not the entry key", async () => {
+    asUser("exams.marks.create");
+
+    await renderTabs();
+
+    expect(await screen.findByRole("tab", { name: "Subjects" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Marks" })).not.toBeInTheDocument();
   });
 
   it("gates the Admit cards tab on the admit-card view key", async () => {
@@ -233,7 +290,7 @@ describe("ExamTabs", () => {
 
   it("draws no tab for a viewer without the key of a tab that has content", async () => {
     mocked(Services.auth.fetchCurrentUser).mockResolvedValue(
-      buildUser(["exams.result.view" satisfies PermissionKey]),
+      buildUser(["exams.grading-scale.view" satisfies PermissionKey]),
     );
 
     await renderTabs();
@@ -252,6 +309,26 @@ describe("ExamTabs", () => {
       await screen.findByRole("tab", { name: "Subjects", selected: true }),
     ).toBeInTheDocument();
     expect(urlParam("tab")).toBe("marks");
+  });
+
+  it("drops the marks grid's subject and section when leaving the Marks tab", async () => {
+    asUser("exams.marks.view", "exams.admit-card.view");
+    fetchGrid.mockResolvedValue(marksGrid());
+    setUrl(`/exams/${EXAM_ID}?tab=marks&subject=${EXAM_SUBJECT_ID}&section=${SECTION_ID}`);
+
+    await renderTabs();
+    const user = userEvent.setup();
+    await screen.findByRole("textbox", { name: "Theory marks for Ali Raza" });
+
+    await user.click(screen.getByRole("tab", { name: "Admit cards" }));
+
+    expect(urlParam("tab")).toBe("admit-cards");
+    expect(urlParam("subject")).toBeNull();
+    expect(urlParam("section")).toBeNull();
+    await waitFor(() => {
+      expect(fetchAdmitCardsPage).toHaveBeenCalled();
+    });
+    expect(lastArg(fetchAdmitCardsPage)).toMatchObject({ sectionId: undefined });
   });
 
   it("keeps the first tab out of the URL", async () => {

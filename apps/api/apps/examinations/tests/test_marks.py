@@ -17,8 +17,10 @@ from __future__ import annotations
 
 import datetime
 from decimal import Decimal
+from unittest import mock
 
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -28,6 +30,7 @@ from apps.examinations.models import ExamStatus, Marks, MarksStatus
 from apps.examinations.tests.base import ExaminationsAPITestCase
 from apps.examinations.tests.factories import (
     CampusFactory,
+    ClassFactory,
     ExamFactory,
     ExamSubjectFactory,
     MarksFactory,
@@ -41,6 +44,7 @@ from apps.examinations.tests.factories import (
     grant,
     open_marks_entry,
 )
+from core.api.exceptions import DomainRuleViolation
 from core.jobs.tests.base import assert_sent_on_commit
 from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
@@ -80,10 +84,14 @@ class MarksTestCase(ExaminationsAPITestCase):
             rows[0].update(overrides)
         return rows
 
-    def submit(self, entries=None, client=None):
+    def submit(self, entries=None, client=None, section=None):
         return (client or self.client).post(
             BULK_ENTRY,
-            {"exam_subject_id": str(self.exam_subject.pk), "entries": entries or self.entries()},
+            {
+                "exam_subject_id": str(self.exam_subject.pk),
+                "section_id": str((section or self.section).pk),
+                "entries": entries or self.entries(),
+            },
             format="json",
         )
 
@@ -259,13 +267,21 @@ class BulkEntryTests(MarksTestCase):
     def test_an_idempotency_key_replays_the_counts(self) -> None:
         first = self.client.post(
             BULK_ENTRY,
-            {"exam_subject_id": str(self.exam_subject.pk), "entries": self.entries()},
+            {
+                "exam_subject_id": str(self.exam_subject.pk),
+                "section_id": str(self.section.pk),
+                "entries": self.entries(),
+            },
             format="json",
             **{"HTTP_IDEMPOTENCY_KEY": "grid-1"},
         )
         second = self.client.post(
             BULK_ENTRY,
-            {"exam_subject_id": str(self.exam_subject.pk), "entries": self.entries()},
+            {
+                "exam_subject_id": str(self.exam_subject.pk),
+                "section_id": str(self.section.pk),
+                "entries": self.entries(),
+            },
             format="json",
             **{"HTTP_IDEMPOTENCY_KEY": "grid-1"},
         )
@@ -336,7 +352,7 @@ class EntryGateTests(MarksTestCase):
 
 class AllocationScopeTests(MarksTestCase):
     def _teacher_client(self, user) -> APIClient:
-        grant(user, "exams.marks.create", scope=RecordScope.ASSIGNED)
+        grant(user, "exams.marks.view", "exams.marks.create", scope=RecordScope.ASSIGNED)
         client = APIClient()
         authenticate(client, user)
         return client
@@ -351,17 +367,43 @@ class AllocationScopeTests(MarksTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
 
     def test_a_teacher_not_allocated_to_the_class_subject_is_refused(self) -> None:
+        """The exam-subject is outside their `assigned` reach, so it is a 404 (ADR-0031
+        decision 3), whatever section is posted: a 422 would say whether it is in the class."""
         with tenant_context(self.tenant.id):
             stranger_user = UserFactory(tenant=self.tenant)
-            from apps.examinations.tests.factories import StaffFactory
-
             StaffFactory(tenant=self.tenant, campus=self.campus, user_id=stranger_user.pk)
+            elsewhere = SectionFactory(
+                tenant=self.tenant,
+                school_class=ClassFactory(tenant=self.tenant, level=9),
+                campus=self.campus,
+            )
         client = self._teacher_client(stranger_user)
 
-        response = self.submit(client=client)
+        for section in (self.section, elsewhere):
+            with self.subTest(section=section.name):
+                response = self.submit(client=client, section=section)
+                self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        with tenant_context(self.tenant.id):
+            self.assertFalse(Marks.objects.filter(exam_subject=self.exam_subject).exists())
 
-        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
-        self.assertIn("not currently allocated", str(response.json()))
+    def test_the_gate_names_a_missing_allocation(self) -> None:
+        """The section gate's own sentence, for a caller who reaches the exam-subject."""
+        with tenant_context(self.tenant.id):
+            stranger_user = UserFactory(tenant=self.tenant)
+            StaffFactory(tenant=self.tenant, campus=self.campus, user_id=stranger_user.pk)
+        grant(stranger_user, "exams.marks.create", scope=RecordScope.ASSIGNED)
+        # An unrelated key at `all` must not lift the marks key past the allocation check.
+        grant(stranger_user, "exams.exam.view", scope=RecordScope.ALL)
+
+        with tenant_context(self.tenant.id), self.assertRaises(DomainRuleViolation) as raised:
+            services.assert_marker_may_enter(
+                user=stranger_user,
+                exam_subject=self.exam_subject,
+                section=self.section,
+                permission=services.MARKS_CREATE,
+            )
+
+        self.assertIn("not currently allocated", str(raised.exception.detail))
 
     def test_unrelated_all_role_does_not_skip_allocation_check(self) -> None:
         """Only the roles granting `exams.marks.create` decide the early return.
@@ -372,28 +414,34 @@ class AllocationScopeTests(MarksTestCase):
         """
         with tenant_context(self.tenant.id):
             stranger_user = UserFactory(tenant=self.tenant)
-            from apps.examinations.tests.factories import StaffFactory
-
             StaffFactory(tenant=self.tenant, campus=self.campus, user_id=stranger_user.pk)
         grant(stranger_user, "exams.exam.view", scope=RecordScope.ALL)
         client = self._teacher_client(stranger_user)
 
         response = self.submit(client=client)
 
-        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
-        self.assertIn("not currently allocated", str(response.json()))
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         with tenant_context(self.tenant.id):
             self.assertFalse(Marks.objects.filter(exam_subject=self.exam_subject).exists())
 
     def test_an_account_with_no_staff_row_is_refused(self) -> None:
+        """No staff row teaches nothing: the exam-subject is a 404, and the gate's own
+        sentence says why."""
         with tenant_context(self.tenant.id):
             orphan = UserFactory(tenant=self.tenant)
         client = self._teacher_client(orphan)
 
         response = self.submit(client=client)
+        with tenant_context(self.tenant.id), self.assertRaises(DomainRuleViolation) as raised:
+            services.assert_marker_may_enter(
+                user=orphan,
+                exam_subject=self.exam_subject,
+                section=self.section,
+                permission=services.MARKS_CREATE,
+            )
 
-        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
-        self.assertIn("no active staff record", str(response.json()))
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertIn("no active staff record", str(raised.exception.detail))
 
     def test_an_all_scoped_caller_needs_no_allocation(self) -> None:
         """Many `exam_staff` and admin users have no `Staff` row at all, so
@@ -418,7 +466,12 @@ class AllocationScopeTests(MarksTestCase):
                 entered_by=self.user.pk,
             )
         self.submit()
-        grant(self.subject_teacher_user, "exams.marks.create", scope=RecordScope.ASSIGNED)
+        grant(
+            self.subject_teacher_user,
+            "exams.marks.view",
+            "exams.marks.create",
+            scope=RecordScope.ASSIGNED,
+        )
         client = APIClient()
         authenticate(client, self.subject_teacher_user)
 
@@ -476,11 +529,11 @@ class CampusBMarksTestCase(MarksTestCase):
 class EntryRecordScopeTests(CampusBMarksTestCase):
     """Which students a marker may write is `exams.marks.create`'s record scope.
 
-    The exam-subject is resolved unscoped (a class has no campus), so the scope
-    lives on the students. Against the old code a campus-scoped marker returned
-    early and every enrolled student of the class was eligible, so a campus-A
-    marker wrote campus-B marks, and an allocated teacher wrote marks for a
-    section they do not teach.
+    Entry is per section (the section gate) and per student (this key's record
+    scope over the student), one section per submit. Against the old code a
+    campus-scoped marker returned early and every enrolled student of the class
+    was eligible, so a campus-A marker wrote campus-B marks, and an allocated
+    teacher wrote marks for a section they do not teach.
     """
 
     def _row(self, student) -> dict:
@@ -498,10 +551,17 @@ class EntryRecordScopeTests(CampusBMarksTestCase):
     def _campus_a_marker(self):
         with tenant_context(self.tenant.id):
             marker = UserFactory(tenant=self.tenant)
-        grant(marker, "exams.marks.create", scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+        grant(
+            marker,
+            "exams.marks.view",
+            "exams.marks.create",
+            scope=RecordScope.CAMPUS,
+            scope_ref=self.campus.pk,
+        )
         return marker
 
     def test_a_campus_a_marker_cannot_write_a_campus_b_student(self) -> None:
+        """Proves the section roll: `student_b` is on campus B's section, not this one."""
         marker = self._campus_a_marker()
 
         response = self.submit(
@@ -509,6 +569,18 @@ class EntryRecordScopeTests(CampusBMarksTestCase):
         )
 
         self._assert_rejected_alone(response, index=3, student=self.student_b)
+
+    def test_a_campus_b_student_in_a_campus_a_section_is_rejected_by_record_scope(self) -> None:
+        """Proves the per-student filter: the section passes the gate and the student is
+        on its roll, so only `exams.marks.create`'s scope over the student refuses them
+        (the student-vs-section campus edge in `deferred-work.md`)."""
+        marker = self._campus_a_marker()
+        with tenant_context(self.tenant.id):
+            visitor = self._enrol(campus=self.campus_b, section=self.section)
+
+        response = self.submit([*self.entries(), self._row(visitor)], client=self._client(marker))
+
+        self._assert_rejected_alone(response, index=3, student=visitor)
 
     def test_a_campus_a_marker_still_writes_their_own_campus(self) -> None:
         marker = self._campus_a_marker()
@@ -519,10 +591,16 @@ class EntryRecordScopeTests(CampusBMarksTestCase):
         self.assertEqual(self._marks_written(), 3)
 
     def test_an_assigned_teacher_cannot_write_a_student_outside_their_sections(self) -> None:
-        """The allocation is to `self.section`, and the gate only checks the class."""
+        """Proves the section roll: the allocation is to `self.section`, and a student on
+        `other_section`'s roll is not on it."""
         with tenant_context(self.tenant.id):
             outsider = self._enrol(campus=self.campus, section=self.other_section)
-        grant(self.subject_teacher_user, "exams.marks.create", scope=RecordScope.ASSIGNED)
+        grant(
+            self.subject_teacher_user,
+            "exams.marks.view",
+            "exams.marks.create",
+            scope=RecordScope.ASSIGNED,
+        )
 
         response = self.submit(
             [*self.entries(), self._row(outsider)],
@@ -538,12 +616,26 @@ class EntryRecordScopeTests(CampusBMarksTestCase):
         with tenant_context(self.tenant.id):
             marker = UserFactory(tenant=self.tenant)
             StaffFactory(tenant=self.tenant, campus=self.campus, user_id=marker.pk)
-        grant(marker, "exams.marks.create", scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+        grant(
+            marker,
+            "exams.marks.view",
+            "exams.marks.create",
+            scope=RecordScope.CAMPUS,
+            scope_ref=self.campus.pk,
+        )
         grant(marker, "exams.marks.create", scope=RecordScope.ASSIGNED)
+        client = self._client(marker)
 
-        response = self.submit([self._row(self.student_b)], client=self._client(marker))
+        in_own_section = self.submit([self._row(self.student_b)], client=client)
+        in_its_section = self.submit(
+            [self._row(self.student_b)], client=client, section=self.section_b
+        )
 
-        self._assert_rejected_alone(response, index=0, student=self.student_b)
+        self._assert_rejected_alone(in_own_section, index=0, student=self.student_b)
+        self.assertEqual(in_its_section.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        fields = [detail["field"] for detail in in_its_section.json()["error"]["details"]]
+        self.assertEqual(fields, ["section_id"])
+        self.assertEqual(self._marks_written(), 0)
 
     def test_campus_a_plus_assigned_writes_the_campus_b_section_they_are_allocated(
         self,
@@ -559,23 +651,43 @@ class EntryRecordScopeTests(CampusBMarksTestCase):
                 subject=self.subject,
                 staff=staff,
             )
-        grant(marker, "exams.marks.create", scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
-        grant(marker, "exams.marks.create", scope=RecordScope.ASSIGNED)
-
-        response = self.submit(
-            [*self.entries(), self._row(self.student_b)], client=self._client(marker)
+        grant(
+            marker,
+            "exams.marks.view",
+            "exams.marks.create",
+            scope=RecordScope.CAMPUS,
+            scope_ref=self.campus.pk,
         )
+        grant(marker, "exams.marks.view", "exams.marks.create", scope=RecordScope.ASSIGNED)
+        client = self._client(marker)
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        grid = client.get(
+            f"{MARKS}/grid",
+            {"exam_subject_id": str(self.exam_subject.pk), "section_id": str(self.section_b.pk)},
+        )
+        # One section per submit (the grid's shape): campus A's, then the allocated campus B's.
+        own = self.submit(client=client)
+        allocated = self.submit([self._row(self.student_b)], client=client, section=self.section_b)
+
+        self.assertEqual(grid.status_code, status.HTTP_200_OK, grid.json())
+        self.assertTrue(grid.json()["meta"]["writable"])
+        self.assertEqual(own.status_code, status.HTTP_200_OK, own.json())
+        self.assertEqual(allocated.status_code, status.HTTP_200_OK, allocated.json())
         self.assertEqual(self._marks_written(), 4)
 
     def test_an_all_scoped_marker_still_writes_every_campus_and_section(self) -> None:
         with tenant_context(self.tenant.id):
             outsider = self._enrol(campus=self.campus, section=self.other_section)
 
-        response = self.submit([*self.entries(), self._row(self.student_b), self._row(outsider)])
+        # One section per submit (the grid's shape), every one of them accepted.
+        responses = [
+            self.submit(),
+            self.submit([self._row(self.student_b)], section=self.section_b),
+            self.submit([self._row(outsider)], section=self.other_section),
+        ]
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        for response in responses:
+            self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
         self.assertEqual(self._marks_written(), 5)
 
 
@@ -669,9 +781,10 @@ class ProgressTests(MarksTestCase):
         self.assertEqual(row["submitted"], 0)
 
     def test_progress_is_a_bounded_number_of_queries(self) -> None:
-        """Two queries flat, whatever the size of the exam. The obvious shape —
-        for each subject, count its marks — is a query per subject, and an exam
-        covers every subject in every year group."""
+        """Four queries flat (subjects, rolls, sections, marks counts), whatever
+        the size of the exam. The obvious shape — for each subject, count its
+        marks — is a query per subject, and an exam covers every subject in
+        every year group."""
         from django.db import connection
         from django.test.utils import CaptureQueriesContext
 
@@ -685,9 +798,9 @@ class ProgressTests(MarksTestCase):
                 )
 
         with tenant_context(self.tenant.id), CaptureQueriesContext(connection) as captured:
-            services.marks_entry_progress(exam=self.exam)
+            services.all_marks_entry_progress(exam=self.exam)
 
-        self.assertLessEqual(len(captured.captured_queries), 3)
+        self.assertLessEqual(len(captured.captured_queries), 4)
 
     def _extra_subject(self):
         from apps.examinations.tests.factories import ClassSubjectFactory, SubjectFactory
@@ -756,7 +869,11 @@ class MarksImportTests(MarksTestCase):
         its own path: §6 asks to re-import failed rows only, which needs a
         per-row verdict."""
         with tenant_context(self.tenant.id):
-            students = {student.admission_number: student for student in self.students}
+            enrollments = services.import_candidates_by_admission_number(
+                exam_subject=self.exam_subject,
+                user=self.user,
+                permission="exams.marks.import",
+            )
         rows = [
             f"{self.students[0].admission_number},60,,,,",
             "NOT-A-STUDENT,55,,,,",
@@ -774,7 +891,7 @@ class MarksImportTests(MarksTestCase):
                     row=row,
                     row_number=index + 1,
                     exam_subject=self.exam_subject,
-                    students_by_number=students,
+                    enrollments_by_number=enrollments,
                     actor_id=self.user.pk,
                 )
                 if error:
@@ -795,7 +912,11 @@ class MarksImportTests(MarksTestCase):
                 row={"admission_number": self.students[0].admission_number, "theory_marks": "60"},
                 row_number=2,
                 exam_subject=self.exam_subject,
-                students_by_number={self.students[0].admission_number: self.students[0]},
+                enrollments_by_number=services.import_candidates_by_admission_number(
+                    exam_subject=self.exam_subject,
+                    user=self.user,
+                    permission="exams.marks.import",
+                ),
                 actor_id=self.user.pk,
             )
             row = Marks.objects.alive().get(
@@ -812,7 +933,11 @@ class MarksImportTests(MarksTestCase):
                 row={"admission_number": self.students[0].admission_number, "theory_marks": ""},
                 row_number=2,
                 exam_subject=self.exam_subject,
-                students_by_number={self.students[0].admission_number: self.students[0]},
+                enrollments_by_number=services.import_candidates_by_admission_number(
+                    exam_subject=self.exam_subject,
+                    user=self.user,
+                    permission="exams.marks.import",
+                ),
                 actor_id=self.user.pk,
             )
             row = Marks.objects.alive().get(
@@ -829,6 +954,122 @@ class MarksImportTests(MarksTestCase):
         response = self.upload(self._sheet([f"{self.students[0].admission_number},60,,,,"]))
 
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+
+    def _queue_then(self, change, rows: list[str]):
+        """Upload while entry is open, apply `change` while the job is queued, then run it.
+
+        The gap the gates have to survive: the view's check passes, and the
+        subject changes before the task writes a row.
+        """
+        from core.jobs.models import BackgroundJob
+
+        with self.captureOnCommitCallbacks() as callbacks:
+            response = self.upload(self._sheet(rows))
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.json())
+        with tenant_context(self.tenant.id):
+            change()
+        for callback in callbacks:
+            callback()
+        with tenant_context(self.tenant.id):
+            job = BackgroundJob.objects.get(pk=response.json()["data"]["job_id"])
+            landed = Marks.objects.alive().filter(exam_subject=self.exam_subject).count()
+        return job.result, landed
+
+    def _two_rows(self) -> list[str]:
+        return [f"{student.admission_number},60,,,," for student in self.students[:2]]
+
+    def test_an_import_queued_before_a_lock_writes_nothing(self) -> None:
+        """The review's case: a clerk uploads while entry is open, an admin
+        locks the subject while the job is queued, and the import must not
+        write into a result set that is meant to be final."""
+        result, landed = self._queue_then(
+            lambda: services.lock_marks(exam_subject=self.exam_subject, actor_id=self.user.pk),
+            self._two_rows(),
+        )
+
+        self.assertEqual(landed, 0)
+        self.assertEqual(result["succeeded"], 0)
+        self.assertEqual({e["field"] for e in result["errors"]}, {"exam_subject"})
+        self.assertIn("unlock", result["errors"][0]["issue"].lower())
+
+    def test_a_lock_partway_through_an_import_refuses_the_rows_after_it(self) -> None:
+        original = services.import_marks_row
+        calls = []
+
+        def lock_after_first_row(**kwargs):
+            outcome = original(**kwargs)
+            calls.append(outcome)
+            if len(calls) == 1:
+                services.lock_marks(exam_subject=self.exam_subject, actor_id=self.user.pk)
+            return outcome
+
+        with mock.patch.object(services, "import_marks_row", side_effect=lock_after_first_row):
+            result, landed = self._queue_then(lambda: None, self._two_rows())
+
+        self.assertEqual(landed, 1)
+        self.assertEqual(result["succeeded"], 1)
+        self.assertEqual([e["field"] for e in result["errors"]], ["exam_subject"])
+
+    def test_an_import_after_the_window_closes_writes_nothing(self) -> None:
+        def close_window():
+            now = timezone.now()
+            self.exam_subject.marks_entry_opens_at = now - datetime.timedelta(days=2)
+            self.exam_subject.marks_entry_closes_at = now - datetime.timedelta(minutes=1)
+            self.exam_subject.save(update_fields=["marks_entry_opens_at", "marks_entry_closes_at"])
+
+        result, landed = self._queue_then(close_window, self._two_rows())
+
+        self.assertEqual(landed, 0)
+        self.assertIn("closed", result["errors"][0]["issue"].lower())
+
+    def test_an_import_after_results_are_approved_writes_nothing(self) -> None:
+        def approve():
+            self.exam.status = ExamStatus.APPROVED
+            self.exam.save(update_fields=["status"])
+
+        result, landed = self._queue_then(approve, self._two_rows())
+
+        self.assertEqual(landed, 0)
+        self.assertIn("send the results back", result["errors"][0]["issue"].lower())
+
+    def _remove_subject(self) -> None:
+        self.exam_subject.deleted_at = timezone.now()
+        self.exam_subject.save(update_fields=["deleted_at"])
+
+    def test_a_subject_removed_mid_import_is_a_row_error_not_a_failed_job(self) -> None:
+        """The rows already written stay counted, and the report says why the rest stopped."""
+        original = services.import_marks_row
+        calls = []
+
+        def remove_after_first_row(**kwargs):
+            outcome = original(**kwargs)
+            calls.append(outcome)
+            if len(calls) == 1:
+                self._remove_subject()
+            return outcome
+
+        with mock.patch.object(services, "import_marks_row", side_effect=remove_after_first_row):
+            result, landed = self._queue_then(lambda: None, self._two_rows())
+
+        self.assertEqual(landed, 1)
+        self.assertEqual((result["succeeded"], result["failed"]), (1, 1))
+        self.assertIn("removed", result["errors"][0]["issue"])
+
+    def test_a_subject_removed_while_queued_fails_the_job_in_a_sentence(self) -> None:
+        from core.jobs.models import BackgroundJob, JobStatus
+
+        with self.captureOnCommitCallbacks() as callbacks:
+            response = self.upload(self._sheet(self._two_rows()))
+        with tenant_context(self.tenant.id):
+            self._remove_subject()
+        for callback in callbacks:
+            callback()
+
+        with tenant_context(self.tenant.id):
+            job = BackgroundJob.objects.get(pk=response.json()["data"]["job_id"])
+        self.assertEqual(job.status, JobStatus.FAILED)
+        self.assertIn("was removed", job.error)
+        self.assertNotIn("matching query", job.error)
 
     def test_a_non_spreadsheet_upload_is_refused(self) -> None:
         response = self.upload(b"not a sheet", name="notes.txt")
@@ -854,6 +1095,74 @@ class MarksImportTests(MarksTestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+def _data_statements(captured) -> list[str]:
+    """The statements that read or write a table, without SAVEPOINT or SET."""
+    return [
+        query["sql"]
+        for query in captured.captured_queries
+        if query["sql"].lstrip().upper().startswith(("SELECT", "INSERT", "UPDATE", "DELETE"))
+    ]
+
+
+class SubjectLockOrderTests(MarksTestCase):
+    """Every marks writer, and the locker, locks the exam then the subject, before anything else.
+
+    That order is the whole fix. A gate read under these locks cannot miss a
+    `:lock-marks` or a processing run that commits beside it. One order on
+    every path means no deadlock. The weak modes (`KEY SHARE`, `NO KEY UPDATE`)
+    keep sitting writes, which hold the exam and insert rows referencing the
+    subject, from deadlocking against them.
+    """
+
+    def assert_subject_lock_first(self, captured) -> None:
+        exam_lock, subject_lock = _data_statements(captured)[:2]
+        self.assertIn('FROM "exams"', exam_lock)
+        self.assertIn("FOR KEY SHARE", exam_lock)
+        self.assertIn('FROM "exam_subjects"', subject_lock)
+        self.assertIn("FOR NO KEY UPDATE", subject_lock)
+
+    def test_the_grid_locks_the_subject_first(self) -> None:
+        with tenant_context(self.tenant.id), CaptureQueriesContext(connection) as captured:
+            services.bulk_enter_marks(
+                exam_subject=self.exam_subject,
+                section=self.section,
+                entries=[{"student_id": self.students[0].pk, "theory_marks": Decimal("60")}],
+                user=self.user,
+                actor_id=self.user.pk,
+            )
+
+        self.assert_subject_lock_first(captured)
+
+    def test_an_imported_row_locks_the_subject_first(self) -> None:
+        with tenant_context(self.tenant.id):
+            enrollments = services.import_candidates_by_admission_number(
+                exam_subject=self.exam_subject,
+                user=self.user,
+                permission="exams.marks.import",
+            )
+            with CaptureQueriesContext(connection) as captured:
+                services.import_marks_row(
+                    row={
+                        "admission_number": self.students[0].admission_number,
+                        "theory_marks": "60",
+                    },
+                    row_number=2,
+                    exam_subject=self.exam_subject,
+                    enrollments_by_number=enrollments,
+                    actor_id=self.user.pk,
+                )
+
+        self.assert_subject_lock_first(captured)
+
+    def test_lock_and_unlock_lock_the_subject_first(self) -> None:
+        for change in (services.lock_marks, services.unlock_marks):
+            with self.subTest(change=change.__name__):
+                with tenant_context(self.tenant.id), CaptureQueriesContext(connection) as captured:
+                    change(exam_subject=self.exam_subject, actor_id=self.user.pk)
+
+                self.assert_subject_lock_first(captured)
 
 
 class ImportRecordScopeTests(CampusBMarksTestCase):
@@ -920,6 +1229,36 @@ class ImportRecordScopeTests(CampusBMarksTestCase):
             b_marks = Marks.objects.filter(exam_subject=self.exam_subject, student=self.student_b)
             self.assertFalse(b_marks.exists())
         self.assertEqual(self._marks_written(), 1)
+
+    def test_a_campus_b_student_in_a_campus_a_section_is_rejected_as_unknown(self) -> None:
+        """Proves the per-student filter on the import: the section is the importer's,
+        the student is on its roll, and only the key's scope over the student refuses them."""
+        from core.jobs.models import JobStatus
+
+        with tenant_context(self.tenant.id):
+            importer = UserFactory(tenant=self.tenant)
+            visitor = self._enrol(campus=self.campus_b, section=self.section)
+            own_number = self.students[0].admission_number
+            visitor_number = visitor.admission_number
+        grant(importer, "exams.marks.import", scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self._upload(
+                self._client(importer),
+                [f"{own_number},60,,,,", f"{visitor_number},70,,,,", "NOT-A-STUDENT,55,,,,"],
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.json())
+        job = self._job(response.json()["data"]["job_id"])
+        self.assertEqual(job.status, JobStatus.SUCCEEDED, job.error)
+        self.assertEqual(job.result["succeeded"], 1)
+        out_of_scope, unknown = job.result["errors"]
+        self.assertEqual(
+            out_of_scope["issue"].replace(repr(visitor_number), "<n>"),
+            unknown["issue"].replace(repr("NOT-A-STUDENT"), "<n>"),
+        )
+        with tenant_context(self.tenant.id):
+            self.assertFalse(Marks.objects.filter(student=visitor).exists())
 
     def test_a_legacy_import_job_without_the_key_fails_closed(self) -> None:
         """Queued before `scope_permission`: read under no key it would be empty, and

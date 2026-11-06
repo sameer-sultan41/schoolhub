@@ -26,6 +26,11 @@ export class ExamsPage extends BasePage {
     return this.table.getByRole("link", { name, exact: true });
   }
 
+  /** The list's search box (name or description). */
+  get search(): Locator {
+    return this.page.getByRole("textbox", { name: "Search exams", exact: true });
+  }
+
   get createButton(): Locator {
     return this.page.getByRole("button", { name: "New exam", exact: true });
   }
