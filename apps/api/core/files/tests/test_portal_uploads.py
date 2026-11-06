@@ -17,12 +17,11 @@ FILES = "/api/v1/files"
 
 class PortalUploadGrantTests(APITestCase):
     def test_file_create_defaults_include_the_portal_roles(self) -> None:
-        roles = set(permission_registry.get("platform.file.create").default_roles)
-
-        self.assertTrue({"guardian", "student"} <= roles)
-        # Viewing stays staff-only: the portal reads a file through its module's route.
-        view_roles = set(permission_registry.get("platform.file.view").default_roles)
-        self.assertFalse({"guardian", "student"} & view_roles)
+        for role in ("guardian", "student"):
+            keys = set(permission_registry.keys_for_role(role))
+            self.assertIn("platform.file.create", keys)
+            # Viewing stays staff-only: the portal reads a file through its module's route.
+            self.assertNotIn("platform.file.view", keys)
 
 
 class PortalUploadTests(APITestCase):
