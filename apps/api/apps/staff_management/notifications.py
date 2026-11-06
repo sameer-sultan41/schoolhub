@@ -16,12 +16,10 @@ STAFF_INVITED = "staff.invited"
 
 INVITE_VARIABLES = {"staff.first_name", "school.name"}
 
-# In-app only, deliberately. The account `:invite` creates is inactive with an
-# unusable password until a set-password/SSO onboarding flow exists (see
-# services.invite_staff), so an email saying "your account is ready" would be
-# untrue — there is nothing the recipient could do with it. The inbox entry is
-# honest: it is waiting for them when they can first sign in. Adding
-# NotificationChannel.EMAIL here is the one-line change once onboarding lands.
+# In-app only, deliberately. The email that lets the person in is the invitation
+# itself, sent through core.rbac.auth_emails rather than notify(), because notify()
+# persists the rendered body and the link must never be stored (ADR-0033). The inbox
+# entry is waiting for them once they accept and sign in.
 catalog.register(
     STAFF_INVITED,
     template_code=STAFF_INVITED,

@@ -23,6 +23,7 @@
 8. Test inputs are the exact values the code branches on, and an unrelated edit still passes (L9, L18).
 9. A hook rejection was fixed at its cause, after reading its error, on the files it named (L10).
 10. Every brief to a subagent carries this repository's overrides (L11).
+11. A viewset you edited is the one `config/api_v1.py` routes to (L40), and every fixture of a type the regenerated contract changed was updated in the same commit (L41).
 
 ## 3. Lessons
 
@@ -88,7 +89,12 @@
   `unread_count` with a different field type (`[assignment]`), first silenced with a
   `type: ignore` and then fixed properly by a shared `ThreadBaseSerializer` (`523c453d`).
   Read the mypy error, then restructure; a suppressor is not the fix (AGENTS.md stop rule 2).
-- **Check.** Apply the fix the hook prints, on exactly the files it lists. Delete an unused `noqa` rather than re-adding it, reword a flagged word rather than growing `.cspell/project-words.txt`, and never use `--no-verify`. Keep the reason a removed `noqa` carried as a plain comment. When a hook prints no detail (the pre-push mypy check), run the command it names once and read the error before editing; two guessed fixes in a row failed before the real cause (a class variable overridden by an annotated attribute) was read.
+- **Mistake (again, account-invitations PR A, Task A2 fix round 3).** While clearing hook
+  rejections a subagent ran `ruff check`/`ruff format` by hand instead of letting the commit
+  hooks report and fixing the named files, which is the local lint run ADR-0007 forbids.
+- **Check.** Apply the fix the hook prints, on exactly the files it lists. The hooks run ruff,
+  eslint and prettier; never run them yourself. The pre-commit checks only report, so edit the
+  named files by hand, re-stage them and commit again. Delete an unused `noqa` rather than re-adding it, reword a flagged word rather than growing `.cspell/project-words.txt`, and never use `--no-verify`. Keep the reason a removed `noqa` carried as a plain comment. When a hook prints no detail (the pre-push mypy check), run the command it names once and read the error before editing; two guessed fixes in a row failed before the real cause (a class variable overridden by an annotated attribute) was read.
 
 ### L11. Briefs to subagents must carry this repository's overrides
 
@@ -296,6 +302,47 @@
 - **Check.** In a live spec, never assert a relation between two reads of state that a sibling
   test changes for the same identity: assert each read on its own (`> 0`), or give the test its
   own identity. Pin exact equality in a backend unit test, where nothing runs alongside.
+
+### L40. Confirm a viewset is routed before editing it
+
+- **Mistake.** Account-invitations Task A2 first added `:invite` to
+  `apps/api/apps/student_management/guardians/viewset.py`, an ADR-0010 package copy that nothing
+  routes: `config/api_v1.py` reaches the flat `student_management/views.py` through
+  `student_management/urls.py`. The action would have shipped unreachable, with its tests
+  calling a class the API never serves.
+- **Check.** Before editing a viewset, follow the route from `config/api_v1.py` through the
+  app's `urls.py` to the class it registers, and edit that one. A test that drives the URL
+  (`self.client.post("/api/v1/...")`), not the class, would have failed. Unrouted copies are
+  listed in `deferred-work.md` until they are deleted or wired.
+
+### L41. A regenerated contract updates the fixtures that build its types, in the same commit
+
+- **Mistake.** Account-invitations A2's first commit regenerated `packages/api-client/src/schema.d.ts`
+  (`portal_status` on `Guardian` and `Student`) without updating the eight dashboard fixtures
+  typed as those records, so the pre-push `tsc` failed on each (Invariant 6: backend and client
+  change together, in one commit).
+- **Check.** After regenerating the contract, grep the dashboard and e2e for every changed type
+  (`ApiSchemas["Guardian"]`, `GuardianRecord`, `portal_status:`) and update each fixture and
+  mock in the same commit. A hand-written record type the change touches (for example
+  `StaffDetailRecord` gaining `user_id`) gets the same sweep.
+
+### L42. An action that assigns roles checks the actor may grant them
+
+- **Mistake.** Account-invitations PR A's staff `:invite` assigned any `role_ids` under
+  `staff.staff.update` alone. Once invitations could activate an account, `hr_staff` could mint
+  a `school_admin` login; the final review caught it.
+- **Check.** Wherever a request hands roles or keys to another account, refuse (403) a
+  restricted-principal role and any role holding a key outside
+  `effective_permission_keys(actor)`. Test it with a narrower real role (`grant_default_role`)
+  granting a wider one, plus a positive control.
+
+### L43. Every path that ends a record ends its login
+
+- **Mistake.** PR A ended a departing staff member's access in `:exit` only; `DELETE /staff/{id}`
+  soft-deleted the row and left the login active with its roles and tokens.
+- **Check.** When a record owns a login, list every route that ends the record (`:exit`,
+  `:withdraw`, `DELETE`, imports) and route each through one access-ending service. Test the
+  `DELETE` as well as the colon-action.
 
 ## 4. Adding a lesson
 

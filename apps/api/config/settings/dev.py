@@ -17,6 +17,10 @@ SPECTACULAR_SETTINGS |= {
     "REDOC_DIST": "SIDECAR",
 }
 
+# The dashboard's dev server (`next dev --port 3000`), for emailed account links.
+DASHBOARD_URL_SCHEME = "http"
+DASHBOARD_URL_PORT = "3000"
+
 # Console email in development so nothing is sent to real guardians by accident.
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
@@ -43,10 +47,21 @@ CORS_ALLOW_CREDENTIALS = True
 REST_FRAMEWORK = {
     **REST_FRAMEWORK,
     "DEFAULT_THROTTLE_RATES": {
+        # Every scope keeps its base rate unless an override below lifts it.
+        **THROTTLE_RATES,
         "tenant": env.str("THROTTLE_RATE_TENANT", default=THROTTLE_RATES["tenant"]),
         "user": env.str("THROTTLE_RATE_USER", default=THROTTLE_RATES["user"]),
         "anon": env.str("THROTTLE_RATE_ANON", default=THROTTLE_RATES["anon"]),
         "auth": env.str("THROTTLE_RATE_AUTH", default=THROTTLE_RATES["auth"]),
         "public_form": env.str("THROTTLE_RATE_PUBLIC_FORM", default=THROTTLE_RATES["public_form"]),
+        "password_reset_email": env.str(
+            "THROTTLE_RATE_PASSWORD_RESET_EMAIL", default=THROTTLE_RATES["password_reset_email"]
+        ),
+        "password_reset_ip": env.str(
+            "THROTTLE_RATE_PASSWORD_RESET_IP", default=THROTTLE_RATES["password_reset_ip"]
+        ),
+        "invitation_ip": env.str(
+            "THROTTLE_RATE_INVITATION_IP", default=THROTTLE_RATES["invitation_ip"]
+        ),
     },
 }

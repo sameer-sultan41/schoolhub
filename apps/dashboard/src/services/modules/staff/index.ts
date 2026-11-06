@@ -6,6 +6,7 @@ import {
   fetchStaffPage,
   fetchStaffTypeCount,
   fetchTeachingStaffOptions,
+  inviteStaff,
   triggerStaffExport,
   triggerStaffImport,
   updateStaff,
@@ -20,6 +21,7 @@ export const StaffService = {
   updateStaff,
   exitStaff,
   fetchStaffById,
+  inviteStaff,
   triggerStaffExport,
   triggerStaffImport,
 };

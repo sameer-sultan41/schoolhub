@@ -45,6 +45,8 @@ Modules never send notifications directly. Instead:
 
 Tenant admins can enable/disable triggers and adjust default channels per trigger within plan limits; emergency triggers (see §6) cannot be disabled below in-app.
 
+**The one exception: account security emails.** The invitation, password-reset and "your password was changed" emails do not go through `notify()` or the trigger catalog ([ADR-0033](../decisions/0033-account-invitations-and-auth-email.md)). They carry a working sign-in link, and `notify()` persists the rendered body in `notifications` and `delivery_logs`, which delivery-log viewers can read, and a tenant template override could rewrite the link. They are platform-only templates in `core/rbac/auth_emails.py`, sent through the email adapter from a Celery task on the `transactional` queue, never registered in the template registry and never resolved through `templates.resolve()`, so no school can override them; they do not appear in the inbox or delivery log, and the audit log records them instead (`auth.invitation.sent`, `auth.invitation.send_failed`, `auth.invitation.accepted`, `auth.password.reset`). A new security email follows the same path; every other message still goes through `notify()`.
+
 ## 4. User Preferences & Quiet Hours
 
 - Per-user preference matrix: notification **category** (attendance, fees, academics, announcements, emergencies) × **channel** → on/off. Defaults are seeded per role by the tenant; users adjust from their profile.

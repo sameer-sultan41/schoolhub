@@ -108,6 +108,54 @@
       "expiredBody": "Sign in again to continue.",
       "impersonating": "You are viewing this account as support staff. Every action is audited.",
       "impersonatingLabel": "Impersonation notice"
+    },
+    "password": {
+      "show": "Show password",
+      "hide": "Hide password",
+      "new": "New password",
+      "confirm": "Confirm password",
+      "hint": "At least {min} characters, not a common or all-number password.",
+      "tooShort": "Use at least {min} characters.",
+      "confirmRequired": "Type the password again.",
+      "mismatch": "The two passwords don't match."
+    },
+    "link": {
+      "invalidTitle": "This link can't be used",
+      "invalidBody": "It may have expired, been used already, or been replaced by a newer one.",
+      "askResend": "Ask your school to resend your invitation.",
+      "requestNew": "Request a new link",
+      "backToSignIn": "Back to sign in"
+    },
+    "acceptInvite": {
+      "metaTitle": "Accept invitation",
+      "title": "Set up your account",
+      "subtitle": "Choose a password for {email} at {school}.",
+      "expires": "This invitation expires on {date}.",
+      "loading": "Checking your invitation…",
+      "loadError": "We couldn't check your invitation.",
+      "submit": "Create account",
+      "submitting": "Creating account",
+      "success": "Your account is ready. Sign in with your new password."
+    },
+    "forgotPassword": {
+      "metaTitle": "Forgot password",
+      "title": "Reset your password",
+      "subtitle": "Enter your account's email. If it matches an account at this school, we'll email you a link.",
+      "email": "Email",
+      "invalidEmail": "Enter a valid email address.",
+      "submit": "Email me a link",
+      "submitting": "Sending",
+      "success": "If that email has an account here, a reset link is on its way. It works for one hour.",
+      "noSchool": "Open this page from your school's sign-in address to reset your password.",
+      "backToSignIn": "Back to sign in"
+    },
+    "resetPassword": {
+      "metaTitle": "Reset password",
+      "title": "Choose a new password",
+      "subtitle": "Every device signed in to your account will be signed out.",
+      "submit": "Save password",
+      "submitting": "Saving",
+      "success": "Your password has been changed. Sign in with the new one."
     }
   },
   "dashboard": {
@@ -511,6 +559,37 @@
       "downloadFailed": "The ID-card PDF could not be downloaded.",
       "timedOut": "ID cards are taking longer than expected — check again shortly.",
       "failed": "ID-card generation failed."
+    },
+    "portal": {
+      "title": "Portal account",
+      "status": {
+        "none": "No account",
+        "invited": "Invitation sent",
+        "expired": "Invitation expired",
+        "send_failed": "Invitation not delivered",
+        "active": "Active",
+        "inactive": "Access ended"
+      },
+      "invite": "Invite to portal",
+      "resend": "Resend invitation",
+      "inviteTitle": "Invite {name} to the portal",
+      "resendTitle": "Resend {name}'s invitation",
+      "studentEmail": "Student's email",
+      "studentEmailHint": "The invitation link goes to this address.",
+      "pendingAccountEmailHint": "The invitation is sent again, to the address entered here. Use this to correct a mistyped address.",
+      "inactiveAccountEmailHint": "If the student has never signed in, the invitation goes to the address entered here. If they have, it goes to their account's existing address.",
+      "studentEmailNote": "Students have no email on file, so this is kept only on their portal account.",
+      "invalidEmail": "Enter a valid email address.",
+      "send": "Send invitation",
+      "sending": "Sending",
+      "sent": "Invitation sent to {name}.",
+      "failed": "Couldn't send the invitation.",
+      "errors": {
+        "email_in_use": "That email already belongs to another account. Use a different address.",
+        "already_active": "This person already has an active account.",
+        "portal_disabled": "The parent portal isn't enabled for your school.",
+        "not_eligible": "This person can't be given portal access right now."
+      }
     }
   },
   "staff": {
@@ -688,6 +767,19 @@
       "downloadFailed": "The export file could not be downloaded.",
       "timedOut": "The export is taking longer than expected. Try again in a moment.",
       "failed": "The export failed."
+    },
+    "invite": {
+      "send": "Send invitation",
+      "resend": "Resend invitation",
+      "sendHint": "No sign-in account yet.",
+      "resendHint": "Sends a new link if they haven't set a password yet.",
+      "sending": "Sending",
+      "sent": "Invitation sent to {name}.",
+      "failed": "Couldn't send the invitation.",
+      "errors": {
+        "already_active": "This staff member has already set up their account.",
+        "email_in_use": "This email belongs to another account. Change the staff member's email first."
+      }
     }
   },
   "academicSession": {
@@ -2095,6 +2187,7 @@
     "server_error": "Something went wrong on our side. The team has been notified.",
     "requestId": "Reference: {requestId}",
     "pageErrorTitle": "Something went wrong",
-    "pageErrorBody": "This page hit an unexpected error. Try again, or contact support if it keeps happening."
+    "pageErrorBody": "This page hit an unexpected error. Try again, or contact support if it keeps happening.",
+    "invalid_link": "This link is no longer valid."
   }
 }

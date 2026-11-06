@@ -76,4 +76,22 @@ describe("proxy", () => {
     expect(proxy(makeRequest("/forgot-password")).status).toBe(200);
     expect(proxy(makeRequest("/forgot-password/confirm")).status).toBe(200);
   });
+
+  it("treats /accept-invite and /reset-password as public", () => {
+    expect(proxy(makeRequest("/accept-invite")).status).toBe(200);
+    expect(proxy(makeRequest("/reset-password")).status).toBe(200);
+  });
+
+  it("never redirects a signed-in visitor off an emailed-link page", () => {
+    // The browser would carry the link's fragment, token and all, to wherever this
+    // redirected; the page has to open so the link can be read and cleared.
+    expect(proxy(makeRequest("/accept-invite", { session: true })).status).toBe(200);
+    expect(proxy(makeRequest("/reset-password", { session: true })).status).toBe(200);
+  });
+
+  it("still sends a signed-in visitor away from /forgot-password", () => {
+    const response = proxy(makeRequest("/forgot-password", { session: true }));
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://app.schoolhub.test/dashboard");
+  });
 });
