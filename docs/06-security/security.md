@@ -102,6 +102,7 @@
 - **Transit:** TLS 1.2+ everywhere (external and service-to-service); HSTS preload; auto-renewed certificates including tenant custom domains.
 - **At rest:** disk/volume encryption for database, backups, and object storage (provider-managed keys minimum; KMS-managed recommended).
 - **Column-level (application-layer) encryption** for the most sensitive fields — staff **salary and bank details**, government ID numbers, medical notes on student profiles — so DB dumps and read replicas don't expose them in plaintext. Keys in the secrets manager (SEC-15), rotation procedure documented.
+- **As built — integration credentials.** Each school's payment-gateway credentials are encrypted with `MultiFernet` over `INTEGRATIONS_ENCRYPTION_KEYS` (comma-separated, newest first) in `apps/api/core/integrations/crypto.py`. Rotation procedure: [`infra/runbooks/rotate-integration-credentials.md`](../../infra/runbooks/rotate-integration-credentials.md) — add a key at the front, run `manage.py rotate_integration_credentials`, then drop the old key. Fernet has no associated data, so a ciphertext is not bound to its tenant; Row-Level Security is the tenant boundary ([ADR-0034](../decisions/0034-online-fee-payments.md)).
 
 ## SEC-14 Audit Logging
 
@@ -115,7 +116,9 @@
 ## SEC-15 Secrets Management
 
 **Requirement:** No secret (DB credentials, API keys, JWT signing keys, encryption keys) ever appears in source control, images, logs, or client bundles.
-**Implementation:** Environment-injected secrets from a managed secret store (per [`../02-architecture/hosting-deployment.md`](../02-architecture/hosting-deployment.md)); gitleaks in pre-commit and CI; per-environment secrets with least privilege; JWT signing-key rotation supported via key IDs; provider keys (LLM, SMS, payments) held platform-side only — tenants never see raw provider credentials.
+**Implementation:** Environment-injected secrets from a managed secret store (per [`../02-architecture/hosting-deployment.md`](../02-architecture/hosting-deployment.md)); gitleaks in pre-commit and CI; per-environment secrets with least privilege; JWT signing-key rotation supported via key IDs; provider keys (LLM, SMS) held platform-side only — tenants never see raw provider credentials.
+
+**Amended by [ADR-0034](../decisions/0034-online-fee-payments.md) — payment credentials.** A school is the merchant of record for its own fee payments, so the payment-gateway credentials are the school's own, not the platform's. The school enters them once; they are **write-only** through the API, stored encrypted (SEC-13), never logged or audited in clear, and the only thing ever shown back is a masked merchant id the adapter derives server-side. The encryption keys themselves stay platform-side in the secret store.
 
 ## SEC-16 Rate Limiting & Abuse Prevention
 

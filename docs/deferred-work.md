@@ -10,6 +10,14 @@ either this file or `project-status.md`.
 
 ## Deliberately NOT done
 
+- **Online fee payments, what PR 1 leaves out** ([ADR-0034](decisions/0034-online-fee-payments.md), plan `docs/superpowers/plans/2026-11-07-fee-online-payments.md`). PR 1 runs end to end against the fake provider only.
+  - **PR 2 (blocked):** the real aggregator's adapter (PayFast or Safepay, picked after the user tests both sandboxes; enable it in `PAYMENT_PROVIDERS_ENABLED` for production and set `PAYMENT_PENDING_TTL_MINUTES` from its session lifetime), the portal Pay button and result page on `PortalInvoiceDetail` (waits for the portal stack, #156 → #158 → #160), and the staff gateway-settings and reconciliation-issues screens with `:resolve`. Until then a school can be configured only through the API.
+  - **Partial online payments.** A guardian pays the full available balance only (user decision, 2026-11-07).
+  - **Provider refunds.** No adapter `refund`: each aggregator differs. A refund of an online payment goes through fees-finance §7.3's manual flow, and the money is returned at the provider by hand; a `duplicate_at_gateway` or `overpaid` issue is dismissed with a note saying so.
+  - **An API public-URL setting for the callback URL.** `callback_url` is built with `request.build_absolute_uri`, so it depends on production's `ALLOWED_HOSTS` and `SECURE_PROXY_SSL_HEADER` being right. A dedicated setting (as `tenant_app_url` has for the dashboard) would make it independent of the request that saved the account.
+  - **`apps/fees_finance/services.py` is ~2.8k lines.** The online-payment services were kept in it, as the plan said; moving them to `apps/fees_finance/online_payments.py` (or the ADR-0010 per-resource layout) is a pure move for a later refactor.
+  - **The Fernet ciphertext is not tenant-bound.** Fernet has no associated data; RLS is the boundary. A KMS with an encryption context, behind the same `encrypt`/`decrypt` seam, would close it.
+
 - **Record scope follow-ups left by per-role record scope** (PR A, `fix/per-role-record-scope`;
   [ADR-0031](decisions/0031-record-scope-per-role-assignment.md)). Each scope check now reads
   only the roles that grant its key. These were found on the way and left out:
