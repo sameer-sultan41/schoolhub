@@ -110,7 +110,7 @@ ADR-0021; `docs/deferred-work.md` (the staff-side entry around line 204 and the 
   `Services.leaveRequests.fetchLeaveAttachmentUrl` itself, and the portal imports nothing from the staff
   `leave/` folder.
 - **Staff screen:** `features/attendance/leave/leave-attachment.tsx` takes `requestId`, drops the
-  `platform.file.view` gate and uses the hook. Update `leave-detail-sheet.tsx`, `leave-services-mock.ts`,
+  `platform.file.view` gate and calls the service. Update `leave-detail-sheet.tsx`, `leave-services-mock.ts`,
   `leave-test-support.tsx` and `leave-detail.test.tsx`, and remove `attendance.leave.detail.attachment.onFile`.
 - **Shared portal button:** `features/portal/portal-download-button.tsx`. Receipts and vouchers move onto
   it with unchanged behaviour, and their tests stay green.
@@ -149,7 +149,7 @@ ADR-0021; `docs/deferred-work.md` (the staff-side entry around line 204 and the 
      entries are removed.
   2. The serializer moves to `core/files` with its component name unchanged. The `/files` and
      `/student-documents` downloads are typed with it in the same commit.
-  3. The hook sits at the `features/attendance/` root.
+  3. The portal imports nothing from the staff `leave/` folder (the shared hook was later dropped; see Task 2).
   4. `attendance-approvals.spec.ts` and the leave Jest mocks and tests are in Task 2.
   5. The live check asserts the signed URL serves the uploaded bytes, and keeps the other-family 404.
   6. One `PortalDownloadButton` is extracted for receipts, vouchers and leave.

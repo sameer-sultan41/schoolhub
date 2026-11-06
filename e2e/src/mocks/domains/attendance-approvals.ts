@@ -138,7 +138,8 @@ export function attendanceApprovalsModule(store: AttendanceApprovalsStore): Mock
       return cursorPageOf(ordered(rows, params.get("ordering")), params);
     });
 
-    // The router reads `:download` as a parameter, so the action segment is matched whole.
+    // `compile()` would read `:download` as a parameter, so the whole segment is captured and
+    // checked in `leaveAttachmentDownload`.
     api.post("/leave-requests/:leaveId/:attachmentAction", (request) => {
       if (!holds("attendance.leave-request.view")) return forbidden();
       return leaveAttachmentDownload(

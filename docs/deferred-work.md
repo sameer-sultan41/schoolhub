@@ -1343,7 +1343,8 @@ either this file or `project-status.md`.
   improvise inside one module's PR. The mechanism now exists: a purpose registered with
   `module_gated=True` (`core/files/purposes.py`) is left out of `FileViewSet`'s list and is a
   404 on its retrieve and `:download`, and its module serves its own gated download.
-  `communication.thread-attachment` is the first such purpose (communication PR C);
+  `communication.thread-attachment` is the first such purpose (communication PR C), and
+  `attendance.leave-attachment` the second (`/leave-requests/{id}/attachment:download`);
   `student.document` and the roster exports below can opt in once each has its module-owned
   download for every caller that needs one. The same gap covers whole-roster files: any staff role
   holding `platform.file.view` can also list and download the `student.export`,

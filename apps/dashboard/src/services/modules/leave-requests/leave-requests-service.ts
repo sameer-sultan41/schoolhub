@@ -7,6 +7,7 @@ import { LEAVE_NOTE_FIELD } from "./leave-requests-constant";
 import { toAutoMarkedDays, toLeaveBody, toLeaveQueryParams } from "./leave-requests-helper";
 import type {
   LeaveAction,
+  LeaveAttachmentDownload,
   LeaveCreateInput,
   LeaveDecisionResult,
   LeavePageQuery,
@@ -63,7 +64,7 @@ export async function createLeave(input: LeaveCreateInput): Promise<LeaveRequest
  * (its guardian, its student, an approver in scope). Fetch one per click: it expires. A request
  * out of the caller's scope, or with no ready attachment, is a 404. */
 export async function fetchLeaveAttachmentUrl(id: string): Promise<string> {
-  const { data } = await apiClient.post<{ download_url: string }>(
+  const { data } = await apiClient.post<LeaveAttachmentDownload>(
     endpoints.leaveRequests.attachmentDownload(id),
   );
   return data.download_url;

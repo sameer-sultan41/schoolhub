@@ -22,6 +22,7 @@ from apps.attendance.tests.factories import (
 )
 from apps.attendance.tests.test_leave import next_monday
 from apps.attendance.tests.test_leave_api import LEAVE_REQUESTS, LeaveAPITestCase
+from apps.student_management.models import StudentGuardian
 from core.files.models import FileStatus
 from core.files.tests.factories import FileFactory
 from core.rbac.models import RecordScope
@@ -120,6 +121,27 @@ class LeaveAttachmentDownloadTests(LeaveAPITestCase):
 
     def test_staff_approver_downloads_without_file_view_key(self) -> None:
         response = self.download(self.approver, self.own_request)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+
+    def test_guardian_whose_portal_access_was_revoked_gets_404(self) -> None:
+        with tenant_context(self.tenant.id):
+            StudentGuardian.objects.filter(guardian=self.guardian).update(has_portal_access=False)
+
+        response = self.download(self.guardian_user, self.own_request)
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_campus_scoped_staff_in_campus_downloads(self) -> None:
+        reader = UserFactory(tenant=self.tenant)
+        grant(
+            reader,
+            "attendance.leave-request.view",
+            scope=RecordScope.CAMPUS,
+            scope_ref=self.campus.pk,
+        )
+
+        response = self.download(reader, self.own_request)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
 

@@ -2337,7 +2337,7 @@
       "emptyDescription": "آپ اپنے بچے کے لیے جو درخواستیں جمع کروائیں گے وہ یہاں نظر آئیں گی۔",
       "range": "{from} سے {to} تک",
       "days": "{count, plural, one {# دن} other {# دن}}",
-      "downloadAttachment": "{type} کی دستاویز ڈاؤن لوڈ کریں ({range})",
+      "downloadAttachment": "{type} کی دستاویز ڈاؤن لوڈ کریں ({range}، {status})",
       "attachmentFailed": "دستاویز ڈاؤن لوڈ نہیں ہو سکی۔ دوبارہ کوشش کریں۔",
       "dayPart": {
         "full": "پورا دن",

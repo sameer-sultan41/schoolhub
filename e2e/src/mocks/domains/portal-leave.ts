@@ -90,7 +90,8 @@ export function portalLeaveModule(store: PortalStore): MockModule {
       return ok(row);
     });
 
-    // The router reads `:download` as a parameter, so the action segment is matched whole.
+    // `compile()` would read `:download` as a parameter, so the whole segment is captured and
+    // checked in `leaveAttachmentDownload`.
     api.post("/leave-requests/:requestId/:attachmentAction", (request) =>
       leaveAttachmentDownload(
         store.leaveRequests.find((candidate) => candidate.id === request.params["requestId"]),

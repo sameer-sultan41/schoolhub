@@ -20,6 +20,7 @@ import { useChildLeave } from "./use-child-leave";
  * (the request's own `attachment:download`, so only a reader of the request gets the file). */
 export function LeaveList({ studentId }: { studentId: string }) {
   const t = useTranslations("portal.leave");
+  const tAttendance = useTranslations("attendance");
   const locale = useLocale();
   const query = useChildLeave(studentId);
   const [cancelling, setCancelling] = useState<LeaveRequestRecord | null>(null);
@@ -78,6 +79,8 @@ export function LeaveList({ studentId }: { studentId: string }) {
                       label={t("downloadAttachment", {
                         type: request.leave_type_name,
                         range: datesOf(request),
+                        // A cancelled request and its resubmission can share type and dates.
+                        status: tAttendance(`requestStatus.${request.status}`),
                       })}
                       failedMessage={t("attachmentFailed")}
                       download={async () => {
