@@ -384,8 +384,4 @@ export const endpoints = {
     list: "/receipts",
     download: (id: string) => `/receipts/${id}/download`,
   },
-  /** `/results`: a guardian sees published results only. */
-  results: {
-    list: "/results",
-  },
 } as const;

@@ -315,7 +315,6 @@ export type {
 export type { FeeInvoiceRecord } from "./modules/fee-invoices";
 export type { ReceiptFormat, ReceiptRecord } from "./modules/receipts";
 export type { VoucherFormat, VoucherRecord, VoucherStatus } from "./modules/vouchers";
-export type { ResultRecord } from "./modules/results";
 
 /**
  * Every domain's API calls, aggregated behind one object. A component imports `Services`
