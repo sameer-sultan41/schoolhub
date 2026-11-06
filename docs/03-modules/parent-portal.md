@@ -42,6 +42,9 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 | `exams.result.view` *(scope `own`)* | View published results and report cards only | `guardian`, `student` |
 | `communication.thread.create` / `communication.message.create` *(scope `own`)* | Start/reply to a thread with the school about a linked child | `guardian`, `student` |
 | `communication.notification-preference.update` *(scope `own`)* | Manage own channel preferences | `guardian`, `student` |
+| `communication.notice.view` / `communication.notice.acknowledge` | Read and acknowledge published notices sent to the caller | `guardian`, `student` (and staff) |
+| `platform.notification.view` | Read and mark read the caller's own in-app notifications | every tenant role |
+| `timetable.timetable.view` *(scope `own`)* | A child's (or own) published week via `/timetables/my` | `guardian`, `student` (and staff) |
 
 ## 5. Main Features
 
@@ -154,13 +157,17 @@ Human-approval: none required for read-only Q&A; digest templates are tenant-app
 
 ## 16. API Requirements
 
-Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md). The portal consumes owning modules' endpoints under `own` scope, plus one aggregate:
+Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md). The portal consumes owning modules' endpoints under `own` scope, plus one aggregate. Filter names below are the ones the code accepts. A student id the caller does not own is `404` on every route (Invariant 2).
 
-- `GET /api/v1/parent-portal/dashboard` — per-child summary cards in one call (recommendation; avoids N calls on load).
-- `GET /api/v1/students?scope=own` · `GET /api/v1/students/{id}/guardians` — child list/links.
-- `GET /api/v1/student-attendance?student_id=…&month=…` — filters whitelisted: `student_id`, `date__gte/lte`, `status`.
-- `GET /api/v1/fee-invoices?student_id=…&status=open` · `POST /api/v1/fee-invoices/{id}:initiate-payment` (fees-finance; `Idempotency-Key` required) · `GET /api/v1/receipts/{id}` (PDF).
-- `GET /api/v1/results?student_id=…&status=published` · `GET /api/v1/report-cards/{id}` (PDF).
+- `GET /api/v1/parent-portal/dashboard` — `parent-portal.dashboard.view`, behind `module.parent_portal`. Returns `{as_of, children, unread_notifications, unread_threads, modules}`: `as_of` is the school's local date the summary was built for (a client's "this month" derives from it, never from the viewer's clock); one entry per child the caller owns (`student` plus the `attendance`, `fees` and `latest_result` cards), the caller's unread notification and thread counts, and `modules: {attendance, fees, examinations, communication, timetable}`. See §20 for each card's rule.
+- `GET /api/v1/auth/me` — `is_restricted_principal` tells a client to route the user to the portal ([ADR-0032](../decisions/0032-parent-portal-in-dashboard-route-group.md)).
+- `GET /api/v1/students` · `GET /api/v1/students/{id}` — the caller's own children (or self).
+- `GET /api/v1/student-attendance` — filters `student_id`, `section_id`, `class_id`, `academic_session_id`, `period_id`, `date`, `date__gte`, `date__lte`, `status`, `is_locked`.
+- `GET /api/v1/fee-invoices` — filters `student`, `academic_session_id`, `fee_structure_id`, `status`, `period_label`, `due_date__gte`, `due_date__lte`, `outstanding` (`true`: balance due and not canceled). A guardian or student never sees a draft invoice. `GET /api/v1/receipts` · `GET /api/v1/receipts/{id}/download` (fees-finance). Payment initiation is not built (§20).
+- `GET /api/v1/results` — filters `exam_id`, `student_id`, `section_id`, `status`, `outcome`; a guardian or student sees published results only. `GET /api/v1/report-cards` — filters `exam_id`, `term_id`, `student_id`; published only.
+- `GET /api/v1/timetables/my?student_id=…` — optional `student_id` (also `date`, `academic_session_id`): a guardian names one of their children, a student only themselves; a child they do not own is `404`, and a staff caller passing it is `400`.
+- `GET /api/v1/notices` · `GET /api/v1/notices/{id}` · `POST /api/v1/notices/{id}:acknowledge` — a guardian or student reads only published notices sent to them, in the `PortalNotice` shape (communication.md §16).
+- `GET /api/v1/notifications` (filters `read`, `category`) · `GET /api/v1/notifications/{id}` · `GET /api/v1/notifications:unread-count` · `POST /api/v1/notifications/{id}:mark-read` · `POST /api/v1/notifications:mark-all-read` — the caller's own inbox (communication.md §16).
 - `GET/POST /api/v1/message-threads`, `POST /api/v1/message-threads/{id}/messages` (communication).
 - `GET/PATCH /api/v1/notification-preferences` (communication).
 
@@ -188,3 +195,74 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - Cross-school guardians (children in two tenant schools) are separate accounts per [`multi-tenancy.md`](../02-architecture/multi-tenancy.md) §1; account linking is a future enhancement.
 - Whether guardians may edit emergency contacts directly or only request changes — default **request + staff approval** (recommendation).
 - Portal panels (fees, results, transport, library) individually toggleable per tenant feature flags (recommendation).
+
+## 20. Implementation status
+
+### Built (backend, PR 1)
+
+Plan: [`docs/superpowers/plans/2026-11-04-parent-portal.md`](../superpowers/plans/2026-11-04-parent-portal.md). The dashboard screens are PR 2 ([ADR-0032](../decisions/0032-parent-portal-in-dashboard-route-group.md)), below.
+
+| Area | State |
+| ---- | ----- |
+| App | `apps/api/apps/parent_portal/`: no models, no migration. Key `parent-portal.dashboard.view` (`PORTAL_ROLES`, declared once in `core/rbac/roles.py`), flag `module.parent_portal` (default off) |
+| Which children | `Student.filter_owned_by_user` (an active `student_guardians` link with `has_portal_access`, or the student themself) intersected with `students.student.view` scope. A school owner, who holds every key at scope `all` but owns no child, gets `children: []` |
+| Card rule | A card is `null` unless the caller holds its key (`effective_permission_keys`, cached) and the tenant has its module on (cached): attendance `attendance.student-attendance.view` + `module.attendance`; fees `fees.invoice.view` + `module.fees_finance`; `latest_result` `exams.result.view` + `module.examinations`; `unread_threads` `communication.thread.view` + `module.communication`. `modules.timetable` is `timetable.timetable.view` + `module.timetable` (no card) |
+| Visibility | Each card reads its owning module's own visibility function from that module's `services` (ADR-0013), the same one its list endpoint uses: `attendance.services.visible_attendance` (the `attendance.student-attendance.view` record scope), `fees_finance.services.visible_invoices` and `outstanding_invoices` (no draft or canceled invoice), `examinations.services.visible_results` (published only), `communication.threads.services.access.unread_thread_count`, `core.notifications.services.unread_notification_count` |
+| Attendance card | `{today, month_percentage, month_present_days, month_counted_days}` from `attendance.services.student_month_summary` and `student_day_status` over `visible_attendance(user)`, so the figures are the §13 student summary's own. `month_percentage` is `null` when nothing is counted yet. "Today" is the tenant's local date (`Tenant.local_date()`) |
+| Fees card | `{outstanding_total, outstanding_count, next_due_date}` over outstanding invoices |
+| Results card | `{exam_name, percentage, grade, published_at}`: the newest published result |
+| Queries | A constant number per card, whatever the number of children (`test_query_count_constant_for_one_and_three_children`) |
+| Notices | Guardians and students hold `communication.notice.view`; `list`, `retrieve` and `:acknowledge` are portal-readable and return `PortalNotice` (published notices sent to the caller, with their own `acknowledged_at`). Expired notices are still listed (deferred) |
+| Timetable | `/timetables/my?student_id=` narrows to one owned child |
+| Inbox | `GET /notifications` and its actions (communication.md §20). **Revoked access:** notifications already delivered stay in the guardian's inbox (they are the user's own mail; a notification has no student column to filter on), while new ones stop, because every fan-out resolves the current links |
+| Routing flag | `/auth/me` and the login response carry `is_restricted_principal` |
+| Accounts | Only seeded guardians and students can log in until account onboarding ships ([`deferred-work.md`](../deferred-work.md)) |
+| Tests | `parent_portal/tests/test_dashboard.py`, `test_cross_tenant.py`; `communication/notices/tests/test_portal.py`; `timetable/slots/tests/test_endpoints.py` (`MyTimetableTests`); `core/rbac/tests/test_me.py`; `core/notifications/tests/test_inbox.py` |
+| Live lane | `e2e/tests/live/api/parent-portal.spec.ts` on `seed_e2e_data`'s comms fixture and the portal fixtures it runs (`parent_portal/management/commands/seed_e2e_portal.py`: attendance, an issued invoice, a result taken through marks entry, lock, processing, a second person's approval and publication, and a notice): the summary matches the seed and each module's own reads, an unlinked child is `404`, a staff reply reaches the inbox, a notice is listed and acknowledged, and the other tenant sees none of it |
+| Uploads | `platform.file.create` also goes to `PORTAL_ROLES`. A guardian or student may request a slot only for a purpose with `portal_uploadable` (`attendance.leave-attachment`, `communication.thread-attachment`; any other is `422` on `purpose`), may confirm only a file they created (`404` otherwise), and may attach only a file they uploaded: a leave request's `attachment_file_id` or a thread message's `attachments` is `422` on that field if the file is another user's. Staff callers keep their current behaviour. A guardian cannot re-download the leave attachment they uploaded (see [`deferred-work.md`](../deferred-work.md)). Tests: `core/files/tests/test_portal_uploads.py`, `attendance/tests/test_leave_portal.py`, `communication/threads/tests/test_thread_attachment_ownership.py` |
+| Deferred | Pay now, account onboarding, the AI features, §13's guardian PDF summaries and the other entries in [`deferred-work.md`](../deferred-work.md)'s parent-portal section |
+
+### Built (dashboard, PR 2)
+
+The `(portal)` route group in `apps/dashboard` ([ADR-0032](../decisions/0032-parent-portal-in-dashboard-route-group.md)); screens are client components under `apps/dashboard/src/features/portal/`, and each route page is a thin server component.
+
+| Area | State |
+| ---- | ----- |
+| Routes | `src/app/(portal)/portal/`: `/portal` (a card per child), `/portal/[studentId]` (one child's overview), `/portal/[studentId]/attendance`, `/fees`, `/fees/[invoiceId]`, `/results`, `/timetable`, and the child-free `/portal/messages`, `/portal/notices`, `/portal/notices/[noticeId]`, `/portal/notifications` and `/portal/settings` |
+| Redirect rule | `/auth/me`'s `is_restricted_principal` decides the shell. `AudienceGate` (`src/components/audience-gate.tsx`) renders nothing until `/auth/me` resolves, then `router.replace`s a student or guardian on a staff page to `/portal` and a staff user on a portal page to `/dashboard` (`homePathFor`, `src/lib/home-path.ts`); on a `/auth/me` error it shows the shell rather than a blank page. The token is in memory, so the proxy cannot decide this. It is routing, not authorisation: every call is still the owning module's endpoint with its own key and scope |
+| Tabs | Only from `summary.modules` (`portal-nav-items.ts`): Attendance, Fees, Results and Timetable per child; Messages and Notices with `communication`. Notifications and Settings are always shown (the inbox has no module flag). A card the server sent as `null` is left out of the home, not blanked |
+| Child switcher | The child is the `[studentId]` URL segment, so a refresh keeps it. The switcher (`child-switcher.tsx`) is shown for two or more children and keeps the section when it moves between children (`switchChildPath`). A segment that is not one of the viewer's children says "Child not found" and its pages' own requests answer 404 |
+| Attendance | A month on the `packages/ui` `Calendar` plus a day-by-day table (colour is never the only signal). "This month" is the month of `summary.as_of`, the school's local date from the server; the viewer's clock is never read. The percentage is the summary card's `month_percentage`, shown for the current month only; no percentage is computed in the client |
+| Fees | Read-only: outstanding and paid invoices, an invoice page with lines and server-computed totals, and no Pay button. A receipt downloads through `Services.receipts.downloadReceipt`, which is `ApiClient.downloadBlob` (bearer header, the usual 401 refresh) and `saveBlob`, because a bare anchor would send no `Authorization` header. Receipts are fetched tenant-wide (capped) and matched to invoices by `invoice_no` |
+| Results | The API's published results, newest first, grouped under `term_name`. This PR added `exam_name` and `term_name` to `ResultSerializer` and `as_of` to the summary for it |
+| Messages | The staff inbox's `ThreadPanes` reused with `canTransition={false}` (no close or reopen); the new-conversation form has no type or recipient picker, and its Student field lists only the summary's children |
+| Notices | The `PortalNotice` list and detail, with Acknowledge only while `requires_acknowledgment` and not yet acknowledged; the body renders as text, never HTML |
+| Inbox and settings | Opening a notification marks it read once (retried after a failure); Mark all read sends the newest on-screen `created_at` as `before`; the shell's unread badge reads `:unread-count`. Settings is the category x channel matrix; only the emergency row is locked, on every channel, as on the server |
+| Sign-out | `useSignOut` clears the TanStack Query cache before `/login`, and a login removes the cached `/auth/me`, so the next user never lands on the previous user's cached account |
+| Tests | Jest beside each screen under `features/portal/**/__tests__` and the service tests; the shell and routing in `components/__tests__/audience-gate.test.tsx`; mocked `dashboard`-project journeys `e2e/tests/dashboard/portal-home.spec.ts` (two children, the switcher, a module that is off, a guardian on a staff page and staff on `/portal`), `portal-child-pages.spec.ts` (attendance month and percentage, fees and a receipt download, results by term) and `portal-communication.spec.ts` (acknowledge a notice, mark an inbox row and all read, the preference matrix). The stub is `e2e/src/mocks/domains/portal.ts` (shapes from the generated schema); what a guardian may see stays the Django suite's and the live lane's job |
+| Deferred | The report-card download button, the receipt `format` parameter in the OpenAPI contract, a native-speaker Urdu review, the mark-all-read scope on later pages, the attendance legend swatch and a student filter on `/receipts` (see [`deferred-work.md`](../deferred-work.md)) |
+
+### Built (dashboard, PR B)
+
+Guardian uploads, leave, vouchers and change password, on PR 2's shell (the dashboard half; the upload and ownership rules are PR B's backend task above, "Uploads").
+
+| Area | State |
+| ---- | ----- |
+| Leave | `/portal/{studentId}/leave` and a "Leave" tab behind the attendance flag: list, New request dialog and Cancel on a pending request ([`attendance.md`](attendance.md) §20). Hidden New request without `attendance.leave-request.create` |
+| Vouchers | The fees page offers each outstanding invoice its issued slips as a PDF download, or "Ask the school office for a voucher." ([`fees-finance.md`](fees-finance.md) §20). A vouchers load failure is said as such, never as "none" |
+| Message attachments | The portal composer and new-conversation form upload files ([`communication.md`](communication.md) §20) |
+| Change password | `/portal/settings` gains a Change password form (`POST /auth/change-password`: `current_password`, `new_password`; 204). The confirmation field is browser-only; a wrong current password or a password the server's validators refuse shows under its field; the form clears on success. The settings page composes it beside the preference matrix, so a preferences load error never hides it |
+| Upload client | One client: `Services.files.uploadFile` (the three steps), used by the shared `components/attachment-uploader.tsx` (upload on pick, a chip per file with remove, the server's own refusal text, a stable `onUploadingChange` that holds the host's submit) |
+| Tests | Jest beside each screen (`features/portal/{leave,fees,preferences,messages}/__tests__`) and the service tests; mocked `e2e/tests/dashboard/portal-leave-vouchers.spec.ts`; live `e2e/tests/live/api/portal-leave.spec.ts` |
+| Deferred | Guardian re-download of a leave attachment, cancelling an approved request, editing a request, `issued`-only vouchers, session revocation on password change ([`deferred-work.md`](../deferred-work.md)) |
+
+### Built (admit cards, PR C)
+
+§5's "admit-card download during exam windows", on PR 2's Results page.
+
+| Area | State |
+| ---- | ----- |
+| Screen | `/portal/{studentId}/results` lists the child's issued cards for exams not yet over above the results (`features/portal/results/portal-admit-cards.tsx`): exam name, dates, card number and a Download button; "No admit cards" when there are none; its own load error, so a failure never hides the results |
+| API | `GET /admit-cards?student_id=…&status=issued&current=true` (`current`: the exam is undated or ends on or after the school's today) and `POST /admit-cards/{id}:download`, which returns a short-lived signed link saved with `downloadFile`. The card now carries `exam_name`, `exam_starts_on` and `exam_ends_on` ([`examinations.md`](examinations.md) §16, §20) |
+| Access | Already in place: `exams.admit-card.view` names `student` and `guardian`, `download` is portal-readable, and the record scope keeps a guardian to their own children (another child's card is a 404). `test_guardian_admit_card_download_own_only` proves it with the guardian role's real keys |
+| Tests | `examinations/tests/test_admit_cards.py`; Jest `features/portal/results/__tests__/portal-admit-cards.test.tsx` and the admit-cards service test; mocked `e2e/tests/dashboard/portal-child-pages.spec.ts` (download and the empty state) |

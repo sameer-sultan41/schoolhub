@@ -627,6 +627,53 @@ class AdmitCardNamesTests(AdmitCardTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
         return {row["student_id"]: row for row in response.json()["data"]}
 
+    def test_a_card_carries_its_exam_s_name_and_dates(self) -> None:
+        row = self.listed()[str(self.students[0].pk)]
+
+        self.assertEqual(row["exam_name"], self.exam.name)
+        self.assertEqual(row["exam_starts_on"], self.exam.starts_on.isoformat())
+        self.assertEqual(row["exam_ends_on"], self.exam.ends_on.isoformat())
+
+    def test_current_keeps_undated_and_unfinished_exams_and_drops_ended_ones(self) -> None:
+        """`?current=true` compares with the school's today; an exam that ended
+        yesterday drops out, one ending today stays."""
+        import datetime
+
+        today = self.tenant.local_date()
+        with tenant_context(self.tenant.id):
+            ended = ExamFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                grading_scale=self.scale,
+                status=ExamStatus.SCHEDULED,
+                starts_on=today - datetime.timedelta(days=5),
+                ends_on=today - datetime.timedelta(days=1),
+            )
+            ending_today = ExamFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                grading_scale=self.scale,
+                status=ExamStatus.SCHEDULED,
+                starts_on=today - datetime.timedelta(days=2),
+                ends_on=today,
+            )
+            undated = ExamFactory(
+                tenant=self.tenant, academic_session=self.session, grading_scale=self.scale
+            )
+            student = self.students[0]
+            cards = {
+                exam.pk: AdmitCardFactory(tenant=self.tenant, exam=exam, student=student).pk
+                for exam in (ended, ending_today, undated)
+            }
+
+        response = self.client.get(ADMIT_CARDS, {"current": "true", "student_id": student.pk})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        ids = {row["id"] for row in response.json()["data"]}
+        self.assertNotIn(str(cards[ended.pk]), ids)
+        self.assertIn(str(cards[ending_today.pk]), ids)
+        self.assertIn(str(cards[undated.pk]), ids)
+
     def test_a_card_carries_the_student_s_name_admission_number_and_section(self) -> None:
         student = self.students[0]
 
@@ -883,6 +930,52 @@ class AdmitCardDownloadTests(AdmitCardTestCase):
         response = self.download(self.theirs, self.guardian_client())
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_guardian_admit_card_download_own_only(self) -> None:
+        """The guardian role's real keys (L44), not a hand-picked one: the portal lists and
+        downloads its own child's card, and another child's is a 404 on both routes."""
+        from rest_framework.test import APIClient
+
+        from apps.examinations.tests.factories import (
+            GuardianFactory,
+            StudentGuardianFactory,
+            UserFactory,
+            authenticate,
+            grant,
+        )
+        from core.rbac.models import RecordScope
+        from core.rbac.registry import registry
+
+        guardian_user = UserFactory(tenant=self.tenant)
+        with tenant_context(self.tenant.id):
+            guardian = GuardianFactory(tenant=self.tenant, user_id=guardian_user.pk)
+            StudentGuardianFactory(
+                tenant=self.tenant,
+                student=self.students[0],
+                guardian=guardian,
+                has_portal_access=True,
+            )
+            # Rendered, as the job leaves them.
+            AdmitCard.objects.filter(pk__in=[self.mine.pk, self.theirs.pk]).update(
+                status=AdmitCardStatus.ISSUED
+            )
+        grant(
+            guardian_user,
+            *registry.keys_for_role("guardian"),
+            scope=RecordScope.OWN,
+            is_restricted_principal=True,
+        )
+        client = APIClient()
+        authenticate(client, guardian_user)
+
+        listed = client.get(ADMIT_CARDS, {"current": "true", "status": "issued"})
+        self.assertEqual(listed.status_code, status.HTTP_200_OK, listed.json())
+        self.assertEqual([row["id"] for row in listed.json()["data"]], [str(self.mine.pk)])
+        own = self.download(self.mine, client)
+        self.assertEqual(own.status_code, status.HTTP_200_OK, own.json())
+        self.assertTrue(own.json()["data"]["download_url"])
+        self.assertEqual(self.download(self.theirs, client).status_code, 404)
+        self.assertEqual(client.get(f"{ADMIT_CARDS}/{self.theirs.pk}").status_code, 404)
 
     def test_a_download_costs_a_fixed_number_of_queries(self) -> None:
         """One card with its file joined; no enrollment `Prefetch`, which the

@@ -155,6 +155,7 @@ class NoticeEndpointTests(CommunicationAPITestCase):
             guardian = UserFactory(tenant=self.tenant)
             grant(
                 guardian,
+                "communication.notice.view",
                 "communication.notice.acknowledge",
                 scope=RecordScope.OWN,
                 is_restricted_principal=True,
@@ -182,6 +183,7 @@ class NoticeEndpointTests(CommunicationAPITestCase):
             guardian = UserFactory(tenant=self.tenant)
             grant(
                 guardian,
+                "communication.notice.view",
                 "communication.notice.acknowledge",
                 scope=RecordScope.OWN,
                 is_restricted_principal=True,

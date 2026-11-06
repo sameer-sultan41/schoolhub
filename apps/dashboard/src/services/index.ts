@@ -1,4 +1,12 @@
 import { AdmitCardsService } from "./modules/admit-cards";
+import { FeeInvoicesService } from "./modules/fee-invoices";
+import { NoticesService } from "./modules/notices";
+import { NotificationPreferencesService } from "./modules/notification-preferences";
+import { NotificationsService } from "./modules/notifications";
+import { ParentPortalService } from "./modules/parent-portal";
+import { ReceiptsService } from "./modules/receipts";
+import { VouchersService } from "./modules/vouchers";
+import { ResultsService } from "./modules/results";
 import { AttendanceCorrectionsService } from "./modules/attendance-corrections";
 import { AttendanceReportsService } from "./modules/attendance-reports";
 import { AttendanceSettingsService } from "./modules/attendance-settings";
@@ -181,6 +189,7 @@ export type {
   LeaveAction,
   LeaveApprovalDecision,
   LeaveApprovalRecord,
+  LeaveCreateInput,
   LeaveDayPart,
   LeaveDecisionResult,
   LeavePageQuery,
@@ -283,6 +292,31 @@ export type {
   UpdateGuardianLinkInput,
 } from "./modules/guardians";
 
+export type {
+  PortalChild,
+  PortalDashboard,
+  PortalModuleKey,
+  PortalModules,
+  PortalStudent,
+} from "./modules/parent-portal";
+
+export type {
+  NotificationCategory,
+  NotificationPriority,
+  NotificationRecord,
+  NotificationsQuery,
+} from "./modules/notifications";
+
+export type { NoticeRead, NoticeType, PortalNoticeRecord } from "./modules/notices";
+export type {
+  NotificationChannel,
+  NotificationPreferenceRow,
+} from "./modules/notification-preferences";
+export type { FeeInvoiceRecord } from "./modules/fee-invoices";
+export type { ReceiptFormat, ReceiptRecord } from "./modules/receipts";
+export type { VoucherFormat, VoucherRecord, VoucherStatus } from "./modules/vouchers";
+export type { ResultRecord } from "./modules/results";
+
 /**
  * Every domain's API calls, aggregated behind one object. A component imports `Services`
  * and calls `Services.<domain>.<action>(...)` — never `apiClient` and never a service
@@ -329,4 +363,12 @@ export const Services = {
   messageThreads: MessageThreadsService,
   threadOversight: ThreadOversightService,
   broadcasts: BroadcastsService,
+  parentPortal: ParentPortalService,
+  notifications: NotificationsService,
+  notificationPreferences: NotificationPreferencesService,
+  notices: NoticesService,
+  feeInvoices: FeeInvoicesService,
+  receipts: ReceiptsService,
+  vouchers: VouchersService,
+  results: ResultsService,
 } as const;

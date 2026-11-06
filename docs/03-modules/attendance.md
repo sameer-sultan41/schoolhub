@@ -453,3 +453,16 @@ rather than worked around, because the workaround would be a key nobody declared
   requester rule §11 does not have: the user chose review-only leave in the dashboard
   (2026-10-24), and submission waits for parent-portal. The
   dashboard home has no attendance widget yet. Both are in `docs/deferred-work.md`.
+
+### Built (parent portal PR B)
+
+A guardian submits and withdraws student leave from the dashboard's portal
+([`parent-portal.md`](parent-portal.md) §20), which closes the "staff-on-behalf leave submission and
+the portal screen" note above for the portal half.
+
+| Area | State |
+| ---- | ----- |
+| Screen | `/portal/{studentId}/leave` (a tab under the attendance flag): the child's requests newest first (`GET /leave-requests?student_id=`), a New request dialog and Cancel on a pending one (`POST /leave-requests/{id}:cancel`, keyed `attendance.leave-request.create`) |
+| Form | A type from `GET /leave-types` (active and not staff-only), dates, day part (a half day only on one date, mirroring `leave_days_between`), a reason (500 characters), and an attachment when the chosen type has `requires_attachment`. The file is uploaded first (`attendance.leave-attachment`, the portal-uploadable purpose) and sent as `attachment_file_id`; a 422 shows under the field it names (`student_id` folds into the form message: the child is fixed by the page) |
+| Attachment | Not downloadable by a guardian (`deferred-work.md`): the list says "Attachment submitted" |
+| Tests | Jest `features/portal/leave/__tests__/portal-leave.test.tsx`; mocked `e2e/tests/dashboard/portal-leave-vouchers.spec.ts`; live `e2e/tests/live/api/portal-leave.spec.ts` (real upload, submit, cancel; another family's request is a 404, their child a 422 on `student_id`, their file a 422 on `attachment_file_id`) |

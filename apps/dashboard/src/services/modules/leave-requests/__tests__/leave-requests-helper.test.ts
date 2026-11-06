@@ -37,6 +37,7 @@ describe("toLeaveQueryParams", () => {
         ordering: "-created_at",
         status: "pending",
         leaveTypeId: SICK_TYPE_ID,
+        studentId: "s1",
         dateFrom: "2026-10-01",
         dateTo: "2026-10-31",
       }),
@@ -46,6 +47,7 @@ describe("toLeaveQueryParams", () => {
       ordering: "-created_at",
       status: "pending",
       leave_type_id: SICK_TYPE_ID,
+      student_id: "s1",
       date__gte: "2026-10-01",
       date__lte: "2026-10-31",
     });

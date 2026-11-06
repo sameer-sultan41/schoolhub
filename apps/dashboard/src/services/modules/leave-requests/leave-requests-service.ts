@@ -4,9 +4,10 @@ import { apiClient } from "@/lib/auth";
 import { fetchApprovalPage, postApprovalDecision } from "@/services/approval-queue";
 import { endpoints } from "@/services/endpoints";
 import { LEAVE_NOTE_FIELD } from "./leave-requests-constant";
-import { toAutoMarkedDays, toLeaveQueryParams } from "./leave-requests-helper";
+import { toAutoMarkedDays, toLeaveBody, toLeaveQueryParams } from "./leave-requests-helper";
 import type {
   LeaveAction,
+  LeaveCreateInput,
   LeaveDecisionResult,
   LeavePageQuery,
   LeaveRequestRecord,
@@ -46,4 +47,20 @@ export async function decideLeave(
     note,
   );
   return { request: data, autoMarkedDays: toAutoMarkedDays(meta) };
+}
+
+/** A guardian's (or student's) submission. An unowned student or a file someone else uploaded
+ * is a 422 on `student_id` or `attachment_file_id`. */
+export async function createLeave(input: LeaveCreateInput): Promise<LeaveRequestRecord> {
+  const { data } = await apiClient.post<LeaveRequestRecord>(
+    endpoints.leaveRequests.list,
+    toLeaveBody(input),
+  );
+  return data;
+}
+
+/** Withdraws the caller's own request before it starts. */
+export async function cancelLeave(id: string): Promise<LeaveRequestRecord> {
+  const { data } = await apiClient.post<LeaveRequestRecord>(endpoints.leaveRequests.cancel(id));
+  return data;
 }

@@ -18,12 +18,14 @@ import {
   threadRecord,
 } from "@/test-fixtures/communication";
 import { pick, urlParam } from "@/test-fixtures/list-screen";
+import { buildUser } from "@/test-utils";
 
 import {
   CLOSE_THREAD,
   closeThread,
   CREATE_MESSAGE,
   downloadAttachment,
+  fetchCurrentUser,
   fetchThread,
   listMessages,
   listThreads,
@@ -364,10 +366,22 @@ describe("MessagesScreen", () => {
 
   it("offers the internal-note flag only to a staff poster", async () => {
     stubInbox([VIEW, CREATE_MESSAGE]);
+    fetchCurrentUser.mockResolvedValue({
+      ...buildUser([VIEW, CREATE_MESSAGE]),
+      is_restricted_principal: true,
+    });
     await renderMessages();
 
     expect(await screen.findByLabelText("Reply")).toBeInTheDocument();
     expect(screen.queryByRole("checkbox", { name: "Internal note" })).not.toBeInTheDocument();
+  });
+
+  it("offers the internal-note flag to staff without the close key", async () => {
+    // The gate is the restricted-principal flag, not CLOSE_THREAD: any staff poster may note.
+    stubInbox([VIEW, CREATE_MESSAGE]);
+    await renderMessages();
+
+    expect(await screen.findByRole("checkbox", { name: "Internal note" })).toBeInTheDocument();
   });
 
   it("posts internal note flag", async () => {

@@ -20,6 +20,9 @@ export function admitCardRecord(overrides: Partial<AdmitCardRecord> = {}): Admit
   return {
     id: CARD_ID,
     exam_id: EXAM_ID,
+    exam_name: "Mid-term",
+    exam_starts_on: "2026-10-12",
+    exam_ends_on: "2026-10-16",
     student_id: STUDENT_ID,
     student_name: "Ali Raza",
     admission_number: "ADM-001",
