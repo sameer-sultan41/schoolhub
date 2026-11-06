@@ -32,12 +32,18 @@ class UploadPurposeSpec:
 
     ``mime_types`` is a frozenset so a spec stays hashable and cannot be mutated
     by a caller that got hold of it through ``registry.get()``.
+
+    ``module_gated`` takes the purpose's files out of the generic ``GET /files``
+    list and ``:download``: the owning module serves them through its own
+    record-gated endpoint instead, because ``platform.file.view`` (every staff
+    role) says nothing about who may read, say, a private conversation's files.
     """
 
     key: str
     description: str
     mime_types: frozenset[str]
     max_size_bytes: int
+    module_gated: bool = False
 
 
 class UploadPurposeRegistry:
@@ -51,6 +57,7 @@ class UploadPurposeRegistry:
         *,
         mime_types: set[str] | frozenset[str],
         max_size_bytes: int,
+        module_gated: bool = False,
     ) -> UploadPurposeSpec:
         """Declare a purpose. Returns the spec so the caller can hold the symbol.
 
@@ -72,6 +79,7 @@ class UploadPurposeRegistry:
             description=description,
             mime_types=frozenset(mime_types),
             max_size_bytes=max_size_bytes,
+            module_gated=module_gated,
         )
         self._specs[key] = spec
         return spec
@@ -84,6 +92,10 @@ class UploadPurposeRegistry:
 
     def keys(self) -> set[str]:
         return set(self._specs)
+
+    def module_gated_keys(self) -> frozenset[str]:
+        """Purposes whose files only their owning module may list or sign a download for."""
+        return frozenset(key for key, spec in self._specs.items() if spec.module_gated)
 
     def __contains__(self, key: str) -> bool:
         return key in self._specs

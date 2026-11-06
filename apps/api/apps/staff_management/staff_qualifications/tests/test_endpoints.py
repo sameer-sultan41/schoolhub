@@ -26,6 +26,9 @@ class StaffManagementAPITestCase(_BaseAPITestCase):
         super().setUp()
         with tenant_context(self.tenant.id):
             self.staff = StaffFactory(tenant=self.tenant, campus=self.campus)
+        # The nested route resolves its parent under `/staff`' own key as well as its
+        # own (`_NestedUnderStaffMixin.get_staff`).
+        self.allow("staff.staff.view")
 
 
 class QualificationTests(StaffManagementAPITestCase):
@@ -70,7 +73,9 @@ class QualificationTests(StaffManagementAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.json())
 
     def test_verify_a_qualification(self) -> None:
-        self.allow("staff.qualification.create", "staff.qualification.verify")
+        self.allow(
+            "staff.qualification.create", "staff.qualification.view", "staff.qualification.verify"
+        )
         create_response = self.client.post(
             f"/api/v1/staff/{self.staff.pk}/qualifications",
             {"qualification_type": "degree", "title": "B.Ed"},
@@ -89,7 +94,9 @@ class QualificationTests(StaffManagementAPITestCase):
         self.assertEqual(verify_response.json()["data"]["verified_by"], str(self.user.pk))
 
     def test_verifying_a_qualification_twice_is_a_conflict(self) -> None:
-        self.allow("staff.qualification.create", "staff.qualification.verify")
+        self.allow(
+            "staff.qualification.create", "staff.qualification.view", "staff.qualification.verify"
+        )
         create_response = self.client.post(
             f"/api/v1/staff/{self.staff.pk}/qualifications",
             {"qualification_type": "degree", "title": "B.Ed"},

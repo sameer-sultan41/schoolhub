@@ -171,6 +171,7 @@ AI-generated questions never enter a bank without explicit approval (`exams.ques
 - Unique: exam name per session; one `exam_subjects` row per (exam, class, subject); one marks row per (exam_subject, student); one result per (exam, student).
 - Marks: `0 ≤ obtained ≤ max_marks` per component; pass marks ≤ max marks; entries rejected outside the entry window unless unlocked; absent flag and marks are mutually exclusive.
 - Marks entry is per section: a submit names one `section_id` of the exam-subject's class and may only carry students on that section's active roll in the exam's session (any other is a `meta.rows` issue). An `assigned` caller may write a section only when they hold a current allocation for that section and subject in the exam's session, or are its class teacher in that session; anything else is a 422 on `section_id`. The import applies the same rule per row.
+- Marks entry scope: every student in a `:bulk-entry` grid must be within the caller's `exams.marks.create` record scope — `campus` reaches the held campuses' students, `assigned` the students enrolled in a section the caller is currently allocated the subject in (`academics.TeacherSubjectAllocation`). A student outside it is a rejected row, reported as an ineligible one is, and nothing is saved. A marks import matches rows only against the students the importer's `exams.marks.import` scope reaches (the key travels in the job as `scope_permission`); any other admission number is reported as an unknown one is.
 - Scheduling: no student may have two papers at overlapping times; room and invigilator single-booked; exam dates within the session/term.
 - Processing: blocked while any assigned exam-subject has unsubmitted marks (override with an audited waiver — recommendation); grading bands must be contiguous, non-overlapping, and fully cover 0–100%.
 - Publishing: only approved results; report cards only from published results; approver ≠ processor.
@@ -265,6 +266,11 @@ List and read shapes the dashboard depends on:
   saving a sitting or computing clashes itself. Staff-only (`exams.schedule.view`). Its exam, like
   `:publish-schedule`'s and `:issue-admit-cards`', resolves through `ExamViewSet`'s record scope, so an exam
   outside an `assigned` caller's teaching is a 404.
+- **A colon action reaches its exam under two keys** (ADR-0031 decision 3). The exam is scoped by the hosting
+  view's read key (`exams.schedule.view` for the clash list and `:publish-schedule`, `exams.admit-card.view`
+  for `:issue-admit-cards`, …), then by the route's own key, each with `ExamViewSet`'s scope settings. A wide
+  action role cannot reach an exam the caller's view role hides, and a schedule reader without
+  `exams.exam.view` keeps the clash list.
 - **The publish is typed.** `:publish-schedule` answers `{status, conflicts}` (`ExamSchedulePublish`): the
   exam's new status, `scheduled`, and the soft findings that did not block it. A hard finding is a 422
   `domain_rule_violation` carrying the **whole** list in `error.meta.conflicts` (never flattened into
@@ -381,7 +387,7 @@ assembly. **The module is complete.**
 | §11 processing | Blocked while any exam-subject has marks outstanding, measured against the **expected roll** rather than rows that happen to exist. Recompute is idempotent and refused once approved |
 | §5.6 approval | Per-row `status` and per-exam status both move. **The approver cannot be the processor** — compared against `results.created_by`, which processing stamps. Publishing releases approved, non-withheld rows only; withholding is a per-student `outcome` |
 | §5.7 report cards | Versioned on regeneration, remarks preserved, stale file cleared. Attendance is a JSONB **snapshot** from `attendance.reports.student_summary` — one query for the whole cohort |
-| §11 marks | One row per (exam-subject, student) · nothing negative and absent-excludes-a-mark at the **database**; `0 ≤ mark ≤ max_marks` in `services`, because a CHECK cannot read `exam_subjects.max_marks` · absent and exempt are mutually exclusive · a practical mark on a theory-only subject is refused · only students on the submitted section's active roll in the exam's session, in a section of the exam-subject's class |
+| §11 marks | One row per (exam-subject, student) · nothing negative and absent-excludes-a-mark at the **database**; `0 ≤ mark ≤ max_marks` in `services`, because a CHECK cannot read `exam_subjects.max_marks` · absent and exempt are mutually exclusive · a practical mark on a theory-only subject is refused · only students on the submitted section's active roll in the exam's session, in a section of the exam-subject's class, and within the marker's `exams.marks.create` scope (a `:bulk-entry` grid) or the importer's `exams.marks.import` scope (a marks import) |
 | §5.4 lifecycle | `draft → submitted → locked` on the row, plus `exam_subjects.marks_locked_at` on the *window*. Four gates on every write, each with its own message because each has a different remedy: the exam's status (§7.1), the entry window (§6), the subject lock, and the teacher's allocation (§4). An **unset** window means always open |
 | §6 dashboard | `GET /exams/{id}/marks-progress` — expected / entered / submitted per (exam-subject, section), narrowed by `services.may_enter_marks` for a caller without `all` scope, in a bounded number of queries whatever the size of the exam. The marks-entry reminder goes per section to that section's allocated subject teachers |
 | §11 scheduling | One sitting per (exam-subject, section) · `end_time > start_time` · a section must belong to the exam-subject's class · a completed or cancelled sitting cannot be rescheduled · admit cards need a published schedule · a revocation needs a reason (CHECK, not only a service rule) |

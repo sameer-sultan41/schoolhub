@@ -10,7 +10,12 @@ from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
 from core.files import services
 from core.files.models import File
+from core.files.purposes import registry as upload_purposes
 from core.files.serializers import FileCreateSerializer, FileSerializer
+
+# The uploader confirms their own upload through this viewset, module-gated or not;
+# every other read here is generic and must not reach a module-gated file.
+MODULE_GATED_ACTIONS_ALLOWED = frozenset({"confirm"})
 
 
 class FileViewSet(
@@ -61,7 +66,14 @@ class FileViewSet(
         # raises FieldError the moment a campus-scoped user (school_admin/principal/
         # teacher) hits list/retrieve/confirm/download. Access control here is tenant
         # RLS + the platform.file.* permission, not record-scope narrowing.
-        return File.objects.alive()
+        #
+        # A module-gated purpose (core/files/purposes.py) is the exception: its files are
+        # listed and signed only by the owning module's record-gated endpoint, so here they
+        # are absent from the list and a 404 on retrieve and :download.
+        queryset = File.objects.alive()
+        if self.action in MODULE_GATED_ACTIONS_ALLOWED:
+            return queryset
+        return queryset.exclude(purpose__in=upload_purposes.module_gated_keys())
 
     @extend_schema(
         summary="Request a presigned upload slot",

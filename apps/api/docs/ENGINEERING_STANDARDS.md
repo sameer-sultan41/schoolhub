@@ -75,7 +75,7 @@ Full strategy: `docs/07-quality/testing-strategy.md`.
 - RBAC matrix tests assert each permission key grants exactly what it should.
 - Money tests assert ledger balance invariants.
 - Coverage floor 85% overall (`fail_under` in `pyproject.toml`), plus per-package floors in `api.yml` set at their measured levels on 2026-09-26 — `core/tenancy` 90%, `apps/fees_finance` 85%, `core/rbac` 80% (the two local seed commands excluded). All are ratchets: raise them as coverage rises, never lower them.
-- Architectural contract tests in `tests/` walk the code, so they can't be forgotten: RLS coverage, append-only grants, endpoint permission keys (including inline `has_permission_key()` literals), cross-app import boundaries (ADR-0013), and `.env.example` drift.
+- Architectural contract tests in `tests/` walk the code, so they can't be forgotten: RLS coverage, append-only grants, endpoint permission keys (including keys checked inline through `holds_key_for()`), cross-app import boundaries (ADR-0013), and `.env.example` drift.
 
 **Tests are not run locally.** Push and let CI report — CI is the source of truth for pass/fail.
 

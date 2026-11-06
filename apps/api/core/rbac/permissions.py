@@ -2,67 +2,104 @@
 
 from __future__ import annotations
 
+import uuid
+from collections.abc import Callable, Mapping
+from typing import Any, TypedDict
+
+from django.contrib.auth.models import AbstractBaseUser, AnonymousUser
 from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured
-from django.db.models import Q
-from rest_framework import permissions
+from django.db import models
+from django.db.models import Exists, OuterRef, Q, QuerySet
+from rest_framework import exceptions, permissions
+from rest_framework.request import Request
 
-from core.rbac.models import RecordScope
+from core.rbac.cache import scope_grants_cache_key
+from core.rbac.models import RecordScope, UserRole
 
 _CACHE_TTL = 300
 
+type RbacUser = AbstractBaseUser | AnonymousUser | None
+# permission key -> scope type -> the scope refs of the live assignments granting that key.
+type ScopeGrants = Mapping[str, Mapping[str, tuple[uuid.UUID | None, ...]]]
 
-def effective_permission_keys(user) -> frozenset[str]:
-    """Union of permission keys across all of the user's roles.
 
-    Cached per user; invalidated by role/permission mutations (see signals.py).
+class ScopeKwargs(TypedDict):
+    """A table's record-scope settings, as `scope_queryset` and `holds_key_for` take them.
+
+    `TenantScopedViewSetMixin.scope_kwargs()` builds one from a viewset's `scope_*`
+    attributes, so a check on a row reads it exactly as that row's viewset does.
     """
-    if not user or not user.is_authenticated:
-        return frozenset()
 
-    cache_key = f"perm-keys:{user.pk}"
-    cached = cache.get(cache_key)
-    if cached is not None:
-        return cached
-
-    keys = frozenset(
-        user.user_roles.filter(deleted_at__isnull=True)
-        .values_list("role__permissions__key", flat=True)
-        .exclude(role__permissions__key=None)
-    )
-    cache.set(cache_key, keys, _CACHE_TTL)
-    return keys
+    own_field: str | None
+    campus_field: str | None
+    campus_allows_null: bool
 
 
-def user_scopes(user) -> dict[str, list]:
-    """Record scopes granted to the user, keyed by scope type.
+def scope_grants(user: RbacUser) -> ScopeGrants:
+    """Each permission key the user holds, mapped to the scopes of the roles that grant it.
 
-    Cached per user, mirroring effective_permission_keys above — a serializer
-    calling this once per row in a list response (see
-    student_management/serializers.py's _can_see_medical_notes) would otherwise
-    issue one fresh query per row for the identical requesting user.
-    core/rbac/signals.py's _evict already runs on every UserRole change (the
-    only source of scope/scope_ref), so it evicts this cache key too.
+    auth-and-rbac.md §2.3 attaches a record scope to a `user_role`, so a scope narrows
+    only the keys *its* role grants. Keeping the key next to its scopes is what lets
+    a caller ask for one key's reach, where a flat union of every role's scope let an
+    unrelated `all` role widen a campus-scoped grant.
+
+    Live assignments of live roles only: a removed assignment or a soft-deleted role
+    grants nothing. One query, cached per user as `scope-grants:{pk}` and evicted by
+    `core.rbac.cache.evict_rbac_caches` on every role-graph change (signals.py).
     """
-    if not user or not user.is_authenticated:
+    user_id = user.pk if user and user.is_authenticated else None
+    if user_id is None:
         return {}
 
-    cache_key = f"scopes:{user.pk}"
+    cache_key = scope_grants_cache_key(user_id)
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
 
-    scopes: dict[str, list] = {}
-    for scope, ref in user.user_roles.filter(deleted_at__isnull=True).values_list(
-        "scope", "scope_ref"
-    ):
-        scopes.setdefault(scope, []).append(ref)
-    cache.set(cache_key, scopes, _CACHE_TTL)
+    collected: dict[str, dict[str, list[uuid.UUID | None]]] = {}
+    rows = UserRole.objects.filter(
+        user_id=user_id, deleted_at__isnull=True, role__deleted_at__isnull=True
+    ).values_list("role__permissions__key", "scope", "scope_ref")
+    for key, scope, ref in rows:
+        if key is None:  # a role with no permissions joins to one NULL key
+            continue
+        refs = collected.setdefault(key, {}).setdefault(scope, [])
+        if ref not in refs:
+            refs.append(ref)
+    grants = {
+        key: {scope: tuple(refs) for scope, refs in by_scope.items()}
+        for key, by_scope in collected.items()
+    }
+    cache.set(cache_key, grants, _CACHE_TTL)
+    return grants
+
+
+def effective_permission_keys(user: RbacUser) -> frozenset[str]:
+    """Union of permission keys across all of the user's live roles (auth-and-rbac §2.2).
+
+    The key set of `scope_grants`, so keys and scopes come from one query and one
+    cache entry and cannot disagree.
+    """
+    return frozenset(scope_grants(user))
+
+
+def scopes_for(user: RbacUser, declared: str | AnyOf) -> dict[str, list[uuid.UUID | None]]:
+    """The user's record scopes for one route's declaration, keyed by scope type.
+
+    Only the roles that grant a declared key count. For an `AnyOf`, the union over
+    the roles granting any of its keys, so the answer does not depend on key order.
+    No role granting a declared key means `{}`: the caller fails closed.
+    """
+    grants = scope_grants(user)
+    scopes: dict[str, list[uuid.UUID | None]] = {}
+    for key in declared_keys(declared):
+        for scope, refs in grants.get(key, {}).items():
+            merged = scopes.setdefault(scope, [])
+            for ref in refs:
+                if ref not in merged:
+                    merged.append(ref)
     return scopes
-
-
-def has_permission_key(user, key: str) -> bool:
-    return key in effective_permission_keys(user)
 
 
 class AnyOf:
@@ -116,7 +153,7 @@ class HasPermissionKey(permissions.BasePermission):
     message = "You do not have permission to perform this action."
 
     def has_permission(self, request, view) -> bool:
-        required = self._required_key(request, view)
+        required = required_declaration(request, view)
         if required is None:
             # Fail closed: an authenticated endpoint with no declared key is a bug.
             return False
@@ -125,15 +162,44 @@ class HasPermissionKey(permissions.BasePermission):
         held = effective_permission_keys(request.user)  # one cache read, however many keys
         return any(key in held for key in declared_keys(required))
 
-    @staticmethod
-    def _required_key(request, view) -> str | AnyOf | None:
-        action = getattr(view, "action", None) or request.method.lower()
-        mapping = getattr(view, "required_permission_map", None) or {}
-        # An action that is in the map is decided by its entry, whatever it holds: an empty
-        # string must refuse everyone, not fall back to the resource's (read) key.
-        if action in mapping:
-            return mapping[action]
-        return getattr(view, "required_permission", None)
+
+def required_declaration(request: Request, view: object) -> str | AnyOf | None:
+    """The permission one request to ``view`` is declared to need: a key, an `AnyOf`, or None.
+
+    `required_permission_map[action]`, else `required_permission`. `HasPermissionKey`
+    enforces it; public so that any other code needing a route's key reads the same
+    answer instead of re-deriving it.
+
+    ``view`` is typed ``object`` because only its attributes are read (``action``,
+    ``required_permission_map``, ``required_permission``) and the nested-route mixins
+    pass ``self``, which mypy cannot see as an ``APIView``. Passing the wrong object
+    fails closed: one without the attributes declares nothing, so `HasPermissionKey`
+    refuses it (403), the mixin reads `.none()`, and `route_permission` raises
+    `PermissionDenied`, never a tenant-wide read. (One carrying another route's
+    attributes yields that route's key, so pass the view actually being served.)
+    """
+    action = getattr(view, "action", None) or request.method.lower()
+    mapping = getattr(view, "required_permission_map", None) or {}
+    # An action that is in the map is decided by its entry, whatever it holds: an empty
+    # string must refuse everyone, not fall back to the resource's (read) key.
+    if action in mapping:
+        declared: str | AnyOf | None = mapping[action]
+        return declared
+    fallback: str | AnyOf | None = getattr(view, "required_permission", None)
+    return fallback
+
+
+def route_permission(request: Request, view: object) -> str | AnyOf:
+    """`required_declaration` for a request `HasPermissionKey` has already admitted.
+
+    That class refuses a route declaring nothing, so None should not reach a caller
+    here; if one does (a view without the class), it is refused rather than read
+    under no key at all.
+    """
+    declared = required_declaration(request, view)
+    if declared is None:
+        raise exceptions.PermissionDenied()
+    return declared
 
 
 class IsPlatformPrincipal(permissions.BasePermission):
@@ -144,8 +210,26 @@ class IsPlatformPrincipal(permissions.BasePermission):
         return bool(user and user.is_authenticated and user.is_platform)
 
 
+def live_restricted_role_assignments() -> QuerySet[UserRole]:
+    """Every live assignment of a restricted-principal (student or guardian) role.
+
+    The one definition of "holds a restricted role": `is_restricted_principal`
+    asks it of one user, and a queryset that must leave students and guardians
+    out (`.values("user_id")`) asks it of many, so the two cannot disagree.
+
+    A removed assignment (``deleted_at`` set) or a soft-deleted role does not count,
+    matching `scope_grants`: a staff member whose guardian role was removed is staff
+    again.
+    """
+    return UserRole.objects.filter(
+        deleted_at__isnull=True,
+        role__deleted_at__isnull=True,
+        role__is_restricted_principal=True,
+    )
+
+
 def is_restricted_principal(user) -> bool:
-    """True for a student or guardian — anyone holding a restricted-principal role.
+    """True for a student or guardian — anyone holding a live restricted-principal role.
 
     Extracted from `DenyRestrictedPrincipals` so a *queryset* can ask the same
     question the permission class asks. `examinations` needs it because §5.6
@@ -154,12 +238,12 @@ def is_restricted_principal(user) -> bool:
     Those are different narrowings, and only one of them belongs in a model's
     record-scope hook.
 
-    Reads the same rows the permission class does, so the two can never
-    disagree about who counts as restricted.
+    Reads `live_restricted_role_assignments`, as every restricted-principal
+    check does.
     """
     if not user or not getattr(user, "is_authenticated", False):
         return False
-    return user.user_roles.filter(role__is_restricted_principal=True).exists()
+    return live_restricted_role_assignments().filter(user_id=user.pk).exists()
 
 
 class DenyRestrictedPrincipals(permissions.BasePermission):
@@ -172,16 +256,38 @@ class DenyRestrictedPrincipals(permissions.BasePermission):
         return not is_restricted_principal(user)
 
 
+# The narrowing types, in a fixed order so a mixed user's SQL is stable. `all` is
+# handled before them, because it narrows nothing.
+_NARROWING_SCOPES = (RecordScope.CAMPUS, RecordScope.OWN, RecordScope.ASSIGNED)
+
+
 def scope_queryset(
     queryset,
     user,
     *,
+    permission: str | AnyOf,
     own_field: str | None = None,
     campus_field: str | None = "campus_id",
     campus_allows_null: bool = False,
     assigned_filter=None,
 ):
-    """Narrow a queryset by the user's record scope.
+    """Narrow a queryset by the user's record scope for one declared permission.
+
+    `permission` is the key (or `AnyOf`) that governs this read, and only the roles
+    granting it lend their scope (`scopes_for`): auth-and-rbac.md §2.3 attaches a
+    scope to a role assignment, so an unrelated `all` role must not widen a
+    campus-scoped grant. It is required, with no default, because a forgotten caller
+    falling back to every role's scope is that exact bug. The viewset mixin passes the
+    route's own declaration. A write that first resolves a target calls this twice on
+    the same queryset, with the target's view key and then the action's
+    declaration, so the target is one the caller may both read and act on.
+
+    **A key held at several scope types reads their union** (ADR-0031 decision 7).
+    `all`, or a type that passes the queryset through, returns it unchanged. Otherwise
+    each type narrows on its own, and a type that can reach nothing (a `campus` role
+    with no campus, an `own` or `assigned` with no hook) is empty rather than
+    falling through to the next. One type keeps its exact filter; two or more are an
+    OR of correlated `EXISTS` subqueries.
 
     `assigned_filter(queryset, user)` replaces the model's `filter_assigned_to_user`
     for one call, for a reader that needs a narrower `assigned` than the model's
@@ -221,59 +327,157 @@ def scope_queryset(
     stated at the call site — each viewset opting out says so — rather than inferred
     by catching FieldError, which would also swallow a genuine typo in a real path.
     """
-    scopes = user_scopes(user)
+    scopes = scopes_for(user, permission)
     if RecordScope.ALL in scopes:
         return queryset
-    if RecordScope.CAMPUS in scopes:
-        campus_ids = [ref for ref in scopes[RecordScope.CAMPUS] if ref]
-        if campus_ids:
-            # A per-model hook first, for the same reason `own` and `assigned`
-            # have one: a single field path cannot express every campus
-            # relationship. A student transfer has `from_campus_id` *and*
-            # `to_campus_id`, and scoping on either alone hides half the queue —
-            # the destination campus could not see the incoming transfer it is
-            # the one expected to approve.
-            by_campus = getattr(queryset.model, "filter_by_campus", None)
-            if callable(by_campus):
-                # The hook owns the *whole* campus predicate, so the NULL widening
-                # below never runs for it. Asking for both is a contradiction, and
-                # the way it would fail — the widening silently doing nothing — is
-                # the exact silent row-loss this function exists to stop. Say so
-                # instead of letting the next model discover it in production.
-                if campus_allows_null:
-                    raise ImproperlyConfigured(
-                        f"{queryset.model.__name__} defines filter_by_campus and also asks "
-                        "for campus_allows_null, which filter_by_campus cannot honour. "
-                        "Express the nullable-campus case inside the hook."
-                    )
-                return by_campus(queryset, campus_ids)
-            if campus_field is None:
-                return queryset
-            match = Q(**{f"{campus_field}__in": campus_ids})
+    # One key held at several scope types reads the union of what each type reaches
+    # (ADR-0031 decision 7). It used to return at the first of campus > own >
+    # assigned, so a campus-A teacher lost the campus-B section they class-teach.
+    members: list[QuerySet[Any]] = []
+    for scope in _NARROWING_SCOPES:
+        if scope not in scopes:
+            continue
+        member = _narrow_by_scope(
+            queryset,
+            user,
+            scope,
+            scopes[scope],
+            own_field=own_field,
+            campus_field=campus_field,
+            campus_allows_null=campus_allows_null,
+            assigned_filter=assigned_filter,
+        )
+        if member is None:
+            return queryset
+        # A type that reaches nothing adds nothing to the union. Dropping it here,
+        # rather than leaving `.none()` inside the OR, is what lets a single remaining
+        # type keep its exact filter. Only a literal `.none()` is recognised: a hook
+        # whose filter is empty only at run time (`pk__in` an empty subquery) stays in
+        # the OR, which is still correct, just not the single-type SQL.
+        if not member.query.is_empty():
+            members.append(member)
+    if not members:
+        return queryset.none()
+    if len(members) == 1:
+        # One type keeps the exact filter it always had, so its SQL is unchanged.
+        return members[0]
+    # A correlated `EXISTS` per member, ORed: each probe is a primary-key lookup
+    # bounded by the outer rows, so a detail read stays a point query. Rather than
+    # `a | b`, whose joins can duplicate rows; `union()`, which cannot be filtered
+    # further; or uncorrelated `pk__in` subqueries, each evaluated in full (ruling 9).
+    match = Q()
+    for member in members:
+        match |= Q(Exists(member.filter(pk=OuterRef("pk"))))
+    return queryset.filter(match)
+
+
+def _narrow_by_scope(
+    queryset: QuerySet[Any],
+    user: RbacUser,
+    scope: str,
+    refs: list[uuid.UUID | None],
+    *,
+    own_field: str | None,
+    campus_field: str | None,
+    campus_allows_null: bool,
+    assigned_filter: Callable[[QuerySet[Any], RbacUser], QuerySet[Any]] | None,
+) -> QuerySet[Any] | None:
+    """The rows one scope type reaches, `.none()` if it can reach none, or None when the
+    type is already satisfied by tenant scoping and the queryset passes through.
+
+    Each type stands alone: one that can reach nothing (a `campus` role with no
+    campus, an `own` or `assigned` with no hook) fails closed rather than falling
+    through to the next, because the caller unions every type the key is held at.
+    The one pass-through is deliberate and opt-in: `campus` over a table the caller
+    declared tenant-wide (`campus_field=None`) returns None, and `scope_queryset`
+    then returns the queryset unfiltered (see its docstring).
+    """
+    if scope == RecordScope.CAMPUS:
+        campus_ids = [ref for ref in refs if ref]
+        if not campus_ids:
+            return queryset.none()
+        # A per-model hook first, for the same reason `own` and `assigned`
+        # have one: a single field path cannot express every campus
+        # relationship. A student transfer has `from_campus_id` *and*
+        # `to_campus_id`, and scoping on either alone hides half the queue —
+        # the destination campus could not see the incoming transfer it is
+        # the one expected to approve.
+        by_campus = getattr(queryset.model, "filter_by_campus", None)
+        if callable(by_campus):
+            # The hook owns the *whole* campus predicate, so the NULL widening
+            # below never runs for it. Asking for both is a contradiction, and
+            # the way it would fail — the widening silently doing nothing — is
+            # the exact silent row-loss this function exists to stop. Say so
+            # instead of letting the next model discover it in production.
             if campus_allows_null:
-                # A nullable campus column that means "every campus" — the
-                # pattern is all over this schema (`departments`, `class_subjects`
-                # and `periods` all say so in their own help_text). `IN (...)`
-                # drops NULL, so without this a campus-scoped principal loses
-                # exactly the rows that *do* apply to them, and nothing errors:
-                # the tenant-wide department, the shared curriculum mapping and
-                # the lunch break simply are not in the list.
-                #
-                # `campus_field` verbatim, not stripped of its `_id`: Django
-                # resolves `campus_id__isnull` and `campus__isnull` to the same
-                # SQL for a ForeignKey, while stripping would turn a plain
-                # non-FK `*_id` column (`staff.user_id` is one) into a FieldError.
-                match |= Q(**{f"{campus_field}__isnull": True})
-            return queryset.filter(match)
-    if RecordScope.OWN in scopes:
+                raise ImproperlyConfigured(
+                    f"{queryset.model.__name__} defines filter_by_campus and also asks "
+                    "for campus_allows_null, which filter_by_campus cannot honour. "
+                    "Express the nullable-campus case inside the hook."
+                )
+            return by_campus(queryset, campus_ids)
+        if campus_field is None:
+            return None
+        match = Q(**{f"{campus_field}__in": campus_ids})
+        if campus_allows_null:
+            # A nullable campus column that means "every campus" — the
+            # pattern is all over this schema (`departments`, `class_subjects`
+            # and `periods` all say so in their own help_text). `IN (...)`
+            # drops NULL, so without this a campus-scoped principal loses
+            # exactly the rows that *do* apply to them, and nothing errors:
+            # the tenant-wide department, the shared curriculum mapping and
+            # the lunch break simply are not in the list.
+            #
+            # `campus_field` verbatim, not stripped of its `_id`: Django
+            # resolves `campus_id__isnull` and `campus__isnull` to the same
+            # SQL for a ForeignKey, while stripping would turn a plain
+            # non-FK `*_id` column (`staff.user_id` is one) into a FieldError.
+            match |= Q(**{f"{campus_field}__isnull": True})
+        return queryset.filter(match)
+    if scope == RecordScope.OWN:
         owned = getattr(queryset.model, "filter_owned_by_user", None)
         if callable(owned):
             return owned(queryset, user)
-        if own_field:
+        if own_field and user is not None:
             return queryset.filter(**{own_field: user.pk})
-    if RecordScope.ASSIGNED in scopes:
-        # Each module defines what "assigned" means; it must override this hook.
-        assigned = assigned_filter or getattr(queryset.model, "filter_assigned_to_user", None)
-        if callable(assigned):
-            return assigned(queryset, user)
+        return queryset.none()
+    # `assigned`: each module defines what it means; it must override this hook.
+    assigned = assigned_filter or getattr(queryset.model, "filter_assigned_to_user", None)
+    if callable(assigned):
+        return assigned(queryset, user)
     return queryset.none()
+
+
+def holds_key_for(
+    user: RbacUser,
+    permission: str | AnyOf,
+    instance: models.Model,
+    *,
+    own_field: str | None = None,
+    campus_field: str | None = "campus_id",
+    campus_allows_null: bool = False,
+) -> bool:
+    """Whether ``user`` holds ``permission`` for this one row, not merely somewhere.
+
+    "Is the key held at all" is the wrong question for a privilege applied to a
+    row: a user holding the key on campus A and an action key at `all` would get
+    the privilege on campus B. This is `scope_queryset` over the single row, so the
+    key's own scope must reach it. Fails closed: a key not held gives False.
+
+    Pass the scope settings the row's own viewset declares
+    (``**SomeViewSet.scope_kwargs()``), so "for this row" means what reading it
+    means. The model's default manager is the tenant-scoped one
+    (`TenantOwnedModel.objects`), so a row of another tenant, or any row with no
+    tenant bound, is never found.
+    """
+    row = type(instance)._default_manager.filter(pk=instance.pk)
+    return bool(
+        scope_queryset(
+            row,
+            user,
+            permission=permission,
+            own_field=own_field,
+            campus_field=campus_field,
+            campus_allows_null=campus_allows_null,
+        ).exists()
+    )

@@ -42,6 +42,8 @@ from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
 SUMMARY = "/api/v1/reports/exam-summary"
+# The key `GET` on it declares, which `build_report_rows` scopes by.
+RESULT_VIEW = "exams.result.view"
 
 
 class ReportDataTestCase(ProcessingTestCase):
@@ -295,10 +297,16 @@ class ReportScopeTests(ReportDataTestCase):
         inline."""
         with tenant_context(self.tenant.id):
             teacher_rows = services.build_report_rows(
-                kind="result-register", exam_id=self.exam.pk, user=self.teacher_user
+                kind="result-register",
+                exam_id=self.exam.pk,
+                user=self.teacher_user,
+                permission=RESULT_VIEW,
             )
             admin_rows = services.build_report_rows(
-                kind="result-register", exam_id=self.exam.pk, user=self.user
+                kind="result-register",
+                exam_id=self.exam.pk,
+                user=self.user,
+                permission=RESULT_VIEW,
             )
 
         # The class teacher holds no result key in this fixture, so they see
@@ -311,7 +319,10 @@ class ReportScopeTests(ReportDataTestCase):
 
         with tenant_context(self.tenant.id):
             rows = services.build_report_rows(
-                kind="result-register", exam_id=self.exam.pk, user=self.teacher_user
+                kind="result-register",
+                exam_id=self.exam.pk,
+                user=self.teacher_user,
+                permission=RESULT_VIEW,
             )
 
         self.assertEqual(len(rows), 3)
@@ -325,6 +336,7 @@ class ReportScopeTests(ReportDataTestCase):
                 kind="result-register",
                 exam_id=self.exam.pk,
                 user=self.user,
+                permission=RESULT_VIEW,
                 limit=2,
             )
 

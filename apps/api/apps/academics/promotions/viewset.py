@@ -46,7 +46,7 @@ from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
 from core.idempotency.services import replay_or_execute
 from core.jobs.services import create_job, enqueue_job
-from core.rbac.permissions import DenyRestrictedPrincipals, HasPermissionKey
+from core.rbac.permissions import DenyRestrictedPrincipals, HasPermissionKey, route_permission
 
 
 class AggregateOrderingFilter(StableOrderingFilter):
@@ -108,8 +108,17 @@ class AggregateOrderingFilter(StableOrderingFilter):
         return [*ordering, "batch_id"]
 
 
+class PromotionScopeMixin:
+    """Record scope for promotion rows, from `services.PROMOTION_SCOPE`, which
+    `assert_batch_in_scope` also reads; both promotion viewsets share it."""
+
+    scope_own_field: str | None = services.PROMOTION_SCOPE["own_field"]
+    scope_campus_field: str | None = services.PROMOTION_SCOPE["campus_field"]
+    scope_campus_allows_null: bool = services.PROMOTION_SCOPE["campus_allows_null"]
+
+
 class PromotionBatchViewSet(
-    TenantScopedViewSetMixin, mixins.ListModelMixin, viewsets.GenericViewSet
+    PromotionScopeMixin, TenantScopedViewSetMixin, mixins.ListModelMixin, viewsets.GenericViewSet
 ):
     """`/student-promotions` — the batch resource (§16).
 
@@ -165,7 +174,6 @@ class PromotionBatchViewSet(
     #: Entries in ordering_fields that are annotations from get_queryset, not model
     #: fields — tests/test_endpoint_contracts.py cannot resolve these against the model.
     ordering_annotations = ("students", "started_at")
-    scope_campus_field = "student__campus_id"
     required_feature = FEATURE
     required_permission = "academics.promotion.view"
     required_permission_map = {
@@ -255,13 +263,25 @@ class PromotionBatchViewSet(
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        batch_id, rows = services.create_promotion_batch(
-            from_session=data["from_session"],
-            to_session=data["to_session"],
-            school_class=data["school_class"],
-            tenant_id=request.tenant.pk,
-            actor_id=request.user.pk,
-        )
+        # The scope check reads the rows just written, so it covers exactly what was
+        # inserted, and its 422 leaves this block and rolls the insert back with it,
+        # whatever the request's own transaction does. The class is readable on every
+        # campus, so out of scope is a 422 here, never a 404.
+        with transaction.atomic():
+            batch_id, rows = services.create_promotion_batch(
+                from_session=data["from_session"],
+                to_session=data["to_session"],
+                school_class=data["school_class"],
+                tenant_id=request.tenant.pk,
+                actor_id=request.user.pk,
+            )
+            services.assert_batch_in_scope(
+                services.batch_queryset(batch_id),
+                user=request.user,
+                read_permission=self.scope_read_declaration(),
+                permission=route_permission(request, self),
+                hide_unreadable=False,
+            )
         return ActionResponse.ok(
             PromotionBatchCreatedSerializer({"batch_id": batch_id, "students": len(rows)}).data,
             message="Promotion batch created.",
@@ -274,7 +294,8 @@ class PromotionBatchViewSet(
         responses={200: PromotionTransitionResultSerializer},
     )
     def submit(self, request: Request, pk: str) -> Response:
-        count = services.submit_batch(batch_id=_batch_uuid(pk), actor_id=request.user.pk)
+        batch_id = self._batch_in_scope(request, pk)
+        count = services.submit_batch(batch_id=batch_id, actor_id=request.user.pk)
         return ActionResponse.ok(
             PromotionTransitionResultSerializer({"updated": count}).data,
             message="Batch submitted for approval.",
@@ -286,7 +307,8 @@ class PromotionBatchViewSet(
         responses={200: PromotionTransitionResultSerializer},
     )
     def approve(self, request: Request, pk: str) -> Response:
-        count = services.approve_batch(batch_id=_batch_uuid(pk), actor_id=request.user.pk)
+        batch_id = self._batch_in_scope(request, pk)
+        count = services.approve_batch(batch_id=batch_id, actor_id=request.user.pk)
         return ActionResponse.ok(
             PromotionTransitionResultSerializer({"updated": count}).data,
             message="Batch approved.",
@@ -298,7 +320,8 @@ class PromotionBatchViewSet(
         responses={200: PromotionTransitionResultSerializer},
     )
     def reject(self, request: Request, pk: str) -> Response:
-        count = services.reject_batch(batch_id=_batch_uuid(pk), actor_id=request.user.pk)
+        batch_id = self._batch_in_scope(request, pk)
+        count = services.reject_batch(batch_id=batch_id, actor_id=request.user.pk)
         return ActionResponse.ok(
             PromotionTransitionResultSerializer({"updated": count}).data,
             message="Batch returned to draft.",
@@ -310,7 +333,8 @@ class PromotionBatchViewSet(
         responses={200: PromotionTransitionResultSerializer},
     )
     def revert(self, request: Request, pk: str) -> Response:
-        count = services.revert_batch(batch_id=_batch_uuid(pk), actor_id=request.user.pk)
+        batch_id = self._batch_in_scope(request, pk)
+        count = services.revert_batch(batch_id=batch_id, actor_id=request.user.pk)
         return ActionResponse.ok(
             PromotionTransitionResultSerializer({"updated": count}).data,
             message="Batch reverted.",
@@ -336,7 +360,7 @@ class PromotionBatchViewSet(
         # `tenant_atomic` degrades to a savepoint, so a class of hundreds holds
         # every row lock it takes until the response is rendered, and shows the
         # caller nothing until then. On a worker the helper means what it says.
-        batch_id = _batch_uuid(pk)
+        batch_id = self._batch_in_scope(request, pk)
         # Before the job, not inside it: a draft batch is refused at request time
         # so the caller keeps the 409 rather than getting a job that fails out of
         # band. `execute_batch` checks again on the worker.
@@ -364,12 +388,29 @@ class PromotionBatchViewSet(
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="student-promotions:execute",
+            request_data=request.data,
             execute=run,
         )
 
+    def _batch_in_scope(self, request: Request, pk: str) -> uuid.UUID:
+        """The batch id, once every student in the batch is in the caller's scope (ruling 10).
+
+        A batch action moves every row, but resolves no row through `get_queryset`, so the
+        mixin's chained read-then-action scope never ran: a campus-A holder of the key
+        acted on a campus-B batch. Unreadable is a 404, readable but partly out of scope a 422.
+        """
+        batch_id = _batch_uuid(pk)
+        services.assert_batch_in_scope(
+            services.batch_queryset(batch_id),
+            user=request.user,
+            read_permission=self.scope_read_declaration(),
+            permission=route_permission(request, self),
+        )
+        return batch_id
+
 
 class PromotionDecisionViewSet(
-    TenantScopedViewSetMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet
+    PromotionScopeMixin, TenantScopedViewSetMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet
 ):
     """`/student-promotions/{batch_id}/decisions/{student_id}` — §16's shape.
 
@@ -386,7 +427,6 @@ class PromotionDecisionViewSet(
     ]
     queryset = StudentPromotion.objects
     serializer_class = PromotionDecisionSerializer
-    scope_campus_field = "student__campus_id"
     required_feature = FEATURE
     required_permission = "academics.promotion.view"
     required_permission_map = {

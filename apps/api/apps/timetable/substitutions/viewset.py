@@ -19,6 +19,7 @@ from rest_framework.response import Response
 if TYPE_CHECKING:
     from rest_framework.request import Request
 
+from apps.staff_management.services import STAFF_SCOPE
 from apps.timetable.models import SlotStatus, TeacherSubstitution, TimetableSlot
 from apps.timetable.substitutions import services
 from apps.timetable.substitutions.filters import TeacherSubstitutionFilterSet
@@ -32,7 +33,12 @@ from core.api.exceptions import DomainRuleViolation
 from core.api.pagination import PageNumberPagination
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
-from core.rbac.permissions import AnyOf, has_permission_key, scope_queryset
+from core.rbac.permissions import AnyOf, route_permission, scope_queryset
+
+# `StaffViewSet`'s read key: what `candidates` may offer is scoped by it.
+STAFF_VIEW = "staff.staff.view"
+# Approves, rejects and cancels any cover its scope reaches.
+SUBSTITUTION_APPROVE = "timetable.substitution.approve"
 
 
 class TeacherSubstitutionViewSet(
@@ -89,12 +95,12 @@ class TeacherSubstitutionViewSet(
     required_permission = SCAFFOLDING_VIEW_KEY
     required_permission_map = {
         "create": "timetable.substitution.create",
-        "approve": "timetable.substitution.approve",
-        "reject": "timetable.substitution.approve",
+        "approve": SUBSTITUTION_APPROVE,
+        "reject": SUBSTITUTION_APPROVE,
         "candidates": "timetable.substitution.create",
         # An approver cancels any open cover, a proposer their own proposal: either key
         # passes the class (ADR-0027), and `cancel` applies the row-level rule.
-        "cancel": AnyOf("timetable.substitution.approve", "timetable.substitution.create"),
+        "cancel": AnyOf(SUBSTITUTION_APPROVE, "timetable.substitution.create"),
     }
     http_method_names = ["get", "post", "head", "options"]
 
@@ -103,8 +109,8 @@ class TeacherSubstitutionViewSet(
         that holds even where nothing produces a ``.distinct()`` yet.
 
         ``scope_own_field`` here is a plain forward join (`substitute_staff__user_id`),
-        so today an own-scoped substitute's queryset is not distinct; `PeriodViewSet`
-        and `StudentViewSet` are where the hazard actually bites. Both staff FKs are
+        so today an own-scoped substitute's queryset is not distinct; `StudentViewSet`'s
+        `assigned` scope is where the hazard actually bites. Both staff FKs are
         non-null, so these annotations reuse the inner joins ``select_related`` already
         opens.
         """
@@ -184,7 +190,11 @@ class TeacherSubstitutionViewSet(
     def cancel(self, request: Request, pk) -> Response:
         substitution = get_object_or_404(self.get_queryset(), pk=pk)
         # The class has admitted an approver or a proposer; what is left is whose row.
-        own_proposal_only = not has_permission_key(request.user, "timetable.substitution.approve")
+        # An approver is one whose approve key reaches *this* cover, not one holding it
+        # for another campus while the proposer key's scope found the row.
+        own_proposal_only = not self.holds_key_for_row(
+            request.user, SUBSTITUTION_APPROVE, substitution
+        )
         if own_proposal_only and substitution.created_by != request.user.pk:
             raise PermissionDenied("Only an approver, or whoever proposed it, can cancel cover.")
 
@@ -220,14 +230,15 @@ class TeacherSubstitutionViewSet(
     def candidates(self, request: Request) -> Response:
         query = SubstituteCandidatesQuerySerializer(data=request.query_params)
         query.is_valid(raise_exception=True)
-        # Under the caller's campus scope: another campus's slot is a 404, never a list
-        # of its staff.
+        # Under the scope of this action's own key: another campus's slot is a 404,
+        # never a list of its staff.
         slot = get_object_or_404(
             scope_queryset(
                 TimetableSlot.objects.alive().select_related(
                     "section", "period", "academic_session", "staff"
                 ),
                 request.user,
+                permission=route_permission(request, self),
                 own_field="staff__user_id",
                 campus_field="section__campus_id",
             ),
@@ -250,7 +261,11 @@ class TeacherSubstitutionViewSet(
             raise DomainRuleViolation({"date": "This date is outside the academic session."})
 
         free = services.free_substitutes(slot=slot, on_date=on_date, absent_staff=slot.staff)
-        rows = free.order_by("last_name", "first_name")
+        # The answer is a list of staff, so it is scoped as `GET /staff` scopes one
+        # (`StaffViewSet`'s key and `STAFF_SCOPE`): the caller is offered only staff they may
+        # read, and the substitution key's roles do not widen that.
+        readable = scope_queryset(free, request.user, permission=STAFF_VIEW, **STAFF_SCOPE)
+        rows = readable.order_by("last_name", "first_name")
         return ActionResponse.ok(SubstituteCandidateSerializer(rows, many=True).data)
 
     def _decide(self, request: Request, pk, *, approve: bool, message: str) -> Response:

@@ -33,14 +33,19 @@ from apps.attendance.models import (
 from apps.school_organization.models import Section
 from apps.school_organization.services import LOCKED_SESSION_STATES
 from apps.staff_management.models import EmploymentStatus, Staff
+from apps.staff_management.services import STAFF_SCOPE
 from apps.student_management.models import EnrollmentStatus, StudentEnrollment
 from apps.timetable.slots.services import teacher_slots_for
 from core.rbac.models import RecordScope
-from core.rbac.permissions import scope_queryset, user_scopes
+from core.rbac.permissions import AnyOf, scope_queryset, scopes_for
 
 if TYPE_CHECKING:
     from apps.school_organization.models import AcademicSession, Department
     from apps.timetable.models import Period
+
+# The key that marks a register. The views declare it for `register`, `my-registers`
+# and `:bulk-mark`, and the marker check reads the scopes of the roles granting it.
+STUDENT_ATTENDANCE_MARK = "attendance.student-attendance.mark"
 
 
 def caller_staff_ids(user) -> set[uuid.UUID]:
@@ -68,6 +73,10 @@ def may_mark_register(
        in that period on `on_date`. A confirmed substitute replaces the absent
        teacher, who may not mark it.
 
+    Each scope is read from the roles that grant `STUDENT_ATTENDANCE_MARK` only
+    (`scopes_for`), so an `all` role for another key does not let a teacher mark a
+    section they are not assigned to.
+
     `own` alone marks nothing, since a student marking their own register is not
     a workflow §5 describes. Whether a period fits the mode is the service's
     gate (``services.assert_register_period``), not this predicate's.
@@ -76,7 +85,7 @@ def may_mark_register(
     the caller has already read it in the request's session; otherwise the
     session is the one containing the date.
     """
-    grant = _scope_grant(user_scopes(user), section)
+    grant = _scope_grant(scopes_for(user, STUDENT_ATTENDANCE_MARK), section)
     if grant is not None:
         return grant
     staff_ids = caller_staff_ids(user)
@@ -188,7 +197,8 @@ def my_registers(*, user, session: AcademicSession, on_date: datetime.date) -> l
     can still list entries.
 
     A bounded number of queries whatever the number of sections or lessons, plus
-    the scope lookup, which is cached per user.
+    the scope lookup (the marking key's, as `may_mark_register` reads it), which is
+    cached per user.
     """
     staff_ids = caller_staff_ids(user)
     if not staff_ids:
@@ -208,7 +218,7 @@ def my_registers(*, user, session: AcademicSession, on_date: datetime.date) -> l
     else:
         registers = [(section, None) for section in class_taught]
 
-    scopes = user_scopes(user)
+    scopes = scopes_for(user, STUDENT_ATTENDANCE_MARK)
     registers = [
         (section, period)
         for section, period in registers
@@ -272,13 +282,17 @@ def my_registers(*, user, session: AcademicSession, on_date: datetime.date) -> l
 
 
 def staff_register(
-    *, user, on_date: datetime.date, department: Department | None = None
+    *,
+    user,
+    permission: str | AnyOf,
+    on_date: datetime.date,
+    department: Department | None = None,
 ) -> list[dict]:
     """The staff register for `on_date`: every active staff member the caller may see, by name.
 
-    Scoped the way `/staff-attendance` is (`all`, `campus` on the staff's campus,
-    `own` their own row, `assigned` their reports), so the register never lists
-    someone whose record the caller could not then read. Staff who had not joined
+    Scoped by the roles granting `permission`, the register route's own (marking)
+    key, the way `/staff-attendance` scopes a read (`all`, `campus` on the staff's
+    campus, `own` their own row, `assigned` their reports). Staff who had not joined
     by `on_date` are left out. Each entry carries the date's record, if marked,
     and `on_leave`: approved leave covers the date, or the record says so.
 
@@ -290,7 +304,7 @@ def staff_register(
     if department is not None:
         staff_rows = staff_rows.filter(department=department)
     staff = list(
-        scope_queryset(staff_rows, user, own_field="user_id", campus_field="campus_id")
+        scope_queryset(staff_rows, user, permission=permission, **STAFF_SCOPE)
         .select_related("department")
         .order_by("last_name", "first_name", "pk")
     )

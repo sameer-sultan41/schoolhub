@@ -117,35 +117,62 @@ from core.api.pagination import PageNumberPagination
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
+from core.exports.scope import SCOPE_PERMISSION, scope_permission_payload
 from core.idempotency.services import replay_or_execute
 from core.jobs.services import create_job, enqueue_job
 from core.rbac.permissions import (
+    AnyOf,
     DenyRestrictedPrincipals,
     HasPermissionKey,
+    declared_keys,
     is_restricted_principal,
+    route_permission,
     scope_queryset,
 )
 
 if TYPE_CHECKING:
+    from django.db.models import Model, QuerySet
     from rest_framework.request import Request
+
+    from core.rbac.permissions import ScopeKwargs
 
 FEATURE = "module.examinations"
 
 
-def scoped_exam(request: Request, pk: str | None) -> Exam:
+def _reachable[M: Model](
+    queryset: QuerySet[M], request: Request, view: TenantScopedViewSetMixin, scope: ScopeKwargs
+) -> QuerySet[M]:
+    """Rows a colon action may address: under the hosting view's read key, then the route's.
+
+    The mixin's own two-key rule (ADR-0031 decision 3) applied to a row of another
+    viewset's model, under that model's scope settings, so a wide action role cannot
+    reach a row the caller's view role hides.
+    """
+    read = view.scope_read_declaration()
+    declared = route_permission(request, view)
+    if read is not None and set(declared_keys(read)) != set(declared_keys(declared)):
+        queryset = scope_queryset(queryset, request.user, permission=read, **scope)
+    return scope_queryset(queryset, request.user, permission=declared, **scope)
+
+
+def scoped_exam(request: Request, view: TenantScopedViewSetMixin, pk: str | None) -> Exam:
     """The exam an action addresses by id, through `ExamViewSet`'s record scope.
 
-    An exam outside the caller's scope is a 404, exactly as a foreign id is.
+    Reached under the hosting route's read key and its own (`_reachable`). An exam
+    outside the caller's scope is a 404, exactly as a foreign id is.
     """
-    exams = scope_queryset(Exam.objects.alive(), request.user, own_field=None, campus_field=None)
+    exams = _reachable(Exam.objects.alive(), request, view, ExamViewSet.scope_kwargs())
     return get_object_or_404(exams, pk=pk)
 
 
-def scoped_exam_subject(request: Request, pk) -> ExamSubject:
+def scoped_exam_subject(
+    request: Request, view: TenantScopedViewSetMixin, pk: str | None
+) -> ExamSubject:
     """The exam-subject an action addresses by id, through `ExamSubjectViewSet`'s record scope."""
     exam_subjects = scope_queryset(
         ExamSubject.objects.alive().select_related("exam"),
         request.user,
+        permission=route_permission(request, view),
         own_field=None,
         campus_field=None,
     )
@@ -553,7 +580,7 @@ class ExamScheduleViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         *exam* that moves state: a schedule is published as a whole, not sitting
         by sitting, and §6 calls it "schedule publish to portals".
         """
-        exam = scoped_exam(request, pk)
+        exam = scoped_exam(request, self, pk)
         outcome = services.publish_exam_schedule(exam=exam, actor_id=request.user.pk)
         record_audit(request, "publish", exam, after={"status": outcome["status"]})
 
@@ -578,7 +605,7 @@ class ExamScheduleViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         # client opening the schedule sees exactly what publishing would refuse
         # without saving a sitting to learn it. Staff-only: a clash list names
         # rooms, invigilators and other sections, which no portal reader needs.
-        exam = scoped_exam(request, pk)
+        exam = scoped_exam(request, self, pk)
         return ActionResponse.ok(conflicts.detect_conflicts(exam=exam))
 
 
@@ -659,7 +686,7 @@ class AdmitCardViewSet(
         action should replay the first answer rather than start a second render
         of three hundred documents.
         """
-        exam = scoped_exam(request, pk)
+        exam = scoped_exam(request, self, pk)
 
         def execute():
             outcome = services.issue_admit_cards(exam=exam, actor_id=request.user.pk)
@@ -683,6 +710,7 @@ class AdmitCardViewSet(
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="exams:issue-admit-cards",
+            request_data=request.data,
             execute=execute,
         )
 
@@ -784,6 +812,9 @@ class MarksViewSet(
         "lock": "exams.marks.lock",
         "unlock": "exams.marks.lock",
     }
+    # `:lock-marks` and `:unlock-marks` act on an exam subject, never on a marks row, and
+    # school_admin locks without holding `exams.marks.create`.
+    scope_read_exempt_actions = frozenset({"lock", "unlock"})
     http_method_names = ["get", "post", "head", "options"]
 
     def get_queryset(self):
@@ -811,7 +842,7 @@ class MarksViewSet(
         """`GET /marks/grid` — one section's entry grid for one exam-subject."""
         query = MarksGridQuerySerializer(data=request.query_params)
         query.is_valid(raise_exception=True)
-        exam_subject = scoped_exam_subject(request, query.validated_data["exam_subject_id"])
+        exam_subject = scoped_exam_subject(request, self, query.validated_data["exam_subject_id"])
         section = get_object_or_404(Section.objects.alive(), pk=query.validated_data["section_id"])
         # Out of the caller's sections reads as absent, like any out-of-scope row.
         if not services.may_enter_marks(
@@ -880,13 +911,14 @@ class MarksViewSet(
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="marks:bulk-entry",
+            request_data=request.data,
             execute=execute,
         )
 
     @extend_schema(request=None, responses={200: MarksLockResultSerializer})
     def lock(self, request: Request, pk: str | None = None):
         """`POST /exam-subjects/{id}:lock-marks` (§16)."""
-        exam_subject = scoped_exam_subject(request, pk)
+        exam_subject = scoped_exam_subject(request, self, pk)
         outcome = services.lock_marks(exam_subject=exam_subject, actor_id=request.user.pk)
         record_audit(request, "lock", exam_subject, after=outcome)
         return ActionResponse.ok(
@@ -905,7 +937,7 @@ class MarksViewSet(
         Behind `exams.marks.lock`, and audited — §6 asks for both, because
         reopening a window is how a settled mark changes.
         """
-        exam_subject = scoped_exam_subject(request, pk)
+        exam_subject = scoped_exam_subject(request, self, pk)
         outcome = services.unlock_marks(exam_subject=exam_subject, actor_id=request.user.pk)
         record_audit(request, "update", exam_subject, after=outcome)
         return ActionResponse.ok(
@@ -925,7 +957,7 @@ class MarksViewSet(
         caller may enter marks for unless their scope is `all`.
         """
         # A plain GET rather than a report `kind`: it is operational, read beside the exam.
-        exam = scoped_exam(request, pk)
+        exam = scoped_exam(request, self, pk)
         rows = services.marks_entry_progress(exam=exam, user=request.user)
         return ActionResponse.ok(MarksProgressRowSerializer(rows, many=True).data)
 
@@ -933,7 +965,8 @@ class MarksViewSet(
 class MarksImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
     """`POST /marks-imports` — §9's marks sheet, as 202 + a job.
 
-    A pure job-launcher: no queryset, no record scope. The uploaded file is
+    A pure job-launcher with no queryset. Record scope applies in the job, which
+    narrows the class roll to the students this request's key reaches. The uploaded file is
     handed to the task base64-encoded in the job payload, matching
     `attendance`'s importer — a file small enough to be a marks sheet is small
     enough to carry, and staging it in object storage first would add a failure
@@ -972,6 +1005,9 @@ class MarksImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
                 "filename": upload.name,
                 "content_base64": base64.b64encode(upload.read()).decode(),
                 "requested_by": str(request.user.pk),
+                # The job narrows the class roll to this key's record scope, as an
+                # export job reads its rows (core/exports/scope.py).
+                SCOPE_PERMISSION: scope_permission_payload(route_permission(request, self)),
             },
             actor_id=request.user.pk,
         )
@@ -1046,7 +1082,7 @@ class ResultViewSet(
         outstanding. In the job it is what actually holds, because marks can
         change between the request and the worker picking it up.
         """
-        exam = scoped_exam(request, pk)
+        exam = scoped_exam(request, self, pk)
         services.assert_exam_is_recomputable(exam)
         processing.assert_ready_to_process(processing.collect(exam=exam))
 
@@ -1065,6 +1101,7 @@ class ResultViewSet(
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="exams:process-results",
+            request_data=request.data,
             execute=execute,
         )
 
@@ -1230,7 +1267,7 @@ class ReportCardViewSet(
     @extend_schema(request=None, responses={202: None})
     def generate(self, request: Request, pk: str | None = None):
         """`POST /exams/{id}:generate-report-cards` — 202 + a job (§16)."""
-        exam = scoped_exam(request, pk)
+        exam = scoped_exam(request, self, pk)
         services.assert_report_cards_are_generatable(exam)
 
         def execute():
@@ -1248,6 +1285,7 @@ class ReportCardViewSet(
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="exams:generate-report-cards",
+            request_data=request.data,
             execute=execute,
         )
 
@@ -1464,16 +1502,20 @@ class ExamReportView(TenantScopedViewSetMixin, APIView):
         serializer = ExamReportQuerySerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
         exam = serializer.validated_data.get("exam")
+        permission = route_permission(request, self)
 
         rows = services.build_report_rows(
             kind=serializer.validated_data["kind"],
             exam_id=exam.pk if exam is not None else None,
             user=request.user,
+            permission=permission,
             limit=services.SYNCHRONOUS_REPORT_ROW_LIMIT + 1,
         )
         if len(rows) > services.SYNCHRONOUS_REPORT_ROW_LIMIT:
+            # Queued under this GET's view key, so the file holds what it would have shown.
             return self._queue_export(
                 request,
+                permission=permission,
                 kind=serializer.validated_data["kind"],
                 exam=exam,
                 fmt=serializer.validated_data["format"],
@@ -1490,13 +1532,23 @@ class ExamReportView(TenantScopedViewSetMixin, APIView):
         serializer.is_valid(raise_exception=True)
         return self._queue_export(
             request,
+            permission=route_permission(request, self),
             kind=serializer.validated_data["kind"],
             exam=serializer.validated_data.get("exam"),
             fmt=serializer.validated_data["format"],
             message="Report queued; poll the job for the file.",
         )
 
-    def _queue_export(self, request: Request, *, kind: str, exam, fmt: str, message: str):
+    def _queue_export(
+        self,
+        request: Request,
+        *,
+        permission: str | AnyOf,
+        kind: str,
+        exam,
+        fmt: str,
+        message: str,
+    ):
         job = create_job(
             tenant_id=request.tenant.pk,
             job_type="exams.report-export",
@@ -1508,6 +1560,8 @@ class ExamReportView(TenantScopedViewSetMixin, APIView):
                 # A report is read as authoritative, and an export must not
                 # widen what its requester could see inline.
                 "requested_by": str(request.user.pk),
+                # Under the key this request was admitted on (core/exports/scope.py).
+                SCOPE_PERMISSION: scope_permission_payload(permission),
             },
             actor_id=request.user.pk,
         )

@@ -1010,7 +1010,8 @@ class ScheduleConflictsEndpointTests(ScheduleTestCase):
 
 class ExamLookupScopeTests(ScheduleTestCase):
     """The exam an action addresses by id resolves through `ExamViewSet`'s
-    record scope: out of scope is a 404, as a foreign id is."""
+    record scope, under the hosting view's read key and the route's own: out of
+    scope is a 404, as a foreign id is."""
 
     def client_for(self, user, *keys: str):
         from rest_framework.test import APIClient
@@ -1058,6 +1059,42 @@ class ExamLookupScopeTests(ScheduleTestCase):
         with tenant_context(self.tenant.id):
             self.exam.refresh_from_db()
         self.assertEqual(self.exam.status, ExamStatus.DRAFT)
+
+    def test_a_colon_action_cannot_reach_an_exam_its_view_role_hides(self) -> None:
+        """L36's mixed user: the view key on an unallocated `assigned` role, the
+        action key at `all`. The route reaches the exam under both, so a 404."""
+        from apps.examinations.tests.factories import grant
+        from core.rbac.models import RecordScope
+
+        with tenant_context(self.tenant.id):
+            self.sitting(room=self.room)
+        user = self.unassigned_teacher()
+        grant(user, "exams.schedule.update", scope=RecordScope.ALL)
+        client = self.client_for(user, "exams.schedule.view")
+
+        response = client.post(f"/api/v1/exams/{self.exam.pk}:publish-schedule")
+
+        self.assertEqual(response.status_code, 404)
+        with tenant_context(self.tenant.id):
+            self.exam.refresh_from_db()
+        self.assertEqual(self.exam.status, ExamStatus.DRAFT)
+
+    def test_schedule_conflicts_stays_readable_to_schedule_readers(self) -> None:
+        """The lookup reads under the hosting view's key, not `ExamViewSet`'s, so a
+        schedule reader without `exams.exam.view` keeps the clash list."""
+        from rest_framework.test import APIClient
+
+        from apps.examinations.tests.factories import UserFactory, authenticate, grant
+
+        with tenant_context(self.tenant.id):
+            user = UserFactory(tenant=self.tenant)
+        grant(user, "exams.schedule.view")
+        client = APIClient()
+        authenticate(client, user)
+
+        response = client.get(f"/api/v1/exams/{self.exam.pk}/schedule-conflicts")
+
+        self.assertEqual(response.status_code, 200, response.json())
 
 
 class PublishScheduleContractTests(ScheduleTestCase):

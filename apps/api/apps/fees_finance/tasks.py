@@ -502,12 +502,15 @@ def export_finance_report_task(self, *, tenant_id: str, job_id: str, actor_id: s
     as authoritative, so an export must not widen what its requester could see
     inline — which it would if the job re-queried the tables without the record
     scope the endpoint applied. For money that is not a cosmetic concern: it
-    would put one family's balance in another family's spreadsheet.
+    would put one family's balance in another family's spreadsheet. It is read
+    under the key the enqueuing request was admitted on (`scope_permission`,
+    core/exports/scope.py), and a job without one fails closed.
     """
     import datetime as _datetime
 
     from apps.fees_finance import services, uploads
     from core.exports import tabular
+    from core.exports.scope import MISSING_SCOPE_PERMISSION, job_scope_permission
     from core.files.services import create_ready_file
     from core.rbac.models import User
     from core.tenancy.context import tenant_atomic
@@ -515,6 +518,11 @@ def export_finance_report_task(self, *, tenant_id: str, job_id: str, actor_id: s
     with tenant_atomic(uuid.UUID(tenant_id)):
         job = BackgroundJob.objects.get(pk=job_id)
     mark_running(job=job)
+
+    permission = job_scope_permission(job.payload)
+    if permission is None:
+        mark_failed(job=job, error=MISSING_SCOPE_PERMISSION)
+        return
 
     try:
         with tenant_atomic(uuid.UUID(tenant_id)):
@@ -525,6 +533,7 @@ def export_finance_report_task(self, *, tenant_id: str, job_id: str, actor_id: s
             rows = services.build_report_rows(
                 kind=payload["kind"],
                 user=requester,
+                permission=permission,
                 date_from=_datetime.date.fromisoformat(payload["date_from"]),
                 date_to=_datetime.date.fromisoformat(payload["date_to"]),
                 student_id=payload.get("student_id"),

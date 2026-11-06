@@ -225,17 +225,20 @@ allocation, the invite/exit lifecycle actions, and the two bulk jobs).
 single flat `services.py` — none of the three has enough distinct action
 logic to warrant its own `services/` subpackage.
 
-Like `school_organization`, this module does not split cleanly: four
+
+Like `school_organization`, this module does not split cleanly: three
 functions stay at the app root as a deliberate shared surface, each used by
 more than one of the four packages (or, in one case, by another app
 entirely). `resolve_tenant_staff_id` is imported directly by
 `apps.school_organization.services` to validate staff-reference columns
 across several of that app's own resource packages — the one genuine
-cross-app dependency. `_tenant_settings`, `assert_file_usable` and
-`_verify_record` are each read by two or three of the four sibling packages
-(employee-number pattern lookup, the shared file-purpose/status check, and
-the generic verify-with-lock helper respectively). See `apps/
-staff_management/services.py`'s own docstring for the exact accounting.
+cross-app dependency. `_tenant_settings` and `_verify_record` are each read
+by two of the four sibling packages (the employee-number pattern lookup and
+the generic verify-with-lock helper respectively). The shared
+file-purpose/status check, `assert_file_usable`, moved to
+`core/files/services.py` once communication's thread attachments needed it
+too. See `apps/staff_management/services.py`'s own docstring for the exact
+accounting.
 `views.py` similarly keeps only `_StaffModuleViewSetMixin` (every package's
 permission stack) and `_NestedUnderStaffMixin` (the two nested-under-staff
 routes). `admin.py`, `apps.py`, `models.py`/`migrations/`, `features.py`,

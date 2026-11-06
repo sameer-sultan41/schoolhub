@@ -65,6 +65,10 @@ class NoticeViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         "return_to_draft": "communication.notice.publish",
         "acknowledge": "communication.notice.acknowledge",
     }
+    # Guardians and students acknowledge notices they reach through their inbox and hold
+    # no `communication.notice.view` (permissions.py), and the action returns nothing of
+    # the notice, so its own key's scope alone decides it.
+    scope_read_exempt_actions = frozenset({"acknowledge"})
     http_method_names = ["get", "post", "patch", "head", "options"]
 
     def get_permissions(self):

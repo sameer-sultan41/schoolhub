@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import base64
 import datetime
+import hashlib
 import uuid
 
 from django.db import models, transaction
@@ -134,6 +135,7 @@ from core.api.exceptions import DomainRuleViolation
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
+from core.exports.scope import SCOPE_PERMISSION, scope_permission_payload
 from core.files.services import create_ready_file
 from core.idempotency.services import replay_or_execute
 from core.jobs.services import create_job, enqueue_job
@@ -142,6 +144,8 @@ from core.rbac.permissions import (
     DenyRestrictedPrincipals,
     HasPermissionKey,
     is_restricted_principal,
+    required_declaration,
+    route_permission,
     scope_queryset,
 )
 
@@ -234,13 +238,15 @@ class LedgerEntryViewSet(
         the hand-rolled filter let it see every posting in the tenant. `fees.
         ledger.view`'s default roles are `all`-scoped, but the whole point of
         calling `scope_queryset` is not to depend on that staying true.
+
+        Scoped by this route's own declaration, as the mixin's call is.
         """
+        entries = LedgerEntry.objects.filter(tenant_id=self.request.tenant.pk)
+        declared = required_declaration(self.request, self)
+        if declared is None:
+            return entries.none()
         return (
-            scope_queryset(
-                LedgerEntry.objects.filter(tenant_id=self.request.tenant.pk),
-                self.request.user,
-                campus_field=None,
-            )
+            scope_queryset(entries, self.request.user, permission=declared, campus_field=None)
             .select_related("ledger_account")
             .order_by("-entry_date", "created_at")
         )
@@ -314,6 +320,7 @@ class LedgerEntryViewSet(
             tenant_id=request.tenant.pk,
             key=key,
             endpoint="ledger-entries:post-journal",
+            request_data=request.data,
             execute=execute,
         )
 
@@ -553,6 +560,7 @@ class FeeInvoiceViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="fee-invoices:generate",
+            request_data=request.data,
             execute=execute,
         )
 
@@ -847,6 +855,7 @@ class PaymentViewSet(
             tenant_id=request.tenant.pk,
             key=key,
             endpoint="payments:record",
+            request_data=request.data,
             execute=execute,
         )
 
@@ -977,7 +986,11 @@ class RefundViewSet(
             )
 
         return replay_or_execute(
-            tenant_id=request.tenant.pk, key=key, endpoint="refunds:create", execute=execute
+            tenant_id=request.tenant.pk,
+            key=key,
+            endpoint="refunds:create",
+            request_data=request.data,
+            execute=execute,
         )
 
     @extend_schema(request=RefundDecisionSerializer, responses={200: RefundSerializer})
@@ -1032,7 +1045,11 @@ class RefundViewSet(
             return ActionResponse.ok(RefundSerializer(processed).data, message="Refund processed.")
 
         return replay_or_execute(
-            tenant_id=request.tenant.pk, key=key, endpoint="refunds:process", execute=execute
+            tenant_id=request.tenant.pk,
+            key=key,
+            endpoint="refunds:process",
+            request_data=request.data,
+            execute=execute,
         )
 
 
@@ -1209,6 +1226,8 @@ class VoucherCollectionImportViewSet(
             tenant_id=request.tenant.pk,
             key=key,
             endpoint="voucher-collection-imports:create",
+            # Multipart: the uploaded file is bound by its digest, not its bytes.
+            request_data={"provider": provider, "file_sha256": hashlib.sha256(data).hexdigest()},
             execute=execute,
         )
 
@@ -1432,6 +1451,7 @@ class FinanceReportView(APIView):
         rows = services.build_report_rows(
             kind=payload["kind"],
             user=request.user,
+            permission=route_permission(request, self),
             date_from=payload["date_from"],
             date_to=payload["date_to"],
             student_id=payload.get("student"),
@@ -1479,8 +1499,10 @@ class FinanceReportView(APIView):
                 "group_by": payload.get("group_by", "day"),
                 "format": payload.get("format", "csv"),
                 # Read back by the task to recompute the record scope, which is
-                # what stops an export widening what its requester could see.
+                # what stops an export widening what its requester could see...
                 "requested_by": str(request.user.pk),
+                # ...under the key this request was admitted on (core/exports/scope.py).
+                SCOPE_PERMISSION: scope_permission_payload(route_permission(request, self)),
             },
             actor_id=request.user.pk,
             idempotency_key=request.headers.get("Idempotency-Key"),
@@ -1507,6 +1529,7 @@ class StudentLedgerView(APIView):
         rows = services.build_report_rows(
             kind="student-ledger",
             user=request.user,
+            permission=route_permission(request, self),
             # The whole history: a statement is not period-bounded, and a
             # parent asking what they owe means in total.
             date_from=datetime.date.min,
