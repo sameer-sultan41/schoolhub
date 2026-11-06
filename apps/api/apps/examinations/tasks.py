@@ -333,9 +333,10 @@ def import_marks_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> No
     Progress is reported as it goes, because a school's whole marks sheet is
     long enough that a caller polling `GET /jobs/{id}` needs to see it moving.
 
-    **Rows are matched only against the students the requester's key reaches**,
-    read under the key the enqueuing request was admitted on (`scope_permission`,
-    core/exports/scope.py). A job without one fails closed, as an export does.
+    **Rows are matched only against the students the requester's key reaches**, in
+    the sections it lets them enter, read under the key the enqueuing request was
+    admitted on (`scope_permission`, core/exports/scope.py). A job without one fails
+    closed, as an export does.
     """
     import base64
 
@@ -380,8 +381,6 @@ def import_marks_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> No
             enrollments = services.import_candidates_by_admission_number(
                 exam_subject=exam_subject, user=requester, permission=permission
             )
-            # The requester's sections, checked per row like the grid checks its section.
-            writable = services.enterable_section_ids(user=requester, exam_subject=exam_subject)
 
         errors: list[dict[str, str]] = []
         succeeded = 0
@@ -394,7 +393,6 @@ def import_marks_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> No
                     row_number=int(row[ROW_NUMBER_KEY]),
                     exam_subject=exam_subject,
                     enrollments_by_number=enrollments,
-                    writable_section_ids=writable,
                     actor_id=uuid.UUID(actor_id),
                 )
             if error:
@@ -467,7 +465,7 @@ def remind_tenant_marks_entry(tenant_id: uuid.UUID) -> int:
         for exam in exams:
             due = [
                 entry
-                for entry in marks_entry_progress(exam=exam)
+                for entry in marks_entry_progress(exam=exam, user=None, permission=None)
                 if not entry["is_locked"]
                 and entry["closes_at"] is not None
                 and now <= entry["closes_at"] <= horizon

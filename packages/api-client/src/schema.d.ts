@@ -17323,7 +17323,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The section's active roll in the exam's session, in roll order, each student with their `marks` row or null. `meta.exam_subject` carries `max_marks`, `pass_marks`, `has_practical` and `practical_max_marks`. `meta.writable` says whether `:bulk-entry` would accept this grid now; when false, `meta.unwritable_reason` is one of `no_permission`, `exam_status`, `locked`, `window_not_open` or `window_closed`, and `meta.unwritable_message` is the refusing gate's sentence. An exam-subject or section the caller may not enter (`services.may_enter_marks`) is a 404. */
+            /** @description The section's active roll in the exam's session, in roll order, each student with their `marks` row or null. `meta.exam_subject` carries `max_marks`, `pass_marks`, `has_practical` and `practical_max_marks`. `meta.writable` says whether `:bulk-entry` would accept this grid now; when false, `meta.unwritable_reason` is one of `no_permission`, `exam_status`, `locked`, `window_not_open` or `window_closed`, and `meta.unwritable_message` is the refusing gate's sentence. An exam-subject or section the caller may not read (`services.may_enter_marks`) is a 404. */
             200: {
                 headers: {
                     [name: string]: unknown;

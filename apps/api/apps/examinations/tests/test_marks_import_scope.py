@@ -97,7 +97,10 @@ class PredicateAgreementTests(GridTestCase):
                         .first()
                     )
                     if enrollment and services.may_enter_marks(
-                        user=user, exam_subject=mark.exam_subject, section=enrollment.section
+                        user=user,
+                        exam_subject=mark.exam_subject,
+                        section=enrollment.section,
+                        permission="exams.marks.view",
                     ):
                         enterable.add(mark.pk)
 
@@ -190,14 +193,23 @@ class MarksImportScopeTests(GridTestCase):
 
         with self.captureOnCommitCallbacks(execute=True):
             response = self.upload(
-                self.sheet(self.students[0].admission_number, outsider.admission_number),
+                self.sheet(
+                    self.students[0].admission_number, outsider.admission_number, "NOT-A-STUDENT"
+                ),
                 client=client,
             )
 
         result = self.job_result(response)
-        self.assertEqual((result["succeeded"], result["failed"]), (1, 1))
-        self.assertEqual(result["errors"][0]["row"], "3")
-        self.assertEqual(result["errors"][0]["field"], "admission_number")
+        self.assertEqual((result["succeeded"], result["failed"]), (1, 2))
+        out_of_section, unknown = result["errors"]
+        self.assertEqual(
+            (out_of_section["row"], out_of_section["field"]), ("3", "admission_number")
+        )
+        # Worded as an unknown number, so the row does not say the student exists.
+        self.assertEqual(
+            out_of_section["issue"].replace(repr(outsider.admission_number), "<n>"),
+            unknown["issue"].replace(repr("NOT-A-STUDENT"), "<n>"),
+        )
         with tenant_context(self.tenant.id):
             self.assertFalse(Marks.objects.alive().filter(student=outsider).exists())
             self.assertTrue(Marks.objects.alive().filter(student=self.students[0]).exists())

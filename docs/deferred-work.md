@@ -275,6 +275,12 @@ either this file or `project-status.md`.
   narrow; **PR D converts the results and report-card ones** and PR E the question bank's, each
   with an out-of-scope 404 test.
 - **The examinations dashboard's PR C (marks) left these out:**
+  - **A student whose campus differs from their section's campus.** The marks write gate and the
+    grid's `writable` flag read the *section's* campus; the per-student filter in `_entry_students`
+    keeps `STUDENT_SCOPE`'s *student* campus. A campus-scoped marker therefore sees a grid as
+    writable and is refused that one student on submit, with the unknown-number wording. Resolving
+    it needs a ruling on which campus is authoritative for marks (the section's, as `Marks`' read
+    hook uses, or the student's); plan `2026-11-07-exams-dashboard-per-role-scope.md` §2.
   - **`class.name` in the marks-entry reminder carries "Class Section".** The reminder goes per
     section, so the variable is the class and section joined. A tenant override that words
     `class.name` as a whole class reads oddly; a separate `section.name` variable is the fix.

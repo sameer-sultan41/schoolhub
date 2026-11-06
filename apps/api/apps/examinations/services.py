@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Callable
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
@@ -58,13 +59,12 @@ from apps.school_organization.models import (
 from core.api.exceptions import Conflict, DomainRuleViolation
 from core.imports.tabular import parse_rows
 from core.rbac.models import RecordScope
-from core.rbac.permissions import effective_permission_keys, scopes_for
+from core.rbac.permissions import scopes_for
 from core.tenancy.locks import AdvisoryLockNamespace, advisory_xact_lock
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
 
-    from apps.academics.models import TeacherSubjectAllocation
     from core.rbac.permissions import AnyOf
 
 # §7.1's lifecycle. An exam may only be *configured* — subjects added, marks
@@ -83,6 +83,8 @@ DELETABLE_STATUSES = frozenset({ExamStatus.DRAFT})
 # The key that enters marks: `MarksViewSet` declares it, and the allocation check
 # reads the scopes of the roles granting it.
 MARKS_CREATE = "exams.marks.create"
+# The key that reads the marks grid and progress (`MarksViewSet`'s read key).
+MARKS_VIEW = "exams.marks.view"
 
 
 def assert_session_is_writable(session: AcademicSession) -> None:
@@ -880,75 +882,126 @@ def assert_marks_within_maximum(
         )
 
 
-def _current_allocations(
-    *, staff_ids: Any, exam_subject: ExamSubject
-) -> QuerySet[TeacherSubjectAllocation]:
-    """The current allocations of these staff rows to this exam-subject's class-subject.
+def _allocated_section_ids(teaching: AssignedTeaching, exam_subject: ExamSubject) -> frozenset:
+    """The sections `teaching` is currently allocated this exam-subject's subject in, in the
+    exam's session.
 
-    One row per section taught. Shared by the allocation gate and the `assigned`
-    student filter, so "allocated" means the same thing in both.
+    The one reading of "allocated" for marks (`_assigned_teaching`'s current rows): the
+    section gate, the per-student filter, the grid's flag, the import and the read
+    predicate all come through it, so they cannot disagree about who teaches a section.
     """
-    from apps.academics.models import TeacherSubjectAllocation
-
-    return TeacherSubjectAllocation.objects.alive().filter(
-        staff_id__in=staff_ids,
-        subject_id=exam_subject.subject_id,
-        section__school_class_id=exam_subject.school_class_id,
-        effective_to__isnull=True,
+    session_id = exam_subject.exam.academic_session_id
+    return frozenset(
+        section_id
+        for section_id, class_id, subject_id, allocated_session in teaching.allocations
+        if class_id == exam_subject.school_class_id
+        and subject_id == exam_subject.subject_id
+        and allocated_session == session_id
     )
 
 
-def may_enter_marks(
+def _campus_refs(scopes: dict) -> frozenset:
+    """The campus ids a `campus` grant names; empty when there is none."""
+    return frozenset(ref for ref in scopes.get(RecordScope.CAMPUS, []) if ref)
+
+
+@dataclass(frozen=True)
+class _SectionReach:
+    """The sections of one exam-subject's class a key reaches, read once per call.
+
+    ADR-0031 decision 7's union: `all` reaches every section; otherwise a section is
+    reached when a `campus` grant covers the section's campus **or** an `assigned`
+    grant's teaching covers the section. No type decides alone.
+    """
+
+    every_section: bool = False
+    campus_ids: frozenset = frozenset()
+    taught_section_ids: frozenset = frozenset()
+    assigned: bool = False
+    has_staff: bool = False
+
+    def covers(self, section: Section) -> bool:
+        return (
+            self.every_section
+            or section.campus_id in self.campus_ids
+            or section.pk in self.taught_section_ids
+        )
+
+
+def _section_reach(
     *,
     user,
     exam_subject: ExamSubject,
-    section: Section,
+    permission: str | AnyOf,
+    homeroom: bool,
     teaching: AssignedTeaching | None = None,
-) -> bool:
-    """§4 and §11 — may `user` enter `exam_subject`'s marks for `section`?
+) -> _SectionReach:
+    """`permission`'s reach over the exam-subject's sections (`scopes_for`: only the
+    roles granting it count).
 
-    - `all` scope: yes;
-    - `campus` scope: the section is on one of the caller's campuses;
-    - `assigned` scope: a current allocation for (section, subject) in the exam's
-      session, or the section is the caller's homeroom in that session.
-
-    A deleted section, or one outside the exam-subject's class, is never enterable. Resolved
-    through `_assigned_teaching`, as `Marks.filter_assigned_to_user` is, so the
-    rows a teacher reads and the rows they write agree. `teaching` lets a caller
-    checking many sections resolve it once.
+    `assigned` is the caller's current allocations for this subject in the exam's
+    session; with `homeroom` (the grid *read*), also the sections they class-teach in
+    that session, matching `Marks.filter_assigned_to_user`. Entry never counts the
+    homeroom: a class teacher reviews the class's marks, the subject teacher enters them.
+    `teaching` lets a caller checking many exam-subjects resolve it once.
     """
-    if section.deleted_at is not None or section.school_class_id != exam_subject.school_class_id:
-        return False
-    scopes = scopes_for(user, MARKS_CREATE)
+    scopes = scopes_for(user, permission)
     if RecordScope.ALL in scopes:
-        return True
-    # The same precedence `scope_queryset` applies: a campus grant decides alone.
+        return _SectionReach(every_section=True)
     campus_ids = _campus_refs(scopes)
-    if campus_ids:
-        return section.campus_id in campus_ids
     if RecordScope.ASSIGNED not in scopes:
         # `own` alone enters nothing: a student scoring their own paper is not §5.
-        return False
+        return _SectionReach(campus_ids=campus_ids)
     if teaching is None:
         teaching = _assigned_teaching(user)
-    session_id = exam_subject.exam.academic_session_id
-    if (section.pk, session_id) in teaching.homerooms:
-        return True
-    return any(
-        allocated_section == section.pk
-        and subject_id == exam_subject.subject_id
-        and allocated_session == session_id
-        for allocated_section, _class_id, subject_id, allocated_session in teaching.allocations
+    taught = _allocated_section_ids(teaching, exam_subject)
+    if homeroom:
+        session_id = exam_subject.exam.academic_session_id
+        taught |= {
+            section_id
+            for section_id, homeroom_session in teaching.homerooms
+            if homeroom_session == session_id
+        }
+    return _SectionReach(
+        campus_ids=campus_ids,
+        taught_section_ids=frozenset(taught),
+        assigned=True,
+        has_staff=bool(teaching.staff_ids),
     )
 
 
-def _campus_refs(scopes: dict) -> set:
-    """The campus ids a `campus` grant names; empty when there is none."""
-    return {ref for ref in scopes.get(RecordScope.CAMPUS, []) if ref}
+def _in_exam_class(*, exam_subject: ExamSubject, section: Section) -> bool:
+    return section.deleted_at is None and section.school_class_id == exam_subject.school_class_id
 
 
-def assert_marker_may_enter(*, user, exam_subject: ExamSubject, section: Section) -> None:
-    """`may_enter_marks` as a 422 on `section_id`, naming why it refused."""
+def may_enter_marks(
+    *, user, exam_subject: ExamSubject, section: Section, permission: str | AnyOf
+) -> bool:
+    """§4 — may `user` *read* `exam_subject`'s marks grid for `section` under `permission`?
+
+    The read side, passed the route's key (`exams.marks.view`): the union of `all`,
+    the section's campus, the caller's allocations **and their homeroom** in the
+    exam's session, so it agrees with `Marks.filter_assigned_to_user`. Writing is
+    `assert_marker_may_enter`, which does not count the homeroom. A deleted section, or
+    one outside the exam-subject's class, is never reachable.
+    """
+    if not _in_exam_class(exam_subject=exam_subject, section=section):
+        return False
+    return _section_reach(
+        user=user, exam_subject=exam_subject, permission=permission, homeroom=True
+    ).covers(section)
+
+
+def assert_marker_may_enter(
+    *, user, exam_subject: ExamSubject, section: Section, permission: str | AnyOf
+) -> None:
+    """§4 — may `user` *enter* `exam_subject`'s marks for `section` under `permission`?
+
+    A 422 on `section_id` naming why not. `all` passes; otherwise the section's campus
+    under a `campus` grant **or** a current allocation for (section, subject) in the
+    exam's session under an `assigned` grant (ADR-0031 decision 7). The homeroom does
+    not count for entry. The grid's `writable` flag runs this same gate.
+    """
     # `section_id` resolves through the tenant manager, so a deleted section reaches here.
     if section.deleted_at is not None:
         raise DomainRuleViolation({"section_id": "This section has been deleted."})
@@ -956,13 +1009,14 @@ def assert_marker_may_enter(*, user, exam_subject: ExamSubject, section: Section
         raise DomainRuleViolation(
             {"section_id": "This section is not in the class this exam-subject covers."}
         )
-    if may_enter_marks(user=user, exam_subject=exam_subject, section=section):
+    reach = _section_reach(
+        user=user, exam_subject=exam_subject, permission=permission, homeroom=False
+    )
+    if reach.covers(section):
         return
-    scopes = scopes_for(user, MARKS_CREATE)
-    if RecordScope.ALL not in scopes and _campus_refs(scopes):
+    if reach.campus_ids and not reach.assigned:
         message = "This section is outside your campus."
-    # Many `exam_staff` and admin users have no `Staff` row; only an assigned caller needs one.
-    elif RecordScope.ASSIGNED in scopes and not _assigned_teaching(user).staff_ids:
+    elif reach.assigned and not reach.has_staff:
         message = (
             "Marks entry is scoped to the sections you teach, and this account has no active "
             "staff record."
@@ -975,21 +1029,22 @@ def assert_marker_may_enter(*, user, exam_subject: ExamSubject, section: Section
     raise DomainRuleViolation({"section_id": message})
 
 
-def enterable_section_ids(*, user, exam_subject: ExamSubject) -> frozenset[uuid.UUID]:
-    """The live sections of the exam-subject's class `user` may enter marks for."""
-    sections = Section.objects.alive().filter(school_class_id=exam_subject.school_class_id)
-    assigned = RecordScope.ASSIGNED in scopes_for(user, MARKS_CREATE)
-    teaching = _assigned_teaching(user) if assigned else None
-    return frozenset(
-        section.pk
-        for section in sections
-        if may_enter_marks(user=user, exam_subject=exam_subject, section=section, teaching=teaching)
+def enterable_section_ids(
+    *, user, exam_subject: ExamSubject, permission: str | AnyOf
+) -> frozenset[uuid.UUID]:
+    """The live sections of the exam-subject's class `user` may enter under `permission`."""
+    reach = _section_reach(
+        user=user, exam_subject=exam_subject, permission=permission, homeroom=False
     )
+    sections = Section.objects.alive().filter(school_class_id=exam_subject.school_class_id)
+    return frozenset(section.pk for section in sections if reach.covers(section))
 
 
-def assert_marker_may_enter_some_section(*, user, exam_subject: ExamSubject) -> None:
+def assert_marker_may_enter_some_section(
+    *, user, exam_subject: ExamSubject, permission: str | AnyOf
+) -> None:
     """The import's gate: the caller may enter this exam-subject in at least one section."""
-    if not enterable_section_ids(user=user, exam_subject=exam_subject):
+    if not enterable_section_ids(user=user, exam_subject=exam_subject, permission=permission):
         raise DomainRuleViolation(
             {"exam_subject_id": "You may not enter marks for any section of this exam-subject."}
         )
@@ -1003,56 +1058,59 @@ def _class_enrollments(exam_subject: ExamSubject) -> QuerySet[Any]:
         academic_session_id=exam_subject.exam.academic_session_id,
         school_class_id=exam_subject.school_class_id,
         status=EnrollmentStatus.ACTIVE,
-    )
-
-
-def _entry_students(
-    *, exam_subject: ExamSubject, user=None, section: Section | None = None
-) -> dict:
-    """The roll for this exam-subject's marks: `{student_id: StudentEnrollment}`, in roll order.
-
-    **Eligibility** is an active enrollment in a section of the exam-subject's class, in
-    the exam's session, narrowed to `section` when given. With a `user` (a write), the
-    roll is also narrowed by `MARKS_CREATE`'s **record scope** over `STUDENT_SCOPE`:
-    `campus` keeps the held campuses' students, and `assigned` keeps the students
-    enrolled in a section the caller is currently allocated this subject in. A student
-    outside either is rejected exactly as an ineligible one is.
-    """
-    from apps.staff_management.models import EmploymentStatus, Staff
-    from apps.student_management.models import Student
-    from apps.student_management.services import STUDENT_SCOPE, enrollment_roll_order
-    from core.rbac.permissions import scope_queryset
-
-    enrolled = _class_enrollments(exam_subject).filter(
         # A soft-deleted student can keep a live enrollment; nothing cascades it.
         student__deleted_at__isnull=True,
     )
-    enrollments = enrolled if section is None else enrolled.filter(section=section)
-    if user is not None:
 
-        def in_allocated_sections(queryset: QuerySet[Any], marker: Any) -> QuerySet[Any]:
-            staff_ids = (
-                Staff.objects.alive()
-                .filter(user_id=marker.pk, employment_status=EmploymentStatus.ACTIVE)
-                .values("pk")
-            )
-            sections = _current_allocations(staff_ids=staff_ids, exam_subject=exam_subject).values(
-                "section_id"
-            )
-            return queryset.filter(
-                pk__in=enrolled.filter(section_id__in=sections).values("student_id")
-            )
 
-        scoped = scope_queryset(
-            Student.objects.alive().filter(pk__in=enrolled.values("student_id")),
-            user,
-            permission=MARKS_CREATE,
-            assigned_filter=in_allocated_sections,
-            **STUDENT_SCOPE,
-        )
-        enrollments = enrollments.filter(student_id__in=scoped.values("pk"))
+def _by_student(enrollments: QuerySet[Any]) -> dict:
+    """`{student_id: StudentEnrollment}` in roll order, each with its student and section."""
+    from apps.student_management.services import enrollment_roll_order
+
     ordered = enrollments.select_related("student", "section").order_by(*enrollment_roll_order())
     return {enrollment.student_id: enrollment for enrollment in ordered}
+
+
+def _entry_students(
+    *,
+    exam_subject: ExamSubject,
+    user,
+    permission: str | AnyOf,
+    section: Section | None = None,
+) -> dict:
+    """The enrollments `user` may enter marks for under `permission`, by student id.
+
+    Three narrowings. **Eligibility** is an active enrollment in a section of the
+    exam-subject's class, in the exam's session (and in `section` when given). The
+    **section** must be one `enterable_section_ids` allows. The **student** must be
+    within `permission`'s record scope over `STUDENT_SCOPE` (ADR-0013: the student
+    app's settings, not a copy): `campus` keeps the held campuses' students and
+    `assigned` the students in an allocated section, not the homeroom `Student`'s own
+    hook reads. A student outside any of them is rejected exactly as an ineligible one
+    is, so a row never says whether an out-of-scope student exists.
+    """
+    from apps.student_management.models import Student
+    from apps.student_management.services import STUDENT_SCOPE
+    from core.rbac.permissions import scope_queryset
+
+    enrolled = _class_enrollments(exam_subject)
+
+    def in_allocated_sections(queryset: QuerySet[Any], marker: Any) -> QuerySet[Any]:
+        sections = _allocated_section_ids(_assigned_teaching(marker), exam_subject)
+        return queryset.filter(pk__in=enrolled.filter(section_id__in=sections).values("student_id"))
+
+    scoped = scope_queryset(
+        Student.objects.alive().filter(pk__in=enrolled.values("student_id")),
+        user,
+        permission=permission,
+        assigned_filter=in_allocated_sections,
+        **STUDENT_SCOPE,
+    )
+    sections = enterable_section_ids(user=user, exam_subject=exam_subject, permission=permission)
+    entry = enrolled.filter(section_id__in=sections, student_id__in=scoped.values("pk"))
+    if section is not None:
+        entry = entry.filter(section=section)
+    return _by_student(entry)
 
 
 # `meta.unwritable_reason` on the grid, one per gate `bulk_enter_marks` runs.
@@ -1065,16 +1123,20 @@ NO_PERMISSION_MESSAGE = "You can read these marks but not enter them."
 
 
 def marks_grid_writability(
-    *, user, exam_subject: ExamSubject, write_permission: str
+    *, user, exam_subject: ExamSubject, section: Section, write_permission: str
 ) -> tuple[str, str] | None:
     """None when a grid the caller may read is also writable; else `(reason, message)`.
 
-    Runs the gates `bulk_enter_marks` runs, in its order, so the grid never
-    offers a write the submit refuses. The message is the gate's own sentence.
-    The section gate is not here: a caller failing it never sees the grid.
-    `write_permission` is the submit endpoint's single key, passed in by the view.
+    Runs the gates `bulk_enter_marks` runs, so the grid never offers a write the
+    submit refuses: the section write gate itself (`assert_marker_may_enter` under
+    `write_permission`, the submit endpoint's key passed in by the view), then the
+    exam, lock and window gates, each with its own sentence.
     """
-    if write_permission not in effective_permission_keys(user):
+    try:
+        assert_marker_may_enter(
+            user=user, exam_subject=exam_subject, section=section, permission=write_permission
+        )
+    except DomainRuleViolation:
         return UNWRITABLE_NO_PERMISSION, NO_PERMISSION_MESSAGE
     gates = (
         (UNWRITABLE_EXAM_STATUS, lambda: assert_exam_accepts_marks(exam_subject.exam)),
@@ -1093,9 +1155,11 @@ def marks_grid_writability(
 def marks_grid(*, exam_subject: ExamSubject, section: Section) -> list[dict]:
     """A section's roll for one exam-subject, each student with their marks row or None.
 
-    Two queries: the roll and its marks.
+    The section's whole roll: the view has already passed the section through the
+    read predicate (`may_enter_marks`), which is section-level like `Marks`' own
+    campus hook. Two queries: the roll and its marks.
     """
-    roll = _entry_students(exam_subject=exam_subject, section=section)
+    roll = _by_student(_class_enrollments(exam_subject).filter(section=section))
     rows = Marks.objects.alive().filter(exam_subject=exam_subject, student_id__in=list(roll))
     marks = {row.student_id: row for row in rows}
     return [
@@ -1142,9 +1206,13 @@ def bulk_enter_marks(
     unique index turns the loser into a 500 rather than an update.
     """
     exam_subject = lock_subject_for_entry(exam_subject)
-    assert_marker_may_enter(user=user, exam_subject=exam_subject, section=section)
+    assert_marker_may_enter(
+        user=user, exam_subject=exam_subject, section=section, permission=MARKS_CREATE
+    )
 
-    eligible = _entry_students(exam_subject=exam_subject, user=user, section=section)
+    eligible = _entry_students(
+        exam_subject=exam_subject, user=user, permission=MARKS_CREATE, section=section
+    )
     rejected: list[dict] = []
     accepted: list[dict] = []
 
@@ -1238,12 +1306,13 @@ def bulk_enter_marks(
     return {"entered": created, "updated": updated, "rows": len(accepted)}
 
 
-def marks_entry_progress(*, exam: Exam, user=None) -> list[dict]:
+def marks_entry_progress(*, exam: Exam, user, permission: str | AnyOf | None) -> list[dict]:
     """§13's marks-entry status report, and §6's missing-entries dashboard.
 
     One row per (exam-subject, section with an active roll), in class, subject
-    and section order. With a `user` who is not `all`-scoped, only the rows
-    `may_enter_marks` allows; without one (the reminder sweep), every row.
+    and section order. With a `user`, only the sections `permission` (the route's
+    key, required with a user) reaches under the read predicate `may_enter_marks`
+    uses; with none (the reminder sweep), every row.
 
     Flat in the size of the exam: the exam-subjects, the roll counts, the
     sections and the marks counts are one query each, plus the caller's
@@ -1302,20 +1371,32 @@ def marks_entry_progress(*, exam: Exam, user=None) -> list[dict]:
         (row["exam_subject_id"], row["student__enrollments__section_id"]): row for row in counts
     }
 
-    scopes = scopes_for(user, MARKS_CREATE) if user is not None else {}
-    narrow = user is not None and RecordScope.ALL not in scopes
-    teaching = _assigned_teaching(user) if narrow and RecordScope.ASSIGNED in scopes else None
-
+    # Resolved once for the whole exam, and only when an `assigned` grant needs it.
+    teaching = None
+    if user is not None:
+        if permission is None:
+            raise ValueError("A caller's progress is read under the route's key.")
+        if RecordScope.ASSIGNED in scopes_for(user, permission):
+            teaching = _assigned_teaching(user)
     rows = []
     for subject in subjects:
         class_sections = sorted(
             (sections[sid] for sid in sections_by_class.get(subject.school_class_id, [])),
             key=lambda section: (section.name, section.pk),
         )
+        reach = (
+            None
+            if user is None or permission is None
+            else _section_reach(
+                user=user,
+                exam_subject=subject,
+                permission=permission,
+                homeroom=True,
+                teaching=teaching,
+            )
+        )
         for section in class_sections:
-            if narrow and not may_enter_marks(
-                user=user, exam_subject=subject, section=section, teaching=teaching
-            ):
+            if reach is not None and not reach.covers(section):
                 continue
             tally = tallies.get((subject.pk, section.pk), {})
             rows.append(
@@ -1449,14 +1530,13 @@ def import_marks_row(
     row_number: int,
     exam_subject: ExamSubject,
     enrollments_by_number: dict,
-    writable_section_ids: frozenset[uuid.UUID],
     actor_id: uuid.UUID,
 ) -> dict[str, str] | None:
     """Write one imported marks row. Returns None, or a row-level error.
 
-    `enrollments_by_number` is `import_candidates_by_admission_number`'s roll;
-    `writable_section_ids` is `enterable_section_ids` for the importing user, so
-    a row for a section they may not enter is refused like any other bad row.
+    `enrollments_by_number` is `import_candidates_by_admission_number`'s roll: only
+    the students the importer may enter, so a row outside their sections or record
+    scope reads exactly as an unknown admission number does.
 
     The error's `row` is stringified, matching
     `attendance.import_attendance_row`. Not because a number is wrong in JSON,
@@ -1503,12 +1583,6 @@ def import_marks_row(
                 f"No active enrolment for {admission_number!r} in a class this exam-subject "
                 "covers that you may import marks for."
             ),
-        }
-    if enrollment.section_id not in writable_section_ids:
-        return {
-            "row": str(row_number),
-            "field": "admission_number",
-            "issue": f"You may not enter marks for {admission_number!r}'s section.",
         }
     student = enrollment.student
 
@@ -1568,36 +1642,21 @@ def import_marks_row(
 def import_candidates_by_admission_number(
     *, exam_subject: ExamSubject, user, permission: str | AnyOf
 ) -> dict:
-    """The roll's enrollments the importer may write, keyed by admission number.
+    """The enrollments the importer may write, keyed by admission number.
 
-    The class roll narrowed by `permission`'s record scope over `STUDENT_SCOPE`:
-    `permission` is the key the enqueuing request was admitted on, so a
-    campus-A importer's campus-B rows find no student and are reported as an
-    unknown admission number is, without saying the student exists.
+    `_entry_students` under `permission`, the key the enqueuing request was admitted
+    on: the sections the importer may enter, narrowed per student by that key's record
+    scope. A campus-A importer's campus-B row, or an assigned importer's row in a
+    section they do not teach, finds no enrollment and is reported as an unknown
+    admission number is, without saying the student exists.
 
     Keyed by admission number because that is what a spreadsheet carries — a
     school transcribing a marks sheet has the number on the paper, not a UUID.
     Built once per file rather than looked up per row, which is what keeps a
     six-hundred-row import from being six hundred queries.
     """
-    from apps.student_management.models import Student
-    from apps.student_management.services import STUDENT_SCOPE
-    from core.rbac.permissions import scope_queryset
-
-    roll = _entry_students(exam_subject=exam_subject)
-    scoped = set(
-        scope_queryset(
-            Student.objects.alive().filter(pk__in=list(roll)),
-            user,
-            permission=permission,
-            **STUDENT_SCOPE,
-        ).values_list("pk", flat=True)
-    )
-    return {
-        enrollment.student.admission_number: enrollment
-        for student_id, enrollment in roll.items()
-        if student_id in scoped
-    }
+    entry = _entry_students(exam_subject=exam_subject, user=user, permission=permission)
+    return {enrollment.student.admission_number: enrollment for enrollment in entry.values()}
 
 
 # --- §5.5 processing, §5.6 approval and publishing -------------------------

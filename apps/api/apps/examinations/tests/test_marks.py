@@ -495,11 +495,11 @@ class CampusBMarksTestCase(MarksTestCase):
 class EntryRecordScopeTests(CampusBMarksTestCase):
     """Which students a marker may write is `exams.marks.create`'s record scope.
 
-    The exam-subject is resolved unscoped (a class has no campus), so the scope
-    lives on the students. Against the old code a campus-scoped marker returned
-    early and every enrolled student of the class was eligible, so a campus-A
-    marker wrote campus-B marks, and an allocated teacher wrote marks for a
-    section they do not teach.
+    Entry is per section (the section gate) and per student (this key's record
+    scope over the student), one section per submit. Against the old code a
+    campus-scoped marker returned early and every enrolled student of the class
+    was eligible, so a campus-A marker wrote campus-B marks, and an allocated
+    teacher wrote marks for a section they do not teach.
     """
 
     def _row(self, student) -> dict:
@@ -559,10 +559,18 @@ class EntryRecordScopeTests(CampusBMarksTestCase):
             StaffFactory(tenant=self.tenant, campus=self.campus, user_id=marker.pk)
         grant(marker, "exams.marks.create", scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
         grant(marker, "exams.marks.create", scope=RecordScope.ASSIGNED)
+        client = self._client(marker)
 
-        response = self.submit([self._row(self.student_b)], client=self._client(marker))
+        in_own_section = self.submit([self._row(self.student_b)], client=client)
+        in_its_section = self.submit(
+            [self._row(self.student_b)], client=client, section=self.section_b
+        )
 
-        self._assert_rejected_alone(response, index=0, student=self.student_b)
+        self._assert_rejected_alone(in_own_section, index=0, student=self.student_b)
+        self.assertEqual(in_its_section.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        fields = [detail["field"] for detail in in_its_section.json()["error"]["details"]]
+        self.assertEqual(fields, ["section_id"])
+        self.assertEqual(self._marks_written(), 0)
 
     def test_campus_a_plus_assigned_writes_the_campus_b_section_they_are_allocated(
         self,
@@ -578,23 +586,43 @@ class EntryRecordScopeTests(CampusBMarksTestCase):
                 subject=self.subject,
                 staff=staff,
             )
-        grant(marker, "exams.marks.create", scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
-        grant(marker, "exams.marks.create", scope=RecordScope.ASSIGNED)
-
-        response = self.submit(
-            [*self.entries(), self._row(self.student_b)], client=self._client(marker)
+        grant(
+            marker,
+            "exams.marks.view",
+            "exams.marks.create",
+            scope=RecordScope.CAMPUS,
+            scope_ref=self.campus.pk,
         )
+        grant(marker, "exams.marks.view", "exams.marks.create", scope=RecordScope.ASSIGNED)
+        client = self._client(marker)
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        grid = client.get(
+            f"{MARKS}/grid",
+            {"exam_subject_id": str(self.exam_subject.pk), "section_id": str(self.section_b.pk)},
+        )
+        # One section per submit (the grid's shape): campus A's, then the allocated campus B's.
+        own = self.submit(client=client)
+        allocated = self.submit([self._row(self.student_b)], client=client, section=self.section_b)
+
+        self.assertEqual(grid.status_code, status.HTTP_200_OK, grid.json())
+        self.assertTrue(grid.json()["meta"]["writable"])
+        self.assertEqual(own.status_code, status.HTTP_200_OK, own.json())
+        self.assertEqual(allocated.status_code, status.HTTP_200_OK, allocated.json())
         self.assertEqual(self._marks_written(), 4)
 
     def test_an_all_scoped_marker_still_writes_every_campus_and_section(self) -> None:
         with tenant_context(self.tenant.id):
             outsider = self._enrol(campus=self.campus, section=self.other_section)
 
-        response = self.submit([*self.entries(), self._row(self.student_b), self._row(outsider)])
+        # One section per submit (the grid's shape), every one of them accepted.
+        responses = [
+            self.submit(),
+            self.submit([self._row(self.student_b)], section=self.section_b),
+            self.submit([self._row(outsider)], section=self.other_section),
+        ]
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        for response in responses:
+            self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
         self.assertEqual(self._marks_written(), 5)
 
 
@@ -705,7 +733,7 @@ class ProgressTests(MarksTestCase):
                 )
 
         with tenant_context(self.tenant.id), CaptureQueriesContext(connection) as captured:
-            services.marks_entry_progress(exam=self.exam)
+            services.marks_entry_progress(exam=self.exam, user=None, permission=None)
 
         self.assertLessEqual(len(captured.captured_queries), 4)
 
@@ -799,7 +827,6 @@ class MarksImportTests(MarksTestCase):
                     row_number=index + 1,
                     exam_subject=self.exam_subject,
                     enrollments_by_number=enrollments,
-                    writable_section_ids=frozenset({self.section.pk}),
                     actor_id=self.user.pk,
                 )
                 if error:
@@ -825,7 +852,6 @@ class MarksImportTests(MarksTestCase):
                     user=self.user,
                     permission="exams.marks.import",
                 ),
-                writable_section_ids=frozenset({self.section.pk}),
                 actor_id=self.user.pk,
             )
             row = Marks.objects.alive().get(
@@ -847,7 +873,6 @@ class MarksImportTests(MarksTestCase):
                     user=self.user,
                     permission="exams.marks.import",
                 ),
-                writable_section_ids=frozenset({self.section.pk}),
                 actor_id=self.user.pk,
             )
             row = Marks.objects.alive().get(
@@ -1061,7 +1086,6 @@ class SubjectLockOrderTests(MarksTestCase):
                     row_number=2,
                     exam_subject=self.exam_subject,
                     enrollments_by_number=enrollments,
-                    writable_section_ids=frozenset({self.section.pk}),
                     actor_id=self.user.pk,
                 )
 

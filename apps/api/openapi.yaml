@@ -7052,7 +7052,7 @@ paths:
             when false, `meta.unwritable_reason` is one of `no_permission`, `exam_status`,
             `locked`, `window_not_open` or `window_closed`, and `meta.unwritable_message`
             is the refusing gate's sentence. An exam-subject or section the caller
-            may not enter (`services.may_enter_marks`) is a 404.
+            may not read (`services.may_enter_marks`) is a 404.
   /api/v1/marks:bulk-entry:
     post:
       operationId: marks:bulk_entry_create

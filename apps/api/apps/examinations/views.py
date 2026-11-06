@@ -168,13 +168,16 @@ def scoped_exam(request: Request, view: TenantScopedViewSetMixin, pk: str | None
 def scoped_exam_subject(
     request: Request, view: TenantScopedViewSetMixin, pk: str | None
 ) -> ExamSubject:
-    """The exam-subject an action addresses by id, through `ExamSubjectViewSet`'s record scope."""
-    exam_subjects = scope_queryset(
+    """The exam-subject an action addresses by id, through `ExamSubjectViewSet`'s record scope.
+
+    Reached under the hosting route's read key and its own (`_reachable`), so
+    `:lock-marks` cannot reach an exam-subject the caller's marks view role hides.
+    """
+    exam_subjects = _reachable(
         ExamSubject.objects.alive().select_related("exam"),
-        request.user,
-        permission=route_permission(request, view),
-        own_field=None,
-        campus_field=None,
+        request,
+        view,
+        ExamSubjectViewSet.scope_kwargs(),
     )
     return get_object_or_404(exam_subjects, pk=pk)
 
@@ -802,19 +805,16 @@ class MarksViewSet(
     # as `may_enter_marks` does. This column is only the contract-test fallback.
     scope_campus_field = "student__campus_id"
     required_feature = FEATURE
-    required_permission = "exams.marks.view"
+    required_permission = services.MARKS_VIEW
     required_permission_map = {
-        "list": "exams.marks.view",
-        "retrieve": "exams.marks.view",
-        "grid": "exams.marks.view",
-        "progress": "exams.marks.view",
-        "bulk_entry": "exams.marks.create",
+        "list": services.MARKS_VIEW,
+        "retrieve": services.MARKS_VIEW,
+        "grid": services.MARKS_VIEW,
+        "progress": services.MARKS_VIEW,
+        "bulk_entry": services.MARKS_CREATE,
         "lock": "exams.marks.lock",
         "unlock": "exams.marks.lock",
     }
-    # `:lock-marks` and `:unlock-marks` act on an exam subject, never on a marks row, and
-    # school_admin locks without holding `exams.marks.create`.
-    scope_read_exempt_actions = frozenset({"lock", "unlock"})
     http_method_names = ["get", "post", "head", "options"]
 
     def get_queryset(self):
@@ -833,7 +833,7 @@ class MarksViewSet(
                     "when false, `meta.unwritable_reason` is one of `no_permission`, "
                     "`exam_status`, `locked`, `window_not_open` or `window_closed`, and "
                     "`meta.unwritable_message` is the refusing gate's sentence. An exam-subject "
-                    "or section the caller may not enter (`services.may_enter_marks`) is a 404."
+                    "or section the caller may not read (`services.may_enter_marks`) is a 404."
                 ),
             )
         },
@@ -846,14 +846,18 @@ class MarksViewSet(
         section = get_object_or_404(Section.objects.alive(), pk=query.validated_data["section_id"])
         # Out of the caller's sections reads as absent, like any out-of-scope row.
         if not services.may_enter_marks(
-            user=request.user, exam_subject=exam_subject, section=section
+            user=request.user,
+            exam_subject=exam_subject,
+            section=section,
+            permission=route_permission(request, self),
         ):
             raise NotFound
         entries = services.marks_grid(exam_subject=exam_subject, section=section)
-        # The submit's own key, so the grid can't drift from what `:bulk-entry` enforces.
+        # The submit's own key and section gate, so the flag can't drift from `:bulk-entry`.
         blocked = services.marks_grid_writability(
             user=request.user,
             exam_subject=exam_subject,
+            section=section,
             write_permission=self.required_permission_map["bulk_entry"],
         )
         return Response(
@@ -958,7 +962,9 @@ class MarksViewSet(
         """
         # A plain GET rather than a report `kind`: it is operational, read beside the exam.
         exam = scoped_exam(request, self, pk)
-        rows = services.marks_entry_progress(exam=exam, user=request.user)
+        rows = services.marks_entry_progress(
+            exam=exam, user=request.user, permission=route_permission(request, self)
+        )
         return ActionResponse.ok(MarksProgressRowSerializer(rows, many=True).data)
 
 
@@ -988,8 +994,11 @@ class MarksImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
         exam_subject = serializer.validated_data["exam_subject"]
         upload = serializer.validated_data["file"]
 
-        # The caller must be able to enter at least one section; the job checks each row's.
-        services.assert_marker_may_enter_some_section(user=request.user, exam_subject=exam_subject)
+        # This route's key, checked here and carried to the job, which checks each row's.
+        permission = route_permission(request, self)
+        services.assert_marker_may_enter_some_section(
+            user=request.user, exam_subject=exam_subject, permission=permission
+        )
         # A fail-fast only: a clerk importing into a locked subject is told now
         # rather than by polling a job. The job re-checks every row under the
         # exam's and subject's locks (`lock_subject_for_entry`), because this
@@ -1007,7 +1016,7 @@ class MarksImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
                 "requested_by": str(request.user.pk),
                 # The job narrows the class roll to this key's record scope, as an
                 # export job reads its rows (core/exports/scope.py).
-                SCOPE_PERMISSION: scope_permission_payload(route_permission(request, self)),
+                SCOPE_PERMISSION: scope_permission_payload(permission),
             },
             actor_id=request.user.pk,
         )
