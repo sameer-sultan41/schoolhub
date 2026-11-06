@@ -475,7 +475,7 @@ either this file or `project-status.md`.
   `superpowers/plans/2026-11-01-examinations-dashboard.md`), built as a stack, all open: PR A
   #147 (grading scales, exams and their subjects), PR B #149 (the Schedule and Admit cards
   tabs), PR C #152 (the Marks tab), PR D #154 (Results, Report cards and the Reports section)
-  and PR E (question banks and paper assembly; number to follow). Full-stack once they merge.
+  and PR E #155 (question banks and paper assembly). Full-stack once they merge.
 - **Tier 2's three modules are all in.** `apps/api/apps/` now also has
   `academics`, `timetable` and `attendance`, attendance with all three of its
   halves: marking, leave, and staff attendance with reports (see above).
