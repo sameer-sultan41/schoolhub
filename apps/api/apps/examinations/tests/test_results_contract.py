@@ -219,11 +219,17 @@ class ResultActionScopeTests(ProcessedResultsTestCase):
         with tenant_context(self.tenant.id):
             mixed = UserFactory(tenant=self.tenant)
         grant(mixed, "exams.result.view", scope=RecordScope.ASSIGNED)
-        grant(mixed, "exams.result.approve", "exams.result.publish", scope=RecordScope.ALL)
+        grant(
+            mixed,
+            "exams.result.create",
+            "exams.result.approve",
+            "exams.result.publish",
+            scope=RecordScope.ALL,
+        )
         client = APIClient()
         authenticate(client, mixed)
 
-        for url, body in self.exam_actions()[1:]:
+        for url, body in self.exam_actions():
             with self.subTest(url=url):
                 response = client.post(url, body, format="json")
                 self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

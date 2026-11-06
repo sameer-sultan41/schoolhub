@@ -236,21 +236,21 @@ class ReportCardActionScopeTests(ReportCardsTestCase):
                 self.assertEqual(outsider.post(url).status_code, status.HTTP_404_NOT_FOUND)
 
     def test_an_all_publish_role_does_not_reach_an_exam_the_view_role_hides(self) -> None:
-        """L36: `:publish-report-cards` reaches the exam under the read key, then its own.
+        """L36: both report-card actions reach the exam under the read key, then their own.
 
         `exams.report-card.view` on an `assigned` role that teaches nothing and
-        `.publish` at `all`: a 404, as for a caller with neither.
+        `.create`/`.publish` at `all`: a 404, as for a caller with neither.
         """
         with tenant_context(self.tenant.id):
             mixed = UserFactory(tenant=self.tenant)
         grant(mixed, "exams.report-card.view", scope=RecordScope.ASSIGNED)
-        grant(mixed, "exams.report-card.publish", scope=RecordScope.ALL)
+        grant(mixed, "exams.report-card.create", "exams.report-card.publish", scope=RecordScope.ALL)
         client = APIClient()
         authenticate(client, mixed)
 
-        response = client.post(f"/api/v1/exams/{self.exam.pk}:publish-report-cards")
-
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        for url in self.actions():
+            with self.subTest(url=url):
+                self.assertEqual(client.post(url).status_code, status.HTTP_404_NOT_FOUND)
 
     def test_the_class_teacher_reaches_both_actions(self) -> None:
         grant(self.teacher_user, *self.KEYS, scope=RecordScope.ASSIGNED)

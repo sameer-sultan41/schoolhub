@@ -977,8 +977,9 @@ def marker_teaching(user, *permissions: str | AnyOf) -> AssignedTeaching | None:
     The marks gates take it as `teaching=` so a grid open or a submit reads the
     caller's allocations once, not once per gate.
     """
-    if any(RecordScope.ASSIGNED in scopes_for(user, key) for key in permissions):
-        return _assigned_teaching(user)
+    for key in permissions:
+        if RecordScope.ASSIGNED in scopes_for(user, key):
+            return _assigned_teaching(user)
     return None
 
 
