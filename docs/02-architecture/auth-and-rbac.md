@@ -41,6 +41,47 @@ erDiagram
    - `assigned` — teacher → assigned classes/sections/subjects;
    - `campus:<id>` — staff restricted to one campus;
    - `all` — whole tenant (default for admin-type roles).
+
+   **Scope is evaluated per role assignment** ([ADR-0031](../decisions/0031-record-scope-per-role-assignment.md)).
+   Effective *keys* are the union of every role (§2.2), but a scope narrows only the keys its own
+   role grants. A user with `students.student.view` at `campus:A` and an unrelated role at `all`
+   reads campus A's students, not the whole tenant. The rules, in `core/rbac/permissions.py`:
+   - **A check reads only the assignments whose role grants the route's key.**
+     `scope_grants(user)` maps each held key to the scopes of the live assignments that grant
+     it, from one query and one cache entry; `effective_permission_keys` is its key set.
+     `scopes_for(user, declared)` reads that map for one declaration. No assignment granting the
+     key means no scope, and the read fails closed (`.none()`, `False`, 404).
+   - **An `AnyOf` route unions the assignments of every key it names**, so the answer does not
+     depend on the order the keys are listed in.
+   - **A key held at several scope types reads their union.** A campus-A role and an `assigned`
+     role for the same key reach campus A's rows *and* the sections the user is assigned, not
+     the first type in some precedence. `all`, or a type that passes through (a `campus` scope
+     over a table with no campus column), reads the whole tenant. A type that can reach nothing
+     (a `campus` role with no campus) adds nothing and never falls through to another type.
+   - **Every scoped read names its key.** `scope_queryset(queryset, user, permission=...)` takes
+     the declaration as a required keyword, with no default. The viewset mixin passes the route's
+     own declaration (`required_declaration`); a direct caller names the key that governs it.
+   - **A route that acts on a row must reach it under the read key and its own key.**
+     `TenantScopedViewSetMixin.get_queryset` scopes the queryset twice whenever the route's
+     declaration differs from the viewset's read key: first by the read key, then by the
+     declaration. PATCH, PUT, DELETE and every colon action resolved through `get_object()` or
+     `get_queryset()` get this; a route declaring the read key itself gets one call. The read key
+     is `required_permission`, or `scope_read_permission` where the class names another (the
+     correction queue reads under `AnyOf(correction.create, correction.approve)`); an action in
+     `scope_read_exempt_actions` is scoped by its own key alone (a notice `:acknowledge`, which
+     guardians and students make without `communication.notice.view`). A target resolved outside
+     the mixin chains the same two calls itself, with the target's view key:
+     `attendance.student-attendance.view` or `attendance.staff-attendance.view` for a
+     correction's row, `students.student.view` or `staff.staff.view` for a nested route's parent,
+     `school.section.view` for timetable `:validate` and `:publish`. A target outside either
+     scope is a 404, and neither key's roles widen the other.
+   - **A privilege applied to one row is checked against that row.** "Does the user hold this key
+     at all" is the wrong question for a capacity override, a clearance waiver or an approver's
+     cancel. `holds_key_for(user, permission, row, **SomeViewSet.scope_kwargs())` is
+     `scope_queryset` over that one row, under the scope settings of the viewset that serves it.
+   - **A background job reads under the key its request was admitted on.** An export job's
+     payload carries the enqueuing request's declaration as `scope_permission`
+     (`core/exports/scope.py`). A job without one fails and asks the user to export again.
 4. **Tenant-level:** RLS underneath everything (see `multi-tenancy.md`) — RBAC narrows *within* a tenant, never across.
 
 ### 2.4 Approval & Financial Permissions

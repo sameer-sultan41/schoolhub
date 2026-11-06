@@ -46,6 +46,8 @@ from core.money import ZERO
 from core.tenancy.context import tenant_context
 
 TODAY = datetime.date(2026, 9, 30)
+# The key `GET /reports/finance-summary` declares, which `build_report_rows` scopes by.
+REPORT_VIEW = "fees.report.view"
 
 
 class ReportTestCase(FeesFinanceAPITestCase):
@@ -411,28 +413,30 @@ class IncomeVsExpenseTests(ReportTestCase):
         with `campus_field=None` — `ledger_entries` has no campus dimension, but
         that is not a reason to skip scoping altogether. `LedgerEntry` defines
         neither `filter_owned_by_user` nor `filter_assigned_to_user`, so a role
-        granted `fees.ledger.view` at `own` scope must see nothing rather than
+        granted the report's key at `own` scope must see nothing rather than
         every posting in the tenant — the fail-closed behaviour is the point;
-        a tenant is free to grant this key more narrowly than the default
-        `accountant`/`school_owner` roles do.
+        a tenant is free to grant this key more narrowly than its default
+        roles do.
         """
         from apps.fees_finance.tests.factories import grant
 
         invoice = self._invoice(due=datetime.date(2026, 9, 10))
         self._pay(invoice, Decimal("1000.00"))
         reader = UserFactory(tenant=self.tenant)
-        grant(reader, "fees.ledger.view", scope="own")
+        grant(reader, REPORT_VIEW, scope="own")
 
         with tenant_context(self.tenant.id):
             income_rows = services.build_report_rows(
                 kind="income-vs-expense",
                 user=reader,
+                permission=REPORT_VIEW,
                 date_from=datetime.date(2026, 1, 1),
                 date_to=datetime.date(2027, 1, 1),
             )
             trial_rows = services.build_report_rows(
                 kind="trial-balance",
                 user=reader,
+                permission=REPORT_VIEW,
                 date_from=datetime.date(2026, 1, 1),
                 date_to=datetime.date(2027, 1, 1),
             )
@@ -457,18 +461,20 @@ class IncomeVsExpenseTests(ReportTestCase):
         invoice = self._invoice(due=datetime.date(2026, 9, 10))
         self._pay(invoice, Decimal("1000.00"))
         reader = UserFactory(tenant=self.tenant)
-        grant(reader, "fees.ledger.view", scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+        grant(reader, REPORT_VIEW, scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
 
         with tenant_context(self.tenant.id):
             income_rows = services.build_report_rows(
                 kind="income-vs-expense",
                 user=reader,
+                permission=REPORT_VIEW,
                 date_from=datetime.date(2026, 1, 1),
                 date_to=datetime.date(2027, 1, 1),
             )
             trial_rows = services.build_report_rows(
                 kind="trial-balance",
                 user=reader,
+                permission=REPORT_VIEW,
                 date_from=datetime.date(2026, 1, 1),
                 date_to=datetime.date(2027, 1, 1),
             )
@@ -487,6 +493,7 @@ class ReportDispatchTests(ReportTestCase):
                 rows = services.build_report_rows(
                     kind=kind,
                     user=self.user,
+                    permission=REPORT_VIEW,
                     date_from=datetime.date(2026, 1, 1),
                     date_to=datetime.date(2027, 1, 1),
                     student_id=self.student.pk if kind == "student-ledger" else None,
@@ -501,6 +508,7 @@ class ReportDispatchTests(ReportTestCase):
             services.build_report_rows(
                 kind="not-a-report",
                 user=self.user,
+                permission=REPORT_VIEW,
                 date_from=datetime.date(2026, 1, 1),
                 date_to=datetime.date(2027, 1, 1),
             )
@@ -513,6 +521,7 @@ class ReportDispatchTests(ReportTestCase):
             services.build_report_rows(
                 kind="student-ledger",
                 user=self.user,
+                permission=REPORT_VIEW,
                 date_from=datetime.date(2026, 1, 1),
                 date_to=datetime.date(2027, 1, 1),
             )

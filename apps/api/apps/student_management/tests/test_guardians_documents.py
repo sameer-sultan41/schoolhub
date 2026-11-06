@@ -98,6 +98,10 @@ class StudentManagementAPITestCase(APITestCase):
         with tenant_context(self.tenant.id):
             self.campus = CampusFactory(tenant=self.tenant)
             self.student = StudentFactory(tenant=self.tenant, campus=self.campus)
+        # A nested route resolves its parent under `/students`' own key as well as its
+        # own (`_NestedUnderStudentMixin.get_student`), and every role holding a
+        # guardian or document key holds this one too.
+        grant(self.user, "students.student.view")
 
     def allow(self, *keys: str) -> None:
         grant(self.user, *keys)
@@ -383,7 +387,7 @@ class StudentDocumentTests(StudentManagementAPITestCase):
         self.assertEqual(verify_response.json()["data"]["verified_by"], str(self.user.pk))
 
     def test_verifying_twice_is_a_conflict(self) -> None:
-        self.allow("students.document.create", "students.document.verify")
+        self.allow("students.document.create", "students.document.view", "students.document.verify")
         file = self._ready_file()
         create_response = self.client.post(
             f"/api/v1/students/{self.student.pk}/documents",

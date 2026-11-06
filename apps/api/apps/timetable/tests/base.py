@@ -46,6 +46,10 @@ class TimetableAPITestCase(APITestCase):
         self.user = UserFactory(tenant=self.tenant)
         authenticate(self.client, self.user)
         enable_feature(self.tenant, "module.timetable")
+        # Every staff role reads sections and staff. `:validate`/`:publish` resolve
+        # their section, and `candidates` its slot, under those keys' scope as well as
+        # the action's own, so the acting admin holds them as a real one does.
+        grant(self.user, "school.section.view", "staff.staff.view")
 
         with tenant_context(self.tenant.id):
             self.campus = CampusFactory(tenant=self.tenant)

@@ -37,8 +37,11 @@ from apps.timetable.tests.factories import (
 )
 from core.audit.models import AuditLog
 from core.notifications.models import Notification
+from core.rbac.models import RecordScope
 from core.rbac.permissions import declared_keys
 from core.tenancy.context import tenant_context
+
+APPROVE = "timetable.substitution.approve"
 
 
 def next_monday() -> datetime.date:
@@ -124,6 +127,41 @@ class CancelTests(CoverTestCase):
         cover = self.open_cover(on=next_monday(), created_by=other.pk)
 
         self.assertEqual(self.cancel(cover).status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_an_approver_for_another_campus_cannot_cancel_someone_elses_proposal(self) -> None:
+        """The approve key must reach this cover's campus (auth-and-rbac.md §2.3).
+
+        The proposer key at `all` finds the row, and the approve key is held, but for
+        another campus: read key-blind, that made the caller an approver here.
+        """
+        with tenant_context(self.tenant.id):
+            elsewhere = CampusFactory(tenant=self.tenant)
+        grant(self.user, APPROVE, scope=RecordScope.CAMPUS, scope_ref=elsewhere.pk)
+        grant(
+            self.user,
+            "timetable.timetable.view",
+            "timetable.substitution.create",
+            scope=RecordScope.ALL,
+        )
+        cover = self.open_cover(on=next_monday(), created_by=UserFactory(tenant=self.tenant).pk)
+
+        self.assertEqual(self.cancel(cover).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.status_of(cover), SubstitutionStatus.PROPOSED)
+
+    def test_an_approver_for_this_campus_cancels_someone_elses_proposal(self) -> None:
+        grant(self.user, APPROVE, scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+        grant(
+            self.user,
+            "timetable.timetable.view",
+            "timetable.substitution.create",
+            scope=RecordScope.ALL,
+        )
+        cover = self.open_cover(on=next_monday(), created_by=UserFactory(tenant=self.tenant).pk)
+
+        response = self.cancel(cover)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(self.status_of(cover), SubstitutionStatus.CANCELLED)
 
     def test_a_viewer_with_neither_key_is_refused(self) -> None:
         self.allow("timetable.timetable.view")

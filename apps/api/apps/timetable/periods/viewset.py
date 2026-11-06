@@ -30,8 +30,6 @@ from apps.timetable.periods.serializers import PeriodSerializer
 from apps.timetable.views import FEATURE, SCAFFOLDING_VIEW_KEY, STAFF_PERMISSIONS
 from core.api.pagination import PageNumberPagination
 from core.api.viewsets import TenantScopedViewSetMixin
-from core.rbac.models import RecordScope
-from core.rbac.permissions import user_scopes
 
 
 class PeriodViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
@@ -68,6 +66,9 @@ class PeriodViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     # Period.Meta.ordering; see RoomViewSet for why the view repeats the model's.
     ordering = ["sequence"]
     scope_campus_field = "campus_id"
+    # A null campus on a period means "every campus" (models.py), so a campus-scoped
+    # reader must keep the tenant-wide periods, or the day template loses lunch.
+    scope_campus_allows_null = True
     required_feature = FEATURE
     required_permission = SCAFFOLDING_VIEW_KEY
     required_permission_map = {
@@ -84,42 +85,15 @@ class PeriodViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         super().perform_destroy(instance)
 
     def get_queryset(self):
-        """Campus scoping must not hide the tenant-wide periods.
-
-        ``scope_queryset`` narrows to ``campus_id IN (...)``, which drops
-        ``campus_id IS NULL`` — and a null campus on a period means "every
-        campus" (models.py). Left alone, a campus-scoped admin would lose exactly
-        the rows that do apply to them, and the day template would render with
-        lunch missing. The scoped queryset is combined back with the tenant-wide
-        rows rather than the campus filter being reimplemented here.
-
-        ``_with_campus_name`` is applied *after* that combine rather than to each
-        side of it. ``QuerySet.__or__`` keeps only the left-hand query's
-        annotations, so annotating both sides would be one wasted join and one
-        silent dependence on which operand is on the left.
-        """
-        scoped = super().get_queryset()
-
-        scopes = user_scopes(self.request.user)
-        campus_ids = [ref for ref in scopes.get(RecordScope.CAMPUS, []) if ref]
-        # `not campus_ids` covers a campus scope with no `scope_ref`, which
-        # `scope_queryset` treats as granting nothing; widening that back to the
-        # tenant-wide rows would turn a malformed assignment into extra access.
-        if RecordScope.ALL in scopes or not campus_ids:
-            return self._with_campus_name(scoped)
-
-        tenant_wide = Period.objects.alive().filter(campus__isnull=True)
-        return self._with_campus_name((scoped | tenant_wide).distinct())
+        return self._with_campus_name(super().get_queryset())
 
     @staticmethod
     def _with_campus_name(queryset):
         """Make the campus sortable without putting a `__` in `ordering_fields`.
 
-        This queryset is ``.distinct()`` on the campus-scoped path above, and
-        Postgres rejects ``SELECT DISTINCT`` with an ``ORDER BY`` on a joined column
-        that is not in the select list — so `campus__name` in `ordering_fields`
-        would be a 500 for exactly the principals that branch exists to serve. The
-        annotation is in the select list, which is what makes the alias safe.
+        `ordering_fields` never traverses a relation (tests/test_endpoint_contracts.py:
+        Postgres rejects `SELECT DISTINCT` with an `ORDER BY` on a joined column that
+        is not in the select list), so the campus name is an annotation, which is.
 
         ``select_related`` is not redundant with the annotation: without it the
         serializer's campus fields would re-fetch the row per period.

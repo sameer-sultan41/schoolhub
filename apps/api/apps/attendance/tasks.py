@@ -16,6 +16,7 @@ import datetime
 import logging
 import uuid
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from celery import shared_task
 from django.utils import timezone
@@ -27,6 +28,9 @@ from core.jobs.models import BackgroundJob
 from core.jobs.services import mark_failed, mark_running, mark_succeeded, update_progress
 from core.tenancy.maintenance import for_each_tenant
 from core.tenancy.tasks import TenantAwareTask
+
+if TYPE_CHECKING:
+    from core.rbac.permissions import AnyOf
 
 logger = logging.getLogger(__name__)
 
@@ -185,13 +189,15 @@ def export_attendance_report_task(self, *, tenant_id: str, job_id: str, actor_id
     the reason the export exists. `core.jobs`' own prune sweep already notes that
     these rows carry base64 import payloads and are the heavier retention sweep.
 
-    **The scope is recomputed too, from the requesting user.** A report is read as
-    authoritative, so an export must not widen what its requester could see
-    inline — which it would if the job re-queried the table without the record
-    scope the endpoint applied.
+    **The scope is recomputed too, from the requesting user**, under the key the
+    enqueuing request was admitted on (`scope_permission`, core/exports/scope.py). A
+    report is read as authoritative, so an export must not widen what its requester
+    could see inline — which it would if the job re-queried the table without the
+    record scope the endpoint applied. A job without that key fails closed.
     """
     from apps.attendance import uploads
     from core.exports import tabular
+    from core.exports.scope import MISSING_SCOPE_PERMISSION, job_scope_permission
     from core.files.services import create_ready_file
     from core.rbac.models import User
     from core.tenancy.context import tenant_atomic
@@ -199,6 +205,11 @@ def export_attendance_report_task(self, *, tenant_id: str, job_id: str, actor_id
     with tenant_atomic(uuid.UUID(tenant_id)):
         job = BackgroundJob.objects.get(pk=job_id)
     mark_running(job=job)
+
+    permission = job_scope_permission(job.payload)
+    if permission is None:
+        mark_failed(job=job, error=MISSING_SCOPE_PERMISSION)
+        return
 
     try:
         with tenant_atomic(uuid.UUID(tenant_id)):
@@ -212,6 +223,7 @@ def export_attendance_report_task(self, *, tenant_id: str, job_id: str, actor_id
             rows = build_report_rows(
                 kind=payload["kind"],
                 user=requester,
+                permission=permission,
                 start_date=datetime.date.fromisoformat(payload["start_date"]),
                 end_date=datetime.date.fromisoformat(payload["end_date"]),
                 section_id=payload.get("section_id"),
@@ -252,6 +264,7 @@ def build_report_rows(
     *,
     kind: str,
     user,
+    permission: str | AnyOf,
     start_date: datetime.date,
     end_date: datetime.date,
     section_id: str | None = None,
@@ -259,7 +272,10 @@ def build_report_rows(
     threshold: Decimal | None = None,
     limit: int | None = None,
 ) -> list[dict]:
-    """Build one §13 report's rows under `user`'s record scope.
+    """Build one §13 report's rows under `user`'s record scope for `permission`.
+
+    `permission` is the declaration the request was admitted on (the view key inline,
+    whichever key queued the job in an export), so only the roles granting it count.
 
     `threshold` is the defaulters' cutoff (the report's default when None); the
     other kinds ignore it.
@@ -284,7 +300,10 @@ def build_report_rows(
 
     if kind == "staff-punctuality":
         scoped = scope_queryset(
-            StaffAttendance.objects.alive(), user, campus_field="staff__campus_id"
+            StaffAttendance.objects.alive(),
+            user,
+            permission=permission,
+            campus_field="staff__campus_id",
         )
         return reports.staff_punctuality(
             scoped, start_date=start_date, end_date=end_date, limit=limit
@@ -294,6 +313,7 @@ def build_report_rows(
         scoped = scope_queryset(
             LeaveRequest.objects.alive().filter(requester_type=RequesterType.STUDENT),
             user,
+            permission=permission,
             campus_field="student__campus_id",
         )
         return reports.leave_report(scoped, start_date=start_date, end_date=end_date, limit=limit)
@@ -303,6 +323,7 @@ def build_report_rows(
     scoped = scope_queryset(
         StudentAttendance.objects.alive(),
         user,
+        permission=permission,
         campus_field="section__campus_id",
         assigned_filter=StudentAttendance.filter_class_teacher_sections,
     )
