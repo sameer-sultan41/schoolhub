@@ -1835,7 +1835,6 @@
         "attachment": {
           "title": "Attachment",
           "none": "No attachment.",
-          "onFile": "A file is attached.",
           "download": "Download attachment",
           "downloading": "Preparing the download…",
           "failed": "The attachment couldn't be downloaded."
@@ -2338,7 +2337,8 @@
       "emptyDescription": "Requests you submit for your child will appear here.",
       "range": "{from} to {to}",
       "days": "{count, plural, one {# day} other {# days}}",
-      "attached": "Attachment submitted",
+      "downloadAttachment": "Download the {type} note ({range}, {status})",
+      "attachmentFailed": "The attachment couldn't be downloaded. Please try again.",
       "dayPart": {
         "full": "Full day",
         "first_half": "First half",

@@ -2553,6 +2553,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/leave-requests/{id}/attachment:download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get a signed download URL for a leave request's attachment
+         * @description `POST /leave-requests/{id}/attachment:download`.
+         *
+         *     The only way to fetch a leave attachment: the purpose is module-gated, so
+         *     `/files` never signs one. Found through `get_queryset`, so a guardian reaches only
+         *     their own child's request and staff only their scope's. Not audited, as no
+         *     download is.
+         */
+        post: operations["leave_requests_attachment:download_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/leave-requests/{id}:approve": {
         parameters: {
             query?: never;
@@ -6533,7 +6558,7 @@ export interface components {
             title: string;
             sections: components["schemas"]["PaperSection"][];
         };
-        /** @description An attachment's short-lived signed link, as `POST /files/{id}:download` returns one. */
+        /** @description A file's short-lived signed link: every `:download` action answers with one. */
         AttachmentDownload: {
             download_url: string;
         };
@@ -16018,20 +16043,15 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["File"];
-                "application/x-www-form-urlencoded": components["schemas"]["File"];
-                "multipart/form-data": components["schemas"]["File"];
-            };
-        };
+        requestBody?: never;
         responses: {
-            /** @description {'download_url': str} */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AttachmentDownload"];
+                };
             };
         };
     };
@@ -16913,6 +16933,34 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LeaveRequest"];
                 };
+            };
+        };
+    };
+    "leave_requests_attachment:download_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttachmentDownload"];
+                };
+            };
+            /** @description Not a request the caller may read, or it has no ready attachment. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -20754,12 +20802,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description {'download_url': str} */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AttachmentDownload"];
+                };
             };
         };
     };

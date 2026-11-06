@@ -81,6 +81,7 @@ from apps.student_management.tasks import (
 from core.api.exceptions import DomainRuleViolation
 from core.api.pagination import PageNumberPagination
 from core.api.viewsets import ActionResponse, TenantModelViewSet, TenantScopedViewSetMixin
+from core.files.serializers import AttachmentDownloadSerializer
 from core.idempotency.services import replay_or_execute
 from core.jobs.services import create_job, enqueue_job
 from core.rbac.permissions import holds_key_for, route_permission, scope_queryset
@@ -718,7 +719,7 @@ class StudentDocumentViewSet(
     @extend_schema(
         summary="Get a signed download URL for a student document",
         request=None,
-        responses={200: OpenApiResponse(description="{'download_url': str}")},
+        responses={200: AttachmentDownloadSerializer},
     )
     def download(self, request, pk=None) -> Response:
         from core.files.services import get_download_url

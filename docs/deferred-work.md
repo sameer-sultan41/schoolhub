@@ -201,16 +201,6 @@ either this file or `project-status.md`.
     "today only" through the default window; an explicit `attendance_lock_window_days=0`
     test would keep that boundary pinned if the default ever changes.
 - **The attendance dashboard's PR B (the corrections and leave queues) left these out:**
-  - **A leave attachment downloads through the generic file endpoint, which has no record
-    scope.** The Leave detail sheet downloads through `POST /files/{id}:download`, keyed
-    `platform.file.view` (every staff role). `FileViewSet.get_queryset`
-    (`core/files/views.py:55-64`) is `File.objects.alive()`: a class teacher who reaches
-    only their own sections' requests can still fetch any file in the tenant whose id they
-    learn. The id arrives through a record-scoped leave request, which bounds the exposure
-    in the dashboard, but not at the API. This is the platform gap recorded under
-    `core/files` below (C1 in `07-quality/2026-09-module-audit-findings.md`); for leave,
-    the fix is a `:download` action on `/leave-requests/{id}` gated by the request's own
-    scope, as `/student-documents/{id}:download` is for students' documents.
   - **A leave request's `section_name` is the current session's section.** It is the
     student's active enrollment in the current session, not the session the leave dates
     fall in, so a request from last session shows today's section, or none. The queue is
@@ -1049,11 +1039,6 @@ either this file or `project-status.md`.
   - **`platform.notification.view` for custom tenant roles.** The key's default roles are
     `ALL_TENANT_ROLES`; a role a tenant defines later does not get it, so its holders get a 403
     on the inbox until someone grants it. Role management has to grant it by default.
-  - **A guardian can upload a leave attachment but cannot download it again.**
-    `platform.file.view` is staff-only and there is no leave `:download` route, so the portal
-    cannot re-open the document it attached. A `:download` on `/leave-requests/{id}` gated by
-    the request's own scope is the fix. The portal's leave list only notes "Attachment
-    submitted" until then.
   - **Portal users can create unlimited pending upload slots.** Only the per-user throttle
     caps `POST /files` for a guardian or student; nothing expires or counts unconfirmed slots.
   - **Library and transport panels** (§5.8). Neither module is built.
@@ -1358,7 +1343,8 @@ either this file or `project-status.md`.
   improvise inside one module's PR. The mechanism now exists: a purpose registered with
   `module_gated=True` (`core/files/purposes.py`) is left out of `FileViewSet`'s list and is a
   404 on its retrieve and `:download`, and its module serves its own gated download.
-  `communication.thread-attachment` is the first such purpose (communication PR C);
+  `communication.thread-attachment` is the first such purpose (communication PR C), and
+  `attendance.leave-attachment` the second (`/leave-requests/{id}/attachment:download`);
   `student.document` and the roster exports below can opt in once each has its module-owned
   download for every caller that needs one. The same gap covers whole-roster files: any staff role
   holding `platform.file.view` can also list and download the `student.export`,

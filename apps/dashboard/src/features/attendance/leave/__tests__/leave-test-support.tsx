@@ -30,7 +30,7 @@ export { pick, rowOf, urlParam } from "@/test-fixtures/list-screen";
 export const fetchPage = mocked(Services.leaveRequests.fetchLeavePage);
 export const fetchTypes = mocked(Services.leaveRequests.fetchLeaveTypes);
 export const decide = mocked(Services.leaveRequests.decideLeave);
-export const fetchDownloadUrl = mocked(Services.jobs.fetchFileDownloadUrl);
+export const fetchDownloadUrl = mocked(Services.leaveRequests.fetchLeaveAttachmentUrl);
 
 /** The signed-in user's id, `buildUser`'s: the one whose own requests and levels are barred. */
 export const MY_USER_ID = buildUser([]).id;

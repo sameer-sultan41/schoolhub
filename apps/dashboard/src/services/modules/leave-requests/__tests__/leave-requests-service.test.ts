@@ -142,4 +142,14 @@ describe("leave-requests-service", () => {
     expect(mockPost).toHaveBeenCalledWith(`/leave-requests/${LEAVE_ID}:cancel`);
     expect(cancelled.status).toBe("cancelled");
   });
+
+  it("asks the request's own route for its attachment's signed URL", async () => {
+    const { fetchLeaveAttachmentUrl } = await import("../leave-requests-service");
+    mockPost.mockResolvedValue({ data: { download_url: "https://signed.test/note.pdf" } });
+
+    const url = await fetchLeaveAttachmentUrl(LEAVE_ID);
+
+    expect(mockPost).toHaveBeenCalledWith(`/leave-requests/${LEAVE_ID}/attachment:download`);
+    expect(url).toBe("https://signed.test/note.pdf");
+  });
 });

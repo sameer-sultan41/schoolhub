@@ -1835,7 +1835,6 @@
         "attachment": {
           "title": "منسلکہ",
           "none": "کوئی منسلکہ نہیں۔",
-          "onFile": "ایک فائل منسلک ہے۔",
           "download": "منسلکہ ڈاؤن لوڈ کریں",
           "downloading": "ڈاؤن لوڈ تیار کیا جا رہا ہے…",
           "failed": "منسلکہ ڈاؤن لوڈ نہیں ہو سکا۔"
@@ -2338,7 +2337,8 @@
       "emptyDescription": "آپ اپنے بچے کے لیے جو درخواستیں جمع کروائیں گے وہ یہاں نظر آئیں گی۔",
       "range": "{from} سے {to} تک",
       "days": "{count, plural, one {# دن} other {# دن}}",
-      "attached": "دستاویز جمع کروائی گئی",
+      "downloadAttachment": "{type} کی دستاویز ڈاؤن لوڈ کریں ({range}، {status})",
+      "attachmentFailed": "دستاویز ڈاؤن لوڈ نہیں ہو سکی۔ دوبارہ کوشش کریں۔",
       "dayPart": {
         "full": "پورا دن",
         "first_half": "پہلا نصف",

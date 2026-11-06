@@ -4971,22 +4971,15 @@ paths:
         required: true
       tags:
       - files
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/File'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/File'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/File'
       security:
       - jwtAuth: []
       responses:
         '200':
-          description: '{''download_url'': str}'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttachmentDownload'
+          description: ''
   /api/v1/fines:
     get:
       operationId: fines_list
@@ -6240,6 +6233,37 @@ paths:
               schema:
                 $ref: '#/components/schemas/LeaveRequest'
           description: ''
+  /api/v1/leave-requests/{id}/attachment:download:
+    post:
+      operationId: leave_requests_attachment:download_create
+      description: |-
+        `POST /leave-requests/{id}/attachment:download`.
+
+        The only way to fetch a leave attachment: the purpose is module-gated, so
+        `/files` never signs one. Found through `get_queryset`, so a guardian reaches only
+        their own child's request and staff only their scope's. Not audited, as no
+        download is.
+      summary: Get a signed download URL for a leave request's attachment
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - leave-requests
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttachmentDownload'
+          description: ''
+        '404':
+          description: Not a request the caller may read, or it has no ready attachment.
   /api/v1/leave-requests/{id}:approve:
     post:
       operationId: leave_requests_:approve_create
@@ -11814,7 +11838,11 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: '{''download_url'': str}'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttachmentDownload'
+          description: ''
   /api/v1/student-documents/{id}:verify:
     post:
       operationId: student_documents_:verify_create
@@ -14937,8 +14965,8 @@ components:
       - title
     AttachmentDownload:
       type: object
-      description: An attachment's short-lived signed link, as `POST /files/{id}:download`
-        returns one.
+      description: 'A file''s short-lived signed link: every `:download` action answers
+        with one.'
       properties:
         download_url:
           type: string
