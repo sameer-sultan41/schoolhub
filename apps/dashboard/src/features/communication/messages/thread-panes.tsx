@@ -28,6 +28,8 @@ export interface ThreadPanesProps {
   header?: ReactNode;
   /** `false` hides close and reopen (the parent portal); the default keeps them. */
   canTransition?: boolean;
+  /** The parent portal sets this: replies can carry files. */
+  allowAttachments?: boolean;
 }
 
 /**
@@ -35,7 +37,13 @@ export interface ThreadPanesProps {
  * the right (below it on a narrow screen). The open thread and the status filter live in the
  * URL (`?thread=`, `?status=`), so a reload or a shared link keeps them.
  */
-export function ThreadPanes({ source, readOnly, header, canTransition }: ThreadPanesProps) {
+export function ThreadPanes({
+  source,
+  readOnly,
+  header,
+  canTransition,
+  allowAttachments,
+}: ThreadPanesProps) {
   const t = useTranslations("communication.messages");
   const { searchParams, setParams } = useUrlParams();
   const rawThread = searchParams.get(THREAD_PARAM);
@@ -78,6 +86,7 @@ export function ThreadPanes({ source, readOnly, header, canTransition }: ThreadP
                 threadId={threadId}
                 readOnly={readOnly}
                 canTransition={canTransition}
+                allowAttachments={allowAttachments}
               />
             </div>
           ) : (

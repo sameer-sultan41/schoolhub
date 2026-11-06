@@ -23,6 +23,8 @@ export interface LeavePageQuery {
   ordering?: string;
   status?: LeaveStatus;
   leaveTypeId?: string;
+  /** One student's requests (a guardian reads their child's). */
+  studentId?: string;
   dateFrom?: string;
   dateTo?: string;
 }
@@ -38,4 +40,15 @@ export interface LeaveDecisionResult {
   request: LeaveRequestRecord;
   /** `meta.auto_marked_days`; `null` when the server sent none. */
   autoMarkedDays: number | null;
+}
+
+/** What a guardian submits: the wire body, minus what the server derives. */
+export interface LeaveCreateInput {
+  studentId: string;
+  leaveTypeId: string;
+  startDate: string;
+  endDate: string;
+  dayPart: LeaveDayPart;
+  reason: string;
+  attachmentFileId?: string;
 }

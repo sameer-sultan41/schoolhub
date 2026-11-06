@@ -39,6 +39,7 @@ export function PortalMessages() {
         source={INBOX_SOURCE}
         readOnly={false}
         canTransition={false}
+        allowAttachments
         header={
           <div className="flex items-center justify-between gap-3">
             <h1 className="font-heading text-xl font-semibold text-foreground">{t("title")}</h1>
@@ -60,6 +61,7 @@ export function PortalMessages() {
           open
           onOpenChange={setNewThreadOpen}
           students={students}
+          allowAttachments
           onCreated={(threadId) => {
             setParams({ [THREAD_PARAM]: threadId });
           }}

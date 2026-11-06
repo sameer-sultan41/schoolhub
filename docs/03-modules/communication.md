@@ -323,3 +323,9 @@ Built with the parent portal's backend (PR 1 of [`docs/superpowers/plans/2026-11
 | Dashboard | The reply composer's internal-note checkbox reads `is_restricted_principal` (see PR D above) |
 | Tests | `core/notifications/tests/test_inbox.py` (own rows for a scope-`all` caller, mark-read idempotent, mark-all-read bounded by `before`, a guardian reading a staff reply, cross-tenant `404`); `communication/notices/tests/test_portal.py`; `e2e/tests/live/api/parent-portal.spec.ts` (a staff reply in the guardian's inbox, a notice listed and acknowledged, the other tenant's `404`) |
 
+### Built (parent portal PR B)
+
+| Area | State |
+| ---- | ----- |
+| Portal attachments | The portal composer (`ReplyComposer`) and the new-conversation form take files through the shared `AttachmentUploader` (`allowAttachments`, set only by the portal): each file goes through `POST /files` (`communication.thread-attachment`, portal-uploadable), a PUT and `:confirm`, and its id is sent in `attachments` (not `attachment_file_ids`); at most five per message, PDF, JPEG or PNG up to 10 MB, checked in the browser first. Someone else's file is a 422 on `attachments`, shown as the form's message. Send is held while a file uploads. The staff composer is unchanged (`deferred-work.md`) |
+| Tests | Jest `features/portal/messages/__tests__/portal-messages.test.tsx` (an upload sent with the reply, a refused type never uploaded) |

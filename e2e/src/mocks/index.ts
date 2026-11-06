@@ -29,3 +29,4 @@ export * from "./domains/communication-store";
 export * from "./domains/communication";
 export * from "./domains/portal-store";
 export * from "./domains/portal";
+export * from "./domains/portal-leave";

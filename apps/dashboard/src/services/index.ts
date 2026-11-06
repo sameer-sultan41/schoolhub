@@ -5,6 +5,7 @@ import { NotificationPreferencesService } from "./modules/notification-preferenc
 import { NotificationsService } from "./modules/notifications";
 import { ParentPortalService } from "./modules/parent-portal";
 import { ReceiptsService } from "./modules/receipts";
+import { VouchersService } from "./modules/vouchers";
 import { ResultsService } from "./modules/results";
 import { AttendanceCorrectionsService } from "./modules/attendance-corrections";
 import { AttendanceReportsService } from "./modules/attendance-reports";
@@ -106,6 +107,7 @@ export type {
   LeaveAction,
   LeaveApprovalDecision,
   LeaveApprovalRecord,
+  LeaveCreateInput,
   LeaveDayPart,
   LeaveDecisionResult,
   LeavePageQuery,
@@ -218,6 +220,7 @@ export type {
 } from "./modules/notification-preferences";
 export type { FeeInvoiceRecord } from "./modules/fee-invoices";
 export type { ReceiptFormat, ReceiptRecord } from "./modules/receipts";
+export type { VoucherFormat, VoucherRecord, VoucherStatus } from "./modules/vouchers";
 export type { ResultRecord } from "./modules/results";
 
 /**
@@ -263,5 +266,6 @@ export const Services = {
   notices: NoticesService,
   feeInvoices: FeeInvoicesService,
   receipts: ReceiptsService,
+  vouchers: VouchersService,
   results: ResultsService,
 } as const;

@@ -12,6 +12,8 @@ import {
   portalDashboard,
   portalInvoice,
   portalReceipt,
+  portalVoucher,
+  VOUCHER_ID,
 } from "@/test-fixtures/portal";
 import { renderWithProviders } from "@/test-utils";
 
@@ -35,6 +37,7 @@ jest.mock("@/services", () => ({
     parentPortal: { fetchPortalDashboard: jest.fn() },
     feeInvoices: { listFeeInvoices: jest.fn(), fetchFeeInvoice: jest.fn() },
     receipts: { listReceipts: jest.fn(), downloadReceipt: jest.fn() },
+    vouchers: { listVouchers: jest.fn(), downloadVoucher: jest.fn() },
   },
 }));
 
@@ -54,6 +57,13 @@ const mockDownload = Services.receipts.downloadReceipt as jest.MockedFunction<
   typeof Services.receipts.downloadReceipt
 >;
 
+const mockListVouchers = Services.vouchers.listVouchers as jest.MockedFunction<
+  typeof Services.vouchers.listVouchers
+>;
+const mockDownloadVoucher = Services.vouchers.downloadVoucher as jest.MockedFunction<
+  typeof Services.vouchers.downloadVoucher
+>;
+
 const outstanding = portalInvoice();
 const paid = portalInvoice({
   id: PAID_INVOICE_ID,
@@ -70,6 +80,9 @@ describe("PortalFees", () => {
     mockFetchInvoice.mockReset();
     mockListReceipts.mockReset();
     mockDownload.mockReset();
+    mockListVouchers.mockReset();
+    mockDownloadVoucher.mockReset();
+    mockListVouchers.mockResolvedValue({ items: [] });
     mockUseParams.mockReturnValue({ studentId: AYESHA_ID, invoiceId: INVOICE_ID });
     mockFetchDashboard.mockResolvedValue(portalDashboard());
     mockListInvoices.mockImplementation((query) =>
@@ -102,6 +115,51 @@ describe("PortalFees", () => {
       expect(saveBlob).toHaveBeenCalledWith(blob, "RCP-0001.pdf");
     });
     expect(mockDownload).toHaveBeenCalledWith(RECEIPT_ID);
+  });
+
+  it("offers each open invoice its issued voucher and downloads it as a blob", async () => {
+    mockListVouchers.mockResolvedValue({ items: [portalVoucher()] });
+    const blob = new Blob(["%PDF"], { type: "application/pdf" });
+    mockDownloadVoucher.mockResolvedValue(blob);
+    const user = userEvent.setup();
+
+    renderWithProviders(<PortalFees />);
+    await user.click(await screen.findByRole("button", { name: /Bank branch voucher 1234567890/ }));
+
+    expect(mockListVouchers).toHaveBeenCalledWith(
+      expect.objectContaining({ student: AYESHA_ID, status: "issued" }),
+    );
+    await waitFor(() => {
+      expect(saveBlob).toHaveBeenCalledWith(blob, "1234567890.pdf");
+    });
+    expect(mockDownloadVoucher).toHaveBeenCalledWith(VOUCHER_ID);
+  });
+
+  it("tells a parent to ask the office when an open invoice has no voucher", async () => {
+    renderWithProviders(<PortalFees />);
+
+    expect(await screen.findByText("Ask the school office for a voucher.")).toBeInTheDocument();
+  });
+
+  it("does not claim there is no voucher when the vouchers fail to load", async () => {
+    mockListVouchers.mockRejectedValue(new Error("boom"));
+
+    renderWithProviders(<PortalFees />);
+
+    expect(await screen.findByText(/couldn't load the vouchers/)).toBeInTheDocument();
+    expect(screen.queryByText("Ask the school office for a voucher.")).not.toBeInTheDocument();
+  });
+
+  it("says in place when a voucher fails to download", async () => {
+    mockListVouchers.mockResolvedValue({ items: [portalVoucher()] });
+    mockDownloadVoucher.mockRejectedValue(new Error("boom"));
+    const user = userEvent.setup();
+
+    renderWithProviders(<PortalFees />);
+    await user.click(await screen.findByRole("button", { name: /voucher 1234567890/ }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("couldn't download the voucher");
+    expect(saveBlob).not.toHaveBeenCalled();
   });
 
   it("says in place when a receipt fails to download", async () => {

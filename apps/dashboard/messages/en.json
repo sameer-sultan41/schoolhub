@@ -1415,7 +1415,8 @@
         "internalNote": "Internal note",
         "send": "Send",
         "sending": "Sending",
-        "failed": "Your message couldn't be sent."
+        "failed": "Your message couldn't be sent.",
+        "attachments": "Attachments"
       },
       "picker": {
         "search": "Search",
@@ -1453,7 +1454,8 @@
           "studentRequired": "Choose the student this conversation is about.",
           "internalNeedsOne": "Choose one colleague.",
           "groupNeedsTwo": "Choose at least two colleagues for a group conversation."
-        }
+        },
+        "attachments": "Attachments"
       }
     },
     "oversight": {
@@ -2078,7 +2080,15 @@
       "uploadFailed": "The photo could not be uploaded."
     },
     "submitFailed": "Something went wrong. Please try again.",
-    "saving": "Saving"
+    "saving": "Saving",
+    "attachmentUpload": {
+      "uploading": "Uploading…",
+      "remove": "Remove {name}",
+      "wrongType": "{name} isn't a supported type. Use PDF, JPEG or PNG.",
+      "tooLarge": "{name} is larger than {max} MB.",
+      "uploadFailed": "The file could not be uploaded.",
+      "limitReached": "You can attach at most {max} files."
+    }
   },
   "errors": {
     "validation_error": "Please correct the highlighted fields.",
@@ -2114,6 +2124,7 @@
       "label": "Portal sections",
       "overview": "Overview",
       "attendance": "Attendance",
+      "leave": "Leave",
       "fees": "Fees",
       "results": "Results",
       "timetable": "Timetable",
@@ -2205,6 +2216,17 @@
         "receipts": "Receipts",
         "noReceiptsTitle": "No receipts yet",
         "noReceiptsDescription": "A receipt appears here once a payment is recorded."
+      },
+      "vouchers": {
+        "download": "{provider} voucher {number} (due {date})",
+        "failed": "We couldn't download the voucher. Please try again.",
+        "empty": "Ask the school office for a voucher.",
+        "loadError": "We couldn't load the vouchers. Please try again.",
+        "providers": {
+          "bank_branch": "Bank branch",
+          "easypaisa": "Easypaisa",
+          "jazzcash": "JazzCash"
+        }
       }
     },
     "results": {
@@ -2290,6 +2312,72 @@
         "sms": "SMS",
         "push": "Push",
         "whatsapp": "WhatsApp"
+      },
+      "password": {
+        "title": "Change password",
+        "description": "Use at least {min} characters.",
+        "currentPassword": "Current password",
+        "newPassword": "New password",
+        "confirmPassword": "Confirm new password",
+        "submit": "Change password",
+        "submitting": "Changing",
+        "done": "Password changed.",
+        "failed": "We couldn't change your password. Please try again.",
+        "errors": {
+          "currentRequired": "Enter your current password.",
+          "newTooShort": "The new password must be at least {min} characters.",
+          "confirmMismatch": "The two passwords don't match.",
+          "sameAsCurrent": "Choose a password different from the current one."
+        }
+      }
+    },
+    "leave": {
+      "title": "Leave requests",
+      "loadError": "We couldn't load the leave requests. Please try again.",
+      "emptyTitle": "No leave requests",
+      "emptyDescription": "Requests you submit for your child will appear here.",
+      "range": "{from} to {to}",
+      "days": "{count} days",
+      "attached": "Attachment submitted",
+      "dayPart": {
+        "full": "Full day",
+        "first_half": "First half",
+        "second_half": "Second half"
+      },
+      "cancel": {
+        "open": "Cancel request",
+        "title": "Cancel this leave request?",
+        "description": "The {type} request will be withdrawn. You can submit a new one later.",
+        "confirm": "Cancel request",
+        "done": "Leave request cancelled.",
+        "failed": "We couldn't cancel the request. Please try again."
+      },
+      "new": {
+        "open": "New request",
+        "title": "Request leave",
+        "type": "Leave type",
+        "typePlaceholder": "Choose a type",
+        "typesFailed": "We couldn't load the leave types. Close this and try again.",
+        "startDate": "From",
+        "endDate": "To",
+        "dayPart": "Day part",
+        "dayPartHint": "A half day needs a single date.",
+        "reason": "Reason",
+        "attachment": "Supporting document (PDF, JPEG or PNG)",
+        "submit": "Submit request",
+        "submitting": "Submitting",
+        "done": "Leave request submitted.",
+        "failed": "We couldn't submit the request. Please try again.",
+        "errors": {
+          "typeRequired": "Choose a leave type.",
+          "startRequired": "Choose the first day.",
+          "endRequired": "Choose the last day.",
+          "endBeforeStart": "The last day can't be before the first day.",
+          "halfDaySingleDay": "A half day can only cover a single date.",
+          "reasonRequired": "Enter a reason.",
+          "reasonTooLong": "The reason can be at most {max} characters.",
+          "attachmentRequired": "This leave type needs a supporting document."
+        }
       }
     }
   }

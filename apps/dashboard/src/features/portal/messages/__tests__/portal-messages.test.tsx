@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { Services } from "@/services";
@@ -23,8 +23,16 @@ jest.mock("@/services", () =>
     .servicesMock({
       auth: ["fetchCurrentUser"],
       parentPortal: ["fetchPortalDashboard"],
-      messageThreads: ["listThreads", "fetchThread", "listMessages", "markRead", "createThread"],
+      messageThreads: [
+        "listThreads",
+        "fetchThread",
+        "listMessages",
+        "markRead",
+        "createThread",
+        "postMessage",
+      ],
       students: ["fetchStudentsPage"],
+      files: ["uploadFile"],
     }),
 );
 
@@ -89,6 +97,46 @@ describe("PortalMessages", () => {
 
       expect(screen.getByRole("textbox", { name: "Reply" })).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "Close conversation" })).not.toBeInTheDocument();
+    });
+
+    it("uploads a picked file and sends its id with the reply", async () => {
+      await renderOpenThread("open");
+      mocked(Services.files.uploadFile).mockResolvedValue("file-1");
+      mocked(Services.messageThreads.postMessage).mockResolvedValue(messageRecord());
+      const user = userEvent.setup();
+
+      await user.upload(
+        screen.getByLabelText("Attachments"),
+        new File(["x"], "note.pdf", { type: "application/pdf" }),
+      );
+      await screen.findByText("note.pdf");
+      await user.type(screen.getByRole("textbox", { name: "Reply" }), "See attached");
+      await user.click(screen.getByRole("button", { name: "Send" }));
+
+      expect(Services.files.uploadFile).toHaveBeenCalledWith(
+        expect.any(File),
+        "communication.thread-attachment",
+      );
+      await waitFor(() => {
+        expect(Services.messageThreads.postMessage).toHaveBeenCalledWith(THREAD_ID, {
+          body: "See attached",
+          is_internal_note: false,
+          attachments: ["file-1"],
+        });
+      });
+    });
+
+    it("refuses a file of a type the portal does not take, without uploading it", async () => {
+      await renderOpenThread("open");
+      const user = userEvent.setup({ applyAccept: false });
+
+      await user.upload(
+        screen.getByLabelText("Attachments"),
+        new File(["x"], "run.exe", { type: "application/x-msdownload" }),
+      );
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("run.exe");
+      expect(Services.files.uploadFile).not.toHaveBeenCalled();
     });
 
     it("shows no Reopen button on a closed conversation", async () => {

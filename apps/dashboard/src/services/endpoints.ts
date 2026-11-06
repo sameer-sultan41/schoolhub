@@ -19,6 +19,7 @@ export const endpoints = {
     login: "/login",
     logout: "/logout",
     me: "/auth/me",
+    changePassword: "/auth/change-password",
     refresh: "/refresh",
   },
   tenant: {
@@ -154,6 +155,8 @@ export const endpoints = {
   /** `apps/api/apps/attendance/urls.py`: approve and reject are colon-actions on the row. */
   leaveRequests: {
     list: "/leave-requests",
+    /** `:cancel` is the requester's withdrawal, a colon-action like approve and reject. */
+    cancel: (id: string) => `/leave-requests/${id}:cancel`,
     action: (id: string, action: "approve" | "reject") => `/leave-requests/${id}:${action}`,
   },
   /** `GET /leave-types`: the read-only catalogue, keyed `attendance.leave-request.view`. */
@@ -288,6 +291,12 @@ export const endpoints = {
   feeInvoices: {
     list: "/fee-invoices",
     detail: (id: string) => `/fee-invoices/${id}`,
+  },
+  /** `/vouchers`: a guardian reads the slips of their own child's invoices; `download` streams
+   * a PDF (`?format=pdf|thermal`). */
+  vouchers: {
+    list: "/vouchers",
+    download: (id: string) => `/vouchers/${id}/download`,
   },
   /** `/receipts`; `download` streams a PDF (`?format=pdf|thermal`). */
   receipts: {

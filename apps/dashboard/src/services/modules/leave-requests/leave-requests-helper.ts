@@ -13,6 +13,7 @@ import {
 import type {
   LeaveApprovalRecord,
   LeaveAction,
+  LeaveCreateInput,
   LeaveDecisionResult,
   LeavePageQuery,
   LeaveRequestRecord,
@@ -34,6 +35,19 @@ export function toLeaveQueryParams(
     params,
   );
   return params as Record<string, string | number | undefined>;
+}
+
+/** The submit body: the attachment key is left out when there is none. */
+export function toLeaveBody(input: LeaveCreateInput): Record<string, string> {
+  return {
+    student_id: input.studentId,
+    leave_type_id: input.leaveTypeId,
+    start_date: input.startDate,
+    end_date: input.endDate,
+    day_part: input.dayPart,
+    reason: input.reason,
+    ...(input.attachmentFileId ? { attachment_file_id: input.attachmentFileId } : {}),
+  };
 }
 
 /** The status filter -> `status`: `all` is no filter. */

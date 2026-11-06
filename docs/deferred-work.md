@@ -154,11 +154,12 @@ either this file or `project-status.md`.
   nobody declared.
 - **The attendance dashboard's PR A (register, Records, Settings, the attendance mode;
   plan `docs/superpowers/plans/2026-10-24-attendance-dashboard.md`) left these out:**
-  - **Leave submission waits for parent-portal.** The dashboard's leave screens (PR B)
-    review and decide; they do not submit. §4 and §11 make the requester the student or a
-    linked guardian, so a staff member entering leave for a guardian who phoned in
-    would need a rule the module doc does not have. The user chose review-only leave in the
-    dashboard (2026-10-24); submission waits for parent-portal.
+  - **Staff-on-behalf leave submission stays out; the portal now submits.** The dashboard's
+    staff leave screens (PR B) review and decide; they do not submit. §4 and §11 make the
+    requester the student or a linked guardian, so a staff member entering leave for a guardian
+    who phoned in would need a rule the module doc does not have. The user chose review-only
+    leave in the dashboard (2026-10-24). A guardian now submits and withdraws a request for
+    their own child from `/portal/{studentId}/leave` (parent-portal PR B).
   - **Half-day leave mapped to periods.** A `first_half`/`second_half` leave writes a
     daily `on_leave` row, which refuses the student in *every* period register that
     day ([ADR-0028](decisions/0028-one-attendance-mode-per-tenant.md)). Mapping a half
@@ -976,15 +977,12 @@ either this file or `project-status.md`.
     unguessable UUID, and the purpose is module-gated, so `GET /files` does not list it to other
     staff; but every participant of a thread it was sent in sees the id, and could re-send it
     into another thread. `created_by == sender` is the full check.
-  - **Nobody can attach a file to a thread from the dashboard yet.** The API takes attachments
-    (ready `communication.thread-attachment` files, uploaded and confirmed through `/files`), but
-    the thread composer has no upload control, for staff or for guardians; attachments render
-    and download through the thread's own route and the oversight twin. A guardian or student
-    can upload at the API since the portal uploads change (`platform.file.create`,
-    `portal_uploadable` purposes); the portal composer's upload control is PR B's dashboard
-    work. The staff composer's upload (the two-step
-    presigned flow, a chip per file, the same type and size limits) is a dashboard follow-up
-    that needs no backend change.
+  - **Staff cannot attach a file to a thread from the dashboard yet.** The API takes attachments
+    (ready `communication.thread-attachment` files, uploaded and confirmed through `/files`);
+    attachments render and download through the thread's own route and the oversight twin. The
+    portal composer and new-conversation form have the upload control since parent-portal PR B
+    (`allowAttachments`, the shared `AttachmentUploader`). The staff composer is the same
+    component with the prop on: a dashboard follow-up that needs no backend change.
   - **Messages carry `sender_id` only**, no sender name, so the dashboard's bubbles say "You" or
     "Participant". A name field on `MessageSerializer` (as `UserNamesModelSerializer` gives
     attendance) is what would let the thread show who wrote what.
@@ -1020,6 +1018,21 @@ either this file or `project-status.md`.
   - **A user's notification preferences** (`/notification-preferences`).
   - **The delivery logs and their summary report** (`/delivery-logs`, `:summary`).
 
+- **Parent portal PR B (guardian uploads, leave, vouchers, change password) left these out**
+  (`docs/03-modules/parent-portal.md` §20).
+  - **A guardian cannot withdraw an approved request.** The API allows `:cancel` on an approved
+    request before it starts (attendance.md §6); the portal offers Cancel on a pending one only,
+    as the brief asked. Offering it on an approved one before its start date is a portal-only
+    change.
+  - **A request cannot be edited.** `/leave-requests` has no `PATCH` (a decided date would move
+    under an approver): a guardian cancels and submits again.
+  - **The portal lists only `issued` vouchers.** A voided, expired or paid slip is no use to a
+    parent, so the list asks for `status=issued`; a parent who wants an older one asks the office.
+  - **Password change may leave other sessions signed in.** `ChangePasswordView`
+    (`core/rbac/views.py`) sets the password and records a security event; it calls nothing that
+    revokes the user's other refresh tokens. Whether a stolen session survives a change is worth
+    confirming, and revoking on change is a security-hardening follow-up, not a portal one.
+
 - **Parent portal PR 1 (backend) left these out** (`docs/03-modules/parent-portal.md` §20;
   plan `docs/superpowers/plans/2026-11-04-parent-portal.md`). The summary, the inbox, guardian
   notice browsing and the per-child timetable are built; the dashboard screens follow in PR 2.
@@ -1039,7 +1052,8 @@ either this file or `project-status.md`.
   - **A guardian can upload a leave attachment but cannot download it again.**
     `platform.file.view` is staff-only and there is no leave `:download` route, so the portal
     cannot re-open the document it attached. A `:download` on `/leave-requests/{id}` gated by
-    the request's own scope is the fix.
+    the request's own scope is the fix. The portal's leave list only notes "Attachment
+    submitted" until then.
   - **Portal users can create unlimited pending upload slots.** Only the per-user throttle
     caps `POST /files` for a guardian or student; nothing expires or counts unconfirmed slots.
   - **Library and transport panels** (§5.8). Neither module is built.

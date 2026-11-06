@@ -7,6 +7,7 @@ import type {
   PortalModules,
   ReceiptRecord,
   ResultRecord,
+  VoucherRecord,
 } from "@/services";
 
 /** The portal screens' fixtures: the shell's and every portal screen's tests read them. */
@@ -67,6 +68,7 @@ export function portalDashboard(overrides: Partial<PortalDashboard> = {}): Porta
 
 export const INVOICE_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 export const PAID_INVOICE_ID = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+export const VOUCHER_ID = "99999999-9999-4999-8999-999999999999";
 export const RECEIPT_ID = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
 
 /** An issued invoice for Ayesha with one line; override what a test needs. */
@@ -118,6 +120,27 @@ export function portalReceipt(overrides: Partial<ReceiptRecord> = {}): ReceiptRe
     amount: "9000.00",
     issued_at: "2026-10-15T09:00:00Z",
     pdf_file: null,
+    ...overrides,
+  };
+}
+
+/** An issued bank slip for Ayesha's outstanding invoice. */
+export function portalVoucher(overrides: Partial<VoucherRecord> = {}): VoucherRecord {
+  return {
+    id: VOUCHER_ID,
+    fee_invoice: INVOICE_ID,
+    invoice_no: "INV-0001",
+    student: AYESHA_ID,
+    student_name: "Ayesha Khan",
+    provider: "bank_branch",
+    consumer_number: "1234567890",
+    amount: "12000.00",
+    due_date: "2026-11-30",
+    status: "issued",
+    payment: null,
+    voided_reason: null,
+    issued_by: "11111111-1111-4111-8111-111111111111",
+    created_at: "2026-10-02T08:00:00Z",
     ...overrides,
   };
 }

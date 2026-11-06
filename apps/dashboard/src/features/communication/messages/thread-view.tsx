@@ -27,10 +27,18 @@ export interface ThreadViewProps {
   readOnly: boolean;
   /** The parent portal sets this to `false`: a guardian has no close or reopen. */
   canTransition?: boolean;
+  /** The parent portal sets this: the reply box takes file attachments. */
+  allowAttachments?: boolean;
 }
 
 /** One conversation: its header, the messages and, for a participant, the reply box. */
-export function ThreadView({ source, threadId, readOnly, canTransition = true }: ThreadViewProps) {
+export function ThreadView({
+  source,
+  threadId,
+  readOnly,
+  canTransition = true,
+  allowAttachments = false,
+}: ThreadViewProps) {
   const t = useTranslations("communication.messages");
   const tErrors = useTranslations("errors");
   const { data: user } = useCurrentUser();
@@ -163,7 +171,13 @@ export function ThreadView({ source, threadId, readOnly, canTransition = true }:
           )}
         </Alert>
       )}
-      {canPost && <ReplyComposer threadId={threadId} isClosed={isClosed} />}
+      {canPost && (
+        <ReplyComposer
+          threadId={threadId}
+          isClosed={isClosed}
+          allowAttachments={allowAttachments}
+        />
+      )}
     </article>
   );
 }

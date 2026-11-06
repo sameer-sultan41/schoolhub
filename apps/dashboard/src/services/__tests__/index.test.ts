@@ -64,12 +64,19 @@ describe("Services", () => {
       "tenant",
       "threadOversight",
       "timetableSlots",
+      "vouchers",
     ]);
 
     expect(typeof Services.auth.login).toBe("function");
     expect(typeof Services.auth.logout).toBe("function");
     expect(typeof Services.auth.fetchCurrentUser).toBe("function");
     expect(typeof Services.auth.restoreSession).toBe("function");
+    expect(typeof Services.auth.changePassword).toBe("function");
+
+    expect(typeof Services.vouchers.listVouchers).toBe("function");
+    expect(typeof Services.vouchers.downloadVoucher).toBe("function");
+    expect(typeof Services.leaveRequests.createLeave).toBe("function");
+    expect(typeof Services.leaveRequests.cancelLeave).toBe("function");
 
     expect(typeof Services.tenant.fetchCurrentTenant).toBe("function");
 

@@ -50,6 +50,7 @@ export const Paths = {
   PORTAL: "/portal",
   PORTAL_CHILD: (studentId: string) => `/portal/${studentId}`,
   PORTAL_ATTENDANCE: (studentId: string) => `/portal/${studentId}/attendance`,
+  PORTAL_LEAVE: (studentId: string) => `/portal/${studentId}/leave`,
   PORTAL_FEES: (studentId: string) => `/portal/${studentId}/fees`,
   PORTAL_INVOICE: (studentId: string, invoiceId: string) =>
     `/portal/${studentId}/fees/${invoiceId}`,

@@ -1,7 +1,7 @@
-import { fail, ok, type MockResponse } from "../envelope";
+import { fail, noContent, ok, type MockResponse } from "../envelope";
 import { cursorPageOf } from "../list";
 import type { MockModule } from "../router";
-import { colonAction } from "./attendance-mock-utils";
+import { colonAction, fieldError } from "./attendance-mock-utils";
 import type { PortalStore } from "./portal-store";
 
 /** `NotFound`'s sentence, as the envelope handler sends it. */
@@ -18,6 +18,9 @@ const EMERGENCY_LOCKED = "The emergency notification category cannot be disabled
 /** `InvoiceFilter.outstanding`: issued, partially paid or overdue, none of them settled. */
 const OUTSTANDING_STATUSES: readonly string[] = ["issued", "partially_paid", "overdue"];
 
+/** `ChangePasswordSerializer.validate_current_password`'s refusal, word for word. */
+const WRONG_PASSWORD = "Current password is incorrect.";
+
 /** `?flag=true|false` as the API reads a boolean query value. */
 function flag(value: string | null): boolean | undefined {
   if (value === "true") return true;
@@ -28,7 +31,8 @@ function flag(value: string | null): boolean | undefined {
 /**
  * A guardian's portal reads and writes, for the family in `store`:
  * `GET /parent-portal/dashboard`; the child's `/student-attendance`, `/fee-invoices`,
- * `/receipts` (and the streamed `/receipts/{id}/download`) and `/results`; `/notices` with
+ * `/receipts` (and the streamed `/receipts/{id}/download`), `/vouchers` (and its download),
+ * `/auth/change-password` and `/results`; `/notices` with
  * `:acknowledge`; the inbox `/notifications` with `:unread-count`, `:mark-read` and
  * `:mark-all-read`; and `/notification-preferences`.
  *
@@ -87,6 +91,33 @@ export function portalModule(store: PortalStore): MockModule {
         return fail(401, "Authentication credentials were not provided.");
       }
       return { status: 200, body: PDF_BODY, headers: { "content-type": "application/pdf" } };
+    });
+
+    // Tenant-wide too: the page narrows by `student` and `status` as the real list does.
+    api.get("/vouchers", (request) => {
+      const studentId = request.searchParams.get("student");
+      const status = request.searchParams.get("status");
+      const rows = store.vouchers
+        .filter((row) => !studentId || row.student === studentId)
+        .filter((row) => !status || row.status === status);
+      return cursorPageOf(rows, request.searchParams);
+    });
+
+    api.get("/vouchers/:voucherId/download", (request): MockResponse => {
+      if (!store.vouchers.some((row) => row.id === request.params["voucherId"])) {
+        return fail(404, NOT_FOUND);
+      }
+      return { status: 200, body: PDF_BODY, headers: { "content-type": "application/pdf" } };
+    });
+
+    // `ChangePasswordSerializer`: a wrong current password is a 400 on that field.
+    api.post("/auth/change-password", (request) => {
+      const body = request.json() as { current_password: string; new_password: string };
+      if (body.current_password !== store.password) {
+        return fieldError("current_password", WRONG_PASSWORD);
+      }
+      store.passwordChanges.push(body);
+      return noContent();
     });
 
     api.get("/results", (request) => {

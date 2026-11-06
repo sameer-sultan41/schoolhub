@@ -19,6 +19,9 @@ export type PortalAttendanceRow = ApiSchemas["StudentAttendance"];
 export type PortalInvoice = ApiSchemas["FeeInvoice"];
 export type PortalReceipt = ApiSchemas["Receipt"];
 export type PortalResult = ApiSchemas["Result"];
+export type PortalVoucher = ApiSchemas["FeeVoucher"];
+export type PortalLeaveType = ApiSchemas["LeaveType"];
+export type PortalLeaveRequest = Mutable<ApiSchemas["LeaveRequest"]>;
 export type PortalNotice = Mutable<ApiSchemas["PortalNotice"]>;
 export type PortalNotification = Mutable<ApiSchemas["Notification"]>;
 export type PreferenceRow = Mutable<ApiSchemas["NotificationPreferenceRow"]>;
@@ -34,6 +37,11 @@ export const PORTAL_IDS = {
   paidInvoice: "00000000-0000-4000-b000-000000000022",
   bilalInvoice: "00000000-0000-4000-b000-000000000023",
   receipt: "00000000-0000-4000-b000-000000000031",
+  voucher: "00000000-0000-4000-b000-000000000033",
+  sickLeave: "00000000-0000-4000-b000-000000000071",
+  casualLeave: "00000000-0000-4000-b000-000000000072",
+  staffLeave: "00000000-0000-4000-b000-000000000073",
+  leaveRequest: "00000000-0000-4000-b000-000000000074",
   payment: "00000000-0000-4000-b000-000000000032",
   midTerm: "00000000-0000-4000-b000-000000000041",
   annual: "00000000-0000-4000-b000-000000000042",
@@ -208,6 +216,92 @@ export function buildResult(overrides: Partial<PortalResult> = {}): PortalResult
   };
 }
 
+/** An issued bank slip for the open invoice. */
+export function buildVoucher(overrides: Partial<PortalVoucher> = {}): PortalVoucher {
+  return {
+    id: PORTAL_IDS.voucher,
+    fee_invoice: PORTAL_IDS.openInvoice,
+    invoice_no: "INV-0001",
+    student: PORTAL_IDS.ayesha,
+    student_name: "Ayesha Khan",
+    provider: "bank_branch",
+    consumer_number: "1234567890",
+    amount: "12000.00",
+    due_date: "2026-11-30",
+    status: "issued",
+    payment: null,
+    voided_reason: null,
+    issued_by: PORTAL_IDS.teacher,
+    created_at: "2026-10-02T08:00:00Z",
+    ...overrides,
+  };
+}
+
+export function buildPortalLeaveType(overrides: Partial<PortalLeaveType> = {}): PortalLeaveType {
+  return {
+    id: PORTAL_IDS.sickLeave,
+    name: "Sick leave",
+    code: "SICK",
+    applies_to: "both",
+    is_paid: true,
+    requires_attachment: true,
+    max_consecutive_days: null,
+    is_active: true,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+/** The two types a student may use (one needing a document) and one that is staff only. */
+export function buildPortalLeaveTypes(): PortalLeaveType[] {
+  return [
+    buildPortalLeaveType(),
+    buildPortalLeaveType({
+      id: PORTAL_IDS.casualLeave,
+      name: "Family event",
+      code: "CASUAL",
+      requires_attachment: false,
+    }),
+    buildPortalLeaveType({
+      id: PORTAL_IDS.staffLeave,
+      name: "Staff only",
+      code: "STAFF",
+      applies_to: "staff",
+    }),
+  ];
+}
+
+export function buildPortalLeaveRequest(
+  overrides: Partial<PortalLeaveRequest> = {},
+): PortalLeaveRequest {
+  return {
+    id: PORTAL_IDS.leaveRequest,
+    requester_type: "student",
+    student_id: PORTAL_IDS.ayesha,
+    student_name: "Ayesha Khan",
+    admission_number: "ADM-001",
+    section_name: "A",
+    submitted_by: PORTAL_IDS.teacher,
+    submitted_by_name: "Sana Khan",
+    leave_type_id: PORTAL_IDS.casualLeave,
+    leave_type_name: "Family event",
+    start_date: "2026-11-20",
+    end_date: "2026-11-20",
+    day_part: "full",
+    days_count: "1.0",
+    reason: "A cousin's wedding",
+    attachment_file_id: null,
+    status: "pending",
+    current_approval_level: 1,
+    decided_at: null,
+    approvals: [],
+    created_at: "2026-11-10T08:00:00Z",
+    updated_at: "2026-11-10T08:00:00Z",
+    ...overrides,
+  };
+}
+
 /** A published notice that asks for an acknowledgment nobody has given yet. */
 export function buildNotice(overrides: Partial<PortalNotice> = {}): PortalNotice {
   return {
@@ -255,6 +349,9 @@ export interface PortalOptions {
   attendance?: PortalAttendanceRow[];
   invoices?: PortalInvoice[];
   receipts?: PortalReceipt[];
+  vouchers?: PortalVoucher[];
+  leaveTypes?: PortalLeaveType[];
+  leaveRequests?: PortalLeaveRequest[];
   results?: PortalResult[];
   notices?: PortalNotice[];
   notifications?: PortalNotification[];
@@ -267,6 +364,9 @@ export class PortalStore {
   readonly attendance: PortalAttendanceRow[];
   readonly invoices: PortalInvoice[];
   readonly receipts: PortalReceipt[];
+  readonly vouchers: PortalVoucher[];
+  readonly leaveTypes: PortalLeaveType[];
+  readonly leaveRequests: PortalLeaveRequest[];
   readonly results: PortalResult[];
   readonly notices: PortalNotice[];
   readonly notifications: PortalNotification[];
@@ -276,6 +376,12 @@ export class PortalStore {
   readonly markAllBefore: (string | undefined)[] = [];
   /** The `Authorization` header each receipt download carried (undefined when it sent none). */
   readonly downloadAuthorizations: (string | undefined)[] = [];
+  /** The password a change must name as the current one. */
+  readonly password = "current-secret-1";
+  /** The bodies of every accepted `POST /auth/change-password`. */
+  readonly passwordChanges: { current_password: string; new_password: string }[] = [];
+  /** The bodies of every `POST /leave-requests` the stub accepted. */
+  readonly leaveSubmissions: Record<string, unknown>[] = [];
   /** Notices acknowledged (`:acknowledge`). */
   readonly acknowledged: string[] = [];
 
@@ -286,6 +392,9 @@ export class PortalStore {
     this.attendance = options.attendance ?? [];
     this.invoices = options.invoices ?? [];
     this.receipts = options.receipts ?? [];
+    this.vouchers = options.vouchers ?? [];
+    this.leaveTypes = options.leaveTypes ?? buildPortalLeaveTypes();
+    this.leaveRequests = options.leaveRequests ?? [];
     this.results = options.results ?? [];
     this.notices = options.notices ?? [];
     this.notifications = options.notifications ?? [];

@@ -9,6 +9,7 @@ describe("portalNavItems", () => {
     expect(labels(portalNavItems(ALL_MODULES_ON, AYESHA_ID))).toEqual([
       "overview",
       "attendance",
+      "leave",
       "fees",
       "results",
       "timetable",

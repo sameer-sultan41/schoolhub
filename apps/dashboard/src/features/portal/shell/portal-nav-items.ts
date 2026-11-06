@@ -22,6 +22,7 @@ export interface PortalNavItem {
   labelKey:
     | "overview"
     | "attendance"
+    | "leave"
     | "fees"
     | "results"
     | "timetable"
@@ -47,6 +48,8 @@ export function portalNavItems(
     items.push({ labelKey: "overview", href: Paths.PORTAL_CHILD(studentId) });
     if (modules.attendance) {
       items.push({ labelKey: "attendance", href: Paths.PORTAL_ATTENDANCE(studentId) });
+      // Leave is the attendance module's, so it follows that flag.
+      items.push({ labelKey: "leave", href: Paths.PORTAL_LEAVE(studentId) });
     }
     if (modules.fees) items.push({ labelKey: "fees", href: Paths.PORTAL_FEES(studentId) });
     if (modules.examinations) {

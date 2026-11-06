@@ -275,7 +275,8 @@ export const COMMUNICATION_BROADCAST_PERMISSIONS: PermissionKey[] = [
  * A guardian's keys, as the seeded `guardian` role holds them: the portal
  * summary, the inbox, notices, threads, and the fees, exam, attendance and timetable reads that
  * `filter_owned_by_user` then narrows to their own children. `fees.payment.view` is the receipts
- * key.
+ * and vouchers key; the leave keys and `platform.file.create` (a leave or thread attachment) are
+ * what a guardian submits and uploads with.
  */
 export const GUARDIAN_PERMISSIONS: PermissionKey[] = [
   "parent-portal.dashboard.view",
@@ -287,6 +288,9 @@ export const GUARDIAN_PERMISSIONS: PermissionKey[] = [
   "communication.message.create",
   "exams.result.view",
   "attendance.student-attendance.view",
+  "attendance.leave-request.view",
+  "attendance.leave-request.create",
+  "platform.file.create",
   "timetable.timetable.view",
   "fees.invoice.view",
   "fees.payment.view",

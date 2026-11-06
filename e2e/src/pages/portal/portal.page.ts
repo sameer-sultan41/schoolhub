@@ -4,6 +4,7 @@ import { BasePage } from "../base.page";
 export type PortalTab =
   | "Overview"
   | "Attendance"
+  | "Leave"
   | "Fees"
   | "Results"
   | "Timetable"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
 import { useForm } from "react-hook-form";
@@ -14,10 +14,15 @@ import {
   Textarea,
 } from "@schoolhub/ui";
 
+import { AttachmentUploader, type UploadedAttachment } from "@/components/attachment-uploader";
 import { FormDialogLayout } from "@/components/form-dialog-layout";
 import { FormSelectField } from "@/components/form-select-field";
 import { useFormDialogSubmit } from "@/hooks/use-form-dialog-submit";
 import { Services } from "@/services";
+import {
+  THREAD_ATTACHMENT_MAX_FILES,
+  THREAD_ATTACHMENT_PURPOSE,
+} from "@/services/modules/files/files-constant";
 import {
   MESSAGE_BODY_MAX_LENGTH,
   NEW_THREAD_TYPES,
@@ -43,15 +48,25 @@ export interface NewThreadDialogProps {
   /** The parent portal: the guardian's own children are the only choice, and the thread is
    * always a guardian-school one, so there is no type or recipient picker. */
   students?: readonly PickedStudent[];
+  /** The parent portal: the first message can carry files. */
+  allowAttachments?: boolean;
 }
 
 /**
  * Starts a conversation with its first message. Mounted by the screen only while open, so each
  * open is a fresh form.
  */
-export function NewThreadDialog({ open, onOpenChange, onCreated, students }: NewThreadDialogProps) {
+export function NewThreadDialog({
+  open,
+  onOpenChange,
+  onCreated,
+  students,
+  allowAttachments = false,
+}: NewThreadDialogProps) {
   const t = useTranslations("communication.messages.newThread");
   const invalidate = useInvalidateThreads();
+  const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
 
   const schema = useMemo(
     () =>
@@ -74,7 +89,11 @@ export function NewThreadDialog({ open, onOpenChange, onCreated, students }: New
 
   const { handleSubmit, formError, isPending } = useFormDialogSubmit({
     form,
-    mutationFn: (values) => Services.messageThreads.createThread(buildNewThreadInput(values)),
+    mutationFn: (values) =>
+      Services.messageThreads.createThread({
+        ...buildNewThreadInput(values),
+        ...(attachments.length > 0 ? { attachments: attachments.map((item) => item.id) } : {}),
+      }),
     knownFields: ["subject", "body", "thread_type"],
     onSuccess: (thread) => {
       invalidate();
@@ -95,6 +114,7 @@ export function NewThreadDialog({ open, onOpenChange, onCreated, students }: New
       isPending={isPending}
       submittingLabel={t("submitting")}
       submitLabel={t("submit")}
+      submitDisabled={isUploading}
     >
       {students === undefined && (
         <FormSelectField
@@ -168,6 +188,17 @@ export function NewThreadDialog({ open, onOpenChange, onCreated, students }: New
           </FormItem>
         )}
       />
+      {allowAttachments && (
+        <AttachmentUploader
+          purpose={THREAD_ATTACHMENT_PURPOSE}
+          label={t("attachments")}
+          value={attachments}
+          onChange={setAttachments}
+          onUploadingChange={setIsUploading}
+          multiple
+          maxFiles={THREAD_ATTACHMENT_MAX_FILES}
+        />
+      )}
     </FormDialogLayout>
   );
 }

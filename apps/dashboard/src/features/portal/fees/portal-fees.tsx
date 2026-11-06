@@ -8,21 +8,24 @@ import { useLocale, useTranslations } from "next-intl";
 import { LoadErrorCard } from "@/components/load-error-card";
 import { Paths } from "@/config/paths";
 import { formatDate } from "@/lib/helpers";
-import type { FeeInvoiceRecord, ReceiptRecord } from "@/services";
+import type { FeeInvoiceRecord, ReceiptRecord, VoucherRecord } from "@/services";
 import { formatDecimal } from "@/features/portal/format-decimal";
 import { ChildGate } from "@/features/portal/shell/child-gate";
 import { FEE_STATUS_BADGE, FEE_STATUS_LABEL_KEY } from "./fee-status";
 import { ReceiptDownloadButton } from "./receipt-download-button";
-import { useChildInvoices, useReceiptsByInvoice } from "./use-fees-data";
+import { useChildInvoices, useChildVouchers, useReceiptsByInvoice } from "./use-fees-data";
+import { VoucherList } from "./voucher-list";
 import { enumBadge, enumLabel } from "@/features/portal/enum-label";
 
 interface InvoiceListProps {
   kind: "outstanding" | "paid";
   studentId: string | undefined;
   receipts: ReadonlyMap<string, ReceiptRecord[]> | undefined;
+  /** Unpaid vouchers by invoice, offered under each outstanding row once they have loaded. */
+  vouchers: ReadonlyMap<string, VoucherRecord[]> | undefined;
 }
 
-function InvoiceList({ kind, studentId, receipts }: InvoiceListProps) {
+function InvoiceList({ kind, studentId, receipts, vouchers }: InvoiceListProps) {
   const t = useTranslations("portal.fees");
   const locale = useLocale();
   const query = useChildInvoices(studentId, kind);
@@ -85,6 +88,11 @@ function InvoiceList({ kind, studentId, receipts }: InvoiceListProps) {
                   ))
                 : null}
             </div>
+            {kind === "outstanding" && vouchers !== undefined ? (
+              <div className="w-full">
+                <VoucherList vouchers={vouchers.get(invoice.id) ?? []} />
+              </div>
+            ) : null}
           </li>
         ))}
       </ul>
@@ -112,6 +120,7 @@ export function PortalFees() {
 function ChildFees({ studentId }: { studentId: string }) {
   const t = useTranslations("portal.fees");
   const receipts = useReceiptsByInvoice();
+  const vouchers = useChildVouchers(studentId);
 
   return (
     <section className="space-y-4">
@@ -124,8 +133,26 @@ function ChildFees({ studentId }: { studentId: string }) {
           }}
         />
       ) : null}
-      <InvoiceList kind="outstanding" studentId={studentId} receipts={receipts.data} />
-      <InvoiceList kind="paid" studentId={studentId} receipts={receipts.data} />
+      {vouchers.isError ? (
+        <LoadErrorCard
+          message={t("vouchers.loadError")}
+          onRetry={() => {
+            void vouchers.refetch();
+          }}
+        />
+      ) : null}
+      <InvoiceList
+        kind="outstanding"
+        studentId={studentId}
+        receipts={receipts.data}
+        vouchers={vouchers.data}
+      />
+      <InvoiceList
+        kind="paid"
+        studentId={studentId}
+        receipts={receipts.data}
+        vouchers={undefined}
+      />
     </section>
   );
 }

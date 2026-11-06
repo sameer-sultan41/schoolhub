@@ -242,3 +242,16 @@ The `(portal)` route group in `apps/dashboard` ([ADR-0032](../decisions/0032-par
 | Tests | Jest beside each screen under `features/portal/**/__tests__` and the service tests; the shell and routing in `components/__tests__/audience-gate.test.tsx`; mocked `dashboard`-project journeys `e2e/tests/dashboard/portal-home.spec.ts` (two children, the switcher, a module that is off, a guardian on a staff page and staff on `/portal`), `portal-child-pages.spec.ts` (attendance month and percentage, fees and a receipt download, results by term) and `portal-communication.spec.ts` (acknowledge a notice, mark an inbox row and all read, the preference matrix). The stub is `e2e/src/mocks/domains/portal.ts` (shapes from the generated schema); what a guardian may see stays the Django suite's and the live lane's job |
 | Deferred | The report-card download button, the receipt `format` parameter in the OpenAPI contract, a native-speaker Urdu review, the mark-all-read scope on later pages, the attendance legend swatch and a student filter on `/receipts` (see [`deferred-work.md`](../deferred-work.md)) |
 
+### Built (dashboard, PR B)
+
+Guardian uploads, leave, vouchers and change password, on PR 2's shell (the dashboard half; the upload and ownership rules are PR B's backend task above, "Uploads").
+
+| Area | State |
+| ---- | ----- |
+| Leave | `/portal/{studentId}/leave` and a "Leave" tab behind the attendance flag: list, New request dialog and Cancel on a pending request ([`attendance.md`](attendance.md) §20). Hidden New request without `attendance.leave-request.create` |
+| Vouchers | The fees page offers each outstanding invoice its issued slips as a PDF download, or "Ask the school office for a voucher." ([`fees-finance.md`](fees-finance.md) §20). A vouchers load failure is said as such, never as "none" |
+| Message attachments | The portal composer and new-conversation form upload files ([`communication.md`](communication.md) §20) |
+| Change password | `/portal/settings` gains a Change password form (`POST /auth/change-password`: `current_password`, `new_password`; 204). The confirmation field is browser-only; a wrong current password or a password the server's validators refuse shows under its field; the form clears on success. The settings page composes it beside the preference matrix, so a preferences load error never hides it |
+| Upload client | One client: `Services.files.uploadFile` (the three steps), used by the shared `components/attachment-uploader.tsx` (upload on pick, a chip per file with remove, the server's own refusal text, a stable `onUploadingChange` that holds the host's submit) |
+| Tests | Jest beside each screen (`features/portal/{leave,fees,preferences,messages}/__tests__`) and the service tests; mocked `e2e/tests/dashboard/portal-leave-vouchers.spec.ts`; live `e2e/tests/live/api/portal-leave.spec.ts` |
+| Deferred | Guardian re-download of a leave attachment, cancelling an approved request, editing a request, `issued`-only vouchers, session revocation on password change ([`deferred-work.md`](../deferred-work.md)) |

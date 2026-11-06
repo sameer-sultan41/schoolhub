@@ -1,5 +1,5 @@
-import { PortalPreferences } from "@/features/portal/preferences/portal-preferences";
+import { PortalSettings } from "@/features/portal/preferences/portal-settings";
 
 export default function PortalSettingsPage() {
-  return <PortalPreferences />;
+  return <PortalSettings />;
 }

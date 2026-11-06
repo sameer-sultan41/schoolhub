@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { queryKeys } from "@/lib/query-client";
-import { Services, type ReceiptRecord } from "@/services";
+import { Services, type ReceiptRecord, type VoucherRecord } from "@/services";
 import { PARENT_PORTAL_QUERY_MODULE } from "@/services/modules/parent-portal/parent-portal-constant";
 import { fetchAllPages } from "@/features/portal/fetch-all-pages";
 
@@ -37,6 +37,34 @@ export function useReceiptsByInvoice() {
       const byInvoice = new Map<string, ReceiptRecord[]>();
       for (const receipt of receipts) {
         byInvoice.set(receipt.invoice_no, [...(byInvoice.get(receipt.invoice_no) ?? []), receipt]);
+      }
+      return byInvoice;
+    },
+  });
+}
+
+/** One child's unpaid vouchers by invoice id, so an open invoice can offer its own. Void, paid
+ * and expired slips are no use to a parent, so only `issued` ones are asked for. */
+export function useChildVouchers(studentId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.list(PARENT_PORTAL_QUERY_MODULE, "vouchers", { studentId }),
+    enabled: studentId !== undefined,
+    queryFn: () =>
+      fetchAllPages((cursor) =>
+        Services.vouchers.listVouchers({
+          student: studentId,
+          status: "issued",
+          cursor,
+          pageSize: PAGE_SIZE,
+        }),
+      ),
+    select: (vouchers) => {
+      const byInvoice = new Map<string, VoucherRecord[]>();
+      for (const voucher of vouchers) {
+        byInvoice.set(voucher.fee_invoice, [
+          ...(byInvoice.get(voucher.fee_invoice) ?? []),
+          voucher,
+        ]);
       }
       return byInvoice;
     },
