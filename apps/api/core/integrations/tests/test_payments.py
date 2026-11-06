@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from django.test import SimpleTestCase, override_settings
 
-from core.integrations.payments.base import InvalidSignature
+from core.integrations.payments.base import CheckoutRequest, InvalidSignature
 from core.integrations.payments.fake import SIGNATURE_HEADER, FakeAdapter, sign
 from core.integrations.payments.registry import adapter_for
 
 CREDENTIALS = {"merchant_id": "M-12345", "secret": "test-secret"}
 NOW = datetime(2026, 11, 7, 12, 0, tzinfo=UTC)
+ORDER_ID = "SH-INV-1-abcd1234"
 BODY = json.dumps(
     {
         "order_id": "SH-INV-1-abcd1234",
@@ -44,6 +46,35 @@ class FakeAdapterTests(SimpleTestCase):
             adapter.verify_callback(
                 _headers(BODY, int(NOW.timestamp()), secret="other"), BODY, CREDENTIALS, NOW
             )
+
+    def _checkout(self) -> CheckoutRequest:
+        return CheckoutRequest(
+            order_id=ORDER_ID,
+            amount=Decimal("1500.00"),
+            currency="PKR",
+            description="Fee invoice INV-1",
+            return_url="https://school.example/portal/fees",
+            callback_url="https://api.example/callback",
+        )
+
+    @override_settings(PAYMENT_FAKE_SETTLES_ON_INITIATE=False)
+    def test_initiate_records_nothing_by_default(self) -> None:
+        adapter = FakeAdapter()
+
+        adapter.initiate(self._checkout(), CREDENTIALS)
+
+        self.assertIsNone(adapter.fetch_transaction(CREDENTIALS, ORDER_ID))
+
+    @override_settings(PAYMENT_FAKE_SETTLES_ON_INITIATE=True)
+    def test_initiate_settles_when_dev_setting_is_on(self) -> None:
+        adapter = FakeAdapter()
+
+        adapter.initiate(self._checkout(), CREDENTIALS)
+
+        event = adapter.fetch_transaction(CREDENTIALS, ORDER_ID)
+        assert event is not None
+        self.assertEqual(event.status, "paid")
+        self.assertEqual(event.amount, Decimal("1500.00"))
 
     def test_fake_signature_rejects_stale_timestamp(self) -> None:
         adapter = FakeAdapter()
