@@ -349,6 +349,11 @@
 - **Mistake.** Merging `feat/exams-schedule` into the portal stack (PR C) raised no conflict in `scoped_exam()`, but the other side had made `scope_queryset(permission=)` required (#148), so five exam actions would 500. Only the pre-push mypy caught it. The first fix also added `exams.exam.view` on top of the route key, which 404'd a schedule-keyed teacher (`ExamLookupScopeTests`).
 - **Check.** After merging two branches, list the shared helpers either side changed (`git diff <base>...<other> -- core/`) and grep every new caller from the other side. When fixing such a caller, keep the behaviour that side's tests pin (here, the route key's own scope).
 
+### L54. A query parameter named `format` belongs to DRF unless the override is off
+
+- **Mistake.** Receipt and voucher downloads took `?format=pdf|thermal` (fees-finance §16), but DRF's `URL_FORMAT_OVERRIDE` read `format` as a renderer choice and 404'd before the view ran. Backend tests never sent the parameter, and the dashboard's Jest mocks did, so only parent-portal PR B's live voucher download caught it. Fixed by setting `URL_FORMAT_OVERRIDE = None` (the API renders JSON only).
+- **Check.** A backend test for any endpoint the spec gives query parameters sends those exact parameters; a mocked client call is not evidence the server accepts them.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.

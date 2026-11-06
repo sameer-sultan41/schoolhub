@@ -196,6 +196,9 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_RENDERER_CLASSES": ("core.api.renderers.EnvelopeJSONRenderer",),
+    # JSON only, so DRF's `?format=` renderer override buys nothing, and it would 404
+    # the documents' own `?format=pdf|thermal` before the view runs.
+    "URL_FORMAT_OVERRIDE": None,
     "DEFAULT_PAGINATION_CLASS": "core.api.pagination.CursorPagination",
     "PAGE_SIZE": 25,
     "DEFAULT_FILTER_BACKENDS": (
