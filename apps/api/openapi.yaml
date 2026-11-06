@@ -4890,6 +4890,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/File'
           description: ''
+        '422':
+          description: A portal user asked for a staff-only purpose
   /api/v1/files/{id}:
     get:
       operationId: files_retrieve

@@ -15943,6 +15943,13 @@ export interface operations {
                     "application/json": components["schemas"]["File"];
                 };
             };
+            /** @description A portal user asked for a staff-only purpose */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     files_retrieve: {

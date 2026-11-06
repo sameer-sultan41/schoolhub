@@ -84,7 +84,10 @@ class FileViewSet(
     @extend_schema(
         summary="Request a presigned upload slot",
         request=FileCreateSerializer,
-        responses={201: FileSerializer},
+        responses={
+            201: FileSerializer,
+            422: OpenApiResponse(description="A portal user asked for a staff-only purpose"),
+        },
     )
     def create(self, request, *args, **kwargs) -> Response:
         payload = FileCreateSerializer(data=request.data)

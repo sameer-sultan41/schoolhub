@@ -229,7 +229,7 @@ describe("PortalLeave", () => {
     mocked(Services.files.uploadFile).mockResolvedValue(ATTACHMENT_FILE_ID);
     mocked(Services.leaveRequests.createLeave).mockRejectedValue(
       new ApiError({
-        code: "validation_error",
+        code: "domain_rule_violation",
         message: "Invalid input.",
         status: 422,
         url: "/leave-requests",
