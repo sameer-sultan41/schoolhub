@@ -298,3 +298,54 @@ describe("cursor pagination", () => {
     expect(String(fetchImpl.mock.calls[0]?.[0])).toContain("page_size=100");
   });
 });
+
+describe("ApiClient.downloadBlob", () => {
+  it("downloadBlob sends the bearer token and returns a Blob", async () => {
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValue(
+        new Response("%PDF-1.7", { status: 200, headers: { "Content-Type": "application/pdf" } }),
+      );
+    const client = new ApiClient({
+      baseUrl: "https://api.test/api/v1",
+      fetchImpl,
+      getAccessToken: () => "token-abc",
+    });
+
+    const blob = await client.downloadBlob("/receipts/r1/download", { query: { format: "pdf" } });
+
+    expect(authHeaderOf(fetchImpl, 0)).toBe("Bearer token-abc");
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe(
+      "https://api.test/api/v1/receipts/r1/download?format=pdf",
+    );
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.type).toBe("application/pdf");
+  });
+
+  it("downloadBlob refreshes once on a 401 and replays with the new token", async () => {
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockResolvedValueOnce(new Response("%PDF", { status: 200 }));
+    const client = new ApiClient({
+      baseUrl: "https://api.test/api/v1",
+      fetchImpl,
+      getAccessToken: () => "old",
+      refreshAccessToken: () => Promise.resolve("new"),
+    });
+
+    await client.downloadBlob("/receipts/r1/download");
+
+    expect(authHeaderOf(fetchImpl, 1)).toBe("Bearer new");
+  });
+
+  it("downloadBlob throws an ApiError for a non-ok response", async () => {
+    const fetchImpl = jest.fn().mockResolvedValue(new Response(null, { status: 404 }));
+    const client = new ApiClient({ baseUrl: "https://api.test/api/v1", fetchImpl });
+
+    await expect(client.downloadBlob("/receipts/x/download")).rejects.toMatchObject({
+      status: 404,
+    });
+    await expect(client.downloadBlob("/receipts/x/download")).rejects.toBeInstanceOf(ApiError);
+  });
+});

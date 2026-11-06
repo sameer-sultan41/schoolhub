@@ -50,7 +50,7 @@ export class DashboardPage extends BasePage {
    */
   sectionTab(
     name: string,
-    module: "Academics" | "Timetable" | "Attendance" = "Academics",
+    module: "Academics" | "Timetable" | "Attendance" | "Examinations" = "Academics",
   ): Locator {
     return this.page
       .getByRole("navigation", { name: `${module} sections`, exact: true })

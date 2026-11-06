@@ -1,0 +1,266 @@
+import { ApiError } from "@schoolhub/api-client";
+import { screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+
+import { saveBlob } from "@/lib/helpers";
+import { Services } from "@/services";
+import {
+  AYESHA_ID,
+  INVOICE_ID,
+  PAID_INVOICE_ID,
+  RECEIPT_ID,
+  portalDashboard,
+  portalInvoice,
+  portalReceipt,
+  portalVoucher,
+  VOUCHER_ID,
+} from "@/test-fixtures/portal";
+import { renderWithProviders } from "@/test-utils";
+
+import { PortalFees } from "../portal-fees";
+import { PortalInvoiceDetail } from "../portal-invoice-detail";
+
+const mockUseParams = jest.fn();
+
+jest.mock("next/navigation", () => ({
+  useParams: () => mockUseParams() as unknown,
+}));
+
+jest.mock("@/lib/helpers", () => ({
+  ...jest.requireActual<Record<string, unknown>>("@/lib/helpers"),
+  saveBlob: jest.fn(),
+}));
+
+jest.mock("@/services", () => ({
+  ApiError: jest.requireActual<{ ApiError: unknown }>("@schoolhub/api-client").ApiError,
+  Services: {
+    parentPortal: { fetchPortalDashboard: jest.fn() },
+    feeInvoices: { listFeeInvoices: jest.fn(), fetchFeeInvoice: jest.fn() },
+    receipts: { listReceipts: jest.fn(), downloadReceipt: jest.fn() },
+    vouchers: { listVouchers: jest.fn(), downloadVoucher: jest.fn() },
+  },
+}));
+
+const mockFetchDashboard = Services.parentPortal.fetchPortalDashboard as jest.MockedFunction<
+  typeof Services.parentPortal.fetchPortalDashboard
+>;
+const mockListInvoices = Services.feeInvoices.listFeeInvoices as jest.MockedFunction<
+  typeof Services.feeInvoices.listFeeInvoices
+>;
+const mockFetchInvoice = Services.feeInvoices.fetchFeeInvoice as jest.MockedFunction<
+  typeof Services.feeInvoices.fetchFeeInvoice
+>;
+const mockListReceipts = Services.receipts.listReceipts as jest.MockedFunction<
+  typeof Services.receipts.listReceipts
+>;
+const mockDownload = Services.receipts.downloadReceipt as jest.MockedFunction<
+  typeof Services.receipts.downloadReceipt
+>;
+
+const mockListVouchers = Services.vouchers.listVouchers as jest.MockedFunction<
+  typeof Services.vouchers.listVouchers
+>;
+const mockDownloadVoucher = Services.vouchers.downloadVoucher as jest.MockedFunction<
+  typeof Services.vouchers.downloadVoucher
+>;
+
+const outstanding = portalInvoice();
+const paid = portalInvoice({
+  id: PAID_INVOICE_ID,
+  invoice_no: "INV-0002",
+  status: "paid",
+  paid_total: "9000.00",
+  balance_due: "0.00",
+});
+
+describe("PortalFees", () => {
+  beforeEach(() => {
+    jest.mocked(saveBlob).mockReset();
+    mockListInvoices.mockReset();
+    mockFetchInvoice.mockReset();
+    mockListReceipts.mockReset();
+    mockDownload.mockReset();
+    mockListVouchers.mockReset();
+    mockDownloadVoucher.mockReset();
+    mockListVouchers.mockResolvedValue({ items: [] });
+    mockUseParams.mockReturnValue({ studentId: AYESHA_ID, invoiceId: INVOICE_ID });
+    mockFetchDashboard.mockResolvedValue(portalDashboard());
+    mockListInvoices.mockImplementation((query) =>
+      Promise.resolve({ items: query?.outstanding ? [outstanding] : [paid] }),
+    );
+    mockListReceipts.mockResolvedValue({ items: [portalReceipt()] });
+  });
+
+  it("fees shows outstanding and paid with a receipt blob download", async () => {
+    const blob = new Blob(["%PDF"], { type: "application/pdf" });
+    mockDownload.mockResolvedValue(blob);
+    const user = userEvent.setup();
+
+    renderWithProviders(<PortalFees />);
+
+    expect(await screen.findByText("INV-0001")).toBeInTheDocument();
+    expect(await screen.findByText("INV-0002")).toBeInTheDocument();
+    expect(mockListInvoices).toHaveBeenCalledWith(
+      expect.objectContaining({ studentId: AYESHA_ID, outstanding: true }),
+    );
+    expect(mockListInvoices).toHaveBeenCalledWith(
+      expect.objectContaining({ studentId: AYESHA_ID, status: "paid" }),
+    );
+    // There is no way to pay from the portal.
+    expect(screen.queryByRole("button", { name: /pay/i })).not.toBeInTheDocument();
+
+    await user.click(await screen.findByRole("button", { name: /Receipt RCP-0001/ }));
+
+    await waitFor(() => {
+      expect(saveBlob).toHaveBeenCalledWith(blob, "RCP-0001.pdf");
+    });
+    expect(mockDownload).toHaveBeenCalledWith(RECEIPT_ID);
+  });
+
+  it("offers each open invoice its issued voucher and downloads it as a blob", async () => {
+    mockListVouchers.mockResolvedValue({ items: [portalVoucher()] });
+    const blob = new Blob(["%PDF"], { type: "application/pdf" });
+    mockDownloadVoucher.mockResolvedValue(blob);
+    const user = userEvent.setup();
+
+    renderWithProviders(<PortalFees />);
+    await user.click(await screen.findByRole("button", { name: /Bank branch voucher 1234567890/ }));
+
+    expect(mockListVouchers).toHaveBeenCalledWith(
+      expect.objectContaining({ student: AYESHA_ID, status: "issued" }),
+    );
+    await waitFor(() => {
+      expect(saveBlob).toHaveBeenCalledWith(blob, "1234567890.pdf");
+    });
+    expect(mockDownloadVoucher).toHaveBeenCalledWith(VOUCHER_ID);
+  });
+
+  it("tells a parent to ask the office when an open invoice has no voucher", async () => {
+    renderWithProviders(<PortalFees />);
+
+    expect(await screen.findByText("Ask the school office for a voucher.")).toBeInTheDocument();
+  });
+
+  it("does not claim there is no voucher when the vouchers fail to load", async () => {
+    mockListVouchers.mockRejectedValue(new Error("boom"));
+
+    renderWithProviders(<PortalFees />);
+
+    expect(await screen.findByText(/couldn't load the vouchers/)).toBeInTheDocument();
+    expect(screen.queryByText("Ask the school office for a voucher.")).not.toBeInTheDocument();
+  });
+
+  it("says in place when a voucher fails to download", async () => {
+    mockListVouchers.mockResolvedValue({ items: [portalVoucher()] });
+    mockDownloadVoucher.mockRejectedValue(new Error("boom"));
+    const user = userEvent.setup();
+
+    renderWithProviders(<PortalFees />);
+    await user.click(await screen.findByRole("button", { name: /voucher 1234567890/ }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("couldn't download the voucher");
+    expect(saveBlob).not.toHaveBeenCalled();
+  });
+
+  it("says in place when a receipt fails to download", async () => {
+    mockDownload.mockRejectedValue(new Error("boom"));
+    const user = userEvent.setup();
+
+    renderWithProviders(<PortalFees />);
+    await user.click(await screen.findByRole("button", { name: /Receipt RCP-0001/ }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("couldn't download the receipt");
+    expect(saveBlob).not.toHaveBeenCalled();
+  });
+
+  it("shows a retry when the receipts fail to load rather than hiding the buttons", async () => {
+    mockListReceipts.mockRejectedValueOnce(new Error("boom"));
+    const user = userEvent.setup();
+
+    renderWithProviders(<PortalFees />);
+
+    expect(await screen.findByText(/couldn't load the receipts/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(await screen.findByRole("button", { name: /Receipt RCP-0001/ })).toBeInTheDocument();
+  });
+
+  it("shows the empty states when nothing is outstanding or paid", async () => {
+    mockListInvoices.mockResolvedValue({ items: [] });
+
+    renderWithProviders(<PortalFees />);
+
+    expect(await screen.findByText("Nothing outstanding")).toBeInTheDocument();
+    expect(await screen.findByText("No paid invoices")).toBeInTheDocument();
+  });
+
+  it("shows an invoice with its lines, totals and receipts", async () => {
+    mockFetchInvoice.mockResolvedValue(paid);
+
+    renderWithProviders(<PortalInvoiceDetail />);
+
+    expect(await screen.findByRole("heading", { name: "Invoice INV-0002" })).toBeInTheDocument();
+    const lines = within(screen.getByRole("table", { name: "Invoice lines" }));
+    expect(lines.getByText("Tuition")).toBeInTheDocument();
+    expect(mockFetchInvoice).toHaveBeenCalledWith(INVOICE_ID);
+    expect(await screen.findByRole("button", { name: /Receipt RCP-0001/ })).toBeInTheDocument();
+  });
+
+  it("does not say there are no receipts while the receipts are still loading", async () => {
+    mockFetchInvoice.mockResolvedValue(paid);
+    type ReceiptsPage = Awaited<ReturnType<typeof Services.receipts.listReceipts>>;
+    let resolveReceipts: (page: ReceiptsPage) => void = () => {};
+    mockListReceipts.mockReturnValue(
+      new Promise<ReceiptsPage>((resolve) => {
+        resolveReceipts = resolve;
+      }),
+    );
+
+    renderWithProviders(<PortalInvoiceDetail />);
+
+    expect(await screen.findByRole("heading", { name: "Invoice INV-0002" })).toBeInTheDocument();
+    expect(screen.queryByText("No receipts yet")).not.toBeInTheDocument();
+
+    resolveReceipts({ items: [portalReceipt()] });
+    expect(await screen.findByRole("button", { name: /Receipt RCP-0001/ })).toBeInTheDocument();
+    expect(screen.queryByText("No receipts yet")).not.toBeInTheDocument();
+  });
+
+  it("does not show another child's invoice under this child's address", async () => {
+    mockFetchInvoice.mockResolvedValue(
+      portalInvoice({ student: "ffffffff-ffff-4fff-8fff-ffffffffffff" }),
+    );
+
+    renderWithProviders(<PortalInvoiceDetail />);
+
+    expect(await screen.findByText("Invoice not found")).toBeInTheDocument();
+    expect(screen.queryByText(/couldn't load this invoice/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Tuition")).not.toBeInTheDocument();
+  });
+
+  it("says not found, without a retry, when the invoice answers 404", async () => {
+    mockFetchInvoice.mockRejectedValue(
+      new ApiError({
+        code: "not_found",
+        message: "Not found.",
+        status: 404,
+        url: "/fee-invoices/x",
+      }),
+    );
+
+    renderWithProviders(<PortalInvoiceDetail />);
+
+    expect(await screen.findByText("Invoice not found")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+  });
+
+  it("offers Try again for a transport failure", async () => {
+    mockFetchInvoice.mockRejectedValue(new Error("network down"));
+
+    renderWithProviders(<PortalInvoiceDetail />);
+
+    expect(await screen.findByText(/couldn't load this invoice/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.queryByText("Invoice not found")).not.toBeInTheDocument();
+  });
+});

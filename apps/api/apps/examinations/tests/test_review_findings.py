@@ -92,9 +92,15 @@ class PublishPermissionTests(ScheduleTestCase):
         """
         from apps.examinations.views import AdmitCardViewSet, ExamScheduleViewSet
 
-        for viewset in (ExamScheduleViewSet, AdmitCardViewSet):
+        # `download` is portal-readable on purpose: a student or guardian fetches
+        # their own admit card through it, narrowed by record scope (ADR-0021).
+        readable = {
+            ExamScheduleViewSet: frozenset({"list", "retrieve"}),
+            AdmitCardViewSet: frozenset({"list", "retrieve", "download"}),
+        }
+        for viewset, expected in readable.items():
             with self.subTest(viewset=viewset.__name__):
-                self.assertEqual(viewset.PORTAL_READABLE_ACTIONS, frozenset({"list", "retrieve"}))
+                self.assertEqual(viewset.PORTAL_READABLE_ACTIONS, expected)
                 self.assertFalse(hasattr(viewset, "STAFF_ONLY_ACTIONS"))
 
 
@@ -309,25 +315,34 @@ class AdmitCardBatchTests(ScheduleTestCase):
             self.exam.save(update_fields=["status"])
 
     def test_the_issued_count_is_what_the_database_holds(self) -> None:
-        """Finding 6 — `len(created)` overstated under exactly the race
-        `ignore_conflicts` exists to absorb: the loser attempted N rows,
-        inserted none, and reported N.
+        """Finding 6 — `issued` is the rows this run added: a top-up run with
+        nothing new reports 0, and the runs sum to the rows held.
         """
         with tenant_context(self.tenant.id):
             first = services.issue_admit_cards(exam=self.exam, actor_id=self.user.pk)
-            # A second run with nothing new. The invariant is what matters
-            # and what the fix guarantees: `issued` is always the change in row
-            # count, never the number of rows attempted. A genuine concurrent
-            # race is not reproducible in a single-connection `TestCase`, so
-            # asserting the invariant is the honest test — faking the race by
-            # rewriting card numbers would violate the very uniqueness
-            # constraint the race turns on.
             second = services.issue_admit_cards(exam=self.exam, actor_id=self.user.pk)
             total = AdmitCard.objects.alive().filter(exam=self.exam).count()
 
         self.assertEqual(first["issued"], 3)
         self.assertEqual(second["issued"], 0)
+        self.assertEqual(second["already_issued"], 3)
         self.assertEqual(first["issued"] + second["issued"], total)
+
+    def test_issuing_locks_the_exam_before_reading_existing_cards(self) -> None:
+        """Two concurrent runs both read the same `existing` set and both
+        reported N. Locking the exam row serialises them, so the second sees
+        the first's cards. Asserted on the SQL issued, as
+        `fees_finance` `ConcurrencyTests` does: a real race needs two
+        connections.
+        """
+        with tenant_context(self.tenant.id), CaptureQueriesContext(connection) as queries:
+            services.issue_admit_cards(exam=self.exam, actor_id=self.user.pk)
+
+        sql = [query["sql"] for query in queries.captured_queries]
+        lock_at = next((i for i, q in enumerate(sql) if "FOR UPDATE" in q and '"exams"' in q), None)
+        self.assertIsNotNone(lock_at, "issue_admit_cards must read the exam FOR UPDATE")
+        first_card_read = next(i for i, q in enumerate(sql) if 'FROM "admit_cards"' in q)
+        self.assertLess(lock_at, first_card_read)
 
     def test_rendering_does_not_query_per_card(self) -> None:
         """Finding 7 — `student_sittings` was called once per card, two queries

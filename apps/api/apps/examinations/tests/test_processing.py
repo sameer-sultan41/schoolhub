@@ -22,6 +22,7 @@ from rest_framework.test import APIClient
 
 from apps.examinations import processing, services, tasks
 from apps.examinations.models import (
+    Exam,
     ExamStatus,
     MarksStatus,
     Result,
@@ -34,12 +35,14 @@ from apps.examinations.tests.factories import (
     ExamFactory,
     ExamSubjectFactory,
     MarksFactory,
+    StaffFactory,
     SubjectFactory,
     UserFactory,
     authenticate,
     grant,
 )
 from core.api.exceptions import Conflict, DomainRuleViolation
+from core.jobs.models import BackgroundJob
 from core.jobs.tests.base import assert_sent_on_commit
 from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
@@ -124,6 +127,40 @@ class ReadinessTests(ProcessingTestCase):
 
         self.assertIn("still outstanding", str(caught.exception.detail))
         self.assertIn(self.subject.name, str(caught.exception.detail))
+
+    def test_the_outstanding_marks_refusal_carries_its_own_code(self) -> None:
+        """`marks_outstanding`, so a client can send the user to marks entry; the exam's
+        other 409s keep `conflict`."""
+        with tenant_context(self.tenant.id):
+            self.mark(self.students[0], theory_marks=Decimal("60.00"))
+
+        response = self.client.post(f"/api/v1/exams/{self.exam.pk}:process-results")
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        error = response.json()["error"]
+        self.assertEqual(error["code"], "marks_outstanding")
+        self.assertIn("still outstanding", error["message"])
+        self.assertIn(self.subject.name, error["message"])
+
+    def test_the_exam_s_other_refusals_keep_the_conflict_code(self) -> None:
+        with tenant_context(self.tenant.id):
+            empty = ExamFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                grading_scale=self.scale,
+                status=ExamStatus.MARKS_ENTRY,
+            )
+            approved = ExamFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                grading_scale=self.scale,
+                status=ExamStatus.APPROVED,
+            )
+
+        for exam in (empty, approved):
+            response = self.client.post(f"/api/v1/exams/{exam.pk}:process-results")
+            self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+            self.assertEqual(response.json()["error"]["code"], "conflict")
 
     def test_a_draft_row_does_not_count_as_entered(self) -> None:
         """A `draft` row was saved but never claimed as finished. Processing it
@@ -330,6 +367,22 @@ class ProcessEndpointTests(ProcessingTestCase):
             tenant_id=self.tenant.pk,
             actor_id=self.user.pk,
         )
+
+    def test_an_exam_outside_the_caller_s_scope_is_a_404(self) -> None:
+        """Resolved through `ExamViewSet`'s record scope, not a bare lookup."""
+        self.mark_all("60.00", "70.00", "80.00")
+        with tenant_context(self.tenant.id):
+            outsider = UserFactory(tenant=self.tenant)
+            StaffFactory(tenant=self.tenant, campus=self.campus, user_id=outsider.pk)
+        grant(outsider, "exams.result.create", scope=RecordScope.ASSIGNED)
+        client = APIClient()
+        authenticate(client, outsider)
+
+        response = client.post(f"/api/v1/exams/{self.exam.pk}:process-results")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        with tenant_context(self.tenant.id):
+            self.assertFalse(BackgroundJob.objects.exists())
 
 
 class RecomputeTests(ProcessingTestCase):
@@ -547,6 +600,46 @@ class ResultVisibilityTests(ProcessingTestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["student_id"], str(self.students[0].pk))
 
+    def publish(self) -> None:
+        with tenant_context(self.tenant.id):
+            approver = UserFactory(tenant=self.tenant)
+            services.approve_exam_results(exam=self.exam, approver_id=approver.pk)
+            services.publish_exam_results(exam=self.exam, actor_id=approver.pk)
+
+    def test_the_list_names_the_exam_and_its_term(self) -> None:
+        self.publish()
+        with tenant_context(self.tenant.id):
+            # The fixture exam is session-wide; `update` skips the lifecycle checks a save runs.
+            Exam.objects.filter(pk=self.exam.pk).update(term=self.term)
+
+        row = self.portal.get("/api/v1/results").json()["data"][0]
+
+        self.assertEqual(row["exam_name"], self.exam.name)
+        self.assertEqual(row["term_name"], self.term.name)
+
+    def test_a_session_wide_exam_has_no_term_name(self) -> None:
+        self.publish()
+
+        row = self.portal.get("/api/v1/results").json()["data"][0]
+
+        self.assertEqual(row["exam_name"], self.exam.name)
+        self.assertIsNone(row["term_name"])
+
+    def test_the_list_query_count_does_not_grow_with_rows(self) -> None:
+        self.publish()
+
+        def queries_for(query: str) -> int:
+            with CaptureQueriesContext(connection) as captured:
+                response = self.client.get(f"/api/v1/results{query}")
+            self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+            return len(captured.captured_queries)
+
+        # The first request also fills the permission, scope and feature caches (cold
+        # reads that later requests skip), so warm them before comparing row counts.
+        queries_for("")
+        self.assertEqual(queries_for("?page_size=1"), queries_for(""))
+        self.assertEqual(len(self.client.get("/api/v1/results").json()["data"]), 3)
+
     def test_a_student_never_sees_another_student_s_published_result(self) -> None:
         with tenant_context(self.tenant.id):
             approver = UserFactory(tenant=self.tenant)
@@ -613,7 +706,7 @@ class ConcurrencyLockTests(ProcessingTestCase):
         import inspect
 
         source = inspect.getsource(services.withhold_result)
-        self.assertIn("select_for_update()", source)
+        self.assertIn("select_for_update(", source)
         self.assertNotIn("lock_exam", source)
 
     def test_publish_returns_the_ids_it_moved(self) -> None:

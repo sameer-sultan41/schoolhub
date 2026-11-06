@@ -87,7 +87,8 @@
         "newStaff": "New staff member",
         "importStudents": "Import students"
       }
-    }
+    },
+    "examinations": "Examinations"
   },
   "auth": {
     "login": {
@@ -1415,7 +1416,8 @@
         "internalNote": "Internal note",
         "send": "Send",
         "sending": "Sending",
-        "failed": "Your message couldn't be sent."
+        "failed": "Your message couldn't be sent.",
+        "attachments": "Attachments"
       },
       "picker": {
         "search": "Search",
@@ -1453,7 +1455,8 @@
           "studentRequired": "Choose the student this conversation is about.",
           "internalNeedsOne": "Choose one colleague.",
           "groupNeedsTwo": "Choose at least two colleagues for a group conversation."
-        }
+        },
+        "attachments": "Attachments"
       }
     },
     "oversight": {
@@ -1941,11 +1944,8 @@
         "staff-punctuality": "Staff punctuality",
         "leave": "Leave"
       },
-      "caption": "{report} report",
-      "rowCount": "{count, plural, one {# row} other {# rows}}",
       "notRunTitle": "Pick a report and run it",
       "notRunDescription": "Choose the report, its dates and any filters, then select Run report.",
-      "emptyTitle": "No rows",
       "emptyDescription": "Nothing matches this report's dates and filters.",
       "loadError": "The report couldn't be run.",
       "stale": "The options changed. Run the report to update it; the table below and its exports still show the last run.",
@@ -1976,38 +1976,1029 @@
         "dates": "Dates",
         "days": "Days",
         "dayPart": "Day part"
-      },
-      "queued": {
-        "title": "This report is being built as a file",
-        "description": "It has more than 1,000 rows, too many to show here, so the server is building it as a CSV file.",
-        "progress": "Building the file — {progress}%",
-        "ready": "The file is ready.",
-        "download": "Download CSV",
-        "downloading": "Preparing the download…",
-        "downloadFailed": "The file couldn't be downloaded.",
-        "failed": "The report file couldn't be built.",
-        "pollFailed": "The report's progress couldn't be checked.",
-        "timedOut": "Still building in the background. Check again in a moment.",
-        "checkAgain": "Check again",
-        "runAgain": "Run the report again"
-      },
-      "export": {
-        "label": "Export the report",
-        "button": "Export {format}",
-        "exporting": "Exporting {format}…",
-        "checkStatus": "Check {format} export",
-        "permissionTitle": "You don't have permission to export reports.",
-        "success": "Report exported.",
-        "startFailed": "The export could not be started.",
-        "downloadFailed": "The export file could not be downloaded.",
-        "timedOut": "The export is taking longer than expected. Try again in a moment.",
-        "failed": "The export failed."
-      },
-      "formats": {
-        "csv": "CSV",
-        "xlsx": "XLSX",
-        "pdf": "PDF"
       }
+    }
+  },
+  "exams": {
+    "nav": {
+      "label": "Examinations sections",
+      "exams": "Exams",
+      "gradingScales": "Grading scales",
+      "reports": "Reports",
+      "questionBanks": "Question banks"
+    },
+    "title": "Exams",
+    "summary": "Plan each exam, its subjects and its marks structure.",
+    "examOption": "{name} · {session}",
+    "types": {
+      "unit_test": "Unit test",
+      "midterm": "Midterm",
+      "final": "Final",
+      "practical": "Practical",
+      "custom": "Custom"
+    },
+    "status": {
+      "draft": "Draft",
+      "scheduled": "Scheduled",
+      "ongoing": "Ongoing",
+      "marks_entry": "Marks entry",
+      "processing": "Processing",
+      "approved": "Approved",
+      "published": "Published",
+      "archived": "Archived"
+    },
+    "list": {
+      "caption": "Exams",
+      "emptyTitle": "No exams yet",
+      "emptyDescription": "Create an exam, then add the subjects it covers.",
+      "loadError": "The exams couldn't be loaded.",
+      "searchPlaceholder": "Search by name or description",
+      "noMatches": "No exams match these filters",
+      "noMatchesDescription": "Try a different search, or clear a filter."
+    },
+    "filters": {
+      "search": "Search exams",
+      "clearSearch": "Clear search",
+      "session": "Academic session",
+      "term": "Term",
+      "status": "Status",
+      "type": "Exam type",
+      "allSessions": "All sessions",
+      "allTerms": "All terms",
+      "allStatuses": "All statuses",
+      "allTypes": "All types"
+    },
+    "columns": {
+      "name": "Exam",
+      "sessionTerm": "Session and term",
+      "type": "Type",
+      "dates": "Dates",
+      "status": "Status",
+      "subjects": "Subjects"
+    },
+    "actions": {
+      "create": "New exam",
+      "edit": "Edit exam",
+      "delete": "Delete exam",
+      "editRow": "Edit {name}",
+      "deleteRow": "Delete {name}",
+      "backToList": "Back to exams",
+      "frozen": "This exam's configuration is frozen once it is past Scheduled."
+    },
+    "form": {
+      "createTitle": "New exam",
+      "editTitle": "Edit exam",
+      "intro": "An exam's session, grading scale and subjects are set here and on its page. Once it is past Scheduled they are frozen.",
+      "name": "Name",
+      "session": "Academic session",
+      "selectSession": "Select a session",
+      "term": "Term",
+      "selectTerm": "Select a term",
+      "noTerm": "No term",
+      "type": "Exam type",
+      "weightage": "Weightage (%)",
+      "weightageHint": "Contribution to a consolidated term or session result.",
+      "gradingScale": "Grading scale",
+      "selectScale": "Select a scale",
+      "defaultScale": "School default",
+      "startsOn": "Starts on",
+      "endsOn": "Ends on",
+      "description": "Description",
+      "weightageInvalid": "Enter a percentage above 0 and at most 100, with up to two decimals.",
+      "endsBeforeStart": "An exam cannot end before it starts.",
+      "bothDates": "Set both dates or neither."
+    },
+    "delete": {
+      "titleNamed": "Delete {name}",
+      "description": "Only a draft exam can be deleted. Its subjects go with it."
+    },
+    "saved": "Exam saved.",
+    "removed": "Exam deleted.",
+    "detail": {
+      "loadError": "The exam couldn't be loaded.",
+      "notFoundTitle": "Exam not found",
+      "notFoundDescription": "It may have been deleted, or it belongs to another school.",
+      "sessionTerm": "{session}, {term}",
+      "dates": "{from} to {to}",
+      "noDates": "Dates not set",
+      "scale": "Grading scale: {name}",
+      "weightage": "Weightage {percent}%",
+      "stepper": {
+        "label": "Exam progress",
+        "done": "done",
+        "current": "current",
+        "upcoming": "upcoming",
+        "skipped": "skipped",
+        "terminal": "final status"
+      }
+    },
+    "tabs": {
+      "label": "Exam sections",
+      "subjects": "Subjects",
+      "schedule": "Schedule",
+      "admit-cards": "Admit cards",
+      "marks": "Marks",
+      "results": "Results",
+      "report-cards": "Report cards"
+    },
+    "subjects": {
+      "title": "Subjects",
+      "emptyTitle": "No subjects yet",
+      "emptyDescription": "Add the subjects each class sits, with their marks.",
+      "emptyFrozen": "This exam has no subjects, and its configuration is frozen.",
+      "loadError": "The subjects couldn't be loaded.",
+      "columns": {
+        "subject": "Subject",
+        "maxMarks": "Max marks",
+        "passMarks": "Pass marks",
+        "practical": "Practical",
+        "weightage": "Weightage",
+        "entryWindow": "Marks entry",
+        "locked": "Locked"
+      },
+      "practicalSplit": "{max} (pass {pass})",
+      "noPractical": "No practical",
+      "weightagePercent": "{percent}%",
+      "window": "{from} to {to}",
+      "windowNotSet": "Not set",
+      "windowFrom": "From {from}",
+      "windowUntil": "Until {to}",
+      "lockedYes": "Locked",
+      "lockedNo": "Open",
+      "actions": {
+        "add": "Add subject",
+        "edit": "Edit",
+        "delete": "Remove",
+        "editRow": "Edit {subject} in {class}",
+        "deleteRow": "Remove {subject} from {class}"
+      },
+      "form": {
+        "createTitle": "Add subject",
+        "editTitle": "Edit subject",
+        "intro": "Marks for one subject in one class. The subject must be on the class's curriculum for this exam's session.",
+        "class": "Class",
+        "selectClass": "Select a class",
+        "subject": "Subject",
+        "selectSubject": "Select a subject",
+        "noCurriculum": "This class has no curriculum subjects in the exam's session.",
+        "maxMarks": "Maximum marks",
+        "passMarks": "Pass marks",
+        "hasPractical": "Has a practical component",
+        "practicalMax": "Practical maximum",
+        "practicalPass": "Practical pass marks",
+        "weightage": "Weightage (%)",
+        "weightageHint": "Weight within this exam's aggregate.",
+        "opensAt": "Marks entry opens",
+        "closesAt": "Marks entry closes",
+        "marksInvalid": "Enter marks as a number with up to two decimals.",
+        "weightageInvalid": "Enter a percentage above 0 and at most 100, with up to two decimals.",
+        "passAboveMax": "Pass marks cannot exceed the maximum.",
+        "windowOrder": "The entry window must close after it opens."
+      },
+      "delete": {
+        "titleNamed": "Remove {subject} from {class}",
+        "description": "The subject leaves this exam. This cannot be undone."
+      },
+      "saved": "Subject saved.",
+      "removed": "Subject removed."
+    },
+    "schedule": {
+      "title": "Schedule",
+      "loadError": "The schedule couldn't be loaded.",
+      "emptyTitle": "No sittings yet",
+      "emptyDescription": "Add a sitting for each paper and section, with its date, time and room.",
+      "emptyReadOnly": "No sittings have been scheduled for this exam.",
+      "timeRange": "{start} to {end}",
+      "classSection": "{class} {section}",
+      "columns": {
+        "time": "Time",
+        "subject": "Subject",
+        "section": "Class and section",
+        "room": "Room",
+        "invigilator": "Invigilator",
+        "status": "Status"
+      },
+      "status": {
+        "scheduled": "Scheduled",
+        "completed": "Completed",
+        "cancelled": "Cancelled"
+      },
+      "clash": {
+        "hard": "Blocking clash",
+        "soft": "Clash warning"
+      },
+      "actions": {
+        "add": "Add sitting",
+        "editRow": "Reschedule {subject}, {class} {section}",
+        "cancelRow": "Cancel {subject}, {class} {section}",
+        "deleteRow": "Delete {subject}, {class} {section}"
+      },
+      "form": {
+        "createTitle": "Add sitting",
+        "editTitle": "Reschedule sitting",
+        "intro": "One section's sitting of one paper. A clash with another sitting is saved and flagged, and only blocks publishing.",
+        "subject": "Paper",
+        "selectSubject": "Select a paper",
+        "subjectOption": "{subject} ({class})",
+        "section": "Section",
+        "selectSection": "Select a section",
+        "date": "Date",
+        "startTime": "Starts",
+        "endTime": "Ends",
+        "room": "Room",
+        "selectRoom": "Select a room",
+        "noRoom": "No room",
+        "roomHint": "Rooms in service on the section's campus.",
+        "invigilator": "Invigilator",
+        "selectInvigilator": "Select an invigilator",
+        "noInvigilator": "No invigilator",
+        "endBeforeStart": "A sitting must end after it starts."
+      },
+      "saved": "Sitting saved.",
+      "cancel": {
+        "title": "Cancel {subject}, {class} {section}",
+        "description": "The sitting is called off and its room is freed. It stays on the schedule as cancelled.",
+        "confirm": "Cancel sitting",
+        "done": "Sitting cancelled."
+      },
+      "delete": {
+        "title": "Delete {subject}, {class} {section}",
+        "description": "The sitting is removed from this draft exam. This cannot be undone.",
+        "confirm": "Delete sitting",
+        "done": "Sitting deleted."
+      },
+      "conflicts": {
+        "title": "Clashes",
+        "none": "No clashes found.",
+        "loadError": "The clashes couldn't be checked.",
+        "involves": "Sittings involved",
+        "severity": {
+          "hard": "Blocking",
+          "soft": "Warning"
+        },
+        "types": {
+          "room_double_booked": "A room is booked for two sittings at the same time.",
+          "invigilator_double_booked": "An invigilator is assigned to two sittings at the same time.",
+          "student_two_papers_at_once": "Students in a section have two papers at the same time.",
+          "outside_exam_window": "A sitting falls outside the exam's dates.",
+          "not_a_working_day": "A sitting falls on a day the school doesn't work.",
+          "room_over_capacity": "A room is smaller than the section sitting in it.",
+          "clashes_with_timetable": "A sitting overlaps the regular timetable."
+        }
+      },
+      "publish": {
+        "button": "Publish schedule",
+        "blocked": "{count, plural, one {# blocking clash} other {# blocking clashes}} to resolve first",
+        "title": "Publish the schedule?",
+        "description": "Students and guardians are told the schedule is out, and admit cards can then be issued. Warnings do not stop this.",
+        "confirm": "Publish schedule",
+        "done": "Schedule published."
+      }
+    },
+    "admitCards": {
+      "caption": "Admit cards for this exam",
+      "pagination": "Admit card pages",
+      "loadError": "The admit cards couldn't be loaded.",
+      "emptyTitle": "No admit cards yet",
+      "emptyDescription": "No admit cards have been issued for this exam yet.",
+      "emptyDraft": "Admit cards are issued once the schedule is published.",
+      "noMatches": "No admit cards match these filters",
+      "noMatchesDescription": "Try another section or status.",
+      "filters": {
+        "section": "Section",
+        "status": "Status",
+        "all": "All"
+      },
+      "columns": {
+        "number": "Card number",
+        "student": "Student",
+        "admissionNumber": "Admission number",
+        "section": "Section",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "status": {
+        "generated": "Awaiting PDF",
+        "issued": "Issued",
+        "revoked": "Revoked"
+      },
+      "revokedReason": "Reason: {reason}",
+      "actions": {
+        "downloadRow": "Download {name}'s admit card",
+        "revokeRow": "Revoke {name}'s admit card"
+      },
+      "download": {
+        "failed": "The admit card couldn't be downloaded."
+      },
+      "issue": {
+        "button": "Issue admit cards",
+        "resume": "Check rendering again",
+        "summary": "{added, plural, =0 {No new admit cards} one {# admit card added} other {# admit cards added}}; {existing, plural, =0 {none already existed} other {# already existed}}.",
+        "rendering": "Rendering PDFs: {progress}%",
+        "rendered": "{count, plural, one {# admit card PDF is} other {# admit card PDFs are}} ready.",
+        "renderedAll": "Admit card PDFs are ready.",
+        "failed": "Admit cards couldn't be issued.",
+        "renderFailed": "The admit card PDFs couldn't be rendered.",
+        "timedOut": "Rendering is taking longer than expected. Check again in a moment."
+      },
+      "revoke": {
+        "title": "Revoke {name}'s admit card",
+        "description": "Card {number} is withdrawn and can no longer be downloaded. Issuing admit cards again will not restore it.",
+        "reason": "Reason",
+        "reasonHint": "Kept with the card: students and guardians may ask why.",
+        "submit": "Revoke card",
+        "submitting": "Revoking the card",
+        "done": "{name}'s admit card revoked.",
+        "required": "Give a reason for revoking this card.",
+        "tooLong": "Keep the reason to {max} characters."
+      }
+    },
+    "marks": {
+      "progress": {
+        "loading": "Loading marks progress",
+        "loadError": "The marks progress couldn't be loaded.",
+        "emptyTitle": "No marks to enter",
+        "emptyDescription": "No subject and section of this exam is open to you for marks entry.",
+        "caption": "Marks entry progress by subject and section",
+        "columns": {
+          "subject": "Subject",
+          "section": "Class and section",
+          "entered": "Entered",
+          "submitted": "Submitted",
+          "status": "Status",
+          "actions": "Actions"
+        },
+        "state": {
+          "locked": "Locked",
+          "submitted": "Submitted",
+          "inProgress": "In progress",
+          "notStarted": "Not started"
+        },
+        "sectionName": "{class} – {section}",
+        "count": "{done} of {total}",
+        "enter": "Enter marks",
+        "enterRow": "Enter marks for {subject}, {section}",
+        "unlockHint": "Some subjects are locked and take no marks until they are unlocked. To correct one (after the results were sent back, for example), unlock it first; unlocking is audited.",
+        "unlockHintAsk": "Some subjects are locked and take no marks until they are unlocked. To correct one (after the results were sent back, for example), ask someone who can lock marks to unlock it."
+      },
+      "lock": {
+        "lock": "Lock",
+        "lockRow": "Lock {subject} marks for {class}",
+        "unlock": "Unlock",
+        "unlockRow": "Unlock {subject} marks for {class}",
+        "locked": "{subject} marks locked.",
+        "unlocked": "{subject} marks unlocked.",
+        "failed": "The marks couldn't be locked.",
+        "unlockTitle": "Unlock {subject} marks for {class}?",
+        "unlockDescription": "Every section of {subject} takes marks again until it is locked. Unlocking is audited.",
+        "unlockConfirm": "Unlock marks"
+      },
+      "grid": {
+        "heading": "{subject} · {class} – {section}",
+        "headingFallback": "Marks entry",
+        "back": "Back to progress",
+        "caption": "Marks for {heading}",
+        "loadError": "The marks couldn't be loaded.",
+        "notFoundTitle": "This section isn't open to you",
+        "notFoundDescription": "You can only enter marks for the subjects and sections you teach.",
+        "readOnly": "These marks are read-only.",
+        "emptyTitle": "No students",
+        "emptyDescription": "No students are on this section's roll for the exam's session.",
+        "columns": {
+          "roll": "Roll",
+          "student": "Student",
+          "admissionNumber": "Admission number",
+          "theory": "Theory (out of {max})",
+          "practical": "Practical (out of {max})",
+          "absent": "Absent",
+          "exempt": "Exempt",
+          "remarks": "Remarks"
+        },
+        "theoryFor": "Theory marks for {name}",
+        "practicalFor": "Practical marks for {name}",
+        "absentFor": "{name} was absent",
+        "exemptFor": "{name} is exempt",
+        "remarksFor": "Remarks for {name}",
+        "aboveMax": "Above the maximum of {max}.",
+        "invalid": "Enter a number with at most two decimals.",
+        "absentValue": "Absent",
+        "exemptValue": "Exempt",
+        "yes": "Yes",
+        "no": "No",
+        "saveDraft": "Save draft",
+        "submit": "Submit",
+        "blankCount": "{count, plural, one {# student has} other {# students have}} no mark yet. Enter a mark, or mark them absent or exempt, before submitting.",
+        "saved": "Draft saved: {entered} entered, {updated} updated.",
+        "submitted": "Marks submitted: {entered} entered, {updated} updated."
+      },
+      "import": {
+        "button": "Import marks",
+        "title": "Import {subject} marks",
+        "description": "Upload a CSV or .xlsx sheet with one row per student, by admission number. Each row is checked on its own; rows for sections you don't enter are refused.",
+        "titleFallback": "Import a marks sheet"
+      }
+    },
+    "results": {
+      "caption": "Results for this exam",
+      "pagination": "Result pages",
+      "loadError": "The results couldn't be loaded.",
+      "emptyTitle": "No results yet",
+      "emptyDescription": "Results appear here once the exam's marks are processed.",
+      "noMatches": "No results match these filters",
+      "noMatchesDescription": "Try another section, outcome or status.",
+      "filters": {
+        "section": "Section",
+        "outcome": "Outcome",
+        "status": "Status",
+        "all": "All"
+      },
+      "columns": {
+        "rank": "Rank",
+        "student": "Student",
+        "section": "Section",
+        "percentage": "Percentage",
+        "grade": "Grade",
+        "gpa": "GPA",
+        "outcome": "Outcome",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "status": {
+        "processing": "Processing",
+        "pending_approval": "Awaiting approval",
+        "approved": "Approved",
+        "published": "Published"
+      },
+      "outcome": {
+        "pass": "Pass",
+        "fail": "Fail",
+        "absent": "Absent",
+        "withheld": "Withheld"
+      },
+      "percent": "{value}%",
+      "processedBy": "Processed by {name}",
+      "actions": {
+        "withholdRow": "Withhold {name}'s result"
+      },
+      "process": {
+        "button": "Process results",
+        "resume": "Check processing again",
+        "running": "Processing results: {progress}%",
+        "done": "{count, plural, one {# student's result is} other {# students' results are}} ready for approval.",
+        "doneAll": "Results are ready for approval.",
+        "jobFailed": "The results couldn't be processed.",
+        "failed": "Results couldn't be processed.",
+        "timedOut": "Processing is taking longer than expected. Check again in a moment.",
+        "toMarks": "Go to Marks"
+      },
+      "approve": {
+        "button": "Approve",
+        "title": "Approve these results?",
+        "description": "Every result awaiting approval is approved, and the results can then be published. Withheld results stay withheld.",
+        "confirm": "Approve results",
+        "done": "{count, plural, one {# result} other {# results}} approved.",
+        "ownRun": "You processed these results, so someone else must approve them.",
+        "nothingPending": "No results are awaiting approval.",
+        "loadError": "The results awaiting approval couldn't be checked."
+      },
+      "sendBack": {
+        "button": "Send back",
+        "title": "Send these results back?",
+        "description": "The exam returns to marks entry so the marks can be corrected, and the results must be processed again before approval.",
+        "hint": "Tell the marks team what needs correcting.",
+        "submit": "Send back",
+        "submitting": "Sending the results back",
+        "done": "{count, plural, one {# result} other {# results}} sent back; marks entry is open again."
+      },
+      "publish": {
+        "button": "Publish results",
+        "title": "Publish these results?",
+        "description": "Approved results are released to students and guardians, who are notified. Withheld results are not published.",
+        "confirm": "Publish results",
+        "done": "{published, plural, =0 {No results published} one {# result published} other {# results published}}; {withheld, plural, =0 {none withheld} other {# withheld}}."
+      },
+      "withhold": {
+        "title": "Withhold {name}'s result",
+        "description": "The result is held back when the others are published, and stays withheld if the results are processed again.",
+        "hint": "Kept with the result: students and guardians may ask why.",
+        "submit": "Withhold result",
+        "submitting": "Withholding the result",
+        "done": "{name}'s result withheld."
+      },
+      "reason": {
+        "label": "Reason",
+        "required": "Give a reason.",
+        "tooLong": "Keep the reason to {max} characters."
+      },
+      "detail": {
+        "title": "{name}'s result",
+        "admissionNumber": "Admission number {number}",
+        "rank": "Rank in section",
+        "total": "Total",
+        "outOf": "{obtained} / {max}",
+        "theoryPractical": "{theory} + {practical}",
+        "processedBy": "Processed by",
+        "approvedBy": "Approved by",
+        "subjects": "Subject marks",
+        "marksError": "The subject marks couldn't be loaded.",
+        "marksLoading": "Loading subject marks",
+        "noMarks": "No subject marks are recorded for this student.",
+        "marksHidden": "Subject marks are shown to staff who can view marks."
+      }
+    },
+    "reportCards": {
+      "caption": "Report cards for this exam",
+      "pagination": "Report card pages",
+      "loadError": "The report cards couldn't be loaded.",
+      "emptyTitle": "No report cards yet",
+      "emptyDescription": "Report cards are generated once the exam's results are published.",
+      "noMatches": "No report cards match these filters",
+      "noMatchesDescription": "Try another section or status.",
+      "filters": {
+        "section": "Section",
+        "status": "Status",
+        "all": "All"
+      },
+      "columns": {
+        "student": "Student",
+        "section": "Section",
+        "result": "Result",
+        "version": "Version",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "status": {
+        "draft": "Awaiting PDF",
+        "generated": "Generated",
+        "published": "Published"
+      },
+      "resultValue": "{percentage}% · {grade}",
+      "actions": {
+        "downloadRow": "Download {name}'s report card",
+        "remarksRow": "Edit remarks on {name}'s report card"
+      },
+      "download": {
+        "failed": "The report card couldn't be downloaded."
+      },
+      "generate": {
+        "button": "Generate report cards",
+        "resume": "Check generation again",
+        "running": "Generating report cards: {progress}%",
+        "done": "{count, plural, one {# report card is} other {# report cards are}} ready.",
+        "doneAll": "Report cards are ready.",
+        "partial": "{rendered, plural, =0 {No report cards are} one {# report card is} other {# report cards are}} ready; {failed} couldn't be rendered. Generate again to retry them.",
+        "jobFailed": "The report cards couldn't be generated.",
+        "failed": "Report cards couldn't be generated.",
+        "timedOut": "Generation is taking longer than expected. Check again in a moment."
+      },
+      "publish": {
+        "button": "Publish report cards",
+        "title": "Publish these report cards?",
+        "description": "Every generated report card is released to students and guardians, who are notified. Remarks can't be changed once a card is published.",
+        "confirm": "Publish report cards",
+        "done": "{count, plural, one {# report card} other {# report cards}} published."
+      },
+      "remarks": {
+        "title": "Remarks on {name}'s report card",
+        "description": "Printed on the card the next time report cards are generated.",
+        "submitting": "Saving the remarks",
+        "done": "Remarks on {name}'s report card saved.",
+        "tooLong": "Keep remarks to {max} characters.",
+        "classTeacher": {
+          "label": "Class teacher's remarks",
+          "hint": "Leave blank to remove the remark."
+        },
+        "principal": {
+          "label": "Principal's remarks",
+          "hint": "Leave blank to remove the remark."
+        }
+      }
+    },
+    "gradingScales": {
+      "title": "Grading scales",
+      "summary": "How marks become grades: the bands, and which scale an exam uses when it names none.",
+      "default": "Default",
+      "types": {
+        "percentage": "Percentage",
+        "letter": "Letter grades",
+        "gpa": "GPA",
+        "hybrid": "Hybrid (letter and GPA)"
+      },
+      "columns": {
+        "name": "Name",
+        "type": "Type",
+        "bands": "Bands",
+        "default": "Default"
+      },
+      "list": {
+        "caption": "Grading scales",
+        "emptyTitle": "No grading scales yet",
+        "emptyDescription": "Add a scale and its bands, so exams can turn marks into grades.",
+        "loadError": "The grading scales couldn't be loaded.",
+        "searchPlaceholder": "Search by name or description",
+        "noMatches": "No grading scales match these filters",
+        "noMatchesDescription": "Try a different search, or clear a filter."
+      },
+      "filters": {
+        "search": "Search grading scales",
+        "clearSearch": "Clear search",
+        "type": "Scale type",
+        "all": "All"
+      },
+      "actions": {
+        "create": "New grading scale",
+        "edit": "Edit",
+        "delete": "Remove",
+        "editRow": "Edit {name}",
+        "deleteRow": "Remove {name}",
+        "bands": "Bands",
+        "bandsRow": "Bands of {name}",
+        "makeDefault": "Make default",
+        "makeDefaultRow": "Make {name} the default"
+      },
+      "form": {
+        "createTitle": "New grading scale",
+        "editTitle": "Edit this grading scale",
+        "intro": "Add the bands once the scale exists. Which scale is the default is set from the list.",
+        "description": "Description",
+        "name": "Name",
+        "type": "Scale type",
+        "gpaMax": "Highest grade point",
+        "gpaMaxHint": "For example 4.00 or 5.00.",
+        "decimalInvalid": "Enter a number with up to two decimal places."
+      },
+      "delete": {
+        "titleNamed": "Remove {name}",
+        "description": "A scale an exam still uses cannot be removed. Its bands go with it."
+      },
+      "saved": "Grading scale saved.",
+      "removed": "Grading scale removed.",
+      "defaultSet": "{name} is now the default grading scale.",
+      "bands": {
+        "titleNamed": "Bands of {name}",
+        "description": "Bands run from the lowest percentage up. Together they must cover 0 to 100 with no gap or overlap before an exam can use the scale.",
+        "loadError": "The bands couldn't be loaded.",
+        "columns": {
+          "label": "Grade",
+          "range": "Range",
+          "gradePoint": "Grade point",
+          "result": "Result",
+          "remark": "Remark",
+          "actions": "Actions"
+        },
+        "range": "{min}% to {max}%",
+        "passing": "Pass",
+        "failing": "Fail",
+        "saved": "Band saved.",
+        "removed": "Band removed.",
+        "actions": {
+          "add": "Add band",
+          "delete": "Remove",
+          "editRow": "Edit band {label}",
+          "deleteRow": "Remove band {label}"
+        },
+        "form": {
+          "createTitle": "Add a band",
+          "editTitle": "Edit this band",
+          "label": "Grade",
+          "minPercent": "From (%)",
+          "maxPercent": "To (%)",
+          "gradePoint": "Grade point",
+          "sortOrder": "Order",
+          "remark": "Remark",
+          "isPassing": "Counts as a pass",
+          "orderInvalid": "Enter a whole number, 0 or more."
+        },
+        "delete": {
+          "titleNamed": "Remove band {label}",
+          "description": "Results graded with this band keep their grade. Check the coverage again afterwards."
+        },
+        "coverage": {
+          "title": "Check the coverage",
+          "complete": "The bands cover 0 to 100 with no gap or overlap.",
+          "empty": "No bands yet. Add at least one before an exam can use this scale.",
+          "start": "The lowest band starts at {at}%, so a result below that has no grade. The scale must start at 0.",
+          "end": "The highest band ends at {at}%, so a result above that has no grade. The scale must reach 100.",
+          "gap": "Nothing grades a result between {from}% and {to}%: {lower} and {upper} leave a gap.",
+          "overlap": "{lower} ends at {from}% and {upper} starts at {to}%, so they overlap."
+        }
+      }
+    },
+    "reports": {
+      "title": "Exam reports",
+      "summary": "Run a report on one exam. Up to 1,000 rows show here; a larger report is built as a file to download.",
+      "form": {
+        "label": "Report options",
+        "kind": "Report",
+        "exam": "Exam",
+        "examsLoadError": "The exams couldn't be loaded.",
+        "run": "Run report",
+        "running": "Running the report…",
+        "examAccessNote": "The per-exam reports need permission to view exams, so only question-bank usage is offered here."
+      },
+      "kinds": {
+        "result-register": "Result register",
+        "pass-fail-analysis": "Pass/fail analysis",
+        "subject-performance": "Subject performance",
+        "marks-entry-status": "Marks-entry status",
+        "grade-distribution": "Grade distribution",
+        "question-bank-usage": "Question-bank usage"
+      },
+      "notRunTitle": "Pick a report and run it",
+      "notRunDescription": "Choose the report and, for every report but question-bank usage, its exam; then select Run report.",
+      "emptyDescription": "Nothing in this exam matches this report yet.",
+      "loadError": "The report couldn't be run.",
+      "stale": "The options changed. Run the report to update it; the table below and its exports still show the last run.",
+      "fullName": "{first} {last}",
+      "percent": "{value}%",
+      "marksOutOf": "{obtained} / {max}",
+      "ungraded": "Ungraded",
+      "bandRange": "{min}–{max}%",
+      "passing": {
+        "yes": "Passing",
+        "no": "Not passing"
+      },
+      "difficulty": {
+        "easy": "Easy",
+        "medium": "Medium",
+        "hard": "Hard"
+      },
+      "columns": {
+        "rank": "Rank",
+        "student": "Student",
+        "section": "Section",
+        "percentage": "Percentage",
+        "marks": "Marks",
+        "grade": "Grade",
+        "gpa": "GPA",
+        "classRank": "Class rank",
+        "outcome": "Outcome",
+        "status": "Status",
+        "students": "Students",
+        "sat": "Sat",
+        "passed": "Passed",
+        "failed": "Failed",
+        "absent": "Absent",
+        "withheld": "Withheld",
+        "average": "Average",
+        "highest": "Highest",
+        "lowest": "Lowest",
+        "passRate": "Pass rate",
+        "subject": "Subject",
+        "class": "Class",
+        "maxMarks": "Max marks",
+        "passMarks": "Pass marks",
+        "lockedAt": "Locked",
+        "entered": "Entered",
+        "draft": "Draft",
+        "submitted": "Submitted",
+        "locked": "Locked rows",
+        "exempt": "Exempt",
+        "range": "Range",
+        "passing": "Passing band",
+        "bank": "Question bank",
+        "difficulty": "Difficulty",
+        "questions": "Questions",
+        "approved": "Approved",
+        "totalUses": "Used in a paper",
+        "averageUses": "Average uses"
+      }
+    },
+    "questionBanks": {
+      "title": "Question banks",
+      "summary": "Each subject's questions, the approval AI drafts wait for, and papers assembled from a blueprint.",
+      "everyLevel": "Every level",
+      "status": {
+        "active": "Active",
+        "archived": "Archived"
+      },
+      "types": {
+        "mcq": "Multiple choice",
+        "true_false": "True or false",
+        "short_answer": "Short answer",
+        "long_answer": "Long answer",
+        "fill_blank": "Fill in the blank",
+        "numerical": "Numerical"
+      },
+      "difficulty": {
+        "easy": "Easy",
+        "medium": "Medium",
+        "hard": "Hard"
+      },
+      "difficultyInSentence": {
+        "easy": "easy",
+        "medium": "medium",
+        "hard": "hard"
+      },
+      "sources": {
+        "manual": "Written by staff",
+        "ai_generated": "AI-generated",
+        "imported": "Imported"
+      },
+      "columns": {
+        "name": "Name",
+        "subject": "Subject",
+        "class": "Class",
+        "questions": "Questions",
+        "status": "Status"
+      },
+      "list": {
+        "caption": "Question banks",
+        "emptyTitle": "No question banks yet",
+        "emptyDescription": "Add a bank for a subject, then its questions. A teacher sees the banks of the subjects they teach.",
+        "loadError": "The question banks couldn't be loaded.",
+        "searchPlaceholder": "Search by name or description",
+        "noMatches": "No question banks match these filters",
+        "noMatchesDescription": "Try a different search, or clear a filter."
+      },
+      "filters": {
+        "search": "Search question banks",
+        "clearSearch": "Clear search",
+        "subject": "Subject",
+        "status": "Status",
+        "all": "All"
+      },
+      "actions": {
+        "create": "New question bank",
+        "edit": "Edit",
+        "delete": "Remove",
+        "editRow": "Edit {name}",
+        "deleteRow": "Remove {name}",
+        "backToList": "Back to question banks"
+      },
+      "form": {
+        "createTitle": "New question bank",
+        "editTitle": "Edit this question bank",
+        "intro": "Add the questions once the bank exists.",
+        "name": "Name",
+        "subject": "Subject",
+        "selectSubject": "Select a subject",
+        "noSubjectAccess": "You can't list the school's subjects, so a bank can't be set up here.",
+        "class": "Class",
+        "everyLevel": "Every level",
+        "classHint": "Leave it at every level for questions any class may sit.",
+        "status": "Status",
+        "description": "Description"
+      },
+      "delete": {
+        "titleNamed": "Remove {name}",
+        "description": "Its questions go with it. Papers already downloaded are not affected."
+      },
+      "saved": "Question bank saved.",
+      "removed": "Question bank removed.",
+      "detail": {
+        "questionCount": "{count, plural, one {# question} other {# questions}}",
+        "notFoundTitle": "Question bank not found",
+        "notFoundDescription": "It may have been removed, or it belongs to a subject you don't teach.",
+        "loadError": "The question bank couldn't be loaded."
+      },
+      "questions": {
+        "caption": "Questions in this bank",
+        "pagination": "Question pages",
+        "loadError": "The questions couldn't be loaded.",
+        "emptyTitle": "No questions yet",
+        "emptyDescription": "Add questions to this bank, so a paper can be assembled from them.",
+        "noMatches": "No questions match these filters",
+        "noMatchesDescription": "Try a different topic, or clear a filter.",
+        "aiGenerated": "AI-generated",
+        "approved": "Approved",
+        "awaitingApproval": "Awaiting approval",
+        "approvedBy": "Approved by {name}",
+        "approvedToast": "Question approved: papers can now use it.",
+        "saved": "Question saved.",
+        "removed": "Question removed.",
+        "approvalFilter": {
+          "approved": "Approved",
+          "pending": "Awaiting approval"
+        },
+        "columns": {
+          "question": "Question",
+          "type": "Type",
+          "difficulty": "Difficulty",
+          "topic": "Topic",
+          "marks": "Marks",
+          "source": "Source",
+          "approval": "Approval",
+          "used": "Times used"
+        },
+        "filters": {
+          "search": "Search questions",
+          "searchPlaceholder": "Search the question or topic",
+          "clearSearch": "Clear search",
+          "topic": "Topic",
+          "difficulty": "Difficulty",
+          "type": "Type",
+          "source": "Source",
+          "approval": "Approval"
+        },
+        "actions": {
+          "create": "New question",
+          "approve": "Approve",
+          "approveRow": "Approve the question {question}",
+          "editRow": "Edit the question {question}",
+          "deleteRow": "Remove the question {question}",
+          "delete": "Remove"
+        },
+        "delete": {
+          "title": "Remove this question",
+          "description": "“{question}” leaves the bank, so later papers cannot use it. Papers already downloaded keep it."
+        },
+        "approve": {
+          "title": "Approve this AI-drafted question",
+          "description": "Read the whole question first: once approved, papers can use it, and approval cannot be undone.",
+          "question": "Question",
+          "choices": "Choices",
+          "answerKey": "Answer key",
+          "marks": "Marks",
+          "topic": "Topic"
+        },
+        "form": {
+          "createTitle": "New question",
+          "editTitle": "Edit this question",
+          "text": "Question",
+          "type": "Type",
+          "difficulty": "Difficulty",
+          "marks": "Marks",
+          "marksInvalid": "Enter marks above 0, with up to two decimal places.",
+          "topic": "Topic",
+          "topicHint": "A paper's section can draw from one topic.",
+          "options": "Choices",
+          "optionsHint": "One choice per line, in the order they print.",
+          "optionsNeeded": "Add at least two choices, one per line.",
+          "answer": "Answer",
+          "answerHintChoice": "The correct choice, as written above.",
+          "selectAnswer": "Select the answer",
+          "modelAnswer": "Model answer",
+          "trueFalse": {
+            "True": "True",
+            "False": "False"
+          }
+        }
+      },
+      "paper": {
+        "open": "Assemble paper",
+        "title": "Assemble a paper from {name}",
+        "intro": "Each section draws its questions from the bank's approved ones, the least used first.",
+        "downloadNow": "The paper downloads as soon as it is ready. Papers aren't kept on SchoolHub, so save the file then. You can close this; stay on the bank's page until it arrives.",
+        "paperTitle": "Paper title",
+        "section": "Section {number}",
+        "removeSection": "Remove section {number}",
+        "addSection": "Add section",
+        "sectionTitle": "Section heading",
+        "topic": "Topic",
+        "difficulty": "Difficulty",
+        "count": "Questions",
+        "marksEach": "Marks each",
+        "countInvalid": "Enter a whole number from 1 to 200.",
+        "marksInvalid": "Leave it blank, or enter marks above 0 with up to two decimal places.",
+        "submit": "Assemble paper",
+        "assembling": "Assembling the paper",
+        "progress": "Assembling the paper: {progress}%",
+        "stalled": "The paper is taking longer than usual.",
+        "keepWaiting": "Keep waiting",
+        "shortfall": "Section {number} asks for {requested, plural, one {# {difficulty} question} other {# {difficulty} questions}}; the bank has {available} approved.",
+        "shortfallTopic": "Section {number} asks for {requested, plural, one {# {difficulty} question} other {# {difficulty} questions}} on {topic}; the bank has {available} approved.",
+        "ready": "Paper downloaded: {questions, plural, one {# question} other {# questions}}, {marks} marks.",
+        "failed": "The paper couldn't be assembled.",
+        "timedOut": "The paper is still being assembled. Keep waiting, or try again later.",
+        "downloadFailed": "The paper couldn't be downloaded."
+      }
+    }
+  },
+  "reports": {
+    "caption": "{report} report",
+    "rowCount": "{count, plural, one {# row} other {# rows}}",
+    "emptyTitle": "No rows",
+    "queued": {
+      "title": "This report is being built as a file",
+      "description": "It has more than 1,000 rows, too many to show here, so the server is building it as a CSV file.",
+      "progress": "Building the file — {progress}%",
+      "ready": "The file is ready.",
+      "download": "Download CSV",
+      "downloading": "Preparing the download…",
+      "downloadFailed": "The file couldn't be downloaded.",
+      "failed": "The report file couldn't be built.",
+      "pollFailed": "The report's progress couldn't be checked.",
+      "timedOut": "Still building in the background. Check again in a moment.",
+      "checkAgain": "Check again",
+      "runAgain": "Run the report again"
+    },
+    "export": {
+      "label": "Export the report",
+      "button": "Export {format}",
+      "exporting": "Exporting {format}…",
+      "checkStatus": "Check {format} export",
+      "permissionTitle": "You don't have permission to export reports.",
+      "success": "Report exported.",
+      "startFailed": "The export could not be started.",
+      "downloadFailed": "The export file could not be downloaded.",
+      "timedOut": "The export is taking longer than expected. Try again in a moment.",
+      "failed": "The export failed."
+    },
+    "formats": {
+      "csv": "CSV",
+      "xlsx": "XLSX",
+      "pdf": "PDF"
     }
   },
   "bulkImport": {
@@ -2078,7 +3069,15 @@
       "uploadFailed": "The photo could not be uploaded."
     },
     "submitFailed": "Something went wrong. Please try again.",
-    "saving": "Saving"
+    "saving": "Saving",
+    "attachmentUpload": {
+      "uploading": "Uploading…",
+      "remove": "Remove {name}",
+      "wrongType": "{name} isn't a supported type. Use PDF, JPEG or PNG.",
+      "tooLarge": "{name} is larger than {max} MB.",
+      "uploadFailed": "The file could not be uploaded.",
+      "limitReached": "You can attach at most {max} files."
+    }
   },
   "errors": {
     "validation_error": "Please correct the highlighted fields.",
@@ -2096,5 +3095,289 @@
     "requestId": "Reference: {requestId}",
     "pageErrorTitle": "Something went wrong",
     "pageErrorBody": "This page hit an unexpected error. Try again, or contact support if it keeps happening."
+  },
+  "portal": {
+    "shell": {
+      "title": "Parent portal",
+      "signOut": "Sign out",
+      "unread": "{count, plural, one {# unread notification} other {# unread notifications}}",
+      "loadFailed": "We couldn't load your portal. Please try again.",
+      "disabledTitle": "The parent portal isn't enabled for your school",
+      "disabledDescription": "Your school hasn't turned the parent portal on yet. Please contact the school office."
+    },
+    "switcher": {
+      "label": "Child",
+      "placeholder": "Choose a child"
+    },
+    "nav": {
+      "label": "Portal sections",
+      "overview": "Overview",
+      "attendance": "Attendance",
+      "leave": "Leave",
+      "fees": "Fees",
+      "results": "Results",
+      "timetable": "Timetable",
+      "messages": "Messages",
+      "notices": "Notices",
+      "notifications": "Notifications",
+      "settings": "Settings"
+    },
+    "home": {
+      "title": "Your children",
+      "emptyTitle": "No children linked yet",
+      "emptyDescription": "When the school links a child to your account, they will appear here.",
+      "notFoundTitle": "Child not found",
+      "notFoundDescription": "This child is not linked to your account. Pick one from the list above.",
+      "attendance": {
+        "title": "Attendance today",
+        "notMarked": "Not marked yet",
+        "month": "{value}% this month"
+      },
+      "fees": {
+        "title": "Fees outstanding",
+        "none": "Nothing due",
+        "count": "{count, plural, one {# invoice} other {# invoices}}",
+        "nextDue": "next due {date}"
+      },
+      "result": {
+        "title": "Latest result",
+        "percentage": "{value}%"
+      }
+    },
+    "attendance": {
+      "title": "Attendance",
+      "loadError": "We couldn't load the attendance. Please try again.",
+      "legend": "Attendance statuses",
+      "emptyTitle": "No attendance this month",
+      "emptyDescription": "Nothing has been marked for this month yet.",
+      "caption": "Attendance for {month}",
+      "monthPercentage": "Attendance this month: {value}%",
+      "status": {
+        "present": "Present",
+        "absent": "Absent",
+        "late": "Late",
+        "half_day": "Half day",
+        "excused": "Excused",
+        "on_leave": "On leave"
+      }
+    },
+    "fees": {
+      "title": "Fees",
+      "loadError": "We couldn't load the fees. Please try again.",
+      "dueOn": "due {date}",
+      "downloadReceipt": "Receipt {number}",
+      "receiptsLoadError": "We couldn't load the receipts. Please try again.",
+      "receiptFailed": "We couldn't download the receipt. Please try again.",
+      "status": {
+        "draft": "Draft",
+        "issued": "Issued",
+        "partially_paid": "Partially paid",
+        "paid": "Paid",
+        "overdue": "Overdue",
+        "canceled": "Canceled"
+      },
+      "outstanding": {
+        "title": "Outstanding",
+        "emptyTitle": "Nothing outstanding",
+        "emptyDescription": "All fees are paid up."
+      },
+      "paid": {
+        "title": "Paid",
+        "emptyTitle": "No paid invoices",
+        "emptyDescription": "Paid invoices and their receipts will appear here."
+      },
+      "detail": {
+        "back": "Back to fees",
+        "title": "Invoice {number}",
+        "dates": "Issued {issued}, due {due}",
+        "loadError": "We couldn't load this invoice. Please try again.",
+        "notFoundTitle": "Invoice not found",
+        "notFoundDescription": "This invoice doesn't exist or isn't one of this child's.",
+        "linesCaption": "Invoice lines",
+        "description": "Description",
+        "amount": "Amount",
+        "net": "Net",
+        "subtotal": "Subtotal",
+        "discount": "Discount",
+        "fine": "Fine",
+        "paid": "Paid",
+        "balance": "Balance due",
+        "receipts": "Receipts",
+        "noReceiptsTitle": "No receipts yet",
+        "noReceiptsDescription": "A receipt appears here once a payment is recorded."
+      },
+      "vouchers": {
+        "download": "{provider} voucher {number} (due {date})",
+        "failed": "We couldn't download the voucher. Please try again.",
+        "empty": "Ask the school office for a voucher.",
+        "loadError": "We couldn't load the vouchers. Please try again.",
+        "providers": {
+          "bank_branch": "Bank branch",
+          "easypaisa": "Easypaisa",
+          "jazzcash": "JazzCash"
+        }
+      }
+    },
+    "admitCards": {
+      "title": "Admit cards",
+      "loadError": "We couldn't load the admit cards. Please try again.",
+      "emptyTitle": "No admit cards",
+      "emptyDescription": "Admit cards for upcoming exams appear here once the school issues them.",
+      "dates": "{start} – {end}",
+      "number": "Card {number}",
+      "download": "Download admit card for {exam}",
+      "downloadFailed": "We couldn't download the admit card. Please try again."
+    },
+    "results": {
+      "title": "Results",
+      "loadError": "We couldn't load the results. Please try again.",
+      "emptyTitle": "No results published",
+      "emptyDescription": "Results appear here once the school publishes them.",
+      "published": "Published {date}",
+      "percentage": "{value}%",
+      "marks": "{obtained} of {max} marks",
+      "rank": "rank {rank} in section",
+      "outcome": {
+        "pass": "Pass",
+        "fail": "Fail",
+        "absent": "Absent",
+        "withheld": "Withheld"
+      }
+    },
+    "notices": {
+      "title": "Notices",
+      "emptyTitle": "No notices",
+      "emptyDescription": "The school has not published any notices yet.",
+      "loadError": "We couldn't load the notices. Please try again.",
+      "notFoundTitle": "Notice not found",
+      "notFoundDescription": "This notice doesn't exist or isn't available to you.",
+      "back": "Back to notices",
+      "publishedOn": "Published {date}",
+      "needsAcknowledgment": "Acknowledgment needed",
+      "acknowledge": "Acknowledge",
+      "acknowledging": "Acknowledging",
+      "acknowledged": "Acknowledged",
+      "acknowledgeFailed": "We couldn't record your acknowledgment. Please try again.",
+      "types": {
+        "urgent": "Urgent",
+        "general": "General",
+        "circular": "Circular",
+        "event": "Event"
+      }
+    },
+    "notifications": {
+      "title": "Notifications",
+      "emptyTitle": "No notifications",
+      "emptyDescription": "You're all caught up.",
+      "loadError": "We couldn't load your notifications. Please try again.",
+      "markAllRead": "Mark all read",
+      "markingAll": "Marking",
+      "markAllFailed": "We couldn't mark everything read. Please try again.",
+      "markReadFailed": "We couldn't mark that notification read. Open it again to retry.",
+      "unreadBadge": "Unread",
+      "filter": {
+        "label": "Show",
+        "all": "All",
+        "unread": "Unread",
+        "read": "Read"
+      },
+      "categories": {
+        "attendance": "Attendance",
+        "fees": "Fees",
+        "exams": "Exams",
+        "library": "Library",
+        "transport": "Transport",
+        "academic": "Academic",
+        "general": "General",
+        "emergency": "Emergency"
+      },
+      "priorities": {
+        "normal": "Normal",
+        "high": "High priority",
+        "emergency": "Emergency"
+      }
+    },
+    "preferences": {
+      "title": "Notification settings",
+      "caption": "Which notifications reach you on which channel",
+      "category": "Category",
+      "loadError": "We couldn't load your settings. Please try again.",
+      "saveFailed": "We couldn't save that change. Please try again.",
+      "lockedExplanation": "Emergency notifications are always on, so they can't be turned off.",
+      "cellLabel": "{category} by {channel}",
+      "channels": {
+        "in_app": "In-app",
+        "email": "Email",
+        "sms": "SMS",
+        "push": "Push",
+        "whatsapp": "WhatsApp"
+      },
+      "password": {
+        "title": "Change password",
+        "description": "Use at least {min} characters.",
+        "currentPassword": "Current password",
+        "newPassword": "New password",
+        "confirmPassword": "Confirm new password",
+        "submit": "Change password",
+        "submitting": "Changing",
+        "done": "Password changed.",
+        "failed": "We couldn't change your password. Please try again.",
+        "errors": {
+          "currentRequired": "Enter your current password.",
+          "newTooShort": "The new password must be at least {min} characters.",
+          "confirmMismatch": "The two passwords don't match.",
+          "sameAsCurrent": "Choose a password different from the current one."
+        }
+      }
+    },
+    "leave": {
+      "title": "Leave requests",
+      "loadError": "We couldn't load the leave requests. Please try again.",
+      "emptyTitle": "No leave requests",
+      "emptyDescription": "Requests you submit for your child will appear here.",
+      "range": "{from} to {to}",
+      "days": "{count, plural, one {# day} other {# days}}",
+      "attached": "Attachment submitted",
+      "dayPart": {
+        "full": "Full day",
+        "first_half": "First half",
+        "second_half": "Second half"
+      },
+      "cancel": {
+        "open": "Cancel request",
+        "title": "Cancel this leave request?",
+        "description": "The {type} request will be withdrawn. You can submit a new one later.",
+        "confirm": "Cancel request",
+        "done": "Leave request cancelled.",
+        "failed": "We couldn't cancel the request. Please try again."
+      },
+      "new": {
+        "open": "New request",
+        "title": "Request leave",
+        "type": "Leave type",
+        "typePlaceholder": "Choose a type",
+        "typesFailed": "We couldn't load the leave types. Close this and try again.",
+        "startDate": "From",
+        "endDate": "To",
+        "dayPart": "Day part",
+        "dayPartHint": "A half day needs a single date.",
+        "reason": "Reason",
+        "attachment": "Supporting document (PDF, JPEG or PNG)",
+        "submit": "Submit request",
+        "submitting": "Submitting",
+        "done": "Leave request submitted.",
+        "failed": "We couldn't submit the request. Please try again.",
+        "errors": {
+          "typeRequired": "Choose a leave type.",
+          "startRequired": "Choose the first day.",
+          "endRequired": "Choose the last day.",
+          "endBeforeStart": "The last day can't be before the first day.",
+          "halfDaySingleDay": "A half day can only cover a single date.",
+          "reasonRequired": "Enter a reason.",
+          "reasonTooLong": "The reason can be at most {max} characters.",
+          "attachmentRequired": "This leave type needs a supporting document."
+        }
+      }
+    }
   }
 }

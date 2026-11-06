@@ -26,6 +26,10 @@ export interface ThreadPanesProps {
   readOnly: boolean;
   /** Above the panes: the inbox's New conversation button, oversight's audit banner. */
   header?: ReactNode;
+  /** `false` hides close and reopen (the parent portal); the default keeps them. */
+  canTransition?: boolean;
+  /** The parent portal sets this: replies can carry files. */
+  allowAttachments?: boolean;
 }
 
 /**
@@ -33,7 +37,13 @@ export interface ThreadPanesProps {
  * the right (below it on a narrow screen). The open thread and the status filter live in the
  * URL (`?thread=`, `?status=`), so a reload or a shared link keeps them.
  */
-export function ThreadPanes({ source, readOnly, header }: ThreadPanesProps) {
+export function ThreadPanes({
+  source,
+  readOnly,
+  header,
+  canTransition,
+  allowAttachments,
+}: ThreadPanesProps) {
   const t = useTranslations("communication.messages");
   const { searchParams, setParams } = useUrlParams();
   const rawThread = searchParams.get(THREAD_PARAM);
@@ -70,7 +80,14 @@ export function ThreadPanes({ source, readOnly, header }: ThreadPanesProps) {
               >
                 {t("thread.back")}
               </Button>
-              <ThreadView key={threadId} source={source} threadId={threadId} readOnly={readOnly} />
+              <ThreadView
+                key={threadId}
+                source={source}
+                threadId={threadId}
+                readOnly={readOnly}
+                canTransition={canTransition}
+                allowAttachments={allowAttachments}
+              />
             </div>
           ) : (
             <EmptyState

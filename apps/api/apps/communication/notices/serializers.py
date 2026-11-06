@@ -46,3 +46,30 @@ class NoticeSerializer(serializers.ModelSerializer):
         if self.instance is not None and self.instance.status != NoticeStatus.DRAFT:
             raise serializers.ValidationError({"status": "Only a draft notice can be edited."})
         return attrs
+
+
+class PortalNoticeSerializer(serializers.ModelSerializer):
+    """A notice as a student or guardian sees it: explicit fields only.
+
+    The staff shape also carries `audience_filter` (a custom audience's user ids),
+    `approved_by`, `status` and `show_on_website`, none of which a recipient may read.
+    `acknowledged_at` is the caller's own, annotated by `NoticeViewSet.get_queryset`
+    so a page costs one query rather than one per row.
+    """
+
+    acknowledged_at = serializers.DateTimeField(read_only=True, allow_null=True)
+
+    class Meta:
+        ref_name = "PortalNotice"
+        model = Notice
+        fields = [
+            "id",
+            "notice_no",
+            "title",
+            "body",
+            "notice_type",
+            "published_at",
+            "requires_acknowledgment",
+            "acknowledged_at",
+        ]
+        read_only_fields = fields

@@ -6,7 +6,7 @@ import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { EmptyState } from "@schoolhub/ui";
 import { ClipboardList } from "lucide-react";
 
-import { CursorDataGridCard } from "@/features/attendance/cursor-data-grid-card";
+import { CursorDataGridCard } from "@/components/cursor-data-grid-card";
 import { RequestCorrectionDialog } from "@/features/attendance/request-correction-dialog";
 import { useCursorList } from "@/hooks/use-cursor-list";
 import { useCurrentUser } from "@/hooks/use-current-user";

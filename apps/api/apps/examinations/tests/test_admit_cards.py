@@ -9,22 +9,27 @@ reinstate one somebody revoked.
 
 from __future__ import annotations
 
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
+from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 
-from apps.examinations import services, tasks
+from apps.examinations import services, tasks, uploads
 from apps.examinations.models import AdmitCard, AdmitCardStatus, ExamStatus
 from apps.examinations.tests.base import ExaminationsAPITestCase
 from apps.examinations.tests.factories import (
+    AcademicSessionFactory,
     AdmitCardFactory,
     ExamFactory,
     ExamScheduleFactory,
     ExamSubjectFactory,
     RoomFactory,
+    SectionFactory,
+    StaffFactory,
     StudentEnrollmentFactory,
     StudentFactory,
     exam_week,
 )
+from core.files.models import File
 from core.jobs.tests.base import assert_sent_on_commit
 from core.tenancy.context import tenant_context
 
@@ -242,6 +247,37 @@ class IssueEndpointTests(AdmitCardTestCase):
         self.assertEqual(first.status_code, status.HTTP_202_ACCEPTED, first.json())
         self.assertEqual(second.json()["data"]["job_id"], first.json()["data"]["job_id"])
 
+    def test_issue_answers_the_added_and_existing_counts(self) -> None:
+        with tenant_context(self.tenant.id):
+            AdmitCardFactory(tenant=self.tenant, exam=self.exam, student=self.students[0])
+
+        response = self.client.post(f"/api/v1/exams/{self.exam.pk}:issue-admit-cards")
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.json())
+        data = response.json()["data"]
+        self.assertEqual(set(data), {"job_id", "status", "added", "existing"})
+        self.assertEqual((data["added"], data["existing"]), (2, 1))
+
+    def test_an_exam_outside_the_caller_s_scope_is_a_404(self) -> None:
+        """Resolved through `ExamViewSet`'s record scope, not a bare lookup."""
+        from rest_framework.test import APIClient
+
+        from apps.examinations.tests.factories import UserFactory, authenticate, grant
+        from core.rbac.models import RecordScope
+
+        with tenant_context(self.tenant.id):
+            outsider = UserFactory(tenant=self.tenant)
+            StaffFactory(tenant=self.tenant, campus=self.campus, user_id=outsider.pk)
+        grant(outsider, "exams.admit-card.issue", scope=RecordScope.ASSIGNED)
+        client = APIClient()
+        authenticate(client, outsider)
+
+        response = client.post(f"/api/v1/exams/{self.exam.pk}:issue-admit-cards")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        with tenant_context(self.tenant.id):
+            self.assertFalse(AdmitCard.objects.alive().filter(exam=self.exam).exists())
+
     def test_issuing_needs_the_issue_key_not_the_view_key(self) -> None:
         from rest_framework.test import APIClient
 
@@ -291,6 +327,63 @@ class RevokeTests(AdmitCardTestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+
+
+class RenderJobRevokeRaceTests(AdmitCardTestCase):
+    """A revoke made while the render job runs must survive the job's save."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        from core.jobs.services import create_job
+
+        with tenant_context(self.tenant.id):
+            services.issue_admit_cards(exam=self.exam, actor_id=self.user.pk)
+            self.card = AdmitCard.objects.alive().get(exam=self.exam, student=self.students[0])
+            self.job = create_job(
+                tenant_id=self.tenant.pk,
+                job_type="exams.admit-cards",
+                payload={"exam_id": str(self.exam.pk), "requested_by": str(self.user.pk)},
+                actor_id=self.user.pk,
+            )
+
+    def test_a_card_revoked_between_the_read_and_the_save_stays_revoked(self) -> None:
+        from unittest import mock
+
+        card_pk = self.card.pk
+        actor_id = self.user.pk
+
+        def revoke_then_render(html):
+            # The job has already read every card; this is the revoke a clerk
+            # makes while the first PDF is still rendering.
+            if "revoked" not in calls:
+                calls.append("revoked")
+                card = AdmitCard.objects.alive().get(pk=card_pk)
+                services.revoke_admit_card(card=card, reason="Fees", actor_id=actor_id)
+            return b"%PDF-stub"
+
+        calls: list[str] = []
+        with (
+            mock.patch("core.documents.render_pdf", side_effect=revoke_then_render),
+            mock.patch.object(tasks.notify_admit_cards_issued, "delay"),
+        ):
+            tasks.render_admit_cards_task(
+                tenant_id=str(self.tenant.pk),
+                job_id=str(self.job.pk),
+                actor_id=str(self.user.pk),
+            )
+
+        with tenant_context(self.tenant.id):
+            self.card.refresh_from_db()
+            others = AdmitCard.objects.alive().filter(exam=self.exam).exclude(pk=card_pk)
+            self.assertTrue(all(other.status == AdmitCardStatus.ISSUED for other in others))
+            # The PDF rendered for the revoked card is retired, not left live and unreferenced.
+            retired = File.objects.filter(mime_type="application/pdf", deleted_at__isnull=False)
+            self.assertEqual(retired.count(), 1)
+            self.assertFalse(AdmitCard.objects.filter(file__in=retired).exists())
+        self.assertEqual(calls, ["revoked"])
+        self.assertEqual(self.card.status, AdmitCardStatus.REVOKED)
+        self.assertEqual(self.card.revoked_reason, "Fees")
+        self.assertIsNone(self.card.file_id)
 
 
 class AdmitCardRecordScopeTests(AdmitCardTestCase):
@@ -360,6 +453,86 @@ class AdmitCardRecordScopeTests(AdmitCardTestCase):
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
+class AdmitCardAssignedScopeTests(AdmitCardTestCase):
+    """§4's `assigned` on cards: a class teacher's homeroom, in its own session."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        with tenant_context(self.tenant.id):
+            services.issue_admit_cards(exam=self.exam, actor_id=self.user.pk)
+            self.last_year = AcademicSessionFactory(tenant=self.tenant)
+
+    def listed_as(self, user) -> set[str]:
+        from apps.examinations.tests.factories import authenticate, grant
+        from core.rbac.models import RecordScope
+
+        grant(user, "exams.admit-card.view", scope=RecordScope.ASSIGNED)
+        authenticate(self.client, user)
+        response = self.client.get(ADMIT_CARDS)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        return {row["id"] for row in response.json()["data"]}
+
+    def current_cards(self) -> set[str]:
+        with tenant_context(self.tenant.id):
+            return {
+                str(pk)
+                for pk in AdmitCard.objects.alive()
+                .filter(exam=self.exam)
+                .values_list("pk", flat=True)
+            }
+
+    def test_a_class_teacher_sees_their_homeroom_s_cards(self) -> None:
+        self.assertEqual(self.listed_as(self.teacher_user), self.current_cards())
+
+    def test_last_session_s_homeroom_shows_no_current_session_card(self) -> None:
+        """A teacher whose homeroom was last year's sees none of this year's
+        cards, even for a student who was in that homeroom."""
+        from apps.examinations.tests.factories import UserFactory
+
+        with tenant_context(self.tenant.id):
+            former_user = UserFactory(tenant=self.tenant)
+            former = StaffFactory(tenant=self.tenant, campus=self.campus, user_id=former_user.pk)
+            old_homeroom = SectionFactory(
+                tenant=self.tenant,
+                school_class=self.school_class,
+                campus=self.campus,
+                class_teacher_staff_id=former.pk,
+            )
+            StudentEnrollmentFactory(
+                tenant=self.tenant,
+                student=self.students[0],
+                academic_session=self.last_year,
+                school_class=self.school_class,
+                section=old_homeroom,
+            )
+
+        self.assertEqual(self.listed_as(former_user), set())
+
+    def test_this_session_s_homeroom_shows_no_last_session_card(self) -> None:
+        """The same section last year, a closed session's card: not this
+        year's class teacher's."""
+        from apps.student_management.models import EnrollmentStatus
+
+        with tenant_context(self.tenant.id):
+            StudentEnrollmentFactory(
+                tenant=self.tenant,
+                student=self.students[0],
+                academic_session=self.last_year,
+                school_class=self.school_class,
+                section=self.section,
+                status=EnrollmentStatus.PROMOTED,
+            )
+            old_exam = ExamFactory(
+                tenant=self.tenant,
+                academic_session=self.last_year,
+                grading_scale=self.scale,
+                status=ExamStatus.SCHEDULED,
+            )
+            AdmitCardFactory(tenant=self.tenant, exam=old_exam, student=self.students[0])
+
+        self.assertEqual(self.listed_as(self.teacher_user), self.current_cards())
+
+
 class AdmitCardDocumentTests(AdmitCardTestCase):
     def test_a_card_lists_only_the_student_s_own_sittings(self) -> None:
         from apps.examinations import documents
@@ -420,3 +593,413 @@ class AdmitCardDocumentTests(AdmitCardTestCase):
             )
 
         self.assertIn("No papers scheduled", html)
+
+
+class AdmitCardNamesTests(AdmitCardTestCase):
+    """The names and section a card row renders, from the student's
+    enrollment in the exam's own session, in any status."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        with tenant_context(self.tenant.id):
+            # A second roster, scheduled too, so its students get cards.
+            self.other_students = [
+                StudentFactory(tenant=self.tenant, campus=self.campus) for _ in range(2)
+            ]
+            for student in self.other_students:
+                StudentEnrollmentFactory(
+                    tenant=self.tenant,
+                    student=student,
+                    academic_session=self.session,
+                    school_class=self.school_class,
+                    section=self.other_section,
+                )
+            ExamScheduleFactory(
+                tenant=self.tenant,
+                exam_subject=self.exam_subject,
+                section=self.other_section,
+                exam_date=self.day,
+            )
+            services.issue_admit_cards(exam=self.exam, actor_id=self.user.pk)
+
+    def listed(self, query: str = "") -> dict[str, dict]:
+        response = self.client.get(f"{ADMIT_CARDS}{query}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        return {row["student_id"]: row for row in response.json()["data"]}
+
+    def test_a_card_carries_its_exam_s_name_and_dates(self) -> None:
+        row = self.listed()[str(self.students[0].pk)]
+
+        self.assertEqual(row["exam_name"], self.exam.name)
+        self.assertEqual(row["exam_starts_on"], self.exam.starts_on.isoformat())
+        self.assertEqual(row["exam_ends_on"], self.exam.ends_on.isoformat())
+
+    def test_current_keeps_undated_and_unfinished_exams_and_drops_ended_ones(self) -> None:
+        """`?current=true` compares with the school's today; an exam that ended
+        yesterday drops out, one ending today stays."""
+        import datetime
+
+        today = self.tenant.local_date()
+        with tenant_context(self.tenant.id):
+            ended = ExamFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                grading_scale=self.scale,
+                status=ExamStatus.SCHEDULED,
+                starts_on=today - datetime.timedelta(days=5),
+                ends_on=today - datetime.timedelta(days=1),
+            )
+            ending_today = ExamFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                grading_scale=self.scale,
+                status=ExamStatus.SCHEDULED,
+                starts_on=today - datetime.timedelta(days=2),
+                ends_on=today,
+            )
+            undated = ExamFactory(
+                tenant=self.tenant, academic_session=self.session, grading_scale=self.scale
+            )
+            student = self.students[0]
+            cards = {
+                exam.pk: AdmitCardFactory(tenant=self.tenant, exam=exam, student=student).pk
+                for exam in (ended, ending_today, undated)
+            }
+
+        response = self.client.get(ADMIT_CARDS, {"current": "true", "student_id": student.pk})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        ids = {row["id"] for row in response.json()["data"]}
+        self.assertNotIn(str(cards[ended.pk]), ids)
+        self.assertIn(str(cards[ending_today.pk]), ids)
+        self.assertIn(str(cards[undated.pk]), ids)
+
+    def test_a_card_carries_the_student_s_name_admission_number_and_section(self) -> None:
+        student = self.students[0]
+
+        row = self.listed()[str(student.pk)]
+
+        self.assertEqual(row["student_name"], student.full_name)
+        self.assertEqual(row["admission_number"], student.admission_number)
+        self.assertEqual(row["section_id"], str(self.section.pk))
+        self.assertEqual(row["section_name"], self.section.name)
+
+    def test_the_section_is_the_exam_session_s_not_another_session_s(self) -> None:
+        """A student enrolled last year in another section sits *this* exam in
+        this year's section; the card must say so."""
+        with tenant_context(self.tenant.id):
+            last_year = AcademicSessionFactory(tenant=self.tenant)
+            StudentEnrollmentFactory(
+                tenant=self.tenant,
+                student=self.students[0],
+                academic_session=last_year,
+                school_class=self.school_class,
+                section=self.other_section,
+            )
+
+        row = self.listed()[str(self.students[0].pk)]
+
+        self.assertEqual(row["section_id"], str(self.section.pk))
+
+    def test_a_card_serialized_outside_the_list_falls_back_to_its_own_read(self) -> None:
+        """A single card that never passed through the viewset's `Prefetch`
+        resolves the same section with a query of its own (lesson L24)."""
+        from apps.examinations.serializers import AdmitCardSerializer
+
+        with tenant_context(self.tenant.id):
+            card = AdmitCard.objects.alive().get(exam=self.exam, student=self.students[0])
+            data = AdmitCardSerializer(card).data
+
+        self.assertEqual(data["section_id"], self.section.pk)
+        self.assertEqual(data["section_name"], self.section.name)
+        self.assertEqual(data["student_name"], self.students[0].full_name)
+
+    def test_revoking_answers_with_the_card_s_names(self) -> None:
+        with tenant_context(self.tenant.id):
+            card = AdmitCard.objects.alive().get(exam=self.exam, student=self.students[0])
+
+        response = self.client.post(
+            f"{ADMIT_CARDS}/{card.pk}:revoke", {"reason": "Fees"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json()["data"]["section_name"], self.section.name)
+        self.assertEqual(
+            response.json()["data"]["admission_number"], self.students[0].admission_number
+        )
+
+    def test_cards_filter_by_section_through_the_exam_session_s_enrollment(self) -> None:
+        # A homeroom student with last year's enrollment in the other section
+        # must not match it: only the exam session's enrollment counts.
+        with tenant_context(self.tenant.id):
+            last_year = AcademicSessionFactory(tenant=self.tenant)
+            StudentEnrollmentFactory(
+                tenant=self.tenant,
+                student=self.students[0],
+                academic_session=last_year,
+                school_class=self.school_class,
+                section=self.other_section,
+            )
+
+        listed = self.listed(f"?section_id={self.other_section.pk}")
+
+        self.assertEqual(set(listed), {str(student.pk) for student in self.other_students})
+
+    def test_a_promoted_student_s_card_keeps_the_closed_session_s_section(self) -> None:
+        """Promotion turns the exam session's enrollment `promoted`; the card
+        still names, and filters by, the section the student sat in."""
+        from apps.student_management.models import EnrollmentStatus, StudentEnrollment
+
+        student = self.other_students[0]
+        with tenant_context(self.tenant.id):
+            StudentEnrollment.objects.alive().filter(
+                student=student, academic_session=self.session
+            ).update(status=EnrollmentStatus.PROMOTED, end_date=self.session.end_date)
+            next_year = AcademicSessionFactory(tenant=self.tenant)
+            StudentEnrollmentFactory(
+                tenant=self.tenant,
+                student=student,
+                academic_session=next_year,
+                school_class=self.school_class,
+                section=self.section,
+            )
+
+        row = self.listed()[str(student.pk)]
+        filtered = self.listed(f"?section_id={self.other_section.pk}")
+
+        self.assertEqual(row["section_id"], str(self.other_section.pk))
+        self.assertEqual(row["section_name"], self.other_section.name)
+        self.assertIn(str(student.pk), filtered)
+        self.assertNotIn(str(student.pk), self.listed(f"?section_id={self.section.pk}"))
+
+    def test_the_list_costs_the_same_for_two_cards_or_five(self) -> None:
+        """One `Prefetch` resolves every row's section; more rows must not
+        add queries."""
+        query = f"?section_id={self.other_section.pk}"
+        # Warm the per-user permission caches, so the baseline counts the
+        # list's own queries and not a cold first request.
+        self.client.get(f"{ADMIT_CARDS}{query}")
+        with CaptureQueriesContext(connection) as baseline:
+            self.assertEqual(len(self.listed(query)), 2)
+
+        with self.assertNumQueries(len(baseline)):
+            response = self.client.get(ADMIT_CARDS)
+
+        self.assertEqual(len(response.json()["data"]), 5)
+
+
+class AdmitCardDownloadTests(AdmitCardTestCase):
+    """`POST /admit-cards/{id}:download` — ADR-0021's resource-scoped link."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        with tenant_context(self.tenant.id):
+            services.issue_admit_cards(exam=self.exam, actor_id=self.user.pk)
+            self.mine = AdmitCard.objects.alive().get(exam=self.exam, student=self.students[0])
+            self.theirs = AdmitCard.objects.alive().get(exam=self.exam, student=self.students[1])
+        self.attach_file(self.mine)
+        self.attach_file(self.theirs)
+
+    def attach_file(self, card: AdmitCard) -> None:
+        """What the render job leaves behind: a ready PDF on the card."""
+        from core.files.services import create_ready_file
+
+        with tenant_context(self.tenant.id):
+            card.file = create_ready_file(
+                tenant_id=self.tenant.pk,
+                purpose=uploads.ADMIT_CARD.key,
+                original_name="admit-card.pdf",
+                mime_type="application/pdf",
+                data=b"%PDF-stub",
+                actor_id=self.user.pk,
+            )
+            card.save(update_fields=["file"])
+
+    def download(self, card: AdmitCard, client=None):
+        return (client or self.client).post(f"{ADMIT_CARDS}/{card.pk}:download")
+
+    def student_client(self):
+        """`self.students[0]`'s own portal login, `own`-scoped."""
+        from rest_framework.test import APIClient
+
+        from apps.examinations.tests.factories import UserFactory, authenticate, grant
+        from core.rbac.models import RecordScope
+
+        with tenant_context(self.tenant.id):
+            student_user = UserFactory(tenant=self.tenant)
+            self.students[0].user_id = student_user.pk
+            self.students[0].save(update_fields=["user_id"])
+        grant(
+            student_user,
+            "exams.admit-card.view",
+            scope=RecordScope.OWN,
+            is_restricted_principal=True,
+        )
+        client = APIClient()
+        authenticate(client, student_user)
+        return client
+
+    def test_staff_get_a_signed_link(self) -> None:
+        response = self.download(self.mine)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertTrue(response.json()["data"]["download_url"])
+
+    def test_a_student_downloads_their_own_card(self) -> None:
+        response = self.download(self.mine, self.student_client())
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertTrue(response.json()["data"]["download_url"])
+
+    def test_a_student_asking_for_another_s_card_gets_a_404(self) -> None:
+        """The record scope on `get_object()`, not the key, decides: a 404, so
+        the other card's existence is not confirmed."""
+        response = self.download(self.theirs, self.student_client())
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_a_revoked_card_is_a_404_even_with_its_file(self) -> None:
+        with tenant_context(self.tenant.id):
+            services.revoke_admit_card(card=self.mine, reason="Fees", actor_id=self.user.pk)
+
+        response = self.download(self.mine)
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_a_card_not_yet_rendered_is_a_404(self) -> None:
+        with tenant_context(self.tenant.id):
+            self.mine.file = None
+            self.mine.save(update_fields=["file"])
+
+        response = self.download(self.mine)
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_a_card_whose_file_was_retired_is_a_404(self) -> None:
+        """Mirrors `core/files`' `get_display_url`: a soft-deleted file is no
+        document, even though the card still points at it."""
+        from django.utils import timezone
+
+        with tenant_context(self.tenant.id):
+            self.mine.file.deleted_at = timezone.now()
+            self.mine.file.save(update_fields=["deleted_at", "updated_at"])
+
+        response = self.download(self.mine)
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def guardian_client(self):
+        """A guardian linked to `self.students[0]` only, `own`-scoped."""
+        from rest_framework.test import APIClient
+
+        from apps.examinations.tests.factories import (
+            GuardianFactory,
+            StudentGuardianFactory,
+            UserFactory,
+            authenticate,
+            grant,
+        )
+        from core.rbac.models import RecordScope
+
+        guardian_user = UserFactory(tenant=self.tenant)
+        with tenant_context(self.tenant.id):
+            guardian = GuardianFactory(tenant=self.tenant, user_id=guardian_user.pk)
+            StudentGuardianFactory(
+                tenant=self.tenant,
+                student=self.students[0],
+                guardian=guardian,
+                has_portal_access=True,
+            )
+        grant(
+            guardian_user,
+            "exams.admit-card.view",
+            scope=RecordScope.OWN,
+            is_restricted_principal=True,
+        )
+        client = APIClient()
+        authenticate(client, guardian_user)
+        return client
+
+    def test_a_guardian_downloads_their_child_s_card(self) -> None:
+        response = self.download(self.mine, self.guardian_client())
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertTrue(response.json()["data"]["download_url"])
+
+    def test_a_guardian_asking_for_another_child_s_card_gets_a_404(self) -> None:
+        response = self.download(self.theirs, self.guardian_client())
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_guardian_admit_card_download_own_only(self) -> None:
+        """The guardian role's real keys (L44), not a hand-picked one: the portal lists and
+        downloads its own child's card, and another child's is a 404 on both routes."""
+        from rest_framework.test import APIClient
+
+        from apps.examinations.tests.factories import (
+            GuardianFactory,
+            StudentGuardianFactory,
+            UserFactory,
+            authenticate,
+            grant,
+        )
+        from core.rbac.models import RecordScope
+        from core.rbac.registry import registry
+
+        guardian_user = UserFactory(tenant=self.tenant)
+        with tenant_context(self.tenant.id):
+            guardian = GuardianFactory(tenant=self.tenant, user_id=guardian_user.pk)
+            StudentGuardianFactory(
+                tenant=self.tenant,
+                student=self.students[0],
+                guardian=guardian,
+                has_portal_access=True,
+            )
+            # Rendered, as the job leaves them.
+            AdmitCard.objects.filter(pk__in=[self.mine.pk, self.theirs.pk]).update(
+                status=AdmitCardStatus.ISSUED
+            )
+        grant(
+            guardian_user,
+            *registry.keys_for_role("guardian"),
+            scope=RecordScope.OWN,
+            is_restricted_principal=True,
+        )
+        client = APIClient()
+        authenticate(client, guardian_user)
+
+        listed = client.get(ADMIT_CARDS, {"current": "true", "status": "issued"})
+        self.assertEqual(listed.status_code, status.HTTP_200_OK, listed.json())
+        self.assertEqual([row["id"] for row in listed.json()["data"]], [str(self.mine.pk)])
+        own = self.download(self.mine, client)
+        self.assertEqual(own.status_code, status.HTTP_200_OK, own.json())
+        self.assertTrue(own.json()["data"]["download_url"])
+        self.assertEqual(self.download(self.theirs, client).status_code, 404)
+        self.assertEqual(client.get(f"{ADMIT_CARDS}/{self.theirs.pk}").status_code, 404)
+
+    def test_a_download_costs_a_fixed_number_of_queries(self) -> None:
+        """One card with its file joined; no enrollment `Prefetch`, which the
+        list needs and a download does not."""
+        self.download(self.mine)  # Warm the per-user permission caches.
+        with CaptureQueriesContext(connection) as baseline:
+            self.assertEqual(self.download(self.mine).status_code, status.HTTP_200_OK)
+
+        self.assertFalse(
+            any("student_enrollments" in query["sql"] for query in baseline.captured_queries)
+        )
+        with self.assertNumQueries(len(baseline)):
+            self.download(self.theirs)
+
+    def test_downloading_needs_the_admit_card_view_key(self) -> None:
+        """Its own gate, not `core/files`' broad `platform.file.view` (ADR-0021)."""
+        from rest_framework.test import APIClient
+
+        from apps.examinations.tests.factories import UserFactory, authenticate, grant
+        from core.rbac.models import RecordScope
+
+        other = UserFactory(tenant=self.tenant)
+        grant(other, "platform.file.view", "exams.exam.view", scope=RecordScope.ALL)
+        client = APIClient()
+        authenticate(client, other)
+
+        self.assertEqual(self.download(self.mine, client).status_code, 403)

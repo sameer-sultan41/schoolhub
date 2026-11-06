@@ -10,8 +10,25 @@ from __future__ import annotations
 from django.core.management import call_command
 from django.test import TestCase
 
+from apps.attendance.models import AttendanceStatus, StudentAttendance
+from apps.communication.models import Notice, NoticeStatus
 from apps.communication.threads.routing import route_guardian_thread
-from apps.fees_finance.models import LedgerAccount
+from apps.examinations.models import (
+    Exam,
+    ExamStatus,
+    GradeBand,
+    GradingScale,
+    Result,
+    ResultStatus,
+)
+from apps.examinations.services import assert_scale_usable
+from apps.fees_finance.models import FeeInvoice, InvoiceStatus, LedgerAccount
+from apps.parent_portal.management.commands.seed_e2e_portal import (
+    E2E_EXAM_NAME,
+    E2E_EXAM_THEORY_MARKS,
+    E2E_FEE_MONTHLY_AMOUNT,
+    E2E_NOTICE_TITLE,
+)
 from apps.school_organization.models import (
     AcademicSession,
     Campus,
@@ -20,26 +37,33 @@ from apps.school_organization.models import (
     SessionStatus,
     Term,
 )
-from apps.staff_management.models import Staff
+from apps.staff_management.models import EmploymentStatus, Staff, StaffType
 from apps.student_management.models import Guardian, Student, StudentGuardian
+from core.notifications.models import Notification
+from core.notifications.permissions import NOTIFICATION_VIEW
 from core.rbac.management.commands.seed_e2e_data import (
     E2E_ADMIN_EMAIL,
     E2E_ADMIN_PASSWORD,
+    E2E_CLASS_TEACHER_PERMISSIONS,
     E2E_COMMS_CLASS_TEACHER_EMAIL,
     E2E_COMMS_CLASS_TEACHER_EMPLOYEE_NUMBER,
     E2E_COMMS_GUARDIAN_EMAIL,
     E2E_COMMS_STUDENT_ADMISSION_NUMBER,
+    E2E_EXAM_STAFF_EMAIL,
     E2E_GUARDIAN_EMAIL,
     E2E_GUARDIAN_NAME,
-    E2E_GUARDIAN_PERMISSIONS,
     E2E_GUARDIAN_PHONE,
     E2E_OTHER_ADMIN_EMAIL,
     E2E_OTHER_TENANT_SLUG,
     E2E_PRINCIPAL_PERMISSIONS,
     E2E_SCHOOL_ADMIN_PERMISSIONS,
+    E2E_TEACHER_EMAIL,
     E2E_TENANT_SLUG,
+    e2e_exam_staff_permissions,
+    e2e_teacher_permissions,
 )
 from core.rbac.models import RecordScope, Role, RolePermission, User, UserRole
+from core.rbac.registry import registry
 from core.tenancy.context import tenant_context
 from core.tenancy.models import Tenant, TenantFeatureOverride, TenantSettings, TenantStatus
 
@@ -139,7 +163,7 @@ class SeedE2EDataTests(TestCase):
         """§4 grants it to `student` and `guardian` only, so the seed must not widen it."""
         self.assertNotIn("attendance.leave-request.create", E2E_SCHOOL_ADMIN_PERMISSIONS)
 
-    def test_seeds_a_restricted_guardian_holding_exactly_its_listed_keys(self) -> None:
+    def test_seeds_a_restricted_guardian_holding_a_real_guardians_keys(self) -> None:
         call_command("seed_e2e_data")
         tenant = Tenant.objects.get(slug=E2E_TENANT_SLUG)
 
@@ -153,7 +177,94 @@ class SeedE2EDataTests(TestCase):
         keys = set(
             RolePermission.objects.filter(role=role).values_list("permission__key", flat=True)
         )
-        self.assertEqual(keys, set(E2E_GUARDIAN_PERMISSIONS))
+        # Exactly what the registry gives a real `guardian`, so the portal keys arrive with it.
+        self.assertEqual(keys, set(registry.keys_for_role("guardian")))
+        for key in (
+            "parent-portal.dashboard.view",
+            NOTIFICATION_VIEW,
+            "communication.notice.view",
+            "communication.notice.acknowledge",
+            "attendance.student-attendance.view",
+            "fees.invoice.view",
+            "exams.result.view",
+            "timetable.timetable.view",
+            "attendance.leave-request.create",
+            "communication.thread.create",
+        ):
+            self.assertIn(key, keys)
+        self.assertNotIn("attendance.leave-request.approve", keys)
+
+    def test_staff_identities_can_read_their_own_inbox(self) -> None:
+        """Every tenant role holds the inbox key; a staff role without it 403s on the bell."""
+        for keys in (
+            E2E_SCHOOL_ADMIN_PERMISSIONS,
+            E2E_PRINCIPAL_PERMISSIONS,
+            E2E_CLASS_TEACHER_PERMISSIONS,
+        ):
+            self.assertIn(NOTIFICATION_VIEW, keys)
+
+    def test_portal_modules_are_enabled_on_both_tenants(self) -> None:
+        call_command("seed_e2e_data")
+
+        for slug in (E2E_TENANT_SLUG, E2E_OTHER_TENANT_SLUG):
+            tenant = Tenant.objects.get(slug=slug)
+            with tenant_context(tenant.id):
+                enabled = set(
+                    TenantFeatureOverride.objects.filter(
+                        tenant=tenant,
+                        enabled=True,
+                        feature_flag__key__in=[
+                            "module.parent_portal",
+                            "module.fees_finance",
+                            "module.examinations",
+                        ],
+                    ).values_list("feature_flag__key", flat=True)
+                )
+            self.assertEqual(
+                enabled,
+                {"module.parent_portal", "module.fees_finance", "module.examinations"},
+                slug,
+            )
+
+    def test_the_comms_child_has_a_record_behind_every_portal_card(self) -> None:
+        """Seeded twice: every fixture converges rather than piling up."""
+        call_command("seed_e2e_data")
+        call_command("seed_e2e_data")
+        tenant = Tenant.objects.get(slug=E2E_TENANT_SLUG)
+        guardian = User.objects.get(tenant=tenant, email=E2E_COMMS_GUARDIAN_EMAIL)
+
+        with tenant_context(tenant.id):
+            student = Student.objects.get(admission_number=E2E_COMMS_STUDENT_ADMISSION_NUMBER)
+
+            today = tenant.local_date()
+            marked_today = StudentAttendance.objects.alive().get(
+                student=student, attendance_date=today, period__isnull=True
+            )
+            self.assertEqual(marked_today.status, AttendanceStatus.PRESENT)
+
+            (invoice,) = FeeInvoice.objects.alive().filter(student=student)
+            self.assertEqual(invoice.status, InvoiceStatus.ISSUED)
+            self.assertEqual(invoice.balance_due, E2E_FEE_MONTHLY_AMOUNT)
+
+            exam = Exam.objects.alive().get(name=E2E_EXAM_NAME)
+            self.assertEqual(exam.status, ExamStatus.PUBLISHED)
+            result = Result.objects.alive().get(exam=exam, student=student)
+            self.assertEqual(result.status, ResultStatus.PUBLISHED)
+            self.assertIsNotNone(result.published_at)
+            self.assertEqual(result.percentage, E2E_EXAM_THEORY_MARKS)
+            self.assertEqual(result.grade_band.label, "B")
+            # Approved by someone other than the processor (§4).
+            self.assertNotEqual(result.approved_by, result.created_by)
+
+            (notice,) = Notice.objects.alive().filter(title=E2E_NOTICE_TITLE)
+            self.assertEqual(notice.status, NoticeStatus.PUBLISHED)
+            self.assertTrue(notice.requires_acknowledgment)
+            recipients = list(
+                Notification.objects.filter(source_type="notice", source_id=notice.pk).values_list(
+                    "user_id", flat=True
+                )
+            )
+        self.assertEqual(recipients, [guardian.id])
 
     def test_the_guardian_person_row_is_linked_to_the_login_and_not_duplicated(self) -> None:
         call_command("seed_e2e_data")
@@ -216,3 +327,115 @@ class SeedE2EDataTests(TestCase):
         with tenant_context(tenant.id):
             self.assertEqual(Campus.objects.filter(code="MAIN").count(), 1)
             self.assertEqual(AcademicSession.objects.filter(name="E2E Baseline").count(), 1)
+
+
+class SeedE2EExaminationsTests(TestCase):
+    """The examinations lane: the flag, two identities, a teacher's Staff row, a scale."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        call_command("seed_e2e_data")
+        self.tenant = Tenant.objects.get(slug=E2E_TENANT_SLUG)
+
+    def role_keys(self, slug: str) -> set[str]:
+        role = Role.objects.get(tenant=self.tenant, slug=slug)
+        return set(
+            RolePermission.objects.filter(role=role).values_list("permission__key", flat=True)
+        )
+
+    def assert_no_wider_than(self, role: str, keys: set[str]) -> None:
+        """Every seeded key is one the real role holds by default (registry)."""
+        specs = {spec.key: spec for spec in registry.all()}
+        wider = sorted(key for key in keys if role not in specs[key].default_roles)
+        self.assertEqual(wider, [], f"{role} seed holds keys the real role does not")
+
+    def test_examinations_is_enabled_on_both_tenants(self) -> None:
+        for slug in (E2E_TENANT_SLUG, E2E_OTHER_TENANT_SLUG):
+            tenant = Tenant.objects.get(slug=slug)
+            with self.subTest(tenant=slug), tenant_context(tenant.id):
+                override = TenantFeatureOverride.objects.get(
+                    tenant=tenant, feature_flag__key="module.examinations"
+                )
+                self.assertTrue(override.enabled)
+
+    def test_exam_staff_holds_its_role_s_exams_keys_and_its_picker_reads(self) -> None:
+        user = User.objects.get(tenant=self.tenant, email=E2E_EXAM_STAFF_EMAIL)
+        role = Role.objects.get(tenant=self.tenant, slug="exam_staff")
+        keys = self.role_keys("exam_staff")
+
+        self.assertTrue(user.check_password(E2E_ADMIN_PASSWORD))
+        self.assertEqual(keys, set(e2e_exam_staff_permissions()))
+        self.assertIn("exams.exam.create", keys)
+        self.assertIn("timetable.timetable.view", keys)
+        self.assertIn("platform.file.view", keys)
+        self.assert_no_wider_than("exam_staff", keys)
+        self.assertEqual(
+            list(UserRole.objects.filter(user=user, role=role).values_list("scope", flat=True)),
+            [RecordScope.ALL],
+        )
+
+    def test_the_teacher_holds_exactly_its_role_s_exams_keys_assigned_scoped(self) -> None:
+        user = User.objects.get(tenant=self.tenant, email=E2E_TEACHER_EMAIL)
+        role = Role.objects.get(tenant=self.tenant, slug="teacher")
+        keys = self.role_keys("teacher")
+
+        expected = {
+            spec.key for spec in registry.for_module("exams") if "teacher" in spec.default_roles
+        }
+        self.assertEqual(keys, expected)
+        self.assertEqual(set(e2e_teacher_permissions()), expected)
+        self.assertIn("exams.exam.view", keys)
+        self.assertEqual(
+            list(UserRole.objects.filter(user=user, role=role).values_list("scope", flat=True)),
+            [RecordScope.ASSIGNED],
+        )
+
+    def test_the_principal_holds_the_results_approver_s_exams_keys(self) -> None:
+        """The approver half of the results journey: approve, publish and principal
+        remarks, never processing or generation, and nothing the real role lacks."""
+        keys = {key for key in self.role_keys("principal") if key.startswith("exams.")}
+
+        self.assertEqual(
+            keys,
+            {
+                "exams.exam.view",
+                "exams.schedule.view",
+                "exams.marks.view",
+                "exams.result.view",
+                "exams.result.approve",
+                "exams.result.publish",
+                "exams.report-card.view",
+                "exams.report-card.publish",
+            },
+        )
+        self.assert_no_wider_than("principal", keys)
+
+    def test_the_teacher_login_has_an_active_teaching_staff_row(self) -> None:
+        user = User.objects.get(tenant=self.tenant, email=E2E_TEACHER_EMAIL)
+
+        with tenant_context(self.tenant.id):
+            staff = Staff.objects.alive().get(user_id=user.id)
+            self.assertEqual(staff.staff_type, StaffType.TEACHING)
+            self.assertEqual(staff.employment_status, EmploymentStatus.ACTIVE)
+
+    def test_seeds_one_complete_default_scale(self) -> None:
+        with tenant_context(self.tenant.id):
+            scale = GradingScale.objects.alive().get(is_default=True)
+            self.assertEqual(scale.name, "E2E Percentage")
+            assert_scale_usable(scale)
+
+    def test_the_examinations_lane_is_idempotent(self) -> None:
+        call_command("seed_e2e_data")
+
+        teacher = User.objects.get(tenant=self.tenant, email=E2E_TEACHER_EMAIL)
+        exam_staff = User.objects.get(tenant=self.tenant, email=E2E_EXAM_STAFF_EMAIL)
+        self.assertEqual(UserRole.objects.filter(user=teacher).count(), 1)
+        self.assertEqual(UserRole.objects.filter(user=exam_staff).count(), 1)
+        self.assertEqual(self.role_keys("teacher"), set(e2e_teacher_permissions()))
+        self.assertEqual(self.role_keys("exam_staff"), set(e2e_exam_staff_permissions()))
+        with tenant_context(self.tenant.id):
+            self.assertEqual(Staff.objects.alive().filter(user_id=teacher.id).count(), 1)
+            scales = GradingScale.objects.alive().filter(name="E2E Percentage")
+            self.assertEqual(scales.count(), 1)
+            bands = GradeBand.objects.alive().filter(grading_scale=scales.get())
+            self.assertEqual(bands.count(), 5)

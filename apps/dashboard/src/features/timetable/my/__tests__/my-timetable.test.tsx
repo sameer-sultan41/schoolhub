@@ -51,7 +51,7 @@ describe("MyTimetable", () => {
     ]);
     expect(screen.getByText("Science")).toBeInTheDocument();
     expect(screen.getAllByText("Free").length).toBeGreaterThan(0);
-    expect(mockFetchMyTimetable).toHaveBeenCalledWith(undefined);
+    expect(mockFetchMyTimetable).toHaveBeenCalledWith(undefined, undefined);
   });
 
   it("marks cover for a chosen date, with the covering teacher and the moved room", async () => {
@@ -83,7 +83,7 @@ describe("MyTimetable", () => {
     expect(await screen.findByText("Covered by Bilal Khan")).toBeInTheDocument();
     expect(screen.getByText("Grade 5-A · Lab 1")).toBeInTheDocument();
     await waitFor(() => {
-      expect(mockFetchMyTimetable).toHaveBeenLastCalledWith("2026-10-19");
+      expect(mockFetchMyTimetable).toHaveBeenLastCalledWith("2026-10-19", undefined);
     });
   });
 

@@ -16,15 +16,14 @@ from __future__ import annotations
 import datetime
 import logging
 import uuid
+from calendar import monthrange
 from decimal import Decimal
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
 from django.db import IntegrityError, transaction
-from django.db.models import F
-from django.db.models.functions import Length
 from django.utils import timezone
 
-from apps.attendance import uploads
+from apps.attendance import reports, uploads
 from apps.attendance.models import (
     ApprovalDecision,
     AttendanceCorrection,
@@ -47,18 +46,21 @@ from apps.school_organization import calendar
 from apps.school_organization.models import AcademicSession
 from apps.school_organization.services import assert_session_writable
 from apps.student_management.models import EnrollmentStatus, Student, StudentEnrollment
+from apps.student_management.services import enrollment_roll_order
 from apps.timetable.slots.services import effective_slots_for
 from core.api.exceptions import Conflict, DomainRuleViolation
 from core.files.services import assert_file_usable
 from core.imports.tabular import parse_rows
 from core.rbac.models import RecordScope
-from core.rbac.permissions import scopes_for
+from core.rbac.permissions import is_restricted_principal, scopes_for
 from core.tenancy.features import is_feature_enabled
 from core.tenancy.models import TenantSettings
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from django.db.models import QuerySet
+
     from apps.school_organization.models import Section
     from apps.staff_management.models import Staff
     from apps.timetable.models import Period, TimetableSlot
@@ -411,12 +413,7 @@ def roster_enrollments(*, section: Section, session: AcademicSession) -> list[St
             student__deleted_at__isnull=True,
         )
         .select_related("student")
-        .order_by(
-            Length("roll_number").asc(nulls_last=True),
-            F("roll_number").asc(nulls_last=True),
-            "student__first_name",
-            "student__last_name",
-        )
+        .order_by(*enrollment_roll_order())
     )
 
 
@@ -1241,7 +1238,12 @@ def submit_leave_request(
             {"attachment_file_id": f"'{leave_type.name}' requires a supporting document."}
         )
     if attachment_file is not None:
-        assert_file_usable(file=attachment_file, purpose=uploads.LEAVE_ATTACHMENT.key)
+        assert_file_usable(
+            file=attachment_file,
+            purpose=uploads.LEAVE_ATTACHMENT.key,
+            uploaded_by=requesting_user.pk if is_restricted_principal(requesting_user) else None,
+            field="attachment_file_id",
+        )
 
     assert_no_overlapping_leave(student=student, start=start_date, end=end_date)
 
@@ -2088,3 +2090,68 @@ def _parse_import_time(
             "field": field,
             "issue": f"'{value}' is not a time (HH:MM or HH:MM:SS).",
         }
+
+
+# ---------------------------------------------------------------- visibility
+
+#: The key `GET /student-attendance` reads under, and the field its campus scope narrows on.
+STUDENT_ATTENDANCE_VIEW_KEY = "attendance.student-attendance.view"
+STUDENT_ATTENDANCE_CAMPUS_FIELD = "section__campus_id"
+
+
+def visible_attendance(
+    user, *, queryset: QuerySet[StudentAttendance] | None = None
+) -> QuerySet[StudentAttendance]:
+    """The student attendance rows `user` may read: the view key's record scope.
+
+    One definition for `StudentAttendanceViewSet` and the parent portal's card.
+    `queryset` is a caller's already-scoped set (the viewset passes its own, scoped
+    by the route's key); without one, the view key's scope is applied.
+    """
+    from core.rbac.permissions import scope_queryset
+
+    if queryset is not None:
+        return queryset
+    return scope_queryset(
+        StudentAttendance.objects.alive(),
+        user,
+        permission=STUDENT_ATTENDANCE_VIEW_KEY,
+        campus_field=STUDENT_ATTENDANCE_CAMPUS_FIELD,
+    )
+
+
+# ---------------------------------------------------------------- per-student summaries
+
+
+def student_month_summary(
+    *, rows: QuerySet[StudentAttendance], students, month: datetime.date
+) -> dict[uuid.UUID, dict]:
+    """§13's per-student summary for the calendar month containing `month`, keyed by student id.
+
+    `reports.student_summary` over the given students' rows, so the counting rules are
+    the report's own: derived days in period mode (ADR-0028), `PRESENT_STATUSES` over
+    the days not in `EXCLUDED_FROM_RATE`. `rows` is the caller's visible set
+    (`visible_attendance`); `students` is ids or a `Student` queryset. A student with no
+    row in the month is absent from the result. One query for any number of students.
+    """
+    first = month.replace(day=1)
+    last = month.replace(day=monthrange(month.year, month.month)[1])
+    summary = reports.student_summary(
+        rows.filter(student__in=students), start_date=first, end_date=last
+    )
+    return {row["student_id"]: row for row in summary}
+
+
+def student_day_status(
+    *, rows: QuerySet[StudentAttendance], students, on_date: datetime.date
+) -> dict[uuid.UUID, str]:
+    """Each student's derived status for one date — a daily row, or their periods' day.
+
+    The day `reports.derived_days` makes, so it agrees with `student_month_summary`.
+    `rows` is the caller's visible set. A student with nothing marked that day is
+    absent from the result. One query.
+    """
+    days = reports.derived_days(
+        rows.filter(student__in=students), start_date=on_date, end_date=on_date
+    )
+    return {day["student_id"]: day["status"] for day in days}

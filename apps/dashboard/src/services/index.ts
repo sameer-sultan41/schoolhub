@@ -1,16 +1,34 @@
-import { BroadcastsService } from "./modules/broadcasts";
+import { AdmitCardsService } from "./modules/admit-cards";
+import { FeeInvoicesService } from "./modules/fee-invoices";
+import { NoticesService } from "./modules/notices";
+import { NotificationPreferencesService } from "./modules/notification-preferences";
+import { NotificationsService } from "./modules/notifications";
+import { ParentPortalService } from "./modules/parent-portal";
+import { ReceiptsService } from "./modules/receipts";
+import { VouchersService } from "./modules/vouchers";
+import { ResultsService } from "./modules/results";
 import { AttendanceCorrectionsService } from "./modules/attendance-corrections";
 import { AttendanceReportsService } from "./modules/attendance-reports";
 import { AttendanceSettingsService } from "./modules/attendance-settings";
 import { AuthService } from "./modules/auth";
+import { BroadcastsService } from "./modules/broadcasts";
 import { CurriculumService } from "./modules/curriculum";
 import { DashboardService } from "./modules/dashboard";
+import { ExamReportsService } from "./modules/exam-reports";
+import { ExamResultsService } from "./modules/exam-results";
+import { ExamSchedulesService } from "./modules/exam-schedules";
+import { ExamSubjectsService } from "./modules/exam-subjects";
+import { ExamsService } from "./modules/exams";
 import { FilesService } from "./modules/files";
+import { GradingScalesService } from "./modules/grading-scales";
 import { GuardiansService } from "./modules/guardians";
 import { JobsService } from "./modules/jobs";
 import { LeaveRequestsService } from "./modules/leave-requests";
+import { MarksService } from "./modules/marks";
 import { PeriodsService } from "./modules/periods";
 import { PromotionsService } from "./modules/promotions";
+import { QuestionBanksService } from "./modules/question-banks";
+import { ReportCardsService } from "./modules/report-cards";
 import { RoomsService } from "./modules/rooms";
 import { SchoolOrganizationService } from "./modules/school-organization";
 import { StaffService } from "./modules/staff";
@@ -40,6 +58,68 @@ export type {
   StudentDocumentRecord,
   StudentRecord,
 } from "./modules/students";
+
+export type { ExamInput, ExamPageQuery, ExamRecord, ExamStatus, ExamType } from "./modules/exams";
+
+export type {
+  AdmitCardIssue,
+  AdmitCardPageQuery,
+  AdmitCardRecord,
+  AdmitCardStatus,
+} from "./modules/admit-cards";
+
+export type {
+  BulkMarksEntryInput,
+  BulkMarksEntryResult,
+  MarksEntryInput,
+  MarksEntryStatus,
+  MarksGrid,
+  MarksGridEntry,
+  MarksGridMeta,
+  MarksGridQuery,
+  MarksLockResult,
+  MarksProgressRow,
+  MarksRecord,
+  MarksUnlockResult,
+  MarksUnwritableReason,
+} from "./modules/marks";
+
+export type {
+  ResultOutcome,
+  ResultPageQuery,
+  ResultRecord,
+  ResultsApproved,
+  ResultsPublished,
+  ResultsSentBack,
+  ResultStatus,
+} from "./modules/exam-results";
+
+export type {
+  ReportCardPageQuery,
+  ReportCardRecord,
+  ReportCardRemarkField,
+  ReportCardRemarksInput,
+  ReportCardsPublished,
+  ReportCardStatus,
+} from "./modules/report-cards";
+
+export type {
+  ConflictSeverity as ExamConflictSeverity,
+  ExamConflict,
+  ExamConflictType,
+  SchedulePublishResult,
+  SittingDay,
+  SittingInput,
+  SittingRecord,
+  SittingStatus,
+  SittingWriteResult,
+} from "./modules/exam-schedules";
+
+export type {
+  ExamSubjectGroup,
+  ExamSubjectInput,
+  ExamSubjectRecord,
+} from "./modules/exam-subjects";
 
 export type {
   CloneCurriculumResult,
@@ -83,6 +163,17 @@ export type {
 } from "./modules/attendance-corrections";
 
 export type {
+  ExamInlineReport,
+  ExamQueuedReport,
+  ExamReportFormValues,
+  ExamReportKind,
+  ExamReportQuery,
+  ExamReportRow,
+  ExamReportRowOf,
+  ExamReportRun,
+} from "./modules/exam-reports";
+
+export type {
   AttendanceReportRow,
   InlineReport,
   QueuedReport,
@@ -99,6 +190,7 @@ export type {
   LeaveAction,
   LeaveApprovalDecision,
   LeaveApprovalRecord,
+  LeaveCreateInput,
   LeaveDayPart,
   LeaveDecisionResult,
   LeavePageQuery,
@@ -122,10 +214,12 @@ export type {
   RegisterMeta,
   RegisterQuery,
   RegisterResult,
-  RowIssue,
   StudentAttendanceRecord,
   UnmarkableReason,
 } from "./modules/student-attendance";
+
+/** One refused row of a whole-grid submission (attendance's `:bulk-mark`, marks' `:bulk-entry`). */
+export type { RowIssue } from "./shared/row-issues";
 
 export type {
   MarkableStaffStatus,
@@ -137,6 +231,32 @@ export type {
   StaffRegisterQuery,
   StaffRowDraft,
 } from "./modules/staff-attendance";
+
+export type {
+  CoverageIssue,
+  GradeBandInput,
+  GradeBandRecord,
+  GradingScaleInput,
+  GradingScalePageQuery,
+  GradingScaleRecord,
+  GradingScaleType,
+} from "./modules/grading-scales";
+
+export type {
+  PaperBlueprint,
+  PaperResult,
+  PaperShortfall,
+  QuestionBankInput,
+  QuestionBankPageQuery,
+  QuestionBankRecord,
+  QuestionBankStatus,
+  QuestionDifficulty,
+  QuestionInput,
+  QuestionPageQuery,
+  QuestionRecord,
+  QuestionSource,
+  QuestionType,
+} from "./modules/question-banks";
 
 export type { PeriodInput, PeriodPageQuery, PeriodRecord } from "./modules/periods";
 
@@ -189,6 +309,30 @@ export type {
   UpdateGuardianLinkInput,
 } from "./modules/guardians";
 
+export type {
+  PortalChild,
+  PortalDashboard,
+  PortalModuleKey,
+  PortalModules,
+  PortalStudent,
+} from "./modules/parent-portal";
+
+export type {
+  NotificationCategory,
+  NotificationPriority,
+  NotificationRecord,
+  NotificationsQuery,
+} from "./modules/notifications";
+
+export type { NoticeRead, NoticeType, PortalNoticeRecord } from "./modules/notices";
+export type {
+  NotificationChannel,
+  NotificationPreferenceRow,
+} from "./modules/notification-preferences";
+export type { FeeInvoiceRecord } from "./modules/fee-invoices";
+export type { ReceiptFormat, ReceiptRecord } from "./modules/receipts";
+export type { VoucherFormat, VoucherRecord, VoucherStatus } from "./modules/vouchers";
+
 /**
  * Every domain's API calls, aggregated behind one object. A component imports `Services`
  * and calls `Services.<domain>.<action>(...)` — never `apiClient` and never a service
@@ -219,6 +363,16 @@ export const Services = {
   attendanceCorrections: AttendanceCorrectionsService,
   leaveRequests: LeaveRequestsService,
   attendanceReports: AttendanceReportsService,
+  gradingScales: GradingScalesService,
+  exams: ExamsService,
+  examSubjects: ExamSubjectsService,
+  examSchedules: ExamSchedulesService,
+  admitCards: AdmitCardsService,
+  marks: MarksService,
+  examResults: ExamResultsService,
+  examReports: ExamReportsService,
+  questionBanks: QuestionBanksService,
+  reportCards: ReportCardsService,
   guardians: GuardiansService,
   staff: StaffService,
   students: StudentsService,
@@ -226,4 +380,12 @@ export const Services = {
   messageThreads: MessageThreadsService,
   threadOversight: ThreadOversightService,
   broadcasts: BroadcastsService,
+  parentPortal: ParentPortalService,
+  notifications: NotificationsService,
+  notificationPreferences: NotificationPreferencesService,
+  notices: NoticesService,
+  feeInvoices: FeeInvoicesService,
+  receipts: ReceiptsService,
+  vouchers: VouchersService,
+  results: ResultsService,
 } as const;

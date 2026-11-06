@@ -19,8 +19,9 @@ to register the key **and add the §4 row in the same PR** — which is where
 AGENTS.md's "update the module doc in the same PR" points. Inventing a key the
 doc never mentions anywhere would be the different, worse thing.
 
-The five added keys are `exams.grading-scale.view`, `exams.schedule.view`,
-`exams.admit-card.view`, `exams.result.create` and `exams.question-bank.view`.
+The added keys are `exams.grading-scale.view`, `exams.schedule.view`,
+`exams.admit-card.view`, `exams.result.create`, `exams.question-bank.view` and,
+with the marks dashboard, `exams.marks.view`.
 
 **No RBAC registry change ships with this module.** Every verb §4 declares is
 already registered: `view/create/update/delete/export/import/approve/publish`
@@ -39,6 +40,7 @@ table is now fully registered.**
 """
 
 from core.rbac.registry import registry
+from core.rbac.roles import PORTAL_ROLES
 
 # "All staff" means every default tenant role except the restricted principals
 # (student, guardian), which never hold a staff key.
@@ -83,7 +85,7 @@ SCHEDULERS = ("exam_staff",)
 # The portal side of §3's role table. A `student`/`guardian` reads their own
 # schedule and their own card; the *record scope*, not the key, is what narrows
 # them (see each model's `filter_owned_by_user`).
-PORTAL = ("student", "guardian")
+PORTAL = PORTAL_ROLES
 # §4 gives marks entry to `teacher` and `exam_staff`. `teacher` is the load-
 # bearing half and is narrowed further by *record scope*, not by the key: the
 # `assigned` scope resolves through `academics.TeacherSubjectAllocation`, so a
@@ -182,6 +184,14 @@ registry.register(
     ("exam_staff",),
 )
 
+# Reading the marks grid and its progress. §4 had no view key, so reads fell back
+# to `.create` and shut out the leadership roles that review marks. The record
+# scope (`services.may_enter_marks`) still narrows each caller to their sections.
+registry.register(
+    "exams.marks.view",
+    "View marks, the entry grid and entry progress (record-scoped by section).",
+    EXAM_VIEWERS,
+)
 registry.register(
     "exams.marks.create",
     "Enter marks for an assigned class-subject (§5.4).",

@@ -4,9 +4,12 @@ Isolation strategy: shared schema + tenant_id + PostgreSQL Row-Level Security.
 See docs/02-architecture/multi-tenancy.md §3.
 """
 
+import datetime
 import uuid
+from zoneinfo import ZoneInfo
 
 from django.db import models
+from django.utils.timezone import localdate
 
 from core.tenancy.managers import (
     AllTenantsManager,
@@ -70,6 +73,10 @@ class Tenant(TimestampedModel):
     @property
     def is_operational(self) -> bool:
         return self.status in {TenantStatus.TRIAL, TenantStatus.ACTIVE, TenantStatus.PAST_DUE}
+
+    def local_date(self) -> datetime.date:
+        """Today in the school's own timezone; the server's clock is UTC (`TIME_ZONE`)."""
+        return localdate(timezone=ZoneInfo(self.timezone))
 
 
 class TenantSettings(TimestampedModel):

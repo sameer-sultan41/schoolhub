@@ -132,6 +132,24 @@ export function buildAcademicSession(overrides: Partial<AcademicSession> = {}): 
   };
 }
 
+/** Trimmed to what a term picker reads (`TermOption`). */
+export interface Term {
+  id: string;
+  academic_session_id: string;
+  name: string;
+  sequence: number;
+}
+
+export function buildTerm(overrides: Partial<Term> = {}): Term {
+  return {
+    id: uuid(),
+    academic_session_id: "",
+    name: "Term 1",
+    sequence: 1,
+    ...overrides,
+  };
+}
+
 export interface SchoolOrganizationOptions {
   campuses?: Campus[];
   departments?: Department[];
@@ -140,6 +158,7 @@ export interface SchoolOrganizationOptions {
   sections?: Section[];
   subjects?: Subject[];
   academicSessions?: AcademicSession[];
+  terms?: Term[];
 }
 
 /**
@@ -157,6 +176,7 @@ export function schoolOrganizationModule(options: SchoolOrganizationOptions = {}
     const sections = [...(options.sections ?? [])];
     const subjects = [...(options.subjects ?? [])];
     const academicSessions = [...(options.academicSessions ?? [])];
+    const terms = [...(options.terms ?? [])];
 
     api.get("/classes", (request) => {
       const isActive = request.searchParams.get("is_active");
@@ -186,6 +206,14 @@ export function schoolOrganizationModule(options: SchoolOrganizationOptions = {}
     });
 
     api.get("/academic-sessions", () => paginated(academicSessions));
+
+    // A session's terms: the exam form's term select reads them once a session is picked.
+    api.get("/terms", (request) => {
+      const sessionId = request.searchParams.get("academic_session_id");
+      return paginated(
+        terms.filter((term) => !sessionId || term.academic_session_id === sessionId),
+      );
+    });
 
     api.get("/campuses", () => pagedList(campuses));
 
