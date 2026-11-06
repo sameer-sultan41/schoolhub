@@ -14,6 +14,9 @@ INTEGRATIONS_ENCRYPTION_KEYS = env.list("INTEGRATIONS_ENCRYPTION_KEYS", default=
     "ZGV2LW9ubHktaW50ZWdyYXRpb25zLWtleS0wMDAwMDA="
 ]
 PAYMENT_PROVIDERS_ENABLED = ["fake"]
+# The live E2E lane signs a callback for a checkout it started; the fake provider has
+# to "know" that payment for the callback's re-fetch to confirm it.
+PAYMENT_FAKE_SETTLES_ON_INITIATE = True
 ALLOWED_HOSTS = ["*"]
 
 INSTALLED_APPS += ["drf_spectacular_sidecar"]

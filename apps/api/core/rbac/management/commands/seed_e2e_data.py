@@ -15,6 +15,7 @@ import os
 import uuid
 from datetime import time, timedelta
 
+from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
@@ -376,6 +377,11 @@ E2E_GUARDIAN_PERMISSIONS = [
     "communication.thread.view",
     "communication.thread.create",
     "communication.message.create",
+    # fees-finance.md §4: a guardian sees and pays their own children's invoices online
+    # (ADR-0034). `online-payments.spec.ts` links this guardian to its own run-unique child.
+    "fees.invoice.view",
+    "fees.payment.view",
+    "fees.payment.pay-online",
 ]
 # The `Guardian` person row's first name, last name and phone. The phone is the addressable
 # part, mirrored in e2e/src/lib/seed-constants.ts: ids are generated per seed run, and
@@ -593,6 +599,9 @@ class Command(BaseCommand):
 
             # Communication: the thread-routing chain (see E2E_COMMS_GUARDIAN_EMAIL).
             self._ensure_communication_enabled(tenant)
+
+            # Fees, with online payments on: `online-payments.spec.ts`.
+            self._ensure_fees_enabled(tenant)
             comms_class_teacher = self._ensure_teaching_staff(
                 tenant,
                 campus,
@@ -780,6 +789,22 @@ class Command(BaseCommand):
             feature_flag=flag,
             defaults={"enabled": True, "reason": "e2e live-lane fixture"},
         )
+
+    def _ensure_fees_enabled(self, tenant: Tenant) -> None:
+        """`module.fees_finance` and `fees.online-payments` both default off.
+
+        The system ledger accounts come from `seed_finance_accounts` by name rather than
+        an import: core imports no app (ADR-0013). Fee income (4000) is what a spec's
+        fee head posts to. The gateway account is not seeded: the spec saves it through
+        `PUT /payment-gateway-accounts/current`, which is what it proves.
+        """
+        for key in ("module.fees_finance", "fees.online-payments"):
+            TenantFeatureOverride.objects.update_or_create(
+                tenant=tenant,
+                feature_flag=FeatureFlag.objects.get(key=key),
+                defaults={"enabled": True, "reason": "e2e live-lane fixture"},
+            )
+        call_command("seed_finance_accounts", tenant_slug=tenant.slug, stdout=self.stdout)
 
     def _ensure_comms_student(
         self,

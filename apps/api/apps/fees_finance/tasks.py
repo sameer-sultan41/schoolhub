@@ -430,6 +430,33 @@ def expire_pending_online_payments() -> dict[str, int]:
     return for_each_tenant(expire_tenant_pending_online_payments, job="fees-online-payment-expiry")
 
 
+@shared_task
+def reconcile_gateway_payments(day: str | None = None) -> dict[str, int]:
+    """Daily: reconcile online payments against each provider's list (ADR-0034).
+
+    Yesterday (UTC) by default; `day` (ISO date) re-runs a given day, which is
+    safe because reconciliation is idempotent. Non-atomic per tenant: the
+    provider is called outside any transaction, and each event is applied in
+    its own. A provider outage skips that tenant and is logged.
+    """
+    from functools import partial
+
+    from django.utils import timezone
+
+    from apps.fees_finance import services
+
+    target = (
+        datetime.date.fromisoformat(day)
+        if day
+        else timezone.now().date() - datetime.timedelta(days=1)
+    )
+    return for_each_tenant(
+        partial(services.reconcile_tenant_gateway_payments, day=target),
+        job="fees-gateway-reconciliation",
+        atomic=False,
+    )
+
+
 @shared_task(base=TenantAwareTask)
 def notify_payment_received(*, tenant_id: str, payment_id: str) -> dict[str, int]:
     """§12's `fees.payment-receipt`, to the family that paid.

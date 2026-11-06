@@ -2273,6 +2273,178 @@ def _lock_open_issue(issue: GatewayReconciliationIssue) -> GatewayReconciliation
     return locked
 
 
+# --- Nightly reconciliation -------------------------------------------------- #
+#
+# A callback can be lost. Once a day each account's transaction list from the
+# provider is fetched **outside any transaction**, then every event goes through
+# `handle_gateway_event` in its own transaction, so one bad row never undoes the
+# confirmations before it and no lock is held across a provider call.
+
+
+def _day_bounds(day: datetime.date) -> tuple[datetime.datetime, datetime.datetime]:
+    """`day` as a UTC half-open interval: the providers report their days in UTC."""
+    start = datetime.datetime.combine(day, datetime.time.min, tzinfo=datetime.UTC)
+    return start, start + datetime.timedelta(days=1)
+
+
+def _accounts_to_reconcile(day: datetime.date) -> list[PaymentGatewayAccount]:
+    """The bound tenant's accounts, active or not, with online payments in `day`'s window.
+
+    The window takes checkouts opened up to one TTL before the day (paid after
+    midnight) and payments confirmed during it. An inactive account still has
+    money moving through it until its last checkout closes.
+    """
+    start, end = _day_bounds(day)
+    opened_from = start - datetime.timedelta(minutes=settings.PAYMENT_PENDING_TTL_MINUTES)
+    providers = set(
+        Payment.objects.alive()
+        .filter(method=PaymentMethod.ONLINE_GATEWAY, gateway_provider__isnull=False)
+        .filter(
+            models.Q(created_at__gte=opened_from, created_at__lt=end)
+            | models.Q(paid_at__gte=start, paid_at__lt=end)
+        )
+        .values_list("gateway_provider", flat=True)
+        .distinct()
+    )
+    if not providers:
+        return []
+    return list(PaymentGatewayAccount.objects.alive().filter(provider__in=providers))
+
+
+def _paid_at_provider(*, accounts: list[PaymentGatewayAccount], order_id: str) -> bool:
+    """Ask the provider directly before calling a payment missing.
+
+    A payment confirmed just after midnight is in the next day's list, and a
+    school that changed merchant accounts on one provider has two. A direct
+    lookup under each account settles both. Outside any transaction.
+    """
+    for account in accounts:
+        event = adapter_for(account.provider).fetch_transaction(_credentials(account), order_id)
+        if event is not None and event.status == "paid":
+            return True
+    return False
+
+
+def reconcile_gateway_day(*, account: PaymentGatewayAccount, day: datetime.date) -> int:
+    """Reconcile one account against the provider's list for `day`.
+
+    1. Fetch the day's transactions (no transaction open; `GatewayUnavailable`
+       propagates, and the caller skips the tenant).
+    2. Apply each event with `handle_gateway_event(source="reconcile")`, each in
+       its own transaction. A missed callback confirms here; a failing event is
+       logged and the rest still apply.
+    3. Two paid provider transactions for one order → `duplicate_at_gateway`.
+    4. Our confirmed payment the list lacks, and a direct lookup cannot find
+       paid → `missing_at_gateway`. Nothing is reversed; a person decides.
+
+    Open issues are never duplicated (`_raise_issue`), so a second run of the
+    same day changes nothing. Returns the payments whose status changed plus
+    the issues opened.
+    """
+    tenant_id = account.tenant_id
+    adapter = adapter_for(account.provider)
+    started = timezone.now()
+    events = adapter.list_transactions(_credentials(account), day)
+
+    order_ids = {event.order_id for event in events}
+    online = Payment.objects.alive().filter(
+        method=PaymentMethod.ONLINE_GATEWAY, gateway_provider=account.provider
+    )
+    with tenant_atomic(tenant_id):
+        status_before = dict(
+            online.filter(reference_no__in=order_ids).values_list("reference_no", "status")
+        )
+
+    changed = 0
+    for event in events:
+        try:
+            payment = handle_gateway_event(account=account, event=event, source="reconcile")
+        except Exception:
+            logger.exception(
+                "reconciliation could not apply order %s (tenant %s); continuing",
+                event.order_id,
+                tenant_id,
+            )
+            continue
+        if payment is not None and status_before.get(event.order_id) != payment.status:
+            changed += 1
+            status_before[event.order_id] = payment.status
+
+    paid_by_order: dict[str, set[str]] = {}
+    for event in events:
+        if event.status == "paid":
+            paid_by_order.setdefault(event.order_id, set()).add(event.provider_txn_id)
+    for order_id, txn_ids in paid_by_order.items():
+        if len(txn_ids) < 2:
+            continue
+        with tenant_atomic(tenant_id):
+            payment = online.filter(reference_no=order_id).first()
+            if payment is None or payment.status != PaymentStatus.CONFIRMED:
+                continue
+            extra = sorted(txn_ids - {payment.provider_txn_id})
+            _raise_issue(
+                kind=GatewayIssueKind.DUPLICATE_AT_GATEWAY,
+                tenant_id=tenant_id,
+                payment=payment,
+                gateway_provider=account.provider,
+                order_id=order_id,
+                provider_txn_id=extra[0],
+                expected_amount=payment.amount,
+                gateway_amount=payment.amount,
+            )
+
+    start, end = _day_bounds(day)
+    with tenant_atomic(tenant_id):
+        unlisted = list(
+            online.filter(status=PaymentStatus.CONFIRMED, paid_at__gte=start, paid_at__lt=end)
+            .exclude(reference_no__in=list(paid_by_order))
+            .only("pk", "reference_no", "provider_txn_id", "amount")
+        )
+        same_provider = list(
+            PaymentGatewayAccount.objects.alive().filter(provider=account.provider)
+        )
+    for payment in unlisted:
+        if _paid_at_provider(accounts=same_provider, order_id=str(payment.reference_no)):
+            continue
+        with tenant_atomic(tenant_id):
+            _raise_issue(
+                kind=GatewayIssueKind.MISSING_AT_GATEWAY,
+                tenant_id=tenant_id,
+                payment=payment,
+                gateway_provider=account.provider,
+                order_id=payment.reference_no,
+                provider_txn_id=payment.provider_txn_id,
+                expected_amount=payment.amount,
+            )
+
+    with tenant_atomic(tenant_id):
+        opened = GatewayReconciliationIssue.objects.filter(
+            gateway_provider=account.provider, detected_at__gte=started
+        ).count()
+    logger.info(
+        "reconciled %s for tenant %s on %s: %d listed, %d payment(s) changed, %d issue(s) opened",
+        account.provider,
+        tenant_id,
+        day.isoformat(),
+        len(events),
+        changed,
+        opened,
+    )
+    return changed + opened
+
+
+def reconcile_tenant_gateway_payments(tenant_id: uuid.UUID, *, day: datetime.date) -> int:
+    """A non-atomic `for_each_tenant` step: reconcile each account with payments in the window.
+
+    Opens its own short transactions, so the provider calls in
+    `reconcile_gateway_day` hold none. A provider outage raises out of here,
+    and `for_each_tenant` logs it and moves on to the next tenant.
+    """
+    with tenant_atomic(tenant_id):
+        accounts = _accounts_to_reconcile(day)
+    return sum(reconcile_gateway_day(account=account, day=day) for account in accounts)
+
+
 # --------------------------------------------------------------------------- #
 # Spend and reports (PR D)
 # --------------------------------------------------------------------------- #

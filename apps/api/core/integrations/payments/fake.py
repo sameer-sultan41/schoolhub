@@ -4,6 +4,11 @@ It signs like the real aggregators do: ``HMAC-SHA256(secret, f"{timestamp}.{body
 ``X-Fake-Signature: t=<unix>,v1=<hex>``, with a timestamp tolerance (Stripe's webhook
 guidance) so a captured callback cannot be replayed later. Transactions live in memory;
 tests fill them with ``add_transaction``.
+
+With ``PAYMENT_FAKE_SETTLES_ON_INITIATE`` (dev only) a checkout is recorded as paid at
+the "provider" the moment it starts, as if the payer finished at once. The live E2E lane
+needs that: it cannot reach this process's memory, so without it the callback's re-fetch
+would never find the transaction. Tests leave it off and state what the provider knows.
 """
 
 from __future__ import annotations
@@ -17,6 +22,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from django.conf import settings
+from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from core.integrations.payments.base import (
@@ -57,6 +63,17 @@ class FakeAdapter:
         return "****" + str(credentials.get("merchant_id", ""))[-4:]
 
     def initiate(self, request: CheckoutRequest, credentials: Mapping[str, Any]) -> CheckoutSession:
+        if settings.PAYMENT_FAKE_SETTLES_ON_INITIATE:
+            self.add_transaction(
+                GatewayEvent(
+                    order_id=request.order_id,
+                    provider_txn_id=f"FAKE-{request.order_id}",
+                    status="paid",
+                    amount=request.amount,
+                    occurred_at=timezone.now(),
+                    sanitized={"order_id": request.order_id, "status": "paid"},
+                )
+            )
         return CheckoutSession(redirect_url=f"https://fake-gateway.invalid/pay/{request.order_id}")
 
     def verify_callback(

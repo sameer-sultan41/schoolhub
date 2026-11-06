@@ -44,6 +44,10 @@ PAYMENT_CALLBACK_TOLERANCE_SECONDS = 300
 # How long an online checkout stays pending before it is failed. Revisit against the chosen
 # provider's session lifetime when it ships.
 PAYMENT_PENDING_TTL_MINUTES = 60
+# The fake provider records a checkout as paid when it starts
+# (core.integrations.payments.fake). Dev only, for the live E2E lane; tests and every
+# real environment leave it off.
+PAYMENT_FAKE_SETTLES_ON_INITIATE = False
 
 # Object storage (core.files) — matches infra/compose's MinIO service in dev, real S3 in
 # prod. Empty S3_ENDPOINT_URL selects NullPresigner (core.files.storage.get_presigner),
@@ -428,6 +432,7 @@ CELERY_TASK_ROUTES = {
     "apps.fees_finance.tasks.expire_fee_vouchers": {"queue": "bulk"},
     "apps.fees_finance.tasks.export_finance_report_task": {"queue": "bulk"},
     "apps.fees_finance.tasks.expire_pending_online_payments": {"queue": "bulk"},
+    "apps.fees_finance.tasks.reconcile_gateway_payments": {"queue": "bulk"},
     # A receipt confirmation is the one fee message a family is actively waiting
     # for — they are standing at the counter — so it takes the transactional
     # lane for the reason attendance's absence alert does.
@@ -529,6 +534,12 @@ CELERY_BEAT_SCHEDULE = {
     "expire-pending-online-payments": {
         "task": "apps.fees_finance.tasks.expire_pending_online_payments",
         "schedule": crontab(minute="*/15"),
+    },
+    # Daily, after the voucher expiry: yesterday's online payments against each
+    # provider's own transaction list, catching any callback that never arrived.
+    "reconcile-gateway-payments": {
+        "task": "apps.fees_finance.tasks.reconcile_gateway_payments",
+        "schedule": crontab(hour="5", minute="40"),
     },
 }
 
