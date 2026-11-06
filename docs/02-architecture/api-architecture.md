@@ -65,7 +65,7 @@
 - Long operations (bulk imports, report generation, notification blasts, AI batch jobs) return `202 Accepted` + a `job` resource: `GET /api/v1/jobs/{id}` → `queued | running | succeeded | failed` with progress and result link. Executed by Celery (see [`tech-stack.md`](tech-stack.md)).
 
 ### 2.8 File Uploads
-- Two-step: `POST /api/v1/files` → presigned S3 URL + file record (`pending`); client uploads directly to storage; confirmation webhook/poll flips it to `ready`. Server-side validation of type/size/AV-scan per [`../06-security/security.md`](../06-security/security.md). Files are tenant-scoped and served via short-lived signed URLs.
+- Two-step: `POST /api/v1/files` → presigned S3 URL + file record (`pending`); client uploads directly to storage; confirmation webhook/poll flips it to `ready`. Server-side validation of type/size/AV-scan per [`../06-security/security.md`](../06-security/security.md). Files are tenant-scoped and served via short-lived signed URLs. A guardian or student holds `platform.file.create` but may request only a purpose whose spec sets `portal_uploadable`, may confirm only a file they created, and may attach only a file they uploaded (`422` on the attachment field); staff are not so restricted.
 
 ### 2.9 API Documentation
 - OpenAPI 3.1 generated from code (drf-spectacular), published per environment; TypeScript client types generated in CI into the frontend monorepo.

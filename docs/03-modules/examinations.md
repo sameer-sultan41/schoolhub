@@ -240,7 +240,7 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - `POST /api/v1/exams/{id}:process-results` — `202` + job resource (API doc §2.7)
 - `POST /api/v1/exams/{id}:approve-results` · `:publish-results` — colon-actions, permission-guarded, audited
 - `GET /api/v1/exams/{id}/schedule-conflicts` (the clash list) · `POST /api/v1/exams/{id}:publish-schedule`
-- `GET /api/v1/results` (scoped) · `GET /api/v1/report-cards` · `GET /api/v1/admit-cards` · `POST /api/v1/exams/{id}:generate-report-cards` · `:issue-admit-cards` (jobs) · `POST /api/v1/admit-cards/{id}:revoke` · `:download`
+- `GET /api/v1/results` (scoped); each row carries `exam_name` and `term_name` (`null` for a session-wide exam) so a portal can group and label results without a second request · `GET /api/v1/report-cards` · `GET /api/v1/admit-cards` · `POST /api/v1/exams/{id}:generate-report-cards` · `:issue-admit-cards` (jobs) · `POST /api/v1/admit-cards/{id}:revoke` · `:download`
 - `GET/POST/PATCH /api/v1/question-banks` · `/api/v1/questions` · `POST /api/v1/questions/{id}:approve` · `POST /api/v1/question-banks/{id}:generate-questions` (AI, job) · `:assemble-paper` (job → paper PDF file)
 
 List and read shapes the dashboard depends on:
@@ -292,7 +292,9 @@ List and read shapes the dashboard depends on:
   any status, so a promoted or graduated student's card keeps the section they sat in (both null without one),
   prefetched once per page. The `section_id` filter reads the same row. An `assigned` reader (a class teacher)
   sees a card only through a homeroom in the exam's own session. `/admit-cards` keeps the cursor, filters on `exam_id`,
-  `section_id`, `status` and `student_id`, and orders by `admit_card_no` or `created_at`.
+  `section_id`, `status`, `student_id` and `current` (`true`: the exam is undated or ends on or after the school's
+  own today, `Tenant.local_date()`), and orders by `admit_card_no` or `created_at`. Each card also carries its
+  exam's `exam_name`, `exam_starts_on` and `exam_ends_on`, so a portal labels it without the staff-only exam read.
 - **Issuing reports its counts in the `202`.** `:issue-admit-cards` creates the missing rows synchronously and
   queues only the PDFs: the `202`'s `data` (`AdmitCardIssueAccepted`) carries `added` and `existing` beside
   `job_id` and `status`, so a client renders its own localised summary (the job's `result` is
@@ -655,6 +657,19 @@ entry kept; the author locks and the grid turns read-only) and `e2e/tests/live/a
 seeded `teacher`, allocated to one section, sees only that section in progress, reads its roll and submits;
 the sibling section is a 404 to read and a 422 to write, another scaffold's exam and section are 404s; the exam
 staff sees entered = expected, locks, and the teacher's re-submission is a 409).
+
+### Admit cards in the parent portal (portal PR C)
+
+A guardian's (or student's) **Results** page (`/portal/{studentId}/results`) lists the child's issued cards for
+exams not yet over above the results, each with its exam's name, dates and card number and a **Download**
+button; with none it says so. It reads `GET /admit-cards?student_id=…&status=issued&current=true`
+(`Services.admitCards.fetchCurrentAdmitCardsPage`) and downloads through the card's own `:download` signed link
+(`downloadFile`), as the staff tab does. Nothing new was needed in permissions: `exams.admit-card.view` already
+names `student` and `guardian` (§4), `AdmitCardViewSet` already lists `download` in `PORTAL_READABLE_ACTIONS`,
+and `AdmitCard.filter_owned_by_user` narrows through `Student.filter_owned_by_user` (live, portal-enabled
+guardian links), so another child's card is a 404. `test_guardian_admit_card_download_own_only` pins it with the
+guardian role's real registry keys, not a hand-picked set (L44). The contract change is additive: the `current`
+filter and the three `exam_*` fields on the card.
 
 ### The dashboard's setup contract (examinations dashboard, PR A)
 

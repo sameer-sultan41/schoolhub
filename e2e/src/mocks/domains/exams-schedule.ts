@@ -239,6 +239,9 @@ export function examsScheduleModule(options: ExamsScheduleOptions): MockModule {
           .map((student): AdmitCard => ({
             id: uuid(),
             exam_id: exam.id,
+            exam_name: exam.name,
+            exam_starts_on: exam.starts_on ?? null,
+            exam_ends_on: exam.ends_on ?? null,
             student_id: student.studentId,
             student_name: student.studentName,
             admission_number: student.admissionNumber,

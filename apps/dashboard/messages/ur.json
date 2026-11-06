@@ -1416,7 +1416,8 @@
         "internalNote": "اندرونی نوٹ",
         "send": "بھیجیں",
         "sending": "بھیجا جا رہا ہے",
-        "failed": "آپ کا پیغام نہیں بھیجا جا سکا۔"
+        "failed": "آپ کا پیغام نہیں بھیجا جا سکا۔",
+        "attachments": "منسلکات"
       },
       "picker": {
         "search": "تلاش کریں",
@@ -1454,7 +1455,8 @@
           "studentRequired": "وہ طالب علم منتخب کریں جس کے بارے میں یہ گفتگو ہے۔",
           "internalNeedsOne": "ایک ساتھی منتخب کریں۔",
           "groupNeedsTwo": "گروپ گفتگو کے لیے کم از کم دو ساتھی منتخب کریں۔"
-        }
+        },
+        "attachments": "منسلکات"
       }
     },
     "oversight": {
@@ -2606,7 +2608,15 @@
       "uploadFailed": "تصویر اپ لوڈ نہیں ہو سکی۔"
     },
     "submitFailed": "کچھ غلط ہو گیا۔ براہ کرم دوبارہ کوشش کریں۔",
-    "saving": "محفوظ ہو رہا ہے"
+    "saving": "محفوظ ہو رہا ہے",
+    "attachmentUpload": {
+      "uploading": "اپ لوڈ ہو رہا ہے…",
+      "remove": "{name} ہٹائیں",
+      "wrongType": "{name} اس قسم کی فائل نہیں ہے جو قبول ہو۔ PDF، JPEG یا PNG استعمال کریں۔",
+      "tooLarge": "{name} {max} ایم بی سے بڑی ہے۔",
+      "uploadFailed": "فائل اپ لوڈ نہیں ہو سکی۔",
+      "limitReached": "آپ زیادہ سے زیادہ {max} فائلیں منسلک کر سکتے ہیں۔"
+    }
   },
   "errors": {
     "validation_error": "براہ کرم نشان زد خانوں کو درست کریں۔",
@@ -2624,5 +2634,289 @@
     "requestId": "حوالہ: {requestId}",
     "pageErrorTitle": "کچھ غلط ہو گیا",
     "pageErrorBody": "اس صفحے پر ایک غیر متوقع خرابی پیش آئی۔ دوبارہ کوشش کریں، یا اگر مسئلہ برقرار رہے تو سپورٹ سے رابطہ کریں۔"
+  },
+  "portal": {
+    "shell": {
+      "title": "والدین کا پورٹل",
+      "signOut": "سائن آؤٹ",
+      "unread": "{count, plural, one {# نہ پڑھی گئی اطلاع} other {# نہ پڑھی گئی اطلاعات}}",
+      "loadFailed": "آپ کا پورٹل لوڈ نہیں ہو سکا۔ براہ کرم دوبارہ کوشش کریں۔",
+      "disabledTitle": "آپ کے اسکول کے لیے والدین کا پورٹل فعال نہیں ہے",
+      "disabledDescription": "آپ کے اسکول نے ابھی والدین کا پورٹل فعال نہیں کیا۔ براہ کرم اسکول کے دفتر سے رابطہ کریں۔"
+    },
+    "switcher": {
+      "label": "بچہ",
+      "placeholder": "بچہ منتخب کریں"
+    },
+    "nav": {
+      "label": "پورٹل کے حصے",
+      "overview": "خلاصہ",
+      "attendance": "حاضری",
+      "leave": "چھٹی",
+      "fees": "فیس",
+      "results": "نتائج",
+      "timetable": "ٹائم ٹیبل",
+      "messages": "پیغامات",
+      "notices": "نوٹس",
+      "notifications": "اطلاعات",
+      "settings": "ترتیبات"
+    },
+    "home": {
+      "title": "آپ کے بچے",
+      "emptyTitle": "ابھی کوئی بچہ منسلک نہیں",
+      "emptyDescription": "جب اسکول کسی بچے کو آپ کے اکاؤنٹ سے منسلک کرے گا تو وہ یہاں نظر آئے گا۔",
+      "notFoundTitle": "بچہ نہیں ملا",
+      "notFoundDescription": "یہ بچہ آپ کے اکاؤنٹ سے منسلک نہیں ہے۔ اوپر فہرست سے کسی کو منتخب کریں۔",
+      "attendance": {
+        "title": "آج کی حاضری",
+        "notMarked": "ابھی درج نہیں ہوئی",
+        "month": "اس ماہ {value}%"
+      },
+      "fees": {
+        "title": "واجب الادا فیس",
+        "none": "کچھ واجب نہیں",
+        "count": "{count, plural, one {# رسید} other {# رسیدیں}}",
+        "nextDue": "اگلی تاریخ {date}"
+      },
+      "result": {
+        "title": "تازہ ترین نتیجہ",
+        "percentage": "{value}%"
+      }
+    },
+    "attendance": {
+      "title": "حاضری",
+      "loadError": "ہم حاضری لوڈ نہیں کر سکے۔ براہ کرم دوبارہ کوشش کریں۔",
+      "legend": "حاضری کی حالتیں",
+      "emptyTitle": "اس ماہ کوئی حاضری نہیں",
+      "emptyDescription": "اس ماہ کی ابھی کوئی حاضری درج نہیں ہوئی۔",
+      "caption": "{month} کی حاضری",
+      "monthPercentage": "اس ماہ کی حاضری: {value}%",
+      "status": {
+        "present": "حاضر",
+        "absent": "غیر حاضر",
+        "late": "تاخیر سے",
+        "half_day": "آدھا دن",
+        "excused": "معذرت منظور",
+        "on_leave": "چھٹی پر"
+      }
+    },
+    "fees": {
+      "title": "فیس",
+      "loadError": "ہم فیس لوڈ نہیں کر سکے۔ براہ کرم دوبارہ کوشش کریں۔",
+      "dueOn": "آخری تاریخ {date}",
+      "downloadReceipt": "رسید {number}",
+      "receiptsLoadError": "ہم رسیدیں لوڈ نہیں کر سکے۔ براہ کرم دوبارہ کوشش کریں۔",
+      "receiptFailed": "ہم رسید ڈاؤن لوڈ نہیں کر سکے۔ براہ کرم دوبارہ کوشش کریں۔",
+      "status": {
+        "draft": "مسودہ",
+        "issued": "جاری",
+        "partially_paid": "جزوی ادا",
+        "paid": "ادا شدہ",
+        "overdue": "مقررہ تاریخ گزر چکی",
+        "canceled": "منسوخ"
+      },
+      "outstanding": {
+        "title": "واجب الادا",
+        "emptyTitle": "کچھ واجب الادا نہیں",
+        "emptyDescription": "تمام فیس ادا ہو چکی ہے۔"
+      },
+      "paid": {
+        "title": "ادا شدہ",
+        "emptyTitle": "کوئی ادا شدہ رسید نہیں",
+        "emptyDescription": "ادا شدہ فیس اور ان کی رسیدیں یہاں نظر آئیں گی۔"
+      },
+      "detail": {
+        "back": "فیس پر واپس",
+        "title": "انوائس {number}",
+        "dates": "اجرا {issued}، آخری تاریخ {due}",
+        "loadError": "ہم یہ انوائس لوڈ نہیں کر سکے۔ براہ کرم دوبارہ کوشش کریں۔",
+        "notFoundTitle": "انوائس نہیں ملی",
+        "notFoundDescription": "یہ انوائس موجود نہیں ہے یا اس بچے کی نہیں ہے۔",
+        "linesCaption": "انوائس کی مدات",
+        "description": "تفصیل",
+        "amount": "رقم",
+        "net": "خالص",
+        "subtotal": "ذیلی کل",
+        "discount": "رعایت",
+        "fine": "جرمانہ",
+        "paid": "ادا شدہ",
+        "balance": "واجب الادا بقیہ",
+        "receipts": "رسیدیں",
+        "noReceiptsTitle": "ابھی کوئی رسید نہیں",
+        "noReceiptsDescription": "ادائیگی درج ہونے کے بعد رسید یہاں نظر آئے گی۔"
+      },
+      "vouchers": {
+        "download": "{provider} واؤچر {number} (آخری تاریخ {date})",
+        "failed": "ہم واؤچر ڈاؤن لوڈ نہیں کر سکے۔ دوبارہ کوشش کریں۔",
+        "empty": "واؤچر کے لیے سکول کے دفتر سے رابطہ کریں۔",
+        "loadError": "ہم واؤچر لوڈ نہیں کر سکے۔ دوبارہ کوشش کریں۔",
+        "providers": {
+          "bank_branch": "بینک برانچ",
+          "easypaisa": "ایزی پیسہ",
+          "jazzcash": "جاز کیش"
+        }
+      }
+    },
+    "admitCards": {
+      "title": "ایڈمٹ کارڈ",
+      "loadError": "ہم ایڈمٹ کارڈ لوڈ نہیں کر سکے۔ براہ کرم دوبارہ کوشش کریں۔",
+      "emptyTitle": "کوئی ایڈمٹ کارڈ نہیں",
+      "emptyDescription": "آنے والے امتحانات کے ایڈمٹ کارڈ اسکول کے جاری کرنے کے بعد یہاں نظر آئیں گے۔",
+      "dates": "{start} – {end}",
+      "number": "کارڈ {number}",
+      "download": "{exam} کا ایڈمٹ کارڈ ڈاؤن لوڈ کریں",
+      "downloadFailed": "ہم ایڈمٹ کارڈ ڈاؤن لوڈ نہیں کر سکے۔ براہ کرم دوبارہ کوشش کریں۔"
+    },
+    "results": {
+      "title": "نتائج",
+      "loadError": "ہم نتائج لوڈ نہیں کر سکے۔ براہ کرم دوبارہ کوشش کریں۔",
+      "emptyTitle": "کوئی نتیجہ شائع نہیں ہوا",
+      "emptyDescription": "اسکول کے شائع کرنے پر نتائج یہاں نظر آئیں گے۔",
+      "published": "شائع شدہ {date}",
+      "percentage": "{value}%",
+      "marks": "{max} میں سے {obtained} نمبر",
+      "rank": "سیکشن میں {rank} واں نمبر",
+      "outcome": {
+        "pass": "کامیاب",
+        "fail": "ناکام",
+        "absent": "غیر حاضر",
+        "withheld": "روکا گیا"
+      }
+    },
+    "notices": {
+      "title": "نوٹس",
+      "emptyTitle": "کوئی نوٹس نہیں",
+      "emptyDescription": "اسکول نے ابھی تک کوئی نوٹس شائع نہیں کیا۔",
+      "loadError": "ہم نوٹس لوڈ نہیں کر سکے۔ دوبارہ کوشش کریں۔",
+      "notFoundTitle": "نوٹس نہیں ملا",
+      "notFoundDescription": "یہ نوٹس موجود نہیں یا آپ کے لیے دستیاب نہیں۔",
+      "back": "نوٹس پر واپس",
+      "publishedOn": "شائع شدہ {date}",
+      "needsAcknowledgment": "تصدیق درکار ہے",
+      "acknowledge": "تصدیق کریں",
+      "acknowledging": "تصدیق ہو رہی ہے",
+      "acknowledged": "تصدیق ہو گئی",
+      "acknowledgeFailed": "ہم آپ کی تصدیق درج نہیں کر سکے۔ دوبارہ کوشش کریں۔",
+      "types": {
+        "urgent": "فوری",
+        "general": "عمومی",
+        "circular": "سرکلر",
+        "event": "تقریب"
+      }
+    },
+    "notifications": {
+      "title": "اطلاعات",
+      "emptyTitle": "کوئی اطلاع نہیں",
+      "emptyDescription": "آپ سب دیکھ چکے ہیں۔",
+      "loadError": "ہم آپ کی اطلاعات لوڈ نہیں کر سکے۔ دوبارہ کوشش کریں۔",
+      "markAllRead": "سب پڑھی ہوئی کریں",
+      "markingAll": "نشان لگ رہا ہے",
+      "markAllFailed": "ہم سب کو پڑھی ہوئی نشان نہیں کر سکے۔ دوبارہ کوشش کریں۔",
+      "markReadFailed": "ہم اس اطلاع کو پڑھی ہوئی نشان نہیں کر سکے۔ دوبارہ کھول کر کوشش کریں۔",
+      "unreadBadge": "نہ پڑھی ہوئی",
+      "filter": {
+        "label": "دکھائیں",
+        "all": "سب",
+        "unread": "نہ پڑھی ہوئی",
+        "read": "پڑھی ہوئی"
+      },
+      "categories": {
+        "attendance": "حاضری",
+        "fees": "فیس",
+        "exams": "امتحانات",
+        "library": "لائبریری",
+        "transport": "ٹرانسپورٹ",
+        "academic": "تعلیمی",
+        "general": "عمومی",
+        "emergency": "ہنگامی"
+      },
+      "priorities": {
+        "normal": "عام",
+        "high": "اہم",
+        "emergency": "ہنگامی"
+      }
+    },
+    "preferences": {
+      "title": "اطلاعات کی ترتیبات",
+      "caption": "کون سی اطلاعات کس ذریعے سے آپ تک پہنچتی ہیں",
+      "category": "زمرہ",
+      "loadError": "ہم آپ کی ترتیبات لوڈ نہیں کر سکے۔ دوبارہ کوشش کریں۔",
+      "saveFailed": "ہم یہ تبدیلی محفوظ نہیں کر سکے۔ دوبارہ کوشش کریں۔",
+      "lockedExplanation": "ہنگامی اطلاعات ہمیشہ فعال رہتی ہیں، اس لیے انہیں بند نہیں کیا جا سکتا۔",
+      "cellLabel": "{category} بذریعہ {channel}",
+      "channels": {
+        "in_app": "ان-ایپ",
+        "email": "ای میل",
+        "sms": "ایس ایم ایس",
+        "push": "پش",
+        "whatsapp": "واٹس ایپ"
+      },
+      "password": {
+        "title": "پاس ورڈ تبدیل کریں",
+        "description": "کم از کم {min} حروف استعمال کریں۔",
+        "currentPassword": "موجودہ پاس ورڈ",
+        "newPassword": "نیا پاس ورڈ",
+        "confirmPassword": "نئے پاس ورڈ کی تصدیق کریں",
+        "submit": "پاس ورڈ تبدیل کریں",
+        "submitting": "تبدیل کیا جا رہا ہے",
+        "done": "پاس ورڈ تبدیل ہو گیا۔",
+        "failed": "ہم آپ کا پاس ورڈ تبدیل نہیں کر سکے۔ دوبارہ کوشش کریں۔",
+        "errors": {
+          "currentRequired": "اپنا موجودہ پاس ورڈ درج کریں۔",
+          "newTooShort": "نیا پاس ورڈ کم از کم {min} حروف کا ہونا چاہیے۔",
+          "confirmMismatch": "دونوں پاس ورڈ مختلف ہیں۔",
+          "sameAsCurrent": "موجودہ پاس ورڈ سے مختلف پاس ورڈ منتخب کریں۔"
+        }
+      }
+    },
+    "leave": {
+      "title": "چھٹی کی درخواستیں",
+      "loadError": "ہم چھٹی کی درخواستیں لوڈ نہیں کر سکے۔ دوبارہ کوشش کریں۔",
+      "emptyTitle": "چھٹی کی کوئی درخواست نہیں",
+      "emptyDescription": "آپ اپنے بچے کے لیے جو درخواستیں جمع کروائیں گے وہ یہاں نظر آئیں گی۔",
+      "range": "{from} سے {to} تک",
+      "days": "{count, plural, one {# دن} other {# دن}}",
+      "attached": "دستاویز جمع کروائی گئی",
+      "dayPart": {
+        "full": "پورا دن",
+        "first_half": "پہلا نصف",
+        "second_half": "دوسرا نصف"
+      },
+      "cancel": {
+        "open": "درخواست منسوخ کریں",
+        "title": "کیا یہ چھٹی کی درخواست منسوخ کریں؟",
+        "description": "{type} کی درخواست واپس لے لی جائے گی۔ آپ بعد میں نئی درخواست جمع کروا سکتے ہیں۔",
+        "confirm": "درخواست منسوخ کریں",
+        "done": "چھٹی کی درخواست منسوخ ہو گئی۔",
+        "failed": "ہم درخواست منسوخ نہیں کر سکے۔ دوبارہ کوشش کریں۔"
+      },
+      "new": {
+        "open": "نئی درخواست",
+        "title": "چھٹی کی درخواست",
+        "type": "چھٹی کی قسم",
+        "typePlaceholder": "قسم منتخب کریں",
+        "typesFailed": "ہم چھٹی کی اقسام لوڈ نہیں کر سکے۔ اسے بند کر کے دوبارہ کوشش کریں۔",
+        "startDate": "سے",
+        "endDate": "تک",
+        "dayPart": "دن کا حصہ",
+        "dayPartHint": "نصف دن کے لیے ایک ہی تاریخ ہونی چاہیے۔",
+        "reason": "وجہ",
+        "attachment": "معاون دستاویز (PDF، JPEG یا PNG)",
+        "submit": "درخواست جمع کریں",
+        "submitting": "جمع کی جا رہی ہے",
+        "done": "چھٹی کی درخواست جمع ہو گئی۔",
+        "failed": "ہم درخواست جمع نہیں کر سکے۔ دوبارہ کوشش کریں۔",
+        "errors": {
+          "typeRequired": "چھٹی کی قسم منتخب کریں۔",
+          "startRequired": "پہلا دن منتخب کریں۔",
+          "endRequired": "آخری دن منتخب کریں۔",
+          "endBeforeStart": "آخری دن پہلے دن سے پہلے نہیں ہو سکتا۔",
+          "halfDaySingleDay": "نصف دن صرف ایک تاریخ کا ہو سکتا ہے۔",
+          "reasonRequired": "وجہ درج کریں۔",
+          "reasonTooLong": "وجہ زیادہ سے زیادہ {max} حروف کی ہو سکتی ہے۔",
+          "attachmentRequired": "اس قسم کی چھٹی کے لیے معاون دستاویز درکار ہے۔"
+        }
+      }
+    }
   }
 }

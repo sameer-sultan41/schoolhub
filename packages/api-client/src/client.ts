@@ -112,11 +112,31 @@ export class ApiClient {
   }
 
   async request<TData>(path: string, options: RequestOptions = {}): Promise<ApiResult<TData>> {
+    const response = await this.execute(path, options);
+    return this.toResult<TData>(response, path);
+  }
+
+  /** GET a streamed binary body (a PDF, say) with the same bearer token and 401 refresh as `request`. */
+  async downloadBlob(
+    path: string,
+    options: Omit<RequestOptions, "method" | "body"> = {},
+  ): Promise<Blob> {
+    const response = await this.execute(path, {
+      ...options,
+      method: "GET",
+      headers: { Accept: "*/*", ...options.headers },
+    });
+    if (!response.ok) throw await this.toApiError(response, path);
+    return response.blob();
+  }
+
+  /** Send with the bearer token; on a 401 refresh once and replay. Returns the final response. */
+  private async execute(path: string, options: RequestOptions): Promise<Response> {
     const accessToken = (await this.config.getAccessToken?.()) ?? null;
     const response = await this.send(path, options, accessToken);
 
     if (response.status !== 401 || options.skipAuthRefresh || !this.config.refreshAccessToken) {
-      return this.toResult<TData>(response, path);
+      return response;
     }
 
     // 401 → refresh once, then replay the original request. A refresh that *fails to
@@ -135,7 +155,7 @@ export class ApiClient {
       this.config.onUnauthorized?.(error);
       throw error;
     }
-    return this.toResult<TData>(retried, path);
+    return retried;
   }
 
   get<TData>(path: string, options: Omit<RequestOptions, "method" | "body"> = {}) {

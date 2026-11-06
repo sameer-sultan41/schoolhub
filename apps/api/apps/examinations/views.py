@@ -77,7 +77,6 @@ from apps.examinations.models import (
     ReportCard,
     ReportCardStatus,
     Result,
-    ResultStatus,
 )
 from apps.examinations.serializers import (
     ADMIT_CARD_ENROLLMENTS,
@@ -125,7 +124,6 @@ from core.rbac.permissions import (
     DenyRestrictedPrincipals,
     HasPermissionKey,
     declared_keys,
-    is_restricted_principal,
     route_permission,
     scope_queryset,
 )
@@ -1066,9 +1064,9 @@ class ResultViewSet(
     filterset_class = ResultFilterSet
     ordering_fields = ["percentage", "rank_in_section", "created_at"]
     scope_own_field = None
-    scope_campus_field = "student__campus_id"
+    scope_campus_field = services.RESULT_CAMPUS_FIELD
     required_feature = FEATURE
-    required_permission = "exams.result.view"
+    required_permission = services.RESULT_VIEW_KEY
     required_permission_map = {
         "process": "exams.result.create",
         "approve": "exams.result.approve",
@@ -1086,13 +1084,14 @@ class ResultViewSet(
         return [permission() for permission in STAFF_PERMISSIONS]
 
     def get_queryset(self):
-        queryset = super().get_queryset().select_related("student", "grade_band", "section")
-        if is_restricted_principal(self.request.user):
-            # §5.6 — a student or guardian sees a result only once it is
-            # released. Applied here rather than in the model hook because it is
-            # a question about the *result's* state, not about whose it is.
-            queryset = queryset.filter(status=ResultStatus.PUBLISHED)
-        return queryset
+        queryset = (
+            super()
+            .get_queryset()
+            .select_related("student", "grade_band", "section", "exam", "exam__term")
+        )
+        # §5.6's published-only rule for a student or guardian lives in services,
+        # so the parent portal reads the same set.
+        return services.visible_results(self.request.user, queryset=queryset)
 
     @extend_schema(request=None, responses={202: None})
     def process(self, request: Request, pk: str | None = None):
@@ -1253,9 +1252,9 @@ class ReportCardViewSet(
     filterset_class = ReportCardFilterSet
     ordering_fields = ["created_at", "version"]
     scope_own_field = None
-    scope_campus_field = "student__campus_id"
+    scope_campus_field = services.RESULT_CAMPUS_FIELD
     required_feature = FEATURE
-    required_permission = "exams.report-card.view"
+    required_permission = services.REPORT_CARD_VIEW_KEY
     required_permission_map = {
         "update": "exams.report-card.create",
         "partial_update": "exams.report-card.create",
@@ -1273,9 +1272,7 @@ class ReportCardViewSet(
 
     def get_queryset(self):
         queryset = super().get_queryset().select_related("student", "result")
-        if is_restricted_principal(self.request.user):
-            queryset = queryset.filter(status=ReportCardStatus.PUBLISHED)
-        return queryset
+        return services.visible_report_cards(self.request.user, queryset=queryset)
 
     def perform_update(self, serializer) -> None:
         if serializer.instance.status == ReportCardStatus.PUBLISHED:

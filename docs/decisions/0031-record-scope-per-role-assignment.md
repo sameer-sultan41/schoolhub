@@ -35,8 +35,9 @@ PR B appended decision 7, the mixed-scope-type union.
    read key is `required_permission`, unless the class names another in
    `scope_read_permission` (`AttendanceCorrectionViewSet` reads its queue under
    `AnyOf(correction.create, correction.approve)`). An action in `scope_read_exempt_actions`
-   is scoped by its own key alone (`NoticeViewSet`'s `acknowledge`, whose guardians and
-   students hold no `communication.notice.view`). Code that resolves a target outside the
+   is scoped by its own key alone (`MarksViewSet`'s `lock` and `unlock`, which act on an exam
+   subject rather than a marks row, and which `school_admin` makes without
+   `exams.marks.create`). Code that resolves a target outside the
    mixin chains the same two calls by hand: a nested route's parent, an attendance
    correction's student or staff row, a staff thread's student, and timetable `:validate`
    and `:publish`. A promotion batch action moves every row of a batch, and a batch can span

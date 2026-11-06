@@ -283,9 +283,12 @@ class Notice(TenantOwnedModel):
         """
         from core.notifications.models import Notification
 
-        notice_ids = Notification.objects.filter(
-            tenant_id=user.tenant_id, user_id=user.pk, source_type="notice"
-        ).values_list("source_id", flat=True)
+        # A soft-deleted delivery no longer makes the caller a recipient.
+        notice_ids = (
+            Notification.objects.alive()
+            .filter(tenant_id=user.tenant_id, user_id=user.pk, source_type="notice")
+            .values_list("source_id", flat=True)
+        )
         return queryset.filter(pk__in=notice_ids)
 
 

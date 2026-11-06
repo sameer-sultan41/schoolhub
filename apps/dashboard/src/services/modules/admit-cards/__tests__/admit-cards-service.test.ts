@@ -56,6 +56,29 @@ describe("admit-cards-service", () => {
     );
   });
 
+  it("reads a child's issued cards for exams not yet over", async () => {
+    const { fetchCurrentAdmitCardsPage } = await import("../admit-cards-service");
+    mockGet.mockResolvedValue({
+      data: [{ id: "c1" }],
+      meta: { pagination: { next_cursor: null, has_more: false } },
+    });
+
+    const page = await fetchCurrentAdmitCardsPage({ studentId: "s1", pageSize: 50 });
+
+    expect(page.items).toEqual([{ id: "c1" }]);
+    expect(mockGet).toHaveBeenCalledWith(
+      "/admit-cards",
+      expect.objectContaining({
+        query: expect.objectContaining({
+          student_id: "s1",
+          status: "issued",
+          current: "true",
+          page_size: 50,
+        }),
+      }),
+    );
+  });
+
   it("issues with the Idempotency-Key, returning the job and the server's counts", async () => {
     const { issueAdmitCards } = await import("../admit-cards-service");
     mockPost.mockResolvedValue({

@@ -213,7 +213,7 @@ class Command(BaseCommand):
                 tenant,
                 slug,
                 label,
-                [spec.key for spec in specs if slug in spec.default_roles],
+                registry.keys_for_role(slug),
                 is_restricted_principal=slug in RESTRICTED_ROLES,
             )
             email = f"{slug}@demo.localhost"

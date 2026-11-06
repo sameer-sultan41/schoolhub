@@ -129,6 +129,36 @@ export const E2E_BASELINE_SUBSTITUTION_REASON = "e2e live-lane fixture";
 export const MAX_LOCK_WINDOW_DAYS = 7;
 
 /**
+ * Mirrors seed_e2e_data.py's communication thread fixture. The guardian is linked, with
+ * portal access and communications on, to the seeded comms student, who is enrolled in the
+ * baseline section; that section's class teacher is a staff row whose `user_id` is the
+ * `assigned`-scoped class teacher login. So a thread this guardian starts is routed to that
+ * teacher (`threads/routing.py`), not to the fallback role.
+ *
+ * Separate from `E2E_GUARDIAN_EMAIL` and `E2E_CLASS_TEACHER_EMAIL`: the leave guardian is
+ * linked to nobody on purpose, and the marking class teacher is `all`-scoped.
+ */
+export const E2E_COMMS_GUARDIAN_EMAIL = "e2e-comms-guardian@schoolhub.test";
+export const E2E_COMMS_CLASS_TEACHER_EMAIL = "e2e-comms-class-teacher@schoolhub.test";
+/** The comms student's addressable attribute; ids are generated per seed run. */
+export const E2E_COMMS_STUDENT_ADMISSION_NUMBER = "E2E-STUDENT-COMMS";
+
+/**
+ * Mirrors the parent-portal fixtures `apps/parent_portal/management/commands/seed_e2e_portal.py`
+ * writes for the comms student (run by seed_e2e_data.py): one invoice for the session's first
+ * month, one published result, and one notice sent to the comms guardian alone. These are the
+ * values the dashboard summary must report back.
+ */
+export const E2E_PORTAL_FEE_AMOUNT = "2500.00";
+export const E2E_PORTAL_EXAM_NAME = "E2E Midterm";
+/** 78 out of 100 at full weight: the result's percentage, and band "B" on the seeded scale. */
+export const E2E_PORTAL_RESULT_PERCENTAGE = "78.00";
+export const E2E_PORTAL_RESULT_GRADE = "B";
+export const E2E_PORTAL_NOTICE_TITLE = "E2E Sports Day";
+/** The seeded baseline student nobody is linked to: a guardian naming it gets a 404. */
+export const E2E_UNLINKED_STUDENT_ADMISSION_NUMBER = "E2E-STUDENT-B";
+
+/**
  * Mirrors seed_e2e_data.py's E2E_EXAM_STAFF_EMAIL — an `exam_staff` login at `all` scope,
  * holding the role's real `exams.*` keys (read from the registry by role) plus the reads its
  * pickers make. The admin builds a spec's scaffold; this identity writes the exams, so a key
@@ -155,18 +185,3 @@ export const E2E_TEACHER_LOGIN_EMPLOYEE_NUMBER = "E2E-TEACHER-LOGIN";
  * grades against.
  */
 export const E2E_GRADING_SCALE_NAME = "E2E Percentage";
-
-/**
- * Mirrors seed_e2e_data.py's communication thread fixture. The guardian is linked, with
- * portal access and communications on, to the seeded comms student, who is enrolled in the
- * baseline section; that section's class teacher is a staff row whose `user_id` is the
- * `assigned`-scoped class teacher login. So a thread this guardian starts is routed to that
- * teacher (`threads/routing.py`), not to the fallback role.
- *
- * Separate from `E2E_GUARDIAN_EMAIL` and `E2E_CLASS_TEACHER_EMAIL`: the leave guardian is
- * linked to nobody on purpose, and the marking class teacher is `all`-scoped.
- */
-export const E2E_COMMS_GUARDIAN_EMAIL = "e2e-comms-guardian@schoolhub.test";
-export const E2E_COMMS_CLASS_TEACHER_EMAIL = "e2e-comms-class-teacher@schoolhub.test";
-/** The comms student's addressable attribute; ids are generated per seed run. */
-export const E2E_COMMS_STUDENT_ADMISSION_NUMBER = "E2E-STUDENT-COMMS";
