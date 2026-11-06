@@ -73,7 +73,7 @@ def enrollment_roll_order() -> tuple[OrderBy | str, ...]:
     """`order_by` arguments for a `StudentEnrollment` class list, in the order a teacher reads it.
 
     Roll number first, shorter first because it is text ("2" before "10"), unnumbered
-    students last; then name; then the student id, so ties are total (L41).
+    students last; then name; then the student id, so ties are total (L46).
     """
     return (
         Length("roll_number").asc(nulls_last=True),

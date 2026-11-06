@@ -1,4 +1,4 @@
-"""The nested question routes' record scope (PR #54's review, Major 1, and L46).
+"""The nested question routes' record scope (PR #54's review, Major 1, and L51).
 
 Its own file so the scope fix and its tests commit together: it imports only what
 the module already had before the question-bank dashboard work.
@@ -104,7 +104,7 @@ class NestedQuestionScopeTests(QuestionBankTestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_an_unassigned_teacher_cannot_read_another_subjects_bank_questions(self) -> None:
-        """L46: the bank in the URL resolves through its own record scope, so a bank
+        """L51: the bank in the URL resolves through its own record scope, so a bank
         outside the teacher's subjects is a 404, not an empty 200 that confirms it."""
         response = self.teacher.get(f"{BANKS}/{self.stranger_bank.pk}/questions")
 

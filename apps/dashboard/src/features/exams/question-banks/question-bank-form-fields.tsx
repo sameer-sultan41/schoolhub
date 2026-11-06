@@ -26,7 +26,7 @@ import type { BankFormValues } from "@/services/modules/question-banks/question-
 /**
  * The bank form's inputs: name, subject, class (or every level), status and description. Every
  * field renders its own `FormMessage`, so a server error the dialog maps onto it shows under it.
- * The subject and class lists are read only for a holder of their view keys (L48), and the two
+ * The subject and class lists are read only for a holder of their view keys (L55), and the two
  * selects mount once their options have loaded, so an edit's saved value is never blanked by a
  * select whose option has not registered yet.
  */

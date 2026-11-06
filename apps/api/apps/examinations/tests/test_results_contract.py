@@ -1,5 +1,5 @@
 """The results wire contract: names on the row, typed action bodies, query counts,
-and the record scope on every action that addresses an exam or a result (L46)."""
+and the record scope on every action that addresses an exam or a result (L51)."""
 
 from __future__ import annotations
 
@@ -177,7 +177,7 @@ class TypedActionBodyTests(ProcessedResultsTestCase):
 
 
 class ResultActionScopeTests(ProcessedResultsTestCase):
-    """L46: each action resolves its exam or result through the record scope.
+    """L51: each action resolves its exam or result through the record scope.
 
     The outsider holds every results key `assigned`-scoped but teaches nothing, so
     a 404 can only come from the scope. The class teacher (a homeroom in the exam's

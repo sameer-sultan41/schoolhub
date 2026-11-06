@@ -1229,7 +1229,7 @@ class ResultViewSet(
     @extend_schema(request=ResultWithholdSerializer, responses={200: ResultSerializer})
     def withhold(self, request: Request, pk: str | None = None):
         """`POST /results/{id}:withhold` — §5.6's per-student hold."""
-        # Through the record scope (L46): a result outside it is a 404.
+        # Through the record scope (L51): a result outside it is a 404.
         result = get_object_or_404(self.get_queryset(), pk=pk)
         serializer = ResultWithholdSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -1577,7 +1577,7 @@ class QuestionViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_bank(self) -> QuestionBank:
-        # Through the bank's record scope (L46): a foreign bank, or one outside
+        # Through the bank's record scope (L51): a foreign bank, or one outside
         # an `assigned` teacher's subjects, is a 404, never a 403 (invariant 2).
         return scoped_question_bank(self.request, self, self.kwargs["bank_pk"])
 

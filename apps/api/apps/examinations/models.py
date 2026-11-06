@@ -975,7 +975,7 @@ class Marks(TenantOwnedModel):
         """Record scope `campus` — the campus of the section the row belongs to.
 
         The section is the student's enrollment in the exam's own session, the one
-        `services.may_enter_marks` checks `section.campus_id` on. Any status (L45),
+        `services.may_enter_marks` checks `section.campus_id` on. Any status (L50),
         so a promoted session's marks stay readable to its campus.
         """
         return queryset.filter(

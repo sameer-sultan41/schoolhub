@@ -136,7 +136,7 @@ class SectionWriteScopeTests(GridTestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_an_allocation_in_another_session_opens_no_section(self) -> None:
-        """Same section and subject, last session's allocation: not this exam's (L40)."""
+        """Same section and subject, last session's allocation: not this exam's (L45)."""
         with tenant_context(self.tenant.id):
             last_year = AcademicSessionFactory(tenant=self.tenant, is_current=False)
             self.allocation.academic_session = last_year

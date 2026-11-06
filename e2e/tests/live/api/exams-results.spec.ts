@@ -73,7 +73,7 @@ async function resultsOf(client: ApiClient, examId: string): Promise<ResultRow[]
   return (await client.get<ResultRow[]>("/results", { query: { exam_id: examId } })).data;
 }
 
-/** The one processor every result of the exam names: the latest run stamps them all (L50). */
+/** The one processor every result of the exam names: the latest run stamps them all (L57). */
 async function processorOf(client: ApiClient, examId: string): Promise<string | null> {
   const processors = new Set((await resultsOf(client, examId)).map((row) => row.processed_by));
   expect(processors.size).toBe(1);
