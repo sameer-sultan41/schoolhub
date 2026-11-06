@@ -250,6 +250,11 @@ List and read shapes the dashboard depends on:
   saving a sitting or computing clashes itself. Staff-only (`exams.schedule.view`). Its exam, like
   `:publish-schedule`'s and `:issue-admit-cards`', resolves through `ExamViewSet`'s record scope, so an exam
   outside an `assigned` caller's teaching is a 404.
+- **A colon action reaches its exam under two keys** (ADR-0031 decision 3). The exam is scoped by the hosting
+  view's read key (`exams.schedule.view` for the clash list and `:publish-schedule`, `exams.admit-card.view`
+  for `:issue-admit-cards`, …), then by the route's own key, each with `ExamViewSet`'s scope settings. A wide
+  action role cannot reach an exam the caller's view role hides, and a schedule reader without
+  `exams.exam.view` keeps the clash list.
 - **The publish is typed.** `:publish-schedule` answers `{status, conflicts}` (`ExamSchedulePublish`): the
   exam's new status, `scheduled`, and the soft findings that did not block it. A hard finding is a 422
   `domain_rule_violation` carrying the **whole** list in `error.meta.conflicts` (never flattened into

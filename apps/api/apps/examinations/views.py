@@ -117,23 +117,44 @@ from core.rbac.permissions import (
     AnyOf,
     DenyRestrictedPrincipals,
     HasPermissionKey,
+    declared_keys,
     is_restricted_principal,
     route_permission,
     scope_queryset,
 )
 
 if TYPE_CHECKING:
+    from django.db.models import Model, QuerySet
     from rest_framework.request import Request
+
+    from core.rbac.permissions import ScopeKwargs
 
 FEATURE = "module.examinations"
 
 
-def scoped_exam(request: Request, pk: str | None) -> Exam:
+def _reachable[M: Model](
+    queryset: QuerySet[M], request: Request, view: TenantScopedViewSetMixin, scope: ScopeKwargs
+) -> QuerySet[M]:
+    """Rows a colon action may address: under the hosting view's read key, then the route's.
+
+    The mixin's own two-key rule (ADR-0031 decision 3) applied to a row of another
+    viewset's model, under that model's scope settings, so a wide action role cannot
+    reach a row the caller's view role hides.
+    """
+    read = view.scope_read_declaration()
+    declared = route_permission(request, view)
+    if read is not None and set(declared_keys(read)) != set(declared_keys(declared)):
+        queryset = scope_queryset(queryset, request.user, permission=read, **scope)
+    return scope_queryset(queryset, request.user, permission=declared, **scope)
+
+
+def scoped_exam(request: Request, view: TenantScopedViewSetMixin, pk: str | None) -> Exam:
     """The exam an action addresses by id, through `ExamViewSet`'s record scope.
 
-    An exam outside the caller's scope is a 404, exactly as a foreign id is.
+    Reached under the hosting route's read key and its own (`_reachable`). An exam
+    outside the caller's scope is a 404, exactly as a foreign id is.
     """
-    exams = scope_queryset(Exam.objects.alive(), request.user, own_field=None, campus_field=None)
+    exams = _reachable(Exam.objects.alive(), request, view, ExamViewSet.scope_kwargs())
     return get_object_or_404(exams, pk=pk)
 
 
@@ -538,7 +559,7 @@ class ExamScheduleViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         *exam* that moves state: a schedule is published as a whole, not sitting
         by sitting, and §6 calls it "schedule publish to portals".
         """
-        exam = scoped_exam(request, pk)
+        exam = scoped_exam(request, self, pk)
         outcome = services.publish_exam_schedule(exam=exam, actor_id=request.user.pk)
         record_audit(request, "publish", exam, after={"status": outcome["status"]})
 
@@ -563,7 +584,7 @@ class ExamScheduleViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         # client opening the schedule sees exactly what publishing would refuse
         # without saving a sitting to learn it. Staff-only: a clash list names
         # rooms, invigilators and other sections, which no portal reader needs.
-        exam = scoped_exam(request, pk)
+        exam = scoped_exam(request, self, pk)
         return ActionResponse.ok(conflicts.detect_conflicts(exam=exam))
 
 
@@ -644,7 +665,7 @@ class AdmitCardViewSet(
         action should replay the first answer rather than start a second render
         of three hundred documents.
         """
-        exam = scoped_exam(request, pk)
+        exam = scoped_exam(request, self, pk)
 
         def execute():
             outcome = services.issue_admit_cards(exam=exam, actor_id=request.user.pk)
@@ -970,7 +991,7 @@ class ResultViewSet(
         outstanding. In the job it is what actually holds, because marks can
         change between the request and the worker picking it up.
         """
-        exam = scoped_exam(request, pk)
+        exam = scoped_exam(request, self, pk)
         services.assert_exam_is_recomputable(exam)
         processing.assert_ready_to_process(processing.collect(exam=exam))
 
@@ -1155,7 +1176,7 @@ class ReportCardViewSet(
     @extend_schema(request=None, responses={202: None})
     def generate(self, request: Request, pk: str | None = None):
         """`POST /exams/{id}:generate-report-cards` — 202 + a job (§16)."""
-        exam = scoped_exam(request, pk)
+        exam = scoped_exam(request, self, pk)
         services.assert_report_cards_are_generatable(exam)
 
         def execute():
