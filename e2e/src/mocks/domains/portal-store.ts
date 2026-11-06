@@ -194,7 +194,7 @@ export function buildReceipt(overrides: Partial<PortalReceipt> = {}): PortalRece
   };
 }
 
-export function buildResult(overrides: Partial<PortalResult> = {}): PortalResult {
+export function buildPortalResult(overrides: Partial<PortalResult> = {}): PortalResult {
   return {
     id: PORTAL_IDS.midTerm,
     exam_id: PORTAL_IDS.midTerm,

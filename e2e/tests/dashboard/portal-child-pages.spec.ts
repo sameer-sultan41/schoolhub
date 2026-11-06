@@ -8,7 +8,7 @@ import {
   buildInvoice,
   buildPortalAdmitCard,
   buildReceipt,
-  buildResult,
+  buildPortalResult,
   portalModule,
   type MockApi,
 } from "@/mocks";
@@ -66,8 +66,8 @@ function stubFamily(mockApi: MockApi): PortalStore {
       }),
     ],
     results: [
-      buildResult(),
-      buildResult({
+      buildPortalResult(),
+      buildPortalResult({
         id: PORTAL_IDS.annual,
         exam_id: PORTAL_IDS.annual,
         exam_name: "Annual",
@@ -77,7 +77,7 @@ function stubFamily(mockApi: MockApi): PortalStore {
         rank_in_section: null,
         published_at: "2026-07-01T09:00:00Z",
       }),
-      buildResult({
+      buildPortalResult({
         id: PORTAL_IDS.bilalResult,
         exam_id: PORTAL_IDS.bilalResult,
         exam_name: "Spelling bee",
