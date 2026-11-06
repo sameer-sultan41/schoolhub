@@ -1,6 +1,7 @@
 import type { MenuConfig } from "@schoolhub/ui";
 import type { AuthenticatedUser, PermissionKey } from "@schoolhub/types";
 
+import { mostSpecificPath } from "@/lib/active-path";
 import { canAccessModule, hasAnyPermission } from "@/lib/permissions";
 
 /**
@@ -25,4 +26,25 @@ export function filterMenuByAccess(
     const children = filterMenuByAccess(item.children, user);
     return children.length > 0 ? [{ ...item, children }] : [];
   });
+}
+
+/** Every `path` in the menu, children included. */
+export function collectMenuPaths(items: MenuConfig): string[] {
+  return items.flatMap((item) => [
+    ...(item.path ? [item.path] : []),
+    ...(item.children ? collectMenuPaths(item.children) : []),
+  ]);
+}
+
+/**
+ * Whether a menu item at `path` is the active one for `pathname`: it matches, and no other menu
+ * path matches more specifically (Exams at `/exams` and Grading scales at `/exams/grading-scales`
+ * must not both light up).
+ */
+export function isActiveMenuPath(
+  path: string,
+  pathname: string,
+  menuPaths: readonly string[],
+): boolean {
+  return mostSpecificPath([path, ...menuPaths], pathname) === path;
 }

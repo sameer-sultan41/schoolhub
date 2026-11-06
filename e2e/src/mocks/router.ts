@@ -186,7 +186,13 @@ export class MockApi {
     await route.fulfill({
       status: response.status,
       headers: { "content-type": "application/json", ...cors, ...response.headers },
-      body: response.body === null ? "" : JSON.stringify(response.body),
+      // A string body (a streamed file) goes out as is; anything else is the JSON envelope.
+      body:
+        response.body === null
+          ? ""
+          : typeof response.body === "string"
+            ? response.body
+            : JSON.stringify(response.body),
     });
   }
 }

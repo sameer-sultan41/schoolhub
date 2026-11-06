@@ -54,7 +54,7 @@ def post_message(
         raise DomainRuleViolation(
             {"is_internal_note": "Guardians and students cannot post internal notes."}
         )
-    _assert_attachments_usable(attachments)
+    _assert_attachments_usable(attachments, uploaded_by=sender.pk if restricted else None)
 
     with transaction.atomic():
         locked = locked_thread(thread)
@@ -86,11 +86,13 @@ def post_message(
     return message
 
 
-def _assert_attachments_usable(attachments: list | None) -> None:
+def _assert_attachments_usable(attachments: list | None, *, uploaded_by) -> None:
     """Every id names a ready thread-attachment upload of this tenant.
 
     An id the tenant-scoped manager cannot see is a 404, like any other miss:
     whether that file exists in another school is not the caller's to learn.
+    ``uploaded_by`` is the sender when a guardian or student, who may attach only
+    their own uploads.
     """
     if not attachments:
         return
@@ -99,7 +101,12 @@ def _assert_attachments_usable(attachments: list | None) -> None:
     if {str(file.pk) for file in files} != wanted:
         raise Http404("No such file.")
     for file in files:
-        assert_file_usable(file=file, purpose=uploads.THREAD_ATTACHMENT.key)
+        assert_file_usable(
+            file=file,
+            purpose=uploads.THREAD_ATTACHMENT.key,
+            uploaded_by=uploaded_by,
+            field="attachments",
+        )
 
 
 def _notify_participants(*, thread: MessageThread, message: Message, sender) -> None:

@@ -36,6 +36,9 @@ dev = [
     # Serves the Swagger UI assets locally instead of from a CDN, which keeps the
     # docs page working offline and under a strict CSP.
     "drf-spectacular-sidecar",
+    # Validates live responses against the generated OpenAPI components in tests;
+    # declared rather than relied on through drf-spectacular's own dependency.
+    "jsonschema>=4.26",
 ]
 
 [tool.uv]

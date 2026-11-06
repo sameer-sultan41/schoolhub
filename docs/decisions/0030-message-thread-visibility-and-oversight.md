@@ -18,7 +18,7 @@ not part of, for safeguarding. Decided in plan
 ## Decision
 
 1. **Membership is the authorization.** `/message-threads` and its `/messages`, `:mark-read`,
-   `:close` and `:reopen` resolve a thread through one function, `threads.viewset.visible_threads`:
+   `:close` and `:reopen` resolve a thread through one function, `threads.services.access.visible_threads`:
    threads whose `participant_user_ids` contain the caller (`MessageThread.participant_filter`,
    served by the GIN index). Record scope is not consulted. A miss is 404, never 403.
 2. **A guardian or student must still own the child.** For a restricted principal,

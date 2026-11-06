@@ -248,3 +248,17 @@ export function downloadFile(url: string, filename?: string): void {
   if (filename) link.download = filename;
   link.click();
 }
+
+/**
+ * Saves an in-memory `Blob` as `filename` (a streamed PDF fetched with the bearer token, where
+ * a bare anchor would send no `Authorization` header). The object URL is revoked just after the
+ * click.
+ */
+export function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  downloadFile(url, filename);
+  // Deferred a tick: revoking inside the click can cancel the download in Safari.
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 0);
+}

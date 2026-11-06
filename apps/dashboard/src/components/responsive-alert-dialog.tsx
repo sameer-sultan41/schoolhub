@@ -20,6 +20,7 @@ import {
   DrawerTitle,
 } from "@schoolhub/ui";
 import { useTranslations } from "next-intl";
+import type { ReactNode } from "react";
 
 import { useIsDesktopShell } from "@/hooks/use-is-desktop-shell";
 
@@ -54,6 +55,9 @@ export interface ResponsiveAlertDialogProps {
    * Omitted entirely for the default styling, never `"default"` (not a real value either
    * primitive accepts). */
   variant?: "destructive";
+  /** What the confirm acts on, shown under the description (e.g. the question an approval
+   * publishes), when one sentence can't carry it. */
+  children?: ReactNode;
 }
 
 export function ResponsiveAlertDialog({
@@ -66,6 +70,7 @@ export function ResponsiveAlertDialog({
   isPending,
   error,
   variant,
+  children,
 }: ResponsiveAlertDialogProps) {
   const isDesktop = useIsDesktopShell();
   const tCommon = useTranslations("common");
@@ -84,6 +89,7 @@ export function ResponsiveAlertDialog({
             <AlertDialogTitle>{title}</AlertDialogTitle>
             <AlertDialogDescription>{description}</AlertDialogDescription>
           </AlertDialogHeader>
+          {children}
           {errorAlert}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isPending}>{tCommon("cancel")}</AlertDialogCancel>
@@ -110,6 +116,7 @@ export function ResponsiveAlertDialog({
           <DrawerTitle>{title}</DrawerTitle>
           <DrawerDescription>{description}</DrawerDescription>
         </DrawerHeader>
+        {children && <div className="px-4">{children}</div>}
         {errorAlert}
         <DrawerFooter>
           <Button

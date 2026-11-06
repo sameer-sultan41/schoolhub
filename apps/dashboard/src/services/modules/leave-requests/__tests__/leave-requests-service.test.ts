@@ -2,6 +2,7 @@ import type * as ApiClientModule from "@schoolhub/api-client";
 import type { ApiClientConfig } from "@schoolhub/api-client";
 
 import {
+  ATTACHMENT_FILE_ID,
   LEAVE_ID,
   leavePage,
   leaveRecord,
@@ -103,5 +104,42 @@ describe("leave-requests-service", () => {
 
     expect(mockPost).toHaveBeenCalledWith(`/leave-requests/${LEAVE_ID}:reject`, {});
     expect(decided.autoMarkedDays).toBeNull();
+  });
+
+  it("submits a request with the attachment only when there is one", async () => {
+    const { createLeave } = await import("../leave-requests-service");
+    mockPost.mockResolvedValue({ data: leaveRecord(), meta: undefined });
+    const base = {
+      studentId: "s1",
+      leaveTypeId: SICK_TYPE_ID,
+      startDate: "2026-11-10",
+      endDate: "2026-11-11",
+      dayPart: "full" as const,
+      reason: "Fever",
+    };
+
+    await createLeave({ ...base, attachmentFileId: ATTACHMENT_FILE_ID });
+    await createLeave(base);
+
+    expect(mockPost).toHaveBeenNthCalledWith(1, "/leave-requests", {
+      student_id: "s1",
+      leave_type_id: SICK_TYPE_ID,
+      start_date: "2026-11-10",
+      end_date: "2026-11-11",
+      day_part: "full",
+      reason: "Fever",
+      attachment_file_id: ATTACHMENT_FILE_ID,
+    });
+    expect(mockPost.mock.calls[1]?.[1]).not.toHaveProperty("attachment_file_id");
+  });
+
+  it("cancels a request through its colon-action", async () => {
+    const { cancelLeave } = await import("../leave-requests-service");
+    mockPost.mockResolvedValue({ data: leaveRecord({ status: "cancelled" }), meta: undefined });
+
+    const cancelled = await cancelLeave(LEAVE_ID);
+
+    expect(mockPost).toHaveBeenCalledWith(`/leave-requests/${LEAVE_ID}:cancel`);
+    expect(cancelled.status).toBe("cancelled");
   });
 });

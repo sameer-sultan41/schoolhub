@@ -27,8 +27,11 @@ ADMIT_CARD = registry.register(
 MARKS_IMPORT = registry.register(
     "exams.marks-import",
     "A marks sheet being imported for one exam-subject (§9).",
+    # Windows browsers with Excel installed send a `.csv` as application/vnd.ms-excel; the
+    # parser dispatches on the file name, so a real `.xls` is refused there, not here.
     mime_types={
         "text/csv",
+        "application/vnd.ms-excel",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     },
     max_size_bytes=10 * MEGABYTE,

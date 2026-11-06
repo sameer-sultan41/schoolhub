@@ -140,6 +140,9 @@ export const API_ERROR_CODES = [
   "domain_rule_violation",
   "rate_limited",
   "module_disabled",
+  // A 409 `Conflict` subclass with a domain code: results can't be processed while marks are
+  // outstanding (apps/api/apps/examinations/processing.py `MarksOutstanding`).
+  "marks_outstanding",
   // Synthesised by this client when the request never produced an envelope.
   "network_error",
   "server_error",

@@ -64,17 +64,18 @@ function MySlotEntry({ slot }: { slot: EffectiveSlotRecord }) {
  * `/timetable/my`: the viewer's own published week (a teacher's classes and the cover they
  * give; a student's or guardian's section), from `/timetables/my`. Without a date it is the
  * current week; with one, the week in force that day with confirmed cover marked. Every
- * label comes from the response itself, so no reference list is requested.
+ * label comes from the response itself, so no reference list is requested. A guardian's portal
+ * passes `studentId` to read one child's week.
  */
-export function MyTimetable() {
+export function MyTimetable({ studentId }: { studentId?: string } = {}) {
   const t = useTranslations("timetable");
   const tErrors = useTranslations("errors");
   const [date, setDate] = useState("");
   const forDate = isIsoDate(date) ? date : undefined;
 
   const query = useQuery({
-    queryKey: queryKeys.myTimetable(forDate),
-    queryFn: () => Services.timetableSlots.fetchMyTimetable(forDate),
+    queryKey: queryKeys.myTimetable(forDate, studentId),
+    queryFn: () => Services.timetableSlots.fetchMyTimetable(forDate, studentId),
   });
   const slots = useMemo(() => query.data ?? [], [query.data]);
   const rows = useMemo(() => periodRows(slots), [slots]);

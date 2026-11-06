@@ -6,16 +6,21 @@ import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactElement } from "react";
 import messages from "../../../../messages/en.json";
+import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
+import { buildUser } from "@/test-utils";
 import { LoginForm } from "../login-form";
 
 function renderLoginForm(ui: ReactElement = <LoginForm />) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <NextIntlClientProvider locale="en" messages={messages}>
-      <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
-    </NextIntlClientProvider>,
-  );
+  return {
+    queryClient,
+    ...render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+      </NextIntlClientProvider>,
+    ),
+  };
 }
 
 function makeLoginResponse(): LoginResponse {
@@ -104,6 +109,45 @@ describe("LoginForm", () => {
     expect(mockLogin.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({ identifier: "admin@cityschool.test", password: "secret123" }),
     );
+  });
+
+  it("lands a restricted principal on the portal when there is no next param", async () => {
+    const response = makeLoginResponse();
+    mockLogin.mockResolvedValue({
+      ...response,
+      user: { ...response.user, is_restricted_principal: true },
+    });
+
+    renderLoginForm();
+    await fillAndSubmit("guardian@cityschool.test", "secret123");
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/portal");
+    });
+  });
+
+  it("a guardian logging in after a staff sign-out lands in the portal", async () => {
+    const response = makeLoginResponse();
+    mockLogin.mockResolvedValue({
+      ...response,
+      user: { ...response.user, is_restricted_principal: true },
+    });
+
+    const { queryClient } = renderLoginForm();
+    // The previous staff user is still cached under the key the audience gate reads, along
+    // with whatever that user's screens read.
+    queryClient.setQueryData(queryKeys.currentUser(), buildUser([]));
+    queryClient.setQueryData(queryKeys.list("students", "students", { page: 1 }), { items: [] });
+    await fillAndSubmit("guardian@cityschool.test", "secret123");
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/portal");
+    });
+    // The whole cache is cleared, not only the current user.
+    expect(queryClient.getQueryData(queryKeys.currentUser())).toBeUndefined();
+    expect(
+      queryClient.getQueryData(queryKeys.list("students", "students", { page: 1 })),
+    ).toBeUndefined();
   });
 
   it("redirects to a same-origin next param when present", async () => {
