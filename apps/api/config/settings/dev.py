@@ -8,10 +8,11 @@ from config.settings.base import PLATFORM_DOMAIN, THROTTLE_RATES, env
 DEBUG = True
 
 # A fixed, public, dev-only Fernet key so the api and celery-worker (separate processes)
-# agree without configuration. It protects nothing; never use it outside local development.
-INTEGRATIONS_ENCRYPTION_KEYS = env.list(
-    "INTEGRATIONS_ENCRYPTION_KEYS", default=["ZGV2LW9ubHktaW50ZWdyYXRpb25zLWtleS0wMDAwMDA="]
-)
+# agree without configuration, used when the variable is unset or empty. It protects nothing;
+# never use it outside local development.
+INTEGRATIONS_ENCRYPTION_KEYS = env.list("INTEGRATIONS_ENCRYPTION_KEYS", default=[]) or [
+    "ZGV2LW9ubHktaW50ZWdyYXRpb25zLWtleS0wMDAwMDA="
+]
 PAYMENT_PROVIDERS_ENABLED = ["fake"]
 ALLOWED_HOSTS = ["*"]
 
