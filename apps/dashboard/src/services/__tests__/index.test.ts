@@ -42,14 +42,21 @@ describe("Services", () => {
       "examSchedules",
       "examSubjects",
       "exams",
+      "feeInvoices",
       "files",
       "gradingScales",
       "guardians",
       "jobs",
       "leaveRequests",
       "messageThreads",
+      "notices",
+      "notificationPreferences",
+      "notifications",
+      "parentPortal",
       "periods",
       "promotions",
+      "receipts",
+      "results",
       "rooms",
       "schoolOrganization",
       "staff",
@@ -62,12 +69,19 @@ describe("Services", () => {
       "tenant",
       "threadOversight",
       "timetableSlots",
+      "vouchers",
     ]);
 
     expect(typeof Services.auth.login).toBe("function");
     expect(typeof Services.auth.logout).toBe("function");
     expect(typeof Services.auth.fetchCurrentUser).toBe("function");
     expect(typeof Services.auth.restoreSession).toBe("function");
+    expect(typeof Services.auth.changePassword).toBe("function");
+
+    expect(typeof Services.vouchers.listVouchers).toBe("function");
+    expect(typeof Services.vouchers.downloadVoucher).toBe("function");
+    expect(typeof Services.leaveRequests.createLeave).toBe("function");
+    expect(typeof Services.leaveRequests.cancelLeave).toBe("function");
 
     expect(typeof Services.tenant.fetchCurrentTenant).toBe("function");
 
@@ -175,6 +189,20 @@ describe("Services", () => {
     expect(typeof Services.timetableSlots.deleteSlot).toBe("function");
     expect(typeof Services.timetableSlots.validateSection).toBe("function");
     expect(typeof Services.timetableSlots.publishSection).toBe("function");
+
+    expect(typeof Services.parentPortal.fetchPortalDashboard).toBe("function");
+    expect(typeof Services.notifications.listNotifications).toBe("function");
+    expect(typeof Services.notifications.fetchUnreadCount).toBe("function");
+    expect(typeof Services.notifications.markNotificationRead).toBe("function");
+    expect(typeof Services.notifications.markAllNotificationsRead).toBe("function");
+    expect(typeof Services.notificationPreferences.fetchNotificationPreferences).toBe("function");
+    expect(typeof Services.notificationPreferences.updateNotificationPreferences).toBe("function");
+    expect(typeof Services.notices.listNotices).toBe("function");
+    expect(typeof Services.notices.acknowledgeNotice).toBe("function");
+    expect(typeof Services.feeInvoices.listFeeInvoices).toBe("function");
+    expect(typeof Services.receipts.listReceipts).toBe("function");
+    expect(typeof Services.receipts.downloadReceipt).toBe("function");
+    expect(typeof Services.results.listResults).toBe("function");
     expect(typeof Services.timetableSlots.fetchMyTimetable).toBe("function");
     expect(typeof Services.timetableSlots.fetchTeacherClassesOn).toBe("function");
 

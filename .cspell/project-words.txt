@@ -122,6 +122,7 @@ Keyspace
 Laiba
 Laravel
 launchable
+libgobject
 libharfbuzz
 libpango
 libpangoft
@@ -354,3 +355,4 @@ fileobj
 dedup
 regen
 uncleareable
+harfbuzz

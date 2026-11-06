@@ -173,6 +173,13 @@ class MyTimetableQuerySerializer(serializers.Serializer):
     academic_session_id = serializers.UUIDField(
         required=False, help_text="Defaults to the tenant's current session."
     )
+    student_id = serializers.UUIDField(
+        required=False,
+        help_text=(
+            "A guardian's child to serve instead of every child at once. Refused for staff;"
+            " a student who is not the caller's own is a 404."
+        ),
+    )
 
 
 class SlotSubstitutionSerializer(serializers.Serializer):

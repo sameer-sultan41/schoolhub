@@ -453,6 +453,10 @@ class AdmitCardSerializer(serializers.ModelSerializer):
     """
 
     exam_id = serializers.UUIDField(read_only=True)
+    # The exam's name and dates, so a portal can label a card without the staff-only exam read.
+    exam_name = serializers.CharField(source="exam.name", read_only=True)
+    exam_starts_on = serializers.DateField(source="exam.starts_on", read_only=True, allow_null=True)
+    exam_ends_on = serializers.DateField(source="exam.ends_on", read_only=True, allow_null=True)
     student_id = serializers.UUIDField(read_only=True)
     student_name = serializers.CharField(source="student.full_name", read_only=True)
     admission_number = serializers.CharField(source="student.admission_number", read_only=True)
@@ -465,6 +469,9 @@ class AdmitCardSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "exam_id",
+            "exam_name",
+            "exam_starts_on",
+            "exam_ends_on",
             "student_id",
             "student_name",
             "admission_number",
@@ -674,6 +681,11 @@ class ResultSerializer(serializers.ModelSerializer):
     exam_id = serializers.UUIDField(read_only=True)
     student_id = serializers.UUIDField(read_only=True)
     section_id = serializers.UUIDField(read_only=True)
+    # What a parent reads a result by; the viewset joins `exam` and its term, so no N+1.
+    exam_name = serializers.CharField(source="exam.name", read_only=True)
+    term_name = serializers.CharField(
+        source="exam.term.name", read_only=True, allow_null=True, default=None
+    )
     grade = serializers.CharField(source="grade_band.label", read_only=True, default=None)
 
     class Meta:
@@ -681,6 +693,8 @@ class ResultSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "exam_id",
+            "exam_name",
+            "term_name",
             "student_id",
             "section_id",
             "total_max_marks",

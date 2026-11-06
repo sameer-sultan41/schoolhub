@@ -7,7 +7,12 @@ import {
   setSessionCookie,
 } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
-import type { AuthenticatedUser, LoginCredentials, LoginResponse } from "./auth-type";
+import type {
+  AuthenticatedUser,
+  ChangePasswordInput,
+  LoginCredentials,
+  LoginResponse,
+} from "./auth-type";
 
 /**
  * The auth domain's API calls. Every dashboard consumer reaches these through
@@ -15,7 +20,12 @@ import type { AuthenticatedUser, LoginCredentials, LoginResponse } from "./auth-
  * by importing `@schoolhub/api-client` directly.
  */
 
-export type { AuthenticatedUser, LoginCredentials, LoginResponse } from "./auth-type";
+export type {
+  AuthenticatedUser,
+  ChangePasswordInput,
+  LoginCredentials,
+  LoginResponse,
+} from "./auth-type";
 
 export async function login(credentials: LoginCredentials): Promise<LoginResponse> {
   const { data } = await authProxyClient.post<LoginResponse>(endpoints.auth.login, credentials, {
@@ -41,6 +51,12 @@ export async function logout(): Promise<void> {
     accessTokenStore.clear();
     clearSessionCookie();
   }
+}
+
+/** Changes the signed-in user's own password (204). A wrong current password or a weak new one
+ * is a 400 with the field named. */
+export async function changePassword(input: ChangePasswordInput): Promise<void> {
+  await apiClient.post(endpoints.auth.changePassword, input);
 }
 
 /** Current user + effective permissions. The single source for permission-aware UI. */

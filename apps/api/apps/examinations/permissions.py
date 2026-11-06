@@ -39,6 +39,7 @@ table is now fully registered.**
 """
 
 from core.rbac.registry import registry
+from core.rbac.roles import PORTAL_ROLES
 
 # "All staff" means every default tenant role except the restricted principals
 # (student, guardian), which never hold a staff key.
@@ -83,7 +84,7 @@ SCHEDULERS = ("exam_staff",)
 # The portal side of §3's role table. A `student`/`guardian` reads their own
 # schedule and their own card; the *record scope*, not the key, is what narrows
 # them (see each model's `filter_owned_by_user`).
-PORTAL = ("student", "guardian")
+PORTAL = PORTAL_ROLES
 # §4 gives marks entry to `teacher` and `exam_staff`. `teacher` is the load-
 # bearing half and is narrowed further by *record scope*, not by the key: the
 # `assigned` scope resolves through `academics.TeacherSubjectAllocation`, so a

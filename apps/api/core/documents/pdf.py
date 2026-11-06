@@ -8,11 +8,11 @@ of the three escaped their inputs and one did not, and the one that did not was
 printing children's names.
 
 **The import stays inside the function.** WeasyPrint links against system
-libraries (pango, cairo, gdk-pixbuf) that only ``.github/workflows/api.yml``'s
-``test`` job installs, so a module-level import breaks ``manage.py`` everywhere
-else — including ``check --deploy``, which CI runs. Every caller in this repo
-already followed that convention; centralising it means one place has to
-remember rather than four.
+libraries (pango, harfbuzz) that only the API image (``apps/api/Dockerfile``) and
+``.github/workflows/api.yml``'s ``test`` job install, so a module-level import
+breaks ``manage.py`` everywhere else — including ``check --deploy``, which CI
+runs. Every caller in this repo already followed that convention; centralising
+it means one place has to remember rather than four.
 """
 
 from __future__ import annotations

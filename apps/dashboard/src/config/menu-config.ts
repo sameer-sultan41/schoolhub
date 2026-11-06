@@ -23,8 +23,8 @@ import type { MenuConfig } from "@schoolhub/ui";
 import { sectionMenuItems } from "@/components/module-sections/module-sections";
 import { ACADEMICS_SECTIONS } from "@/features/academics/academics-sections";
 import { ATTENDANCE_SECTIONS } from "@/features/attendance/attendance-sections";
-import { EXAMS_SECTIONS } from "@/features/exams/exams-sections";
 import { COMMUNICATION_SECTIONS } from "@/features/communication/communication-sections";
+import { EXAMS_SECTIONS } from "@/features/exams/exams-sections";
 import { TIMETABLE_SECTIONS } from "@/features/timetable/timetable-sections";
 
 import { Paths } from "./paths";
@@ -79,19 +79,19 @@ export const MENU_SIDEBAR: MenuConfig = [
     children: sectionMenuItems(ATTENDANCE_SECTIONS),
   },
   {
+    title: "Communication",
+    icon: MessagesSquare,
+    module: "communication",
+    // Shared with the Communication tabs and landing, gated the same way.
+    children: sectionMenuItems(COMMUNICATION_SECTIONS),
+  },
+  {
     title: "Examinations",
     icon: FileText,
     // The permission prefix is `exams`, not `examinations`.
     module: "exams",
     // Shared with the Examinations tabs and landing, gated the same way.
     children: sectionMenuItems(EXAMS_SECTIONS),
-  },
-  {
-    title: "Communication",
-    icon: MessagesSquare,
-    module: "communication",
-    // Shared with the Communication tabs and landing, gated the same way.
-    children: sectionMenuItems(COMMUNICATION_SECTIONS),
   },
   { heading: "User" },
   {

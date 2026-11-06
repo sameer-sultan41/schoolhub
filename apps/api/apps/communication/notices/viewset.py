@@ -16,16 +16,19 @@ gives every action a clearly-bounded method.
 
 from __future__ import annotations
 
+from functools import cached_property
+
+from django.db.models import OuterRef, Subquery
 from django.http import HttpResponse
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import PolymorphicProxySerializer, extend_schema, extend_schema_view
 from rest_framework import viewsets
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from apps.communication.models import Notice
+from apps.communication.models import Notice, NoticeStatus
 from apps.communication.notices import documents
-from apps.communication.notices.filters import NoticeFilterSet
-from apps.communication.notices.serializers import NoticeSerializer
+from apps.communication.notices.filters import NoticeFilterSet, PortalNoticeFilterSet
+from apps.communication.notices.serializers import NoticeSerializer, PortalNoticeSerializer
 from apps.communication.notices.services.acknowledge import acknowledge_notice
 from apps.communication.notices.services.publish import publish_notice
 from apps.communication.notices.services.return_to_draft import return_notice_to_draft
@@ -37,8 +40,22 @@ from apps.communication.permission_classes import (
 )
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
+from core.notifications.models import Notification
+from core.rbac.permissions import is_restricted_principal
+
+# Which shape a caller gets depends on their role, not on a field in the row, so there is no
+# discriminator; the proxy only documents it (a student or guardian gets `PortalNotice`).
+NOTICE_READ_SCHEMA = PolymorphicProxySerializer(
+    component_name="NoticeRead",
+    serializers=[NoticeSerializer, PortalNoticeSerializer],
+    resource_type_field_name=None,
+)
 
 
+@extend_schema_view(
+    list=extend_schema(responses=NOTICE_READ_SCHEMA),
+    retrieve=extend_schema(responses=NOTICE_READ_SCHEMA),
+)
 class NoticeViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     """`/notices` — formal, sequence-numbered notices with a publish-approval gate.
 
@@ -50,7 +67,6 @@ class NoticeViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     permission_classes = STAFF_PERMISSIONS
     queryset = Notice.objects
     serializer_class = NoticeSerializer
-    filterset_class = NoticeFilterSet
     search_fields = ["title", "body", "notice_no"]
     ordering_fields = ["publish_at", "created_at"]
     scope_campus_field = None
@@ -65,19 +81,53 @@ class NoticeViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         "return_to_draft": "communication.notice.publish",
         "acknowledge": "communication.notice.acknowledge",
     }
-    # Guardians and students acknowledge notices they reach through their inbox and hold
-    # no `communication.notice.view` (permissions.py), and the action returns nothing of
-    # the notice, so its own key's scope alone decides it.
-    scope_read_exempt_actions = frozenset({"acknowledge"})
+    # Guardians and students hold `communication.notice.view` and `.acknowledge` (§4), so
+    # these three skip `DenyRestrictedPrincipals`; acknowledge is then scoped by the view
+    # key too (ADR-0031 decision 3). Everything else stays staff-only.
+    PORTAL_READABLE_ACTIONS = frozenset({"list", "retrieve", "acknowledge"})
     http_method_names = ["get", "post", "patch", "head", "options"]
 
     def get_permissions(self):
-        # `communication.notice.acknowledge` is held by guardians/students
-        # (§4) — `STAFF_PERMISSIONS`' `DenyRestrictedPrincipals` would block
-        # every one of them before `HasPermissionKey` is even consulted.
-        if self.action == "acknowledge":
+        if self.action in self.PORTAL_READABLE_ACTIONS:
             return [permission() for permission in OWN_PREFERENCE_PERMISSIONS]
         return [permission() for permission in STAFF_PERMISSIONS]
+
+    @cached_property
+    def restricted(self) -> bool:
+        return is_restricted_principal(self.request.user)
+
+    def get_serializer_class(self):
+        if self.restricted:
+            return PortalNoticeSerializer
+        return NoticeSerializer
+
+    @property
+    def filterset_class(self):
+        # Chosen like the serializer: a recipient filters only on fields they can read.
+        return PortalNoticeFilterSet if self.restricted else NoticeFilterSet
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        if not self.restricted:
+            return queryset
+        # A recipient reads published notices that reached them, whatever scope their role
+        # carries, each with their own acknowledgement time in the same query.
+        own_ack = (
+            Notification.objects.alive()
+            .filter(
+                tenant_id=user.tenant_id,
+                user_id=user.pk,
+                source_type="notice",
+                source_id=OuterRef("pk"),
+                acknowledged_at__isnull=False,
+            )
+            .order_by("acknowledged_at")
+            .values("acknowledged_at")[:1]
+        )
+        return Notice.filter_owned_by_user(
+            queryset.filter(status=NoticeStatus.PUBLISHED), user
+        ).annotate(acknowledged_at=Subquery(own_ack))
 
     @extend_schema(request=None, responses={200: NoticeSerializer})
     def submit(self, request: Request, pk: str | None = None) -> Response:

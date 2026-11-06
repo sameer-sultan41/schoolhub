@@ -3510,6 +3510,120 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The caller's own notifications, the same rows for every role and scope. */
+        get: operations["notifications_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The caller's own notifications, the same rows for every role and scope. */
+        get: operations["notifications_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/{id}:mark-read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `POST /notifications/{id}:mark-read` — idempotent, keeps the first `read_at`. */
+        post: operations["notifications_:mark_read_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications:mark-all-read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /notifications:mark-all-read` — rows at or before `before` (default now).
+         *
+         *     The bound keeps a notification that arrived after the client rendered its list
+         *     unread, instead of marking it unseen.
+         */
+        post: operations["notifications_mark_all_read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications:unread-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET /notifications:unread-count`. */
+        get: operations["notifications_unread_count"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/parent-portal/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The parent portal dashboard
+         * @description Per-child summary cards plus the caller's unread counts.
+         *
+         *     The base permission stack (authenticated, module on, key held). Staff holding
+         *     the key are not refused: they simply own no children, so the list is empty.
+         *     Every card is read through its owning module's own visibility function.
+         */
+        get: operations["parent_portal_dashboard_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/payments": {
         parameters: {
             query?: never;
@@ -6364,6 +6478,11 @@ export interface components {
             readonly id: string;
             /** Format: uuid */
             readonly exam_id: string;
+            readonly exam_name: string;
+            /** Format: date */
+            readonly exam_starts_on: string | null;
+            /** Format: date */
+            readonly exam_ends_on: string | null;
             /** Format: uuid */
             readonly student_id: string;
             readonly student_name: string;
@@ -6472,6 +6591,13 @@ export interface components {
         /** @description An attachment's short-lived signed link, as `POST /files/{id}:download` returns one. */
         AttachmentDownload: {
             download_url: string;
+        };
+        AttendanceCard: {
+            today: components["schemas"]["AttendanceStatusEnum"] | null;
+            /** Format: decimal */
+            month_percentage: string | null;
+            month_present_days: number;
+            month_counted_days: number;
         };
         /**
          * @description `attendance_corrections` — the request half. Decisions are colon-actions.
@@ -7744,6 +7870,13 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
+        FeesCard: {
+            /** Format: decimal */
+            outstanding_total: string;
+            outstanding_count: number;
+            /** Format: date */
+            next_due_date: string | null;
+        };
         File: {
             /** Format: uuid */
             readonly id: string;
@@ -8043,6 +8176,14 @@ export interface components {
             provider: components["schemas"]["VoucherProviderEnum"];
             validity_days?: number;
         };
+        LatestResultCard: {
+            exam_name: string;
+            /** Format: decimal */
+            percentage: string;
+            grade: string | null;
+            /** Format: date-time */
+            published_at: string;
+        };
         /** @description One step of §7.2's chain, nested on the request it belongs to. */
         LeaveApproval: {
             /** Format: uuid */
@@ -8301,6 +8442,16 @@ export interface components {
             memo: string;
             lines: components["schemas"]["LedgerLine"][];
         };
+        MarkAllReadRequest: {
+            /**
+             * Format: date-time
+             * @description Only rows created at or before this moment are marked. Defaults to now.
+             */
+            before?: string;
+        };
+        MarkAllReadResult: {
+            marked: number;
+        };
         /** @description `:mark-read`'s result — how many messages it stamped. */
         MarkReadResult: {
             marked: number;
@@ -8513,6 +8664,7 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        NoticeRead: components["schemas"]["Notice"] | components["schemas"]["PortalNotice"];
         /**
          * @description * `draft` - Draft
          *     * `pending_approval` - Pending approval
@@ -8529,6 +8681,31 @@ export interface components {
          * @enum {string}
          */
         NoticeTypeEnum: "general" | "circular" | "event" | "urgent";
+        Notification: {
+            /** Format: uuid */
+            readonly id: string;
+            /** @description Producing event, e.g. 'attendance.student-absent'. */
+            readonly event_key: string;
+            readonly category: components["schemas"]["NotificationCategoryEnum"];
+            /** @description Rendered from the template. */
+            readonly title: string;
+            /** @description Rendered from the template. */
+            readonly body: string;
+            /** @description Deep-link payload (resource type/id, route). */
+            readonly data: unknown;
+            /** @description Polymorphic origin, e.g. 'student'. */
+            readonly source_type: string | null;
+            /**
+             * Format: uuid
+             * @description Origin row id, validated in the service layer.
+             */
+            readonly source_id: string | null;
+            readonly priority: components["schemas"]["PriorityEnum"];
+            /** Format: date-time */
+            readonly read_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
         /**
          * @description * `attendance` - Attendance
          *     * `fees` - Fees
@@ -8550,6 +8727,10 @@ export interface components {
          * @enum {string}
          */
         NotificationChannelEnum: "email" | "sms" | "push" | "in_app" | "whatsapp";
+        NotificationMarkReadResult: {
+            /** Format: date-time */
+            read_at: string;
+        };
         /** @description One cell of the materialized category x channel matrix. */
         NotificationPreferenceRow: {
             event_category: string;
@@ -8946,8 +9127,18 @@ export interface components {
                 };
             };
         };
-        PaginatedNoticeList: {
-            data?: components["schemas"]["Notice"][];
+        PaginatedNoticeReadList: {
+            data?: components["schemas"]["NoticeRead"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedNotificationList: {
+            data?: components["schemas"]["Notification"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -10585,6 +10776,65 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        PortalChild: {
+            student: components["schemas"]["PortalStudent"];
+            attendance: components["schemas"]["AttendanceCard"] | null;
+            fees: components["schemas"]["FeesCard"] | null;
+            latest_result: components["schemas"]["LatestResultCard"] | null;
+        };
+        PortalDashboard: {
+            /** Format: date */
+            as_of: string;
+            children: components["schemas"]["PortalChild"][];
+            unread_notifications: number;
+            unread_threads: number | null;
+            modules: components["schemas"]["PortalModules"];
+        };
+        PortalModules: {
+            attendance: boolean;
+            fees: boolean;
+            examinations: boolean;
+            communication: boolean;
+            timetable: boolean;
+        };
+        /**
+         * @description A notice as a student or guardian sees it: explicit fields only.
+         *
+         *     The staff shape also carries `audience_filter` (a custom audience's user ids),
+         *     `approved_by`, `status` and `show_on_website`, none of which a recipient may read.
+         *     `acknowledged_at` is the caller's own, annotated by `NoticeViewSet.get_queryset`
+         *     so a page costs one query rather than one per row.
+         */
+        PortalNotice: {
+            /** Format: uuid */
+            readonly id: string;
+            /** @description Assigned at publish from the tenant sequence. */
+            readonly notice_no: string | null;
+            readonly title: string;
+            readonly body: string;
+            readonly notice_type: components["schemas"]["NoticeTypeEnum"];
+            /** Format: date-time */
+            readonly published_at: string | null;
+            readonly requires_acknowledgment: boolean;
+            /** Format: date-time */
+            readonly acknowledged_at: string | null;
+        };
+        PortalStudent: {
+            /** Format: uuid */
+            id: string;
+            first_name: string;
+            last_name: string;
+            admission_number: string;
+            class_name: string | null;
+            section_name: string | null;
+        };
+        /**
+         * @description * `normal` - Normal
+         *     * `high` - High
+         *     * `emergency` - Emergency
+         * @enum {string}
+         */
+        PriorityEnum: "normal" | "high" | "emergency";
         /** @description ⚿ `:process` — how the money actually went back. */
         ProcessRefund: {
             method: components["schemas"]["PaymentMethodEnum"];
@@ -10969,6 +11219,8 @@ export interface components {
             readonly id: string;
             /** Format: uuid */
             readonly exam_id: string;
+            readonly exam_name: string;
+            readonly term_name: string | null;
             /** Format: uuid */
             readonly student_id: string;
             /** Format: uuid */
@@ -12084,6 +12336,9 @@ export interface components {
          * @enum {string}
          */
         TransferTypeEnum: "inter_campus" | "outgoing" | "incoming";
+        UnreadCount: {
+            unread: number;
+        };
         User: {
             /** Format: uuid */
             readonly id: string;
@@ -12102,6 +12357,8 @@ export interface components {
             readonly mfa_enabled: boolean;
             readonly permissions: string[];
             readonly roles: string[];
+            /** @description A student or guardian, so a client routes them to the portal rather than guessing. */
+            readonly is_restricted_principal: boolean;
         };
         /**
          * @description * `pending` - Pending
@@ -12403,6 +12660,7 @@ export interface operations {
     admit_cards_list: {
         parameters: {
             query?: {
+                current?: boolean;
                 /** @description The pagination cursor value. */
                 cursor?: string;
                 exam_id?: string;
@@ -15844,6 +16102,13 @@ export interface operations {
                     "application/json": components["schemas"]["File"];
                 };
             };
+            /** @description A portal user asked for a staff-only purpose */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     files_retrieve: {
@@ -17644,7 +17909,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedNoticeList"];
+                    "application/json": components["schemas"]["PaginatedNoticeReadList"];
                 };
             };
         };
@@ -17691,7 +17956,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Notice"];
+                    "application/json": components["schemas"]["NoticeRead"];
                 };
             };
         };
@@ -18016,6 +18281,149 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NotificationTemplatePreview"];
+                };
+            };
+        };
+    };
+    notifications_list: {
+        parameters: {
+            query?: {
+                /**
+                 * @description * `attendance` - Attendance
+                 *     * `fees` - Fees
+                 *     * `exams` - Exams
+                 *     * `library` - Library
+                 *     * `transport` - Transport
+                 *     * `academic` - Academic
+                 *     * `general` - General
+                 *     * `emergency` - Emergency
+                 */
+                category?: "academic" | "attendance" | "emergency" | "exams" | "fees" | "general" | "library" | "transport";
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description true = read, false = unread. */
+                read?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedNotificationList"];
+                };
+            };
+        };
+    };
+    notifications_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this notification. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Notification"];
+                };
+            };
+        };
+    };
+    "notifications_:mark_read_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationMarkReadResult"];
+                };
+            };
+        };
+    };
+    notifications_mark_all_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["MarkAllReadRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["MarkAllReadRequest"];
+                "multipart/form-data": components["schemas"]["MarkAllReadRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkAllReadResult"];
+                };
+            };
+        };
+    };
+    notifications_unread_count: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnreadCount"];
+                };
+            };
+        };
+    };
+    parent_portal_dashboard_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalDashboard"];
                 };
             };
         };
@@ -22350,6 +22758,8 @@ export interface operations {
                 academic_session_id?: string;
                 /** @description Apply confirmed substitutions for this date. Omitted = the base grid. */
                 date?: string;
+                /** @description A guardian's child to serve instead of every child at once. Refused for staff; a student who is not the caller's own is a 404. */
+                student_id?: string;
             };
             header?: never;
             path?: never;
