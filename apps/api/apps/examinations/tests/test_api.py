@@ -166,6 +166,19 @@ class GradeBandEndpointTests(ExaminationsAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_a_band_bound_outside_zero_to_a_hundred_is_refused_under_its_field(self) -> None:
+        """The CHECK would answer a 409; the field validators answer first, by name."""
+        for field, value in (("max_percent", "150.00"), ("min_percent", "-5.00")):
+            with self.subTest(field=field):
+                payload = {"label": "X", "min_percent": "10.00", "max_percent": "90.00"}
+                payload[field] = value
+
+                response = self.client.post(self.bands_url, payload, format="json")
+
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.json())
+                fields = [detail["field"] for detail in response.json()["error"]["details"]]
+                self.assertEqual(fields, [field])
+
     def test_bands_list_only_their_own_scale(self) -> None:
         with tenant_context(self.tenant.id):
             GradeBandFactory(
@@ -451,6 +464,17 @@ class ExamSubjectEndpointTests(ExaminationsAPITestCase):
         self.assertEqual(clash.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY, clash.json())
         self.assertIn("already on this exam", str(clash.json()))
         self.assertEqual(resave.status_code, status.HTTP_200_OK, resave.json())
+
+    def test_a_subject_weightage_outside_zero_to_a_hundred_is_refused_under_its_field(self) -> None:
+        for value in ("0", "100.01"):
+            with self.subTest(value=value):
+                response = self.client.post(
+                    EXAM_SUBJECTS, self._payload(subject_weightage_percent=value), format="json"
+                )
+
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.json())
+                fields = [detail["field"] for detail in response.json()["error"]["details"]]
+                self.assertEqual(fields, ["subject_weightage_percent"])
 
     def test_pass_marks_above_the_maximum_are_refused(self) -> None:
         response = self.client.post(
