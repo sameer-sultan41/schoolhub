@@ -127,16 +127,18 @@ FEATURE = "module.examinations"
 
 
 def scoped_exam(request: Request, view: object, pk: str | None) -> Exam:
-    """The exam an action addresses by id, through `ExamViewSet`'s record scope.
+    """The exam an action addresses by id, through the record scope of the route's own key.
 
-    Narrowed by the exam read key and then the route's own key (ADR-0031 decision 3),
-    so an exam outside the caller's scope is a 404, exactly as a foreign id is.
+    An exam outside the caller's scope is a 404, exactly as a foreign id is. A
+    schedule- or result-keyed route needs no `exams.exam.view` on top.
     """
-    exams = Exam.objects.alive()
-    for permission in ("exams.exam.view", route_permission(request, view)):
-        exams = scope_queryset(
-            exams, request.user, permission=permission, own_field=None, campus_field=None
-        )
+    exams = scope_queryset(
+        Exam.objects.alive(),
+        request.user,
+        permission=route_permission(request, view),
+        own_field=None,
+        campus_field=None,
+    )
     return get_object_or_404(exams, pk=pk)
 
 
