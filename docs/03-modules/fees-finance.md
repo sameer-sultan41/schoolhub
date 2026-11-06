@@ -610,3 +610,12 @@ tables, staff leave *policy* and accrual do not exist yet.
 | ---- | ----- |
 | Vouchers in the portal | `GET /vouchers` and `GET /vouchers/{id}/download?format=pdf` were already portal-readable (`fees.payment.view`, `PORTAL_READABLE_ACTIONS`, record-scoped). The guardian's fees page asks for `student=` and `status=issued` and offers each outstanding invoice its slips as a PDF through `ApiClient.downloadBlob` (bearer header); an invoice with none says "Ask the school office for a voucher." A guardian never issues or voids a slip (`fees.payment.collect`, staff-only) |
 | Tests | Jest `features/portal/fees/__tests__/portal-fees.test.tsx`; mocked `e2e/tests/dashboard/portal-leave-vouchers.spec.ts`; live `e2e/tests/live/api/portal-leave.spec.ts` (the school issues a slip, the guardian lists and downloads it) |
+
+### Built (staff dashboard, PR A)
+
+| Area | State |
+| ---- | ----- |
+| `/fees/structures` | Two sub-tabs in `?tab=`: **Structures** (default) and **Fee heads**, each a cursor-paged list with its filters in the URL. Structures filter by session, class, campus and status; a name links to the structure's page. Fee heads filter by category and status; the income-account picker lists only `account_type=income` accounts, and the server's in-use refusal on delete shows inline |
+| `/fees/structures/{id}` | The structure's scope and status, its schedules (amount via `formatDecimal`, no currency symbol) and the header actions, each on its key **and** the structure's state: Activate (a draft) and Archive (an active one) follow `fees.fee-structure.update`; Edit and schedule add/edit/remove need a draft; Delete (a draft) follows `.delete`. The server's activate refusals (no schedules, or another active structure at the same scope) show inline in the confirm; a schedule's frequency and due rule errors land under `term`, `due_day` or `due_date` |
+| `/fees/ledger` | **Accounts** tab (one entry now; the journal joins it): filter by type, status and system; create and edit with a parent picker (`fees.ledger.create`); Delete is hidden for a system account and the server's postings refusal shows inline |
+| Tests | Jest `features/fees/__tests__/` (permission matrix, status-gated actions, server errors on the right field, delete refusals); mocked `e2e/tests/dashboard/fees-setup.spec.ts`; live `e2e/tests/live/api/fees-setup.spec.ts` as the seeded accountant (create → activate, a second active structure at one scope is 422, another tenant's structure is 404) |
