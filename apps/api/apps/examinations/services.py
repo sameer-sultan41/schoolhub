@@ -2174,22 +2174,26 @@ def publish_report_cards(*, exam: Exam, actor_id: uuid.UUID) -> dict:
 # --- §5.8 question banks and paper assembly -------------------------------
 
 
-def assert_creator_teaches_bank_subject(*, user, subject: Subject) -> None:
-    """§4 — an `assigned` creator's bank is in a subject they currently teach.
+def assert_creator_teaches_bank_subject(*, user, subject: Subject, permission: str | AnyOf) -> None:
+    """§4 — a bank written under `permission` (the route's key) lands where that key reads.
 
-    The write side of `QuestionBank.filter_assigned_to_user`, read from the same
-    `_assigned_teaching` allocations, so a teacher cannot create (or move) a bank
-    into a subject they would then be unable to see. `all` and `campus` callers
-    are unrestricted, as their reads are: a bank has no campus.
+    The write side of `QuestionBankViewSet`'s scope, so a creator cannot create (or move)
+    a bank into a subject they would then be unable to see. ADR-0031 decision 7's union
+    over the roles granting `permission` (`scopes_for`): `all`, or a `campus` grant (a
+    bank has no campus), passes; otherwise an `assigned` grant passes for a subject the
+    caller currently teaches (`QuestionBank.filter_assigned_to_user`). No type decides
+    alone, and an unrelated key's `all` role lifts nothing.
     """
-    scopes = scopes_for(user, "exams.question-bank.create")
-    if RecordScope.ALL in scopes or _campus_refs(scopes) or RecordScope.ASSIGNED not in scopes:
+    scopes = scopes_for(user, permission)
+    if RecordScope.ALL in scopes or _campus_refs(scopes):
         return
-    taught = {subject_id for _, _, subject_id, _ in _assigned_teaching(user).allocations}
-    if subject.pk not in taught:
-        raise DomainRuleViolation(
-            {"subject_id": "You can keep a question bank only in a subject you currently teach."}
-        )
+    if RecordScope.ASSIGNED in scopes:
+        taught = {subject_id for _, _, subject_id, _ in _assigned_teaching(user).allocations}
+        if subject.pk in taught:
+            return
+    raise DomainRuleViolation(
+        {"subject_id": "You can keep a question bank only in a subject you currently teach."}
+    )
 
 
 def assert_question_is_approvable(question: Question) -> None:

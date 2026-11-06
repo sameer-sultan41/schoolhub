@@ -80,3 +80,74 @@ class BankSubjectTests(QuestionBankTestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.json())
+
+
+class MixedRoleBankSubjectTests(QuestionBankTestCase):
+    """The creator check reads the route key's own scope (ADR-0031, L36), as a union
+    (decision 7): an unrelated `all` role lifts nothing, and a `campus` grant of the
+    key itself passes, since a bank has no campus."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        with tenant_context(self.tenant.id):
+            self.stranger_subject = SubjectFactory(tenant=self.tenant)
+        grant(self.subject_teacher_user, "exams.question-bank.view", scope=RecordScope.ASSIGNED)
+        self.teacher = APIClient()
+        authenticate(self.teacher, self.subject_teacher_user)
+
+    def create_in_stranger_subject(self):
+        return self.teacher.post(
+            BANKS, {"name": "Stray", "subject_id": str(self.stranger_subject.pk)}, format="json"
+        )
+
+    def test_an_unrelated_all_role_does_not_lift_an_assigned_create_key(self) -> None:
+        grant(self.subject_teacher_user, "exams.question-bank.create", scope=RecordScope.ASSIGNED)
+        grant(self.subject_teacher_user, "exams.exam.view", scope=RecordScope.ALL)
+
+        response = self.create_in_stranger_subject()
+
+        self.assertEqual(
+            response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY, response.json()
+        )
+        self.assertEqual(
+            response.json()["error"]["details"], [{"field": "subject_id", "issue": REFUSAL}]
+        )
+
+    def test_a_campus_grant_of_the_create_key_can_create_in_any_subject(self) -> None:
+        """The union: `assigned` alone would refuse, the `campus` grant passes."""
+        grant(self.subject_teacher_user, "exams.question-bank.create", scope=RecordScope.ASSIGNED)
+        grant(
+            self.subject_teacher_user,
+            "exams.question-bank.create",
+            scope=RecordScope.CAMPUS,
+            scope_ref=self.campus.pk,
+        )
+
+        response = self.create_in_stranger_subject()
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.json())
+
+    def test_an_all_grant_of_the_create_key_can_create_in_any_subject(self) -> None:
+        grant(self.subject_teacher_user, "exams.question-bank.create", scope=RecordScope.ALL)
+
+        response = self.create_in_stranger_subject()
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.json())
+
+    def test_a_move_reads_the_update_key_not_the_create_key(self) -> None:
+        """The route's key: `all` create does not lift an `assigned` update."""
+        grant(self.subject_teacher_user, "exams.question-bank.create", scope=RecordScope.ALL)
+        grant(self.subject_teacher_user, "exams.question-bank.update", scope=RecordScope.ASSIGNED)
+
+        response = self.teacher.patch(
+            f"{BANKS}/{self.bank.pk}",
+            {"subject_id": str(self.stranger_subject.pk)},
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY, response.json()
+        )
+        with tenant_context(self.tenant.id):
+            self.bank.refresh_from_db()
+        self.assertEqual(self.bank.subject_id, self.subject.pk)

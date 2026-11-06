@@ -193,14 +193,16 @@ def scoped_exam_subject(
     return get_object_or_404(exam_subjects, pk=pk)
 
 
-def scoped_question_bank(request: Request, pk) -> QuestionBank:
-    """The bank a nested question route addresses, through `QuestionBankViewSet`'s record scope."""
-    banks = scope_queryset(
-        QuestionBank.objects.alive(),
-        request.user,
-        permission="exams.question-bank.view",
-        own_field=None,
-        campus_field=None,
+def scoped_question_bank(
+    request: Request, view: TenantScopedViewSetMixin, pk: str | None
+) -> QuestionBank:
+    """The bank a nested question route addresses, through `QuestionBankViewSet`'s record scope.
+
+    Reached under the hosting route's read key and its own (`_reachable`), so an `all`
+    approve or create role cannot reach a bank the caller's bank view role hides.
+    """
+    banks = _reachable(
+        QuestionBank.objects.alive(), request, view, QuestionBankViewSet.scope_kwargs()
     )
     return get_object_or_404(banks, pk=pk)
 
@@ -1460,7 +1462,9 @@ class QuestionBankViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
 
     def perform_create(self, serializer) -> None:
         services.assert_creator_teaches_bank_subject(
-            user=self.request.user, subject=serializer.validated_data["subject"]
+            user=self.request.user,
+            subject=serializer.validated_data["subject"],
+            permission=route_permission(self.request, self),
         )
         super().perform_create(serializer)
 
@@ -1468,7 +1472,11 @@ class QuestionBankViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         # A PATCH that leaves the subject alone keeps a bank the caller can already see.
         subject = serializer.validated_data.get("subject")
         if subject is not None:
-            services.assert_creator_teaches_bank_subject(user=self.request.user, subject=subject)
+            services.assert_creator_teaches_bank_subject(
+                user=self.request.user,
+                subject=subject,
+                permission=route_permission(self.request, self),
+            )
         super().perform_update(serializer)
 
     @extend_schema(
@@ -1570,7 +1578,7 @@ class QuestionViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     def get_bank(self) -> QuestionBank:
         # Through the bank's record scope (L46): a foreign bank, or one outside
         # an `assigned` teacher's subjects, is a 404, never a 403 (invariant 2).
-        return scoped_question_bank(self.request, self.kwargs["bank_pk"])
+        return scoped_question_bank(self.request, self, self.kwargs["bank_pk"])
 
     def get_queryset(self):
         return super().get_queryset().filter(question_bank=self.get_bank())

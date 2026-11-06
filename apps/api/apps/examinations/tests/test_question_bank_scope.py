@@ -150,3 +150,68 @@ class NestedQuestionScopeTests(QuestionBankTestCase):
             self.assertEqual(
                 {row.pk for row in scoped}, {row.pk for row in self.bank.questions.all()}
             )
+
+
+class MixedRoleBankLookupTests(QuestionBankTestCase):
+    """ADR-0031 decision 3 on the nested routes' bank lookup (`scoped_question_bank`).
+
+    `QuestionBank` has no campus column, so the narrowing role is `assigned`: the
+    teacher teaches `self.subject` only. A wide role holding a different key must not
+    lift the bank lookup past the narrow one, in either direction.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        with tenant_context(self.tenant.id):
+            self.stranger_bank = QuestionBankFactory(
+                tenant=self.tenant, subject=SubjectFactory(tenant=self.tenant)
+            )
+            self.draft = QuestionFactory(
+                tenant=self.tenant,
+                question_bank=self.stranger_bank,
+                source=QuestionSource.AI_GENERATED,
+                is_approved=False,
+            )
+        self.teacher = APIClient()
+        authenticate(self.teacher, self.subject_teacher_user)
+
+    def test_an_all_action_role_cannot_reach_a_bank_the_view_role_hides(self) -> None:
+        grant(self.subject_teacher_user, "exams.question-bank.view", scope=RecordScope.ASSIGNED)
+        grant(self.subject_teacher_user, "exams.question.approve", scope=RecordScope.ALL)
+
+        response = self.teacher.post(
+            f"{BANKS}/{self.stranger_bank.pk}/questions/{self.draft.pk}:approve"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        with tenant_context(self.tenant.id):
+            self.draft.refresh_from_db()
+        self.assertFalse(self.draft.is_approved)
+
+    def test_an_all_view_role_cannot_lift_the_create_key_past_its_assigned_role(self) -> None:
+        """The route's own key narrows the bank too: a create saved into a bank by id."""
+        grant(self.subject_teacher_user, "exams.question-bank.view", scope=RecordScope.ALL)
+        grant(self.subject_teacher_user, "exams.question-bank.create", scope=RecordScope.ASSIGNED)
+
+        response = self.teacher.post(
+            f"{BANKS}/{self.stranger_bank.pk}/questions",
+            {"question_text": "2 + 2?", "question_type": QuestionType.SHORT_ANSWER},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        with tenant_context(self.tenant.id):
+            self.assertEqual(self.stranger_bank.questions.count(), 1)
+
+    def test_the_same_create_reaches_a_bank_both_roles_cover(self) -> None:
+        """The control: the teacher's own subject's bank passes both keys."""
+        grant(self.subject_teacher_user, "exams.question-bank.view", scope=RecordScope.ALL)
+        grant(self.subject_teacher_user, "exams.question-bank.create", scope=RecordScope.ASSIGNED)
+
+        response = self.teacher.post(
+            f"{BANKS}/{self.bank.pk}/questions",
+            {"question_text": "2 + 2?", "question_type": QuestionType.SHORT_ANSWER},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.json())

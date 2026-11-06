@@ -401,12 +401,15 @@ List and read shapes the dashboard depends on:
   and `search` over the text and topic; `/question-banks` takes `subject_id`, `class_id`, `status` and
   `search` over the name and description.
 - **The nested question routes are record-scoped.** `/question-banks/{id}/questions` and its `:approve` resolve
-  the bank through `QuestionBankViewSet`'s record scope (L46), so a bank outside an `assigned` teacher's subjects
-  is a 404 on every route, the list and a create included, exactly as a foreign bank is.
+  the bank through `QuestionBankViewSet`'s record scope (L46) under two keys (ADR-0031 decision 3):
+  `exams.question-bank.view`, then the route's own (`.create`, `.update`, `.delete`, `exams.question.approve`).
+  A bank outside an `assigned` teacher's subjects under either key is a 404 on every route, the list and a create
+  included, exactly as a foreign bank is, so an `all` approve role cannot reach a bank the view role hides.
 - **An `assigned` creator's bank stays in a subject they teach.** On `POST /question-banks` and on a `PATCH`
-  that sends `subject_id`, a caller whose scope is `assigned` must hold a current allocation
-  (`_assigned_teaching`) in that subject, or it is a 422 on `subject_id`; `all` and `campus` callers are
-  unrestricted, as their reads are.
+  that sends `subject_id`, the check reads the route's key (`.create`, `.update`) and only the roles granting it,
+  as a union (ADR-0031 decision 7): an `all` or `campus` grant of that key passes (a bank has no campus);
+  otherwise an `assigned` grant needs a current allocation (`_assigned_teaching`) in the subject, or it is a 422
+  on `subject_id`. An unrelated key's `all` role lifts nothing.
 - **A question's `source` is fixed at create.** A `PATCH` that changes it is a 422 on `source` (resending the
   same value is accepted), so an AI draft's label cannot be removed.
 - **Assembly is a job with a typed result.** `:assemble-paper` takes `{title, sections}` and answers a `202`
