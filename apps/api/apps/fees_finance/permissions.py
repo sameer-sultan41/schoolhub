@@ -199,6 +199,24 @@ registry.register(
     REFUND_APPROVERS,
 )
 
+# --- Online payments ------------------------------------------------------ #
+
+# A family pays its own child's invoice online. The one financial mutation a
+# portal principal holds: it moves money *in*, and record scope `own` (the
+# guardian/student role assignment) narrows it to their own invoices.
+registry.register(
+    "fees.payment.pay-online",
+    "Pay one's own invoice online through the school's payment gateway.",
+    PORTAL,
+)
+# The school's merchant credentials and the gateway discrepancy queue.
+GATEWAY_MANAGERS = ("school_owner", "accountant")
+registry.register(
+    "fees.gateway.manage",
+    "Configure the school's payment gateway and resolve gateway discrepancies.",
+    GATEWAY_MANAGERS,
+)
+
 # --- Spend and reports (PR D) --------------------------------------------- #
 
 registry.register(
@@ -247,6 +265,7 @@ registry.register(
 __all__ = [
     "ACCOUNTANTS",
     "FINANCE_STAFF",
+    "GATEWAY_MANAGERS",
     "GRANT_VIEWERS",
     "INVOICE_VIEWERS",
     "LEDGER_VIEWERS",

@@ -380,6 +380,27 @@
 - **Mistake.** `send_results_back` moved every unpublished result of the exam to `processing`, but the next `processing.write` advanced only the rows it recomputed (the active roll) to `pending_approval`. A student withdrawn between the send-back and the re-process kept a `processing` row, and `approve_exam_results`, which approves only pending rows, moved the exam to `approved` around it: the row was never approved or published, silently (examinations PR #154). The run now moves every `processing` row of the exam to pending, and approval refuses while one is left.
 - **Check.** For every bulk status reset, name the step that re-advances those rows and confirm its filter covers the same row set, not a subset recomputed from today's data (an active roll, a current enrolment). Where it cannot, make the next gate refuse leftovers instead of acting on the rows it finds. Test it: reset, change the population, re-advance, then assert no row is left in the reset state.
 
+### L59. A fake whose state lives in process memory cannot be driven by the live lane
+
+- **Mistake.** The online-payments fake provider (`core/integrations/payments/fake.py`) kept its
+  transactions in memory, filled by tests with `add_transaction`. The callback re-fetches from
+  it, so the planned live spec (`e2e/tests/live/api/online-payments.spec.ts`) could sign a
+  callback but never get it confirmed: nothing outside the API process can fill that store.
+- **Check.** Before planning a live spec against a fake, trace how the spec puts the fake into
+  the state the assertion needs, across the process boundary. If it cannot, give the fake a
+  dev-only behaviour behind a setting that tests leave off (`PAYMENT_FAKE_SETTLES_ON_INITIATE`).
+
+### L60. A new required production setting is supplied to every CI job that loads prod settings
+
+- **Mistake.** Online payments made `prod.py` read `INTEGRATIONS_ENCRYPTION_KEYS` with no default,
+  so production fails closed at boot. The `security` job in `.github/workflows/api.yml` runs
+  `manage.py check --deploy` under `config.settings.prod` and did not set it, so it would have
+  failed with `ImproperlyConfigured` on the PR (fee online payments review).
+- **Check.** When a setting in `prod.py` reads `env(...)` with no default, grep
+  `.github/workflows/` and `apps/api/Dockerfile` for `config.settings.prod` and supply the variable
+  in each such step: a throwaway value generated at runtime for a secret (never a committed one),
+  a placeholder for a non-secret. Keep production failing closed; never add a default to get green.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.
