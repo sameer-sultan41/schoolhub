@@ -376,7 +376,10 @@ with its reasoning. Read the entry for the area you are about to touch before re
    `docs/superpowers/plans/2026-11-01-examinations-dashboard.md`); **PR A, setup, is in flight**:
    `/exams`, an exam's page with its Subjects tab, and `/exams/grading-scales`, with the
    setup contract behind them (page-numbered lists, names on rows, `assigned` scope for exams
-   and their subjects; `docs/03-modules/examinations.md` §20). **PR B, schedule and admit
+   and their subjects; `docs/03-modules/examinations.md` §20); its review round (#147) made a zero
+   weightage a form error, gave out-of-range grade-band bounds and subject weightage a field
+   error instead of a database conflict, and shared one active-path matcher across the sidebar,
+   section tabs and auth proxy. **PR B, schedule and admit
    cards, is in flight** (stacked on PR A): the Schedule tab (an exam's sittings by date, the
    clash panel, publish schedule) and the Admit cards tab (the cards by section and status,
    issue with the server's counts, download through `:download`, revoke with a reason), with
