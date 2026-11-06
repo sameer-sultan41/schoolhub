@@ -130,7 +130,6 @@ from core.rbac.permissions import (
     DenyRestrictedPrincipals,
     HasPermissionKey,
     declared_keys,
-    effective_permission_keys,
     is_restricted_principal,
     route_permission,
     scope_queryset,
@@ -143,6 +142,11 @@ if TYPE_CHECKING:
     from core.rbac.permissions import ScopeKwargs
 
 FEATURE = "module.examinations"
+
+# The report-card remark fields' keys: §4 gives class-teacher remarks to `.create`
+# and principal remarks to `.publish`.
+REPORT_CARD_CREATE = "exams.report-card.create"
+REPORT_CARD_PUBLISH = "exams.report-card.publish"
 
 
 def _reachable[M: Model](
@@ -1253,21 +1257,14 @@ class ReportCardViewSet(
     required_permission_map = {
         # A class teacher writes their remark, a principal theirs; each field's
         # own key is checked in `check_object_permissions` (ADR-0027 amendment).
-        "update": AnyOf("exams.report-card.create", "exams.report-card.publish"),
-        "partial_update": AnyOf("exams.report-card.create", "exams.report-card.publish"),
-        "generate": "exams.report-card.create",
-        "publish": "exams.report-card.publish",
+        "update": AnyOf(REPORT_CARD_CREATE, REPORT_CARD_PUBLISH),
+        "partial_update": AnyOf(REPORT_CARD_CREATE, REPORT_CARD_PUBLISH),
+        "generate": REPORT_CARD_CREATE,
+        "publish": REPORT_CARD_PUBLISH,
         # A download is a read of one card, so it takes the view key (ADR-0021).
         "download": "exams.report-card.view",
     }
     http_method_names = ["get", "post", "patch", "head", "options"]
-
-    # The key each remark field needs: §4 gives class-teacher remarks to
-    # `.create` and principal remarks to `.publish`.
-    REMARK_FIELD_KEYS = {
-        "class_teacher_remarks": "exams.report-card.create",
-        "principal_remarks": "exams.report-card.publish",
-    }
 
     # `download` is a read: a student or guardian fetches their own published
     # card, and `get_queryset` keeps a restricted principal to published ones.
@@ -1294,13 +1291,21 @@ class ReportCardViewSet(
         super().check_object_permissions(request, obj)
         if self.action not in ("update", "partial_update"):
             return
-        refused = {
-            field: f"You do not have permission to write {field}."
-            for field, key in self.REMARK_FIELD_KEYS.items()
-            if field in request.data and key not in effective_permission_keys(request.user)
-        }
+        # Each field's key held for this card, not anywhere (ADR-0031): one spelled
+        # check per field so the endpoint contract tests can read the key.
+        refused = []
+        if "class_teacher_remarks" in request.data and not self.holds_key_for_row(
+            request.user, REPORT_CARD_CREATE, obj
+        ):
+            refused.append("class_teacher_remarks")
+        if "principal_remarks" in request.data and not self.holds_key_for_row(
+            request.user, REPORT_CARD_PUBLISH, obj
+        ):
+            refused.append("principal_remarks")
         if refused:
-            raise PermissionDenied(refused)
+            raise PermissionDenied(
+                {field: f"You do not have permission to write {field}." for field in refused}
+            )
 
     def perform_update(self, serializer) -> None:
         if serializer.instance.status == ReportCardStatus.PUBLISHED:

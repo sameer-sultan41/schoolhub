@@ -12,6 +12,7 @@ from rest_framework.test import APIClient
 from apps.examinations import services
 from apps.examinations.models import ReportCard, ReportCardStatus, Result
 from apps.examinations.tests.factories import (
+    CampusFactory,
     ReportCardFactory,
     UserFactory,
     authenticate,
@@ -177,6 +178,35 @@ class RemarksSplitTests(ReportCardsTestCase):
         response = self.patch(client, {"class_teacher_remarks": "Steady."})
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_the_principal_key_held_only_for_another_campus_cannot_write_principal_remarks(
+        self,
+    ) -> None:
+        """L36: a field's key is checked for this card's campus, not held anywhere.
+
+        The read and class-teacher keys at `all` reach the card; `.publish` covers
+        another campus only, so `principal_remarks` is refused and nothing is written.
+        """
+        with tenant_context(self.tenant.id):
+            far_campus = CampusFactory(tenant=self.tenant)
+            near = UserFactory(tenant=self.tenant)
+            far = UserFactory(tenant=self.tenant)
+        for user, campus_id in ((near, self.students[0].campus_id), (far, far_campus.pk)):
+            grant(user, "exams.report-card.view", "exams.report-card.create", scope=RecordScope.ALL)
+            grant(user, "exams.report-card.publish", scope=RecordScope.CAMPUS, scope_ref=campus_id)
+        far_client, near_client = APIClient(), APIClient()
+        authenticate(far_client, far)
+        authenticate(near_client, near)
+
+        refused = self.patch(far_client, {"principal_remarks": "Promoted."})
+
+        self.assertEqual(refused.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(refused.json()["error"]["details"][0]["field"], "principal_remarks")
+        self.assertIsNone(self.stored().principal_remarks)
+        # The same grant on the card's own campus writes it.
+        written = self.patch(near_client, {"principal_remarks": "Promoted."})
+        self.assertEqual(written.status_code, status.HTTP_200_OK, written.json())
+        self.assertEqual(self.stored().principal_remarks, "Promoted.")
 
     def test_an_out_of_scope_card_is_a_404_not_a_field_403(self) -> None:
         """The field check runs after the scoped lookup, so it never confirms a card exists."""

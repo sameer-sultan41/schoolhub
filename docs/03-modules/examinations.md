@@ -377,8 +377,8 @@ List and read shapes the dashboard depends on:
   `:publish-report-cards` resolve the exam through `ExamViewSet`'s record scope; `:publish-report-cards` answers
   `{published, published_ids}`.
 - **Remarks are written per field.** `PATCH /report-cards/{id}` takes `class_teacher_remarks` (needs
-  `exams.report-card.create`) and `principal_remarks` (needs `exams.report-card.publish`); a field whose key the
-  caller lacks is a 403 naming it in `error.details`, checked after the scoped lookup (out of scope stays a 404)
+  `exams.report-card.create`) and `principal_remarks` (needs `exams.report-card.publish`), each held for this
+  card's student's campus, not anywhere (ADR-0031); a field whose key the caller lacks for the card is a 403 naming it in `error.details`, checked after the scoped lookup (out of scope stays a 404)
   and before anything is written. A published card is a 409.
 - **A report card's document has its own action.** `POST /report-cards/{id}:download` returns `{download_url}`
   under `exams.report-card.view` and the record scope, the admit card's shape (ADR-0021). A student or guardian
