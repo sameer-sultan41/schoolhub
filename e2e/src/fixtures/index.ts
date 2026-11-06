@@ -26,7 +26,9 @@ import {
   ExamResultsPage,
   ExamSchedulePage,
   ExamsPage,
+  FeeStructuresPage,
   GradingScalesPage,
+  LedgerPage,
   LoginPage,
   MessagesPage,
   OversightPage,
@@ -131,6 +133,8 @@ export interface E2EFixtures {
   examReportCardsPage: ExamReportCardsPage;
   examReportsPage: ExamReportsPage;
   gradingScalesPage: GradingScalesPage;
+  feeStructuresPage: FeeStructuresPage;
+  ledgerPage: LedgerPage;
   questionBanksPage: QuestionBanksPage;
   /**
    * Signs a **second** identity in, on its own browser context, and hands back that
@@ -380,6 +384,14 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
 
   questionBanksPage: async ({ page }, use) => {
     await use(new QuestionBanksPage(page));
+  },
+
+  feeStructuresPage: async ({ page }, use) => {
+    await use(new FeeStructuresPage(page));
+  },
+
+  ledgerPage: async ({ page }, use) => {
+    await use(new LedgerPage(page));
   },
 
   signInAsSecondIdentity: async ({ browser }, use) => {

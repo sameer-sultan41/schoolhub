@@ -297,6 +297,24 @@ export const GUARDIAN_PERMISSIONS: PermissionKey[] = [
   "students.student.view",
 ];
 
+/**
+ * The seeded `accountant`'s keys for the fees setup screens (`apps/api/apps/fees_finance/
+ * permissions.py`: `STRUCTURE_AUTHORS` and `LEDGER_VIEWERS` plus the ledger write), and the three
+ * `ALL_STAFF` school reads their session, class and campus pickers make. A role with a wider set
+ * would hide a control that leaks to a narrower one (L55).
+ */
+export const FINANCE_ACCOUNTANT_SETUP_PERMISSIONS: PermissionKey[] = [
+  "fees.fee-structure.view",
+  "fees.fee-structure.create",
+  "fees.fee-structure.update",
+  "fees.fee-structure.delete",
+  "fees.ledger.view",
+  "fees.ledger.create",
+  "school.academic-session.view",
+  "school.class.view",
+  "school.campus.view",
+];
+
 /** A module this user must *not* see, for the negative half of a filtering assertion. */
 export const MODULE_WITHOUT_PERMISSION = "Fees & Finance";
 
