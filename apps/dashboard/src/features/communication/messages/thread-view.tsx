@@ -25,10 +25,20 @@ export interface ThreadViewProps {
   threadId: string;
   /** Oversight: no composer, no close or reopen, and the thread is never marked read. */
   readOnly: boolean;
+  /** The parent portal sets this to `false`: a guardian has no close or reopen. */
+  canTransition?: boolean;
+  /** The parent portal sets this: the reply box takes file attachments. */
+  allowAttachments?: boolean;
 }
 
 /** One conversation: its header, the messages and, for a participant, the reply box. */
-export function ThreadView({ source, threadId, readOnly }: ThreadViewProps) {
+export function ThreadView({
+  source,
+  threadId,
+  readOnly,
+  canTransition = true,
+  allowAttachments = false,
+}: ThreadViewProps) {
   const t = useTranslations("communication.messages");
   const tErrors = useTranslations("errors");
   const { data: user } = useCurrentUser();
@@ -38,7 +48,7 @@ export function ThreadView({ source, threadId, readOnly }: ThreadViewProps) {
   // `:mark-read` is keyed `communication.message.create` on the server, so a reader without it
   // would only get a 403: never call it for them.
   const canPost = !readOnly && hasPermission(user, "communication.message.create");
-  const canClose = !readOnly && hasPermission(user, "communication.thread.close");
+  const canClose = !readOnly && canTransition && hasPermission(user, "communication.thread.close");
 
   const thread = useQuery({
     queryKey: queryKeys.detail(source.module, "threads", threadId),
@@ -161,7 +171,13 @@ export function ThreadView({ source, threadId, readOnly }: ThreadViewProps) {
           )}
         </Alert>
       )}
-      {canPost && <ReplyComposer threadId={threadId} isClosed={isClosed} />}
+      {canPost && (
+        <ReplyComposer
+          threadId={threadId}
+          isClosed={isClosed}
+          allowAttachments={allowAttachments}
+        />
+      )}
     </article>
   );
 }

@@ -37,13 +37,12 @@ import {
   Switch,
 } from "@schoolhub/ui";
 
-import { Paths } from "@/config/paths";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { LOCALE_COOKIE_MAX_AGE_SECONDS } from "@/lib/constants";
 import { Cookies } from "@/lib/cookies";
 import { SUPPORTED_LOCALES, type SupportedLocale } from "@/lib/env";
 import { getInitials, stableSignedUrl } from "@/lib/helpers";
-import { Services } from "@/services";
+import { useSignOut } from "@/hooks/use-sign-out";
 
 /**
  * Ported from packages/ui's partials/topbar/user-dropdown-menu.tsx. The vendor
@@ -72,6 +71,7 @@ export function UserDropdownMenu() {
   const locale = useLocale();
   const { theme, setTheme } = useTheme();
   const router = useRouter();
+  const signOut = useSignOut();
   const { data: user, isPending, isError } = useCurrentUser();
 
   // Distinct from "still loading": an error (e.g. the API unreachable) must not sit on
@@ -252,27 +252,7 @@ export function UserDropdownMenu() {
           </div>
         </DropdownMenuItem>
         <div className="mt-1 p-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full"
-            onClick={() => {
-              // Services.auth.logout() intentionally rethrows anything that isn't the
-              // expected ApiError (see its own comment in
-              // services/modules/auth/auth-service.ts), so that rejection must be
-              // handled here rather than left as an unhandled promise rejection. The
-              // user still always reaches /login: the unexpected case is logged, not
-              // swallowed or re-thrown.
-              void Services.auth
-                .logout()
-                .catch((error: unknown) => {
-                  console.error("Sign-out request failed unexpectedly:", error);
-                })
-                .finally(() => {
-                  router.replace(Paths.LOGIN);
-                });
-            }}
-          >
+          <Button variant="outline" size="sm" className="w-full" onClick={signOut}>
             Logout
           </Button>
         </div>

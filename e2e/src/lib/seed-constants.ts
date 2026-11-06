@@ -1,3 +1,5 @@
+import type { PermissionKey } from "@schoolhub/types";
+
 /**
  * Mirrors identifiers `apps/api/core/rbac/management/commands/seed_e2e_data.py` seeds.
  * There is no cross-language build-time coupling between the two — keep these in sync
@@ -53,6 +55,33 @@ export const E2E_GUARDIAN_PHONE = "+15550000010";
  * `created_by`): that rule cannot be proven with one identity, only refused.
  */
 export const E2E_PRINCIPAL_EMAIL = "e2e-principal@schoolhub.test";
+
+/** Mirrors seed_e2e_data.py's E2E_PRINCIPAL_PERMISSIONS, in its order: the mocked lane's
+ * `principal` holds exactly these, so a mocked screen never passes on a key the live approver
+ * lacks (L5, L27). */
+export const E2E_PRINCIPAL_PERMISSIONS: PermissionKey[] = [
+  "academics.promotion.view",
+  "academics.promotion.approve",
+  "academics.curriculum.view",
+  "academics.teacher-allocation.view",
+  "students.student.view",
+  "students.transfer.approve",
+  "school.campus.view",
+  "school.academic-session.view",
+  "school.class.view",
+  "school.section.view",
+  "school.house.view",
+  "attendance.leave-request.view",
+  "attendance.leave-request.approve",
+  "exams.exam.view",
+  "exams.schedule.view",
+  "exams.marks.view",
+  "exams.result.view",
+  "exams.result.approve",
+  "exams.result.publish",
+  "exams.report-card.view",
+  "exams.report-card.publish",
+];
 
 /**
  * Mirrors seed_e2e_data.py's baseline school_organization data — the admission->enrollment
@@ -142,3 +171,46 @@ export const E2E_COMMS_GUARDIAN_EMAIL = "e2e-comms-guardian@schoolhub.test";
 export const E2E_COMMS_CLASS_TEACHER_EMAIL = "e2e-comms-class-teacher@schoolhub.test";
 /** The comms student's addressable attribute; ids are generated per seed run. */
 export const E2E_COMMS_STUDENT_ADMISSION_NUMBER = "E2E-STUDENT-COMMS";
+
+/**
+ * Mirrors the parent-portal fixtures `apps/parent_portal/management/commands/seed_e2e_portal.py`
+ * writes for the comms student (run by seed_e2e_data.py): one invoice for the session's first
+ * month, one published result, and one notice sent to the comms guardian alone. These are the
+ * values the dashboard summary must report back.
+ */
+export const E2E_PORTAL_FEE_AMOUNT = "2500.00";
+export const E2E_PORTAL_EXAM_NAME = "E2E Midterm";
+/** 78 out of 100 at full weight: the result's percentage, and band "B" on the seeded scale. */
+export const E2E_PORTAL_RESULT_PERCENTAGE = "78.00";
+export const E2E_PORTAL_RESULT_GRADE = "B";
+export const E2E_PORTAL_NOTICE_TITLE = "E2E Sports Day";
+/** The seeded baseline student nobody is linked to: a guardian naming it gets a 404. */
+export const E2E_UNLINKED_STUDENT_ADMISSION_NUMBER = "E2E-STUDENT-B";
+
+/**
+ * Mirrors seed_e2e_data.py's E2E_EXAM_STAFF_EMAIL — an `exam_staff` login at `all` scope,
+ * holding the role's real `exams.*` keys (read from the registry by role) plus the reads its
+ * pickers make. The admin builds a spec's scaffold; this identity writes the exams, so a key
+ * the real role lacks fails here rather than passing on the admin's wider set.
+ */
+export const E2E_EXAM_STAFF_EMAIL = "e2e-exam-staff@schoolhub.test";
+
+/**
+ * Mirrors seed_e2e_data.py's E2E_TEACHER_EMAIL — a `teacher` login at `assigned` scope, with
+ * its own active teaching `Staff` row and no allocation: it sees an exam only once a spec
+ * allocates it to one of that exam's (class, subject) pairs in the exam's session.
+ */
+export const E2E_TEACHER_EMAIL = "e2e-teacher@schoolhub.test";
+
+/**
+ * Mirrors seed_e2e_data.py's E2E_TEACHER_LOGIN_EMPLOYEE_NUMBER — the teacher login's `Staff`
+ * row, found through `GET /staff?search=` (ids are generated per seed run).
+ */
+export const E2E_TEACHER_LOGIN_EMPLOYEE_NUMBER = "E2E-TEACHER-LOGIN";
+
+/**
+ * Mirrors `apps/api/apps/examinations/management/commands/seed_e2e_examinations.py`'s
+ * E2E_SCALE_NAME: the tenant's complete default grading scale, which an exam naming no scale
+ * grades against.
+ */
+export const E2E_GRADING_SCALE_NAME = "E2E Percentage";

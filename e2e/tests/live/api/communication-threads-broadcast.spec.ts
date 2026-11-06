@@ -24,9 +24,9 @@ import {
  * teacher is the `assigned`-scoped comms class teacher. So the thread is routed to that
  * teacher, and the teacher reaches it through membership, not record scope (ADR-0030).
  *
- * **There is no `GET /notifications` inbox yet** (communication.md §16 lists it; nothing
- * serves it — docs/deferred-work.md). So "the guardian was notified" is read where the
- * server records it: `/delivery-logs`, as the seeded owner. Every notification gets one row
+ * "The guardian was notified" is read where the server records each channel's delivery:
+ * `/delivery-logs`, as the seeded owner. (The recipient's own `GET /notifications` inbox is
+ * covered by parent-portal.spec.ts.) Every notification gets one row
  * per channel. A push row carries the rendered subject and body (push has no adapter yet,
  * so it is `skipped`, but it is written), and the in-app row of the same notification
  * carries the recipient's masked user id.

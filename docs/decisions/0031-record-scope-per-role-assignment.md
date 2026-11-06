@@ -35,8 +35,9 @@ PR B appended decision 7, the mixed-scope-type union.
    read key is `required_permission`, unless the class names another in
    `scope_read_permission` (`AttendanceCorrectionViewSet` reads its queue under
    `AnyOf(correction.create, correction.approve)`). An action in `scope_read_exempt_actions`
-   is scoped by its own key alone (`NoticeViewSet`'s `acknowledge`, whose guardians and
-   students hold no `communication.notice.view`). Code that resolves a target outside the
+   is scoped by its own key alone (`MarksViewSet`'s `lock` and `unlock`, which act on an exam
+   subject rather than a marks row, and which `school_admin` makes without
+   `exams.marks.create`). Code that resolves a target outside the
    mixin chains the same two calls by hand: a nested route's parent, an attendance
    correction's student or staff row, a staff thread's student, and timetable `:validate`
    and `:publish`. A promotion batch action moves every row of a batch, and a batch can span
@@ -90,11 +91,16 @@ PR B appended decision 7, the mixed-scope-type union.
    - A check that treats a `campus` scope as "wide" must now check the row's campus too, since
      the union lets a user reach a row through one type and hold the key at another elsewhere.
      Leave escalation's level 2 does (`_assert_escalation_reaches_wider`): it passes on `all`,
-     or on a `campus` scope naming the request's own campus. Marks bulk entry does it per
-     student: `assert_marker_may_enter` still passes a `campus` holder for the subject, but
-     `_entry_students` keeps only the students `exams.marks.create`'s scope reaches over
-     `STUDENT_SCOPE`, with `assigned` meaning the sections the caller is allocated the subject
-     in (plan, ruling 13).
+     or on a `campus` scope naming the request's own campus. Marks entry does it per section
+     and per student. *Amended by the exams dashboard stack (#152):* the gate is section-level,
+     `assert_marker_may_enter(user, exam_subject, section, permission)`, and reads the union: a
+     section is enterable when `all` is held, a `campus` grant covers the section's campus, or
+     an `assigned` grant's current allocation covers that section and subject in the exam's
+     session. `assigned` means allocations only for entry; the homeroom is a read (the grid
+     under `exams.marks.view`), not a write. `_entry_students` then keeps only the enterable
+     sections' students that the key's scope reaches over `STUDENT_SCOPE`, and the grid's
+     `writable` flag and the import run the same gate (plan
+     `2026-11-07-exams-dashboard-per-role-scope.md`, D1 and D3).
 
    **Why correlated `EXISTS`** (plan, execution ruling 9). Each member becomes
    `EXISTS (SELECT 1 FROM <table> U0 ... WHERE U0.id = <outer>.id AND <member's filter>)`, ORed.

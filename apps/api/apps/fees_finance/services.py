@@ -1865,3 +1865,41 @@ def build_report_rows(
         date_to=date_to,
         limit=limit,
     )
+
+
+# ---------------------------------------------------------------- visibility
+
+#: An invoice has no campus of its own; its student's is the one record scope reads.
+INVOICE_CAMPUS_FIELD = "student__campus_id"
+INVOICE_VIEW_KEY = "fees.invoice.view"
+
+
+def visible_invoices(user, *, queryset: models.QuerySet[FeeInvoice] | None = None):
+    """The invoices `user` may read: record scope, then drafts hidden from a student or guardian.
+
+    A draft is a working document the accountant has not handed over, and showing a
+    parent a charge that may still change is worse than showing them nothing.
+    `queryset` is a caller's already-scoped set (`FeeInvoiceViewSet` passes its
+    own, scoped by the route's key); without one, the view key's scope is applied.
+    """
+    from core.rbac.permissions import is_restricted_principal, scope_queryset
+
+    if queryset is None:
+        queryset = scope_queryset(
+            FeeInvoice.objects.alive(),
+            user,
+            permission=INVOICE_VIEW_KEY,
+            campus_field=INVOICE_CAMPUS_FIELD,
+        )
+    if is_restricted_principal(user):
+        return queryset.exclude(status=InvoiceStatus.DRAFT)
+    return queryset
+
+
+def outstanding_invoices(queryset: models.QuerySet[FeeInvoice]) -> models.QuerySet[FeeInvoice]:
+    """§13's defaulter rule: still owing money, and not canceled.
+
+    `status` alone cannot express it: a partially-paid invoice owes a balance,
+    while an overdue one with a zero balance does not.
+    """
+    return queryset.filter(balance_due__gt=0).exclude(status=InvoiceStatus.CANCELED)

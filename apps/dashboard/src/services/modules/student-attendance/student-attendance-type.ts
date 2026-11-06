@@ -93,9 +93,3 @@ export interface BulkMarkMeta {
   /** Guardian alerts queued. */
   alertsQueued: number;
 }
-
-/** One refused register row (`error.meta.rows[]`): the server's own sentence. */
-export interface RowIssue {
-  student_id: string;
-  issue: string;
-}

@@ -74,6 +74,22 @@ from core.notifications.templates import resolve as resolve_template
 logger = logging.getLogger(__name__)
 
 
+def own_notifications(user):
+    """The caller's own inbox rows, deliberately not `scope_queryset`.
+
+    A notification is its recipient's own mail, so membership is the authorisation
+    (ADR-0030). Record scope would let a scope-`all` admin read everyone's inbox, and
+    a restricted principal's scope-`own` has no `user_id` meaning for a student's row.
+    Another tenant's rows are already invisible to the tenant-scoped manager.
+    """
+    return Notification.objects.alive().filter(user_id=user.pk)
+
+
+def unread_notification_count(user) -> int:
+    """How many of `own_notifications` are unread. One query."""
+    return own_notifications(user).filter(read_at__isnull=True).count()
+
+
 class UnknownTrigger(Exception):
     """An event key no module declared in its `notifications.py`."""
 

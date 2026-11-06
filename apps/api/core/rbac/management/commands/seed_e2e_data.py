@@ -15,6 +15,7 @@ import os
 import uuid
 from datetime import time, timedelta
 
+from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
@@ -50,7 +51,9 @@ from apps.timetable.models import (
     TeacherSubstitution,
     TimetableSlot,
 )
-from core.rbac.models import RecordScope
+from core.notifications.permissions import NOTIFICATION_VIEW
+from core.rbac.models import RecordScope, User
+from core.rbac.registry import registry
 from core.rbac.seeding import (
     ensure_role_with_permissions,
     ensure_school_owner_role,
@@ -289,6 +292,9 @@ E2E_SCHOOL_ADMIN_PERMISSIONS = [
     # The week grid's Subject and Teacher selects are the same two calls.
     "school.subject.view",
     "staff.staff.view",
+    # Every tenant role reads its own inbox (`ALL_TENANT_ROLES`); without it the bell's
+    # `GET /notifications` is a 403 for this identity.
+    NOTIFICATION_VIEW,
 ]
 # The approver half of §7.2. `principal` holds `academics.promotion.approve` (and, per §4,
 # does NOT hold `.execute` — execution is `school_admin`'s), plus the read keys the review
@@ -317,6 +323,18 @@ E2E_PRINCIPAL_PERMISSIONS = [
     # stops the escalation being theatre.
     "attendance.leave-request.view",
     "attendance.leave-request.approve",
+    # The examinations approver: §4 bars the processor of the latest run from
+    # approving it, so the results journey needs a second identity to approve,
+    # publish and write principal remarks on the report cards. The schedule key
+    # feeds the Results and Report cards tabs' section filter (`/exam-schedules`).
+    "exams.exam.view",
+    "exams.schedule.view",
+    "exams.marks.view",
+    "exams.result.view",
+    "exams.result.approve",
+    "exams.result.publish",
+    "exams.report-card.view",
+    "exams.report-card.publish",
     # Communication (communication.md §4). `thread.oversee` is the audited read of every
     # thread, which §4 gives `school_owner` and `principal` only; the live thread journey
     # proves it as this identity, not as the owner who holds every key anyway. `thread.view`
@@ -327,6 +345,7 @@ E2E_PRINCIPAL_PERMISSIONS = [
     "communication.thread.oversee",
     "communication.broadcast.send",
     "platform.job.view",
+    NOTIFICATION_VIEW,
 ]
 # A `class_teacher` identity, and it exists for one reason: **§4 grants
 # `attendance.student-attendance.mark` to `teacher`/`class_teacher` and to nobody
@@ -359,29 +378,79 @@ E2E_CLASS_TEACHER_PERMISSIONS = [
     # identity below holds this role too; it is the one a guardian's thread reaches.
     "communication.thread.view",
     "communication.message.create",
+    NOTIFICATION_VIEW,
 ]
 # A restricted principal (student, guardian) holds only own-scoped keys, narrowed via
 # RecordScope.OWN rather than the grant itself being unsafe.
 E2E_STUDENT_PERMISSIONS = ["students.student.view"]
-# The guardian half of attendance.md §4's leave rows (create + view, own children). It exists
-# because §11 makes the requester the student or a linked guardian, and
-# `services.assert_may_request_for_student` checks that link, not the key: the seeded owner
-# and school admin cannot submit leave for anyone. A live spec links this guardian to its own
-# run-unique students (e2e/src/lib/live-guardian.ts). No `approve`: guardians never decide.
-E2E_GUARDIAN_PERMISSIONS = [
-    "attendance.leave-request.create",
-    "attendance.leave-request.view",
-    # communication.md §4: every role starts and replies to threads, a guardian only about
-    # their own children (`threads/services/create.py` checks the link, not the key).
-    "communication.thread.view",
-    "communication.thread.create",
-    "communication.message.create",
-]
+# The guardian role holds what a real `guardian` gets: every key whose `default_roles`
+# name it (`registry.keys_for_role`), so the parent-portal journey meets the production
+# grant set rather than a hand-kept subset that drifts as modules add portal keys. Each
+# key is still `own`-scoped (the users below). Read when the command runs, not at import,
+# so every app's `permissions` module has registered first.
+#
+# Why each module matters here: leave create/view (attendance.md §11 makes the requester a
+# linked guardian; a live spec links the leave guardian to its own run-unique students via
+# e2e/src/lib/live-guardian.ts), thread create/reply (communication.md §4), and the portal's
+# own `parent-portal.dashboard.view` plus each card's read key.
+E2E_GUARDIAN_ROLE_SLUG = "guardian"
+
+
+def guardian_permissions() -> list[str]:
+    return registry.keys_for_role(E2E_GUARDIAN_ROLE_SLUG)
+
+
 # The `Guardian` person row's first name, last name and phone. The phone is the addressable
 # part, mirrored in e2e/src/lib/seed-constants.ts: ids are generated per seed run, and
 # `GET /guardians?search=` matches phone.
 E2E_GUARDIAN_NAME = ("E2E", "Guardian")
 E2E_GUARDIAN_PHONE = "+15550000010"
+
+# Examinations (apps/examinations/permissions.py). Two identities, because §4 splits the
+# module between them: `exam_staff` builds exams and schedules, a `teacher` sees only the
+# exams they teach (`Exam.filter_assigned_to_user`).
+#
+# Their `exams.*` keys are read from the registry by role, not listed here, so the seed is
+# never wider than the real role and a key the module adds later reaches the live lane
+# without a second edit. `e2e_exam_staff_permissions`/`e2e_teacher_permissions` below.
+E2E_EXAM_STAFF_EMAIL = "e2e-exam-staff@schoolhub.test"
+E2E_TEACHER_EMAIL = "e2e-teacher@schoolhub.test"
+# The reads exam staff's pickers make outside `exams.*`, each held by the real
+# `exam_staff` through its module's ALL_STAFF: the class, section and subject selects,
+# the curriculum check behind exam-subjects, the invigilator (`GET /staff`) and room
+# (`GET /rooms`, which reads `timetable.timetable.view` — timetable declares no room view
+# key) selects, and the session picker. Then `GET /jobs/{id}` and file downloads for the
+# 202 + job actions (lesson L27).
+E2E_EXAM_STAFF_READS = (
+    "school.class.view",
+    "school.section.view",
+    "school.subject.view",
+    "timetable.timetable.view",
+    "academics.curriculum.view",
+    "staff.staff.view",
+    "school.academic-session.view",
+    "platform.job.view",
+    "platform.file.view",
+)
+# The teacher login's own `Staff` row. Its employee number is the idempotency key and
+# what a live spec searches `GET /staff` by to allocate this teacher per run; no
+# allocation is seeded, so the teacher sees nothing until a spec gives them one.
+E2E_TEACHER_LOGIN_EMPLOYEE_NUMBER = "E2E-TEACHER-LOGIN"
+E2E_TEACHER_LOGIN_NAME = ("E2E", "Subject Teacher")
+E2E_TEACHER_LOGIN_PHONE = "+15550000004"
+
+
+def _exams_keys_for(role: str) -> list[str]:
+    return [spec.key for spec in registry.for_module("exams") if role in spec.default_roles]
+
+
+def e2e_exam_staff_permissions() -> list[str]:
+    return [*_exams_keys_for("exam_staff"), *E2E_EXAM_STAFF_READS]
+
+
+def e2e_teacher_permissions() -> list[str]:
+    return _exams_keys_for("teacher")
+
 
 E2E_STUDENT_A_NAME = ("E2E", "Student A")
 E2E_STUDENT_B_NAME = ("E2E", "Student B")
@@ -417,7 +486,10 @@ class Command(BaseCommand):
         "academics fixtures (subject, curriculum row, teaching staff, principal "
         "approver) the curriculum/allocation/promotion specs need, and the timetable "
         "fixtures (bell schedule, rooms, a published week and one proposed "
-        "substitution) the grid and substitution specs need."
+        "substitution) the grid and substitution specs need, the examinations "
+        "fixtures (exam-staff and assigned-teacher identities, a complete default "
+        "grading scale) and the parent-portal fixtures (attendance, an outstanding "
+        "invoice, a published result and a notice for the comms guardian's child)."
     )
 
     @transaction.atomic
@@ -495,9 +567,9 @@ class Command(BaseCommand):
 
         guardian_role = ensure_role_with_permissions(
             tenant,
-            "guardian",
+            E2E_GUARDIAN_ROLE_SLUG,
             "Guardian",
-            E2E_GUARDIAN_PERMISSIONS,
+            guardian_permissions(),
             is_restricted_principal=True,
         )
         guardian_user = ensure_seed_user(
@@ -525,6 +597,32 @@ class Command(BaseCommand):
             password=E2E_ADMIN_PASSWORD,
             first_name=E2E_COMMS_CLASS_TEACHER_NAME[0],
             last_name=E2E_COMMS_CLASS_TEACHER_NAME[1],
+            scope=RecordScope.ASSIGNED,
+        )
+
+        exam_staff_role = ensure_role_with_permissions(
+            tenant, "exam_staff", "Exam Staff", e2e_exam_staff_permissions()
+        )
+        ensure_seed_user(
+            tenant,
+            exam_staff_role,
+            email=E2E_EXAM_STAFF_EMAIL,
+            password=E2E_ADMIN_PASSWORD,
+            first_name="E2E",
+            last_name="Exam Staff",
+        )
+        teacher_role = ensure_role_with_permissions(
+            tenant, "teacher", "Teacher", e2e_teacher_permissions()
+        )
+        # `assigned`, as in production: the point of this identity is that it sees only
+        # what it teaches, which an `all`-scoped teacher could never show.
+        teacher_user = ensure_seed_user(
+            tenant,
+            teacher_role,
+            email=E2E_TEACHER_EMAIL,
+            password=E2E_ADMIN_PASSWORD,
+            first_name=E2E_TEACHER_LOGIN_NAME[0],
+            last_name=E2E_TEACHER_LOGIN_NAME[1],
             scope=RecordScope.ASSIGNED,
         )
 
@@ -610,6 +708,13 @@ class Command(BaseCommand):
                 class_teacher=comms_class_teacher,
                 guardian_user_id=comms_guardian_user.id,
             )
+            self._ensure_portal_modules_enabled(tenant)
+            self._ensure_examinations_enabled(tenant)
+            self._ensure_teacher_login_staff(tenant, campus, user=teacher_user)
+
+        # The grading scale is the examinations module's to write (ADR-0013: `core`
+        # imports no app), so it is seeded by that module's own command, by name.
+        call_command("seed_e2e_examinations", tenant=tenant.slug)
 
         # The *other* tenant needs the academics flag too, and for a reason easy to get
         # backwards: `TenantScopedViewSetMixin` checks `required_feature` *before*
@@ -630,6 +735,16 @@ class Command(BaseCommand):
             self._ensure_leave_types(other_tenant)
             # And for communication: the thread isolation probes must reach the lookup.
             self._ensure_communication_enabled(other_tenant)
+            # And for the portal and the two modules its cards read.
+            self._ensure_portal_modules_enabled(other_tenant)
+            # And for examinations.
+            self._ensure_examinations_enabled(other_tenant)
+
+        # The parent portal's per-card records for the comms child (attendance, an
+        # outstanding invoice, a published result, a notice). They live in the portal app's
+        # own command, which reaches those modules through their services: `core` imports
+        # no app (ADR-0013, tests/test_import_boundaries.py). Same transaction as this one.
+        call_command("seed_e2e_portal", stdout=self.stdout)
 
         # TODO(website-cms): no public-content/CMS backend module exists yet
         # (apps/api/config/api_v1.py routes only core.rbac and
@@ -661,6 +776,21 @@ class Command(BaseCommand):
         row.academic = {**(row.academic or {}), "working_days": [0, 1, 2, 3, 4, 5, 6]}
         row.save(update_fields=["academic", "updated_at"])
 
+    def _ensure_feature_enabled(self, tenant: Tenant, key: str) -> None:
+        """Switch `key` on for `tenant`. Every module flag the live lane needs defaults off.
+
+        `update_or_create`, not `get_or_create`: a prior run (or someone poking at the
+        override in the admin) could have left this row `enabled=False`, and
+        `get_or_create` only sets `defaults` on *creation*, so it would leave a disabled
+        row disabled and reintroduce the `module_disabled` 403s this exists to prevent.
+        """
+        flag = FeatureFlag.objects.get(key=key)
+        TenantFeatureOverride.objects.update_or_create(
+            tenant=tenant,
+            feature_flag=flag,
+            defaults={"enabled": True, "reason": "e2e live-lane fixture"},
+        )
+
     def _ensure_students_module_enabled(self, tenant: Tenant) -> None:
         """`module.students` defaults off (features.py) — every endpoint 403s with
         `module_disabled` until a tenant is explicitly onboarded onto it, same recipe
@@ -672,12 +802,7 @@ class Command(BaseCommand):
         disabled row disabled forever, silently reintroducing the very `module_disabled`
         403s this seed step exists to prevent.
         """
-        flag = FeatureFlag.objects.get(key="module.students")
-        TenantFeatureOverride.objects.update_or_create(
-            tenant=tenant,
-            feature_flag=flag,
-            defaults={"enabled": True, "reason": "e2e live-lane fixture"},
-        )
+        self._ensure_feature_enabled(tenant, "module.students")
 
     def _ensure_academics_enabled(self, tenant: Tenant) -> None:
         """`module.academics` defaults off (apps/academics/features.py).
@@ -690,12 +815,7 @@ class Command(BaseCommand):
         a cross-tenant probe to reach the row lookup and answer 404 rather than being
         turned away by the feature gate first.
         """
-        flag = FeatureFlag.objects.get(key="module.academics")
-        TenantFeatureOverride.objects.update_or_create(
-            tenant=tenant,
-            feature_flag=flag,
-            defaults={"enabled": True, "reason": "e2e live-lane fixture"},
-        )
+        self._ensure_feature_enabled(tenant, "module.academics")
 
     def _ensure_timetable_enabled(self, tenant: Tenant) -> None:
         """`module.timetable` defaults off (apps/timetable/features.py).
@@ -704,12 +824,7 @@ class Command(BaseCommand):
         `_ensure_students_module_enabled` above. Called for *both* tenants (see
         `handle`) for the same reason `module.academics` is.
         """
-        flag = FeatureFlag.objects.get(key="module.timetable")
-        TenantFeatureOverride.objects.update_or_create(
-            tenant=tenant,
-            feature_flag=flag,
-            defaults={"enabled": True, "reason": "e2e live-lane fixture"},
-        )
+        self._ensure_feature_enabled(tenant, "module.timetable")
 
     def _ensure_attendance_enabled(self, tenant: Tenant) -> None:
         """`module.attendance` defaults off (apps/attendance/features.py).
@@ -718,12 +833,49 @@ class Command(BaseCommand):
         `_ensure_students_module_enabled`, and called for both tenants for the
         same 403-before-404 reason `_ensure_timetable_enabled` is.
         """
-        flag = FeatureFlag.objects.get(key="module.attendance")
-        TenantFeatureOverride.objects.update_or_create(
+        self._ensure_feature_enabled(tenant, "module.attendance")
+
+    def _ensure_examinations_enabled(self, tenant: Tenant) -> None:
+        """`module.examinations` defaults off (apps/examinations/features.py).
+
+        Same `update_or_create`-not-`get_or_create` reasoning as
+        `_ensure_students_module_enabled`, and called for both tenants for the
+        same 403-before-404 reason `_ensure_timetable_enabled` is.
+        """
+        self._ensure_feature_enabled(tenant, "module.examinations")
+
+    def _ensure_teacher_login_staff(self, tenant: Tenant, campus: Campus, *, user: User) -> Staff:
+        """The `Staff` row behind `E2E_TEACHER_EMAIL`, active and teaching.
+
+        Every `assigned` hook resolves a user to their teaching through
+        `staff.user_id`, so a teacher login with no staff row sees nothing however it
+        is allocated. Keyed on `user_id` (unique per tenant among live rows), and an
+        existing row is brought back to active teaching rather than trusted: a row a
+        spec or a person had exited would otherwise hide every exam for a reason no
+        spec is testing.
+        """
+        staff, created = Staff.objects.alive().get_or_create(
             tenant=tenant,
-            feature_flag=flag,
-            defaults={"enabled": True, "reason": "e2e live-lane fixture"},
+            user_id=user.id,
+            defaults={
+                "employee_number": E2E_TEACHER_LOGIN_EMPLOYEE_NUMBER,
+                "first_name": E2E_TEACHER_LOGIN_NAME[0],
+                "last_name": E2E_TEACHER_LOGIN_NAME[1],
+                "staff_type": StaffType.TEACHING,
+                "employment_status": EmploymentStatus.ACTIVE,
+                "campus": campus,
+                "joining_date": "2026-01-01",
+                "phone": E2E_TEACHER_LOGIN_PHONE,
+            },
         )
+        if not created and (
+            staff.staff_type != StaffType.TEACHING
+            or staff.employment_status != EmploymentStatus.ACTIVE
+        ):
+            staff.staff_type = StaffType.TEACHING
+            staff.employment_status = EmploymentStatus.ACTIVE
+            staff.save(update_fields=["staff_type", "employment_status", "updated_at"])
+        return staff
 
     def _ensure_leave_types(self, tenant: Tenant) -> list[LeaveType]:
         """The two §6 names, one of which requires an attachment.
@@ -760,12 +912,7 @@ class Command(BaseCommand):
         teacher picker is the same call. Without this flag the seeded staff row exists
         but nothing can look it up, which is indistinguishable from not seeding it.
         """
-        flag = FeatureFlag.objects.get(key="module.staff")
-        TenantFeatureOverride.objects.update_or_create(
-            tenant=tenant,
-            feature_flag=flag,
-            defaults={"enabled": True, "reason": "e2e live-lane fixture"},
-        )
+        self._ensure_feature_enabled(tenant, "module.staff")
 
     def _ensure_communication_enabled(self, tenant: Tenant) -> None:
         """`module.communication` defaults off (apps/communication/features.py).
@@ -774,12 +921,7 @@ class Command(BaseCommand):
         `_ensure_students_module_enabled`, and called for both tenants for the same
         403-before-404 reason `_ensure_timetable_enabled` is.
         """
-        flag = FeatureFlag.objects.get(key="module.communication")
-        TenantFeatureOverride.objects.update_or_create(
-            tenant=tenant,
-            feature_flag=flag,
-            defaults={"enabled": True, "reason": "e2e live-lane fixture"},
-        )
+        self._ensure_feature_enabled(tenant, "module.communication")
 
     def _ensure_comms_student(
         self,
@@ -856,6 +998,19 @@ class Command(BaseCommand):
             },
         )
         return student
+
+    # ------------------------------------------------------------------
+    # Parent portal (docs/03-modules/parent-portal.md)
+    # ------------------------------------------------------------------
+
+    def _ensure_portal_modules_enabled(self, tenant: Tenant) -> None:
+        """The portal and the two modules whose cards it reads; all three default off.
+
+        Called for both tenants, so the other tenant's isolation probes reach the row
+        lookup (a 404 or an empty list) instead of a 403 `module_disabled`.
+        """
+        for key in ("module.parent_portal", "module.fees_finance", "module.examinations"):
+            self._ensure_feature_enabled(tenant, key)
 
     def _ensure_subject(self, tenant: Tenant) -> Subject:
         subject, _ = Subject.objects.get_or_create(

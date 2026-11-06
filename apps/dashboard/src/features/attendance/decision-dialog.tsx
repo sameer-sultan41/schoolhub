@@ -18,8 +18,8 @@ import {
 } from "@schoolhub/ui";
 
 import { FormDialogLayout } from "@/components/form-dialog-layout";
-import { keepServerMessage } from "@/features/attendance/keep-server-message";
 import { useFormDialogSubmit } from "@/hooks/use-form-dialog-submit";
+import { keepServerMessage } from "@/lib/keep-server-message";
 import { queryKeys } from "@/lib/query-client";
 import { ApiError } from "@/services";
 

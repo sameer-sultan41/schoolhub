@@ -16,7 +16,7 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 
-from apps.attendance import serializers, services
+from apps.attendance import services
 from apps.attendance.models import (
     AttendanceCorrection,
     AttendanceStatus,
@@ -50,6 +50,7 @@ from apps.attendance.tests.factories import (
 )
 from apps.attendance.tests.test_leave import next_monday
 from apps.student_management.models import EnrollmentStatus
+from core.api import serializers
 from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 

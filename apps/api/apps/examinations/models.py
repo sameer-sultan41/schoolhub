@@ -34,9 +34,17 @@ suppression.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from decimal import Decimal
+from typing import TYPE_CHECKING
+
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 from core.tenancy.models import TenantOwnedModel
+
+if TYPE_CHECKING:
+    import uuid
 
 
 class ScaleType(models.TextChoices):
@@ -144,6 +152,20 @@ class GradingScale(TenantOwnedModel):
     def __str__(self) -> str:
         return self.name
 
+    @classmethod
+    def filter_assigned_to_user(cls, queryset, user):
+        """Record scope `assigned` — every scale, deliberately.
+
+        A scale is tenant reference data, the same reasoning that gives its
+        viewset `scope_campus_field = None`: it belongs to no class, campus or
+        teacher, and it is needed to render any grade. A teacher who can see an
+        exam but not the scale it grades against could not read its results.
+        """
+        return queryset
+
+
+PERCENT_VALIDATORS = [MinValueValidator(Decimal("0")), MaxValueValidator(Decimal("100"))]
+
 
 class GradeBand(TenantOwnedModel):
     """One band within a scale — §5.5.
@@ -160,8 +182,19 @@ class GradeBand(TenantOwnedModel):
 
     grading_scale = models.ForeignKey(GradingScale, on_delete=models.CASCADE, related_name="bands")
     label = models.CharField(max_length=10, help_text="e.g. A+, B, Pass.")
-    min_percent = models.DecimalField(max_digits=5, decimal_places=2, help_text="Inclusive.")
-    max_percent = models.DecimalField(max_digits=5, decimal_places=2, help_text="Inclusive.")
+    # Validators answer an out-of-range bound with a field error before the CHECK can 409.
+    min_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        validators=PERCENT_VALIDATORS,
+        help_text="Inclusive.",
+    )
+    max_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        validators=PERCENT_VALIDATORS,
+        help_text="Inclusive.",
+    )
     grade_point = models.DecimalField(
         max_digits=4, decimal_places=2, null=True, blank=True, help_text="For GPA scales."
     )
@@ -199,6 +232,112 @@ class GradeBand(TenantOwnedModel):
 
     def __str__(self) -> str:
         return f"{self.label} ({self.min_percent}-{self.max_percent}%)"
+
+    @classmethod
+    def filter_assigned_to_user(cls, queryset, user):
+        """Record scope `assigned` — every band, for `GradingScale`'s reason.
+
+        Tenant reference data needed to render any grade (`scope_campus_field =
+        None` on the viewset says the same about campus); a scale without its
+        bands is a name with no meaning.
+        """
+        return queryset
+
+
+@dataclass(frozen=True)
+class AssignedTeaching:
+    """What a teacher is currently assigned to teach — §4's record scope `assigned`.
+
+    `allocations` holds one `(section_id, class_id, subject_id, session_id)` per
+    current `academics.TeacherSubjectAllocation` row; `homerooms` one
+    `(section_id, session_id)` per section they are class teacher of, read
+    through active enrollments and carrying the enrollment's session.
+    `staff_ids` is the caller's active `Staff` rows, which an invigilation
+    names directly rather than through any teaching.
+    """
+
+    allocations: tuple[tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID], ...] = ()
+    homerooms: frozenset[tuple[uuid.UUID, uuid.UUID]] = frozenset()
+    staff_ids: frozenset[uuid.UUID] = frozenset()
+
+    @property
+    def is_empty(self) -> bool:
+        return not (self.allocations or self.homerooms)
+
+
+def _assigned_teaching(user) -> AssignedTeaching:
+    """Resolve `user`'s teaching once, for every `filter_assigned_to_user` here.
+
+    **One reading of "assigned" for the whole module.** `Marks` resolved it
+    inline first; `Exam` and `ExamSubject` need the same two halves, and three
+    copies of the predicate is how a reassigned teacher keeps seeing one table
+    after losing another. The allocation side keeps only *current* rows
+    (`effective_to IS NULL`), so a reassignment ends access rather than adding
+    to it — the reason that column is end-dated rather than deleted.
+
+    The homeroom side is read through active enrollments, as `Marks` always
+    did; each section carries the session of the enrollments that make it a
+    homeroom, so `Exam`/`ExamSubject` can match the exam's session too.
+    """
+    from apps.academics.models import TeacherSubjectAllocation
+    from apps.staff_management.models import EmploymentStatus, Staff
+    from apps.student_management.models import EnrollmentStatus, StudentEnrollment
+
+    if user is None or not getattr(user, "is_authenticated", False):
+        return AssignedTeaching()
+    staff_ids = list(
+        Staff.objects.alive()
+        .filter(user_id=user.pk, employment_status=EmploymentStatus.ACTIVE)
+        .values_list("pk", flat=True)
+    )
+    if not staff_ids:
+        return AssignedTeaching()
+
+    allocations = tuple(
+        TeacherSubjectAllocation.objects.alive()
+        .filter(staff_id__in=staff_ids, effective_to__isnull=True)
+        .values_list("section_id", "section__school_class_id", "subject_id", "academic_session_id")
+    )
+    homerooms = frozenset(
+        StudentEnrollment.objects.alive()
+        .filter(status=EnrollmentStatus.ACTIVE, section__class_teacher_staff_id__in=staff_ids)
+        .values_list("section_id", "academic_session_id")
+        .distinct()
+    )
+    return AssignedTeaching(
+        allocations=allocations, homerooms=homerooms, staff_ids=frozenset(staff_ids)
+    )
+
+
+def _exam_subjects_taught(teaching: AssignedTeaching) -> models.Q:
+    """The exam-subjects `teaching` covers: an allocation, or a homeroom's class.
+
+    An allocation matches on (class, subject) **in the exam's own session**: a
+    teacher allocated Maths for Grade 8 this year is not thereby assigned last
+    year's Grade 8 Maths paper. A homeroom section matches every subject of its
+    class, because §3's class-teacher review role is over the class, not one
+    subject — and, like an allocation, only in the homeroom's own session.
+    """
+    from apps.school_organization.models import Section
+
+    predicate = models.Q(pk__in=[])
+    for _section_id, class_id, subject_id, session_id in teaching.allocations:
+        predicate |= models.Q(
+            school_class_id=class_id,
+            subject_id=subject_id,
+            exam__academic_session_id=session_id,
+        )
+    sections_by_session: dict[uuid.UUID, set[uuid.UUID]] = {}
+    for section_id, session_id in teaching.homerooms:
+        sections_by_session.setdefault(session_id, set()).add(section_id)
+    for session_id, section_ids in sections_by_session.items():
+        predicate |= models.Q(
+            school_class_id__in=Section.objects.filter(pk__in=section_ids).values(
+                "school_class_id"
+            ),
+            exam__academic_session_id=session_id,
+        )
+    return predicate
 
 
 class Exam(TenantOwnedModel):
@@ -275,6 +414,22 @@ class Exam(TenantOwnedModel):
 
     def __str__(self) -> str:
         return self.name
+
+    @classmethod
+    def filter_assigned_to_user(cls, queryset, user):
+        """Record scope `assigned` — the exams a teacher teaches a paper in.
+
+        An exam is visible when one of its exam-subjects is (see
+        `_exam_subjects_taught`). A `pk__in` subquery rather than a join plus
+        `.distinct()`: the join fans out one row per matching subject, and
+        `SELECT DISTINCT` refuses an `ORDER BY` on anything not selected, which
+        the list's annotated name columns would be.
+        """
+        teaching = _assigned_teaching(user)
+        if teaching.is_empty:
+            return queryset.none()
+        taught = ExamSubject.objects.alive().filter(_exam_subjects_taught(teaching))
+        return queryset.filter(pk__in=taught.values("exam_id"))
 
 
 class ExamSubject(TenantOwnedModel):
@@ -376,6 +531,19 @@ class ExamSubject(TenantOwnedModel):
 
     def __str__(self) -> str:
         return f"{self.exam_id}/{self.subject_id}"
+
+    @classmethod
+    def filter_assigned_to_user(cls, queryset, user):
+        """Record scope `assigned` — the subject configurations a teacher teaches.
+
+        The same rows `Exam.filter_assigned_to_user` resolves an exam through,
+        so an assigned teacher who can open an exam sees exactly the subjects
+        that made it visible, not its whole timetable of papers.
+        """
+        teaching = _assigned_teaching(user)
+        if teaching.is_empty:
+            return queryset.none()
+        return queryset.filter(_exam_subjects_taught(teaching))
 
 
 class ScheduleStatus(models.TextChoices):
@@ -540,28 +708,40 @@ class ExamSchedule(TenantOwnedModel):
 
     @classmethod
     def filter_assigned_to_user(cls, queryset, user):
-        """Record scope `assigned` — a teacher's own section, or their invigilations.
+        """Record scope `assigned` — what a teacher teaches, homerooms or invigilates.
 
-        The union is deliberate. A class teacher needs their section's schedule;
-        an invigilator needs the sittings they are supervising, which are
-        routinely *not* their own section — that is the point of an invigilator.
-        Narrowing to either one alone would hide half of what each needs.
+        Three halves, unioned, because each role needs a different slice:
+
+        - the *subject* teacher sees the sittings of the (section, subject) they
+          are allocated, in the allocation's session — the paper they set and
+          mark;
+        - the *class* teacher sees every sitting of their homeroom, in the
+          homeroom's session;
+        - an invigilator sees the sittings they supervise, which are routinely
+          *not* their own section — that is the point of an invigilator.
+
+        The first two come from `_assigned_teaching`, the module's one reading
+        of "assigned", so a reassigned teacher loses a sitting exactly when they
+        lose the exam it belongs to. Every predicate is a forward join, so no
+        row fans out and no `.distinct()` is needed — which would otherwise make
+        Postgres refuse an `ORDER BY` on an annotated name.
         """
-        if user is None or not getattr(user, "is_authenticated", False):
+        teaching = _assigned_teaching(user)
+        if not teaching.staff_ids:
             return queryset.none()
-        from apps.staff_management.models import EmploymentStatus, Staff
 
-        staff_ids = list(
-            Staff.objects.alive()
-            .filter(user_id=user.pk, employment_status=EmploymentStatus.ACTIVE)
-            .values_list("pk", flat=True)
-        )
-        if not staff_ids:
-            return queryset.none()
-        return queryset.filter(
-            models.Q(section__class_teacher_staff_id__in=staff_ids)
-            | models.Q(invigilator_staff_id__in=staff_ids)
-        ).distinct()
+        predicate = models.Q(invigilator_staff_id__in=teaching.staff_ids)
+        for section_id, _class_id, subject_id, session_id in teaching.allocations:
+            predicate |= models.Q(
+                section_id=section_id,
+                exam_subject__subject_id=subject_id,
+                exam_subject__exam__academic_session_id=session_id,
+            )
+        for section_id, session_id in teaching.homerooms:
+            predicate |= models.Q(
+                section_id=section_id, exam_subject__exam__academic_session_id=session_id
+            )
+        return queryset.filter(predicate)
 
 
 class AdmitCard(TenantOwnedModel):
@@ -643,28 +823,26 @@ class AdmitCard(TenantOwnedModel):
 
     @classmethod
     def filter_assigned_to_user(cls, queryset, user):
-        """Record scope `assigned` — a class teacher's own section's cards."""
-        if user is None or not getattr(user, "is_authenticated", False):
-            return queryset.none()
-        from apps.staff_management.models import EmploymentStatus, Staff
-        from apps.student_management.models import EnrollmentStatus, StudentEnrollment
+        """Record scope `assigned` — a class teacher's homeroom cards, per session.
 
-        staff_ids = list(
-            Staff.objects.alive()
-            .filter(user_id=user.pk, employment_status=EmploymentStatus.ACTIVE)
-            .values_list("pk", flat=True)
-        )
-        if not staff_ids:
-            return queryset.none()
-        student_ids = (
-            StudentEnrollment.objects.alive()
-            .filter(
-                status=EnrollmentStatus.ACTIVE,
-                section__class_teacher_staff_id__in=staff_ids,
+        Read through `_assigned_teaching`, the module's one reading of
+        "assigned": a card matches a homeroom only when its exam is in the
+        homeroom's session and the student's enrollment in that session is in
+        that section. So last year's homeroom does not reach this year's cards,
+        and vice versa. One `.filter()`, so every condition lands on the same
+        enrollment join; no status filter, as a closed session's rows are no
+        longer `active`.
+        """
+        teaching = _assigned_teaching(user)
+        predicate = models.Q(pk__in=[])
+        for section_id, session_id in teaching.homerooms:
+            predicate |= models.Q(
+                exam__academic_session_id=session_id,
+                student__enrollments__section_id=section_id,
+                student__enrollments__academic_session_id=session_id,
+                student__enrollments__deleted_at__isnull=True,
             )
-            .values_list("student_id", flat=True)
-        )
-        return queryset.filter(student_id__in=student_ids)
+        return queryset.filter(predicate)
 
 
 class MarksStatus(models.TextChoices):
@@ -793,6 +971,22 @@ class Marks(TenantOwnedModel):
         return queryset.filter(student__in=visible)
 
     @classmethod
+    def filter_by_campus(cls, queryset, campus_ids):
+        """Record scope `campus` — the campus of the section the row belongs to.
+
+        The section is the student's enrollment in the exam's own session, the one
+        `services.may_enter_marks` checks `section.campus_id` on. Any status (L50),
+        so a promoted session's marks stay readable to its campus.
+        """
+        return queryset.filter(
+            student__enrollments__section__campus_id__in=campus_ids,
+            student__enrollments__academic_session_id=models.F(
+                "exam_subject__exam__academic_session_id"
+            ),
+            student__enrollments__deleted_at__isnull=True,
+        )
+
+    @classmethod
     def filter_assigned_to_user(cls, queryset, user):
         """Record scope `assigned` — §4's marks-entry rights.
 
@@ -807,55 +1001,39 @@ class Marks(TenantOwnedModel):
           gives them a review role over their homeroom's results, which is a
           different thing from teaching the subject.
 
-        Narrowing to either alone would hide half of what each role needs. The
-        allocation side is restricted to *current* rows (`effective_to IS
-        NULL`), so a reassigned teacher stops being able to enter marks for a
-        class they no longer teach — the reason that column is end-dated rather
-        than deleted.
+        Narrowing to either alone would hide half of what each role needs. Both
+        halves come from `_assigned_teaching`, and both match only in the
+        exam's session, through the student's active enrollment there — the
+        same rule `services.may_enter_marks` applies to the grid *read*.
+        **Entry is narrower:** `services.assert_marker_may_enter` counts the
+        allocations only, so a homeroom-only class teacher reads their class's
+        marks but does not enter them.
         """
-        if user is None or not getattr(user, "is_authenticated", False):
-            return queryset.none()
-        from apps.academics.models import TeacherSubjectAllocation
-        from apps.staff_management.models import EmploymentStatus, Staff
-        from apps.student_management.models import EnrollmentStatus, StudentEnrollment
+        from apps.student_management.models import EnrollmentStatus
 
-        staff_ids = list(
-            Staff.objects.alive()
-            .filter(user_id=user.pk, employment_status=EmploymentStatus.ACTIVE)
-            .values_list("pk", flat=True)
-        )
-        if not staff_ids:
+        teaching = _assigned_teaching(user)
+        if teaching.is_empty:
             return queryset.none()
 
-        # (section, subject) pairs this user currently teaches.
-        allocations = list(
-            TeacherSubjectAllocation.objects.alive()
-            .filter(staff_id__in=staff_ids, effective_to__isnull=True)
-            .values_list("section_id", "subject_id")
-        )
-        # Sections they are class teacher of.
-        homeroom_sections = list(
-            StudentEnrollment.objects.alive()
-            .filter(status=EnrollmentStatus.ACTIVE, section__class_teacher_staff_id__in=staff_ids)
-            .values_list("section_id", flat=True)
-            .distinct()
-        )
-
+        enrolled = {
+            "student__enrollments__status": EnrollmentStatus.ACTIVE,
+            "student__enrollments__deleted_at__isnull": True,
+        }
         predicate = models.Q(pk__in=[])
-        for section_id, subject_id in allocations:
-            # Marks name a student and an exam-subject, so "the section I teach"
-            # resolves through the student's active enrollment in it.
+        for section_id, _class_id, subject_id, session_id in teaching.allocations:
             predicate |= models.Q(
                 exam_subject__subject_id=subject_id,
+                exam_subject__exam__academic_session_id=session_id,
                 student__enrollments__section_id=section_id,
-                student__enrollments__status=EnrollmentStatus.ACTIVE,
-                student__enrollments__deleted_at__isnull=True,
+                student__enrollments__academic_session_id=session_id,
+                **enrolled,
             )
-        if homeroom_sections:
+        for section_id, session_id in teaching.homerooms:
             predicate |= models.Q(
-                student__enrollments__section_id__in=homeroom_sections,
-                student__enrollments__status=EnrollmentStatus.ACTIVE,
-                student__enrollments__deleted_at__isnull=True,
+                exam_subject__exam__academic_session_id=session_id,
+                student__enrollments__section_id=section_id,
+                student__enrollments__academic_session_id=session_id,
+                **enrolled,
             )
         return queryset.filter(predicate).distinct()
 
@@ -916,10 +1094,11 @@ class Result(TenantOwnedModel):
     and resolving the section through the enrolment at read time would do
     exactly that.
 
-    `created_by` is the processing initiator, and `approved_by` must differ from
-    it — §4's closing line and auth-and-rbac §2.4's segregation of duties. That
-    is checked in `services`, not here, because a CHECK cannot compare a column
-    against another row's author and the rule has to hold for any caller.
+    `processed_by` is whoever ran the latest processing, re-stamped on every run
+    (a re-process after a send-back included), and `approved_by` must differ
+    from it — §4's closing line and auth-and-rbac §2.4's segregation of duties.
+    `created_by` names only the first run, so it cannot carry the rule. That is
+    checked in `services`, not here, because the rule has to hold for any caller.
     """
 
     exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name="results")
@@ -951,8 +1130,13 @@ class Result(TenantOwnedModel):
     status = models.CharField(
         max_length=20, choices=ResultStatus.choices, default=ResultStatus.PROCESSING
     )
+    processed_by = models.UUIDField(
+        null=True,
+        blank=True,
+        help_text="users(id) of the latest processing run; re-stamped on every run.",
+    )
     approved_by = models.UUIDField(
-        null=True, blank=True, help_text="Must differ from the processing initiator (§4)."
+        null=True, blank=True, help_text="Must differ from `processed_by` (§4)."
     )
     approved_at = models.DateTimeField(null=True, blank=True)
     published_at = models.DateTimeField(null=True, blank=True)
@@ -1286,29 +1470,13 @@ class QuestionBank(TenantOwnedModel):
     def filter_assigned_to_user(cls, queryset, user):
         """Record scope `assigned` — the subjects a teacher currently teaches.
 
-        Through `academics.TeacherSubjectAllocation`, the same table
-        `Marks.filter_assigned_to_user` resolves entry rights through. §4 gives
-        `exams.question.approve` to a "`teacher` (assigned subject)", and this
-        is what makes "assigned subject" mean something.
+        Read from `_assigned_teaching`'s current allocations, the module's one
+        reading of "assigned". §4 gives `exams.question.approve` to a "`teacher`
+        (assigned subject)": a bank matches on its subject alone, whatever its
+        class, and a homeroom grants no bank.
         """
-        if user is None or not getattr(user, "is_authenticated", False):
-            return queryset.none()
-        from apps.academics.models import TeacherSubjectAllocation
-        from apps.staff_management.models import EmploymentStatus, Staff
-
-        staff_ids = list(
-            Staff.objects.alive()
-            .filter(user_id=user.pk, employment_status=EmploymentStatus.ACTIVE)
-            .values_list("pk", flat=True)
-        )
-        if not staff_ids:
-            return queryset.none()
-        subject_ids = (
-            TeacherSubjectAllocation.objects.alive()
-            .filter(staff_id__in=staff_ids, effective_to__isnull=True)
-            .values_list("subject_id", flat=True)
-        )
-        return queryset.filter(subject_id__in=list(subject_ids))
+        subject_ids = {subject_id for _, _, subject_id, _ in _assigned_teaching(user).allocations}
+        return queryset.filter(subject_id__in=subject_ids) if subject_ids else queryset.none()
 
 
 class Question(TenantOwnedModel):

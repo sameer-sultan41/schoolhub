@@ -1051,6 +1051,7 @@ dev = [
     { name = "django-stubs" },
     { name = "drf-spectacular-sidecar" },
     { name = "factory-boy" },
+    { name = "jsonschema" },
     { name = "mypy" },
     { name = "ruff" },
 ]
@@ -1081,6 +1082,7 @@ dev = [
     { name = "django-stubs", specifier = ">=6.1" },
     { name = "drf-spectacular-sidecar" },
     { name = "factory-boy", specifier = ">=3.3" },
+    { name = "jsonschema", specifier = ">=4.26" },
     { name = "mypy", specifier = ">=2.3,<2.4" },
     { name = "ruff", specifier = ">=0.16" },
 ]

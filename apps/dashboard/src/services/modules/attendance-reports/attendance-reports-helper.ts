@@ -93,12 +93,6 @@ export function formatOneDecimal(value: number, locale: string): string {
   return decimalFormat(locale, REPORT_FRACTION_DIGITS, { fixed: true }).format(value);
 }
 
-/** A finished report job's file id, read without trusting the result's shape. */
-export function jobResultFileId(result: Record<string, unknown> | null | undefined): string | null {
-  const fileId = result?.result_file_id;
-  return typeof fileId === "string" ? fileId : null;
-}
-
 /** A finished report job's `attendance_mode`, or `null` when the result names none. */
 export function jobResultMode(
   result: Record<string, unknown> | null | undefined,

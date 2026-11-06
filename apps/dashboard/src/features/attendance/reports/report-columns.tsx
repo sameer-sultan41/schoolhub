@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { useMemo } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { ColumnDef } from "@tanstack/react-table";
 
+import { reportColumn as column } from "@/components/reports/report-column";
 import { AttendanceStatusBadge } from "@/features/attendance/attendance-status";
 import { RequestStatusBadge } from "@/features/attendance/request-status-badge";
 import { EMPTY_VALUE } from "@/lib/constants";
@@ -22,17 +23,6 @@ type Translate = ReturnType<typeof useTranslations>;
 interface PersonRow {
   first_name: string;
   last_name: string;
-}
-
-/** A plain column: a translated header and a cell. Report columns are never sorted. */
-function column<TRow>(id: string, title: string, cell: (row: TRow) => ReactNode): ColumnDef<TRow> {
-  return {
-    id,
-    enableSorting: false,
-    header: () => title,
-    cell: ({ row }) => cell(row.original),
-    meta: { headerTitle: title },
-  };
 }
 
 /** A count that may be null (no minutes at all), shown as a dash. */

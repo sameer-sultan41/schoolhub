@@ -53,6 +53,9 @@ export interface AuthenticatedUser {
   roles: Role[];
   /** Effective permission keys — the union across all roles. */
   permissions: PermissionKey[];
+  /** True for a student or guardian (the generated `User` schema's field; optional here only
+   * because this hand-written type predates it, ADR-0017). */
+  is_restricted_principal?: boolean;
   /** Set when a platform support user is impersonating this account. */
   impersonated_by?: string | null;
 }

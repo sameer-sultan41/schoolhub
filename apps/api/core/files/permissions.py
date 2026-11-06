@@ -7,14 +7,16 @@ key (e.g. ``students.document.create``) actually gates; this key only gates
 whether the caller can request a presigned slot and fetch a download URL at
 all.
 
-Granted to staff roles only for now — nothing in this PR gives a guardian or
-student a reason to call these endpoints (parent-portal, a later tier, is what
-would). Restricted principals are never staff-permission holders anyway
-(auth-and-rbac.md §6 rule 4); widen this only when a concrete caller needs it,
-not preemptively.
+``platform.file.create`` is also held by the portal roles, so a guardian or
+student can upload a leave or thread attachment. It is narrowed in
+``core.files.views``: a restricted principal may only request a purpose whose
+spec sets ``portal_uploadable``, and may only confirm a file they created.
+``platform.file.view`` stays staff-only; the portal reads a file through its
+owning module's record-gated route.
 """
 
 from core.rbac.registry import registry
+from core.rbac.roles import PORTAL_ROLES
 
 ALL_STAFF = (
     "school_owner",
@@ -39,7 +41,7 @@ ALL_STAFF = (
 registry.register(
     "platform.file.create",
     "Request a presigned upload slot and confirm it (core platform infrastructure).",
-    ALL_STAFF,
+    (*ALL_STAFF, *PORTAL_ROLES),
 )
 registry.register(
     "platform.file.view",

@@ -146,7 +146,8 @@ Processed per-student outcome for one exam: aggregates, grade, GPA, rank, and th
 | outcome | VARCHAR(20) | no | — | Enum: `pass`, `fail`, `absent`, `withheld` |
 | grace_marks | NUMERIC(6,2) | no | 0 | Moderation adjustment, audited (recommendation) |
 | status | VARCHAR(20) | no | `processing` | Enum: `processing`, `pending_approval`, `approved`, `published` |
-| approved_by | UUID | yes | NULL | FK → users; must differ from processing initiator |
+| processed_by | UUID | yes | NULL | FK → users; who ran the latest processing, re-stamped on every run (a re-process after a send-back included). Backfilled from `created_by`, which names only the first run |
+| approved_by | UUID | yes | NULL | FK → users; must differ from `processed_by` (§4 segregation of duties) |
 | approved_at | TIMESTAMPTZ | yes | NULL | |
 | published_at | TIMESTAMPTZ | yes | NULL | |
 
