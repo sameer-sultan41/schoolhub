@@ -2337,7 +2337,7 @@
       "emptyTitle": "چھٹی کی کوئی درخواست نہیں",
       "emptyDescription": "آپ اپنے بچے کے لیے جو درخواستیں جمع کروائیں گے وہ یہاں نظر آئیں گی۔",
       "range": "{from} سے {to} تک",
-      "days": "{count} دن",
+      "days": "{count, plural, one {# دن} other {# دن}}",
       "attached": "دستاویز جمع کروائی گئی",
       "dayPart": {
         "full": "پورا دن",

@@ -31,6 +31,10 @@ export interface AttachmentUploaderProps {
   multiple?: boolean;
   maxFiles?: number;
   disabled?: boolean;
+  /** Set by a surrounding `FormControl` (`Slot`), which ties a field's error to the input. */
+  id?: string;
+  "aria-invalid"?: boolean;
+  "aria-describedby"?: string;
 }
 
 /**
@@ -47,9 +51,13 @@ export function AttachmentUploader({
   multiple = false,
   maxFiles = 1,
   disabled = false,
+  id,
+  "aria-invalid": ariaInvalid,
+  "aria-describedby": ariaDescribedBy,
 }: AttachmentUploaderProps) {
   const t = useTranslations("common.attachmentUpload");
-  const inputId = useId();
+  const generatedId = useId();
+  const inputId = id ?? generatedId;
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Only a still-mounted instance reports back, and the latest list wins over a stale closure.
@@ -109,6 +117,8 @@ export function AttachmentUploader({
       {!atLimit || !multiple ? (
         <Input
           id={inputId}
+          aria-invalid={ariaInvalid}
+          aria-describedby={ariaDescribedBy}
           type="file"
           accept={PORTAL_ATTACHMENT_MIME_TYPES.join(",")}
           disabled={disabled || uploading}

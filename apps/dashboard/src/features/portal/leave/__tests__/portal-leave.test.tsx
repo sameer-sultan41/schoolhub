@@ -250,6 +250,10 @@ describe("PortalLeave", () => {
     await user.click(screen.getByRole("button", { name: "Submit request" }));
 
     expect(await screen.findByText("That file was not uploaded by you.")).toBeInTheDocument();
+    // Tied to the input itself, so a message that fell through to the form alert fails this.
+    expect(
+      screen.getByLabelText("Supporting document (PDF, JPEG or PNG)"),
+    ).toHaveAccessibleDescription("That file was not uploaded by you.");
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 

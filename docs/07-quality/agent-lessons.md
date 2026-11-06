@@ -298,6 +298,11 @@
   test changes for the same identity: assert each read on its own (`> 0`), or give the test its
   own identity. Pin exact equality in a backend unit test, where nothing runs alongside.
 
+### L40. Granting a role an action key means checking the view's read key too
+
+- **Mistake.** Parent-portal PR B's backend gave guardians and students `platform.file.create` so they could upload, but `FileViewSet`'s `confirm` also required the read key `platform.file.view`, which stays staff-only. The tests hand-granted keys to a user, so every one passed; only CI's `DefaultRoleReadKeyTests` (ADR-0031 decision 3) caught that the real role could not confirm an upload. Fixed with `scope_read_exempt_actions={"confirm"}` (`fix(files): a portal user's upload confirm needs no file-view key`).
+- **Check.** When a role gains an action key, read the viewset it reaches for its read key and `scope_read_exempt_actions`, and prove the path with the role's real keys (`keys_for_role`), not a hand-granted user.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.

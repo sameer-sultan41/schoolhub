@@ -10,9 +10,6 @@ const NOT_FOUND = "Not found.";
 /** `assert_may_request_for_student`'s refusal when the caller is not the child's guardian. */
 const NOT_YOUR_CHILD = "You can only request leave for your own child.";
 
-/** `cancel_leave_request`'s sentence for a request that has already started. */
-const ALREADY_STARTED = "Leave can only be cancelled before it starts (§6).";
-
 interface LeaveBody {
   student_id?: string;
   leave_type_id?: string;
@@ -83,7 +80,11 @@ export function portalLeaveModule(store: PortalStore): MockModule {
       const { id, action } = colonAction(request.params["requestAction"]);
       const row = store.leaveRequests.find((candidate) => candidate.id === id);
       if (action !== "cancel" || !row) return fail(404, NOT_FOUND);
-      if (row.status !== "pending") return refused("status", ALREADY_STARTED);
+      // `cancel_leave_request`: a rejected or cancelled request is a 409 (an approved one may
+      // still be cancelled; the start-date refusal is not modelled, the stub holds no clock).
+      if (row.status === "rejected" || row.status === "cancelled") {
+        return fail(409, `This request was already ${row.status}.`);
+      }
       row.status = "cancelled";
       return ok(row);
     });

@@ -2337,7 +2337,7 @@
       "emptyTitle": "No leave requests",
       "emptyDescription": "Requests you submit for your child will appear here.",
       "range": "{from} to {to}",
-      "days": "{count} days",
+      "days": "{count, plural, one {# day} other {# days}}",
       "attached": "Attachment submitted",
       "dayPart": {
         "full": "Full day",

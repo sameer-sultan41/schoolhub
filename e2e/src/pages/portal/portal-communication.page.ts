@@ -54,4 +54,22 @@ export class PortalCommunicationPage extends BasePage {
   preference(category: string, channel: string): Locator {
     return this.page.getByRole("checkbox", { name: `${category} by ${channel}`, exact: true });
   }
+
+  // ---- settings: change password ----------------------------------------------------------
+
+  get currentPassword(): Locator {
+    return this.page.getByLabel("Current password", { exact: true });
+  }
+
+  get newPassword(): Locator {
+    return this.page.getByLabel("New password", { exact: true });
+  }
+
+  get confirmPassword(): Locator {
+    return this.page.getByLabel("Confirm new password", { exact: true });
+  }
+
+  get changePassword(): Locator {
+    return this.page.getByRole("button", { name: "Change password", exact: true });
+  }
 }

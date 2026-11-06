@@ -1,11 +1,10 @@
-import type { Locator } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { BasePage } from "../base.page";
 
 /**
- * A child's leave page (`/portal/{studentId}/leave`) and the portal's write-side controls that
- * sit beside it: the new-request dialog, a request's Cancel, and the fees page's vouchers. Reached
- * through the shell's tab (`PortalPage.tab`). Names come from `apps/dashboard/messages/en.json`
- * (`portal.leave`, `portal.fees.vouchers`).
+ * A child's leave page (`/portal/{studentId}/leave`): the list, the new-request dialog and a
+ * request's Cancel. Reached through the shell's tab (`PortalPage.tab`). Names come from
+ * `apps/dashboard/messages/en.json` (`portal.leave`).
  */
 export class PortalLeavePage extends BasePage {
   readonly path = "/portal";
@@ -22,7 +21,7 @@ export class PortalLeavePage extends BasePage {
   }
 
   /** A row's Cancel button, or the one in the confirm dialog when `within` is the dialog. */
-  cancelButton(within: Locator = this.page): Locator {
+  cancelButton(within: Page | Locator = this.page): Locator {
     return within.getByRole("button", { name: "Cancel request", exact: true });
   }
 
@@ -58,33 +57,5 @@ export class PortalLeavePage extends BasePage {
 
   get submit(): Locator {
     return this.dialog.getByRole("button", { name: "Submit request", exact: true });
-  }
-
-  // ---- fees: vouchers -----------------------------------------------------------------------
-
-  voucherButton(consumerNumber: string): Locator {
-    return this.page.getByRole("button", { name: new RegExp(`voucher ${consumerNumber}`) });
-  }
-
-  get noVoucher(): Locator {
-    return this.page.getByText("Ask the school office for a voucher.", { exact: true });
-  }
-
-  // ---- settings: change password ------------------------------------------------------------
-
-  get currentPassword(): Locator {
-    return this.page.getByLabel("Current password", { exact: true });
-  }
-
-  get newPassword(): Locator {
-    return this.page.getByLabel("New password", { exact: true });
-  }
-
-  get confirmPassword(): Locator {
-    return this.page.getByLabel("Confirm new password", { exact: true });
-  }
-
-  get changePassword(): Locator {
-    return this.page.getByRole("button", { name: "Change password", exact: true });
   }
 }

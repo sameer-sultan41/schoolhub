@@ -44,6 +44,16 @@ export class PortalChildPage extends BasePage {
     return this.page.getByRole("button", { name: `Receipt ${receiptNo}`, exact: true });
   }
 
+  /** An invoice's voucher download, found by its consumer number. */
+  voucherButton(consumerNumber: string): Locator {
+    return this.page.getByRole("button", { name: new RegExp(`voucher ${consumerNumber}`) });
+  }
+
+  /** What an open invoice with no voucher says. */
+  get noVoucher(): Locator {
+    return this.page.getByText("Ask the school office for a voucher.", { exact: true });
+  }
+
   /** A "Pay" control: there is none, the portal is read-only for money. */
   get payButton(): Locator {
     return this.page.getByRole("button", { name: /\bpay\b/i });

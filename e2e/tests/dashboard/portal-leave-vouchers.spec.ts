@@ -131,7 +131,7 @@ test.describe("a guardian's leave, vouchers and password", () => {
     page,
     mockApi,
     portalPage,
-    portalLeavePage,
+    portalChildPage,
     signedIn: _signedIn,
   }) => {
     stubFamily(mockApi, { invoices: [buildInvoice()], vouchers: [buildVoucher()] });
@@ -140,7 +140,7 @@ test.describe("a guardian's leave, vouchers and password", () => {
 
     const request = page.waitForRequest((r) => isApiCall(r, "GET", VOUCHER_DOWNLOAD_PATH));
     const download = page.waitForEvent("download");
-    await portalLeavePage.voucherButton("1234567890").click();
+    await portalChildPage.voucherButton("1234567890").click();
 
     expect((await download).suggestedFilename()).toBe("1234567890.pdf");
     const sent = await request;
@@ -151,42 +151,42 @@ test.describe("a guardian's leave, vouchers and password", () => {
   test("an open invoice with no voucher says to ask the school office", async ({
     mockApi,
     portalPage,
-    portalLeavePage,
+    portalChildPage,
     signedIn: _signedIn,
   }) => {
     stubFamily(mockApi, { invoices: [buildInvoice()] });
     await portalPage.goto();
     await portalPage.tab("Fees").click();
 
-    await expect(portalLeavePage.noVoucher).toBeVisible();
+    await expect(portalChildPage.noVoucher).toBeVisible();
   });
 
   test("settings changes the password, naming a wrong current one on its field", async ({
     page,
     mockApi,
     portalPage,
-    portalLeavePage,
+    portalCommunicationPage,
     signedIn: _signedIn,
   }) => {
     const store = stubFamily(mockApi);
     await portalPage.goto();
     await portalPage.tab("Settings").click();
 
-    await portalLeavePage.currentPassword.fill("not-the-password");
-    await portalLeavePage.newPassword.fill("a-better-password-2");
-    await portalLeavePage.confirmPassword.fill("a-better-password-2");
-    await portalLeavePage.changePassword.click();
+    await portalCommunicationPage.currentPassword.fill("not-the-password");
+    await portalCommunicationPage.newPassword.fill("a-better-password-2");
+    await portalCommunicationPage.confirmPassword.fill("a-better-password-2");
+    await portalCommunicationPage.changePassword.click();
 
     await expect(page.getByText("Current password is incorrect.")).toBeVisible();
     expect(store.passwordChanges).toHaveLength(0);
 
-    await portalLeavePage.currentPassword.fill(store.password);
-    await portalLeavePage.changePassword.click();
+    await portalCommunicationPage.currentPassword.fill(store.password);
+    await portalCommunicationPage.changePassword.click();
 
     await expect(page.getByText("Password changed.")).toBeVisible();
     expect(store.passwordChanges).toEqual([
       { current_password: store.password, new_password: "a-better-password-2" },
     ]);
-    await expect(portalLeavePage.currentPassword).toHaveValue("");
+    await expect(portalCommunicationPage.currentPassword).toHaveValue("");
   });
 });

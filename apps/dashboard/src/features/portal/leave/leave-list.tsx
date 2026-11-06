@@ -11,7 +11,6 @@ import { enumLabel } from "@/features/portal/enum-label";
 import { formatDate } from "@/lib/helpers";
 import type { LeaveRequestRecord } from "@/services";
 import { LEAVE_DEFAULT_DAY_PART } from "@/services/modules/leave-requests/leave-requests-constant";
-import { formatLeaveDays } from "@/services/modules/leave-requests/leave-requests-helper";
 import { CancelLeaveDialog } from "./cancel-leave-dialog";
 import { LEAVE_DAY_PART_LABEL_KEY } from "./leave-labels";
 import { useChildLeave } from "./use-child-leave";
@@ -61,7 +60,7 @@ export function LeaveList({ studentId }: { studentId: string }) {
                             from: formatDate(request.start_date, locale),
                             to: formatDate(request.end_date, locale),
                           }),
-                      t("days", { count: formatLeaveDays(request.days_count, locale) }),
+                      t("days", { count: Number(request.days_count) }),
                       enumLabel(
                         t,
                         LEAVE_DAY_PART_LABEL_KEY,

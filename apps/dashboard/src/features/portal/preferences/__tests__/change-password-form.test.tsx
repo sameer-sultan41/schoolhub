@@ -106,6 +106,10 @@ describe("ChangePasswordForm", () => {
     await user.click(screen.getByRole("button", { name: "Change password" }));
 
     expect(await screen.findByText("Current password is incorrect.")).toBeInTheDocument();
+    // Under its own field, not in the form's alert.
+    expect(screen.getByLabelText("Current password")).toHaveAccessibleDescription(
+      "Current password is incorrect.",
+    );
     expect(screen.getByLabelText("New password")).toHaveValue(NEXT);
   });
 });

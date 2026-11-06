@@ -107,6 +107,7 @@ export function NewLeaveDialog({ open, onOpenChange, studentId }: NewLeaveDialog
     defaultValues: DEFAULTS,
   });
   const leaveTypeId = useWatch({ control: form.control, name: "leave_type_id" });
+  const startDate = useWatch({ control: form.control, name: "start_date" });
   const requiresAttachment =
     types.data?.find((type) => type.id === leaveTypeId)?.requires_attachment ?? false;
 
@@ -183,7 +184,7 @@ export function NewLeaveDialog({ open, onOpenChange, studentId }: NewLeaveDialog
             <FormItem>
               <FormLabel>{t("endDate")}</FormLabel>
               <FormControl>
-                <Input type="date" min={form.getValues("start_date") || undefined} {...field} />
+                <Input type="date" min={startDate || undefined} {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -220,18 +221,20 @@ export function NewLeaveDialog({ open, onOpenChange, studentId }: NewLeaveDialog
           name="attachment_file_id"
           render={() => (
             <FormItem>
-              <AttachmentUploader
-                purpose={LEAVE_ATTACHMENT_PURPOSE}
-                label={t("attachment")}
-                value={attachment}
-                onChange={(next) => {
-                  setAttachment(next);
-                  form.setValue("attachment_file_id", next[0]?.id ?? "", {
-                    shouldValidate: form.formState.isSubmitted,
-                  });
-                }}
-                onUploadingChange={setIsUploading}
-              />
+              <FormControl>
+                <AttachmentUploader
+                  purpose={LEAVE_ATTACHMENT_PURPOSE}
+                  label={t("attachment")}
+                  value={attachment}
+                  onChange={(next) => {
+                    setAttachment(next);
+                    form.setValue("attachment_file_id", next[0]?.id ?? "", {
+                      shouldValidate: form.formState.isSubmitted,
+                    });
+                  }}
+                  onUploadingChange={setIsUploading}
+                />
+              </FormControl>
               <FormMessage />
             </FormItem>
           )}
