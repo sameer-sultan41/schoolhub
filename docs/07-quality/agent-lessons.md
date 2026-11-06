@@ -344,6 +344,11 @@
 - **Mistake.** `:publish-schedule` locked the exam and read the clash list, but sitting create, update and delete never took that lock, so a sitting saved mid-publish committed unseen and the exam went to `scheduled` over a hard clash. `issue_admit_cards` read the existing cards with no lock, so two runs both saw none missing and both reported `issued = N` (PR #149 review).
 - **Check.** When a gate reads child rows and decides on them, find every writer of those rows and lock the same parent (`lock_exam`, `select_for_update()` on the parent, several parents in pk order) before it writes, as well as in the gate. When the gate also reads rows of *other* parents (a clash check across exams), lock their common ancestor instead, here a per-tenant advisory lock (`core.tenancy.locks.advisory_xact_lock`), taken before any row lock on every path. A count of rows "this run added" is then just what it inserted. Test each path with `CaptureQueriesContext`: a `FOR UPDATE` on the parent's table before the first read or write of the children.
 
+### L53. A clean merge of two stacks can still break a call whose signature one side changed
+
+- **Mistake.** Merging `feat/exams-schedule` into the portal stack (PR C) raised no conflict in `scoped_exam()`, but the other side had made `scope_queryset(permission=)` required (#148), so five exam actions would 500. Only the pre-push mypy caught it. The first fix also added `exams.exam.view` on top of the route key, which 404'd a schedule-keyed teacher (`ExamLookupScopeTests`).
+- **Check.** After merging two branches, list the shared helpers either side changed (`git diff <base>...<other> -- core/`) and grep every new caller from the other side. When fixing such a caller, keep the behaviour that side's tests pin (here, the route key's own scope).
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.
