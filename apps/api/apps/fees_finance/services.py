@@ -18,12 +18,12 @@ import logging
 import re
 import secrets
 import uuid
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Literal
 
 from django.conf import settings
-from django.db import models, transaction
+from django.db import IntegrityError, models, transaction
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status as http_status
@@ -650,6 +650,7 @@ def cancel_invoice(*, invoice: FeeInvoice, reason: str, actor_id: uuid.UUID | No
 
     Refused once anything has been paid against it: money already received
     cannot be un-received, and §7.3's refund workflow is the route for that.
+    Refused too while an online checkout is pending (409 `pending_online_payment`).
     Cancelling a part-paid invoice would leave the payment pointing at a void
     charge and the ledger describing income the school no longer claims.
     """
@@ -667,6 +668,11 @@ def cancel_invoice(*, invoice: FeeInvoice, reason: str, actor_id: uuid.UUID | No
                 )
             }
         )
+    # A family may be paying it online right now; the money would land on a void
+    # charge. Wait for the checkout to confirm or fail (at most its TTL).
+    pending = _pending_online(locked.pk).first()
+    if pending is not None:
+        raise PendingOnlinePayment(pending)
 
     # Fines billed on this invoice go back in the queue rather than vanishing —
     # a cancelled invoice must not quietly forgive a library charge.
@@ -990,8 +996,10 @@ def confirm_payment(
     A `failed` payment is refused unless `allow_failed`: only the gateway (money
     the provider says arrived after all) and a booked gateway issue pass it.
 
-    Locks the invoice, then the payment: the one lock order every money path
-    here follows, so two of them can never deadlock on the pair.
+    Locks the invoice, then the payment, the order the online-payment paths
+    (initiation, callbacks, reconciliation, `:resolve`) all follow so they cannot
+    deadlock on the pair. `request_refund`/`process_refund` are not yet aligned
+    (docs/deferred-work.md).
     """
     invoice = FeeInvoice.objects.select_for_update().get(pk=payment.fee_invoice_id)
     locked = Payment.objects.select_for_update().get(pk=payment.pk)
@@ -1001,6 +1009,10 @@ def confirm_payment(
         raise DomainRuleViolation({"status": "A reversed payment cannot be confirmed."})
     if locked.status == PaymentStatus.FAILED and not allow_failed:
         raise DomainRuleViolation({"status": "A failed payment cannot be confirmed."})
+    if invoice.status == InvoiceStatus.CANCELED:
+        raise DomainRuleViolation(
+            {"fee_invoice": f"{invoice.invoice_no} is canceled and takes no payment."}
+        )
 
     locked.status = PaymentStatus.CONFIRMED
     locked.paid_at = locked.paid_at or timezone.now()
@@ -1616,6 +1628,30 @@ class PaymentAttemptClosed(Conflict):
     default_code = "payment_attempt_closed"
 
 
+class CheckoutInProgress(Conflict):
+    default_detail = "A checkout for this invoice is still being started. Try again in a moment."
+    default_code = "checkout_in_progress"
+
+
+class PendingOnlinePayment(Conflict):
+    default_code = "pending_online_payment"
+
+    def __init__(self, payment: Payment) -> None:
+        super().__init__(
+            f"Online payment {payment.reference_no} of {payment.amount} is pending on this "
+            "invoice. Wait for it to confirm or fail before cancelling."
+        )
+        self.meta = {"pending_online_payment_id": str(payment.pk)}
+
+
+class CallbackNotVerified(APIException):
+    """A signed callback the provider cannot confirm yet: 503, so the provider retries."""
+
+    status_code = http_status.HTTP_503_SERVICE_UNAVAILABLE
+    default_detail = "The provider does not report this transaction yet. Retry later."
+    default_code = "transaction_not_found"
+
+
 class GatewayUnavailableError(APIException):
     status_code = http_status.HTTP_503_SERVICE_UNAVAILABLE
     default_detail = "The payment provider is unavailable. Try again shortly."
@@ -1677,6 +1713,34 @@ def _stored_checkout(payment: Payment) -> CheckoutSession | None:
     )
 
 
+def _matching_issue(
+    *,
+    kind: str,
+    payment: Payment | None,
+    gateway_provider: str | None,
+    order_id: str | None,
+    provider_txn_id: str | None,
+) -> GatewayReconciliationIssue | None:
+    """The issue already raised for this discrepancy, open or resolved.
+
+    Keyed on (kind, payment or order id, provider transaction): a dismissed issue
+    stays decided, so a replayed callback or a re-run reconcile never reopens it.
+    Failing that, the open issue of the same kind for the payment or order, which
+    the partial unique indexes allow only one of.
+    """
+    alive = GatewayReconciliationIssue.objects.alive().filter(kind=kind)
+    if payment is not None:
+        same = alive.filter(payment=payment)
+    else:
+        same = alive.filter(
+            payment__isnull=True, gateway_provider=gateway_provider, order_id=order_id
+        )
+    return (
+        same.filter(provider_txn_id=provider_txn_id).first()
+        or same.filter(resolution__isnull=True).first()
+    )
+
+
 def _raise_issue(
     *,
     kind: str,
@@ -1688,27 +1752,40 @@ def _raise_issue(
     expected_amount: Decimal | None = None,
     gateway_amount: Decimal | None = None,
 ) -> GatewayReconciliationIssue:
-    """Open an issue, or return the open one already raised for the same thing."""
-    open_issues = GatewayReconciliationIssue.objects.alive().filter(
-        kind=kind, resolution__isnull=True
-    )
-    if payment is not None:
-        existing = open_issues.filter(payment=payment).first()
-    else:
-        existing = open_issues.filter(payment__isnull=True, order_id=order_id).first()
+    """Open an issue, or return the one already raised for the same thing (`_matching_issue`).
+
+    Two callbacks or a callback and a reconcile can race to raise the same
+    issue; the partial unique indexes let one insert win, and the loser returns
+    the winner's row.
+    """
+    key = {
+        "kind": kind,
+        "payment": payment,
+        "gateway_provider": gateway_provider,
+        "order_id": order_id,
+        "provider_txn_id": provider_txn_id,
+    }
+    existing = _matching_issue(**key)
     if existing is not None:
         return existing
-    issue = GatewayReconciliationIssue.objects.create(
-        tenant_id=tenant_id,
-        kind=kind,
-        payment=payment,
-        gateway_provider=gateway_provider,
-        order_id=order_id,
-        provider_txn_id=provider_txn_id,
-        expected_amount=expected_amount,
-        gateway_amount=gateway_amount,
-        detected_at=timezone.now(),
-    )
+    try:
+        with transaction.atomic():
+            issue = GatewayReconciliationIssue.objects.create(
+                tenant_id=tenant_id,
+                kind=kind,
+                payment=payment,
+                gateway_provider=gateway_provider,
+                order_id=order_id,
+                provider_txn_id=provider_txn_id,
+                expected_amount=expected_amount,
+                gateway_amount=gateway_amount,
+                detected_at=timezone.now(),
+            )
+    except IntegrityError:
+        existing = _matching_issue(**key)
+        if existing is None:
+            raise
+        return existing
     record_system_audit(
         tenant_id,
         "create",
@@ -1850,11 +1927,13 @@ def gateway_account_for_token(token: str) -> PaymentGatewayAccount | None:
     return match
 
 
-def callback_path(*, tenant: Tenant, account: PaymentGatewayAccount) -> str:
-    return reverse(
+def callback_url(*, tenant: Tenant, account: PaymentGatewayAccount) -> str:
+    """The URL the provider calls, from `API_PUBLIC_URL`: never the request's Host header."""
+    path = reverse(
         "v1:payment-callbacks",
         kwargs={"tenant_slug": tenant.slug, "callback_token": account.callback_token},
     )
+    return f"{settings.API_PUBLIC_URL.rstrip('/')}{path}"
 
 
 # --- Initiation ------------------------------------------------------------ #
@@ -1867,21 +1946,24 @@ def initiate_online_payment(
     tenant: Tenant,
     return_path: str,
     idempotency_key: str,
-    absolute_uri: Callable[[str], str],
-) -> tuple[Payment, CheckoutSession]:
+) -> tuple[Payment, CheckoutSession, bool]:
     """Start a checkout for the invoice's full available balance.
 
     Three steps, so the provider call holds no lock and no transaction:
 
     1. Under the invoice lock: fail a pending payment past its TTL, reuse a
        live one, or create one, then commit.
-    2. Call the provider. If it is down, fail the payment and raise 503.
+    2. Call the provider. If it is down, fail the payment this request created
+       and raise 503; its Idempotency-Key is released so a retry starts afresh.
     3. Store the checkout's redirect on the payment.
 
     A live pending payment is returned with its stored redirect when the
-    provider cannot start a second checkout for one order. A repeated
-    Idempotency-Key returns its own pending payment the same way.
-    `absolute_uri` turns the callback path into the URL the provider calls.
+    provider cannot start a second checkout for one order. One with no stored
+    redirect yet is another request's checkout still being started: 409
+    `checkout_in_progress`, and no provider call. A repeated Idempotency-Key
+    returns its own pending payment the same way.
+
+    Returns the payment, the checkout and whether this call created the payment.
     """
     key = f"{PAY_ONLINE_KEY_PREFIX}{idempotency_key}"
     with tenant_atomic(tenant.pk):
@@ -1895,14 +1977,12 @@ def initiate_online_payment(
 
         replay = Payment.objects.alive().filter(idempotency_key=key).first()
         if replay is not None:
+            if replay.fee_invoice_id != invoice.pk or replay.status != PaymentStatus.PENDING:
+                raise PaymentAttemptClosed()
             stored = _stored_checkout(replay)
-            if (
-                replay.fee_invoice_id == invoice.pk
-                and replay.status == PaymentStatus.PENDING
-                and stored is not None
-            ):
-                return replay, stored
-            raise PaymentAttemptClosed()
+            if stored is None:
+                raise CheckoutInProgress()
+            return replay, stored, False
 
         locked = FeeInvoice.objects.select_for_update().get(pk=invoice.pk)
         if locked.status in (InvoiceStatus.DRAFT, InvoiceStatus.CANCELED):
@@ -1915,10 +1995,14 @@ def initiate_online_payment(
             else:
                 payment = pending
 
+        created = payment is None
         if payment is not None:
             stored = _stored_checkout(payment)
-            if stored is not None and not adapter.can_reinitiate:
-                return payment, stored
+            if stored is None:
+                # Another request committed this payment and is calling the provider.
+                raise CheckoutInProgress()
+            if not adapter.can_reinitiate:
+                return payment, stored, False
         else:
             if locked.balance_due <= ZERO:
                 raise NothingDue()
@@ -1933,6 +2017,7 @@ def initiate_online_payment(
                 method=PaymentMethod.ONLINE_GATEWAY,
                 reference_no=f"SH-{locked.invoice_no}-{secrets.token_hex(4)}",
                 gateway_provider=account.provider,
+                gateway_account=account,
                 status=PaymentStatus.PENDING,
                 idempotency_key=key,
                 created_by=user.pk,
@@ -1945,7 +2030,7 @@ def initiate_online_payment(
             currency=tenant.currency,
             description=f"Fee invoice {locked.invoice_no}",
             return_url=tenant_app_url(tenant, return_path),
-            callback_url=absolute_uri(callback_path(tenant=tenant, account=account)),
+            callback_url=callback_url(tenant=tenant, account=account),
             customer_email=getattr(user, "email", None) or None,
         )
         credentials = _credentials(account)
@@ -1953,8 +2038,11 @@ def initiate_online_payment(
     try:
         session = adapter.initiate(checkout, credentials)
     except GatewayUnavailable as exc:
-        with tenant_atomic(tenant.pk):
-            fail_payment(payment=payment, reason="gateway_unavailable")
+        if created:
+            with tenant_atomic(tenant.pk):
+                fail_payment(
+                    payment=payment, reason="gateway_unavailable", release_idempotency_key=True
+                )
         raise GatewayUnavailableError() from exc
 
     with tenant_atomic(tenant.pk):
@@ -1968,17 +2056,21 @@ def initiate_online_payment(
         Payment.objects.filter(pk=payment.pk, status=PaymentStatus.PENDING).update(
             gateway_payload=stored_payload, updated_at=timezone.now()
         )
-    return payment, session
+    return payment, session, created
 
 
 # --- Failing, confirming and resolving -------------------------------------- #
 
 
-def fail_payment(*, payment: Payment, reason: str) -> Payment:
+def fail_payment(
+    *, payment: Payment, reason: str, release_idempotency_key: bool = False
+) -> Payment:
     """`pending → failed`. Anything else is a logged no-op: money is append-only.
 
     A `failed` callback after a `paid` one, or a sweep racing a callback, must
-    never undo a confirmed payment.
+    never undo a confirmed payment. `release_idempotency_key` clears the key of
+    an attempt that never reached the provider, so retrying it with the same key
+    starts a new attempt rather than meeting `payment_attempt_closed`.
     """
     with transaction.atomic():
         _lock_invoice(payment.fee_invoice_id)
@@ -1990,7 +2082,11 @@ def fail_payment(*, payment: Payment, reason: str) -> Payment:
             return locked
         locked.status = PaymentStatus.FAILED
         locked.gateway_payload = _merge_payload(locked, failure_reason=reason)
-        locked.save(update_fields=["status", "gateway_payload", "updated_at"])
+        update_fields = ["status", "gateway_payload", "updated_at"]
+        if release_idempotency_key:
+            locked.idempotency_key = None
+            update_fields.append("idempotency_key")
+        locked.save(update_fields=update_fields)
         record_system_audit(
             locked.tenant_id,
             "fail",
@@ -2044,8 +2140,9 @@ def handle_gateway_event(
     from the provider's own transaction list, so it is applied as given.
 
     Then, under the invoice and payment locks: no payment for the order is an
-    `unknown_reference` issue; a paid amount that differs is `amount_mismatch`
-    and confirms nothing; a payment is confirmed even if it had failed
+    `unknown_reference` issue; a paid event on a canceled invoice is
+    `paid_on_canceled_invoice` and confirms nothing; a paid amount that differs
+    is `amount_mismatch` and confirms nothing; a payment is confirmed even if it had failed
     (`paid_after_failed`), and an `overpaid` issue is raised if the invoice now
     owes less than nothing. A `failed` event only ever fails a pending payment.
     Replays and out-of-order events are no-ops.
@@ -2055,10 +2152,13 @@ def handle_gateway_event(
             _credentials(account), event.order_id
         )
         if verified is None:
+            # Signed but not (yet) at the provider. 503 so the provider retries;
+            # the nightly reconcile is the backstop.
             logger.warning(
-                "gateway callback for %s not found at the provider; ignored", event.order_id
+                "gateway callback for %s not found at the provider; asking for a retry",
+                event.order_id,
             )
-            return None
+            raise CallbackNotVerified()
         event = verified
 
     with tenant_atomic(account.tenant_id):
@@ -2091,7 +2191,7 @@ def _apply_gateway_event(
             )
         return None
 
-    _lock_invoice(found.fee_invoice_id)
+    invoice = _lock_invoice(found.fee_invoice_id)
     payment = Payment.objects.select_for_update().get(pk=found.pk)
     amount = quantize_money(event.amount)
 
@@ -2122,6 +2222,19 @@ def _apply_gateway_event(
         return fail_payment(payment=payment, reason="failed_at_gateway")
     if payment.status == PaymentStatus.REVERSED:
         logger.warning("paid event for reversed payment %s ignored", payment.pk)
+        return payment
+    if invoice.status == InvoiceStatus.CANCELED:
+        # Money for a void charge: a person returns it or re-bills; nothing posts.
+        _raise_issue(
+            kind=GatewayIssueKind.PAID_ON_CANCELED_INVOICE,
+            tenant_id=tenant_id,
+            payment=payment,
+            gateway_provider=account.provider,
+            order_id=event.order_id,
+            provider_txn_id=event.provider_txn_id,
+            expected_amount=payment.amount,
+            gateway_amount=amount,
+        )
         return payment
     if amount != payment.amount:
         _raise_issue(
@@ -2281,6 +2394,10 @@ def _lock_open_issue(issue: GatewayReconciliationIssue) -> GatewayReconciliation
 # confirmations before it and no lock is held across a provider call.
 
 
+class ReconciliationIncomplete(Exception):
+    """At least one of a school's gateway accounts could not be reconciled."""
+
+
 def _day_bounds(day: datetime.date) -> tuple[datetime.datetime, datetime.datetime]:
     """`day` as a UTC half-open interval: the providers report their days in UTC."""
     start = datetime.datetime.combine(day, datetime.time.min, tzinfo=datetime.UTC)
@@ -2288,27 +2405,25 @@ def _day_bounds(day: datetime.date) -> tuple[datetime.datetime, datetime.datetim
 
 
 def _accounts_to_reconcile(day: datetime.date) -> list[PaymentGatewayAccount]:
-    """The bound tenant's accounts, active or not, with online payments in `day`'s window.
+    """The bound tenant's accounts, active or not, that own online payments in `day`'s window.
 
     The window takes checkouts opened up to one TTL before the day (paid after
     midnight) and payments confirmed during it. An inactive account still has
-    money moving through it until its last checkout closes.
+    money moving through it until its last checkout closes; one with nothing in
+    the window (say, an old account whose credentials were revoked) is not called.
     """
     start, end = _day_bounds(day)
     opened_from = start - datetime.timedelta(minutes=settings.PAYMENT_PENDING_TTL_MINUTES)
-    providers = set(
+    owners = (
         Payment.objects.alive()
-        .filter(method=PaymentMethod.ONLINE_GATEWAY, gateway_provider__isnull=False)
+        .filter(method=PaymentMethod.ONLINE_GATEWAY, gateway_account__isnull=False)
         .filter(
             models.Q(created_at__gte=opened_from, created_at__lt=end)
             | models.Q(paid_at__gte=start, paid_at__lt=end)
         )
-        .values_list("gateway_provider", flat=True)
-        .distinct()
+        .values("gateway_account_id")
     )
-    if not providers:
-        return []
-    return list(PaymentGatewayAccount.objects.alive().filter(provider__in=providers))
+    return list(PaymentGatewayAccount.objects.alive().filter(pk__in=owners))
 
 
 def _paid_at_provider(*, accounts: list[PaymentGatewayAccount], order_id: str) -> bool:
@@ -2337,9 +2452,9 @@ def reconcile_gateway_day(*, account: PaymentGatewayAccount, day: datetime.date)
     4. Our confirmed payment the list lacks, and a direct lookup cannot find
        paid → `missing_at_gateway`. Nothing is reversed; a person decides.
 
-    Open issues are never duplicated (`_raise_issue`), so a second run of the
-    same day changes nothing. Returns the payments whose status changed plus
-    the issues opened.
+    An issue already raised, open or resolved, is never raised again
+    (`_raise_issue`), so a second run of the same day changes nothing.
+    Returns the payments whose status changed plus the issues opened.
     """
     tenant_id = account.tenant_id
     adapter = adapter_for(account.provider)
@@ -2395,16 +2510,20 @@ def reconcile_gateway_day(*, account: PaymentGatewayAccount, day: datetime.date)
 
     start, end = _day_bounds(day)
     with tenant_atomic(tenant_id):
+        # This account's payments, plus any with no account recorded (a booked
+        # unknown reference), which any account of the provider may have taken.
         unlisted = list(
             online.filter(status=PaymentStatus.CONFIRMED, paid_at__gte=start, paid_at__lt=end)
+            .filter(models.Q(gateway_account=account) | models.Q(gateway_account__isnull=True))
             .exclude(reference_no__in=list(paid_by_order))
-            .only("pk", "reference_no", "provider_txn_id", "amount")
+            .only("pk", "reference_no", "provider_txn_id", "amount", "gateway_account_id")
         )
         same_provider = list(
             PaymentGatewayAccount.objects.alive().filter(provider=account.provider)
         )
     for payment in unlisted:
-        if _paid_at_provider(accounts=same_provider, order_id=str(payment.reference_no)):
+        ask = [account] if payment.gateway_account_id == account.pk else same_provider
+        if _paid_at_provider(accounts=ask, order_id=str(payment.reference_no)):
             continue
         with tenant_atomic(tenant_id):
             _raise_issue(
@@ -2437,12 +2556,32 @@ def reconcile_tenant_gateway_payments(tenant_id: uuid.UUID, *, day: datetime.dat
     """A non-atomic `for_each_tenant` step: reconcile each account with payments in the window.
 
     Opens its own short transactions, so the provider calls in
-    `reconcile_gateway_day` hold none. A provider outage raises out of here,
-    and `for_each_tenant` logs it and moves on to the next tenant.
+    `reconcile_gateway_day` hold none. One account failing (an outage, an old
+    account whose credentials the provider has revoked) is logged and the
+    school's other accounts are still reconciled; then `ReconciliationIncomplete`
+    is raised so `for_each_tenant` still counts the school as failed.
     """
     with tenant_atomic(tenant_id):
         accounts = _accounts_to_reconcile(day)
-    return sum(reconcile_gateway_day(account=account, day=day) for account in accounts)
+    total = 0
+    failed = 0
+    for account in accounts:
+        try:
+            total += reconcile_gateway_day(account=account, day=day)
+        except Exception:
+            failed += 1
+            logger.exception(
+                "reconciliation failed for %s account %s (tenant %s) on %s; continuing",
+                account.provider,
+                account.pk,
+                tenant_id,
+                day.isoformat(),
+            )
+    if failed:
+        raise ReconciliationIncomplete(
+            f"{failed} of {len(accounts)} gateway account(s) could not be reconciled"
+        )
+    return total
 
 
 # --------------------------------------------------------------------------- #

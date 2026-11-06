@@ -41,8 +41,13 @@ class GatewayAccountTests(FeesFinanceAPITestCase):
                 self.assertEqual(data["merchant_id_masked"], "****7654")
                 self.assertNotIn("credentials", data)
                 self.assertNotIn(SECRET, response.content.decode())
-                self.assertIn(
-                    f"/api/v1/public/payment-callbacks/{self.tenant.slug}/", data["callback_url"]
+                # From API_PUBLIC_URL (test settings), never the request's Host.
+                self.assertTrue(
+                    data["callback_url"].startswith(
+                        "https://api.schoolhub.test/api/v1/public/payment-callbacks/"
+                        f"{self.tenant.slug}/"
+                    ),
+                    data["callback_url"],
                 )
 
     def test_credentials_stored_encrypted(self) -> None:

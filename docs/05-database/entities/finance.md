@@ -173,13 +173,14 @@ Payments received against a single invoice (one invoice per payment; multi-invoi
 | gateway_provider | varchar(40) | yes | null | Set for `online_gateway` |
 | gateway_payload | jsonb | yes | null | Sanitized gateway confirmation snapshot |
 | provider_txn_id | varchar(120) | yes | null | The provider's own transaction id, set from the verified event |
+| gateway_account_id | uuid | yes | null | FK → `payment_gateway_accounts.id`; the account an online checkout went through, set at initiation; reconciliation calls only accounts that own payments in its window |
 | status | varchar(15) | no | `'pending'` | Enum: `pending`, `confirmed`, `failed`, `reversed` |
 | paid_at | timestamptz | yes | null | Set on confirmation |
 | received_by | uuid | yes | null | FK → `users.id`; null for gateway self-service |
 | idempotency_key | varchar(80) | yes | null | Unique partial `(tenant_id, idempotency_key)` where not null |
 
 Indexes: `(tenant_id, fee_invoice_id)`; `(tenant_id, student_id, paid_at)`; `(tenant_id, status, method)`; unique partial on idempotency_key. For live `online_gateway` rows: unique `(tenant_id, gateway_provider, reference_no)` (`payments_gateway_order_id_unique`), unique `(tenant_id, gateway_provider, provider_txn_id)` (`payments_gateway_txn_id_unique`), and at most one `pending` per invoice (`payments_one_pending_online_per_invoice`).
-Relationships: many→one `fee_invoices`, `students`, `users`; one→one `receipts`; one→many `refunds`.
+Relationships: many→one `fee_invoices`, `students`, `users`, optional `payment_gateway_accounts`; one→one `receipts`; one→many `refunds`.
 
 ### receipts
 
@@ -277,7 +278,7 @@ An online-payment discrepancy for a person to book or dismiss, once.
 
 | Column | Type | Null | Default | Notes |
 | ------ | ---- | ---- | ------- | ----- |
-| kind | varchar(30) | no | — | Enum: `amount_mismatch`, `overpaid`, `unknown_reference`, `missing_at_gateway`, `paid_after_failed`, `duplicate_at_gateway` |
+| kind | varchar(30) | no | — | Enum: `amount_mismatch`, `overpaid`, `unknown_reference`, `missing_at_gateway`, `paid_after_failed`, `duplicate_at_gateway`, `paid_on_canceled_invoice` |
 | payment_id | uuid | yes | null | FK → `payments.id`; null for an `unknown_reference` until it is booked |
 | gateway_provider | varchar(40) | yes | null | Needed to book an `unknown_reference` |
 | order_id | varchar(80) | yes | null | Our order id |
@@ -290,7 +291,7 @@ An online-payment discrepancy for a person to book or dismiss, once.
 | resolved_by | uuid | yes | null | FK → `users.id` |
 | note | text | yes | null | Required to dismiss (CHECK) |
 
-Indexes: unique partial `(tenant_id, payment_id, kind)` while open (`gateway_issues_one_open_per_payment_kind`); `(tenant_id, resolution, detected_at)` for the issues list.
+Indexes: unique partial `(tenant_id, payment_id, kind)` while open (`gateway_issues_one_open_per_payment_kind`); unique partial `(tenant_id, gateway_provider, order_id, kind)` while open with no payment (`gateway_issues_one_open_unmatched_per_order_kind`), so two callbacks racing on an unknown order raise one issue; `(tenant_id, resolution, detected_at)` for the issues list.
 Relationships: many→one optional `payments`, `users`.
 
 ### ledger_accounts

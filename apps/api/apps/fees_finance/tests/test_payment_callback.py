@@ -18,6 +18,7 @@ from apps.fees_finance.models import (
     GatewayReconciliationIssue,
     InvoiceStatus,
     LedgerEntry,
+    Payment,
     PaymentMethod,
     PaymentStatus,
     Receipt,
@@ -151,16 +152,63 @@ class CallbackTests(OnlinePaymentsTestCase):
         self.assertEqual(self.reload(payment).status, PaymentStatus.CONFIRMED)
         self.assertEqual(self.invoice_now().status, InvoiceStatus.PAID)
 
-    def test_a_callback_the_provider_does_not_know_changes_nothing(self) -> None:
-        """Signed but not confirmed by the re-fetch: nothing is applied."""
+    def test_a_callback_the_provider_does_not_know_changes_nothing_and_is_retried(self) -> None:
+        """Signed but not confirmed by the re-fetch: nothing applies, and a 503 asks for a retry.
+
+        A 200 would tell the provider the callback landed, so it would never send it again.
+        """
         payment = self.pending_payment()
         event = self.provider_has(payment)
         self.adapter.reset()
 
         response = self.callback(event)
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 503, response.content)
+        self.assertEqual(response.json()["error"]["code"], "transaction_not_found")
         self.assertEqual(self.reload(payment).status, PaymentStatus.PENDING)
+
+        # Once the provider reports it, the retried callback confirms.
+        self.adapter.add_transaction(event)
+        self.assertEqual(self.callback(event).status_code, 200)
+        self.assertEqual(self.reload(payment).status, PaymentStatus.CONFIRMED)
+
+    def test_a_callback_misdirected_to_another_school_never_touches_this_one(self) -> None:
+        """The other school's URL and secret, carrying this school's order id.
+
+        The slug and token pick the other school, its secret verifies, and the event
+        is applied under its tenant, where RLS hides this school's payment.
+        """
+        other = TenantFactory()
+        other_account = make_account(
+            other,
+            UserFactory(tenant=other).pk,
+            credentials={"merchant_id": "OTHER-000001", "secret": "other-school-secret"},
+        )
+        payment = self.pending_payment()
+        event = self.provider_has(payment)
+
+        self.callback(
+            event,
+            slug=other.slug,
+            token=other_account.callback_token,
+            secret="other-school-secret",
+        )
+
+        payment = self.reload(payment)
+        self.assertEqual(payment.status, PaymentStatus.PENDING)
+        self.assertIsNone(payment.provider_txn_id)
+        self.assertEqual(self.invoice_now().paid_total, ZERO)
+        with tenant_context(self.tenant.id):
+            self.assertFalse(Receipt.objects.exists())
+            self.assertFalse(LedgerEntry.objects.filter(reference_id=payment.pk).exists())
+            self.assertFalse(GatewayReconciliationIssue.objects.exists())
+        with tenant_context(other.id):
+            self.assertFalse(Payment.objects.exists())
+            self.assertFalse(Receipt.objects.exists())
+            # At most the other school sees money it cannot place, under its own RLS.
+            for issue in GatewayReconciliationIssue.objects.all():
+                self.assertEqual(issue.tenant_id, other.pk)
+                self.assertIsNone(issue.payment_id)
 
 
 class MoneyRuleTests(OnlinePaymentsTestCase):
@@ -219,6 +267,32 @@ class MoneyRuleTests(OnlinePaymentsTestCase):
         self.assertEqual(len(self._issues(GatewayIssueKind.PAID_AFTER_FAILED)), 1)
         [overpaid] = self._issues(GatewayIssueKind.OVERPAID)
         self.assertEqual(overpaid.payment_id, payment.pk)
+
+    def test_paid_on_a_canceled_invoice_raises_an_issue_and_confirms_nothing(self) -> None:
+        payment = self.pending_payment()
+        with tenant_context(self.tenant.id):
+            services.fail_payment(payment=payment, reason="expired")
+            services.cancel_invoice(invoice=self.invoice, reason="Billed twice", actor_id=None)
+
+        response = self.callback(self.provider_has(payment))
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(self.reload(payment).status, PaymentStatus.FAILED)
+        invoice = self.invoice_now()
+        self.assertEqual(invoice.status, InvoiceStatus.CANCELED)
+        self.assertEqual(invoice.paid_total, ZERO)
+        [issue] = self._issues(GatewayIssueKind.PAID_ON_CANCELED_INVOICE)
+        self.assertEqual(issue.payment_id, payment.pk)
+        self.assertEqual(issue.gateway_amount, Decimal("1000.00"))
+        self.assertEqual(issue.provider_txn_id, "TXN-1")
+        self.assertEqual(self._issues(GatewayIssueKind.PAID_AFTER_FAILED), [])
+        with tenant_context(self.tenant.id):
+            self.assertFalse(Receipt.objects.filter(payment=payment).exists())
+            self.assertFalse(LedgerEntry.objects.filter(reference_id=payment.pk).exists())
+
+        # A replay raises nothing new.
+        self.callback(self.provider_has(payment))
+        self.assertEqual(len(self._issues(GatewayIssueKind.PAID_ON_CANCELED_INVOICE)), 1)
 
     def test_gateway_confirm_is_audited_with_system_actor(self) -> None:
         payment = self.pending_payment()

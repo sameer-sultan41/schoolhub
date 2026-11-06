@@ -30,6 +30,10 @@ PLATFORM_DOMAIN = env("PLATFORM_DOMAIN", default="localhost")
 # header (host-header poisoning). An empty port means the scheme's default.
 DASHBOARD_URL_SCHEME = "https"
 DASHBOARD_URL_PORT = ""
+# Where this API is reachable from outside, e.g. `https://api.<PLATFORM_DOMAIN>`: the base
+# of URLs a third party calls back (a payment provider's callback). Configured, never read
+# from the request's Host header. Empty here; prod.py requires it, dev and test set their own.
+API_PUBLIC_URL = env("API_PUBLIC_URL", default="")
 
 # Encrypts each school's payment-gateway credentials (core.integrations.crypto): Fernet
 # keys, newest first. No default here, so production must set it (prod.py reads it from the

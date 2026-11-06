@@ -190,6 +190,7 @@ class GatewayIssueKind(models.TextChoices):
     MISSING_AT_GATEWAY = "missing_at_gateway", "Missing at gateway"
     PAID_AFTER_FAILED = "paid_after_failed", "Paid after failed"
     DUPLICATE_AT_GATEWAY = "duplicate_at_gateway", "Duplicate at gateway"
+    PAID_ON_CANCELED_INVOICE = "paid_on_canceled_invoice", "Paid on canceled invoice"
 
 
 class GatewayIssueResolution(models.TextChoices):
@@ -1125,6 +1126,14 @@ class Payment(TenantOwnedModel):
         blank=True,
         help_text="The provider's own transaction id. `reference_no` holds our order id.",
     )
+    gateway_account = models.ForeignKey(
+        "PaymentGatewayAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="payments",
+        help_text="The merchant account a checkout was opened through; reconciled against it.",
+    )
 
     class Meta:
         db_table = "payments"
@@ -1603,6 +1612,15 @@ class GatewayReconciliationIssue(TenantOwnedModel):
                 fields=["tenant", "payment", "kind"],
                 name="gateway_issues_one_open_per_payment_kind",
                 condition=models.Q(resolution__isnull=True, deleted_at__isnull=True),
+            ),
+            # Money for an order we have no payment for: one open issue, however many
+            # callbacks and reconcile runs report it at once.
+            models.UniqueConstraint(
+                fields=["tenant", "gateway_provider", "order_id", "kind"],
+                name="gateway_issues_one_open_unmatched_per_order_kind",
+                condition=models.Q(
+                    payment__isnull=True, resolution__isnull=True, deleted_at__isnull=True
+                ),
             ),
             models.CheckConstraint(
                 condition=(

@@ -12,10 +12,11 @@ from __future__ import annotations
 from decimal import Decimal
 from unittest import mock
 
+from django.test import override_settings
 from rest_framework.test import APIClient
 
 from apps.fees_finance import services, tasks
-from apps.fees_finance.models import Payment, PaymentMethod, PaymentStatus
+from apps.fees_finance.models import InvoiceStatus, Payment, PaymentMethod, PaymentStatus
 from apps.fees_finance.tests.factories import (
     FeeInvoiceFactory,
     UserFactory,
@@ -25,6 +26,7 @@ from apps.fees_finance.tests.factories import (
 from apps.fees_finance.tests.online_base import ONLINE_FEATURE, OnlinePaymentsTestCase
 from apps.school_organization.tests.factories import grant_default_role
 from core.api.exceptions import DomainRuleViolation
+from core.audit.models import AuditLog
 from core.integrations.payments.base import GatewayUnavailable
 from core.tenancy.context import tenant_context
 
@@ -215,3 +217,134 @@ class PendingCheckoutRuleTests(OnlinePaymentsTestCase):
         self.assertEqual(self.reload(stale).status, PaymentStatus.FAILED)
         self.assertEqual(self.reload(fresh).status, PaymentStatus.PENDING)
         self.assertGreaterEqual(summary["affected"], 1)
+
+
+class ConcurrentInitiateTests(OnlinePaymentsTestCase):
+    """Two requests for one invoice, and a provider outage, never strand or fail a checkout."""
+
+    def _pending_without_checkout(self) -> Payment:
+        """What another request leaves while its provider call is in flight."""
+        with tenant_context(self.tenant.id):
+            return Payment.objects.create(
+                tenant=self.tenant,
+                fee_invoice=self.invoice,
+                student_id=self.invoice.student_id,
+                amount=Decimal("1000.00"),
+                method=PaymentMethod.ONLINE_GATEWAY,
+                reference_no=f"SH-{self.invoice.invoice_no}-0a1b2c3d",
+                gateway_provider="fake",
+                gateway_account=self.account,
+                status=PaymentStatus.PENDING,
+                idempotency_key=f"{services.PAY_ONLINE_KEY_PREFIX}in-flight",
+            )
+
+    def test_a_pending_payment_with_no_checkout_yet_is_409_and_calls_no_provider(self) -> None:
+        in_flight = self._pending_without_checkout()
+
+        with mock.patch.object(self.adapter, "initiate") as initiate:
+            response = self.initiate(key="second")
+
+        self.assertEqual(response.status_code, 409, response.content)
+        self.assertEqual(response.json()["error"]["code"], "checkout_in_progress")
+        initiate.assert_not_called()
+        self.assertEqual(self.reload(in_flight).status, PaymentStatus.PENDING)
+        with tenant_context(self.tenant.id):
+            self.assertEqual(Payment.objects.count(), 1)
+
+    def test_the_same_key_while_its_checkout_is_starting_is_409(self) -> None:
+        self._pending_without_checkout()
+
+        with mock.patch.object(self.adapter, "initiate") as initiate:
+            response = self.initiate(key="in-flight")
+
+        self.assertEqual(response.status_code, 409, response.content)
+        self.assertEqual(response.json()["error"]["code"], "checkout_in_progress")
+        initiate.assert_not_called()
+
+    def test_a_provider_error_never_fails_a_payment_this_request_did_not_create(self) -> None:
+        first = self.pending_payment(key="first")
+
+        with (
+            mock.patch.object(self.adapter, "can_reinitiate", True),
+            mock.patch.object(self.adapter, "initiate", side_effect=GatewayUnavailable("down")),
+        ):
+            response = self.initiate(key="second")
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(self.reload(first).status, PaymentStatus.PENDING)
+
+    def test_a_503_releases_the_key_so_the_same_key_starts_again(self) -> None:
+        with mock.patch.object(self.adapter, "initiate", side_effect=GatewayUnavailable("down")):
+            failed = self.initiate(key="retry-me")
+        self.assertEqual(failed.status_code, 503)
+
+        retried = self.initiate(key="retry-me")
+
+        self.assertEqual(retried.status_code, 201, retried.content)
+        with tenant_context(self.tenant.id):
+            old = Payment.objects.get(status=PaymentStatus.FAILED)
+            new = Payment.objects.get(pk=retried.json()["data"]["payment_id"])
+        self.assertEqual(old.gateway_payload["failure_reason"], "gateway_unavailable")
+        self.assertIsNone(old.idempotency_key)
+        self.assertEqual(new.status, PaymentStatus.PENDING)
+        self.assertEqual(new.idempotency_key, f"{services.PAY_ONLINE_KEY_PREFIX}retry-me")
+
+    def test_only_the_request_that_created_the_payment_audits_it(self) -> None:
+        payment = self.pending_payment(key="same")
+        self.assertEqual(self.initiate(key="same").status_code, 201)
+        self.assertEqual(self.initiate(key="other").status_code, 201)
+
+        audits = AuditLog.objects.filter(
+            tenant=self.tenant, action="create", resource_id=payment.pk
+        )
+        self.assertEqual(audits.count(), 1)
+
+    @override_settings(API_PUBLIC_URL="https://api.schools.example/")
+    def test_the_callback_url_comes_from_api_public_url_not_the_host_header(self) -> None:
+        with mock.patch.object(self.adapter, "initiate", wraps=self.adapter.initiate) as initiate:
+            response = self.guardian_client.post(
+                f"/api/v1/fee-invoices/{self.invoice.pk}:initiate-payment",
+                {"return_path": "/portal/fees"},
+                format="json",
+                HTTP_IDEMPOTENCY_KEY="host-header",
+                HTTP_X_FORWARDED_HOST="evil.example",
+            )
+
+        self.assertEqual(response.status_code, 201, response.content)
+        checkout = initiate.call_args.args[0]
+        self.assertEqual(
+            checkout.callback_url,
+            "https://api.schools.example/api/v1/public/payment-callbacks/"
+            f"{self.tenant.slug}/{self.account.callback_token}",
+        )
+
+
+class CancelDuringCheckoutTests(OnlinePaymentsTestCase):
+    def cancel(self):
+        return self.client.post(
+            f"/api/v1/fee-invoices/{self.invoice.pk}:cancel",
+            {"reason": "Billed twice"},
+            format="json",
+        )
+
+    def test_cancel_is_refused_while_an_online_checkout_is_pending(self) -> None:
+        pending = self.pending_payment()
+
+        response = self.cancel()
+
+        self.assertEqual(response.status_code, 409, response.content)
+        error = response.json()["error"]
+        self.assertEqual(error["code"], "pending_online_payment")
+        self.assertIn(pending.reference_no, error["message"])
+        self.assertEqual(error["meta"]["pending_online_payment_id"], str(pending.pk))
+        self.assertNotEqual(self.invoice_now().status, InvoiceStatus.CANCELED)
+
+    def test_cancel_goes_through_once_the_checkout_has_failed(self) -> None:
+        pending = self.pending_payment()
+        with tenant_context(self.tenant.id):
+            services.fail_payment(payment=pending, reason="expired")
+
+        response = self.cancel()
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(self.invoice_now().status, InvoiceStatus.CANCELED)

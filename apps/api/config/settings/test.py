@@ -18,3 +18,4 @@ EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 
 INTEGRATIONS_ENCRYPTION_KEYS = ["dGVzdC1vbmx5LWludGVncmF0aW9ucy1rZXktMDAwMDA="]
 PAYMENT_PROVIDERS_ENABLED = ["fake"]
+API_PUBLIC_URL = "https://api.schoolhub.test"
