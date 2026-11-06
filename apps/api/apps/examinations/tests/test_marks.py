@@ -392,6 +392,8 @@ class AllocationScopeTests(MarksTestCase):
             stranger_user = UserFactory(tenant=self.tenant)
             StaffFactory(tenant=self.tenant, campus=self.campus, user_id=stranger_user.pk)
         grant(stranger_user, "exams.marks.create", scope=RecordScope.ASSIGNED)
+        # An unrelated key at `all` must not lift the marks key past the allocation check.
+        grant(stranger_user, "exams.exam.view", scope=RecordScope.ALL)
 
         with tenant_context(self.tenant.id), self.assertRaises(DomainRuleViolation) as raised:
             services.assert_marker_may_enter(
