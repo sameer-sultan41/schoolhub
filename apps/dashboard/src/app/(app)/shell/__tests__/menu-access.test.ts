@@ -127,4 +127,8 @@ describe("isActiveMenuPath", () => {
     expect(isActiveMenuPath("/exams", "/exams/7f1a2b3c", paths)).toBe(true);
     expect(isActiveMenuPath("/staff", "/exams", paths)).toBe(false);
   });
+
+  it("does not light an item for a sibling path that only shares its prefix", () => {
+    expect(isActiveMenuPath("/exams", "/exams-archive", paths)).toBe(false);
+  });
 });

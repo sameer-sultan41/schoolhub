@@ -35,8 +35,10 @@ suppression.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 from core.tenancy.models import TenantOwnedModel
@@ -162,6 +164,9 @@ class GradingScale(TenantOwnedModel):
         return queryset
 
 
+PERCENT_VALIDATORS = [MinValueValidator(Decimal("0")), MaxValueValidator(Decimal("100"))]
+
+
 class GradeBand(TenantOwnedModel):
     """One band within a scale — §5.5.
 
@@ -177,8 +182,19 @@ class GradeBand(TenantOwnedModel):
 
     grading_scale = models.ForeignKey(GradingScale, on_delete=models.CASCADE, related_name="bands")
     label = models.CharField(max_length=10, help_text="e.g. A+, B, Pass.")
-    min_percent = models.DecimalField(max_digits=5, decimal_places=2, help_text="Inclusive.")
-    max_percent = models.DecimalField(max_digits=5, decimal_places=2, help_text="Inclusive.")
+    # Validators answer an out-of-range bound with a field error before the CHECK can 409.
+    min_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        validators=PERCENT_VALIDATORS,
+        help_text="Inclusive.",
+    )
+    max_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        validators=PERCENT_VALIDATORS,
+        help_text="Inclusive.",
+    )
     grade_point = models.DecimalField(
         max_digits=4, decimal_places=2, null=True, blank=True, help_text="For GPA scales."
     )

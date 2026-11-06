@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { WEIGHTAGE_PATTERN } from "@/services/modules/exams/exams-constant";
+import { weightageSchema } from "@/services/modules/exams/exams.schema";
 import { MARKS_PATTERN } from "./exam-subjects-constant";
 
 /** The exam-subject form's schema, with the API's own field names. */
@@ -36,10 +36,7 @@ export function createExamSubjectFormSchema(messages: ExamSubjectFormMessages) {
       has_practical: z.boolean(),
       practical_max_marks: optionalMarks(messages.marksInvalid),
       practical_pass_marks: optionalMarks(messages.marksInvalid),
-      subject_weightage_percent: z
-        .string()
-        .trim()
-        .regex(WEIGHTAGE_PATTERN, messages.weightageInvalid),
+      subject_weightage_percent: weightageSchema(messages.weightageInvalid),
       marks_entry_opens_at: z.string(),
       marks_entry_closes_at: z.string(),
     })

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 
+import { mostSpecificPath } from "@/lib/active-path";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { permittedSections, type ModuleSection } from "./module-sections";
 
@@ -26,10 +27,10 @@ export function ModuleSectionNav({ sections, namespace }: ModuleSectionNavProps)
   const permitted = permittedSections(sections, user);
   // The most specific section wins, so a section nested under another's path (Exams at `/exams`,
   // Grading scales at `/exams/grading-scales`) doesn't light up its parent too.
-  const currentHref = permitted
-    .map((section) => section.href)
-    .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
-    .sort((a, b) => b.length - a.length)[0];
+  const currentHref = mostSpecificPath(
+    permitted.map((section) => section.href),
+    pathname,
+  );
 
   if (permitted.length === 0) return null;
 
