@@ -13,11 +13,11 @@ import { formatDate } from "@/lib/helpers";
 import { queryKeys } from "@/lib/query-client";
 import { ApiError, Services } from "@/services";
 import { PARENT_PORTAL_QUERY_MODULE } from "@/services/modules/parent-portal/parent-portal-constant";
-import { formatDecimal } from "@/features/portal/format-decimal";
-import { FEE_STATUS_BADGE, FEE_STATUS_LABEL_KEY } from "./fee-status";
+import { formatDecimal } from "@/lib/format-decimal";
+import { FEE_STATUS_BADGE, FEE_STATUS_LABEL_KEY } from "@/features/fees/shared/fee-status";
 import { ReceiptDownloadButton } from "./receipt-download-button";
 import { useReceiptsByInvoice } from "./use-fees-data";
-import { enumBadge, enumLabel } from "@/features/portal/enum-label";
+import { enumBadge, enumLabel } from "@/lib/enum-label";
 
 /** One invoice with its lines, the totals the server computed, and its receipts. */
 export function PortalInvoiceDetail() {
