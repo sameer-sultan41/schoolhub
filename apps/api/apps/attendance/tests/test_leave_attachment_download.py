@@ -43,9 +43,8 @@ class LeaveAttachmentDownloadTests(LeaveAPITestCase):
         with tenant_context(self.tenant.id):
             return FileFactory(
                 tenant=self.tenant,
-                purpose=uploads.LEAVE_ATTACHMENT.key,
                 created_by=owner.pk,
-                **overrides,
+                **{"purpose": uploads.LEAVE_ATTACHMENT.key, **overrides},
             )
 
     def make_request(self, student, *, attachment=None) -> LeaveRequest:
