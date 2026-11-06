@@ -40,3 +40,18 @@ export const FEE_SCHEDULES_QUERY_FIELDS: ReadonlyArray<readonly [keyof FeeSchedu
     ["cursor", "cursor"],
     ["pageSize", "page_size"],
   ];
+
+export const DEFAULT_FEE_FREQUENCY: FeeFrequency = "one_time";
+export const DUE_DAY_MIN = 1;
+export const DUE_DAY_MAX = 31;
+/** A decimal amount as the API takes it: up to ten digits and two decimals. */
+export const AMOUNT_PATTERN = /^\d{1,10}(\.\d{1,2})?$/;
+
+/** The due rule each frequency uses: a term, a day of the month, or a fixed date (the API's own
+ * pairing, `FeeScheduleSerializer.validate`). */
+export const FREQUENCY_USES_TERM: readonly FeeFrequency[] = ["per_term"];
+export const FREQUENCY_USES_DUE_DAY: readonly FeeFrequency[] = ["monthly"];
+export const FREQUENCY_USES_DUE_DATE: readonly FeeFrequency[] = ["one_time", "annual"];
+
+/** The form's fields that have an input regardless of frequency. */
+export const FEE_SCHEDULE_BASE_ERROR_FIELDS = ["fee_head", "amount", "frequency"] as const;
