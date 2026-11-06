@@ -117,6 +117,7 @@ class ExportEndpointTests(AttendanceAPITestCase):
                     "section_id": None,
                     "format": "xlsx",
                     "requested_by": str(self.user.pk),
+                    "scope_permission": ["attendance.report.export"],
                 },
                 actor_id=self.user.pk,
             )

@@ -11,7 +11,7 @@ import { LeaveDecisionDialog } from "@/features/attendance/leave/leave-decision-
 import { LeaveDetailSheet } from "@/features/attendance/leave/leave-detail-sheet";
 import { useLeaveColumns } from "@/features/attendance/leave/leave-columns";
 import { LeaveFilters } from "@/features/attendance/leave/leave-filters";
-import { useCursorList } from "@/features/attendance/use-cursor-list";
+import { useCursorList } from "@/hooks/use-cursor-list";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { hideableColumnIds, useDataGridUrlState } from "@/hooks/use-data-grid-url-state";
 import { FILTER_ALL } from "@/lib/constants";

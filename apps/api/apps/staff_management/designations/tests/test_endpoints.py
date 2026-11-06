@@ -30,7 +30,7 @@ class DesignationCrudTests(StaffManagementAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_deactivating_a_designation_assigned_to_staff_is_rejected(self) -> None:
-        self.allow("staff.designation.create", "staff.designation.update")
+        self.allow("staff.designation.view", "staff.designation.create", "staff.designation.update")
         with tenant_context(self.tenant.id):
             designation = DesignationFactory(tenant=self.tenant)
             StaffFactory(tenant=self.tenant, campus=self.campus, designation=designation)
@@ -44,7 +44,7 @@ class DesignationCrudTests(StaffManagementAPITestCase):
 
     def test_deactivating_an_unassigned_designation_succeeds(self) -> None:
         """Positive control: the block above is about assignment, not about PATCH itself."""
-        self.allow("staff.designation.create", "staff.designation.update")
+        self.allow("staff.designation.view", "staff.designation.create", "staff.designation.update")
         with tenant_context(self.tenant.id):
             designation = DesignationFactory(tenant=self.tenant)
 
@@ -56,7 +56,7 @@ class DesignationCrudTests(StaffManagementAPITestCase):
         self.assertFalse(response.json()["data"]["is_active"])
 
     def test_deleting_a_designation_assigned_to_staff_is_rejected(self) -> None:
-        self.allow("staff.designation.delete")
+        self.allow("staff.designation.view", "staff.designation.delete")
         with tenant_context(self.tenant.id):
             designation = DesignationFactory(tenant=self.tenant)
             StaffFactory(tenant=self.tenant, campus=self.campus, designation=designation)

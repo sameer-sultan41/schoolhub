@@ -7,6 +7,8 @@ rather than silently dropped, and no unmasked address is ever stored.
 
 from __future__ import annotations
 
+from unittest import mock
+
 from django.core import mail
 from django.test import TestCase
 
@@ -21,8 +23,11 @@ from core.notifications.models import (
     Notification,
     NotificationCategory,
     NotificationChannel,
+    NotificationPriority,
 )
+from core.notifications.queues import EMERGENCY_QUEUE
 from core.notifications.services import Recipient, UnknownTrigger, mask_address, notify
+from core.notifications.tasks import deliver_notifications
 from core.notifications.templates import NotificationTemplate, TemplateError
 from core.notifications.templates import registry as template_registry
 from core.tenancy.context import tenant_context
@@ -32,7 +37,9 @@ CODE = "test.event"
 VARIABLES = {"name"}
 
 
-def _register_test_trigger(*, channels: set[str]) -> None:
+def _register_test_trigger(
+    *, channels: set[str], priority: str = NotificationPriority.NORMAL
+) -> None:
     """Register a throwaway trigger + templates into the real registries.
 
     Registered per test rather than in a fixture module so the shipped catalog
@@ -45,6 +52,7 @@ def _register_test_trigger(*, channels: set[str]) -> None:
         category=NotificationCategory.ATTENDANCE,
         channels=channels,
         variables=VARIABLES,
+        priority=priority,
     )
     template_registry.register(
         CODE,
@@ -67,6 +75,7 @@ class NotifyTestCase(TestCase):
     """Swaps in fresh registries so a test-only trigger never leaks."""
 
     channels: set[str] = {NotificationChannel.IN_APP}
+    priority: str = NotificationPriority.NORMAL
 
     def setUp(self) -> None:
         super().setUp()
@@ -77,7 +86,7 @@ class NotifyTestCase(TestCase):
         # cannot leak it into an unrelated test run in the same process.
         self._saved_override_resolver = templates_module._override_resolver
         self._saved_preference_resolver = notify_services._preference_resolver
-        _register_test_trigger(channels=self.channels)
+        _register_test_trigger(channels=self.channels, priority=self.priority)
 
         self.tenant = TenantFactory()
         self.user = UserFactory(tenant=self.tenant, email="parent@example.test")
@@ -234,6 +243,34 @@ class EmailChannelTests(NotifyTestCase):
         # In-app has no provider hop, so it is delivered the instant it is sent.
         self.assertEqual(in_app_row.status, DeliveryStatus.DELIVERED)
         self.assertIsNotNone(in_app_row.delivered_at)
+
+
+class DispatchLaneTestCase(NotifyTestCase):
+    """Delivery is queued on the trigger's lane, not always on the task's default route."""
+
+    def dispatched_options(self) -> dict:
+        with mock.patch.object(deliver_notifications, "apply_async") as apply_async:
+            self.run_notify(deliver=True)
+        apply_async.assert_called_once()
+        return apply_async.call_args.kwargs
+
+
+class NormalDispatchLaneTests(DispatchLaneTestCase):
+    def test_a_normal_priority_trigger_keeps_the_default_route(self) -> None:
+        options = self.dispatched_options()
+
+        self.assertNotIn("queue", options)
+        self.assertEqual(options["kwargs"]["tenant_id"], str(self.tenant.pk))
+
+
+class EmergencyDispatchLaneTests(DispatchLaneTestCase):
+    priority = NotificationPriority.EMERGENCY
+
+    def test_an_emergency_priority_trigger_is_sent_on_the_emergency_queue(self) -> None:
+        options = self.dispatched_options()
+
+        self.assertEqual(options["queue"], "emergency")
+        self.assertEqual(options["queue"], EMERGENCY_QUEUE)
 
 
 class UnavailableChannelTests(NotifyTestCase):

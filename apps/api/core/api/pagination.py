@@ -29,7 +29,8 @@ class CursorPagination(DRFCursorPagination):
     max_page_size = 100
     page_size_query_param = "page_size"
     cursor_query_param = "cursor"
-    ordering = "-created_at"
+    # A tuple lets a subclass add a tie-breaker (`("-last_message_at", "-id")`).
+    ordering: str | tuple[str, ...] = "-created_at"
 
     #: Emit `meta.pagination.total_count`. Off here, on in `CountedCursorPagination`.
     count_total = False

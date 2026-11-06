@@ -14,6 +14,10 @@ import uuid
 from apps.communication.models import AudienceType
 from core.api.exceptions import DomainRuleViolation
 
+EMPTY_AUDIENCE_MESSAGE = (
+    "This audience resolves to zero recipients. Broaden the targeting before publishing."
+)
+
 
 def resolve_audience(
     *,
@@ -77,13 +81,16 @@ def resolve_audience(
     raise DomainRuleViolation(f"Unknown audience_type {audience_type!r}.")
 
 
-def assert_audience_is_nonempty(recipients: list[uuid.UUID]) -> None:
+def assert_audience_is_nonempty(
+    recipients: list[uuid.UUID], *, message: str = EMPTY_AUDIENCE_MESSAGE
+) -> None:
     """§11: audience resolution must yield >= 1 recipient — a published
-    announcement/notice with zero reach is refused, not silently sent to no one."""
+    announcement/notice with zero reach is refused, not silently sent to no one.
+
+    `message` lets a caller that is not publishing (a broadcast) say so.
+    """
     if not recipients:
-        raise DomainRuleViolation(
-            "This audience resolves to zero recipients. Broaden the targeting before publishing."
-        )
+        raise DomainRuleViolation(message)
 
 
 def _resolve_all(*, tenant_id: uuid.UUID, campus_id: uuid.UUID | None = None) -> list[uuid.UUID]:

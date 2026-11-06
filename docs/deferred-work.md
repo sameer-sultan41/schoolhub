@@ -10,6 +10,59 @@ either this file or `project-status.md`.
 
 ## Deliberately NOT done
 
+- **Record scope follow-ups left by per-role record scope** (PR A, `fix/per-role-record-scope`;
+  [ADR-0031](decisions/0031-record-scope-per-role-assignment.md)). Each scope check now reads
+  only the roles that grant its key. These were found on the way and left out:
+  - **Promotion approver notifications ignore scope.** `_promotion_approvers`
+    (`apps/academics/promotions/services.py`) notifies every holder of
+    `academics.promotion.approve`, whatever that key's scope. A campus-A approver is told about a
+    batch of campus-B students they cannot open (promotion rows are scoped by
+    `student__campus_id`). The batch actions themselves now refuse such an approver
+    (`assert_batch_in_scope`, PR B), so the notification asks for something they cannot do.
+    Narrowing it means checking each holder's scope for that key (`scopes_for`) against the
+    batch's students' campuses before sending.
+  - **Admit-card issue is not record-scoped.** `issue_admit_cards`
+    (`apps/examinations/services.py`) issues a card to every student on the exam's roll, with
+    no actor scope, so a campus-scoped holder of `exams.admit-card.issue` (`exam_staff`) issues
+    cards for every campus. Marks entry and import are now scoped by their keys (plan, rulings
+    13 and 14); issuing cards needs the same narrowing of `admit_card_candidates` by
+    `scope_queryset(..., permission=<the route's key>, **STUDENT_SCOPE)`, or a ruling that
+    issuing for the whole exam is an exam-wide act.
+  - **`own` beside `campus` or `assigned` on `exams.marks.create` reaches the holder's own
+    children.** The grid's student narrowing unions every scope type the key is held at, and
+    `own` over `STUDENT_SCOPE` is `Student.filter_owned_by_user`: the user themself or their
+    linked children. No default role grants the key at `own`, and `own` alone is refused by
+    `assert_marker_may_enter`, but a custom non-restricted role granting it at `own` with
+    `campus` or `assigned` would let a staff member who is also a guardian enter their own
+    child's marks. A conflict of interest to refuse before role management allows custom
+    scopes, by excluding `own` from marks entry's narrowing or refusing the grant.
+  - **A staff member who is also a guardian still gets a 404 on their child's leave on
+    another campus.** ADR-0031 decision 7 reaches the child only through the `own`-scoped
+    guardian role, and that role is a restricted principal: holding it shuts the user out of
+    every staff endpoint (`DenyRestrictedPrincipals`), so a working staff member cannot take
+    it. Closing this needs a guardian grant that is not restricted, or the guardian link read
+    as a scope for staff; role management decides which.
+  - **The mixed-scope `EXISTS` path has never been measured.** Execution ruling 9 dropped the
+    plan's `EXPLAIN` step (no local runs, and no invented output). Capture `EXPLAIN ANALYZE`
+    of a mixed-scope user's `GET /student-attendance` and `GET /students` on real volumes
+    before role management ships, since it is what will first write mixed assignments.
+  - **Result-approval notifications ignore scope too.** `notify_result_approval_pending`
+    (`apps/examinations/tasks.py`) notifies every active user holding `exams.result.approve`,
+    checked by key presence alone, whatever that key's scope. The fix is the promotions one:
+    check each holder's scope for the key against the pending results' students.
+  - **A rolled-back request can leave its grants cached for up to 300 s.** This predates PR A.
+    Under `ATOMIC_REQUESTS`, a role change evicts the cache at once, and a later read in the
+    same request re-caches the new, uncommitted grants. If the request then rolls back, the
+    on-commit eviction never runs, and the rolled-back grants stay cached until the TTL ends.
+    Closing it means skipping the cache write while a transaction holds an uncommitted RBAC
+    change, or evicting on rollback.
+  - **`GET /teacher-substitutions/candidates` returns `[]` to a caller without
+    `staff.staff.view`.** The candidate list is scoped as `GET /staff` scopes it (execution
+    ruling 4 in the plan), so a proposer who may propose cover but not read staff is offered
+    nobody, with no error to say why. Every default staff role holds `staff.staff.view`
+    (`ALL_STAFF`), so only a custom role meets it. If one does, either grant the key or answer
+    403 with a reason.
+
 - **`tenant`/`files`/`jobs`/`school-organization`/`dashboard` still have only the
   original three service-module files** (`<domain>-service.ts`/`index.ts`, no
   `-type`/`-constant`/`-helper`/`.schema`), not yet retrofitted to the five-file shape
@@ -140,25 +193,6 @@ either this file or `project-status.md`.
     `assigned`-scoped user now also match rows they marked
     (`StudentAttendance.filter_assigned_to_user`), an `OR` on an unindexed column. Add
     the index (its own migration) if that read shows up slow.
-  - **Marking takes the union of a mixed user's scopes; Records does not.**
-    `register.may_mark_register` grants a caller with a `campus` role *and* an
-    `assigned` role every register either one allows, but `scope_queryset`
-    (`core/rbac/permissions.py`) returns at its `campus` branch and never reaches
-    `assigned`. So a campus-A + assigned user who marks a campus-B section they
-    class-teach (`test_campus_a_plus_assigned_marks_the_section_they_class_teach_on_campus_b`)
-    cannot see those rows in Records. Making the read path a union is a core RBAC
-    change that touches every module's lists, so it belongs in its own reviewed PR.
-  - **A campus-staff guardian cannot see the leave they submitted for a child on
-    another campus** (found in PR B; the same precedence fix as the entry above).
-    The guardian link admits the create, so a campus-A staff member who is also a
-    linked guardian of a campus-B child gets a 201
-    (`test_a_campus_staff_member_submits_for_their_child_on_another_campus`). Every
-    read after that goes through `scope_queryset`, which takes the broadest scope in
-    the order `all` > `campus` > `own` > `assigned` and returns at its `campus`
-    branch: the list, the retrieve and `:cancel` are all a 404 on that request. A
-    union of scopes on the read path closes this gap only when the user also holds
-    the `own`-scoped guardian role: the guardian link is a data relation, not a
-    scope, so without that role there is no `own` branch to union in.
   - **`:bulk-mark` makes one extra `TenantSettings` read.** The lock window is read twice
     in one submission (once for the lock, once for the alert boundary). Passing the first
     read through would save the query; it is not worth a signature change on its own.
@@ -787,6 +821,12 @@ either this file or `project-status.md`.
   per `(tenant, key, endpoint)` and replays it on a repeat `Idempotency-Key`
   within 24h. Expired rows are pruned hourly by
   `core.idempotency.tasks.prune_idempotency_records` (PR 0).
+- **The idempotency fingerprint ignores the URL and record id.** `core.idempotency`
+  fingerprints the request body only, so a reused `Idempotency-Key` with the same
+  body against a *different* record, on an endpoint whose caller-chosen `endpoint`
+  string carries no record id (e.g. `students:enroll`), replays the first record's
+  response instead of acting on the second. Follow-up: include the resolved path
+  or record id in the fingerprint, or in the `endpoint` string.
 - **Withdrawal is a single audited action**, not initiate/approve — no
   `student_withdrawals` entity exists. Clearance checks (fees/library/
   transport) always return "clear" since none of those modules exist yet.
@@ -939,6 +979,87 @@ either this file or `project-status.md`.
   Deliberately absent, all communication scope: preferences, quiet hours,
   suppression lists, SMS quotas, provider status webhooks, the SSE badge stream,
   and §6's full five-stage retry schedule.
+- **Communication PR C left these out** (`docs/03-modules/communication.md` §20, "Built (PR C)"):
+  - **No `GET /notifications` inbox or `:mark-read`.** §16 lists both (and the SSE badge
+    stream); `core.notifications` persists the rows but serves no endpoint, so a guardian has no
+    API to read a thread reply or a broadcast in-app yet. Earlier docs called it "the existing
+    inbox"; it is not. The live lane reads delivery from `/delivery-logs` instead. Parent-portal
+    needs it first.
+  - **A per-broadcast live delivery board** (§7). The delivery dashboard can filter by
+    `notification_id` and date, not by broadcast; the job's result carries only the counts.
+  - **MFA step-up on `:emergency`** (§4's "MFA-recommended"). There is no MFA yet. The digest
+    proves the audience, not that a person read the confirmation (ADR-0029).
+  - **Quiet hours.** No quiet-hours setting exists, so there is nothing for the emergency
+    category to bypass yet.
+  - **Broadcast fan-out in batches.** One `notify()` call and one `deliver_notifications` task
+    carry the whole audience; notifications.md §5 asks for ~500-recipient batches so one
+    school's blast cannot starve the lane, against a "seconds" latency target.
+  - **A read-receipt tenant toggle** (§19: on by default, tenant-disableable). Receipts are
+    always on.
+  - **Message soft delete.** The entity doc lists it, but `messages` is append-only
+    (`AppendOnlyTenantModel`), so a soft delete (an UPDATE) is refused and the table has no
+    `updated_at`/`updated_by`/`deleted_at`. Retracting a message needs a design (a tombstone
+    message, or a granted `deleted_at` column) and a decision on what guardians see.
+  - **The `message_participants` join table** (§19). Participants are a JSON array fixed at
+    creation; adding or removing someone, or per-participant state beyond `read_by`, needs it.
+  - **§10's webhook events** (`broadcast.sent`, `message.created`). No webhook machinery exists.
+  - **`AI-COM-03`** emergency drafting (§14). No AI gateway yet.
+  - **Parent-portal §7's topic category** when a guardian starts a thread. Threads carry a
+    subject only; routing does not vary by topic.
+  - **§13's thread SLA report** (first-response and resolution times).
+  - **Campus-narrowed oversight.** `communication.thread.oversee` reads every thread in the
+    tenant whatever the overseer's scope (ADR-0030); a campus-scoped principal sees every
+    campus's threads.
+  - **Thread attachments are not checked against the uploader.** `post_message` requires a
+    ready `communication.thread-attachment` file of the tenant, but not one the sender uploaded,
+    so a participant could attach another user's upload if they had its id. The id is an
+    unguessable UUID, and the purpose is module-gated, so `GET /files` does not list it to other
+    staff; but every participant of a thread it was sent in sees the id, and could re-send it
+    into another thread. `created_by == sender` is the full check.
+  - **Nobody can attach a file to a thread from the dashboard yet.** The API takes attachments
+    (ready `communication.thread-attachment` files, uploaded and confirmed through `/files`), but
+    the thread composer has no upload control, for staff or for guardians; attachments render
+    and download through the thread's own route and the oversight twin. A guardian or student
+    also cannot upload at the API: `platform.file.create` is staff-only
+    (`core/files/permissions.py`), so they can download what staff send them but not upload.
+    Parent-portal must grant the upload, scoped to the `communication.thread-attachment`
+    purpose, as it must for leave attachments. The staff composer's upload (the two-step
+    presigned flow, a chip per file, the same type and size limits) is a dashboard follow-up
+    that needs no backend change.
+  - **Messages carry `sender_id` only**, no sender name, so the dashboard's bubbles say "You" or
+    "Participant". A name field on `MessageSerializer` (as `UserNamesModelSerializer` gives
+    attendance) is what would let the thread show who wrote what.
+  - **Replies and `:mark-read` are not audited.** A message is itself an immutable, attributed
+    record, and a receipt is the caller's own state; thread create, close and reopen, oversight
+    reads and broadcasts are audited.
+  - **`audience._resolve_staff` includes a user who holds both a staff role and a guardian
+    role.** That is deliberate: a teacher who is also a parent still gets staff broadcasts and
+    announcements. It differs from `thread_staff_users`, which leaves out anyone holding a live
+    restricted role, because a thread's staff side sees internal notes about other families.
+  - **A staff-only "last activity" ordering for threads.** An internal note leaves
+    `last_message_at` alone, because a bumped timestamp on a guardian's thread with no message
+    the guardian can see would leak that a note exists. So a note does not move a thread up a
+    staff inbox either; the staff `unread_count` still counts it. A separate staff-visible
+    activity column (bumped by every message, notes included, and never serialized to a
+    guardian or student) would let notes surface in staff inboxes without the leak.
+  - **An `Idempotency-Key` longer than 64 characters is a 500.** `BackgroundJob.idempotency_key`
+    is `max_length=64` and nothing checks the header's length first; shared with
+    `fee-invoices:generate`. Reusing a key after its 24-hour replay window is a generic 409 from
+    the job's unique index rather than a replay. A length check in `core.idempotency` closes the
+    first for every endpoint.
+
+- **Communication PR D built only the threads, oversight and broadcast screens**
+  (`docs/03-modules/communication.md` §20, "Built (PR D)"). The API for the rest of the module
+  is built, but the dashboard has no screen for any of it, and `/communication` offers only
+  Messages, Oversight and Broadcast:
+  - **Announcements**: draft, edit, delete, and publish or schedule (`/announcements`,
+    `:publish`).
+  - **Notices**: draft, submit, the publish-approval gate (the approver must not be the drafter),
+    return to draft, acknowledgment and the A4 PDF (`/notices` and its actions).
+  - **Notification template overrides**, with their preview (`/notification-templates`,
+    `:preview`).
+  - **A user's notification preferences** (`/notification-preferences`).
+  - **The delivery logs and their summary report** (`/delivery-logs`, `:summary`).
 
 - **`eslint-plugin-playwright` for `e2e/`** (planned in the engineering-standards spec, PR 4) was
   deferred: adding a dependency means `pnpm install`, which runs PR 3's `prepare` script and
@@ -1175,7 +1296,12 @@ either this file or `project-status.md`.
   for every document-bearing endpoint to carry its own permission key — `core/files`'
   generic routes do not yet). Closing this means adding an owning-permission check to
   `FileViewSet`'s list and download, keyed by each file's `purpose` — not something to
-  improvise inside one module's PR. The same gap covers whole-roster files: any staff role
+  improvise inside one module's PR. The mechanism now exists: a purpose registered with
+  `module_gated=True` (`core/files/purposes.py`) is left out of `FileViewSet`'s list and is a
+  404 on its retrieve and `:download`, and its module serves its own gated download.
+  `communication.thread-attachment` is the first such purpose (communication PR C);
+  `student.document` and the roster exports below can opt in once each has its module-owned
+  download for every caller that needs one. The same gap covers whole-roster files: any staff role
   holding `platform.file.view` can also list and download the `student.export`,
   `student.id-card-batch` and `staff.export` purposes, which are whole-roster PII (every
   student's or staff member's record in one file). Students Phase 4 adds the first dashboard

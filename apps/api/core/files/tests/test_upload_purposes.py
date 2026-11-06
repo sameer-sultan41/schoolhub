@@ -48,6 +48,16 @@ class UploadPurposeRegistryTests(SimpleTestCase):
         with self.assertRaises(ValueError):
             local.register("demo.b", "x", mime_types={"text/csv"}, max_size_bytes=0)
 
+    def test_module_gated_keys_lists_only_flagged_purposes(self) -> None:
+        local = UploadPurposeRegistry()
+        open_spec = local.register("demo.open", "x", mime_types={"text/csv"}, max_size_bytes=1)
+        local.register(
+            "demo.gated", "x", mime_types={"text/csv"}, max_size_bytes=1, module_gated=True
+        )
+
+        self.assertFalse(open_spec.module_gated)
+        self.assertEqual(local.module_gated_keys(), frozenset({"demo.gated"}))
+
     def test_a_registered_spec_exposes_an_immutable_mime_type_set(self) -> None:
         spec = registry.get("student.photo")
         assert spec is not None

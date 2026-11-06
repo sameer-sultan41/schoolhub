@@ -36,6 +36,7 @@ from apps.student_management.tests.factories import (
 )
 from core.files.models import FileStatus
 from core.files.tests.factories import FileFactory
+from core.rbac.cache import evict_rbac_caches
 from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
@@ -344,9 +345,7 @@ class StudentListTests(StudentManagementAPITestCase):
         UserRole.objects.create(
             user=self.user, role=role, tenant=self.tenant, scope=RecordScope.OWN
         )
-        from django.core.cache import cache
-
-        cache.delete(f"perm-keys:{self.user.pk}")
+        evict_rbac_caches([self.user.pk])
 
         response = self.client.get("/api/v1/students")
 

@@ -407,6 +407,7 @@ class ReportExportTaskTests(ReportDataTestCase):
                     "end_date": self.end.isoformat(),
                     "section_id": None,
                     "requested_by": str(self.user.pk),
+                    "scope_permission": ["attendance.report.export"],
                 },
                 actor_id=self.user.pk,
             )

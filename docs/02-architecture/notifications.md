@@ -60,6 +60,7 @@ Tenant admins can enable/disable triggers and adjust default channels per trigge
 | `notify.bulk` | Announcements, fee-reminder batches, result publishing fan-out | Minutes; rate-shaped | Throttled per provider + per tenant |
 
 - Fan-out jobs (one announcement → thousands of recipients) chunk recipients (batches of ~500) so a single tenant's blast cannot starve the lane; per-tenant rate shaping keeps one school from consuming the whole SMS pipe.
+- Implemented routing: queue names are the plain `emergency` / `transactional` / `bulk` the workers consume. `notify()` sends an `emergency`-priority trigger's deliveries to `emergency` (`core.notifications.queues.EMERGENCY_QUEUE`); every other delivery takes the `transactional` route.
 - Celery Beat drives scheduled notifications (fee due reminders, report deliveries) by emitting the same domain events.
 - Workers set the tenant context (`SET LOCAL app.tenant_id`) from the job payload before any data access, per [`database-architecture.md`](database-architecture.md) §1.1.
 

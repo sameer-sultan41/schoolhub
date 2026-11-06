@@ -250,5 +250,6 @@ class CurriculumViewSet(BlockingDestroyMixin, viewsets.ModelViewSet):
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="class-subjects:clone",
+            request_data=request.data,
             execute=execute,
         )
