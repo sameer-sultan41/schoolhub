@@ -22,6 +22,8 @@ export function resultRecord(overrides: Partial<ResultRecord> = {}): ResultRecor
   return {
     id: RESULT_ID,
     exam_id: EXAM_ID,
+    exam_name: "Mid-term",
+    term_name: "Term 1",
     student_id: RESULT_STUDENT_ID,
     student_name: "Ali Raza",
     admission_number: "ADM-001",
