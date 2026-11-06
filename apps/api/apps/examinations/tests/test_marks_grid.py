@@ -102,7 +102,12 @@ class SectionWriteScopeTests(GridTestCase):
                 school_class=self.school_class,
                 section=self.other_section,
             )
-        grant(self.subject_teacher_user, "exams.marks.create", scope=RecordScope.ASSIGNED)
+        grant(
+            self.subject_teacher_user,
+            "exams.marks.view",
+            "exams.marks.create",
+            scope=RecordScope.ASSIGNED,
+        )
         client = APIClient()
         authenticate(client, self.subject_teacher_user)
 

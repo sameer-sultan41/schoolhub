@@ -30,6 +30,7 @@ from apps.examinations.models import ExamStatus, Marks, MarksStatus
 from apps.examinations.tests.base import ExaminationsAPITestCase
 from apps.examinations.tests.factories import (
     CampusFactory,
+    ClassFactory,
     ExamFactory,
     ExamSubjectFactory,
     MarksFactory,
@@ -43,6 +44,7 @@ from apps.examinations.tests.factories import (
     grant,
     open_marks_entry,
 )
+from core.api.exceptions import DomainRuleViolation
 from core.jobs.tests.base import assert_sent_on_commit
 from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
@@ -350,7 +352,7 @@ class EntryGateTests(MarksTestCase):
 
 class AllocationScopeTests(MarksTestCase):
     def _teacher_client(self, user) -> APIClient:
-        grant(user, "exams.marks.create", scope=RecordScope.ASSIGNED)
+        grant(user, "exams.marks.view", "exams.marks.create", scope=RecordScope.ASSIGNED)
         client = APIClient()
         authenticate(client, user)
         return client
@@ -365,17 +367,41 @@ class AllocationScopeTests(MarksTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
 
     def test_a_teacher_not_allocated_to_the_class_subject_is_refused(self) -> None:
+        """The exam-subject is outside their `assigned` reach, so it is a 404 (ADR-0031
+        decision 3), whatever section is posted: a 422 would say whether it is in the class."""
         with tenant_context(self.tenant.id):
             stranger_user = UserFactory(tenant=self.tenant)
-            from apps.examinations.tests.factories import StaffFactory
-
             StaffFactory(tenant=self.tenant, campus=self.campus, user_id=stranger_user.pk)
+            elsewhere = SectionFactory(
+                tenant=self.tenant,
+                school_class=ClassFactory(tenant=self.tenant, level=9),
+                campus=self.campus,
+            )
         client = self._teacher_client(stranger_user)
 
-        response = self.submit(client=client)
+        for section in (self.section, elsewhere):
+            with self.subTest(section=section.name):
+                response = self.submit(client=client, section=section)
+                self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        with tenant_context(self.tenant.id):
+            self.assertFalse(Marks.objects.filter(exam_subject=self.exam_subject).exists())
 
-        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
-        self.assertIn("not currently allocated", str(response.json()))
+    def test_the_gate_names_a_missing_allocation(self) -> None:
+        """The section gate's own sentence, for a caller who reaches the exam-subject."""
+        with tenant_context(self.tenant.id):
+            stranger_user = UserFactory(tenant=self.tenant)
+            StaffFactory(tenant=self.tenant, campus=self.campus, user_id=stranger_user.pk)
+        grant(stranger_user, "exams.marks.create", scope=RecordScope.ASSIGNED)
+
+        with tenant_context(self.tenant.id), self.assertRaises(DomainRuleViolation) as raised:
+            services.assert_marker_may_enter(
+                user=stranger_user,
+                exam_subject=self.exam_subject,
+                section=self.section,
+                permission=services.MARKS_CREATE,
+            )
+
+        self.assertIn("not currently allocated", str(raised.exception.detail))
 
     def test_unrelated_all_role_does_not_skip_allocation_check(self) -> None:
         """Only the roles granting `exams.marks.create` decide the early return.
@@ -386,28 +412,34 @@ class AllocationScopeTests(MarksTestCase):
         """
         with tenant_context(self.tenant.id):
             stranger_user = UserFactory(tenant=self.tenant)
-            from apps.examinations.tests.factories import StaffFactory
-
             StaffFactory(tenant=self.tenant, campus=self.campus, user_id=stranger_user.pk)
         grant(stranger_user, "exams.exam.view", scope=RecordScope.ALL)
         client = self._teacher_client(stranger_user)
 
         response = self.submit(client=client)
 
-        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
-        self.assertIn("not currently allocated", str(response.json()))
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         with tenant_context(self.tenant.id):
             self.assertFalse(Marks.objects.filter(exam_subject=self.exam_subject).exists())
 
     def test_an_account_with_no_staff_row_is_refused(self) -> None:
+        """No staff row teaches nothing: the exam-subject is a 404, and the gate's own
+        sentence says why."""
         with tenant_context(self.tenant.id):
             orphan = UserFactory(tenant=self.tenant)
         client = self._teacher_client(orphan)
 
         response = self.submit(client=client)
+        with tenant_context(self.tenant.id), self.assertRaises(DomainRuleViolation) as raised:
+            services.assert_marker_may_enter(
+                user=orphan,
+                exam_subject=self.exam_subject,
+                section=self.section,
+                permission=services.MARKS_CREATE,
+            )
 
-        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
-        self.assertIn("no active staff record", str(response.json()))
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertIn("no active staff record", str(raised.exception.detail))
 
     def test_an_all_scoped_caller_needs_no_allocation(self) -> None:
         """Many `exam_staff` and admin users have no `Staff` row at all, so
@@ -517,10 +549,17 @@ class EntryRecordScopeTests(CampusBMarksTestCase):
     def _campus_a_marker(self):
         with tenant_context(self.tenant.id):
             marker = UserFactory(tenant=self.tenant)
-        grant(marker, "exams.marks.create", scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+        grant(
+            marker,
+            "exams.marks.view",
+            "exams.marks.create",
+            scope=RecordScope.CAMPUS,
+            scope_ref=self.campus.pk,
+        )
         return marker
 
     def test_a_campus_a_marker_cannot_write_a_campus_b_student(self) -> None:
+        """Proves the section roll: `student_b` is on campus B's section, not this one."""
         marker = self._campus_a_marker()
 
         response = self.submit(
@@ -528,6 +567,18 @@ class EntryRecordScopeTests(CampusBMarksTestCase):
         )
 
         self._assert_rejected_alone(response, index=3, student=self.student_b)
+
+    def test_a_campus_b_student_in_a_campus_a_section_is_rejected_by_record_scope(self) -> None:
+        """Proves the per-student filter: the section passes the gate and the student is
+        on its roll, so only `exams.marks.create`'s scope over the student refuses them
+        (the student-vs-section campus edge in `deferred-work.md`)."""
+        marker = self._campus_a_marker()
+        with tenant_context(self.tenant.id):
+            visitor = self._enrol(campus=self.campus_b, section=self.section)
+
+        response = self.submit([*self.entries(), self._row(visitor)], client=self._client(marker))
+
+        self._assert_rejected_alone(response, index=3, student=visitor)
 
     def test_a_campus_a_marker_still_writes_their_own_campus(self) -> None:
         marker = self._campus_a_marker()
@@ -538,10 +589,16 @@ class EntryRecordScopeTests(CampusBMarksTestCase):
         self.assertEqual(self._marks_written(), 3)
 
     def test_an_assigned_teacher_cannot_write_a_student_outside_their_sections(self) -> None:
-        """The allocation is to `self.section`, and the gate only checks the class."""
+        """Proves the section roll: the allocation is to `self.section`, and a student on
+        `other_section`'s roll is not on it."""
         with tenant_context(self.tenant.id):
             outsider = self._enrol(campus=self.campus, section=self.other_section)
-        grant(self.subject_teacher_user, "exams.marks.create", scope=RecordScope.ASSIGNED)
+        grant(
+            self.subject_teacher_user,
+            "exams.marks.view",
+            "exams.marks.create",
+            scope=RecordScope.ASSIGNED,
+        )
 
         response = self.submit(
             [*self.entries(), self._row(outsider)],
@@ -557,7 +614,13 @@ class EntryRecordScopeTests(CampusBMarksTestCase):
         with tenant_context(self.tenant.id):
             marker = UserFactory(tenant=self.tenant)
             StaffFactory(tenant=self.tenant, campus=self.campus, user_id=marker.pk)
-        grant(marker, "exams.marks.create", scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+        grant(
+            marker,
+            "exams.marks.view",
+            "exams.marks.create",
+            scope=RecordScope.CAMPUS,
+            scope_ref=self.campus.pk,
+        )
         grant(marker, "exams.marks.create", scope=RecordScope.ASSIGNED)
         client = self._client(marker)
 
@@ -733,7 +796,7 @@ class ProgressTests(MarksTestCase):
                 )
 
         with tenant_context(self.tenant.id), CaptureQueriesContext(connection) as captured:
-            services.marks_entry_progress(exam=self.exam, user=None, permission=None)
+            services.all_marks_entry_progress(exam=self.exam)
 
         self.assertLessEqual(len(captured.captured_queries), 4)
 
@@ -1164,6 +1227,36 @@ class ImportRecordScopeTests(CampusBMarksTestCase):
             b_marks = Marks.objects.filter(exam_subject=self.exam_subject, student=self.student_b)
             self.assertFalse(b_marks.exists())
         self.assertEqual(self._marks_written(), 1)
+
+    def test_a_campus_b_student_in_a_campus_a_section_is_rejected_as_unknown(self) -> None:
+        """Proves the per-student filter on the import: the section is the importer's,
+        the student is on its roll, and only the key's scope over the student refuses them."""
+        from core.jobs.models import JobStatus
+
+        with tenant_context(self.tenant.id):
+            importer = UserFactory(tenant=self.tenant)
+            visitor = self._enrol(campus=self.campus_b, section=self.section)
+            own_number = self.students[0].admission_number
+            visitor_number = visitor.admission_number
+        grant(importer, "exams.marks.import", scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self._upload(
+                self._client(importer),
+                [f"{own_number},60,,,,", f"{visitor_number},70,,,,", "NOT-A-STUDENT,55,,,,"],
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.json())
+        job = self._job(response.json()["data"]["job_id"])
+        self.assertEqual(job.status, JobStatus.SUCCEEDED, job.error)
+        self.assertEqual(job.result["succeeded"], 1)
+        out_of_scope, unknown = job.result["errors"]
+        self.assertEqual(
+            out_of_scope["issue"].replace(repr(visitor_number), "<n>"),
+            unknown["issue"].replace(repr("NOT-A-STUDENT"), "<n>"),
+        )
+        with tenant_context(self.tenant.id):
+            self.assertFalse(Marks.objects.filter(student=visitor).exists())
 
     def test_a_legacy_import_job_without_the_key_fails_closed(self) -> None:
         """Queued before `scope_permission`: read under no key it would be empty, and
