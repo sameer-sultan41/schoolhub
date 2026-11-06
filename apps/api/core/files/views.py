@@ -57,6 +57,8 @@ class FileViewSet(
         # defines platform.file.view as exactly this. Mapped explicitly so it isn't a fallback.
         "download": "platform.file.view",
     }
+    # A guardian confirms their own slot without platform.file.view (get_queryset narrows it).
+    scope_read_exempt_actions = frozenset({"confirm"})
 
     def get_queryset(self):
         # Deliberately does NOT call TenantScopedViewSetMixin.get_queryset(): File has
