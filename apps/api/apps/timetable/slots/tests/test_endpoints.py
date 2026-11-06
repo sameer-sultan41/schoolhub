@@ -168,7 +168,7 @@ class TimetableSlotEndpointTests(TimetableAPITestCase):
 
     def test_a_published_slot_cannot_be_edited_in_place(self) -> None:
         """§5.7 — republish instead, so the change carries validation and notice."""
-        self.allow("timetable.slot.update")
+        self.allow("timetable.slot.update", "timetable.slot.view")
         slot = self.publish(self.make_slot())
 
         response = self.client.patch(
@@ -192,7 +192,7 @@ class TimetableSlotEndpointTests(TimetableAPITestCase):
             self.assertFalse(TimetableSlot.objects.alive().filter(pk=first.pk).exists())
 
     def test_a_published_slot_cannot_be_deleted(self) -> None:
-        self.allow("timetable.slot.delete")
+        self.allow("timetable.slot.delete", "timetable.slot.view")
         slot = self.publish(self.make_slot())
 
         response = self.client.delete(f"/api/v1/timetable-slots/{slot.pk}")

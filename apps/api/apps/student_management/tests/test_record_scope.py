@@ -9,18 +9,28 @@ the hook that fixes it; these are the assertions that keep it fixed.
 
 from __future__ import annotations
 
+from unittest import mock
+
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.school_organization.tests.factories import (
+    AcademicSessionFactory,
     CampusFactory,
+    ClassFactory,
+    SectionFactory,
     TenantFactory,
     UserFactory,
     authenticate,
     grant,
 )
+from apps.staff_management.tests.factories import StaffFactory
 from apps.student_management.tests.factories import (
+    EmergencyContactFactory,
     GuardianFactory,
+    StudentEnrollmentFactory,
     StudentFactory,
     StudentGuardianFactory,
     enable_feature,
@@ -29,6 +39,11 @@ from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
 VIEW_KEY = "students.student.view"
+UPDATE_KEY = "students.student.update"
+APPROVE_WITHDRAWAL = "students.withdrawal.approve"
+# A key no student route declares: the unrelated `all` role a mixed user holds.
+UNRELATED = "exams.exam.view"
+NOTES = "Penicillin allergy"
 
 
 class StudentOwnScopeTests(APITestCase):
@@ -126,3 +141,292 @@ class StudentOwnScopeTests(APITestCase):
         self._own_scoped_client(stranger)
 
         self.assertEqual(self.client.get("/api/v1/students").json()["data"], [])
+
+
+class MedicalNotesScopeTests(APITestCase):
+    """`medical_notes` follows the scope of the key that reveals it (auth-and-rbac.md §2.3).
+
+    `students.student.update` reveals the notes of the rows inside that key's own
+    scope, and an `assigned` scope reveals them only when it is the scope of
+    `students.student.view`. Read key-blind, holding the update key anywhere showed
+    every readable row's notes, and an `assigned` role for any key showed a class
+    teacher's students' notes.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.tenant = TenantFactory()
+        enable_feature(self.tenant, "module.students")
+        self.user = UserFactory(tenant=self.tenant)
+        authenticate(self.client, self.user)
+        with tenant_context(self.tenant.id):
+            self.campus_a = CampusFactory(tenant=self.tenant)
+            self.campus_b = CampusFactory(tenant=self.tenant)
+            self.session = AcademicSessionFactory(tenant=self.tenant, is_current=True)
+            self.school_class = ClassFactory(tenant=self.tenant, level=6)
+            staff = StaffFactory(tenant=self.tenant, campus=self.campus_a, user_id=self.user.pk)
+            # The caller is this section's class teacher, so `assigned` reaches its roll.
+            self.section = SectionFactory(
+                tenant=self.tenant,
+                school_class=self.school_class,
+                campus=self.campus_a,
+                class_teacher_staff_id=staff.pk,
+            )
+
+    def _student(self, campus, *, taught: bool = False):
+        with tenant_context(self.tenant.id):
+            student = StudentFactory(tenant=self.tenant, campus=campus, medical_notes=NOTES)
+            if taught:
+                StudentEnrollmentFactory(
+                    tenant=self.tenant,
+                    student=student,
+                    academic_session=self.session,
+                    school_class=self.school_class,
+                    section=self.section,
+                )
+        return student
+
+    def _notes_shown(self, path: str = "/api/v1/students?page_size=100") -> dict[str, bool]:
+        response = self.client.get(path)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        data = response.json()["data"]
+        rows = data if isinstance(data, list) else [data]
+        return {row["id"]: row.get("medical_notes") == NOTES for row in rows}
+
+    def test_medical_notes_follow_the_update_roles_scope(self) -> None:
+        in_scope = self._student(self.campus_a)
+        out_of_scope = self._student(self.campus_b)
+        grant(self.user, VIEW_KEY, UPDATE_KEY, scope=RecordScope.CAMPUS, scope_ref=self.campus_a.pk)
+        # Reads campus B too, but grants no update anywhere.
+        grant(self.user, VIEW_KEY, UNRELATED, scope=RecordScope.ALL)
+
+        self.assertEqual(self._notes_shown(), {str(in_scope.pk): True, str(out_of_scope.pk): False})
+        self.assertEqual(
+            self._notes_shown(f"/api/v1/students/{out_of_scope.pk}"),
+            {str(out_of_scope.pk): False},
+        )
+
+    def test_medical_notes_assigned_branch_reads_the_view_roles_scope(self) -> None:
+        """The `assigned` scope here belongs to a marking role, not to the view key."""
+        taught = self._student(self.campus_a, taught=True)
+        grant(self.user, VIEW_KEY, scope=RecordScope.ALL)
+        grant(self.user, "attendance.student-attendance.mark", scope=RecordScope.ASSIGNED)
+
+        self.assertEqual(self._notes_shown(), {str(taught.pk): False})
+
+    def test_an_assigned_class_teacher_sees_their_students_notes(self) -> None:
+        taught = self._student(self.campus_a, taught=True)
+        grant(self.user, VIEW_KEY, scope=RecordScope.ASSIGNED)
+        grant(self.user, UNRELATED, scope=RecordScope.ALL)
+
+        self.assertEqual(self._notes_shown(), {str(taught.pk): True})
+
+    def test_medical_notes_query_count_is_constant(self) -> None:
+        """Visibility is resolved once over the page, never with a query per row."""
+        grant(self.user, VIEW_KEY, scope=RecordScope.ASSIGNED)
+        grant(self.user, UNRELATED, scope=RecordScope.ALL)
+        for _ in range(3):
+            self._student(self.campus_a, taught=True)
+        # Warm-up: the first request fills per-process caches (feature flags,
+        # permissions), which would otherwise make the second measurement look cheaper.
+        self._notes_shown()
+        with CaptureQueriesContext(connection) as three_rows:
+            shown = self._notes_shown()
+        self.assertEqual(len(shown), 3)
+
+        for _ in range(27):
+            self._student(self.campus_a, taught=True)
+        with CaptureQueriesContext(connection) as thirty_rows:
+            shown = self._notes_shown()
+
+        self.assertEqual(list(shown.values()), [True] * 30)
+        self.assertEqual(len(thirty_rows), len(three_rows))
+
+    def test_an_own_scoped_reader_sees_their_record_without_medical_notes(self) -> None:
+        """A student or guardian under `own` reads the row, never the notes on it."""
+        student_user = UserFactory(tenant=self.tenant)
+        own_record = self._student(self.campus_a)
+        with tenant_context(self.tenant.id):
+            own_record.user_id = student_user.pk
+            own_record.save(update_fields=["user_id"])
+        authenticate(self.client, student_user)
+        grant(student_user, VIEW_KEY, scope=RecordScope.OWN, is_restricted_principal=True)
+
+        response = self.client.get(f"/api/v1/students/{own_record.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertNotIn("medical_notes", response.json()["data"])
+
+
+class PrivilegeKeyScopeTests(APITestCase):
+    """A privilege key applied to a student must reach that student (auth-and-rbac.md §2.3).
+
+    The capacity override (`students.student.update`) and the clearance waiver
+    (`students.withdrawal.approve`) used to ask whether the key was held anywhere. A
+    user holding it for campus A, and the route's action key at `all`, got the
+    privilege on a campus-B student. Every test here gives the caller that mixed
+    pair, so each fails against the key-blind check.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.tenant = TenantFactory()
+        enable_feature(self.tenant, "module.students")
+        self.user = UserFactory(tenant=self.tenant)
+        authenticate(self.client, self.user)
+        # A row must be readable before an action reaches it (ADR-0031 decision 3);
+        # these tests are about the privilege key alone.
+        grant(self.user, VIEW_KEY, scope=RecordScope.ALL)
+        with tenant_context(self.tenant.id):
+            self.campus_a = CampusFactory(tenant=self.tenant)
+            self.campus_b = CampusFactory(tenant=self.tenant)
+            self.session = AcademicSessionFactory(tenant=self.tenant)
+            self.school_class = ClassFactory(tenant=self.tenant)
+            # Campus B's section is full, so only the override admits anyone.
+            self.full_section = self._section(self.campus_b, capacity=1)
+            occupant = StudentFactory(tenant=self.tenant, campus=self.campus_b)
+            self._enroll(occupant, self.full_section)
+            self.student = self._ready_student(self.campus_b)
+
+    def _section(self, campus, *, capacity: int):
+        return SectionFactory(
+            tenant=self.tenant, school_class=self.school_class, campus=campus, capacity=capacity
+        )
+
+    def _enroll(self, student, section):
+        return StudentEnrollmentFactory(
+            tenant=self.tenant,
+            student=student,
+            academic_session=self.session,
+            school_class=self.school_class,
+            section=section,
+        )
+
+    def _ready_student(self, campus):
+        """A student who meets enrolment's guardian and emergency-contact prerequisites."""
+        student = StudentFactory(tenant=self.tenant, campus=campus)
+        StudentGuardianFactory(
+            tenant=self.tenant, student=student, guardian=GuardianFactory(tenant=self.tenant)
+        )
+        EmergencyContactFactory(tenant=self.tenant, student=student)
+        return student
+
+    def _fields(self, response) -> set[str]:
+        return {detail["field"] for detail in response.json()["error"]["details"]}
+
+    def _enroll_with_override(self, student):
+        return self.client.post(
+            f"/api/v1/students/{student.pk}:enroll",
+            {
+                "academic_session_id": str(self.session.pk),
+                "class_id": str(self.school_class.pk),
+                "section_id": str(self.full_section.pk),
+                "enrollment_date": "2026-04-05",
+                "capacity_override_reason": "Sibling priority admission",
+            },
+            format="json",
+        )
+
+    def test_enroll_override_needs_the_update_key_on_the_students_campus(self) -> None:
+        grant(self.user, UPDATE_KEY, scope=RecordScope.CAMPUS, scope_ref=self.campus_a.pk)
+        grant(self.user, "students.enrollment.enroll", scope=RecordScope.ALL)
+
+        response = self._enroll_with_override(self.student)
+
+        self.assertEqual(
+            response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY, response.json()
+        )
+        self.assertEqual(self._fields(response), {"capacity_override_reason"})
+
+    def test_enroll_override_needs_the_update_key_on_the_sections_campus(self) -> None:
+        """The student is in scope; the section whose capacity is exceeded is not."""
+        with tenant_context(self.tenant.id):
+            student = self._ready_student(self.campus_a)
+        grant(self.user, UPDATE_KEY, scope=RecordScope.CAMPUS, scope_ref=self.campus_a.pk)
+        grant(self.user, "students.enrollment.enroll", scope=RecordScope.ALL)
+
+        response = self._enroll_with_override(student)
+
+        self.assertEqual(
+            response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY, response.json()
+        )
+        self.assertEqual(self._fields(response), {"capacity_override_reason"})
+
+    def test_enroll_override_is_granted_when_the_update_key_reaches_both(self) -> None:
+        grant(self.user, UPDATE_KEY, scope=RecordScope.CAMPUS, scope_ref=self.campus_b.pk)
+        grant(self.user, "students.enrollment.enroll", scope=RecordScope.ALL)
+
+        response = self._enroll_with_override(self.student)
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.json())
+
+    def _change_section_with_override(self):
+        """Move the campus-B student from a section with room into the full one."""
+        with tenant_context(self.tenant.id):
+            self._enroll(self.student, self._section(self.campus_b, capacity=5))
+        return self.client.post(
+            f"/api/v1/students/{self.student.pk}:change-section",
+            {
+                "section_id": str(self.full_section.pk),
+                "capacity_override_reason": "Sibling priority admission",
+            },
+            format="json",
+        )
+
+    def test_change_section_override_needs_the_update_key_on_the_students_campus(self) -> None:
+        grant(self.user, UPDATE_KEY, scope=RecordScope.CAMPUS, scope_ref=self.campus_a.pk)
+        grant(self.user, "students.enrollment.update", scope=RecordScope.ALL)
+
+        response = self._change_section_with_override()
+
+        self.assertEqual(
+            response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY, response.json()
+        )
+        self.assertEqual(self._fields(response), {"capacity_override_reason"})
+
+    def test_change_section_override_is_granted_when_the_update_key_reaches_both(self) -> None:
+        """The positive control: the same request passes once the key reaches campus B."""
+        grant(self.user, UPDATE_KEY, scope=RecordScope.CAMPUS, scope_ref=self.campus_b.pk)
+        grant(self.user, "students.enrollment.update", scope=RecordScope.ALL)
+
+        response = self._change_section_with_override()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json()["data"]["section_id"], str(self.full_section.pk))
+
+    def _withdraw_waiving_clearance(self):
+        # `clearance_blockers` finds nothing until the owning modules ship, so the
+        # waiver branch is reached only with a blocker stubbed in.
+        with mock.patch(
+            "apps.student_management.services.clearance_blockers",
+            return_value=["Outstanding fee dues"],
+        ):
+            return self.client.post(
+                f"/api/v1/students/{self.student.pk}:withdraw",
+                {
+                    "reason": "Family relocation",
+                    "effective_date": "2026-06-01",
+                    "waive_clearance": True,
+                },
+                format="json",
+            )
+
+    def test_withdraw_waiver_needs_the_approve_key_on_the_students_campus(self) -> None:
+        grant(self.user, APPROVE_WITHDRAWAL, scope=RecordScope.CAMPUS, scope_ref=self.campus_a.pk)
+        grant(self.user, "students.student.withdraw", scope=RecordScope.ALL)
+
+        response = self._withdraw_waiving_clearance()
+
+        self.assertEqual(
+            response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY, response.json()
+        )
+        self.assertEqual(self._fields(response), {"waive_clearance"})
+
+    def test_withdraw_waiver_is_granted_on_the_students_campus(self) -> None:
+        grant(self.user, APPROVE_WITHDRAWAL, scope=RecordScope.CAMPUS, scope_ref=self.campus_b.pk)
+        grant(self.user, "students.student.withdraw", scope=RecordScope.ALL)
+
+        response = self._withdraw_waiving_clearance()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json()["data"]["status"], "withdrawn")

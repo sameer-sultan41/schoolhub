@@ -12,8 +12,10 @@ from unittest import mock
 
 from django.contrib.admin import AdminSite
 from django.db import connection, transaction
+from django.http import Http404
 from django.test import SimpleTestCase
 from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 from rest_framework import status
 
 from apps.academics import tasks
@@ -27,6 +29,7 @@ from apps.academics.promotions.serializers import (
 )
 from apps.academics.tests.base import AcademicsAPITestCase
 from apps.academics.tests.factories import (
+    CampusFactory,
     ClassFactory,
     SectionFactory,
     UserFactory,
@@ -34,6 +37,7 @@ from apps.academics.tests.factories import (
     grant,
 )
 from apps.school_organization.models import Class, SessionStatus
+from apps.school_organization.tests.factories import grant_default_role
 from apps.student_management.models import EnrollmentStatus, StudentEnrollment
 from apps.student_management.tests.factories import (
     EmergencyContactFactory,
@@ -46,11 +50,15 @@ from core.api.exceptions import Conflict, DomainRuleViolation
 from core.jobs.models import BackgroundJob, JobStatus
 from core.jobs.tests.base import assert_sent_on_commit, run_on_commit
 from core.notifications.models import Notification
+from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
+VIEW = "academics.promotion.view"
+APPROVE = "academics.promotion.approve"
+EXECUTE = "academics.promotion.execute"
 PREPARE_KEYS = (
     "academics.promotion.create",
-    "academics.promotion.view",
+    VIEW,
     "academics.promotion.update",
 )
 
@@ -121,9 +129,13 @@ class PromotionTestCase(AcademicsAPITestCase):
         )
 
     def second_user(self, *keys: str):
-        """A distinct principal — segregation of duties needs two identities."""
+        """A distinct principal — segregation of duties needs two identities.
+
+        Holds the view key too: an approver must be able to read the batch it acts on
+        (plan, rulings 8 and 10), so one without it is a 404.
+        """
         approver = UserFactory(tenant=self.tenant)
-        grant(approver, *keys)
+        grant(approver, VIEW, *keys)
         return approver
 
     def close_target_session(self) -> None:
@@ -420,6 +432,22 @@ class BatchResourceTests(PromotionTestCase):
 
 
 class ApprovalTests(PromotionTestCase):
+    def test_the_seeded_school_owner_sees_and_approves_a_batch(self) -> None:
+        """An approver must see what it approves: the seeded `school_owner` holds
+        `academics.promotion.approve`, so it holds the batch's view key too."""
+        self.allow(*PREPARE_KEYS)
+        batch_id = self.create_batch()
+        self.transition(batch_id, "submit")
+        owner = UserFactory(tenant=self.tenant)
+        grant_default_role(owner, "school_owner")
+        authenticate(self.client, owner)
+
+        seen = self.client.get(f"/api/v1/student-promotions/{batch_id}")
+        approved = self.transition(batch_id, "approve")
+
+        self.assertEqual(seen.status_code, status.HTTP_200_OK, seen.json())
+        self.assertEqual(approved.status_code, status.HTTP_200_OK, approved.json())
+
     def test_the_preparer_cannot_approve_their_own_batch(self) -> None:
         """RBAC §2.4 segregation of duties — the rule this workflow exists for."""
         self.allow(*PREPARE_KEYS, "academics.promotion.approve")
@@ -1293,6 +1321,24 @@ class PromotionNotificationTests(PromotionTestCase):
         self.assertEqual([row.user_id for row in pending], [approver.pk])
         self.assertIn(self.school_class.name, pending[0].body)
 
+    def test_a_holder_of_a_soft_deleted_approver_role_is_not_asked(self) -> None:
+        """A soft-deleted role grants nothing (`scope_grants`), so the endpoint would
+        refuse its holder; asking them to approve would be an instruction they cannot
+        follow."""
+        self.allow(*PREPARE_KEYS)
+        approver = UserFactory(tenant=self.tenant)
+        role = grant(approver, "academics.promotion.approve")
+        role.deleted_at = timezone.now()
+        role.save(update_fields=["deleted_at", "updated_at"])
+        batch_id = self.create_batch()
+
+        response = self.client.post(
+            f"/api/v1/student-promotions/{batch_id}:submit", {}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(self._notifications("academics.promotion-pending"), [])
+
     def test_the_preparer_is_never_asked_to_approve_their_own_batch(self) -> None:
         """Asking them would be an instruction `approve_batch` then refuses."""
         self.allow(*PREPARE_KEYS, "academics.promotion.approve")
@@ -1328,3 +1374,237 @@ class PromotionNotificationTests(PromotionTestCase):
         outcome = self._notifications("academics.promotion-outcome")
         self.assertEqual([row.user_id for row in outcome], [self.user.pk])
         self.assertIn("returned to draft", outcome[0].body)
+
+
+class BatchRecordScopeTests(PromotionTestCase):
+    """Plan, execution ruling 10: every student a batch covers must be within the actor's
+    scope for the action's key.
+
+    A batch belongs to a class, and classes have no campus, so one batch can span
+    campuses. The actions called their services with the batch id alone, so a campus-A
+    holder of the key acted on a campus-B batch. Now a batch the actor cannot read is a
+    404, and one they can read but only partly reach is a 422.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        with tenant_context(self.tenant.id):
+            self.campus_b = CampusFactory(tenant=self.tenant)
+            # A campus-B section of the base class, so its batch spans both campuses.
+            self.mixed_section = SectionFactory(
+                tenant=self.tenant, school_class=self.school_class, campus=self.campus_b
+            )
+            self.b_class = ClassFactory(tenant=self.tenant, level=4)
+            self.b_section = SectionFactory(
+                tenant=self.tenant, school_class=self.b_class, campus=self.campus_b
+            )
+        # The preparer is tenant-wide; only the actor under test is narrowed.
+        self.allow(*PREPARE_KEYS, EXECUTE)
+
+    def enroll_on_campus_b(self, school_class, section):
+        with tenant_context(self.tenant.id):
+            student = StudentFactory(tenant=self.tenant, campus=self.campus_b)
+            StudentEnrollmentFactory(
+                tenant=self.tenant,
+                student=student,
+                academic_session=self.session,
+                school_class=school_class,
+                section=section,
+            )
+        return student
+
+    def campus_b_batch(self) -> str:
+        """A draft batch whose every student is on campus B."""
+        self.enroll_on_campus_b(self.b_class, self.b_section)
+        return self.create_batch(self.b_class)
+
+    def mixed_batch(self) -> str:
+        """A draft batch of the base class: `self.student` on A, a classmate on B."""
+        self.enroll_on_campus_b(self.school_class, self.mixed_section)
+        return self.create_batch()
+
+    def submitted(self, batch_id: str) -> str:
+        response = self.transition(batch_id, "submit")
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        return batch_id
+
+    def on_campus_a(self, *keys: str):
+        """An actor holding the view key and `keys` on campus A only."""
+        actor = UserFactory(tenant=self.tenant)
+        grant(actor, VIEW, *keys, scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+        return actor
+
+    def statuses(self, batch_id: str) -> set[str]:
+        with tenant_context(self.tenant.id):
+            rows = StudentPromotion.objects.alive().filter(batch_id=batch_id)
+            return set(rows.values_list("status", flat=True))
+
+    def test_a_campus_a_approver_cannot_approve_or_reject_a_campus_b_batch(self) -> None:
+        batch_id = self.submitted(self.campus_b_batch())
+        authenticate(self.client, self.on_campus_a(APPROVE))
+
+        for action in ("approve", "reject"):
+            with self.subTest(action=action):
+                response = self.transition(batch_id, action)
+                self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(self.statuses(batch_id), {PromotionStatus.PENDING_APPROVAL})
+
+    def test_a_campus_a_approver_cannot_act_on_a_mixed_campus_batch(self) -> None:
+        """Readable through the campus-A student, so a 422 rather than a 404."""
+        batch_id = self.submitted(self.mixed_batch())
+        authenticate(self.client, self.on_campus_a(APPROVE))
+
+        for action in ("approve", "reject"):
+            with self.subTest(action=action):
+                response = self.transition(batch_id, action)
+                self.assertEqual(
+                    response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY, response.json()
+                )
+                self.assertIn("outside your record scope", response.content.decode())
+        self.assertEqual(self.statuses(batch_id), {PromotionStatus.PENDING_APPROVAL})
+
+    def test_the_action_key_must_reach_every_student_not_only_the_view_key(self) -> None:
+        """View at `all` makes a campus-B batch readable, so the campus-A approve key's
+        gap is a 422: the batch exists for this actor, they just may not move it."""
+        batch_id = self.submitted(self.campus_b_batch())
+        approver = UserFactory(tenant=self.tenant)
+        grant(approver, VIEW)
+        grant(approver, APPROVE, scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+        authenticate(self.client, approver)
+
+        response = self.transition(batch_id, "approve")
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(self.statuses(batch_id), {PromotionStatus.PENDING_APPROVAL})
+
+    def test_an_approver_without_the_view_key_gets_a_404(self) -> None:
+        """The as-built rule: an actor must read a batch to act on it (rulings 8 and 10),
+        so `approve` at `all` with no view key reads no row."""
+        batch_id = self.submitted(self.mixed_batch())
+        approver = UserFactory(tenant=self.tenant)
+        grant(approver, APPROVE)
+        authenticate(self.client, approver)
+
+        response = self.transition(batch_id, "approve")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(self.statuses(batch_id), {PromotionStatus.PENDING_APPROVAL})
+
+    def test_a_creator_without_the_view_key_is_told_they_cannot_view_the_students(
+        self,
+    ) -> None:
+        """The class is wholly on campus A and the create key is `all`, so the refusal is
+        the missing view key, and the 422 says so rather than "outside your scope"."""
+        creator = UserFactory(tenant=self.tenant)
+        grant(creator, "academics.promotion.create")
+        authenticate(self.client, creator)
+
+        response = self.client.post(
+            "/api/v1/student-promotions",
+            {
+                "from_academic_session_id": str(self.session.pk),
+                "to_academic_session_id": str(self.next_session.pk),
+                "class_id": str(self.school_class.pk),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertIn("cannot view the students", response.content.decode())
+        with tenant_context(self.tenant.id):
+            self.assertFalse(StudentPromotion.objects.alive().exists())
+
+    def test_an_all_approver_can_act_on_a_mixed_campus_batch(self) -> None:
+        """The control: the check refuses on scope, not on a batch spanning campuses."""
+        batch_id = self.submitted(self.mixed_batch())
+        authenticate(self.client, self.second_user(APPROVE))
+
+        response = self.transition(batch_id, "approve")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json()["data"], {"updated": 2})
+        self.assertEqual(self.statuses(batch_id), {PromotionStatus.APPROVED})
+
+    def test_a_campus_a_preparer_cannot_submit_a_campus_b_batch(self) -> None:
+        batch_id = self.campus_b_batch()
+        authenticate(self.client, self.on_campus_a("academics.promotion.update"))
+
+        response = self.transition(batch_id, "submit")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(self.statuses(batch_id), {PromotionStatus.DRAFT})
+
+    def test_a_campus_a_preparer_cannot_revert_a_mixed_campus_batch(self) -> None:
+        batch_id = self.mixed_batch()
+        authenticate(self.client, self.on_campus_a("academics.promotion.update"))
+
+        response = self.transition(batch_id, "revert")
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(self.statuses(batch_id), {PromotionStatus.DRAFT})
+
+    def test_a_campus_a_executor_cannot_execute_a_mixed_campus_batch(self) -> None:
+        """Refused at request time, so no job is queued for the worker to run unscoped."""
+        self.enroll_on_campus_b(self.school_class, self.mixed_section)
+        batch_id = self._approved_batch()
+        authenticate(self.client, self.on_campus_a(EXECUTE))
+
+        response = self.transition(batch_id, "execute")
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(self.statuses(batch_id), {PromotionStatus.APPROVED})
+        with tenant_context(self.tenant.id):
+            queued = BackgroundJob.objects.filter(job_type="promotion.execute")
+            self.assertFalse(queued.exists())
+
+    def test_a_campus_a_preparer_cannot_create_a_batch_spanning_campus_b(self) -> None:
+        """The class is readable on every campus, so out-of-scope students are a 422.
+
+        "No rows written" holds with or without the view's inner `transaction.atomic()`:
+        under `ATOMIC_REQUESTS` the 422 already rolls the request's transaction back. So
+        this pins the 422 and the outcome, not the inner block.
+        """
+        self.enroll_on_campus_b(self.school_class, self.mixed_section)
+        authenticate(self.client, self.on_campus_a("academics.promotion.create"))
+
+        response = self.client.post(
+            "/api/v1/student-promotions",
+            {
+                "from_academic_session_id": str(self.session.pk),
+                "to_academic_session_id": str(self.next_session.pk),
+                "class_id": str(self.school_class.pk),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        with tenant_context(self.tenant.id):
+            self.assertFalse(StudentPromotion.objects.alive().exists())
+
+    def test_an_unknown_batch_id_is_a_404_from_the_scope_check_itself(self) -> None:
+        """No rows is an unknown id. The helper used to pass it and leave the 404 to each
+        service, so a new action calling one that did not 404 would answer 200."""
+        approver = self.on_campus_a(APPROVE)
+
+        with tenant_context(self.tenant.id), self.assertRaises(Http404):
+            services.assert_batch_in_scope(
+                services.batch_queryset(uuid.uuid4()),
+                user=approver,
+                read_permission=VIEW,
+                permission=APPROVE,
+            )
+
+    def test_an_unknown_batch_id_is_a_404_on_an_action(self) -> None:
+        authenticate(self.client, self.second_user(APPROVE))
+
+        response = self.transition(str(uuid.uuid4()), "approve")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_a_campus_a_preparer_still_creates_a_batch_wholly_on_campus_a(self) -> None:
+        """The control for creation: the base class has only `self.student`, on A."""
+        authenticate(self.client, self.on_campus_a("academics.promotion.create"))
+
+        batch_id = self.create_batch()
+
+        self.assertEqual(self.statuses(batch_id), {PromotionStatus.DRAFT})

@@ -184,3 +184,18 @@ export const E2E_TEACHER_LOGIN_EMPLOYEE_NUMBER = "E2E-TEACHER-LOGIN";
  * grades against.
  */
 export const E2E_GRADING_SCALE_NAME = "E2E Percentage";
+
+/**
+ * Mirrors seed_e2e_data.py's communication thread fixture. The guardian is linked, with
+ * portal access and communications on, to the seeded comms student, who is enrolled in the
+ * baseline section; that section's class teacher is a staff row whose `user_id` is the
+ * `assigned`-scoped class teacher login. So a thread this guardian starts is routed to that
+ * teacher (`threads/routing.py`), not to the fallback role.
+ *
+ * Separate from `E2E_GUARDIAN_EMAIL` and `E2E_CLASS_TEACHER_EMAIL`: the leave guardian is
+ * linked to nobody on purpose, and the marking class teacher is `all`-scoped.
+ */
+export const E2E_COMMS_GUARDIAN_EMAIL = "e2e-comms-guardian@schoolhub.test";
+export const E2E_COMMS_CLASS_TEACHER_EMAIL = "e2e-comms-class-teacher@schoolhub.test";
+/** The comms student's addressable attribute; ids are generated per seed run. */
+export const E2E_COMMS_STUDENT_ADMISSION_NUMBER = "E2E-STUDENT-COMMS";

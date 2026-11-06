@@ -22,6 +22,9 @@ from rest_framework.response import Response
 if TYPE_CHECKING:
     from rest_framework.request import Request
 
+    from apps.school_organization.models import Section
+
+from apps.school_organization.services import SECTION_SCOPE
 from apps.student_management.filters import StudentFilterSet, StudentTransferFilterSet
 from apps.student_management.models import (
     EmergencyContact,
@@ -32,6 +35,8 @@ from apps.student_management.models import (
     StudentTransfer,
 )
 from apps.student_management.serializers import (
+    STUDENT_UPDATE,
+    STUDENT_VIEW,
     ChangeSectionRequestSerializer,
     DocumentVerifyRequestSerializer,
     EmergencyContactSerializer,
@@ -50,6 +55,7 @@ from apps.student_management.serializers import (
     WithdrawRequestSerializer,
 )
 from apps.student_management.services import (
+    STUDENT_SCOPE,
     active_enrollment,
     add_emergency_contact,
     add_student_document,
@@ -77,7 +83,10 @@ from core.api.pagination import PageNumberPagination
 from core.api.viewsets import ActionResponse, TenantModelViewSet, TenantScopedViewSetMixin
 from core.idempotency.services import replay_or_execute
 from core.jobs.services import create_job, enqueue_job
-from core.rbac.permissions import has_permission_key
+from core.rbac.permissions import holds_key_for, route_permission, scope_queryset
+
+# The key that lets a withdrawal waive outstanding clearance (`withdraw`).
+WITHDRAWAL_APPROVE = "students.withdrawal.approve"
 
 # PolymorphicProxySerializer is annotation-only (no real to_representation) —
 # the actual runtime dispatch for `history` below is this plain dict lookup. Explicitly
@@ -130,13 +139,16 @@ class StudentViewSet(TenantModelViewSet):
     # *view's* default, not the model's, and a list with no view default lets the
     # paginator page an unordered result.
     ordering = ["last_name", "first_name"]
-    scope_own_field = "user_id"
+    # From `STUDENT_SCOPE`, which every other read of a student row also passes.
+    scope_own_field = STUDENT_SCOPE["own_field"]
+    scope_campus_field = STUDENT_SCOPE["campus_field"]
+    scope_campus_allows_null = STUDENT_SCOPE["campus_allows_null"]
     required_feature = "module.students"
-    required_permission = "students.student.view"
+    required_permission = STUDENT_VIEW
     required_permission_map = {
         "create": "students.student.create",
-        "update": "students.student.update",
-        "partial_update": "students.student.update",
+        "update": STUDENT_UPDATE,
+        "partial_update": STUDENT_UPDATE,
         "destroy": "students.student.delete",
         "enroll": "students.enrollment.enroll",
         "change_section": "students.enrollment.update",
@@ -165,6 +177,18 @@ class StudentViewSet(TenantModelViewSet):
             .get_queryset()
             .select_related("campus", "house", "photo_file")
             .annotate(campus_name=F("campus__name"), house_name=F("house__name"))
+        )
+
+    def _may_override_capacity(self, user, student: Student, section: Section) -> bool:
+        """§11's capacity override: `students.student.update`, held for both rows it touches.
+
+        The student is the row being written, and the section is the one whose capacity
+        is exceeded, so the key's own scope must reach both. Neither the route's action
+        key nor the key held for another campus lends it (auth-and-rbac.md §2.3). The
+        section is read under `SectionViewSet`'s scope settings (`SECTION_SCOPE`).
+        """
+        return self.holds_key_for_row(user, STUDENT_UPDATE, student) and holds_key_for(
+            user, STUDENT_UPDATE, section, **SECTION_SCOPE
         )
 
     def perform_create(self, serializer) -> None:
@@ -223,9 +247,9 @@ class StudentViewSet(TenantModelViewSet):
                 enrollment_date=data["enrollment_date"],
                 roll_number=data.get("roll_number"),
                 capacity_override_reason=data.get("capacity_override_reason"),
-                actor_has_capacity_override=has_permission_key(
-                    request.user, "students.student.update"
-                ),
+                # Read only when an override is asked for, as the service reads it.
+                actor_has_capacity_override=bool(data.get("capacity_override_reason"))
+                and self._may_override_capacity(request.user, student, data["section"]),
                 actor_id=request.user.pk,
                 tenant_id=request.tenant.pk,
             )
@@ -242,6 +266,7 @@ class StudentViewSet(TenantModelViewSet):
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="students:enroll",
+            request_data=request.data,
             execute=execute,
         )
 
@@ -269,9 +294,8 @@ class StudentViewSet(TenantModelViewSet):
                 section=data["section"],
                 roll_number=data.get("roll_number"),
                 capacity_override_reason=data.get("capacity_override_reason"),
-                actor_has_capacity_override=has_permission_key(
-                    request.user, "students.student.update"
-                ),
+                actor_has_capacity_override=bool(data.get("capacity_override_reason"))
+                and self._may_override_capacity(request.user, student, data["section"]),
                 actor_id=request.user.pk,
             )
             after = StudentEnrollmentSerializer(updated).data
@@ -289,6 +313,7 @@ class StudentViewSet(TenantModelViewSet):
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="students:change-section",
+            request_data=request.data,
             execute=execute,
         )
 
@@ -312,9 +337,9 @@ class StudentViewSet(TenantModelViewSet):
                 reason=data["reason"],
                 effective_date=data["effective_date"],
                 waive_clearance=data.get("waive_clearance", False),
-                actor_has_withdrawal_approval=has_permission_key(
-                    request.user, "students.withdrawal.approve"
-                ),
+                # Held for this student, and read only when a waiver is asked for.
+                actor_has_withdrawal_approval=data.get("waive_clearance", False)
+                and self.holds_key_for_row(request.user, WITHDRAWAL_APPROVE, student),
                 actor_id=request.user.pk,
             )
             after = self.get_serializer(withdrawn).data
@@ -331,6 +356,7 @@ class StudentViewSet(TenantModelViewSet):
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="students:withdraw",
+            request_data=request.data,
             execute=execute,
         )
 
@@ -470,11 +496,17 @@ class _NestedUnderStudentMixin:
         kwargs: dict[str, str]
 
     def get_student(self) -> Student:
-        from core.rbac.permissions import scope_queryset
-
-        # `own_field` is the fallback only: `Student.filter_owned_by_user` takes
-        # precedence and is what resolves a guardian to their linked children.
-        queryset = scope_queryset(Student.objects.alive(), self.request.user, own_field="user_id")
+        # Scoped twice: by `/students`' own view key, so the parent is one the caller
+        # may read, then by this route's key, so it is one they may act under. Each
+        # reads only the roles granting its key, so neither key's roles widen the
+        # other. `STUDENT_SCOPE`'s `own_field` is the fallback only:
+        # `Student.filter_owned_by_user` takes precedence and is what resolves a
+        # guardian to their linked children.
+        queryset = Student.objects.alive()
+        for permission in (STUDENT_VIEW, route_permission(self.request, self)):
+            queryset = scope_queryset(
+                queryset, self.request.user, permission=permission, **STUDENT_SCOPE
+            )
         try:
             return get_object_or_404(queryset, pk=self.kwargs["student_pk"])
         except (ValueError, TypeError) as exc:
@@ -561,8 +593,8 @@ class EmergencyContactLinkViewSet(
     queryset = EmergencyContact.objects
     serializer_class = EmergencyContactSerializer
     required_feature = "module.students"
-    required_permission = "students.student.view"
-    required_permission_map = {"create": "students.student.update"}
+    required_permission = STUDENT_VIEW
+    required_permission_map = {"create": STUDENT_UPDATE}
     scope_campus_field = "student__campus_id"
     ordering_fields = ["priority"]
 
@@ -720,7 +752,7 @@ class StudentTransferViewSet(
     # one sorts by. No related-field sorts: nothing renders the student's name here yet.
     ordering_fields = ["status", "created_at"]
     ordering = ["-created_at"]
-    required_permission = "students.student.view"
+    required_permission = STUDENT_VIEW
     required_permission_map = {
         "create": "students.transfer.create",
         "approve": "students.transfer.approve",
@@ -772,6 +804,7 @@ class StudentTransferViewSet(
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="student-transfers:approve",
+            request_data=request.data,
             execute=execute,
         )
 
@@ -799,6 +832,7 @@ class StudentTransferViewSet(
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="student-transfers:reject",
+            request_data=request.data,
             execute=execute,
         )
 
@@ -832,6 +866,7 @@ class StudentTransferViewSet(
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="student-transfers:complete",
+            request_data=request.data,
             execute=execute,
         )
 
@@ -934,7 +969,14 @@ class IdCardGenerateViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
     def create(self, request, *args, **kwargs) -> Response:
         payload = IdCardGenerateRequestSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
-        student_ids = payload.validated_data["student_ids"]
+        # Only students the generate key's roles reach. One outside them is dropped,
+        # as an unknown id is, so a card's absence says nothing about the row.
+        student_ids = scope_queryset(
+            Student.objects.alive().filter(pk__in=payload.validated_data["student_ids"]),
+            request.user,
+            permission=route_permission(request, self),
+            **STUDENT_SCOPE,
+        ).values_list("pk", flat=True)
 
         job = create_job(
             tenant_id=request.tenant.pk,

@@ -7,6 +7,7 @@ is explicit and reviewable.
 
 from __future__ import annotations
 
+from django.db import models
 from django.utils import timezone
 from rest_framework import mixins, viewsets
 from rest_framework.permissions import IsAuthenticated
@@ -14,7 +15,16 @@ from rest_framework.response import Response
 
 from core.api.permissions import RequiresModuleFeature
 from core.audit.services import record_audit
-from core.rbac.permissions import HasPermissionKey, scope_queryset
+from core.rbac.permissions import (
+    AnyOf,
+    HasPermissionKey,
+    RbacUser,
+    ScopeKwargs,
+    declared_keys,
+    holds_key_for,
+    required_declaration,
+    scope_queryset,
+)
 from core.tenancy.context import bind_tenant, unbind_tenant
 from core.tenancy.models import Tenant
 
@@ -48,6 +58,12 @@ class TenantScopedViewSetMixin:
     whatever this names, so a table without that column raises ``FieldError``
     for every campus-scoped user the moment they hit the endpoint — override it
     per child viewset rather than leaving the default.
+
+    A route whose declaration is not the read key (an update, a delete, a colon
+    action) is scoped by the read key and then by its own, so its target must be
+    one the caller may read as well as act on. The read key is
+    ``required_permission`` unless ``scope_read_permission`` names another, and
+    ``scope_read_exempt_actions`` lists any action with no read requirement.
     """
 
     permission_classes = [IsAuthenticated, RequiresModuleFeature, HasPermissionKey]
@@ -61,6 +77,11 @@ class TenantScopedViewSetMixin:
     # `IN (...)` drops NULL, so without this a campus-scoped principal silently
     # loses the tenant-wide rows — no error, just a shorter list.
     scope_campus_allows_null: bool = False
+    # The key a row must be readable under before any other route acts on it (ADR-0031
+    # decision 3). None means `required_permission`; set it where that is not the read key.
+    scope_read_permission: str | AnyOf | None = None
+    # Actions whose target need not be readable. Each use says why.
+    scope_read_exempt_actions: frozenset[str] = frozenset()
     audit_resource: str | None = None
 
     def initial(self, request, *args, **kwargs):
@@ -113,15 +134,54 @@ class TenantScopedViewSetMixin:
 
     def get_queryset(self):
         # The model's default manager is already tenant-scoped, and RLS enforces it
-        # in the database; this narrows further by the user's record scope.
+        # in the database; this narrows further by the user's record scope for this
+        # route's own key, so only the roles granting that key count.
         queryset = super().get_queryset().alive()
-        return scope_queryset(
-            queryset,
-            self.request.user,
-            own_field=self.scope_own_field,
-            campus_field=self.scope_campus_field,
-            campus_allows_null=self.scope_campus_allows_null,
-        )
+        declared = required_declaration(self.request, self)
+        if declared is None:
+            # `HasPermissionKey` refuses such a route; never read one under no key.
+            return queryset.none()
+        scope = self.scope_kwargs()
+        read = self.scope_read_declaration()
+        if read is not None and set(declared_keys(read)) != set(declared_keys(declared)):
+            # A route acting on a row (PATCH, DELETE, a colon action) finds it only if
+            # the caller may read it too, so a wide action role cannot reach, or echo
+            # back, a row their view role hides. ADR-0031 decision 3.
+            queryset = scope_queryset(queryset, self.request.user, permission=read, **scope)
+        return scope_queryset(queryset, self.request.user, permission=declared, **scope)
+
+    def scope_read_declaration(self) -> str | AnyOf | None:
+        """The read key a row this route acts on must also be reachable under.
+
+        `scope_read_permission`, else `required_permission`; None for an action in
+        `scope_read_exempt_actions`, which is then scoped by its own key alone.
+        """
+        if getattr(self, "action", None) in self.scope_read_exempt_actions:
+            return None
+        if self.scope_read_permission is not None:
+            return self.scope_read_permission
+        fallback: str | AnyOf | None = getattr(self, "required_permission", None)
+        return fallback
+
+    @classmethod
+    def scope_kwargs(cls) -> ScopeKwargs:
+        """This viewset's record-scope settings, the one source every scope check reads.
+
+        `get_queryset`, `holds_key_for_row` and any check on a row this viewset
+        serves (``holds_key_for(..., **SomeViewSet.scope_kwargs())``) read the same
+        settings, so a privilege check cannot drift from what reading the row means.
+        """
+        return {
+            "own_field": cls.scope_own_field,
+            "campus_field": cls.scope_campus_field,
+            "campus_allows_null": cls.scope_campus_allows_null,
+        }
+
+    def holds_key_for_row(
+        self, user: RbacUser, permission: str | AnyOf, instance: models.Model
+    ) -> bool:
+        """`holds_key_for` under this viewset's own scope settings, for a row it serves."""
+        return holds_key_for(user, permission, instance, **self.scope_kwargs())
 
     def perform_create(self, serializer):
         instance = serializer.save(

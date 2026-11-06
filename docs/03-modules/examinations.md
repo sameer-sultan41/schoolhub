@@ -70,11 +70,16 @@ of the active enrolments that make the section theirs).
 Grading scales are reference data, readable in full by every holder of `exams.grading-scale.view`. §20
 records how both are resolved.
 
-Marks entry (`exams.marks.create`) and the marks reads (`exams.marks.view`) are narrowed per **section**
-by one predicate, `services.may_enter_marks`: `all` scope reaches every section; `campus` scope the
-sections on the caller's campuses; `assigned` scope a section the caller holds a current allocation for
-(that section and subject, in the exam's session) or is class teacher of (in the same session). §11
-states the write rule.
+Marks entry (`exams.marks.create`) and the marks reads (`exams.marks.view`) are narrowed per **section**,
+each under its own key's scope (`scopes_for`), and a key held at several scope types reads their union
+(ADR-0031 decision 7): `all` reaches every section; otherwise a section is reached when a `campus` grant
+covers the section's campus **or** an `assigned` grant covers the section. **`assigned` differs between
+read and write.** Reading (`services.may_enter_marks`, the grid, progress) counts a current allocation for
+that section and subject in the exam's session **or** the homeroom in that session, as
+`Marks.filter_assigned_to_user` does, because §3 gives the class teacher a review role. Writing
+(`services.assert_marker_may_enter`, `:bulk-entry`, the import and the grid's `writable` flag) counts the
+allocation only: a homeroom-only class teacher reads the grid with `writable` false (`no_permission`) and
+a submit is a 422 on `section_id`. §11 states the write rule.
 
 `exams.marks.view` was added with the marks dashboard. Before it, the marks reads fell back to
 `exams.marks.create`, so `principal`, `vice_principal` and `school_admin`, who review marks but do not
@@ -177,7 +182,8 @@ AI-generated questions never enter a bank without explicit approval (`exams.ques
 
 - Unique: exam name per session; one `exam_subjects` row per (exam, class, subject); one marks row per (exam_subject, student); one result per (exam, student).
 - Marks: `0 ≤ obtained ≤ max_marks` per component; pass marks ≤ max marks; entries rejected outside the entry window unless unlocked; absent flag and marks are mutually exclusive.
-- Marks entry is per section: a submit names one `section_id` of the exam-subject's class and may only carry students on that section's active roll in the exam's session (any other is a `meta.rows` issue). An `assigned` caller may write a section only when they hold a current allocation for that section and subject in the exam's session, or are its class teacher in that session; anything else is a 422 on `section_id`. The import applies the same rule per row.
+- Marks entry is per section: a submit names one `section_id` of the exam-subject's class and may only carry students on that section's active roll in the exam's session (any other is a `meta.rows` issue). The section must be one the caller may enter under `exams.marks.create`: `all`, a `campus` grant covering the section's campus, or an `assigned` grant with a current allocation for that section and subject in the exam's session (the homeroom does not count for entry); anything else is a 422 on `section_id`. The import applies the same rule per row under `exams.marks.import`.
+- Marks entry scope: every student in a `:bulk-entry` grid must be within the caller's `exams.marks.create` record scope — `campus` reaches the held campuses' students, `assigned` the students enrolled in a section the caller is currently allocated the subject in (`academics.TeacherSubjectAllocation`). A student outside it is a rejected row, reported as an ineligible one is, and nothing is saved. A marks import matches rows only against the students the importer's `exams.marks.import` scope reaches, in the sections that key lets them enter (the key travels in the job as `scope_permission`, and a job without it fails closed); any other admission number, including one in a section the importer may not enter, is reported as an unknown one is. A student whose own campus differs from their section's is refused on submit even where the section is enterable (`deferred-work.md`).
 - Scheduling: no student may have two papers at overlapping times; room and invigilator single-booked; exam dates within the session/term.
 - Processing: blocked while any assigned exam-subject has unsubmitted marks (override with an audited waiver — recommendation); grading bands must be contiguous, non-overlapping, and fully cover 0–100%.
 - Publishing: only approved results; report cards only from published results; approver ≠ processor.
@@ -273,6 +279,13 @@ List and read shapes the dashboard depends on:
   saving a sitting or computing clashes itself. Staff-only (`exams.schedule.view`). Its exam, like
   `:publish-schedule`'s and `:issue-admit-cards`', resolves through `ExamViewSet`'s record scope, so an exam
   outside an `assigned` caller's teaching is a 404.
+- **A colon action reaches its exam under two keys** (ADR-0031 decision 3). The exam is scoped by the hosting
+  view's read key (`exams.schedule.view` for the clash list and `:publish-schedule`, `exams.admit-card.view`
+  for `:issue-admit-cards`, …), then by the route's own key, each with `ExamViewSet`'s scope settings. A wide
+  action role cannot reach an exam the caller's view role hides, and a schedule reader without
+  `exams.exam.view` keeps the clash list. **An exam-subject addressed by id follows the same two-key rule**
+  (`scoped_exam_subject`, with `ExamSubjectViewSet`'s scope settings): the grid under `exams.marks.view`
+  alone, `:lock-marks` and `:unlock-marks` under `exams.marks.view` and then `exams.marks.lock`.
 - **The publish is typed.** `:publish-schedule` answers `{status, conflicts}` (`ExamSchedulePublish`): the
   exam's new status, `scheduled`, and the soft findings that did not block it. A hard finding is a 422
   `domain_rule_violation` carrying the **whole** list in `error.meta.conflicts` (never flattened into
@@ -301,10 +314,12 @@ List and read shapes the dashboard depends on:
   (`enrollment_roll_order`), each with `student_id`, `student_name`, `admission_number`, `roll_number` and its
   `marks` row or null. `meta.exam_subject` carries `max_marks`, `pass_marks`, `has_practical` and
   `practical_max_marks`; `meta.writable` says whether `:bulk-entry` would take the grid now, and when false
-  `meta.unwritable_reason` (`no_permission`, `exam_status`, `locked`, `window_not_open`, `window_closed`, from
-  the gates `:bulk-entry` runs, in its order) and `meta.unwritable_message` (the refusing gate's sentence). An
-  exam-subject outside the caller's record scope, or a section `services.may_enter_marks` refuses them, is a
-  404.
+  `meta.unwritable_reason` (`no_permission`, `exam_status`, `locked`, `window_not_open`, `window_closed`) and
+  `meta.unwritable_message` (the refusing gate's sentence). **The flag runs the submit's own gates**:
+  `no_permission` is the section write gate itself (`assert_marker_may_enter` under `:bulk-entry`'s key, not
+  "holds the key somewhere"), then the exam, lock and window gates, so a grid never looks writable where the
+  submit refuses. An exam-subject outside the caller's record scope, or a section `services.may_enter_marks`
+  refuses them under `exams.marks.view`, is a 404.
 - **Bulk entry names its section and refuses whole.** `POST /marks:bulk-entry` takes `exam_subject_id`,
   `section_id` and `entries`, with an `Idempotency-Key`. In order: the serializer (a mark on an absent row, or
   absent with exempt, is a 400 under `entries.N.<field>`; a student twice is a 400); the exam's status, the
@@ -316,15 +331,21 @@ List and read shapes the dashboard depends on:
 - **Progress is per section.** `GET /exams/{id}/marks-progress` (`exams.marks.view`) returns
   `MarksProgressRow[]` unpaginated, one per (exam-subject, section with an active roll), in class, subject and
   section order: `exam_subject_id`, `subject_name`, `class_name`, `section_id`, `section_name`, `expected`,
-  `entered`, `submitted` (submitted or locked rows) and `is_locked`. A caller without `all` scope gets only the
-  pairs `may_enter_marks` allows; the exam resolves through `ExamViewSet`'s record scope (out of scope is a 404).
+  `entered`, `submitted` (submitted or locked rows) and `is_locked`. A caller without `all` scope for the
+  progress route's key (`exams.marks.view`) gets only the pairs the read predicate allows under that key; the
+  exam resolves through `ExamViewSet`'s record scope (out of scope is a 404).
 - **Lock and unlock are typed and scoped.** `:lock-marks` answers `{locked_rows, already_locked}` and
   `:unlock-marks` `{unlocked_rows, already_unlocked}`; a repeat is a retry, not a conflict. The exam-subject
-  resolves through `ExamSubjectViewSet`'s record scope (L46), and an unlock once results are approved is a 409.
+  resolves through `ExamSubjectViewSet`'s record scope under two keys (ADR-0031 decision 3): the marks read key
+  `exams.marks.view`, then `exams.marks.lock`, so an `all` lock role cannot reach an exam-subject the caller's
+  marks view role hides (a 404). An unlock once results are approved is a 409.
 - **The marks import checks the file's type and the importer's sections.** `POST /marks-imports` refuses a
   content type outside the `exams.marks-import` purpose's MIME allowlist (`text/csv`, Windows' `application/vnd.ms-excel` CSV type and `.xlsx`; a 400 under
-  `file`), and a caller who may enter no section of the exam-subject (a 422 on `exam_subject_id`); the job then
-  checks each row's student against the importer's sections.
+  `file`), and a caller who may enter no section of the exam-subject under `exams.marks.import` (a 422 on
+  `exam_subject_id`). The job carries that key as `scope_permission` and **fails closed** without it (a job
+  queued before the key existed is failed, never read under every role's scope). Each row's student must be in
+  a section the importer may enter and within the key's record scope; any other row reads as an unknown
+  admission number, so a refused row does not say the student exists.
 - **Every imported row re-checks the entry gates, under the exam's and the subject's locks.** The upload's
   check is only a fail-fast. For each row, the job takes the exam `FOR KEY SHARE`, which conflicts with
   `:process-results`, and then the exam-subject `FOR NO KEY UPDATE`, which conflicts with `:lock-marks`.
@@ -424,7 +445,7 @@ assembly. **The module is complete.**
 | §11 processing | Blocked while any exam-subject has marks outstanding, measured against the **expected roll** rather than rows that happen to exist: a 409 with its own code, `marks_outstanding`, naming the subjects. Recompute is idempotent and refused once approved (a plain `conflict`) |
 | §5.6 approval | Per-row `status` and per-exam status both move. **The approver cannot be the processor** — compared against `results.processed_by`, which every processing run re-stamps on every pending row of the exam (a re-process after a send-back included), not `created_by`, which names only the first run (lesson L50). Publishing releases approved, non-withheld rows only; withholding is a per-student `outcome` |
 | §5.7 report cards | Versioned on regeneration, remarks preserved, stale file cleared. Attendance is a JSONB **snapshot** from `attendance.reports.student_summary` — one query for the whole cohort |
-| §11 marks | One row per (exam-subject, student) · nothing negative and absent-excludes-a-mark at the **database**; `0 ≤ mark ≤ max_marks` in `services`, because a CHECK cannot read `exam_subjects.max_marks` · absent and exempt are mutually exclusive · a practical mark on a theory-only subject is refused · only students on the submitted section's active roll in the exam's session, in a section of the exam-subject's class |
+| §11 marks | One row per (exam-subject, student) · nothing negative and absent-excludes-a-mark at the **database**; `0 ≤ mark ≤ max_marks` in `services`, because a CHECK cannot read `exam_subjects.max_marks` · absent and exempt are mutually exclusive · a practical mark on a theory-only subject is refused · only students on the submitted section's active roll in the exam's session, in a section of the exam-subject's class, and within the marker's `exams.marks.create` scope (a `:bulk-entry` grid) or the importer's `exams.marks.import` scope (a marks import) |
 | §5.4 lifecycle | `draft → submitted → locked` on the row, plus `exam_subjects.marks_locked_at` on the *window*. Four gates on every write, each with its own message because each has a different remedy: the exam's status (§7.1), the entry window (§6), the subject lock, and the teacher's allocation (§4). An **unset** window means always open |
 | §6 dashboard | `GET /exams/{id}/marks-progress` — expected / entered / submitted per (exam-subject, section), narrowed by `services.may_enter_marks` for a caller without `all` scope, in a bounded number of queries whatever the size of the exam. The marks-entry reminder goes per section to that section's allocated subject teachers |
 | §11 scheduling | One sitting per (exam-subject, section) · `end_time > start_time` · a section must belong to the exam-subject's class · a completed or cancelled sitting cannot be rescheduled · admit cards need a published schedule · a revocation needs a reason (CHECK, not only a service rule) |

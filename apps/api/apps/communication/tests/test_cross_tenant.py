@@ -10,15 +10,33 @@ import uuid
 
 from rest_framework import status
 
+from apps.communication import uploads
+from apps.communication.models import (
+    AudienceType,
+    Message,
+    MessageThread,
+    ThreadStatus,
+    ThreadType,
+)
 from apps.communication.tests.base import CommunicationAPITestCase
 from apps.communication.tests.factories import (
     AnnouncementFactory,
+    CampusFactory,
+    MessageFactory,
+    MessageThreadFactory,
     NoticeFactory,
     NotificationTemplateOverrideFactory,
+    StudentFactory,
     TenantFactory,
+    UserFactory,
+    authenticate,
+    grant,
 )
+from core.files.tests.factories import FileFactory
+from core.jobs.models import BackgroundJob
 from core.notifications.models import DeliveryLog, Notification, NotificationChannel
 from core.notifications.templates import registry as platform_templates
+from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
 CODE = "communication-cross-tenant-test.event"
@@ -51,6 +69,22 @@ class CommunicationCrossTenantTests(CommunicationAPITestCase):
             )
             self.other_announcement = AnnouncementFactory(tenant=self.other_tenant)
             self.other_notice = NoticeFactory(tenant=self.other_tenant)
+            self.other_user = UserFactory(tenant=self.other_tenant, first_name="Foreign")
+            grant(self.other_user, "communication.thread.view")
+            self.other_student = StudentFactory(
+                tenant=self.other_tenant, campus=CampusFactory(tenant=self.other_tenant)
+            )
+            # Lists *this* tenant's caller as a participant: only tenancy, not
+            # membership, can keep it out of their inbox.
+            self.other_thread = MessageThreadFactory(
+                tenant=self.other_tenant,
+                participant_user_ids=[str(self.user.pk), str(self.other_user.pk)],
+            )
+            self.other_closed_thread = MessageThreadFactory(
+                tenant=self.other_tenant,
+                participant_user_ids=[str(self.user.pk), str(self.other_user.pk)],
+                status=ThreadStatus.CLOSED,
+            )
 
     def tearDown(self) -> None:
         platform_templates._templates = self._saved_templates
@@ -116,3 +150,217 @@ class CommunicationCrossTenantTests(CommunicationAPITestCase):
         response = self.client.get(f"/api/v1/notices/{self.other_notice.pk}/download")
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_listing_threads_never_shows_another_tenants_thread(self) -> None:
+        response = self.client.get("/api/v1/message-threads")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"], [])
+
+    def test_reading_another_tenants_thread_is_404(self) -> None:
+        response = self.client.get(f"/api/v1/message-threads/{self.other_thread.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_closing_another_tenants_thread_is_404(self) -> None:
+        response = self.client.post(f"/api/v1/message-threads/{self.other_thread.pk}:close")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_reopening_another_tenants_thread_is_404(self) -> None:
+        response = self.client.post(f"/api/v1/message-threads/{self.other_closed_thread.pk}:reopen")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_listing_another_tenants_thread_messages_is_404(self) -> None:
+        response = self.client.get(f"/api/v1/message-threads/{self.other_thread.pk}/messages")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_posting_into_another_tenants_thread_is_404(self) -> None:
+        response = self.client.post(
+            f"/api/v1/message-threads/{self.other_thread.pk}/messages",
+            {"body": "Hello."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        with tenant_context(self.other_tenant.id):
+            self.assertFalse(Message.objects.filter(thread=self.other_thread).exists())
+
+    def test_attaching_another_tenants_file_is_404(self) -> None:
+        with tenant_context(self.tenant.id):
+            colleague = UserFactory(tenant=self.tenant)
+            mine = MessageThreadFactory(
+                tenant=self.tenant,
+                participant_user_ids=[str(self.user.pk), str(colleague.pk)],
+            )
+        with tenant_context(self.other_tenant.id):
+            foreign_file = FileFactory(
+                tenant=self.other_tenant, purpose=uploads.THREAD_ATTACHMENT.key
+            )
+
+        response = self.client.post(
+            f"/api/v1/message-threads/{mine.pk}/messages",
+            {"body": "Hello.", "attachments": [str(foreign_file.pk)]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        with tenant_context(self.tenant.id):
+            self.assertFalse(Message.objects.filter(thread=mine).exists())
+
+    def test_downloading_another_tenants_thread_attachment_is_404(self) -> None:
+        with tenant_context(self.other_tenant.id):
+            foreign_file = FileFactory(
+                tenant=self.other_tenant, purpose=uploads.THREAD_ATTACHMENT.key
+            )
+            MessageFactory(
+                thread=self.other_thread,
+                sender_id=self.other_user.pk,
+                attachments=[str(foreign_file.pk)],
+            )
+        tail = f"{self.other_thread.pk}/attachments/{foreign_file.pk}:download"
+
+        for url in (
+            f"/api/v1/message-threads/{tail}",
+            f"/api/v1/message-thread-oversight/{tail}",
+        ):
+            with self.subTest(url=url):
+                response = self.client.post(url)
+                self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_another_tenants_file_id_on_own_thread_is_404(self) -> None:
+        """Even were a foreign id on one of the caller's messages, RLS hides the file."""
+        with tenant_context(self.other_tenant.id):
+            foreign_file = FileFactory(
+                tenant=self.other_tenant, purpose=uploads.THREAD_ATTACHMENT.key
+            )
+        with tenant_context(self.tenant.id):
+            colleague = UserFactory(tenant=self.tenant)
+            mine = MessageThreadFactory(
+                tenant=self.tenant,
+                participant_user_ids=[str(self.user.pk), str(colleague.pk)],
+            )
+            MessageFactory(thread=mine, sender_id=colleague.pk, attachments=[str(foreign_file.pk)])
+
+        response = self.client.post(
+            f"/api/v1/message-threads/{mine.pk}/attachments/{foreign_file.pk}:download"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_marking_another_tenants_thread_read_is_404(self) -> None:
+        response = self.client.post(f"/api/v1/message-threads/{self.other_thread.pk}:mark-read")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_oversight_retrieve_of_another_tenants_thread_is_404(self) -> None:
+        response = self.client.get(f"/api/v1/message-thread-oversight/{self.other_thread.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_oversight_messages_of_another_tenants_thread_is_404(self) -> None:
+        response = self.client.get(
+            f"/api/v1/message-thread-oversight/{self.other_thread.pk}/messages"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_recipients_never_lists_another_tenants_user(self) -> None:
+        response = self.client.get("/api/v1/message-threads/recipients", {"search": "Foreign"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"], [])
+
+    def test_starting_a_thread_about_another_tenants_student_is_404(self) -> None:
+        response = self.client.post(
+            "/api/v1/message-threads",
+            {
+                "subject": "Hello",
+                "thread_type": ThreadType.GUARDIAN_SCHOOL,
+                "student_id": str(self.other_student.pk),
+                "body": "Hi.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        with tenant_context(self.tenant.id):
+            self.assertFalse(MessageThread.objects.exists())
+
+    def test_starting_a_thread_with_another_tenants_user_is_404(self) -> None:
+        response = self.client.post(
+            "/api/v1/message-threads",
+            {
+                "subject": "Hello",
+                "thread_type": ThreadType.INTERNAL,
+                "participant_user_ids": [str(self.other_user.pk)],
+                "body": "Hi.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        with tenant_context(self.tenant.id):
+            self.assertFalse(MessageThread.objects.exists())
+
+    def test_previewing_a_broadcast_to_another_tenants_targets_is_404(self) -> None:
+        for audience_filter in (
+            {"user_ids": [str(self.other_user.pk)]},
+            {"campus_ids": [str(self.other_student.campus_id)]},
+        ):
+            with self.subTest(audience_filter=audience_filter):
+                response = self.client.post(
+                    "/api/v1/broadcasts:preview",
+                    {
+                        "audience_type": AudienceType.CUSTOM,
+                        "audience_filter": audience_filter,
+                        "message": "Hi.",
+                    },
+                    format="json",
+                )
+
+                self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_sending_a_broadcast_to_another_tenants_targets_is_404(self) -> None:
+        response = self.client.post(
+            "/api/v1/broadcasts:emergency",
+            {
+                "audience_type": AudienceType.ALL,
+                "campus_id": str(self.other_student.campus_id),
+                "message": "Hi.",
+                "confirm_recipient_count": 1,
+                "audience_digest": "0" * 64,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        with tenant_context(self.tenant.id):
+            self.assertFalse(BackgroundJob.objects.exists())
+
+    def test_the_broadcast_scope_lists_only_the_callers_own_campuses(self) -> None:
+        """Another tenant's campus-scoped sender never shows up in this caller's answer."""
+        with tenant_context(self.other_tenant.id):
+            grant(
+                self.other_user,
+                "communication.broadcast.send",
+                scope=RecordScope.CAMPUS,
+                scope_ref=self.other_student.campus_id,
+            )
+        with tenant_context(self.tenant.id):
+            campus = CampusFactory(tenant=self.tenant)
+            sender = UserFactory(tenant=self.tenant)
+            grant(
+                sender,
+                "communication.broadcast.send",
+                scope=RecordScope.CAMPUS,
+                scope_ref=campus.pk,
+            )
+        authenticate(self.client, sender)
+
+        response = self.client.get("/api/v1/broadcasts:scope")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json()["data"], {"campus_ids": [str(campus.pk)]})

@@ -11,6 +11,8 @@ import environ
 from celery.schedules import crontab
 from corsheaders.defaults import default_headers
 
+from core.notifications.queues import EMERGENCY_QUEUE
+
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 env = environ.Env()
@@ -333,6 +335,9 @@ SPECTACULAR_SETTINGS = {
         "AnnouncementStatusEnum": "apps.communication.models.AnnouncementStatus",
         "NoticeTypeEnum": "apps.communication.models.NoticeType",
         "NoticeStatusEnum": "apps.communication.models.NoticeStatus",
+        # The thread read serializer and its oversight subclass both expose `status`;
+        # pinned so the name stays `MessageThreadStatusEnum` and the client does not churn.
+        "MessageThreadStatusEnum": "apps.communication.models.ThreadStatus",
     },
 }
 
@@ -411,10 +416,14 @@ CELERY_TASK_ROUTES = {
     # notifications.md §5 names three lanes (emergency / transactional / bulk);
     # `celery-worker` in infra/compose already consumes exactly those queue names,
     # so this uses them rather than the doc's dotted `notify.*` spelling, which
-    # nothing listens to. One lane for now — separating them only buys something
-    # once each has its own worker pool and per-tenant rate shaping to protect,
-    # both of which arrive with the communication module.
+    # nothing listens to. Transactional by default; an emergency-priority
+    # trigger's deliveries override it per send to the emergency lane (see
+    # `core.notifications.services._dispatch`). Bulk shaping arrives with
+    # per-tenant rate limits.
     "core.notifications.tasks.*": {"queue": "transactional"},
+    # notifications.md §5's always-warm lane: a school-closure broadcast must not
+    # queue behind a term's invoice run or a morning of absence alerts.
+    "apps.communication.tasks.send_emergency_broadcast_task": {"queue": EMERGENCY_QUEUE},
 }
 # An unrouted task goes to a queue the workers consume. Celery's own default, "celery",
 # is consumed by nothing here, so an unrouted task would wait on it forever.

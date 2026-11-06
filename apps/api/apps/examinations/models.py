@@ -1004,8 +1004,10 @@ class Marks(TenantOwnedModel):
         Narrowing to either alone would hide half of what each role needs. Both
         halves come from `_assigned_teaching`, and both match only in the
         exam's session, through the student's active enrollment there — the
-        same rule `services.may_enter_marks` applies to a write, so a teacher
-        reads exactly the rows they may enter.
+        same rule `services.may_enter_marks` applies to the grid *read*.
+        **Entry is narrower:** `services.assert_marker_may_enter` counts the
+        allocations only, so a homeroom-only class teacher reads their class's
+        marks but does not enter them.
         """
         from apps.student_management.models import EnrollmentStatus
 

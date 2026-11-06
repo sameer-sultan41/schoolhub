@@ -43,6 +43,9 @@ from core.tenancy.context import tenant_context
 CORRECTIONS = "/api/v1/attendance-corrections"
 CREATE = "attendance.correction.create"
 APPROVE = "attendance.correction.approve"
+# A staff correction's target is scoped by this key's roles too, as for a student row;
+# every real requester role holds it.
+STAFF_VIEW = "attendance.staff-attendance.view"
 # A date past any lock window, so a row is locked by its date as well as its column.
 LOCKED_DATE = MARKING_DATE - datetime.timedelta(days=30)
 
@@ -60,7 +63,7 @@ class StaffCorrectionTestCase(AttendanceAPITestCase):
                 tenant=self.tenant, campus=self.campus, first_name="Bilal", last_name="Khan"
             )
         self.row = self.staff_row(self.staff)
-        self.sign_in(self.hr_clerk, CREATE)
+        self.sign_in(self.hr_clerk, CREATE, STAFF_VIEW)
 
     def sign_in(self, user, *keys: str, scope=RecordScope.ALL, scope_ref=None) -> None:
         grant(user, *keys, scope=scope, scope_ref=scope_ref)
@@ -329,18 +332,32 @@ class StaffCorrectionScopeTests(StaffCorrectionTestCase):
 
     def test_a_campus_a_clerk_cannot_correct_a_campus_b_staff_row(self) -> None:
         clerk = UserFactory(tenant=self.tenant)
-        self.sign_in(clerk, CREATE, scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+        self.sign_in(clerk, CREATE, STAFF_VIEW, scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
 
         self.assertEqual(self.raise_correction(self.row_b).status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(self.correction_count(), 0)
 
     def test_a_campus_a_clerk_can_correct_a_campus_a_staff_row(self) -> None:
         clerk = UserFactory(tenant=self.tenant)
-        self.sign_in(clerk, CREATE, scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+        self.sign_in(clerk, CREATE, STAFF_VIEW, scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
 
         response = self.raise_correction(self.row)
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.json())
+
+    def test_staff_correction_target_needs_the_staff_attendance_view_scope(self) -> None:
+        """The staff twin of `test_correction_target_needs_the_attendance_view_scope`:
+        the correction key is held tenant-wide, the staff view key on campus A only,
+        so a campus-B staff row is a 404 (ADR-0031 decision 3)."""
+        clerk = UserFactory(tenant=self.tenant)
+        grant(clerk, CREATE, scope=RecordScope.ALL)
+        self.sign_in(clerk, STAFF_VIEW, scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+
+        foreign = self.raise_correction(self.row_b)
+        own = self.raise_correction(self.row)
+
+        self.assertEqual(foreign.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(own.status_code, status.HTTP_201_CREATED, own.json())
 
     def test_a_campus_approver_decides_staff_corrections_on_their_campus_only(self) -> None:
         on_campus = self.correction(self.row)

@@ -96,6 +96,16 @@ class RegisterTestCase(AttendanceAPITestCase):
             )
         return section, student
 
+    def mark_in(self, section, student, marked_by):
+        with tenant_context(self.tenant.id):
+            return StudentAttendanceFactory(
+                tenant=self.tenant,
+                student=student,
+                section=section,
+                academic_session=self.session,
+                marked_by=marked_by.pk,
+            )
+
     def field_errors(self, response) -> set[str]:
         return {detail["field"] for detail in response.json()["error"]["details"]}
 
@@ -211,6 +221,30 @@ class MixedScopeMarkingTests(RegisterTestCase):
         self.sign_in(self.teacher_user, MARK)
 
         self.assert_every_route_agrees()
+
+    def test_campus_a_plus_assigned_reads_the_section_they_class_teach_on_campus_b(self) -> None:
+        """Records takes the same union marking does (ADR-0031 decision 7). First-wins
+        returned at the campus branch, hiding the campus-B section they class-teach."""
+        with tenant_context(self.tenant.id):
+            visitor = StudentFactory(tenant=self.tenant, campus=self.campus)
+            far_visitor = StudentFactory(tenant=self.tenant, campus=self.far_section.campus)
+            untaught_far_section = SectionFactory(
+                tenant=self.tenant, school_class=self.school_class, campus=self.far_section.campus
+            )
+        on_campus_a = self.mark_in(self.other_section, visitor, self.user)
+        taught_on_b = self.mark_in(self.far_section, self.far_student, self.user)
+        untaught_on_b = self.mark_in(untaught_far_section, far_visitor, self.user)
+        grant(self.teacher_user, VIEW, scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+        self.sign_in(self.teacher_user, VIEW)
+
+        listed = {row["id"] for row in self.client.get(LIST).json()["data"]}
+
+        self.assertIn(str(on_campus_a.pk), listed)
+        self.assertIn(str(taught_on_b.pk), listed)
+        self.assertNotIn(str(untaught_on_b.pk), listed)
+        self.assertEqual(
+            self.client.get(f"{LIST}/{taught_on_b.pk}").status_code, status.HTTP_200_OK
+        )
 
     def test_a_campus_role_with_no_campus_plus_assigned_still_marks_their_section(self) -> None:
         grant(self.teacher_user, MARK, scope=RecordScope.CAMPUS, scope_ref=None)
@@ -514,16 +548,6 @@ class MyRegistersTests(RegisterTestCase):
 
 
 class StudentAttendanceNamesAndScopeTests(RegisterTestCase):
-    def mark_in(self, section, student, marked_by):
-        with tenant_context(self.tenant.id):
-            return StudentAttendanceFactory(
-                tenant=self.tenant,
-                student=student,
-                section=section,
-                academic_session=self.session,
-                marked_by=marked_by.pk,
-            )
-
     def test_the_list_carries_names(self) -> None:
         self.sign_in(self.user, VIEW, scope=RecordScope.ALL)
         self.mark_in(self.section, self.students[0], self.user)

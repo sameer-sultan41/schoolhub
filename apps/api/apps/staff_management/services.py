@@ -16,14 +16,14 @@ by more than one of those packages, or by another app entirely:
 - ``_tenant_settings`` — read by ``staff/services/numbering.py`` (the
   employee-number pattern) and ``staff_documents/services.py`` (the extra
   document-type allowlist).
-- ``assert_file_usable`` — called by all three of ``staff/`` (the staff
-  photo), ``staff_qualifications/`` (the qualification's evidence file) and
-  ``staff_documents/`` (the document's own file).
 - ``_verify_record`` — the generic verify-with-lock helper shared by
   ``staff_qualifications.verify_qualification`` and
   ``staff_documents.verify_document``, which both act on the same four
   audit fields (``verification_status``/``verified_by``/``verified_at``)
   and the same ``VerificationStatus`` enum.
+- ``STAFF_SCOPE`` — ``StaffViewSet``'s record-scope settings, read by the
+  nested staff routes and by ``apps/timetable/substitutions/viewset.py``'s
+  candidate list (ADR-0013 keeps another app out of ``staff/viewset.py``).
 """
 
 from __future__ import annotations
@@ -35,6 +35,16 @@ from django.utils import timezone
 
 from apps.staff_management.models import EmploymentStatus, Staff, VerificationStatus
 from core.api.exceptions import Conflict, DomainRuleViolation
+from core.rbac.permissions import ScopeKwargs
+
+# `StaffViewSet`'s record-scope settings, declared once: the viewset sets its
+# `scope_*` attributes from these, and every other read of a staff row (a nested
+# parent, another app's staff list) passes them on.
+STAFF_SCOPE: ScopeKwargs = {
+    "own_field": "user_id",
+    "campus_field": "campus_id",
+    "campus_allows_null": False,
+}
 
 
 def resolve_tenant_staff_id(
@@ -71,20 +81,6 @@ def _tenant_settings(tenant_id: uuid.UUID) -> dict:
 
     row = TenantSettings.all_tenants.filter(tenant_id=tenant_id).first()
     return (row.hr or {}) if row else {}
-
-
-def assert_file_usable(*, file, purpose: str):
-    """Check a resolved File instance matches the caller's intended purpose and
-
-    is ready — mirrors student_management.services.assert_file_usable exactly.
-    """
-    if file.purpose != purpose:
-        raise DomainRuleViolation(
-            {"non_field": f"This file was uploaded for '{file.purpose}', not '{purpose}'."}
-        )
-    if file.status != "ready":
-        raise DomainRuleViolation({"non_field": "This file's upload has not been confirmed yet."})
-    return file
 
 
 @transaction.atomic

@@ -15,6 +15,7 @@ import calendar
 import datetime
 import uuid
 from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 from django.db import models, transaction
 from django.utils import timezone
@@ -58,6 +59,9 @@ from apps.fees_finance.models import (
 )
 from core.api.exceptions import DomainRuleViolation
 from core.money import ZERO, quantize_money
+
+if TYPE_CHECKING:
+    from core.rbac.permissions import AnyOf
 
 #: The chart of accounts a tenant cannot operate without — §6's "system accounts
 #: seeded at provisioning". Deliberately minimal: these are the accounts this
@@ -1729,7 +1733,7 @@ def allocate_expense_no(*, tenant_id: uuid.UUID, on_date: datetime.date) -> str:
     return numbering.allocate_expense_no(tenant_id=tenant_id, on_date=on_date)
 
 
-def _ledger_report_queryset(*, user) -> models.QuerySet[LedgerEntry]:
+def _ledger_report_queryset(*, user, permission: str | AnyOf) -> models.QuerySet[LedgerEntry]:
     """`LedgerEntry.objects`, scoped for `income-vs-expense` and `trial-balance`.
 
     `scope_queryset(..., campus_field=None)` correctly fails `own`/`assigned`
@@ -1746,31 +1750,35 @@ def _ledger_report_queryset(*, user) -> models.QuerySet[LedgerEntry]:
     avoid. Refused the same way `own`/`assigned` already is: no correct
     narrowing exists, so the caller sees nothing rather than everything.
 
-    A caller holding `RecordScope.ALL` on some other grant still passes —
-    `scope_queryset` itself resolves scope the same way, aggregated across
-    every role the user holds, and this only narrows the one case it
-    otherwise gets backwards.
+    A caller with an `all`-scoped role granting `permission` still passes, as
+    `scope_queryset` would pass them: both read only the roles that grant the
+    report's key, so an `all` role granting something else does not count, and
+    this only narrows the one case `scope_queryset` otherwise gets backwards.
     """
     from core.rbac.models import RecordScope
-    from core.rbac.permissions import scope_queryset, user_scopes
+    from core.rbac.permissions import scope_queryset, scopes_for
 
-    scopes = user_scopes(user)
+    scopes = scopes_for(user, permission)
     if RecordScope.CAMPUS in scopes and RecordScope.ALL not in scopes:
         return LedgerEntry.objects.none()
-    return scope_queryset(LedgerEntry.objects, user, campus_field=None)
+    return scope_queryset(LedgerEntry.objects, user, permission=permission, campus_field=None)
 
 
 def build_report_rows(
     *,
     kind: str,
     user,
+    permission: str | AnyOf,
     date_from: datetime.date,
     date_to: datetime.date,
     student_id: uuid.UUID | None = None,
     group_by: str = "day",
     limit: int | None = None,
 ) -> list[dict]:
-    """Run one §13 report with the caller's record scope applied.
+    """Run one §13 report with the caller's record scope for `permission` applied.
+
+    `permission` is the declaration the request was admitted on (the job carries it
+    as `scope_permission`), so only the roles granting it count.
 
     **The scope is resolved here, from the user**, and the same function serves
     the inline endpoint and the export job. That is deliberate: an export must
@@ -1797,9 +1805,12 @@ def build_report_rows(
             {"kind": f"Unknown report. Expected one of: {', '.join(reports.REPORT_KINDS)}."}
         )
 
+    def scoped(queryset, campus_field: str = "student__campus_id"):
+        return scope_queryset(queryset, user, permission=permission, campus_field=campus_field)
+
     if kind == "collection":
         return reports.collection_report(
-            scope_queryset(Payment.objects.alive(), user, campus_field="student__campus_id"),
+            scoped(Payment.objects.alive()),
             date_from=date_from,
             date_to=date_to,
             group_by=group_by,
@@ -1807,7 +1818,7 @@ def build_report_rows(
         )
     if kind == "outstanding-aging":
         return reports.outstanding_and_aging(
-            scope_queryset(FeeInvoice.objects.alive(), user, campus_field="student__campus_id"),
+            scoped(FeeInvoice.objects.alive()),
             as_of=date_to,
             limit=limit,
         )
@@ -1816,48 +1827,40 @@ def build_report_rows(
             raise DomainRuleViolation({"student": "A student ledger needs the student it is for."})
         return reports.student_ledger(
             student_id=student_id,
-            invoices=scope_queryset(
-                FeeInvoice.objects.alive(), user, campus_field="student__campus_id"
-            ),
-            payments=scope_queryset(
-                Payment.objects.alive(), user, campus_field="student__campus_id"
-            ),
-            refunds=scope_queryset(Refund.objects.alive(), user, campus_field="student__campus_id"),
+            invoices=scoped(FeeInvoice.objects.alive()),
+            payments=scoped(Payment.objects.alive()),
+            refunds=scoped(Refund.objects.alive()),
             limit=limit,
         )
     if kind == "grant-register":
         return reports.grant_and_waiver_register(
-            discounts=scope_queryset(
-                Discount.objects.alive(), user, campus_field="student__campus_id"
-            ),
-            scholarships=scope_queryset(
-                Scholarship.objects.alive(), user, campus_field="student__campus_id"
-            ),
-            fines=scope_queryset(Fine.objects.alive(), user, campus_field="student__campus_id"),
+            discounts=scoped(Discount.objects.alive()),
+            scholarships=scoped(Scholarship.objects.alive()),
+            fines=scoped(Fine.objects.alive()),
             limit=limit,
         )
     if kind == "income-vs-expense":
         return reports.income_vs_expense(
-            _ledger_report_queryset(user=user),
+            _ledger_report_queryset(user=user, permission=permission),
             date_from=date_from,
             date_to=date_to,
             limit=limit,
         )
     if kind == "budget-variance":
         return reports.budget_variance(
-            scope_queryset(Budget.objects.alive(), user, campus_field="campus_id"),
+            scoped(Budget.objects.alive(), campus_field="campus_id"),
             as_of=date_to,
             limit=limit,
         )
     if kind == "expense-register":
         return reports.expense_register(
-            scope_queryset(Expense.objects.alive(), user, campus_field="campus_id"),
+            scoped(Expense.objects.alive(), campus_field="campus_id"),
             date_from=date_from,
             date_to=date_to,
             limit=limit,
         )
     return reports.trial_balance_extract(
-        _ledger_report_queryset(user=user),
+        _ledger_report_queryset(user=user, permission=permission),
         date_from=date_from,
         date_to=date_to,
         limit=limit,

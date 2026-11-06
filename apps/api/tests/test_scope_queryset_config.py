@@ -30,6 +30,8 @@ from core.rbac.models import RecordScope
 from core.rbac.permissions import scope_queryset
 from core.tenancy.context import tenant_context
 
+TRANSFER_CREATE = "students.transfer.create"
+
 
 class CampusScopeConfigurationTests(TestCase):
     def setUp(self) -> None:
@@ -40,7 +42,7 @@ class CampusScopeConfigurationTests(TestCase):
         self.user = UserFactory(tenant=self.tenant)
         grant(
             self.user,
-            "students.transfer.create",
+            TRANSFER_CREATE,
             scope=RecordScope.CAMPUS,
             scope_ref=self.campus.pk,
         )
@@ -48,7 +50,9 @@ class CampusScopeConfigurationTests(TestCase):
     def test_the_per_model_hook_alone_still_scopes(self) -> None:
         """The control: nothing about the guard below changes the normal path."""
         with tenant_context(self.tenant.id):
-            scoped = scope_queryset(StudentTransfer.all_tenants.all(), self.user)
+            scoped = scope_queryset(
+                StudentTransfer.all_tenants.all(), self.user, permission=TRANSFER_CREATE
+            )
 
         self.assertIn("from_campus_id", str(scoped.query))
         self.assertIn("to_campus_id", str(scoped.query))
@@ -67,6 +71,7 @@ class CampusScopeConfigurationTests(TestCase):
             scope_queryset(
                 StudentTransfer.all_tenants.all(),
                 self.user,
+                permission=TRANSFER_CREATE,
                 campus_allows_null=True,
             )
 
