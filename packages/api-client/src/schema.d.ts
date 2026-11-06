@@ -3888,6 +3888,8 @@ export interface paths {
          *     | Unknown slug or token | 404 |
          *     | Bad signature or stale timestamp | 400 `invalid_signature`, and a security event |
          *     | Valid, including replays and out-of-order events | 200 `{"received": true}` |
+         *     | Valid, but the provider has no such transaction yet | 503 `transaction_not_found` |
+         *     | Provider unreachable for the re-fetch | 503 `gateway_unavailable` |
          *
          *     Failed attempts (bad signature, unknown slug or token) count against a
          *     per-IP budget, so guessing tokens or signatures is slowed without slowing a
@@ -8169,9 +8171,10 @@ export interface components {
          *     * `missing_at_gateway` - Missing at gateway
          *     * `paid_after_failed` - Paid after failed
          *     * `duplicate_at_gateway` - Duplicate at gateway
+         *     * `paid_on_canceled_invoice` - Paid on canceled invoice
          * @enum {string}
          */
-        GatewayIssueKindEnum: "amount_mismatch" | "overpaid" | "unknown_reference" | "missing_at_gateway" | "paid_after_failed" | "duplicate_at_gateway";
+        GatewayIssueKindEnum: "amount_mismatch" | "overpaid" | "unknown_reference" | "missing_at_gateway" | "paid_after_failed" | "duplicate_at_gateway" | "paid_on_canceled_invoice";
         /**
          * @description * `booked` - Booked
          *     * `dismissed` - Dismissed
@@ -16945,8 +16948,9 @@ export interface operations {
                  *     * `missing_at_gateway` - Missing at gateway
                  *     * `paid_after_failed` - Paid after failed
                  *     * `duplicate_at_gateway` - Duplicate at gateway
+                 *     * `paid_on_canceled_invoice` - Paid on canceled invoice
                  */
-                kind?: "amount_mismatch" | "duplicate_at_gateway" | "missing_at_gateway" | "overpaid" | "paid_after_failed" | "unknown_reference";
+                kind?: "amount_mismatch" | "duplicate_at_gateway" | "missing_at_gateway" | "overpaid" | "paid_after_failed" | "paid_on_canceled_invoice" | "unknown_reference";
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
                 /** @description Number of results to return per page. */

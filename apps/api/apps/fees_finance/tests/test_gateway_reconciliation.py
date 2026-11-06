@@ -18,9 +18,11 @@ from django.utils import timezone
 from apps.fees_finance import services, tasks
 from apps.fees_finance.models import (
     GatewayIssueKind,
+    GatewayIssueResolution,
     GatewayReconciliationIssue,
     LedgerEntry,
     Payment,
+    PaymentGatewayAccount,
     PaymentMethod,
     PaymentStatus,
     Receipt,
@@ -34,12 +36,16 @@ from apps.fees_finance.tests.factories import (
     enable_feature,
 )
 from apps.fees_finance.tests.online_base import (
+    CREDENTIALS,
     ONLINE_FEATURE,
     OnlinePaymentsTestCase,
     make_account,
 )
+from core.integrations import crypto
 from core.integrations.payments.base import GatewayEvent, GatewayUnavailable
 from core.tenancy.context import tenant_context
+
+OLD_CREDENTIALS = {"merchant_id": "OLD-000001", "secret": "old-account-secret"}
 
 
 class ReconciliationTests(OnlinePaymentsTestCase):
@@ -94,6 +100,26 @@ class ReconciliationTests(OnlinePaymentsTestCase):
         self.assertEqual(missing[0].expected_amount, Decimal("1000.00"))
         # Nothing is reversed: a person decides.
         self.assertEqual(self.reload(payment).status, PaymentStatus.CONFIRMED)
+
+    def test_a_dismissed_missing_at_gateway_issue_stays_dismissed_on_a_rerun(self) -> None:
+        payment = self.pending_payment()
+        self.callback(self.provider_has(payment))
+        self.adapter.reset()
+        self.reconcile()
+        [issue] = self.issues(GatewayIssueKind.MISSING_AT_GATEWAY)
+        with tenant_context(self.tenant.id):
+            services.resolve_gateway_issue(
+                issue=issue,
+                action="dismiss",
+                note="Provider confirmed by email",
+                actor_id=self.user.pk,
+            )
+
+        self.reconcile()
+
+        [still] = self.issues(GatewayIssueKind.MISSING_AT_GATEWAY)
+        self.assertEqual(still.pk, issue.pk)
+        self.assertEqual(still.resolution, GatewayIssueResolution.DISMISSED)
 
     def test_duplicate_at_gateway_opens_issue(self) -> None:
         payment = self.pending_payment()
@@ -185,6 +211,7 @@ class ReconciliationTests(OnlinePaymentsTestCase):
                 method=PaymentMethod.ONLINE_GATEWAY,
                 reference_no="SH-INV-DOWN-1-0a0b0c0d",
                 gateway_provider=down_account.provider,
+                gateway_account=down_account,
                 status=PaymentStatus.PENDING,
             )
 
@@ -216,6 +243,75 @@ class ReconciliationTests(OnlinePaymentsTestCase):
 
         listing.assert_not_called()
         self.assertEqual(summary["failed"], 0)
+
+    def _old_account(self) -> PaymentGatewayAccount:
+        """A previous merchant account on the same provider, since switched off."""
+        with tenant_context(self.tenant.id):
+            return PaymentGatewayAccount.objects.create(
+                tenant=self.tenant,
+                provider="fake",
+                is_active=False,
+                merchant_id_masked="****0001",
+                credentials_ciphertext=crypto.encrypt(OLD_CREDENTIALS),
+                callback_token="old-account-callback-token",
+                created_by=self.user.pk,
+                updated_by=self.user.pk,
+            )
+
+    def test_a_revoked_old_account_does_not_stop_the_active_one(self) -> None:
+        old = self._old_account()
+        old_invoice = self.second_invoice()
+        with tenant_context(self.tenant.id):
+            Payment.objects.create(
+                tenant=self.tenant,
+                fee_invoice=old_invoice,
+                student_id=old_invoice.student_id,
+                amount=Decimal("300.00"),
+                method=PaymentMethod.ONLINE_GATEWAY,
+                reference_no=f"SH-{old_invoice.invoice_no}-0e0e0e0e",
+                gateway_provider="fake",
+                gateway_account=old,
+                status=PaymentStatus.PENDING,
+            )
+        payment = self.pending_payment()
+        self.provider_has(payment)
+        original = self.adapter.list_transactions
+
+        def listing(credentials, day):
+            if credentials["merchant_id"] == OLD_CREDENTIALS["merchant_id"]:
+                raise RuntimeError("401: credentials revoked")
+            return original(credentials, day)
+
+        with (
+            mock.patch.object(self.adapter, "list_transactions", side_effect=listing),
+            self.assertLogs("apps.fees_finance.services", level="ERROR"),
+            self.assertRaises(services.ReconciliationIncomplete),
+        ):
+            services.reconcile_tenant_gateway_payments(self.tenant.pk, day=self.day)
+
+        self.assertEqual(self.reload(payment).status, PaymentStatus.CONFIRMED)
+
+    def test_an_old_account_with_nothing_in_the_window_is_not_called(self) -> None:
+        self._old_account()
+        payment = self.pending_payment()
+        self.provider_has(payment)
+        called: list[str] = []
+        original = self.adapter.list_transactions
+
+        def listing(credentials, day):
+            called.append(credentials["merchant_id"])
+            return original(credentials, day)
+
+        with mock.patch.object(self.adapter, "list_transactions", side_effect=listing):
+            services.reconcile_tenant_gateway_payments(self.tenant.pk, day=self.day)
+
+        self.assertEqual(called, [CREDENTIALS["merchant_id"]])
+        self.assertEqual(self.reload(payment).status, PaymentStatus.CONFIRMED)
+
+    def test_initiation_records_the_account_the_checkout_went_through(self) -> None:
+        payment = self.pending_payment()
+
+        self.assertEqual(payment.gateway_account_id, self.account.pk)
 
     def test_default_day_is_yesterday(self) -> None:
         yesterday = timezone.now().date() - datetime.timedelta(days=1)

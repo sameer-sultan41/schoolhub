@@ -31,6 +31,8 @@ SPECTACULAR_SETTINGS |= {
 # The dashboard's dev server (`next dev --port 3000`), for links the API hands out.
 DASHBOARD_URL_SCHEME = "http"
 DASHBOARD_URL_PORT = "3000"
+# The compose API (`api.localhost:8000`, as NEXT_PUBLIC_API_BASE_URL in infra/compose).
+API_PUBLIC_URL = env("API_PUBLIC_URL", default="http://api.localhost:8000")
 
 # Console email in development so nothing is sent to real guardians by accident.
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"

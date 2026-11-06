@@ -630,26 +630,27 @@ class FeeInvoiceViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
                 raise ModuleDisabled("Online payments are not enabled for your school.")
             invoice = self.get_object()
 
-        payment, session = services.initiate_online_payment(
+        payment, session, created = services.initiate_online_payment(
             invoice=invoice,
             user=request.user,
             tenant=tenant,
             return_path=serializer.validated_data["return_path"],
             idempotency_key=key,
-            absolute_uri=request.build_absolute_uri,
         )
 
-        with tenant_atomic(tenant.pk):
-            record_audit(
-                request,
-                "create",
-                payment,
-                after={
-                    "amount": str(payment.amount),
-                    "method": payment.method,
-                    "order_id": payment.reference_no,
-                },
-            )
+        # A replay, or a live checkout handed back, created nothing to audit.
+        if created:
+            with tenant_atomic(tenant.pk):
+                record_audit(
+                    request,
+                    "create",
+                    payment,
+                    after={
+                        "amount": str(payment.amount),
+                        "method": payment.method,
+                        "order_id": payment.reference_no,
+                    },
+                )
         return ActionResponse.ok(
             {"payment_id": str(payment.pk), "redirect_url": session.redirect_url},
             message="Checkout started.",
@@ -944,8 +945,8 @@ class PaymentGatewayAccountViewSet(TenantScopedViewSetMixin, viewsets.GenericVie
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
-        context["callback_url"] = lambda account: self.request.build_absolute_uri(
-            services.callback_path(tenant=self.request.tenant, account=account)
+        context["callback_url"] = lambda account: services.callback_url(
+            tenant=self.request.tenant, account=account
         )
         return context
 
@@ -1020,24 +1021,35 @@ class GatewayReconciliationIssueViewSet(
         issue = self.get_object()
 
         def execute() -> Response:
+            # Booking an amount mismatch rewrites the payment's amount; the audit
+            # row keeps what it was. A concurrent resolve fails on the issue lock.
+            amount_before = (
+                Payment.objects.filter(pk=issue.payment_id).values_list("amount", flat=True).first()
+                if issue.payment_id
+                else None
+            )
             resolved = services.resolve_gateway_issue(
                 issue=issue,
                 action=serializer.validated_data["action"],
                 note=serializer.validated_data.get("note"),
                 actor_id=request.user.pk,
             )
-            record_audit(
-                request,
-                "update",
-                resolved,
-                after={
-                    "resolution": resolved.resolution,
-                    "note": resolved.note,
-                    "payment": str(resolved.payment_id) if resolved.payment_id else None,
-                    "order_id": resolved.order_id,
-                    "provider_txn_id": resolved.provider_txn_id,
-                },
-            )
+            after = {
+                "resolution": resolved.resolution,
+                "note": resolved.note,
+                "payment": str(resolved.payment_id) if resolved.payment_id else None,
+                "order_id": resolved.order_id,
+                "provider_txn_id": resolved.provider_txn_id,
+            }
+            before = None
+            if amount_before is not None and resolved.payment_id == issue.payment_id:
+                amount_after = Payment.objects.values_list("amount", flat=True).get(
+                    pk=resolved.payment_id
+                )
+                if amount_after != amount_before:
+                    before = {"amount": str(amount_before)}
+                    after["amount"] = str(amount_after)
+            record_audit(request, "update", resolved, before=before, after=after)
             return ActionResponse.ok(
                 GatewayReconciliationIssueSerializer(resolved).data, message="Issue resolved."
             )
@@ -1070,6 +1082,8 @@ class PaymentCallbackView(APIView):
     | Unknown slug or token | 404 |
     | Bad signature or stale timestamp | 400 `invalid_signature`, and a security event |
     | Valid, including replays and out-of-order events | 200 `{"received": true}` |
+    | Valid, but the provider has no such transaction yet | 503 `transaction_not_found` |
+    | Provider unreachable for the re-fetch | 503 `gateway_unavailable` |
 
     Failed attempts (bad signature, unknown slug or token) count against a
     per-IP budget, so guessing tokens or signatures is slowed without slowing a

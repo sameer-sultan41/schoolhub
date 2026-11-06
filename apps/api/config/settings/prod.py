@@ -10,6 +10,8 @@ DEBUG = False
 
 # Required: no default, so the process fails at boot rather than at the first encrypt.
 INTEGRATIONS_ENCRYPTION_KEYS = env.list("INTEGRATIONS_ENCRYPTION_KEYS")
+# Required for the same reason: a callback URL pointing nowhere loses payments silently.
+API_PUBLIC_URL = env("API_PUBLIC_URL")
 
 SECURE_SSL_REDIRECT = True
 SECURE_HSTS_SECONDS = 31536000

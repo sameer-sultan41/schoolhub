@@ -70,6 +70,12 @@ test.describe("online fee payments (live API, fake provider)", () => {
     // Write-only: the response carries a mask, never the credentials.
     expect(JSON.stringify(account)).not.toContain(secret);
     expect(account.callback_url).toContain(`/public/payment-callbacks/${env.LIVE_TENANT_SLUG}/`);
+    // The URL's host is the API's configured public URL (API_PUBLIC_URL), which a provider
+    // reaches; the spec posts the same path to the API it already talks to.
+    const callbackUrl = new URL(
+      new URL(account.callback_url).pathname,
+      env.API_BASE_URL,
+    ).toString();
 
     const invoice = await seedIssuedInvoice(liveApiClient);
     await linkSeededGuardian(liveApiClient, invoice.studentId);
@@ -98,7 +104,7 @@ test.describe("online fee payments (live API, fake provider)", () => {
     });
     const signature = await signFakeCallback(secret, body);
 
-    const delivered = await postCallback(account.callback_url, body, signature);
+    const delivered = await postCallback(callbackUrl, body, signature);
     expect(delivered.status).toBe(200);
     expect(await delivered.json()).toEqual({ data: { received: true } });
 
@@ -118,7 +124,7 @@ test.describe("online fee payments (live API, fake provider)", () => {
     expect(postings.data.length).toBeGreaterThan(0);
 
     // A replay of the same signed callback is acknowledged and changes nothing.
-    const replayed = await postCallback(account.callback_url, body, signature);
+    const replayed = await postCallback(callbackUrl, body, signature);
     expect(replayed.status).toBe(200);
     expect(
       (await liveApiClient.get<unknown[]>("/receipts", { query: { payment: paymentId } })).data,
@@ -128,7 +134,7 @@ test.describe("online fee payments (live API, fake provider)", () => {
     );
 
     // The same token under another school's slug resolves nothing there.
-    const foreignUrl = account.callback_url.replace(
+    const foreignUrl = callbackUrl.replace(
       `/payment-callbacks/${env.LIVE_TENANT_SLUG}/`,
       `/payment-callbacks/${env.LIVE_OTHER_TENANT_SLUG}/`,
     );

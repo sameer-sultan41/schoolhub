@@ -72,6 +72,7 @@ locals {
     DJANGO_DEBUG           = "false"
     DJANGO_ALLOWED_HOSTS   = "api.${var.platform_domain},app.${var.platform_domain}"
     PLATFORM_DOMAIN        = var.platform_domain
+    API_PUBLIC_URL         = "https://api.${var.platform_domain}"
     S3_BUCKET_NAME         = module.storage.uploads_bucket_name
     S3_REGION_NAME         = var.aws_region
     LOG_LEVEL              = "INFO"

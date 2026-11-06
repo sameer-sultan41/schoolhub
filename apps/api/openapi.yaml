@@ -5252,6 +5252,7 @@ paths:
           - missing_at_gateway
           - overpaid
           - paid_after_failed
+          - paid_on_canceled_invoice
           - unknown_reference
         description: |-
           * `amount_mismatch` - Amount mismatch
@@ -5260,6 +5261,7 @@ paths:
           * `missing_at_gateway` - Missing at gateway
           * `paid_after_failed` - Paid after failed
           * `duplicate_at_gateway` - Duplicate at gateway
+          * `paid_on_canceled_invoice` - Paid on canceled invoice
       - name: ordering
         required: false
         in: query
@@ -8797,6 +8799,8 @@ paths:
         | Unknown slug or token | 404 |
         | Bad signature or stale timestamp | 400 `invalid_signature`, and a security event |
         | Valid, including replays and out-of-order events | 200 `{"received": true}` |
+        | Valid, but the provider has no such transaction yet | 503 `transaction_not_found` |
+        | Provider unreachable for the re-fetch | 503 `gateway_unavailable` |
 
         Failed attempts (bad signature, unknown slug or token) count against a
         per-IP budget, so guessing tokens or signatures is slowed without slowing a
@@ -18349,6 +18353,7 @@ components:
       - missing_at_gateway
       - paid_after_failed
       - duplicate_at_gateway
+      - paid_on_canceled_invoice
       type: string
       description: |-
         * `amount_mismatch` - Amount mismatch
@@ -18357,6 +18362,7 @@ components:
         * `missing_at_gateway` - Missing at gateway
         * `paid_after_failed` - Paid after failed
         * `duplicate_at_gateway` - Duplicate at gateway
+        * `paid_on_canceled_invoice` - Paid on canceled invoice
     GatewayIssueResolutionEnum:
       enum:
       - booked
