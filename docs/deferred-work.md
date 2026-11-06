@@ -10,6 +10,12 @@ either this file or `project-status.md`.
 
 ## Deliberately NOT done
 
+- **`notify_results_pending_approval` picks recipients by "holds `exams.result.approve` anywhere".**
+  It predates ADR-0031 and is on `main` too (`apps/examinations/tasks.py`). It sends only an exam name and a
+  count, so nothing leaks beyond the exam's existence, but a campus-scoped approver of another campus is
+  notified about an exam they cannot open. Narrow it with `holds_key_for` per recipient when the approver
+  inbox lands.
+
 - **A result carried over by a re-process keeps its earlier figures and ranks.** A student
   withdrawn between `:send-results-back` and the re-process is not recomputed (they are no
   longer on the active roll), so their row returns to pending approval with the numbers and
