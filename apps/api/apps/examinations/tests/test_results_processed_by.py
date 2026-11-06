@@ -105,7 +105,7 @@ class ProcessedByStampTests(ReprocessTestCase):
 
 
 class ProcessedByBackfillTests(ProcessingTestCase):
-    """`0011_results_processed_by`'s data step, `backfill_processed_by`.
+    """`0012_results_processed_by`'s data step, `backfill_processed_by`.
 
     Called directly with the current app registry and no schema editor, so it runs
     against today's models rather than the migration's historical state, and the
@@ -117,7 +117,7 @@ class ProcessedByBackfillTests(ProcessingTestCase):
     def setUpClass(cls) -> None:
         super().setUpClass()
         cls.migration = importlib.import_module(
-            "apps.examinations.migrations.0011_results_processed_by"
+            "apps.examinations.migrations.0012_results_processed_by"
         )
 
     def backfill(self) -> None:

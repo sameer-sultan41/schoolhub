@@ -10,13 +10,14 @@ race; everything about *overlap* lives here or nowhere.
 from __future__ import annotations
 
 import datetime
+from unittest import mock
 
 from django.db import IntegrityError, connection, transaction
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 
-from apps.examinations import conflicts
-from apps.examinations.models import ExamStatus, ScheduleStatus
+from apps.examinations import conflicts, services
+from apps.examinations.models import ExamSchedule, ExamStatus, ScheduleStatus
 from apps.examinations.tests.base import ExaminationsAPITestCase
 from apps.examinations.tests.factories import (
     AFTERNOON,
@@ -705,6 +706,75 @@ class SittingWriteLockTests(ScheduleTestCase):
         exam_lock_at = next(i for i, q in enumerate(sql) if _is_exam_lock(q))
         self.assertIn(self.exam.pk.hex, sql[exam_lock_at])
         self.assert_school_lock_first(sql, before=exam_lock_at)
+
+
+class SittingStaleReadTests(ScheduleTestCase):
+    """The state check runs on the row re-read under the school lock, not on
+    the one the view read before it.
+
+    A cancel committed between the view's read and the lock is simulated by
+    writing it inside the school-lock call, the first step under the lock.
+    """
+
+    URL = ScheduleEndpointTests.URL
+
+    def _cancel_when_the_lock_is_taken(self, sitting):
+        real_lock = services.lock_school_schedule
+
+        def lock_then_cancel(tenant_id) -> None:
+            real_lock(tenant_id)
+            ExamSchedule.objects.filter(pk=sitting.pk).update(status=ScheduleStatus.CANCELLED)
+
+        return mock.patch.object(services, "lock_school_schedule", side_effect=lock_then_cancel)
+
+    def test_a_patch_read_before_a_cancel_does_not_write_scheduled_back(self) -> None:
+        with tenant_context(self.tenant.id):
+            sitting = self.sitting()
+
+        with self._cancel_when_the_lock_is_taken(sitting):
+            response = self.client.patch(
+                f"{self.URL}/{sitting.pk}", {"room_id": str(self.room.pk)}, format="json"
+            )
+
+        self.assertEqual(response.status_code, 409, response.json())
+        with tenant_context(self.tenant.id):
+            sitting.refresh_from_db()
+        self.assertEqual(sitting.status, ScheduleStatus.CANCELLED)
+        self.assertIsNone(sitting.room_id)
+
+    def test_a_delete_read_before_a_cancel_leaves_the_sitting(self) -> None:
+        with tenant_context(self.tenant.id):
+            sitting = self.sitting()
+
+        with self._cancel_when_the_lock_is_taken(sitting):
+            response = self.client.delete(f"{self.URL}/{sitting.pk}")
+
+        self.assertEqual(response.status_code, 409, response.json())
+        with tenant_context(self.tenant.id):
+            sitting.refresh_from_db()
+        self.assertIsNone(sitting.deleted_at)
+        self.assertEqual(sitting.status, ScheduleStatus.CANCELLED)
+
+    def test_update_re_reads_the_sitting_after_the_school_lock(self) -> None:
+        with tenant_context(self.tenant.id):
+            sitting = self.sitting()
+
+        with CaptureQueriesContext(connection) as captured:
+            response = self.client.patch(
+                f"{self.URL}/{sitting.pk}", {"room_id": str(self.room.pk)}, format="json"
+            )
+
+        self.assertEqual(response.status_code, 200, response.json())
+        sql = [query["sql"] for query in captured.captured_queries]
+        school_lock = next(
+            i for i, q in enumerate(sql) if _is_school_schedule_lock(q, self.tenant.pk)
+        )
+        re_read = next(
+            i for i, q in enumerate(sql) if "FOR UPDATE" in q and '"exam_schedules"' in q
+        )
+        write = next(i for i, q in enumerate(sql) if q.startswith('UPDATE "exam_schedules"'))
+        self.assertLess(school_lock, re_read)
+        self.assertLess(re_read, write)
 
 
 def _is_exam_lock(query: str) -> bool:

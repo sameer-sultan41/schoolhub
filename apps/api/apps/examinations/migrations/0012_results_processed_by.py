@@ -37,7 +37,7 @@ def backfill_processed_by(apps, schema_editor) -> None:
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("examinations", "0010_rls_policies"),
+        ("examinations", "0011_grade_band_percent_validators"),
         ("tenancy", "0005_tenantsettings_hr"),
     ]
 

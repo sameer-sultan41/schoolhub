@@ -861,9 +861,10 @@ A later review found `:publish-schedule` locking the exam while sitting writes
 did not, so a sitting saved concurrently could commit after publish had read the
 clash list, and the exam went to `scheduled` over a hard clash nobody saw. Every
 sitting write (create, update including a cancel, delete) now goes through
-`services.save_schedule_with_conflicts` or `services.delete_schedule`, which lock
-the parent exam first (both exams, in pk order, when an update moves the sitting
-to another exam).
+`services.save_schedule_with_conflicts`, `services.update_schedule` or
+`services.delete_schedule`. Their lock order is: the school's schedule lock, then
+(update and delete) the sitting row `FOR UPDATE`, then the parent exam (both
+exams, in pk order, when an update moves the sitting to another exam).
 
 Publish also reads room and invigilator clashes against *other* exams'
 sittings, which those exams' locks did not cover. So every sitting write and
@@ -875,6 +876,13 @@ everywhere, so the order is the same on every path. The exam row lock stays,
 because results and admit-card actions change the exam's status without the
 schedule lock. The cost is that schedule edits within one school run one at a
 time, which the school chose over a publish that can miss a clash.
+
+Update and delete then checked `scheduled` on the row read before those locks,
+so a PATCH that read the sitting before a concurrent cancel committed saved its
+stale copy and wrote `scheduled` back, and a DELETE removed a sitting cancelled
+after it was read. Both now re-read the sitting `FOR UPDATE` under the school
+lock (`services.lock_editable_schedule`), refuse with 409 unless that row is
+still `scheduled`, and validate and save against it.
 
 ### Corrected in review (PR D)
 

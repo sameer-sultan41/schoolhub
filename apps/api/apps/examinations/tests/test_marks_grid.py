@@ -9,6 +9,7 @@ agreement with `Marks`' scope in `test_marks_import_scope.py`.
 from __future__ import annotations
 
 import datetime
+from unittest import mock
 
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
@@ -35,6 +36,7 @@ from apps.examinations.tests.factories import (
     open_marks_entry,
 )
 from apps.examinations.tests.test_marks import BULK_ENTRY, MARKS, MarksTestCase
+from apps.examinations.views import MarksViewSet
 from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
@@ -352,3 +354,16 @@ class GridWritabilityTests(GridTestCase):
 
         self.assertEqual((writable, reason), (False, "no_permission"))
         self.assertEqual(message, services.NO_PERMISSION_MESSAGE)
+
+    def test_writability_follows_the_submit_endpoints_key(self) -> None:
+        # Re-keying `:bulk-entry` must move the grid's flag with it, not leave a stale literal.
+        with tenant_context(self.tenant.id):
+            principal = UserFactory(tenant=self.tenant)
+        client = self.client_for(principal, "exams.marks.view", scope=RecordScope.ALL)
+
+        with mock.patch.dict(
+            MarksViewSet.required_permission_map, {"bulk_entry": "exams.marks.view"}
+        ):
+            _writable, reason, _message = self.reason(client)
+
+        self.assertNotEqual(reason, "no_permission")
