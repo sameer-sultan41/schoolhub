@@ -300,8 +300,8 @@
 
 ### L44. Granting a role an action key means checking the view's read key too
 
-- **Mistake.** Parent-portal PR B's backend gave guardians and students `platform.file.create` so they could upload, but `FileViewSet`'s `confirm` also required the read key `platform.file.view`, which stays staff-only. The tests hand-granted keys to a user, so every one passed; only CI's `DefaultRoleReadKeyTests` (ADR-0031 decision 3) caught that the real role could not confirm an upload. Fixed with `scope_read_exempt_actions={"confirm"}` (`fix(files): a portal user's upload confirm needs no file-view key`).
-- **Check.** When a role gains an action key, read the viewset it reaches for its read key and `scope_read_exempt_actions`, and prove the path with the role's real keys (`keys_for_role`), not a hand-granted user.
+- **Mistake.** Parent-portal PR B's backend gave guardians and students `platform.file.create` so they could upload, but `FileViewSet` declares `create` and `confirm` under that key while its read key `platform.file.view` stays staff-only. The tests hand-granted keys to a user, so every one passed; only CI's `DefaultRoleReadKeyTests` (ADR-0031 decision 3) caught it. The first fix exempted `confirm` alone because the CI log truncated the offender list (`[1393 chars]`), hiding `create`, so CI failed a second time.
+- **Check.** When a role gains an action key, read the viewset it reaches for its read key and `scope_read_exempt_actions`, and prove the path with the role's real keys (`keys_for_role`), not a hand-granted user. When a list assertion fails, read every element (the full `Diff` lines in the log) before fixing.
 
 ### L45. A "matches X" claim must be checked against X's own predicate
 

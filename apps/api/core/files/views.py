@@ -57,8 +57,9 @@ class FileViewSet(
         # defines platform.file.view as exactly this. Mapped explicitly so it isn't a fallback.
         "download": "platform.file.view",
     }
-    # A guardian confirms their own slot without platform.file.view (get_queryset narrows it).
-    scope_read_exempt_actions = frozenset({"confirm"})
+    # A portal user uploads without platform.file.view: create reads no row, and confirm is
+    # narrowed to the caller's own slots in get_queryset.
+    scope_read_exempt_actions = frozenset({"create", "confirm"})
 
     def get_queryset(self):
         # Deliberately does NOT call TenantScopedViewSetMixin.get_queryset(): File has
@@ -84,7 +85,10 @@ class FileViewSet(
     @extend_schema(
         summary="Request a presigned upload slot",
         request=FileCreateSerializer,
-        responses={201: FileSerializer},
+        responses={
+            201: FileSerializer,
+            422: OpenApiResponse(description="A portal user asked for a staff-only purpose"),
+        },
     )
     def create(self, request, *args, **kwargs) -> Response:
         payload = FileCreateSerializer(data=request.data)
