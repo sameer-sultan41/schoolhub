@@ -214,3 +214,23 @@ export const E2E_TEACHER_LOGIN_EMPLOYEE_NUMBER = "E2E-TEACHER-LOGIN";
  * grades against.
  */
 export const E2E_GRADING_SCALE_NAME = "E2E Percentage";
+
+/**
+ * Mirror seed_e2e_data.py's finance logins: one per default finance role, each holding exactly
+ * that role's registry keys. The second accountant is the "other approver" — a refund or an
+ * expense cannot be decided by whoever raised it.
+ */
+export const E2E_ACCOUNTANT_EMAIL = "e2e-accountant@schoolhub.test";
+export const E2E_ACCOUNTANT_APPROVER_EMAIL = "e2e-accountant-approver@schoolhub.test";
+export const E2E_FINANCE_STAFF_EMAIL = "e2e-finance-staff@schoolhub.test";
+export const E2E_FINANCE_OWNER_EMAIL = "e2e-finance-owner@schoolhub.test";
+
+/**
+ * Mirror `apps/api/apps/fees_finance/management/commands/seed_e2e_fees.py`: a fee head mapped
+ * to the income account, and a draft structure (one schedule) for the baseline session and
+ * class. Distinct from the portal's active "E2E Grade 1 Fees" structure.
+ */
+export const E2E_FINANCE_FEE_HEAD_CODE = "E2E-LIBRARY";
+export const E2E_FINANCE_FEE_HEAD_NAME = "E2E Library Fee";
+export const E2E_FINANCE_DRAFT_STRUCTURE_NAME = "E2E Draft Fees";
+export const E2E_FINANCE_DRAFT_AMOUNT = "750.00";

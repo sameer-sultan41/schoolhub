@@ -22,7 +22,17 @@ from apps.examinations.models import (
     ResultStatus,
 )
 from apps.examinations.services import assert_scale_usable
-from apps.fees_finance.models import FeeInvoice, InvoiceStatus
+from apps.fees_finance.management.commands.seed_e2e_fees import (
+    E2E_FINANCE_DRAFT_STRUCTURE_NAME,
+    E2E_FINANCE_FEE_HEAD_CODE,
+)
+from apps.fees_finance.models import (
+    FeeHead,
+    FeeInvoice,
+    FeeStructure,
+    FeeStructureStatus,
+    InvoiceStatus,
+)
 from apps.parent_portal.management.commands.seed_e2e_portal import (
     E2E_EXAM_NAME,
     E2E_EXAM_THEORY_MARKS,
@@ -42,6 +52,8 @@ from apps.student_management.models import Guardian, Student, StudentGuardian
 from core.notifications.models import Notification
 from core.notifications.permissions import NOTIFICATION_VIEW
 from core.rbac.management.commands.seed_e2e_data import (
+    E2E_ACCOUNTANT_APPROVER_EMAIL,
+    E2E_ACCOUNTANT_EMAIL,
     E2E_ADMIN_EMAIL,
     E2E_ADMIN_PASSWORD,
     E2E_CLASS_TEACHER_PERMISSIONS,
@@ -50,6 +62,8 @@ from core.rbac.management.commands.seed_e2e_data import (
     E2E_COMMS_GUARDIAN_EMAIL,
     E2E_COMMS_STUDENT_ADMISSION_NUMBER,
     E2E_EXAM_STAFF_EMAIL,
+    E2E_FINANCE_OWNER_EMAIL,
+    E2E_FINANCE_STAFF_EMAIL,
     E2E_GUARDIAN_EMAIL,
     E2E_GUARDIAN_NAME,
     E2E_GUARDIAN_PHONE,
@@ -341,6 +355,33 @@ class SeedE2EExaminationsTests(TestCase):
                     tenant=tenant, feature_flag__key="module.examinations"
                 )
                 self.assertTrue(override.enabled)
+
+    def test_finance_logins_hold_exactly_their_default_role_s_keys(self) -> None:
+        for slug, emails in (
+            ("accountant", (E2E_ACCOUNTANT_EMAIL, E2E_ACCOUNTANT_APPROVER_EMAIL)),
+            ("finance_staff", (E2E_FINANCE_STAFF_EMAIL,)),
+            ("school_owner", (E2E_FINANCE_OWNER_EMAIL,)),
+        ):
+            keys = self.role_keys(slug)
+            self.assertEqual(keys, set(registry.keys_for_role(slug)))
+            self.assertTrue(any(key.startswith("fees.") for key in keys))
+            for email in emails:
+                with self.subTest(email=email):
+                    user = User.objects.get(tenant=self.tenant, email=email)
+                    self.assertTrue(user.check_password(E2E_ADMIN_PASSWORD))
+
+    def test_the_fees_fixtures_are_seeded_and_the_module_is_enabled(self) -> None:
+        with tenant_context(self.tenant.id):
+            self.assertTrue(
+                TenantFeatureOverride.objects.get(
+                    tenant=self.tenant, feature_flag__key="module.fees_finance"
+                ).enabled
+            )
+            self.assertTrue(FeeHead.objects.filter(code=E2E_FINANCE_FEE_HEAD_CODE).exists())
+            self.assertEqual(
+                FeeStructure.objects.get(name=E2E_FINANCE_DRAFT_STRUCTURE_NAME).status,
+                FeeStructureStatus.DRAFT,
+            )
 
     def test_exam_staff_holds_its_role_s_exams_keys_and_its_picker_reads(self) -> None:
         user = User.objects.get(tenant=self.tenant, email=E2E_EXAM_STAFF_EMAIL)
