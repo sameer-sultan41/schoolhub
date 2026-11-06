@@ -52,7 +52,7 @@ from apps.timetable.models import (
     TimetableSlot,
 )
 from core.notifications.permissions import NOTIFICATION_VIEW
-from core.rbac.models import RecordScope
+from core.rbac.models import RecordScope, User
 from core.rbac.registry import registry
 from core.rbac.seeding import (
     ensure_role_with_permissions,
@@ -394,6 +394,52 @@ def guardian_permissions() -> list[str]:
 E2E_GUARDIAN_NAME = ("E2E", "Guardian")
 E2E_GUARDIAN_PHONE = "+15550000010"
 
+# Examinations (apps/examinations/permissions.py). Two identities, because §4 splits the
+# module between them: `exam_staff` builds exams and schedules, a `teacher` sees only the
+# exams they teach (`Exam.filter_assigned_to_user`).
+#
+# Their `exams.*` keys are read from the registry by role, not listed here, so the seed is
+# never wider than the real role and a key the module adds later reaches the live lane
+# without a second edit. `e2e_exam_staff_permissions`/`e2e_teacher_permissions` below.
+E2E_EXAM_STAFF_EMAIL = "e2e-exam-staff@schoolhub.test"
+E2E_TEACHER_EMAIL = "e2e-teacher@schoolhub.test"
+# The reads exam staff's pickers make outside `exams.*`, each held by the real
+# `exam_staff` through its module's ALL_STAFF: the class, section and subject selects,
+# the curriculum check behind exam-subjects, the invigilator (`GET /staff`) and room
+# (`GET /rooms`, which reads `timetable.timetable.view` — timetable declares no room view
+# key) selects, and the session picker. Then `GET /jobs/{id}` and file downloads for the
+# 202 + job actions (lesson L27).
+E2E_EXAM_STAFF_READS = (
+    "school.class.view",
+    "school.section.view",
+    "school.subject.view",
+    "timetable.timetable.view",
+    "academics.curriculum.view",
+    "staff.staff.view",
+    "school.academic-session.view",
+    "platform.job.view",
+    "platform.file.view",
+)
+# The teacher login's own `Staff` row. Its employee number is the idempotency key and
+# what a live spec searches `GET /staff` by to allocate this teacher per run; no
+# allocation is seeded, so the teacher sees nothing until a spec gives them one.
+E2E_TEACHER_LOGIN_EMPLOYEE_NUMBER = "E2E-TEACHER-LOGIN"
+E2E_TEACHER_LOGIN_NAME = ("E2E", "Subject Teacher")
+E2E_TEACHER_LOGIN_PHONE = "+15550000003"
+
+
+def _exams_keys_for(role: str) -> list[str]:
+    return [spec.key for spec in registry.for_module("exams") if role in spec.default_roles]
+
+
+def e2e_exam_staff_permissions() -> list[str]:
+    return [*_exams_keys_for("exam_staff"), *E2E_EXAM_STAFF_READS]
+
+
+def e2e_teacher_permissions() -> list[str]:
+    return _exams_keys_for("teacher")
+
+
 E2E_STUDENT_A_NAME = ("E2E", "Student A")
 E2E_STUDENT_B_NAME = ("E2E", "Student B")
 
@@ -428,9 +474,10 @@ class Command(BaseCommand):
         "academics fixtures (subject, curriculum row, teaching staff, principal "
         "approver) the curriculum/allocation/promotion specs need, and the timetable "
         "fixtures (bell schedule, rooms, a published week and one proposed "
-        "substitution) the grid and substitution specs need, and the parent-portal "
-        "fixtures (attendance, an outstanding invoice, a published result and a notice "
-        "for the comms guardian's child)."
+        "substitution) the grid and substitution specs need, the examinations "
+        "fixtures (exam-staff and assigned-teacher identities, a complete default "
+        "grading scale) and the parent-portal fixtures (attendance, an outstanding "
+        "invoice, a published result and a notice for the comms guardian's child)."
     )
 
     @transaction.atomic
@@ -541,6 +588,32 @@ class Command(BaseCommand):
             scope=RecordScope.ASSIGNED,
         )
 
+        exam_staff_role = ensure_role_with_permissions(
+            tenant, "exam_staff", "Exam Staff", e2e_exam_staff_permissions()
+        )
+        ensure_seed_user(
+            tenant,
+            exam_staff_role,
+            email=E2E_EXAM_STAFF_EMAIL,
+            password=E2E_ADMIN_PASSWORD,
+            first_name="E2E",
+            last_name="Exam Staff",
+        )
+        teacher_role = ensure_role_with_permissions(
+            tenant, "teacher", "Teacher", e2e_teacher_permissions()
+        )
+        # `assigned`, as in production: the point of this identity is that it sees only
+        # what it teaches, which an `all`-scoped teacher could never show.
+        teacher_user = ensure_seed_user(
+            tenant,
+            teacher_role,
+            email=E2E_TEACHER_EMAIL,
+            password=E2E_ADMIN_PASSWORD,
+            first_name=E2E_TEACHER_LOGIN_NAME[0],
+            last_name=E2E_TEACHER_LOGIN_NAME[1],
+            scope=RecordScope.ASSIGNED,
+        )
+
         with tenant_context(tenant.id):
             self._ensure_seven_day_week(tenant)
             campus = self._ensure_campus(tenant)
@@ -624,6 +697,12 @@ class Command(BaseCommand):
                 guardian_user_id=comms_guardian_user.id,
             )
             self._ensure_portal_modules_enabled(tenant)
+            self._ensure_examinations_enabled(tenant)
+            self._ensure_teacher_login_staff(tenant, campus, user=teacher_user)
+
+        # The grading scale is the examinations module's to write (ADR-0013: `core`
+        # imports no app), so it is seeded by that module's own command, by name.
+        call_command("seed_e2e_examinations", tenant=tenant.slug)
 
         # The *other* tenant needs the academics flag too, and for a reason easy to get
         # backwards: `TenantScopedViewSetMixin` checks `required_feature` *before*
@@ -646,6 +725,8 @@ class Command(BaseCommand):
             self._ensure_communication_enabled(other_tenant)
             # And for the portal and the two modules its cards read.
             self._ensure_portal_modules_enabled(other_tenant)
+            # And for examinations.
+            self._ensure_examinations_enabled(other_tenant)
 
         # The parent portal's per-card records for the comms child (attendance, an
         # outstanding invoice, a published result, a notice). They live in the portal app's
@@ -741,6 +822,48 @@ class Command(BaseCommand):
         same 403-before-404 reason `_ensure_timetable_enabled` is.
         """
         self._ensure_feature_enabled(tenant, "module.attendance")
+
+    def _ensure_examinations_enabled(self, tenant: Tenant) -> None:
+        """`module.examinations` defaults off (apps/examinations/features.py).
+
+        Same `update_or_create`-not-`get_or_create` reasoning as
+        `_ensure_students_module_enabled`, and called for both tenants for the
+        same 403-before-404 reason `_ensure_timetable_enabled` is.
+        """
+        self._ensure_feature_enabled(tenant, "module.examinations")
+
+    def _ensure_teacher_login_staff(self, tenant: Tenant, campus: Campus, *, user: User) -> Staff:
+        """The `Staff` row behind `E2E_TEACHER_EMAIL`, active and teaching.
+
+        Every `assigned` hook resolves a user to their teaching through
+        `staff.user_id`, so a teacher login with no staff row sees nothing however it
+        is allocated. Keyed on `user_id` (unique per tenant among live rows), and an
+        existing row is brought back to active teaching rather than trusted: a row a
+        spec or a person had exited would otherwise hide every exam for a reason no
+        spec is testing.
+        """
+        staff, created = Staff.objects.alive().get_or_create(
+            tenant=tenant,
+            user_id=user.id,
+            defaults={
+                "employee_number": E2E_TEACHER_LOGIN_EMPLOYEE_NUMBER,
+                "first_name": E2E_TEACHER_LOGIN_NAME[0],
+                "last_name": E2E_TEACHER_LOGIN_NAME[1],
+                "staff_type": StaffType.TEACHING,
+                "employment_status": EmploymentStatus.ACTIVE,
+                "campus": campus,
+                "joining_date": "2026-01-01",
+                "phone": E2E_TEACHER_LOGIN_PHONE,
+            },
+        )
+        if not created and (
+            staff.staff_type != StaffType.TEACHING
+            or staff.employment_status != EmploymentStatus.ACTIVE
+        ):
+            staff.staff_type = StaffType.TEACHING
+            staff.employment_status = EmploymentStatus.ACTIVE
+            staff.save(update_fields=["staff_type", "employment_status", "updated_at"])
+        return staff
 
     def _ensure_leave_types(self, tenant: Tenant) -> list[LeaveType]:
         """The two §6 names, one of which requires an attachment.

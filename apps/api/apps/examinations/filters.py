@@ -14,6 +14,7 @@ to validate against.
 from __future__ import annotations
 
 import django_filters
+from django.db.models import F
 
 from apps.examinations.models import (
     AdmitCard,
@@ -86,10 +87,26 @@ class ExamScheduleFilterSet(django_filters.FilterSet):
 class AdmitCardFilterSet(django_filters.FilterSet):
     exam_id = django_filters.UUIDFilter(field_name="exam_id")
     student_id = django_filters.UUIDFilter(field_name="student_id")
+    # A card names no section: the student's is on their enrollment. The one
+    # that counts is their enrollment in the exam's own session, in any status
+    # (a closed session's rows are promoted/graduated), the same row
+    # `AdmitCardSerializer.section_id` reports, so filtering by a section
+    # returns exactly the cards that render with it.
+    section_id = django_filters.UUIDFilter(method="filter_section_id")
 
     class Meta:
         model = AdmitCard
         fields = {"status": ["exact"]}
+
+    def filter_section_id(self, queryset, name, value):
+        # One `.filter()` call, so every condition lands on the same enrollment
+        # join. That join matches at most one row per card — enrollments are
+        # unique per student per session — so no card is repeated.
+        return queryset.filter(
+            student__enrollments__section_id=value,
+            student__enrollments__deleted_at__isnull=True,
+            student__enrollments__academic_session_id=F("exam__academic_session_id"),
+        )
 
 
 class MarksFilterSet(django_filters.FilterSet):

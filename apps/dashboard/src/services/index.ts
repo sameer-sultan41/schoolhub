@@ -1,3 +1,4 @@
+import { AdmitCardsService } from "./modules/admit-cards";
 import { BroadcastsService } from "./modules/broadcasts";
 import { FeeInvoicesService } from "./modules/fee-invoices";
 import { NoticesService } from "./modules/notices";
@@ -13,7 +14,11 @@ import { AttendanceSettingsService } from "./modules/attendance-settings";
 import { AuthService } from "./modules/auth";
 import { CurriculumService } from "./modules/curriculum";
 import { DashboardService } from "./modules/dashboard";
+import { ExamSchedulesService } from "./modules/exam-schedules";
+import { ExamSubjectsService } from "./modules/exam-subjects";
+import { ExamsService } from "./modules/exams";
 import { FilesService } from "./modules/files";
+import { GradingScalesService } from "./modules/grading-scales";
 import { GuardiansService } from "./modules/guardians";
 import { JobsService } from "./modules/jobs";
 import { LeaveRequestsService } from "./modules/leave-requests";
@@ -48,6 +53,33 @@ export type {
   StudentDocumentRecord,
   StudentRecord,
 } from "./modules/students";
+
+export type { ExamInput, ExamPageQuery, ExamRecord, ExamStatus, ExamType } from "./modules/exams";
+
+export type {
+  AdmitCardIssue,
+  AdmitCardPageQuery,
+  AdmitCardRecord,
+  AdmitCardStatus,
+} from "./modules/admit-cards";
+
+export type {
+  ConflictSeverity as ExamConflictSeverity,
+  ExamConflict,
+  ExamConflictType,
+  SchedulePublishResult,
+  SittingDay,
+  SittingInput,
+  SittingRecord,
+  SittingStatus,
+  SittingWriteResult,
+} from "./modules/exam-schedules";
+
+export type {
+  ExamSubjectGroup,
+  ExamSubjectInput,
+  ExamSubjectRecord,
+} from "./modules/exam-subjects";
 
 export type {
   CloneCurriculumResult,
@@ -146,6 +178,16 @@ export type {
   StaffRegisterQuery,
   StaffRowDraft,
 } from "./modules/staff-attendance";
+
+export type {
+  CoverageIssue,
+  GradeBandInput,
+  GradeBandRecord,
+  GradingScaleInput,
+  GradingScalePageQuery,
+  GradingScaleRecord,
+  GradingScaleType,
+} from "./modules/grading-scales";
 
 export type { PeriodInput, PeriodPageQuery, PeriodRecord } from "./modules/periods";
 
@@ -253,6 +295,11 @@ export const Services = {
   attendanceCorrections: AttendanceCorrectionsService,
   leaveRequests: LeaveRequestsService,
   attendanceReports: AttendanceReportsService,
+  gradingScales: GradingScalesService,
+  exams: ExamsService,
+  examSubjects: ExamSubjectsService,
+  examSchedules: ExamSchedulesService,
+  admitCards: AdmitCardsService,
   guardians: GuardiansService,
   staff: StaffService,
   students: StudentsService,

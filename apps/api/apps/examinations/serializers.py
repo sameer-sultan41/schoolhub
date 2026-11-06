@@ -18,17 +18,19 @@ that could PATCH `status` could skip the approval gate entirely.
 
 from __future__ import annotations
 
+import uuid
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 from rest_framework import serializers
 
-from apps.examinations import reports, services, uploads
+from apps.examinations import conflicts, reports, services, uploads
 from apps.examinations.models import (
     CHOICE_QUESTION_TYPES,
     AdmitCard,
     Exam,
     ExamSchedule,
+    ExamStatus,
     ExamSubject,
     GradeBand,
     GradingScale,
@@ -44,10 +46,19 @@ from apps.examinations.models import (
 from apps.examinations.services import ENTRY_SETTABLE_STATUSES
 from apps.school_organization.models import AcademicSession, Class, Section, Subject, Term
 from apps.staff_management.models import Staff
+from apps.student_management.models import StudentEnrollment
 from apps.timetable.models import Room
 from core.exports import tabular
 
 READ_ONLY_FIELDS = ("id", "created_at", "updated_at")
+
+# The `to_attr` of `AdmitCardViewSet`'s enrollment `Prefetch`, on each card's
+# student: their live enrollments in any status, of which the serializer picks
+# the exam's session. Named once because the viewset writes it and the serializer reads it.
+ADMIT_CARD_ENROLLMENTS = "exam_enrollments"
+
+# "Not looked up yet", distinct from a looked-up None (no enrollment).
+_UNSET = object()
 
 
 def _fk(model, **kwargs) -> serializers.PrimaryKeyRelatedField:
@@ -160,30 +171,49 @@ class GradingScaleSerializer(serializers.ModelSerializer):
 
 
 class ExamSerializer(serializers.ModelSerializer):
-    """`exams` — an examination event (§5.1)."""
+    """An examination event within an academic session (§5.1)."""
 
+    # The `*_name` fields ride on the viewset's `select_related`, so a list row
+    # renders its session, term and scale without a lookup per id.
     academic_session_id = _fk(AcademicSession, source="academic_session")
+    academic_session_name = serializers.CharField(source="academic_session.name", read_only=True)
     term_id = _fk(Term, source="term", required=False, allow_null=True)
+    term_name = serializers.CharField(source="term.name", read_only=True, allow_null=True)
     grading_scale_id = _fk(GradingScale, source="grading_scale", required=False)
+    grading_scale_name = serializers.CharField(source="grading_scale.name", read_only=True)
+    subject_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Exam
         fields = (
             "id",
             "academic_session_id",
+            "academic_session_name",
             "term_id",
+            "term_name",
             "name",
             "exam_type",
             "grading_scale_id",
+            "grading_scale_name",
             "weightage_percent",
             "starts_on",
             "ends_on",
             "status",
+            "subject_count",
             "description",
             "created_at",
             "updated_at",
         )
         read_only_fields = (*READ_ONLY_FIELDS, "status")
+
+    def get_subject_count(self, exam: Exam) -> int:
+        """All of the exam's live subjects, not only those visible to the viewer."""
+        # The viewset's annotation, or one COUNT without it: a created exam never
+        # passed through the annotated queryset, so its 201 body counts instead.
+        annotated = getattr(exam, "subject_count", None)
+        if annotated is not None:
+            return annotated
+        return exam.exam_subjects.alive().count()
 
     def validate_weightage_percent(self, value: Decimal) -> Decimal:
         if value <= 0 or value > 100:
@@ -241,16 +271,22 @@ class ExamSubjectSerializer(serializers.ModelSerializer):
     """`exam_subjects` — per-class marks structure for one subject (§5.1)."""
 
     exam_id = _fk(Exam, source="exam")
+    exam_name = serializers.CharField(source="exam.name", read_only=True)
     class_id = _fk(Class, source="school_class")
+    class_name = serializers.CharField(source="school_class.name", read_only=True)
     subject_id = _fk(Subject, source="subject")
+    subject_name = serializers.CharField(source="subject.name", read_only=True)
 
     class Meta:
         model = ExamSubject
         fields = (
             "id",
             "exam_id",
+            "exam_name",
             "class_id",
+            "class_name",
             "subject_id",
+            "subject_name",
             "max_marks",
             "pass_marks",
             "has_practical",
@@ -287,6 +323,13 @@ class ExamSubjectSerializer(serializers.ModelSerializer):
             session=exam.academic_session, school_class=school_class, subject=subject
         )
 
+        services.assert_exam_subject_is_unique(
+            exam=exam,
+            school_class=school_class,
+            subject=subject,
+            exclude_pk=self.instance.pk if self.instance else None,
+        )
+
         services.assert_practical_marks(
             has_practical=_value(attrs, self.instance, "has_practical"),
             practical_max_marks=_value(attrs, self.instance, "practical_max_marks"),
@@ -313,22 +356,40 @@ class ExamScheduleSerializer(serializers.ModelSerializer):
     the one with an approval gate behind it.
     """
 
+    # The names ride on the viewset's `select_related`; a write's single row
+    # loads them lazily, which costs a handful of queries for one object.
     exam_subject_id = _fk(ExamSubject, source="exam_subject")
+    exam_id = serializers.UUIDField(source="exam_subject.exam_id", read_only=True)
+    exam_name = serializers.CharField(source="exam_subject.exam.name", read_only=True)
+    subject_name = serializers.CharField(source="exam_subject.subject.name", read_only=True)
+    class_name = serializers.CharField(source="exam_subject.school_class.name", read_only=True)
     section_id = _fk(Section, source="section")
+    section_name = serializers.CharField(source="section.name", read_only=True)
     room_id = _fk(Room, source="room", required=False, allow_null=True)
+    room_name = serializers.CharField(source="room.name", read_only=True, allow_null=True)
     invigilator_staff_id = _fk(Staff, source="invigilator_staff", required=False, allow_null=True)
+    invigilator_name = serializers.CharField(
+        source="invigilator_staff.full_name", read_only=True, allow_null=True
+    )
 
     class Meta:
         model = ExamSchedule
         fields = (
             "id",
+            "exam_id",
+            "exam_name",
             "exam_subject_id",
+            "subject_name",
+            "class_name",
             "section_id",
+            "section_name",
             "exam_date",
             "start_time",
             "end_time",
             "room_id",
+            "room_name",
             "invigilator_staff_id",
+            "invigilator_name",
             "status",
             "instructions",
             "created_at",
@@ -349,6 +410,30 @@ class ExamScheduleSerializer(serializers.ModelSerializer):
         return attrs
 
 
+class ExamConflictSerializer(serializers.Serializer):
+    """One clash in an exam's schedule (§5.2, §11).
+
+    `schedule_ids` names every sitting involved, so a client highlights each of
+    them. A hard finding blocks `:publish-schedule`; a soft one only warns.
+    """
+
+    # The shape of `conflicts.Conflict.as_dict()`, which is what every response
+    # carrying a clash list serializes: `GET /exams/{id}/schedule-conflicts`,
+    # `:publish-schedule`, and each sitting write's `meta.conflicts`.
+    type = serializers.ChoiceField(choices=conflicts.CONFLICT_TYPES)
+    severity = serializers.ChoiceField(choices=conflicts.SEVERITIES)
+    schedule_ids = serializers.ListField(child=serializers.UUIDField())
+    message = serializers.CharField()
+
+
+class ExamSchedulePublishSerializer(serializers.Serializer):
+    """`:publish-schedule`'s answer: the exam's new status, and the soft clashes
+    published over."""
+
+    status = serializers.ChoiceField(choices=ExamStatus.choices)
+    conflicts = ExamConflictSerializer(many=True)
+
+
 class AdmitCardSerializer(serializers.ModelSerializer):
     """`admit_cards` — read-only on the wire (§5.3).
 
@@ -361,6 +446,10 @@ class AdmitCardSerializer(serializers.ModelSerializer):
 
     exam_id = serializers.UUIDField(read_only=True)
     student_id = serializers.UUIDField(read_only=True)
+    student_name = serializers.CharField(source="student.full_name", read_only=True)
+    admission_number = serializers.CharField(source="student.admission_number", read_only=True)
+    section_id = serializers.SerializerMethodField()
+    section_name = serializers.SerializerMethodField()
     file_id = serializers.UUIDField(read_only=True, allow_null=True)
 
     class Meta:
@@ -369,6 +458,10 @@ class AdmitCardSerializer(serializers.ModelSerializer):
             "id",
             "exam_id",
             "student_id",
+            "student_name",
+            "admission_number",
+            "section_id",
+            "section_name",
             "admit_card_no",
             "file_id",
             "status",
@@ -378,6 +471,66 @@ class AdmitCardSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = fields
+
+    def _enrollment(self, card: AdmitCard) -> StudentEnrollment | None:
+        """The student's enrollment in the exam's session, or None.
+
+        Matched on session alone, in any status: promotion turns the row
+        `promoted`/`retained`/`graduated` once the session closes, and the card
+        still names the section the student sat in. One row per (student,
+        session), so there is never a choice to make.
+
+        Read from `ADMIT_CARD_ENROLLMENTS`, the viewset's one `Prefetch`, so a
+        page costs one query for every row's section. A card serialized outside
+        that queryset — a single object, e.g. `:revoke`'s answer — falls back to
+        one query of its own (lesson L24), cached on the instance so the two
+        section fields share it.
+        """
+        cached = card.__dict__.get("_exam_enrollment", _UNSET)
+        if cached is not _UNSET:
+            return cast("StudentEnrollment | None", cached)
+        session_id = card.exam.academic_session_id
+        prefetched = getattr(card.student, ADMIT_CARD_ENROLLMENTS, None)
+        if prefetched is None:
+            enrollment = (
+                StudentEnrollment.objects.alive()
+                .filter(
+                    student_id=card.student_id,
+                    academic_session_id=session_id,
+                )
+                .select_related("section")
+                .first()
+            )
+        else:
+            enrollment = next(
+                (row for row in prefetched if row.academic_session_id == session_id), None
+            )
+        card.__dict__["_exam_enrollment"] = enrollment
+        return enrollment
+
+    def get_section_id(self, card: AdmitCard) -> uuid.UUID | None:
+        enrollment = self._enrollment(card)
+        return enrollment.section_id if enrollment else None
+
+    def get_section_name(self, card: AdmitCard) -> str | None:
+        enrollment = self._enrollment(card)
+        return enrollment.section.name if enrollment else None
+
+
+class AdmitCardIssueAcceptedSerializer(serializers.Serializer):
+    """`:issue-admit-cards`' 202: the render job, and the cards this run added
+    beside the ones that already existed."""
+
+    job_id = serializers.UUIDField()
+    status = serializers.CharField()
+    added = serializers.IntegerField()
+    existing = serializers.IntegerField()
+
+
+class CardDownloadSerializer(serializers.Serializer):
+    """A short-lived signed link to a card's PDF."""
+
+    download_url = serializers.CharField()
 
 
 class AdmitCardRevokeSerializer(serializers.Serializer):

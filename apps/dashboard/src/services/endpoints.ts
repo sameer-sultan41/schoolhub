@@ -85,6 +85,8 @@ export const endpoints = {
     sections: "/sections",
     subjects: "/subjects",
     academicSessions: "/academic-sessions",
+    /** Filtered by `academic_session_id`; governed by the academic-session permission keys. */
+    terms: "/terms",
   },
   /** Curriculum mapping (`class_subjects` in the database) is served at `/class-subjects`
    * (`apps/api/apps/academics/curriculum/urls.py`). */
@@ -162,6 +164,44 @@ export const endpoints = {
   /** `GET /leave-types`: the read-only catalogue, keyed `attendance.leave-request.view`. */
   leaveTypes: {
     list: "/leave-types",
+  },
+  /** `apps/api/apps/examinations`: the scales, their bands and the colon-action. */
+  gradingScales: {
+    list: "/grading-scales",
+    detail: (id: string) => `/grading-scales/${id}`,
+    /** Colon-action, not a nested path: the registered route is `/grading-scales/{id}:set-default`. */
+    setDefault: (id: string) => `/grading-scales/${id}:set-default`,
+    bands: (scaleId: string) => `/grading-scales/${scaleId}/grade-bands`,
+    band: (scaleId: string, bandId: string) => `/grading-scales/${scaleId}/grade-bands/${bandId}`,
+  },
+  /** `/exams`: the exam, keyed `exams.exam.*`. */
+  exams: {
+    list: "/exams",
+    detail: (id: string) => `/exams/${id}`,
+    /** The exam's clash list, keyed `exams.schedule.view`. */
+    scheduleConflicts: (id: string) => `/exams/${id}/schedule-conflicts`,
+    /** Colon-action, not a nested path: the registered route is `/exams/{id}:publish-schedule`. */
+    publishSchedule: (id: string) => `/exams/${id}:publish-schedule`,
+    /** Colon-action: `202` + a render job, keyed `exams.admit-card.issue`. */
+    issueAdmitCards: (id: string) => `/exams/${id}:issue-admit-cards`,
+  },
+  /** `/admit-cards`: an exam's issued cards, keyed `exams.admit-card.*`. */
+  admitCards: {
+    list: "/admit-cards",
+    /** Colon-action, keyed `exams.admit-card.issue`; the body carries the reason. */
+    revoke: (id: string) => `/admit-cards/${id}:revoke`,
+    /** Colon-action, keyed `exams.admit-card.view`: a signed link to the card's own PDF. */
+    download: (id: string) => `/admit-cards/${id}:download`,
+  },
+  /** `/exam-schedules`: an exam's sittings, keyed `exams.schedule.*`. */
+  examSchedules: {
+    list: "/exam-schedules",
+    detail: (id: string) => `/exam-schedules/${id}`,
+  },
+  /** `/exam-subjects`: one exam's per-class marks structure; writes are keyed `exams.exam.update`. */
+  examSubjects: {
+    list: "/exam-subjects",
+    detail: (id: string) => `/exam-subjects/${id}`,
   },
   /** `apps/api/apps/timetable/rooms/urls.py`. */
   rooms: {

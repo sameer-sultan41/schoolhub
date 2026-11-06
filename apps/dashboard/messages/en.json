@@ -87,7 +87,8 @@
         "newStaff": "New staff member",
         "importStudents": "Import students"
       }
-    }
+    },
+    "examinations": "Examinations"
   },
   "auth": {
     "login": {
@@ -2009,6 +2010,448 @@
         "csv": "CSV",
         "xlsx": "XLSX",
         "pdf": "PDF"
+      }
+    }
+  },
+  "exams": {
+    "nav": {
+      "label": "Examinations sections",
+      "exams": "Exams",
+      "gradingScales": "Grading scales"
+    },
+    "title": "Exams",
+    "summary": "Plan each exam, its subjects and its marks structure.",
+    "types": {
+      "unit_test": "Unit test",
+      "midterm": "Midterm",
+      "final": "Final",
+      "practical": "Practical",
+      "custom": "Custom"
+    },
+    "status": {
+      "draft": "Draft",
+      "scheduled": "Scheduled",
+      "ongoing": "Ongoing",
+      "marks_entry": "Marks entry",
+      "processing": "Processing",
+      "approved": "Approved",
+      "published": "Published",
+      "archived": "Archived"
+    },
+    "list": {
+      "caption": "Exams",
+      "emptyTitle": "No exams yet",
+      "emptyDescription": "Create an exam, then add the subjects it covers.",
+      "loadError": "The exams couldn't be loaded.",
+      "searchPlaceholder": "Search by name or description",
+      "noMatches": "No exams match these filters",
+      "noMatchesDescription": "Try a different search, or clear a filter."
+    },
+    "filters": {
+      "search": "Search exams",
+      "clearSearch": "Clear search",
+      "session": "Academic session",
+      "term": "Term",
+      "status": "Status",
+      "type": "Exam type",
+      "allSessions": "All sessions",
+      "allTerms": "All terms",
+      "allStatuses": "All statuses",
+      "allTypes": "All types"
+    },
+    "columns": {
+      "name": "Exam",
+      "sessionTerm": "Session and term",
+      "type": "Type",
+      "dates": "Dates",
+      "status": "Status",
+      "subjects": "Subjects"
+    },
+    "actions": {
+      "create": "New exam",
+      "edit": "Edit exam",
+      "delete": "Delete exam",
+      "editRow": "Edit {name}",
+      "deleteRow": "Delete {name}",
+      "backToList": "Back to exams",
+      "frozen": "This exam's configuration is frozen once it is past Scheduled."
+    },
+    "form": {
+      "createTitle": "New exam",
+      "editTitle": "Edit exam",
+      "intro": "An exam's session, grading scale and subjects are set here and on its page. Once it is past Scheduled they are frozen.",
+      "name": "Name",
+      "session": "Academic session",
+      "selectSession": "Select a session",
+      "term": "Term",
+      "selectTerm": "Select a term",
+      "noTerm": "No term",
+      "type": "Exam type",
+      "weightage": "Weightage (%)",
+      "weightageHint": "Contribution to a consolidated term or session result.",
+      "gradingScale": "Grading scale",
+      "selectScale": "Select a scale",
+      "defaultScale": "School default",
+      "startsOn": "Starts on",
+      "endsOn": "Ends on",
+      "description": "Description",
+      "weightageInvalid": "Enter a percentage above 0 and at most 100, with up to two decimals.",
+      "endsBeforeStart": "An exam cannot end before it starts.",
+      "bothDates": "Set both dates or neither."
+    },
+    "delete": {
+      "titleNamed": "Delete {name}",
+      "description": "Only a draft exam can be deleted. Its subjects go with it."
+    },
+    "saved": "Exam saved.",
+    "removed": "Exam deleted.",
+    "detail": {
+      "loadError": "The exam couldn't be loaded.",
+      "notFoundTitle": "Exam not found",
+      "notFoundDescription": "It may have been deleted, or it belongs to another school.",
+      "sessionTerm": "{session}, {term}",
+      "dates": "{from} to {to}",
+      "noDates": "Dates not set",
+      "scale": "Grading scale: {name}",
+      "weightage": "Weightage {percent}%",
+      "stepper": {
+        "label": "Exam progress",
+        "done": "done",
+        "current": "current",
+        "upcoming": "upcoming",
+        "skipped": "skipped",
+        "terminal": "final status"
+      }
+    },
+    "tabs": {
+      "label": "Exam sections",
+      "subjects": "Subjects",
+      "schedule": "Schedule",
+      "admit-cards": "Admit cards",
+      "marks": "Marks",
+      "results": "Results",
+      "report-cards": "Report cards"
+    },
+    "subjects": {
+      "title": "Subjects",
+      "emptyTitle": "No subjects yet",
+      "emptyDescription": "Add the subjects each class sits, with their marks.",
+      "emptyFrozen": "This exam has no subjects, and its configuration is frozen.",
+      "loadError": "The subjects couldn't be loaded.",
+      "columns": {
+        "subject": "Subject",
+        "maxMarks": "Max marks",
+        "passMarks": "Pass marks",
+        "practical": "Practical",
+        "weightage": "Weightage",
+        "entryWindow": "Marks entry",
+        "locked": "Locked"
+      },
+      "practicalSplit": "{max} (pass {pass})",
+      "noPractical": "No practical",
+      "weightagePercent": "{percent}%",
+      "window": "{from} to {to}",
+      "windowNotSet": "Not set",
+      "windowFrom": "From {from}",
+      "windowUntil": "Until {to}",
+      "lockedYes": "Locked",
+      "lockedNo": "Open",
+      "actions": {
+        "add": "Add subject",
+        "edit": "Edit",
+        "delete": "Remove",
+        "editRow": "Edit {subject} in {class}",
+        "deleteRow": "Remove {subject} from {class}"
+      },
+      "form": {
+        "createTitle": "Add subject",
+        "editTitle": "Edit subject",
+        "intro": "Marks for one subject in one class. The subject must be on the class's curriculum for this exam's session.",
+        "class": "Class",
+        "selectClass": "Select a class",
+        "subject": "Subject",
+        "selectSubject": "Select a subject",
+        "noCurriculum": "This class has no curriculum subjects in the exam's session.",
+        "maxMarks": "Maximum marks",
+        "passMarks": "Pass marks",
+        "hasPractical": "Has a practical component",
+        "practicalMax": "Practical maximum",
+        "practicalPass": "Practical pass marks",
+        "weightage": "Weightage (%)",
+        "weightageHint": "Weight within this exam's aggregate.",
+        "opensAt": "Marks entry opens",
+        "closesAt": "Marks entry closes",
+        "marksInvalid": "Enter marks as a number with up to two decimals.",
+        "weightageInvalid": "Enter a percentage above 0 and at most 100, with up to two decimals.",
+        "passAboveMax": "Pass marks cannot exceed the maximum.",
+        "windowOrder": "The entry window must close after it opens."
+      },
+      "delete": {
+        "titleNamed": "Remove {subject} from {class}",
+        "description": "The subject leaves this exam. This cannot be undone."
+      },
+      "saved": "Subject saved.",
+      "removed": "Subject removed."
+    },
+    "schedule": {
+      "title": "Schedule",
+      "loadError": "The schedule couldn't be loaded.",
+      "emptyTitle": "No sittings yet",
+      "emptyDescription": "Add a sitting for each paper and section, with its date, time and room.",
+      "emptyReadOnly": "No sittings have been scheduled for this exam.",
+      "timeRange": "{start} to {end}",
+      "classSection": "{class} {section}",
+      "columns": {
+        "time": "Time",
+        "subject": "Subject",
+        "section": "Class and section",
+        "room": "Room",
+        "invigilator": "Invigilator",
+        "status": "Status"
+      },
+      "status": {
+        "scheduled": "Scheduled",
+        "completed": "Completed",
+        "cancelled": "Cancelled"
+      },
+      "clash": {
+        "hard": "Blocking clash",
+        "soft": "Clash warning"
+      },
+      "actions": {
+        "add": "Add sitting",
+        "editRow": "Reschedule {subject}, {class} {section}",
+        "cancelRow": "Cancel {subject}, {class} {section}",
+        "deleteRow": "Delete {subject}, {class} {section}"
+      },
+      "form": {
+        "createTitle": "Add sitting",
+        "editTitle": "Reschedule sitting",
+        "intro": "One section's sitting of one paper. A clash with another sitting is saved and flagged, and only blocks publishing.",
+        "subject": "Paper",
+        "selectSubject": "Select a paper",
+        "subjectOption": "{subject} ({class})",
+        "section": "Section",
+        "selectSection": "Select a section",
+        "date": "Date",
+        "startTime": "Starts",
+        "endTime": "Ends",
+        "room": "Room",
+        "selectRoom": "Select a room",
+        "noRoom": "No room",
+        "roomHint": "Rooms in service on the section's campus.",
+        "invigilator": "Invigilator",
+        "selectInvigilator": "Select an invigilator",
+        "noInvigilator": "No invigilator",
+        "endBeforeStart": "A sitting must end after it starts."
+      },
+      "saved": "Sitting saved.",
+      "cancel": {
+        "title": "Cancel {subject}, {class} {section}",
+        "description": "The sitting is called off and its room is freed. It stays on the schedule as cancelled.",
+        "confirm": "Cancel sitting",
+        "done": "Sitting cancelled."
+      },
+      "delete": {
+        "title": "Delete {subject}, {class} {section}",
+        "description": "The sitting is removed from this draft exam. This cannot be undone.",
+        "confirm": "Delete sitting",
+        "done": "Sitting deleted."
+      },
+      "conflicts": {
+        "title": "Clashes",
+        "none": "No clashes found.",
+        "loadError": "The clashes couldn't be checked.",
+        "involves": "Sittings involved",
+        "severity": {
+          "hard": "Blocking",
+          "soft": "Warning"
+        },
+        "types": {
+          "room_double_booked": "A room is booked for two sittings at the same time.",
+          "invigilator_double_booked": "An invigilator is assigned to two sittings at the same time.",
+          "student_two_papers_at_once": "Students in a section have two papers at the same time.",
+          "outside_exam_window": "A sitting falls outside the exam's dates.",
+          "not_a_working_day": "A sitting falls on a day the school doesn't work.",
+          "room_over_capacity": "A room is smaller than the section sitting in it.",
+          "clashes_with_timetable": "A sitting overlaps the regular timetable."
+        }
+      },
+      "publish": {
+        "button": "Publish schedule",
+        "blocked": "{count, plural, one {# blocking clash} other {# blocking clashes}} to resolve first",
+        "title": "Publish the schedule?",
+        "description": "Students and guardians are told the schedule is out, and admit cards can then be issued. Warnings do not stop this.",
+        "confirm": "Publish schedule",
+        "done": "Schedule published."
+      }
+    },
+    "admitCards": {
+      "caption": "Admit cards for this exam",
+      "pagination": "Admit card pages",
+      "loadError": "The admit cards couldn't be loaded.",
+      "emptyTitle": "No admit cards yet",
+      "emptyDescription": "No admit cards have been issued for this exam yet.",
+      "emptyDraft": "Admit cards are issued once the schedule is published.",
+      "noMatches": "No admit cards match these filters",
+      "noMatchesDescription": "Try another section or status.",
+      "filters": {
+        "section": "Section",
+        "status": "Status",
+        "all": "All"
+      },
+      "columns": {
+        "number": "Card number",
+        "student": "Student",
+        "admissionNumber": "Admission number",
+        "section": "Section",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "status": {
+        "generated": "Awaiting PDF",
+        "issued": "Issued",
+        "revoked": "Revoked"
+      },
+      "revokedReason": "Reason: {reason}",
+      "actions": {
+        "downloadRow": "Download {name}'s admit card",
+        "revokeRow": "Revoke {name}'s admit card"
+      },
+      "download": {
+        "failed": "The admit card couldn't be downloaded."
+      },
+      "issue": {
+        "button": "Issue admit cards",
+        "resume": "Check rendering again",
+        "summary": "{added, plural, =0 {No new admit cards} one {# admit card added} other {# admit cards added}}; {existing, plural, =0 {none already existed} other {# already existed}}.",
+        "rendering": "Rendering PDFs: {progress}%",
+        "rendered": "{count, plural, one {# admit card PDF is} other {# admit card PDFs are}} ready.",
+        "renderedAll": "Admit card PDFs are ready.",
+        "failed": "Admit cards couldn't be issued.",
+        "renderFailed": "The admit card PDFs couldn't be rendered.",
+        "timedOut": "Rendering is taking longer than expected. Check again in a moment."
+      },
+      "revoke": {
+        "title": "Revoke {name}'s admit card",
+        "description": "Card {number} is withdrawn and can no longer be downloaded. Issuing admit cards again will not restore it.",
+        "reason": "Reason",
+        "reasonHint": "Kept with the card: students and guardians may ask why.",
+        "submit": "Revoke card",
+        "submitting": "Revoking the card",
+        "done": "{name}'s admit card revoked.",
+        "required": "Give a reason for revoking this card.",
+        "tooLong": "Keep the reason to {max} characters."
+      }
+    },
+    "gradingScales": {
+      "title": "Grading scales",
+      "summary": "How marks become grades: the bands, and which scale an exam uses when it names none.",
+      "default": "Default",
+      "types": {
+        "percentage": "Percentage",
+        "letter": "Letter grades",
+        "gpa": "GPA",
+        "hybrid": "Hybrid (letter and GPA)"
+      },
+      "columns": {
+        "name": "Name",
+        "type": "Type",
+        "bands": "Bands",
+        "default": "Default"
+      },
+      "list": {
+        "caption": "Grading scales",
+        "emptyTitle": "No grading scales yet",
+        "emptyDescription": "Add a scale and its bands, so exams can turn marks into grades.",
+        "loadError": "The grading scales couldn't be loaded.",
+        "searchPlaceholder": "Search by name or description",
+        "noMatches": "No grading scales match these filters",
+        "noMatchesDescription": "Try a different search, or clear a filter."
+      },
+      "filters": {
+        "search": "Search grading scales",
+        "clearSearch": "Clear search",
+        "type": "Scale type",
+        "all": "All"
+      },
+      "actions": {
+        "create": "New grading scale",
+        "edit": "Edit",
+        "delete": "Remove",
+        "editRow": "Edit {name}",
+        "deleteRow": "Remove {name}",
+        "bands": "Bands",
+        "bandsRow": "Bands of {name}",
+        "makeDefault": "Make default",
+        "makeDefaultRow": "Make {name} the default"
+      },
+      "form": {
+        "createTitle": "New grading scale",
+        "editTitle": "Edit this grading scale",
+        "intro": "Add the bands once the scale exists. Which scale is the default is set from the list.",
+        "description": "Description",
+        "name": "Name",
+        "type": "Scale type",
+        "gpaMax": "Highest grade point",
+        "gpaMaxHint": "For example 4.00 or 5.00.",
+        "decimalInvalid": "Enter a number with up to two decimal places."
+      },
+      "delete": {
+        "titleNamed": "Remove {name}",
+        "description": "A scale an exam still uses cannot be removed. Its bands go with it."
+      },
+      "saved": "Grading scale saved.",
+      "removed": "Grading scale removed.",
+      "defaultSet": "{name} is now the default grading scale.",
+      "bands": {
+        "titleNamed": "Bands of {name}",
+        "description": "Bands run from the lowest percentage up. Together they must cover 0 to 100 with no gap or overlap before an exam can use the scale.",
+        "loadError": "The bands couldn't be loaded.",
+        "columns": {
+          "label": "Grade",
+          "range": "Range",
+          "gradePoint": "Grade point",
+          "result": "Result",
+          "remark": "Remark",
+          "actions": "Actions"
+        },
+        "range": "{min}% to {max}%",
+        "passing": "Pass",
+        "failing": "Fail",
+        "saved": "Band saved.",
+        "removed": "Band removed.",
+        "actions": {
+          "add": "Add band",
+          "delete": "Remove",
+          "editRow": "Edit band {label}",
+          "deleteRow": "Remove band {label}"
+        },
+        "form": {
+          "createTitle": "Add a band",
+          "editTitle": "Edit this band",
+          "label": "Grade",
+          "minPercent": "From (%)",
+          "maxPercent": "To (%)",
+          "gradePoint": "Grade point",
+          "sortOrder": "Order",
+          "remark": "Remark",
+          "isPassing": "Counts as a pass",
+          "orderInvalid": "Enter a whole number, 0 or more."
+        },
+        "delete": {
+          "titleNamed": "Remove band {label}",
+          "description": "Results graded with this band keep their grade. Check the coverage again afterwards."
+        },
+        "coverage": {
+          "title": "Check the coverage",
+          "complete": "The bands cover 0 to 100 with no gap or overlap.",
+          "empty": "No bands yet. Add at least one before an exam can use this scale.",
+          "start": "The lowest band starts at {at}%, so a result below that has no grade. The scale must start at 0.",
+          "end": "The highest band ends at {at}%, so a result above that has no grade. The scale must reach 100.",
+          "gap": "Nothing grades a result between {from}% and {to}%: {lower} and {upper} leave a gap.",
+          "overlap": "{lower} ends at {from}% and {upper} starts at {to}%, so they overlap."
+        }
       }
     }
   },

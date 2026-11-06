@@ -338,6 +338,11 @@ paths:
         schema:
           type: string
       - in: query
+        name: section_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
         name: status
         schema:
           type: string
@@ -396,6 +401,30 @@ paths:
               schema:
                 $ref: '#/components/schemas/AdmitCard'
           description: ''
+  /api/v1/admit-cards/{id}:download:
+    post:
+      operationId: admit_cards_:download_create
+      description: A short-lived signed link to the admit card's PDF.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admit-cards
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDownload'
+          description: ''
+        '404':
+          description: Not this caller's card, not rendered yet, or revoked.
   /api/v1/admit-cards/{id}:revoke:
     post:
       operationId: admit_cards_:revoke_create
@@ -2648,7 +2677,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ExamSchedule'
-          description: ''
+          description: 'The sitting, plus `meta.conflicts`: the exam''s whole clash
+            list, each an `ExamConflict`, hard findings first.'
   /api/v1/exam-schedules/{id}:
     get:
       operationId: exam_schedules_retrieve
@@ -2724,7 +2754,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ExamSchedule'
-          description: ''
+          description: 'The sitting, plus `meta.conflicts`: the exam''s whole clash
+            list, each an `ExamConflict`, hard findings first.'
     delete:
       operationId: exam_schedules_destroy
       description: |-
@@ -2971,12 +3002,6 @@ paths:
         schema:
           type: string
           format: uuid
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
       - in: query
         name: ends_on
         schema:
@@ -3019,6 +3044,12 @@ paths:
         description: Which field to use when ordering the results.
         schema:
           type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
       - name: page_size
         required: false
         in: query
@@ -3227,6 +3258,30 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/exams/{id}/schedule-conflicts:
+    get:
+      operationId: exams_schedule_conflicts_retrieve
+      description: The exam's schedule clashes, hard findings first.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - exams
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExamConflict'
+          description: ''
   /api/v1/exams/{id}:approve-results:
     post:
       operationId: exams_:approve_results_create
@@ -3296,7 +3351,11 @@ paths:
       - jwtAuth: []
       responses:
         '202':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdmitCardIssueAccepted'
+          description: ''
   /api/v1/exams/{id}:process-results:
     post:
       operationId: exams_:process_results_create
@@ -3379,88 +3438,12 @@ paths:
         *exam* that moves state: a schedule is published as a whole, not sitting
         by sitting, and §6 calls it "schedule publish to portals".
       parameters:
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
-      - in: query
-        name: exam_date
-        schema:
-          type: string
-          format: date
-      - in: query
-        name: exam_date__gte
-        schema:
-          type: string
-          format: date
-      - in: query
-        name: exam_date__lte
-        schema:
-          type: string
-          format: date
-      - in: query
-        name: exam_id
-        schema:
-          type: string
-          format: uuid
-      - in: query
-        name: exam_subject_id
-        schema:
-          type: string
-          format: uuid
       - in: path
         name: id
         schema:
           type: string
           format: uuid
         required: true
-      - in: query
-        name: invigilator_staff_id
-        schema:
-          type: string
-          format: uuid
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: page_size
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - in: query
-        name: room_id
-        schema:
-          type: string
-          format: uuid
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      - in: query
-        name: section_id
-        schema:
-          type: string
-          format: uuid
-      - in: query
-        name: status
-        schema:
-          type: string
-          enum:
-          - cancelled
-          - completed
-          - scheduled
-        description: |-
-          * `scheduled` - Scheduled
-          * `completed` - Completed
-          * `cancelled` - Cancelled
       tags:
       - exams
       security:
@@ -3470,8 +3453,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedExamScheduleList'
+                $ref: '#/components/schemas/ExamSchedulePublish'
           description: ''
+        '409':
+          description: The exam is past `scheduled`.
+        '422':
+          description: A hard clash (the whole list in `error.meta.conflicts`, each
+            an `ExamConflict`), or no sittings to publish.
   /api/v1/exams/{id}:send-results-back:
     post:
       operationId: exams_:send_results_back_create
@@ -5168,12 +5156,6 @@ paths:
       operationId: grading_scales_list
       description: '`/grading-scales` — §5.5''s tenant grading models.'
       parameters:
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
       - in: query
         name: is_default
         schema:
@@ -5184,6 +5166,12 @@ paths:
         description: Which field to use when ordering the results.
         schema:
           type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
       - name: page_size
         required: false
         in: query
@@ -5362,24 +5350,12 @@ paths:
         and nothing else. Completeness is checked where it matters, when an exam
         attaches the scale (`services.assert_scale_usable`).
       parameters:
-      - name: cursor
-        required: false
-        in: query
-        description: The pagination cursor value.
-        schema:
-          type: string
       - name: ordering
         required: false
         in: query
         description: Which field to use when ordering the results.
         schema:
           type: string
-      - name: page_size
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
       - in: path
         name: scale_pk
         schema:
@@ -5401,7 +5377,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedGradeBandList'
+                type: array
+                items:
+                  $ref: '#/components/schemas/GradeBand'
           description: ''
     post:
       operationId: grading_scales_grade_bands_create
@@ -14761,6 +14739,21 @@ components:
           type: string
           format: uuid
           readOnly: true
+        student_name:
+          type: string
+          readOnly: true
+        admission_number:
+          type: string
+          readOnly: true
+        section_id:
+          type: string
+          format: uuid
+          nullable: true
+          readOnly: true
+        section_name:
+          type: string
+          nullable: true
+          readOnly: true
         admit_card_no:
           type: string
           readOnly: true
@@ -14791,6 +14784,7 @@ components:
           format: date-time
           readOnly: true
       required:
+      - admission_number
       - admit_card_no
       - created_at
       - exam_id
@@ -14798,9 +14792,32 @@ components:
       - id
       - issued_at
       - revoked_reason
+      - section_id
+      - section_name
       - status
       - student_id
+      - student_name
       - updated_at
+    AdmitCardIssueAccepted:
+      type: object
+      description: |-
+        `:issue-admit-cards`' 202: the render job, and the cards this run added
+        beside the ones that already existed.
+      properties:
+        job_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        added:
+          type: integer
+        existing:
+          type: integer
+      required:
+      - added
+      - existing
+      - job_id
+      - status
     AdmitCardRevoke:
       type: object
       description: |-
@@ -15704,6 +15721,14 @@ components:
           maxLength: 2000
       required:
       - reason
+    CardDownload:
+      type: object
+      description: A short-lived signed link to a card's PDF.
+      properties:
+        download_url:
+          type: string
+      required:
+      - download_url
     ChangePassword:
       type: object
       properties:
@@ -15807,6 +15832,14 @@ components:
         * `class` - Class
         * `section` - Section
         * `custom` - Custom
+    ConflictSeverityEnum:
+      enum:
+      - hard
+      - soft
+      type: string
+      description: |-
+        * `hard` - hard
+        * `soft` - soft
     CorrectionDecision:
       type: object
       description: |-
@@ -16621,7 +16654,7 @@ components:
       description: '* `enrollment` - enrollment'
     Exam:
       type: object
-      description: '`exams` — an examination event (§5.1).'
+      description: An examination event within an academic session (§5.1).
       properties:
         id:
           type: string
@@ -16630,9 +16663,16 @@ components:
         academic_session_id:
           type: string
           format: uuid
+        academic_session_name:
+          type: string
+          readOnly: true
         term_id:
           type: string
           format: uuid
+          nullable: true
+        term_name:
+          type: string
+          readOnly: true
           nullable: true
         name:
           type: string
@@ -16643,6 +16683,9 @@ components:
         grading_scale_id:
           type: string
           format: uuid
+        grading_scale_name:
+          type: string
+          readOnly: true
         weightage_percent:
           type: string
           format: decimal
@@ -16660,6 +16703,11 @@ components:
           allOf:
           - $ref: '#/components/schemas/ExamStatusEnum'
           readOnly: true
+        subject_count:
+          type: integer
+          description: All of the exam's live subjects, not only those visible to
+            the viewer.
+          readOnly: true
         description:
           type: string
           nullable: true
@@ -16674,12 +16722,58 @@ components:
           readOnly: true
       required:
       - academic_session_id
+      - academic_session_name
       - created_at
       - exam_type
+      - grading_scale_name
       - id
       - name
       - status
+      - subject_count
+      - term_name
       - updated_at
+    ExamConflict:
+      type: object
+      description: |-
+        One clash in an exam's schedule (§5.2, §11).
+
+        `schedule_ids` names every sitting involved, so a client highlights each of
+        them. A hard finding blocks `:publish-schedule`; a soft one only warns.
+      properties:
+        type:
+          $ref: '#/components/schemas/ExamConflictTypeEnum'
+        severity:
+          $ref: '#/components/schemas/ConflictSeverityEnum'
+        schedule_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        message:
+          type: string
+      required:
+      - message
+      - schedule_ids
+      - severity
+      - type
+    ExamConflictTypeEnum:
+      enum:
+      - room_double_booked
+      - invigilator_double_booked
+      - student_two_papers_at_once
+      - outside_exam_window
+      - not_a_working_day
+      - room_over_capacity
+      - clashes_with_timetable
+      type: string
+      description: |-
+        * `room_double_booked` - room_double_booked
+        * `invigilator_double_booked` - invigilator_double_booked
+        * `student_two_papers_at_once` - student_two_papers_at_once
+        * `outside_exam_window` - outside_exam_window
+        * `not_a_working_day` - not_a_working_day
+        * `room_over_capacity` - room_over_capacity
+        * `clashes_with_timetable` - clashes_with_timetable
     ExamReportQuery:
       type: object
       description: |-
@@ -16732,12 +16826,28 @@ components:
           type: string
           format: uuid
           readOnly: true
+        exam_id:
+          type: string
+          format: uuid
+          readOnly: true
+        exam_name:
+          type: string
+          readOnly: true
         exam_subject_id:
           type: string
           format: uuid
+        subject_name:
+          type: string
+          readOnly: true
+        class_name:
+          type: string
+          readOnly: true
         section_id:
           type: string
           format: uuid
+        section_name:
+          type: string
+          readOnly: true
         exam_date:
           type: string
           format: date
@@ -16751,9 +16861,17 @@ components:
           type: string
           format: uuid
           nullable: true
+        room_name:
+          type: string
+          readOnly: true
+          nullable: true
         invigilator_staff_id:
           type: string
           format: uuid
+          nullable: true
+        invigilator_name:
+          type: string
+          readOnly: true
           nullable: true
         status:
           $ref: '#/components/schemas/ExamScheduleStatusEnum'
@@ -16771,14 +16889,36 @@ components:
           format: date-time
           readOnly: true
       required:
+      - class_name
       - created_at
       - end_time
       - exam_date
+      - exam_id
+      - exam_name
       - exam_subject_id
       - id
+      - invigilator_name
+      - room_name
       - section_id
+      - section_name
       - start_time
+      - subject_name
       - updated_at
+    ExamSchedulePublish:
+      type: object
+      description: |-
+        `:publish-schedule`'s answer: the exam's new status, and the soft clashes
+        published over.
+      properties:
+        status:
+          $ref: '#/components/schemas/ExamStatusEnum'
+        conflicts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExamConflict'
+      required:
+      - conflicts
+      - status
     ExamScheduleStatusEnum:
       enum:
       - scheduled
@@ -16820,12 +16960,21 @@ components:
         exam_id:
           type: string
           format: uuid
+        exam_name:
+          type: string
+          readOnly: true
         class_id:
           type: string
           format: uuid
+        class_name:
+          type: string
+          readOnly: true
         subject_id:
           type: string
           format: uuid
+        subject_name:
+          type: string
+          readOnly: true
         max_marks:
           type: string
           format: decimal
@@ -16875,13 +17024,16 @@ components:
           readOnly: true
       required:
       - class_id
+      - class_name
       - created_at
       - exam_id
+      - exam_name
       - id
       - marks_locked_at
       - max_marks
       - pass_marks
       - subject_id
+      - subject_name
       - updated_at
     ExamTypeEnum:
       enum:
@@ -19675,13 +19827,13 @@ components:
             pagination:
               type: object
               properties:
-                next_cursor:
-                  type: string
-                  nullable: true
-                previous_cursor:
-                  type: string
-                  nullable: true
+                page:
+                  type: integer
                 page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
                   type: integer
     PaginatedExamScheduleList:
       type: object
@@ -19914,27 +20066,6 @@ components:
                   nullable: true
                 page_size:
                   type: integer
-    PaginatedGradeBandList:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/GradeBand'
-        meta:
-          type: object
-          properties:
-            pagination:
-              type: object
-              properties:
-                next_cursor:
-                  type: string
-                  nullable: true
-                previous_cursor:
-                  type: string
-                  nullable: true
-                page_size:
-                  type: integer
     PaginatedGradingScaleList:
       type: object
       properties:
@@ -19948,13 +20079,13 @@ components:
             pagination:
               type: object
               properties:
-                next_cursor:
-                  type: string
-                  nullable: true
-                previous_cursor:
-                  type: string
-                  nullable: true
+                page:
+                  type: integer
                 page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
                   type: integer
     PaginatedGuardianList:
       type: object
@@ -21266,7 +21397,7 @@ components:
           readOnly: true
     PatchedExam:
       type: object
-      description: '`exams` — an examination event (§5.1).'
+      description: An examination event within an academic session (§5.1).
       properties:
         id:
           type: string
@@ -21275,9 +21406,16 @@ components:
         academic_session_id:
           type: string
           format: uuid
+        academic_session_name:
+          type: string
+          readOnly: true
         term_id:
           type: string
           format: uuid
+          nullable: true
+        term_name:
+          type: string
+          readOnly: true
           nullable: true
         name:
           type: string
@@ -21288,6 +21426,9 @@ components:
         grading_scale_id:
           type: string
           format: uuid
+        grading_scale_name:
+          type: string
+          readOnly: true
         weightage_percent:
           type: string
           format: decimal
@@ -21304,6 +21445,11 @@ components:
         status:
           allOf:
           - $ref: '#/components/schemas/ExamStatusEnum'
+          readOnly: true
+        subject_count:
+          type: integer
+          description: All of the exam's live subjects, not only those visible to
+            the viewer.
           readOnly: true
         description:
           type: string
@@ -21332,12 +21478,28 @@ components:
           type: string
           format: uuid
           readOnly: true
+        exam_id:
+          type: string
+          format: uuid
+          readOnly: true
+        exam_name:
+          type: string
+          readOnly: true
         exam_subject_id:
           type: string
           format: uuid
+        subject_name:
+          type: string
+          readOnly: true
+        class_name:
+          type: string
+          readOnly: true
         section_id:
           type: string
           format: uuid
+        section_name:
+          type: string
+          readOnly: true
         exam_date:
           type: string
           format: date
@@ -21351,9 +21513,17 @@ components:
           type: string
           format: uuid
           nullable: true
+        room_name:
+          type: string
+          readOnly: true
+          nullable: true
         invigilator_staff_id:
           type: string
           format: uuid
+          nullable: true
+        invigilator_name:
+          type: string
+          readOnly: true
           nullable: true
         status:
           $ref: '#/components/schemas/ExamScheduleStatusEnum'
@@ -21381,12 +21551,21 @@ components:
         exam_id:
           type: string
           format: uuid
+        exam_name:
+          type: string
+          readOnly: true
         class_id:
           type: string
           format: uuid
+        class_name:
+          type: string
+          readOnly: true
         subject_id:
           type: string
           format: uuid
+        subject_name:
+          type: string
+          readOnly: true
         max_marks:
           type: string
           format: decimal
@@ -26333,7 +26512,7 @@ components:
             by `message`.
         severity:
           allOf:
-          - $ref: '#/components/schemas/TimetableConflictSeverityEnum'
+          - $ref: '#/components/schemas/ConflictSeverityEnum'
           description: |-
             Hard blocks publish; soft only warns.
 
@@ -26351,14 +26530,6 @@ components:
       - severity
       - slot_ids
       - type
-    TimetableConflictSeverityEnum:
-      enum:
-      - hard
-      - soft
-      type: string
-      description: |-
-        * `hard` - hard
-        * `soft` - soft
     TimetablePublishResult:
       type: object
       description: |-

@@ -2,7 +2,7 @@ import type { MenuConfig, MenuItem } from "@schoolhub/ui";
 
 import { buildUser } from "@/test-utils";
 
-import { filterMenuByAccess } from "../menu-access";
+import { collectMenuPaths, filterMenuByAccess, isActiveMenuPath } from "../menu-access";
 
 const CURRICULUM: MenuItem = {
   title: "Curriculum",
@@ -97,5 +97,34 @@ describe("filterMenuByAccess", () => {
       ["Substitutions"],
     );
     expect(filterMenuByAccess(menu, buildUser(["timetable.timetable.view"]))).toEqual([]);
+  });
+});
+
+describe("isActiveMenuPath", () => {
+  const MENU: MenuConfig = [
+    {
+      title: "Examinations",
+      children: [
+        { title: "Exams", path: "/exams" },
+        { title: "Grading scales", path: "/exams/grading-scales" },
+      ],
+    },
+    { title: "Staff", path: "/staff" },
+  ];
+  const paths = collectMenuPaths(MENU);
+
+  it("collects every path, children included", () => {
+    expect(paths).toEqual(["/exams", "/exams/grading-scales", "/staff"]);
+  });
+
+  it("lights only the most specific item: Exams does not light up under Grading scales", () => {
+    expect(isActiveMenuPath("/exams/grading-scales", "/exams/grading-scales", paths)).toBe(true);
+    expect(isActiveMenuPath("/exams", "/exams/grading-scales", paths)).toBe(false);
+  });
+
+  it("still lights the parent-path item on its own page and on a detail page under it", () => {
+    expect(isActiveMenuPath("/exams", "/exams", paths)).toBe(true);
+    expect(isActiveMenuPath("/exams", "/exams/7f1a2b3c", paths)).toBe(true);
+    expect(isActiveMenuPath("/staff", "/exams", paths)).toBe(false);
   });
 });

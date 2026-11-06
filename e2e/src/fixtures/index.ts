@@ -18,6 +18,11 @@ import {
   BroadcastPage,
   CurriculumPage,
   DashboardPage,
+  ExamAdmitCardsPage,
+  ExamPage,
+  ExamSchedulePage,
+  ExamsPage,
+  GradingScalesPage,
   LoginPage,
   MessagesPage,
   OversightPage,
@@ -112,6 +117,11 @@ export interface E2EFixtures {
   portalChildPage: PortalChildPage;
   portalCommunicationPage: PortalCommunicationPage;
   portalLeavePage: PortalLeavePage;
+  examsPage: ExamsPage;
+  examPage: ExamPage;
+  examSchedulePage: ExamSchedulePage;
+  examAdmitCardsPage: ExamAdmitCardsPage;
+  gradingScalesPage: GradingScalesPage;
   /**
    * Signs a **second** identity in, on its own browser context, and hands back that
    * context's page objects.
@@ -320,6 +330,26 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
 
   portalLeavePage: async ({ page }, use) => {
     await use(new PortalLeavePage(page));
+  },
+
+  examsPage: async ({ page }, use) => {
+    await use(new ExamsPage(page));
+  },
+
+  examPage: async ({ page }, use) => {
+    await use(new ExamPage(page));
+  },
+
+  examSchedulePage: async ({ page }, use) => {
+    await use(new ExamSchedulePage(page));
+  },
+
+  examAdmitCardsPage: async ({ page }, use) => {
+    await use(new ExamAdmitCardsPage(page));
+  },
+
+  gradingScalesPage: async ({ page }, use) => {
+    await use(new GradingScalesPage(page));
   },
 
   signInAsSecondIdentity: async ({ browser }, use) => {

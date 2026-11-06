@@ -24,6 +24,12 @@ export function ModuleSectionNav({ sections, namespace }: ModuleSectionNavProps)
   const pathname = usePathname();
   const { data: user } = useCurrentUser();
   const permitted = permittedSections(sections, user);
+  // The most specific section wins, so a section nested under another's path (Exams at `/exams`,
+  // Grading scales at `/exams/grading-scales`) doesn't light up its parent too.
+  const currentHref = permitted
+    .map((section) => section.href)
+    .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
+    .sort((a, b) => b.length - a.length)[0];
 
   if (permitted.length === 0) return null;
 
@@ -31,7 +37,7 @@ export function ModuleSectionNav({ sections, namespace }: ModuleSectionNavProps)
     <nav aria-label={t("nav.label")} className="mb-5 border-b border-border">
       <ul className="-mb-px flex gap-1 overflow-x-auto">
         {permitted.map((section) => {
-          const isCurrent = pathname === section.href || pathname.startsWith(`${section.href}/`);
+          const isCurrent = section.href === currentHref;
           return (
             <li key={section.href}>
               <Link

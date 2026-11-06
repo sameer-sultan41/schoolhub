@@ -35,12 +35,14 @@ from apps.examinations.tests.factories import (
     ExamFactory,
     ExamSubjectFactory,
     MarksFactory,
+    StaffFactory,
     SubjectFactory,
     UserFactory,
     authenticate,
     grant,
 )
 from core.api.exceptions import Conflict, DomainRuleViolation
+from core.jobs.models import BackgroundJob
 from core.jobs.tests.base import assert_sent_on_commit
 from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
@@ -331,6 +333,22 @@ class ProcessEndpointTests(ProcessingTestCase):
             tenant_id=self.tenant.pk,
             actor_id=self.user.pk,
         )
+
+    def test_an_exam_outside_the_caller_s_scope_is_a_404(self) -> None:
+        """Resolved through `ExamViewSet`'s record scope, not a bare lookup."""
+        self.mark_all("60.00", "70.00", "80.00")
+        with tenant_context(self.tenant.id):
+            outsider = UserFactory(tenant=self.tenant)
+            StaffFactory(tenant=self.tenant, campus=self.campus, user_id=outsider.pk)
+        grant(outsider, "exams.result.create", scope=RecordScope.ASSIGNED)
+        client = APIClient()
+        authenticate(client, outsider)
+
+        response = client.post(f"/api/v1/exams/{self.exam.pk}:process-results")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        with tenant_context(self.tenant.id):
+            self.assertFalse(BackgroundJob.objects.exists())
 
 
 class RecomputeTests(ProcessingTestCase):
