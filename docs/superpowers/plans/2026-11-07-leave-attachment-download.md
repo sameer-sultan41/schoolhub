@@ -105,8 +105,9 @@ ADR-0021; `docs/deferred-work.md` (the staff-side entry around line 204 and the 
 - **Services:**
   - `endpoints.ts`: `leaveRequests.attachmentDownload(id)`;
   - `leave-requests-service.ts`: `fetchLeaveAttachmentUrl(id)`, plus its service test.
-- **Hook:** `features/attendance/use-leave-attachment-download.ts`. It sits at the attendance root, beside
-  `request-status-badge.tsx`, which the portal already imports. It is never placed in the staff
+- **No shared hook (amended during implementation).** With `PortalDownloadButton` holding the portal's busy
+  and error state, a shared hook would wrap one service call. So each screen calls
+  `Services.leaveRequests.fetchLeaveAttachmentUrl` itself, and the portal imports nothing from the staff
   `leave/` folder.
 - **Staff screen:** `features/attendance/leave/leave-attachment.tsx` takes `requestId`, drops the
   `platform.file.view` gate and uses the hook. Update `leave-detail-sheet.tsx`, `leave-services-mock.ts`,

@@ -16,7 +16,7 @@ import {
   buildCorrection,
   buildLeaveRequest,
   buildLeaveType,
-  jobsModule,
+  leaveAttachmentUrl,
   type MockApi,
 } from "@/mocks";
 
@@ -344,7 +344,7 @@ test.describe("leave, as a class teacher", () => {
     signedIn: _signedIn,
   }) => {
     const fileId = uuid();
-    const fileUrl = `https://storage.e2e.test/objects/${fileId}-medical-note.bin`;
+    const fileUrl = leaveAttachmentUrl(fileId);
     stubApprovals(mockApi, {
       user: classTeacher,
       leaveRequests: [
@@ -355,8 +355,6 @@ test.describe("leave, as a class teacher", () => {
       ],
       leaveTypes: [sick],
     });
-    // `POST /files/{id}:download` is `jobsModule`'s: the router lets one module own the path.
-    mockApi.use(jobsModule({ files: [{ id: fileId, downloadUrl: fileUrl }] }));
     // Storage signs the URL with `Content-Disposition: attachment`, which is what makes
     // Chromium emit the `download` event for a cross-origin link.
     await page.route(fileUrl, (route) =>
@@ -375,5 +373,7 @@ test.describe("leave, as a class teacher", () => {
     const download = await downloadPromise;
 
     expect(download.url()).toBe(fileUrl);
+    // The request's own route, never the generic `/files`: leave attachments are module-gated.
+    expect(mockApi.countCalls("POST", "/leave-requests/:id/:action")).toBe(1);
   });
 });

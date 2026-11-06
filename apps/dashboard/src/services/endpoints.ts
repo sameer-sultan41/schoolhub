@@ -157,6 +157,7 @@ export const endpoints = {
     list: "/leave-requests",
     /** `:cancel` is the requester's withdrawal, a colon-action like approve and reject. */
     cancel: (id: string) => `/leave-requests/${id}:cancel`,
+    attachmentDownload: (id: string) => `/leave-requests/${id}/attachment:download`,
     action: (id: string, action: "approve" | "reject") => `/leave-requests/${id}:${action}`,
   },
   /** `GET /leave-types`: the read-only catalogue, keyed `attendance.leave-request.view`. */
