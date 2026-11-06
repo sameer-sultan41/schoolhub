@@ -100,9 +100,9 @@ describe("fee-schedules-service", () => {
     const { updateFeeSchedule } = await import("../fee-schedules-service");
     mockPatch.mockResolvedValue({ data: { id: "x1" } });
 
-    await updateFeeSchedule("x1", { name: "Renamed" } as never);
+    await updateFeeSchedule("x1", { amount: "2000.00" });
 
-    expect(mockPatch).toHaveBeenCalledWith("/fee-schedules/x1", { name: "Renamed" });
+    expect(mockPatch).toHaveBeenCalledWith("/fee-schedules/x1", { amount: "2000.00" });
   });
 
   it("deleteFeeSchedule DELETEs /fee-schedules/{id}", async () => {

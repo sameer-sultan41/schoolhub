@@ -34,6 +34,9 @@ export const FEE_SCHEDULES_QUERY_FIELDS: ReadonlyArray<readonly [keyof FeeSchedu
     ["search", "search"],
     ["ordering", "ordering"],
     ["feeStructureId", "fee_structure_id"],
+    ["feeHeadId", "fee_head_id"],
+    ["frequency", "frequency"],
+    ["termId", "term_id"],
     ["cursor", "cursor"],
     ["pageSize", "page_size"],
   ];

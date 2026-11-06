@@ -8,6 +8,9 @@ export interface FeeSchedulesQuery {
   search?: string;
   ordering?: string;
   feeStructureId?: string;
+  feeHeadId?: string;
+  frequency?: FeeFrequency;
+  termId?: string;
   cursor?: string;
   pageSize?: number;
 }

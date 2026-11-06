@@ -7,6 +7,12 @@ describe("toFeeSchedulesQueryParams", () => {
     );
   });
 
+  it("maps the head, frequency and term filters", () => {
+    expect(
+      toFeeSchedulesQueryParams({ feeHeadId: "h1", frequency: "per_term", termId: "t1" }),
+    ).toEqual({ fee_head_id: "h1", frequency: "per_term", term_id: "t1" });
+  });
+
   it("drops undefined and empty filters", () => {
     expect(toFeeSchedulesQueryParams({ search: "", ordering: undefined })).toEqual({});
   });

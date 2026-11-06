@@ -10,6 +10,7 @@ export interface FeeHeadsQuery {
   category?: FeeHeadCategory;
   ledgerAccountId?: string;
   isActive?: boolean;
+  isRefundable?: boolean;
   cursor?: string;
   pageSize?: number;
 }

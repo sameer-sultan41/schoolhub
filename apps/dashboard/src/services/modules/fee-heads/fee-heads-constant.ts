@@ -36,6 +36,7 @@ export const FEE_HEADS_QUERY_FIELDS: ReadonlyArray<readonly [keyof FeeHeadsQuery
   ["category", "category"],
   ["ledgerAccountId", "ledger_account_id"],
   ["isActive", "is_active"],
+  ["isRefundable", "is_refundable"],
   ["cursor", "cursor"],
   ["pageSize", "page_size"],
 ];
