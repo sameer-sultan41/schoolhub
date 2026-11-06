@@ -8,6 +8,7 @@ school. Only active users can reset; an invited account activates through its in
 
 from __future__ import annotations
 
+import logging
 import uuid
 
 from django.conf import settings
@@ -26,6 +27,8 @@ from core.rbac.password_reset.tokens import reset_token_generator
 from core.rbac.sessions import revoke_refresh_tokens
 from core.tenancy.context import tenant_atomic
 from core.tenancy.models import Tenant
+
+logger = logging.getLogger(__name__)
 
 RESET_PATH = "/reset-password"
 
@@ -52,6 +55,12 @@ def deliver_password_reset(*, tenant_id: uuid.UUID, email: str) -> bool:
         # Emails are unique per school but compared case-sensitively by that constraint;
         # an address matching two accounts by case is ambiguous, so nobody gets a link.
         matches = list(_active_members(tenant_id).filter(email__iexact=email.strip())[:2])
+    if len(matches) > 1:
+        # Both holders are locked out of reset until an admin fixes one address; say so.
+        logger.warning(
+            "password reset skipped: users %s share an address differing only by case",
+            ", ".join(str(match.pk) for match in matches),
+        )
     if len(matches) != 1:
         return False
     user = matches[0]

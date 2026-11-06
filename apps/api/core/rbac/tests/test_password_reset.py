@@ -85,6 +85,17 @@ class PasswordResetTests(APITestCase):
                 self.assertEqual(queued, 1)
         self.assertEqual(mail.outbox, [])
 
+    def test_reset_for_an_address_two_accounts_share_by_case_sends_nothing_and_warns(self) -> None:
+        twin = UserFactory(tenant=self.tenant, email="Member@example.test")
+
+        with self.assertLogs("core.rbac.password_reset.services", level="WARNING") as logs:
+            response, _ = self.request_reset(self.user.email)
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(mail.outbox, [])
+        self.assertIn(str(twin.pk), logs.output[0])
+        self.assertNotIn("example.test", logs.output[0])
+
     def test_reset_unknown_school_is_204_no_task(self) -> None:
         response, queued = self.request_reset(self.user.email, school="no-such-school")
 
