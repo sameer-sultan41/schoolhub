@@ -20,6 +20,15 @@ export const EXAM_FORM_MESSAGE_KEYS: ExamFormMessages = {
   bothDates: "bothDates",
 };
 
+/** `weightage_percent`: the format, then above 0 (the pattern alone admits `0`, the server's exclusive bound). */
+export function weightageSchema(message: string) {
+  return z
+    .string()
+    .trim()
+    .regex(WEIGHTAGE_PATTERN, message)
+    .refine((value) => Number(value) > 0, message);
+}
+
 /** Ids, dates and the weightage are strings: a blank is a real answer for the optional ones.
  * Both dates or neither, and the end not before the start, are the server's rules too
  * (`ExamSerializer.validate`); checked here so the message lands under the field before a trip. */
@@ -31,7 +40,7 @@ export function createExamFormSchema(messages: ExamFormMessages) {
       term_id: z.string(),
       exam_type: z.enum(EXAM_TYPES as [ExamType, ...ExamType[]]),
       grading_scale_id: z.string(),
-      weightage_percent: z.string().trim().regex(WEIGHTAGE_PATTERN, messages.weightageInvalid),
+      weightage_percent: weightageSchema(messages.weightageInvalid),
       starts_on: z.string(),
       ends_on: z.string(),
       description: z.string().max(EXAM_DESCRIPTION_MAX),

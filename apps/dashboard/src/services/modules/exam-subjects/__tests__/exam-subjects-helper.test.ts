@@ -35,6 +35,16 @@ const VALID = {
 };
 
 describe("exam subject form", () => {
+  it.each(["0", "0.00", "100.01"])("refuses a subject weightage of %s", (value) => {
+    expect(issuesOf({ ...VALID, subject_weightage_percent: value })).toEqual({
+      subject_weightage_percent: "weightageInvalid",
+    });
+  });
+
+  it.each(["0.5", "100"])("accepts a subject weightage of %s", (value) => {
+    expect(issuesOf({ ...VALID, subject_weightage_percent: value })).toEqual({});
+  });
+
   it("groups the rows by class, keeping the API's order", () => {
     const rows = [
       subjectRecord({ id: "1", subject_name: "Art" }),
