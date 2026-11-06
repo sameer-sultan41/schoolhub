@@ -108,6 +108,10 @@ class PermissionRegistry:
     def keys(self) -> set[str]:
         return set(self._specs)
 
+    def keys_for_role(self, slug: str) -> list[str]:
+        """Every key whose `default_roles` names `slug` — what a real role of that slug gets."""
+        return [s.key for s in self.all() if slug in s.default_roles]
+
     def for_module(self, module: str) -> list[PermissionSpec]:
         return [s for s in self.all() if s.module == module]
 

@@ -470,6 +470,21 @@ class MyTimetableCrossTenantTests(TimetableCrossTenantTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
         self.assertEqual(response.json()["data"], [])
 
+    def test_a_guardian_naming_another_tenants_student_is_404(self) -> None:
+        user = UserFactory(tenant=self.tenant)
+        with tenant_context(self.other.id):
+            foreign_student = StudentFactory(tenant=self.other, campus=self.other_campus)
+            foreign_guardian = GuardianFactory(tenant=self.other, user_id=user.pk)
+            StudentGuardianFactory(
+                tenant=self.other, student=foreign_student, guardian=foreign_guardian
+            )
+        grant(user, "timetable.timetable.view", is_restricted_principal=True)
+        authenticate(self.client, user)
+
+        response = self.client.get(f"/api/v1/timetables/my?student_id={foreign_student.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
     def test_naming_another_tenants_session_yields_nothing(self) -> None:
         user = UserFactory(tenant=self.tenant)
         with tenant_context(self.tenant.id):

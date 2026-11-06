@@ -252,10 +252,13 @@ class AssignedTeaching:
     current `academics.TeacherSubjectAllocation` row; `homerooms` one
     `(section_id, session_id)` per section they are class teacher of, read
     through active enrollments and carrying the enrollment's session.
+    `staff_ids` is the caller's active `Staff` rows, which an invigilation
+    names directly rather than through any teaching.
     """
 
     allocations: tuple[tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID], ...] = ()
     homerooms: frozenset[tuple[uuid.UUID, uuid.UUID]] = frozenset()
+    staff_ids: frozenset[uuid.UUID] = frozenset()
 
     @property
     def homeroom_section_ids(self) -> frozenset[uuid.UUID]:
@@ -307,7 +310,9 @@ def _assigned_teaching(user) -> AssignedTeaching:
         .values_list("section_id", "academic_session_id")
         .distinct()
     )
-    return AssignedTeaching(allocations=allocations, homerooms=homerooms)
+    return AssignedTeaching(
+        allocations=allocations, homerooms=homerooms, staff_ids=frozenset(staff_ids)
+    )
 
 
 def _exam_subjects_taught(teaching: AssignedTeaching) -> models.Q:
@@ -709,28 +714,40 @@ class ExamSchedule(TenantOwnedModel):
 
     @classmethod
     def filter_assigned_to_user(cls, queryset, user):
-        """Record scope `assigned` — a teacher's own section, or their invigilations.
+        """Record scope `assigned` — what a teacher teaches, homerooms or invigilates.
 
-        The union is deliberate. A class teacher needs their section's schedule;
-        an invigilator needs the sittings they are supervising, which are
-        routinely *not* their own section — that is the point of an invigilator.
-        Narrowing to either one alone would hide half of what each needs.
+        Three halves, unioned, because each role needs a different slice:
+
+        - the *subject* teacher sees the sittings of the (section, subject) they
+          are allocated, in the allocation's session — the paper they set and
+          mark;
+        - the *class* teacher sees every sitting of their homeroom, in the
+          homeroom's session;
+        - an invigilator sees the sittings they supervise, which are routinely
+          *not* their own section — that is the point of an invigilator.
+
+        The first two come from `_assigned_teaching`, the module's one reading
+        of "assigned", so a reassigned teacher loses a sitting exactly when they
+        lose the exam it belongs to. Every predicate is a forward join, so no
+        row fans out and no `.distinct()` is needed — which would otherwise make
+        Postgres refuse an `ORDER BY` on an annotated name.
         """
-        if user is None or not getattr(user, "is_authenticated", False):
+        teaching = _assigned_teaching(user)
+        if not teaching.staff_ids:
             return queryset.none()
-        from apps.staff_management.models import EmploymentStatus, Staff
 
-        staff_ids = list(
-            Staff.objects.alive()
-            .filter(user_id=user.pk, employment_status=EmploymentStatus.ACTIVE)
-            .values_list("pk", flat=True)
-        )
-        if not staff_ids:
-            return queryset.none()
-        return queryset.filter(
-            models.Q(section__class_teacher_staff_id__in=staff_ids)
-            | models.Q(invigilator_staff_id__in=staff_ids)
-        ).distinct()
+        predicate = models.Q(invigilator_staff_id__in=teaching.staff_ids)
+        for section_id, _class_id, subject_id, session_id in teaching.allocations:
+            predicate |= models.Q(
+                section_id=section_id,
+                exam_subject__subject_id=subject_id,
+                exam_subject__exam__academic_session_id=session_id,
+            )
+        for section_id, session_id in teaching.homerooms:
+            predicate |= models.Q(
+                section_id=section_id, exam_subject__exam__academic_session_id=session_id
+            )
+        return queryset.filter(predicate)
 
 
 class AdmitCard(TenantOwnedModel):
@@ -812,28 +829,26 @@ class AdmitCard(TenantOwnedModel):
 
     @classmethod
     def filter_assigned_to_user(cls, queryset, user):
-        """Record scope `assigned` — a class teacher's own section's cards."""
-        if user is None or not getattr(user, "is_authenticated", False):
-            return queryset.none()
-        from apps.staff_management.models import EmploymentStatus, Staff
-        from apps.student_management.models import EnrollmentStatus, StudentEnrollment
+        """Record scope `assigned` — a class teacher's homeroom cards, per session.
 
-        staff_ids = list(
-            Staff.objects.alive()
-            .filter(user_id=user.pk, employment_status=EmploymentStatus.ACTIVE)
-            .values_list("pk", flat=True)
-        )
-        if not staff_ids:
-            return queryset.none()
-        student_ids = (
-            StudentEnrollment.objects.alive()
-            .filter(
-                status=EnrollmentStatus.ACTIVE,
-                section__class_teacher_staff_id__in=staff_ids,
+        Read through `_assigned_teaching`, the module's one reading of
+        "assigned": a card matches a homeroom only when its exam is in the
+        homeroom's session and the student's enrollment in that session is in
+        that section. So last year's homeroom does not reach this year's cards,
+        and vice versa. One `.filter()`, so every condition lands on the same
+        enrollment join; no status filter, as a closed session's rows are no
+        longer `active`.
+        """
+        teaching = _assigned_teaching(user)
+        predicate = models.Q(pk__in=[])
+        for section_id, session_id in teaching.homerooms:
+            predicate |= models.Q(
+                exam__academic_session_id=session_id,
+                student__enrollments__section_id=section_id,
+                student__enrollments__academic_session_id=session_id,
+                student__enrollments__deleted_at__isnull=True,
             )
-            .values_list("student_id", flat=True)
-        )
-        return queryset.filter(student_id__in=student_ids)
+        return queryset.filter(predicate)
 
 
 class MarksStatus(models.TextChoices):

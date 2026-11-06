@@ -42,6 +42,7 @@ the discount that explains it is being shown a number they cannot check.
 """
 
 from core.rbac.registry import registry
+from core.rbac.roles import PORTAL_ROLES
 
 # §3's finance roles. `accountant` owns the full cycle; `finance_staff` is
 # deliberately narrower — data entry, no approvals.
@@ -62,7 +63,7 @@ LEDGER_VIEWERS = ("accountant", "school_owner")
 # The portal side of §3's role table. A `student`/`guardian` reads their own
 # invoices and their own fines; the *record scope*, not the key, is what narrows
 # them — see each model's `filter_owned_by_user`.
-PORTAL = ("student", "guardian")
+PORTAL = PORTAL_ROLES
 INVOICE_VIEWERS = (
     "accountant",
     "finance_staff",

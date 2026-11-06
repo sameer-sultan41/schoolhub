@@ -12,6 +12,7 @@ from core.files import services
 from core.files.models import File
 from core.files.purposes import registry as upload_purposes
 from core.files.serializers import FileCreateSerializer, FileSerializer
+from core.rbac.permissions import is_restricted_principal
 
 # The uploader confirms their own upload through this viewset, module-gated or not;
 # every other read here is generic and must not reach a module-gated file.
@@ -56,6 +57,9 @@ class FileViewSet(
         # defines platform.file.view as exactly this. Mapped explicitly so it isn't a fallback.
         "download": "platform.file.view",
     }
+    # A portal user uploads without platform.file.view: create reads no row, and confirm is
+    # narrowed to the caller's own slots in get_queryset.
+    scope_read_exempt_actions = frozenset({"create", "confirm"})
 
     def get_queryset(self):
         # Deliberately does NOT call TenantScopedViewSetMixin.get_queryset(): File has
@@ -72,17 +76,25 @@ class FileViewSet(
         # are absent from the list and a 404 on retrieve and :download.
         queryset = File.objects.alive()
         if self.action in MODULE_GATED_ACTIONS_ALLOWED:
+            # A guardian or student confirms only the slot they requested themselves.
+            if is_restricted_principal(self.request.user):
+                queryset = queryset.filter(created_by=self.request.user.pk)
             return queryset
         return queryset.exclude(purpose__in=upload_purposes.module_gated_keys())
 
     @extend_schema(
         summary="Request a presigned upload slot",
         request=FileCreateSerializer,
-        responses={201: FileSerializer},
+        responses={
+            201: FileSerializer,
+            422: OpenApiResponse(description="A portal user asked for a staff-only purpose"),
+        },
     )
     def create(self, request, *args, **kwargs) -> Response:
         payload = FileCreateSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
+        if is_restricted_principal(request.user):
+            services.assert_portal_may_upload(purpose=payload.validated_data["purpose"])
 
         file, presigned = services.create_upload(
             tenant_id=request.tenant.pk,

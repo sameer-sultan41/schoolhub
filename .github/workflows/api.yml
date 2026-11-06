@@ -97,7 +97,8 @@ jobs:
       # mirroring core.files.storage.S3Presigner's lazy `import boto3`) so no
       # other job needs this step. The list is WeasyPrint's documented one for
       # Ubuntu wheels; it no longer uses gdk-pixbuf, whose old package name is
-      # gone from the 26.04 image.
+      # gone from the 26.04 image. Keep it in step with WEASYPRINT_LIBS in
+      # apps/api/Dockerfile, which installs the same list into the API image.
       - name: Install WeasyPrint system libraries
         run: |
           sudo apt-get update

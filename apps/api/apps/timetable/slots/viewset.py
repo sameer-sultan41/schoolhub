@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING
 from django.db.models import F
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from rest_framework import viewsets
+from rest_framework import serializers, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -382,23 +382,35 @@ class MyTimetableViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
         query.is_valid(raise_exception=True)
         on_date = query.validated_data.get("date")
 
-        session_id = query.validated_data.get("academic_session_id")
-        session = _resolve_session(
-            AcademicSession.objects.alive().filter(pk=session_id).first() if session_id else None
-        )
-
+        # Who the caller is, and whose timetable they may ask for, come before the session
+        # lookup: an access check precedes business-rule validation (Invariant 2), so a
+        # student outside the caller's reach is a 404 whatever state the school's session is in.
         # Staff first: a teacher's "my timetable" is the periods they personally
         # hold, which is a different question from a section's grid. A user with
         # no staff row is a student or a guardian and resolves through
         # enrollments instead.
         staff = Staff.objects.alive().filter(user_id=request.user.pk).first()
+        student_id = query.validated_data.get("student_id")
+        if staff is not None and student_id is not None:
+            raise serializers.ValidationError(
+                {"student_id": "A staff timetable is not served per student."}
+            )
+        students = None if staff is not None else self._owned_students(student_id)
+
+        session_id = query.validated_data.get("academic_session_id")
+        session = _resolve_session(
+            AcademicSession.objects.alive().filter(pk=session_id).first() if session_id else None
+        )
+
         if staff is not None:
             slots, overrides = services.teacher_slots_for(
                 staff_ids=[staff.pk], session=session, on_date=on_date
             )
             audience = "teacher"
         else:
-            slots, overrides = self._learner_timetable(session=session, on_date=on_date)
+            slots, overrides = self._learner_timetable(
+                students=students, session=session, on_date=on_date
+            )
             audience = "learner"
 
         serializer = EffectiveSlotSerializer(
@@ -415,10 +427,8 @@ class MyTimetableViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
             }
         )
 
-    def _learner_timetable(
-        self, *, session: AcademicSession, on_date: date | None
-    ) -> tuple[list, dict]:
-        """A student's own sections, or a guardian's children's.
+    def _owned_students(self, student_id=None):
+        """The students the caller owns, or the one named by `student_id`.
 
         ``Student.filter_owned_by_user`` is the single place that knows what
         "own" means for both principals — a student's own row by `user_id`, and
@@ -428,6 +438,18 @@ class MyTimetableViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
         changes is the one that leaks.
         """
         students = Student.filter_owned_by_user(Student.objects.alive(), self.request.user)
+        if student_id is not None:
+            # Not in the owned set (another family's child, another tenant's, unlinked, or
+            # access revoked) is a 404, never a 403: whether the student exists is not theirs
+            # to learn (Invariant 2).
+            get_object_or_404(students, pk=student_id)
+            students = students.filter(pk=student_id)
+        return students
+
+    def _learner_timetable(
+        self, *, students, session: AcademicSession, on_date: date | None
+    ) -> tuple[list, dict]:
+        """The cells of `students`' sections: a student's own, or a guardian's children's."""
         section_ids = list(
             StudentEnrollment.objects.alive()
             .filter(

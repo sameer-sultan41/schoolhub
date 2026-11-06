@@ -5,7 +5,17 @@
 # regardless of what infra/compose/.env.example set.
 ARG PYTHON_IMAGE=python:3.14-slim
 
+# WeasyPrint's runtime system libraries (core.documents.render_pdf), declared once for
+# both runtime stages. The same list api.yml's test job installs; without it every PDF
+# job (ID cards, admit cards, report cards, exports) fails on `libgobject-2.0-0`.
+ARG WEASYPRINT_LIBS="libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libharfbuzz-subset0"
+
 FROM ${PYTHON_IMAGE} AS base
+
+ARG WEASYPRINT_LIBS
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ${WEASYPRINT_LIBS} \
+    && rm -rf /var/lib/apt/lists/*
 
 # Pinned uv, per docs.astral.sh/uv/guides/integration/docker — matches the
 # `required-version` bound in pyproject.toml's [tool.uv].
@@ -58,8 +68,9 @@ CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
 # ---- prod: no uv, no build toolchain in the image that actually ships -------
 FROM ${PYTHON_IMAGE} AS prod
 
+ARG WEASYPRINT_LIBS
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libpq5 curl \
+    && apt-get install -y --no-install-recommends libpq5 curl ${WEASYPRINT_LIBS} \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

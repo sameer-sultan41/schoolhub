@@ -19,7 +19,7 @@ of **SchoolHub**, an AI-powered multi-tenant School Management SaaS.
 
 ```
 config/            settings (base/dev/prod/test), root urls, api_v1 route table, celery
-core/tenancy/      Tenant model, TenantOwnedModel base, RLS helpers, context, middleware
+core/tenancy/      Tenant model, TenantOwnedModel base, RLS helpers, context, middleware, advisory locks
 core/rbac/         User, Role, Permission, UserRole, permission registry, DRF permission classes
 core/audit/        append-only audit log + recording services
 core/api/          response envelope, error handler, pagination, throttling, base viewsets

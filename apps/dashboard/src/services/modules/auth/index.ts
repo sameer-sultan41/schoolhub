@@ -1,9 +1,15 @@
-import { fetchCurrentUser, login, logout, restoreSession } from "./auth-service";
+import { changePassword, fetchCurrentUser, login, logout, restoreSession } from "./auth-service";
 
 export const AuthService = {
   login,
   logout,
   fetchCurrentUser,
   restoreSession,
+  changePassword,
 };
-export type { AuthenticatedUser, LoginCredentials, LoginResponse } from "./auth-service";
+export type {
+  AuthenticatedUser,
+  ChangePasswordInput,
+  LoginCredentials,
+  LoginResponse,
+} from "./auth-service";

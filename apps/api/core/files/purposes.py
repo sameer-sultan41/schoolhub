@@ -37,6 +37,9 @@ class UploadPurposeSpec:
     list and ``:download``: the owning module serves them through its own
     record-gated endpoint instead, because ``platform.file.view`` (every staff
     role) says nothing about who may read, say, a private conversation's files.
+
+    ``portal_uploadable`` lets a guardian or student request an upload slot for the
+    purpose; every purpose is staff-only until its owning module opts in.
     """
 
     key: str
@@ -44,6 +47,7 @@ class UploadPurposeSpec:
     mime_types: frozenset[str]
     max_size_bytes: int
     module_gated: bool = False
+    portal_uploadable: bool = False
 
 
 class UploadPurposeRegistry:
@@ -58,6 +62,7 @@ class UploadPurposeRegistry:
         mime_types: set[str] | frozenset[str],
         max_size_bytes: int,
         module_gated: bool = False,
+        portal_uploadable: bool = False,
     ) -> UploadPurposeSpec:
         """Declare a purpose. Returns the spec so the caller can hold the symbol.
 
@@ -80,6 +85,7 @@ class UploadPurposeRegistry:
             mime_types=frozenset(mime_types),
             max_size_bytes=max_size_bytes,
             module_gated=module_gated,
+            portal_uploadable=portal_uploadable,
         )
         self._specs[key] = spec
         return spec

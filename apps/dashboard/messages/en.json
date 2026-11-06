@@ -1416,7 +1416,8 @@
         "internalNote": "Internal note",
         "send": "Send",
         "sending": "Sending",
-        "failed": "Your message couldn't be sent."
+        "failed": "Your message couldn't be sent.",
+        "attachments": "Attachments"
       },
       "picker": {
         "search": "Search",
@@ -1454,7 +1455,8 @@
           "studentRequired": "Choose the student this conversation is about.",
           "internalNeedsOne": "Choose one colleague.",
           "groupNeedsTwo": "Choose at least two colleagues for a group conversation."
-        }
+        },
+        "attachments": "Attachments"
       }
     },
     "oversight": {
@@ -2191,6 +2193,157 @@
       "saved": "Subject saved.",
       "removed": "Subject removed."
     },
+    "schedule": {
+      "title": "Schedule",
+      "loadError": "The schedule couldn't be loaded.",
+      "emptyTitle": "No sittings yet",
+      "emptyDescription": "Add a sitting for each paper and section, with its date, time and room.",
+      "emptyReadOnly": "No sittings have been scheduled for this exam.",
+      "timeRange": "{start} to {end}",
+      "classSection": "{class} {section}",
+      "columns": {
+        "time": "Time",
+        "subject": "Subject",
+        "section": "Class and section",
+        "room": "Room",
+        "invigilator": "Invigilator",
+        "status": "Status"
+      },
+      "status": {
+        "scheduled": "Scheduled",
+        "completed": "Completed",
+        "cancelled": "Cancelled"
+      },
+      "clash": {
+        "hard": "Blocking clash",
+        "soft": "Clash warning"
+      },
+      "actions": {
+        "add": "Add sitting",
+        "editRow": "Reschedule {subject}, {class} {section}",
+        "cancelRow": "Cancel {subject}, {class} {section}",
+        "deleteRow": "Delete {subject}, {class} {section}"
+      },
+      "form": {
+        "createTitle": "Add sitting",
+        "editTitle": "Reschedule sitting",
+        "intro": "One section's sitting of one paper. A clash with another sitting is saved and flagged, and only blocks publishing.",
+        "subject": "Paper",
+        "selectSubject": "Select a paper",
+        "subjectOption": "{subject} ({class})",
+        "section": "Section",
+        "selectSection": "Select a section",
+        "date": "Date",
+        "startTime": "Starts",
+        "endTime": "Ends",
+        "room": "Room",
+        "selectRoom": "Select a room",
+        "noRoom": "No room",
+        "roomHint": "Rooms in service on the section's campus.",
+        "invigilator": "Invigilator",
+        "selectInvigilator": "Select an invigilator",
+        "noInvigilator": "No invigilator",
+        "endBeforeStart": "A sitting must end after it starts."
+      },
+      "saved": "Sitting saved.",
+      "cancel": {
+        "title": "Cancel {subject}, {class} {section}",
+        "description": "The sitting is called off and its room is freed. It stays on the schedule as cancelled.",
+        "confirm": "Cancel sitting",
+        "done": "Sitting cancelled."
+      },
+      "delete": {
+        "title": "Delete {subject}, {class} {section}",
+        "description": "The sitting is removed from this draft exam. This cannot be undone.",
+        "confirm": "Delete sitting",
+        "done": "Sitting deleted."
+      },
+      "conflicts": {
+        "title": "Clashes",
+        "none": "No clashes found.",
+        "loadError": "The clashes couldn't be checked.",
+        "involves": "Sittings involved",
+        "severity": {
+          "hard": "Blocking",
+          "soft": "Warning"
+        },
+        "types": {
+          "room_double_booked": "A room is booked for two sittings at the same time.",
+          "invigilator_double_booked": "An invigilator is assigned to two sittings at the same time.",
+          "student_two_papers_at_once": "Students in a section have two papers at the same time.",
+          "outside_exam_window": "A sitting falls outside the exam's dates.",
+          "not_a_working_day": "A sitting falls on a day the school doesn't work.",
+          "room_over_capacity": "A room is smaller than the section sitting in it.",
+          "clashes_with_timetable": "A sitting overlaps the regular timetable."
+        }
+      },
+      "publish": {
+        "button": "Publish schedule",
+        "blocked": "{count, plural, one {# blocking clash} other {# blocking clashes}} to resolve first",
+        "title": "Publish the schedule?",
+        "description": "Students and guardians are told the schedule is out, and admit cards can then be issued. Warnings do not stop this.",
+        "confirm": "Publish schedule",
+        "done": "Schedule published."
+      }
+    },
+    "admitCards": {
+      "caption": "Admit cards for this exam",
+      "pagination": "Admit card pages",
+      "loadError": "The admit cards couldn't be loaded.",
+      "emptyTitle": "No admit cards yet",
+      "emptyDescription": "No admit cards have been issued for this exam yet.",
+      "emptyDraft": "Admit cards are issued once the schedule is published.",
+      "noMatches": "No admit cards match these filters",
+      "noMatchesDescription": "Try another section or status.",
+      "filters": {
+        "section": "Section",
+        "status": "Status",
+        "all": "All"
+      },
+      "columns": {
+        "number": "Card number",
+        "student": "Student",
+        "admissionNumber": "Admission number",
+        "section": "Section",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "status": {
+        "generated": "Awaiting PDF",
+        "issued": "Issued",
+        "revoked": "Revoked"
+      },
+      "revokedReason": "Reason: {reason}",
+      "actions": {
+        "downloadRow": "Download {name}'s admit card",
+        "revokeRow": "Revoke {name}'s admit card"
+      },
+      "download": {
+        "failed": "The admit card couldn't be downloaded."
+      },
+      "issue": {
+        "button": "Issue admit cards",
+        "resume": "Check rendering again",
+        "summary": "{added, plural, =0 {No new admit cards} one {# admit card added} other {# admit cards added}}; {existing, plural, =0 {none already existed} other {# already existed}}.",
+        "rendering": "Rendering PDFs: {progress}%",
+        "rendered": "{count, plural, one {# admit card PDF is} other {# admit card PDFs are}} ready.",
+        "renderedAll": "Admit card PDFs are ready.",
+        "failed": "Admit cards couldn't be issued.",
+        "renderFailed": "The admit card PDFs couldn't be rendered.",
+        "timedOut": "Rendering is taking longer than expected. Check again in a moment."
+      },
+      "revoke": {
+        "title": "Revoke {name}'s admit card",
+        "description": "Card {number} is withdrawn and can no longer be downloaded. Issuing admit cards again will not restore it.",
+        "reason": "Reason",
+        "reasonHint": "Kept with the card: students and guardians may ask why.",
+        "submit": "Revoke card",
+        "submitting": "Revoking the card",
+        "done": "{name}'s admit card revoked.",
+        "required": "Give a reason for revoking this card.",
+        "tooLong": "Keep the reason to {max} characters."
+      }
+    },
     "gradingScales": {
       "title": "Grading scales",
       "summary": "How marks become grades: the bands, and which scale an exam uses when it names none.",
@@ -2370,7 +2523,15 @@
       "uploadFailed": "The photo could not be uploaded."
     },
     "submitFailed": "Something went wrong. Please try again.",
-    "saving": "Saving"
+    "saving": "Saving",
+    "attachmentUpload": {
+      "uploading": "Uploading…",
+      "remove": "Remove {name}",
+      "wrongType": "{name} isn't a supported type. Use PDF, JPEG or PNG.",
+      "tooLarge": "{name} is larger than {max} MB.",
+      "uploadFailed": "The file could not be uploaded.",
+      "limitReached": "You can attach at most {max} files."
+    }
   },
   "errors": {
     "validation_error": "Please correct the highlighted fields.",
@@ -2388,5 +2549,289 @@
     "requestId": "Reference: {requestId}",
     "pageErrorTitle": "Something went wrong",
     "pageErrorBody": "This page hit an unexpected error. Try again, or contact support if it keeps happening."
+  },
+  "portal": {
+    "shell": {
+      "title": "Parent portal",
+      "signOut": "Sign out",
+      "unread": "{count, plural, one {# unread notification} other {# unread notifications}}",
+      "loadFailed": "We couldn't load your portal. Please try again.",
+      "disabledTitle": "The parent portal isn't enabled for your school",
+      "disabledDescription": "Your school hasn't turned the parent portal on yet. Please contact the school office."
+    },
+    "switcher": {
+      "label": "Child",
+      "placeholder": "Choose a child"
+    },
+    "nav": {
+      "label": "Portal sections",
+      "overview": "Overview",
+      "attendance": "Attendance",
+      "leave": "Leave",
+      "fees": "Fees",
+      "results": "Results",
+      "timetable": "Timetable",
+      "messages": "Messages",
+      "notices": "Notices",
+      "notifications": "Notifications",
+      "settings": "Settings"
+    },
+    "home": {
+      "title": "Your children",
+      "emptyTitle": "No children linked yet",
+      "emptyDescription": "When the school links a child to your account, they will appear here.",
+      "notFoundTitle": "Child not found",
+      "notFoundDescription": "This child is not linked to your account. Pick one from the list above.",
+      "attendance": {
+        "title": "Attendance today",
+        "notMarked": "Not marked yet",
+        "month": "{value}% this month"
+      },
+      "fees": {
+        "title": "Fees outstanding",
+        "none": "Nothing due",
+        "count": "{count, plural, one {# invoice} other {# invoices}}",
+        "nextDue": "next due {date}"
+      },
+      "result": {
+        "title": "Latest result",
+        "percentage": "{value}%"
+      }
+    },
+    "attendance": {
+      "title": "Attendance",
+      "loadError": "We couldn't load the attendance. Please try again.",
+      "legend": "Attendance statuses",
+      "emptyTitle": "No attendance this month",
+      "emptyDescription": "Nothing has been marked for this month yet.",
+      "caption": "Attendance for {month}",
+      "monthPercentage": "Attendance this month: {value}%",
+      "status": {
+        "present": "Present",
+        "absent": "Absent",
+        "late": "Late",
+        "half_day": "Half day",
+        "excused": "Excused",
+        "on_leave": "On leave"
+      }
+    },
+    "fees": {
+      "title": "Fees",
+      "loadError": "We couldn't load the fees. Please try again.",
+      "dueOn": "due {date}",
+      "downloadReceipt": "Receipt {number}",
+      "receiptsLoadError": "We couldn't load the receipts. Please try again.",
+      "receiptFailed": "We couldn't download the receipt. Please try again.",
+      "status": {
+        "draft": "Draft",
+        "issued": "Issued",
+        "partially_paid": "Partially paid",
+        "paid": "Paid",
+        "overdue": "Overdue",
+        "canceled": "Canceled"
+      },
+      "outstanding": {
+        "title": "Outstanding",
+        "emptyTitle": "Nothing outstanding",
+        "emptyDescription": "All fees are paid up."
+      },
+      "paid": {
+        "title": "Paid",
+        "emptyTitle": "No paid invoices",
+        "emptyDescription": "Paid invoices and their receipts will appear here."
+      },
+      "detail": {
+        "back": "Back to fees",
+        "title": "Invoice {number}",
+        "dates": "Issued {issued}, due {due}",
+        "loadError": "We couldn't load this invoice. Please try again.",
+        "notFoundTitle": "Invoice not found",
+        "notFoundDescription": "This invoice doesn't exist or isn't one of this child's.",
+        "linesCaption": "Invoice lines",
+        "description": "Description",
+        "amount": "Amount",
+        "net": "Net",
+        "subtotal": "Subtotal",
+        "discount": "Discount",
+        "fine": "Fine",
+        "paid": "Paid",
+        "balance": "Balance due",
+        "receipts": "Receipts",
+        "noReceiptsTitle": "No receipts yet",
+        "noReceiptsDescription": "A receipt appears here once a payment is recorded."
+      },
+      "vouchers": {
+        "download": "{provider} voucher {number} (due {date})",
+        "failed": "We couldn't download the voucher. Please try again.",
+        "empty": "Ask the school office for a voucher.",
+        "loadError": "We couldn't load the vouchers. Please try again.",
+        "providers": {
+          "bank_branch": "Bank branch",
+          "easypaisa": "Easypaisa",
+          "jazzcash": "JazzCash"
+        }
+      }
+    },
+    "admitCards": {
+      "title": "Admit cards",
+      "loadError": "We couldn't load the admit cards. Please try again.",
+      "emptyTitle": "No admit cards",
+      "emptyDescription": "Admit cards for upcoming exams appear here once the school issues them.",
+      "dates": "{start} – {end}",
+      "number": "Card {number}",
+      "download": "Download admit card for {exam}",
+      "downloadFailed": "We couldn't download the admit card. Please try again."
+    },
+    "results": {
+      "title": "Results",
+      "loadError": "We couldn't load the results. Please try again.",
+      "emptyTitle": "No results published",
+      "emptyDescription": "Results appear here once the school publishes them.",
+      "published": "Published {date}",
+      "percentage": "{value}%",
+      "marks": "{obtained} of {max} marks",
+      "rank": "rank {rank} in section",
+      "outcome": {
+        "pass": "Pass",
+        "fail": "Fail",
+        "absent": "Absent",
+        "withheld": "Withheld"
+      }
+    },
+    "notices": {
+      "title": "Notices",
+      "emptyTitle": "No notices",
+      "emptyDescription": "The school has not published any notices yet.",
+      "loadError": "We couldn't load the notices. Please try again.",
+      "notFoundTitle": "Notice not found",
+      "notFoundDescription": "This notice doesn't exist or isn't available to you.",
+      "back": "Back to notices",
+      "publishedOn": "Published {date}",
+      "needsAcknowledgment": "Acknowledgment needed",
+      "acknowledge": "Acknowledge",
+      "acknowledging": "Acknowledging",
+      "acknowledged": "Acknowledged",
+      "acknowledgeFailed": "We couldn't record your acknowledgment. Please try again.",
+      "types": {
+        "urgent": "Urgent",
+        "general": "General",
+        "circular": "Circular",
+        "event": "Event"
+      }
+    },
+    "notifications": {
+      "title": "Notifications",
+      "emptyTitle": "No notifications",
+      "emptyDescription": "You're all caught up.",
+      "loadError": "We couldn't load your notifications. Please try again.",
+      "markAllRead": "Mark all read",
+      "markingAll": "Marking",
+      "markAllFailed": "We couldn't mark everything read. Please try again.",
+      "markReadFailed": "We couldn't mark that notification read. Open it again to retry.",
+      "unreadBadge": "Unread",
+      "filter": {
+        "label": "Show",
+        "all": "All",
+        "unread": "Unread",
+        "read": "Read"
+      },
+      "categories": {
+        "attendance": "Attendance",
+        "fees": "Fees",
+        "exams": "Exams",
+        "library": "Library",
+        "transport": "Transport",
+        "academic": "Academic",
+        "general": "General",
+        "emergency": "Emergency"
+      },
+      "priorities": {
+        "normal": "Normal",
+        "high": "High priority",
+        "emergency": "Emergency"
+      }
+    },
+    "preferences": {
+      "title": "Notification settings",
+      "caption": "Which notifications reach you on which channel",
+      "category": "Category",
+      "loadError": "We couldn't load your settings. Please try again.",
+      "saveFailed": "We couldn't save that change. Please try again.",
+      "lockedExplanation": "Emergency notifications are always on, so they can't be turned off.",
+      "cellLabel": "{category} by {channel}",
+      "channels": {
+        "in_app": "In-app",
+        "email": "Email",
+        "sms": "SMS",
+        "push": "Push",
+        "whatsapp": "WhatsApp"
+      },
+      "password": {
+        "title": "Change password",
+        "description": "Use at least {min} characters.",
+        "currentPassword": "Current password",
+        "newPassword": "New password",
+        "confirmPassword": "Confirm new password",
+        "submit": "Change password",
+        "submitting": "Changing",
+        "done": "Password changed.",
+        "failed": "We couldn't change your password. Please try again.",
+        "errors": {
+          "currentRequired": "Enter your current password.",
+          "newTooShort": "The new password must be at least {min} characters.",
+          "confirmMismatch": "The two passwords don't match.",
+          "sameAsCurrent": "Choose a password different from the current one."
+        }
+      }
+    },
+    "leave": {
+      "title": "Leave requests",
+      "loadError": "We couldn't load the leave requests. Please try again.",
+      "emptyTitle": "No leave requests",
+      "emptyDescription": "Requests you submit for your child will appear here.",
+      "range": "{from} to {to}",
+      "days": "{count, plural, one {# day} other {# days}}",
+      "attached": "Attachment submitted",
+      "dayPart": {
+        "full": "Full day",
+        "first_half": "First half",
+        "second_half": "Second half"
+      },
+      "cancel": {
+        "open": "Cancel request",
+        "title": "Cancel this leave request?",
+        "description": "The {type} request will be withdrawn. You can submit a new one later.",
+        "confirm": "Cancel request",
+        "done": "Leave request cancelled.",
+        "failed": "We couldn't cancel the request. Please try again."
+      },
+      "new": {
+        "open": "New request",
+        "title": "Request leave",
+        "type": "Leave type",
+        "typePlaceholder": "Choose a type",
+        "typesFailed": "We couldn't load the leave types. Close this and try again.",
+        "startDate": "From",
+        "endDate": "To",
+        "dayPart": "Day part",
+        "dayPartHint": "A half day needs a single date.",
+        "reason": "Reason",
+        "attachment": "Supporting document (PDF, JPEG or PNG)",
+        "submit": "Submit request",
+        "submitting": "Submitting",
+        "done": "Leave request submitted.",
+        "failed": "We couldn't submit the request. Please try again.",
+        "errors": {
+          "typeRequired": "Choose a leave type.",
+          "startRequired": "Choose the first day.",
+          "endRequired": "Choose the last day.",
+          "endBeforeStart": "The last day can't be before the first day.",
+          "halfDaySingleDay": "A half day can only cover a single date.",
+          "reasonRequired": "Enter a reason.",
+          "reasonTooLong": "The reason can be at most {max} characters.",
+          "attachmentRequired": "This leave type needs a supporting document."
+        }
+      }
+    }
   }
 }

@@ -39,6 +39,8 @@ export interface ExamScaffold {
   campusId: string;
   sessionId: string;
   sessionName: string;
+  /** The session's first day, years from today (`farFutureSessionWindow`). */
+  sessionStartDate: string;
   classId: string;
   className: string;
   sectionId: string;
@@ -116,6 +118,7 @@ export async function seedExamScaffold(client: ApiClient): Promise<ExamScaffold>
     campusId: register.campusId,
     sessionId: register.sessionId,
     sessionName: register.sessionName,
+    sessionStartDate: register.sessionStartDate,
     classId: register.classId,
     className: register.className,
     sectionId: register.sectionId,
@@ -123,6 +126,47 @@ export async function seedExamScaffold(client: ApiClient): Promise<ExamScaffold>
     subjectName: subjectPayload.name,
     studentIds: register.studentIds,
   };
+}
+
+/** Puts one more subject on the scaffold class's curriculum (as `adminClient`, which holds the
+ * academics keys) and adds it to the exam (as `examClient`): a second paper the same section
+ * sits, for a schedule spec that needs two sittings of one section. Returns the exam-subject's
+ * id. */
+export async function addExamSubject(
+  adminClient: ApiClient,
+  examClient: ApiClient,
+  scaffold: ExamScaffold,
+  examId: string,
+): Promise<string> {
+  const subject = (await adminClient.post("/subjects", buildLiveSubject())).data as Identified;
+  await adminClient.post("/class-subjects", {
+    academic_session_id: scaffold.sessionId,
+    class_id: scaffold.classId,
+    subject_id: subject.id,
+    weekly_periods: CURRICULUM_WEEKLY_PERIODS,
+  });
+  const examSubject = await examClient.post("/exam-subjects", {
+    exam_id: examId,
+    class_id: scaffold.classId,
+    subject_id: subject.id,
+    max_marks: EXAM_SUBJECT_MAX_MARKS,
+    pass_marks: EXAM_SUBJECT_PASS_MARKS,
+  });
+  return (examSubject.data as Identified).id;
+}
+
+const MONDAY = 1;
+const ISO_DATE_LENGTH = 10;
+
+/**
+ * The scaffold session's first Monday: a working day under any school week, and inside the
+ * session, so a sitting on it is never `not_a_working_day` (a hard finding that would hold a
+ * publish for a reason the spec did not ask for).
+ */
+export function firstExamDay(scaffold: ExamScaffold): string {
+  const day = new Date(`${scaffold.sessionStartDate}T00:00:00Z`);
+  while (day.getUTCDay() !== MONDAY) day.setUTCDate(day.getUTCDate() + 1);
+  return day.toISOString().slice(0, ISO_DATE_LENGTH);
 }
 
 /** A draft exam in the scaffold's session with the scaffold's subject on it, written by

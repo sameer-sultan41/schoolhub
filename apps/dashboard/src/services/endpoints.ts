@@ -19,6 +19,7 @@ export const endpoints = {
     login: "/login",
     logout: "/logout",
     me: "/auth/me",
+    changePassword: "/auth/change-password",
     refresh: "/refresh",
   },
   tenant: {
@@ -156,6 +157,8 @@ export const endpoints = {
   /** `apps/api/apps/attendance/urls.py`: approve and reject are colon-actions on the row. */
   leaveRequests: {
     list: "/leave-requests",
+    /** `:cancel` is the requester's withdrawal, a colon-action like approve and reject. */
+    cancel: (id: string) => `/leave-requests/${id}:cancel`,
     action: (id: string, action: "approve" | "reject") => `/leave-requests/${id}:${action}`,
   },
   /** `GET /leave-types`: the read-only catalogue, keyed `attendance.leave-request.view`. */
@@ -175,6 +178,25 @@ export const endpoints = {
   exams: {
     list: "/exams",
     detail: (id: string) => `/exams/${id}`,
+    /** The exam's clash list, keyed `exams.schedule.view`. */
+    scheduleConflicts: (id: string) => `/exams/${id}/schedule-conflicts`,
+    /** Colon-action, not a nested path: the registered route is `/exams/{id}:publish-schedule`. */
+    publishSchedule: (id: string) => `/exams/${id}:publish-schedule`,
+    /** Colon-action: `202` + a render job, keyed `exams.admit-card.issue`. */
+    issueAdmitCards: (id: string) => `/exams/${id}:issue-admit-cards`,
+  },
+  /** `/admit-cards`: an exam's issued cards, keyed `exams.admit-card.*`. */
+  admitCards: {
+    list: "/admit-cards",
+    /** Colon-action, keyed `exams.admit-card.issue`; the body carries the reason. */
+    revoke: (id: string) => `/admit-cards/${id}:revoke`,
+    /** Colon-action, keyed `exams.admit-card.view`: a signed link to the card's own PDF. */
+    download: (id: string) => `/admit-cards/${id}:download`,
+  },
+  /** `/exam-schedules`: an exam's sittings, keyed `exams.schedule.*`. */
+  examSchedules: {
+    list: "/exam-schedules",
+    detail: (id: string) => `/exam-schedules/${id}`,
   },
   /** `/exam-subjects`: one exam's per-class marks structure; writes are keyed `exams.exam.update`. */
   examSubjects: {
@@ -282,5 +304,47 @@ export const endpoints = {
     scope: "/broadcasts:scope",
     preview: "/broadcasts:preview",
     emergency: "/broadcasts:emergency",
+  },
+  /** `GET /parent-portal/dashboard`: the guardian's or student's home summary. */
+  parentPortal: {
+    dashboard: "/parent-portal/dashboard",
+  },
+  /** `/notifications`: the caller's own inbox; the actions are colon-actions
+   * (`apps/api/core/notifications/urls.py`). */
+  notifications: {
+    list: "/notifications",
+    markRead: (id: string) => `/notifications/${id}:mark-read`,
+    markAllRead: "/notifications:mark-all-read",
+    unreadCount: "/notifications:unread-count",
+  },
+  /** `/notification-preferences`: the caller's category x channel matrix (`GET`, `PATCH`). */
+  notificationPreferences: {
+    list: "/notification-preferences",
+  },
+  /** `/notices`: a guardian reads and acknowledges; staff manage (not called here). */
+  notices: {
+    list: "/notices",
+    detail: (id: string) => `/notices/${id}`,
+    acknowledge: (id: string) => `/notices/${id}:acknowledge`,
+  },
+  /** `/fee-invoices`: read-only for a guardian (published, non-draft rows only). */
+  feeInvoices: {
+    list: "/fee-invoices",
+    detail: (id: string) => `/fee-invoices/${id}`,
+  },
+  /** `/vouchers`: a guardian reads the slips of their own child's invoices; `download` streams
+   * a PDF (`?format=pdf|thermal`). */
+  vouchers: {
+    list: "/vouchers",
+    download: (id: string) => `/vouchers/${id}/download`,
+  },
+  /** `/receipts`; `download` streams a PDF (`?format=pdf|thermal`). */
+  receipts: {
+    list: "/receipts",
+    download: (id: string) => `/receipts/${id}/download`,
+  },
+  /** `/results`: a guardian sees published results only. */
+  results: {
+    list: "/results",
   },
 } as const;

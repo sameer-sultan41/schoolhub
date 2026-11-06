@@ -36,13 +36,15 @@ scale's whole set, so the scale has to be in the URL rather than in the body.
 
 from __future__ import annotations
 
+from functools import partial
 from typing import TYPE_CHECKING
 
 from django.db import transaction
-from django.db.models import Count, F, Q
+from django.db.models import Count, F, Prefetch, Q
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import mixins, viewsets
+from rest_framework.exceptions import NotFound
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -63,6 +65,7 @@ from apps.examinations.filters import (
 )
 from apps.examinations.models import (
     AdmitCard,
+    AdmitCardStatus,
     Exam,
     ExamSchedule,
     ExamSubject,
@@ -74,14 +77,18 @@ from apps.examinations.models import (
     ReportCard,
     ReportCardStatus,
     Result,
-    ResultStatus,
 )
 from apps.examinations.serializers import (
+    ADMIT_CARD_ENROLLMENTS,
+    AdmitCardIssueAcceptedSerializer,
     AdmitCardRevokeSerializer,
     AdmitCardSerializer,
     AssemblePaperSerializer,
     BulkMarksEntrySerializer,
+    CardDownloadSerializer,
+    ExamConflictSerializer,
     ExamReportQuerySerializer,
+    ExamSchedulePublishSerializer,
     ExamScheduleSerializer,
     ExamSerializer,
     ExamSubjectSerializer,
@@ -96,6 +103,7 @@ from apps.examinations.serializers import (
     ResultWithholdSerializer,
     SendResultsBackSerializer,
 )
+from apps.student_management.models import StudentEnrollment
 from core.api.exceptions import Conflict, DomainRuleViolation
 from core.api.pagination import PageNumberPagination
 from core.api.permissions import RequiresModuleFeature
@@ -108,14 +116,31 @@ from core.rbac.permissions import (
     AnyOf,
     DenyRestrictedPrincipals,
     HasPermissionKey,
-    is_restricted_principal,
     route_permission,
+    scope_queryset,
 )
 
 if TYPE_CHECKING:
     from rest_framework.request import Request
 
 FEATURE = "module.examinations"
+
+
+def scoped_exam(request: Request, view: object, pk: str | None) -> Exam:
+    """The exam an action addresses by id, through the record scope of the route's own key.
+
+    An exam outside the caller's scope is a 404, exactly as a foreign id is. A
+    schedule- or result-keyed route needs no `exams.exam.view` on top.
+    """
+    exams = scope_queryset(
+        Exam.objects.alive(),
+        request.user,
+        permission=route_permission(request, view),
+        own_field=None,
+        campus_field=None,
+    )
+    return get_object_or_404(exams, pk=pk)
+
 
 STAFF_PERMISSIONS = [
     IsAuthenticated,
@@ -378,6 +403,9 @@ class ExamScheduleViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         # fires §12's announcement. It was missing from this map in review, so
         # it fell back to `required_permission` — the bare *view* key.
         "publish": "exams.schedule.update",
+        # Explicit rather than left to the fallback, so the key the clash list
+        # needs is visible beside the others.
+        "schedule_conflicts": "exams.schedule.view",
     }
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
@@ -406,49 +434,86 @@ class ExamScheduleViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         return [permission() for permission in STAFF_PERMISSIONS]
 
     def get_queryset(self):
+        # Every `*_name` on the serializer rides on these joins.
         return (
             super()
             .get_queryset()
-            .select_related("exam_subject__exam", "exam_subject__subject", "section", "room")
+            .select_related(
+                "exam_subject__exam",
+                "exam_subject__subject",
+                "exam_subject__school_class",
+                "section",
+                "room",
+                "invigilator_staff",
+            )
         )
 
-    def _conflict_meta(self, schedule: ExamSchedule) -> dict:
-        """§5.2's clash list, for the exam the edited sitting belongs to.
-
-        Exam-scoped rather than sitting-scoped: a room or invigilator clash is
-        by definition with some *other* sitting, and a caller editing one cell
-        needs the whole list to act on — §8's journey is "resolves the two room
-        clashes the checker flags", plural.
-        """
-        return {"conflicts": conflicts.detect_conflicts(exam=schedule.exam_subject.exam)}
-
+    @extend_schema(
+        responses={
+            201: OpenApiResponse(
+                response=ExamScheduleSerializer,
+                description=(
+                    "The sitting, plus `meta.conflicts`: the exam's whole clash list, each "
+                    "an `ExamConflict`, hard findings first."
+                ),
+            )
+        }
+    )
     def create(self, request: Request, *args, **kwargs):
         """201 with `meta.conflicts` — a clash list, not a refusal."""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
+        findings = services.save_schedule_with_conflicts(
+            exam_subject=serializer.validated_data["exam_subject"],
+            save=partial(self.perform_create, serializer),
+        )
 
         # A bare Response, not ActionResponse.ok: that helper wraps its argument
         # in {"data": ...}, so an already-enveloped payload nests twice.
         # EnvelopeJSONRenderer passes a pre-shaped {"data", "meta"} through and
         # injects request_id — the same shape timetable's slot grid returns.
-        return Response(
-            {"data": serializer.data, "meta": self._conflict_meta(serializer.instance)},
-            status=201,
-        )
+        return Response({"data": serializer.data, "meta": {"conflicts": findings}}, status=201)
 
+    @extend_schema(
+        responses={
+            200: OpenApiResponse(
+                response=ExamScheduleSerializer,
+                description=(
+                    "The sitting, plus `meta.conflicts`: the exam's whole clash list, each "
+                    "an `ExamConflict`, hard findings first."
+                ),
+            )
+        }
+    )
     def update(self, request: Request, *args, **kwargs):
         """200 with `meta.conflicts`, on the same reasoning as `create`."""
-        partial = kwargs.pop("partial", False)
+        is_partial = kwargs.pop("partial", False)
         instance = self.get_object()
         services.assert_schedule_is_editable(instance)
 
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer = self.get_serializer(instance, data=request.data, partial=is_partial)
         serializer.is_valid(raise_exception=True)
-        self.perform_update(serializer)
+        # The clash list is exam-scoped, for the exam the sitting ends up in;
+        # the exam it leaves is locked too.
+        findings = services.save_schedule_with_conflicts(
+            exam_subject=serializer.validated_data.get("exam_subject", instance.exam_subject),
+            previous_exam_subject=instance.exam_subject,
+            save=partial(self.perform_update, serializer),
+        )
 
-        return Response({"data": serializer.data, "meta": self._conflict_meta(serializer.instance)})
+        return Response({"data": serializer.data, "meta": {"conflicts": findings}})
 
+    @extend_schema(
+        responses={
+            200: OpenApiResponse(
+                response=ExamScheduleSerializer,
+                description=(
+                    "The sitting, plus `meta.conflicts`: the exam's whole clash list, each "
+                    "an `ExamConflict`, hard findings first."
+                ),
+            )
+        }
+    )
     def partial_update(self, request: Request, *args, **kwargs):
         kwargs["partial"] = True
         return self.update(request, *args, **kwargs)
@@ -462,10 +527,23 @@ class ExamScheduleViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         — `cancelled` is the state for calling one off, and it keeps the row
         visible to whoever saw it.
         """
-        services.assert_schedule_is_editable(instance)
-        super().perform_destroy(instance)
+        services.delete_schedule(
+            schedule=instance, delete=partial(super().perform_destroy, instance)
+        )
 
-    @extend_schema(request=None, responses={200: ExamScheduleSerializer(many=True)})
+    @extend_schema(
+        request=None,
+        responses={
+            200: ExamSchedulePublishSerializer,
+            409: OpenApiResponse(description="The exam is past `scheduled`."),
+            422: OpenApiResponse(
+                description=(
+                    "A hard clash (the whole list in `error.meta.conflicts`, each an "
+                    "`ExamConflict`), or no sittings to publish."
+                )
+            ),
+        },
+    )
     def publish(self, request: Request, pk: str | None = None):
         """`POST /exams/{id}:publish-schedule` — release the timetable (§5.2).
 
@@ -473,7 +551,7 @@ class ExamScheduleViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         *exam* that moves state: a schedule is published as a whole, not sitting
         by sitting, and §6 calls it "schedule publish to portals".
         """
-        exam = get_object_or_404(Exam.objects.alive(), pk=pk)
+        exam = scoped_exam(request, self, pk)
         outcome = services.publish_exam_schedule(exam=exam, actor_id=request.user.pk)
         record_audit(request, "publish", exam, after={"status": outcome["status"]})
 
@@ -486,6 +564,20 @@ class ExamScheduleViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
             {"status": outcome["status"], "conflicts": outcome["conflicts"]},
             message="Schedule published. Students and guardians have been notified.",
         )
+
+    @extend_schema(
+        operation_id="exams_schedule_conflicts_retrieve",
+        request=None,
+        responses={200: ExamConflictSerializer(many=True)},
+    )
+    def schedule_conflicts(self, request: Request, pk: str | None = None):
+        """The exam's schedule clashes, hard findings first."""
+        # The same engine every sitting write and `:publish-schedule` run, so a
+        # client opening the schedule sees exactly what publishing would refuse
+        # without saving a sitting to learn it. Staff-only: a clash list names
+        # rooms, invigilators and other sections, which no portal reader needs.
+        exam = scoped_exam(request, self, pk)
+        return ActionResponse.ok(conflicts.detect_conflicts(exam=exam))
 
 
 class AdmitCardViewSet(
@@ -517,12 +609,16 @@ class AdmitCardViewSet(
     required_permission_map = {
         "issue": "exams.admit-card.issue",
         "revoke": "exams.admit-card.issue",
+        # A download is a read of one card, so it takes the view key (ADR-0021).
+        "download": "exams.admit-card.view",
     }
     http_method_names = ["get", "post", "head", "options"]
 
     # Read actions named, everything else staff-only — see
     # `ExamScheduleViewSet.get_permissions` for why the set is inverted.
-    PORTAL_READABLE_ACTIONS = frozenset({"list", "retrieve"})
+    # `download` is a read: §3 gives a student or guardian their own card, and
+    # the record scope on `get_object()` is what keeps it their own.
+    PORTAL_READABLE_ACTIONS = frozenset({"list", "retrieve", "download"})
 
     def get_permissions(self):
         """Add `DenyRestrictedPrincipals` to everything except the portal reads."""
@@ -531,9 +627,24 @@ class AdmitCardViewSet(
         return [permission() for permission in STAFF_PERMISSIONS]
 
     def get_queryset(self):
-        return super().get_queryset().select_related("student")
+        queryset = super().get_queryset()
+        if self.action == "download":
+            # One card and its file; the download names no section.
+            return queryset.select_related("file")
+        # The student's names ride on the join; their section comes from one
+        # `Prefetch` of live enrollments in any status (a closed session's are
+        # promoted/graduated), of which the serializer picks the exam's
+        # session. Filtered by session per card in Python rather than in the
+        # prefetch, because each card's exam names its own.
+        return queryset.select_related("student", "exam").prefetch_related(
+            Prefetch(
+                "student__enrollments",
+                queryset=StudentEnrollment.objects.alive().select_related("section"),
+                to_attr=ADMIT_CARD_ENROLLMENTS,
+            )
+        )
 
-    @extend_schema(request=None, responses={202: None})
+    @extend_schema(request=None, responses={202: AdmitCardIssueAcceptedSerializer})
     def issue(self, request: Request, pk: str | None = None):
         """`POST /exams/{id}:issue-admit-cards` — 202 + a job (§16).
 
@@ -546,7 +657,7 @@ class AdmitCardViewSet(
         action should replay the first answer rather than start a second render
         of three hundred documents.
         """
-        exam = get_object_or_404(Exam.objects.alive(), pk=pk)
+        exam = scoped_exam(request, self, pk)
 
         def execute():
             outcome = services.issue_admit_cards(exam=exam, actor_id=request.user.pk)
@@ -558,12 +669,12 @@ class AdmitCardViewSet(
             )
             enqueue_job(job=job, task=tasks.render_admit_cards_task)
             record_audit(request, "issue", exam, after=outcome)
+            # The counts are typed `data`, so a client renders its own
+            # localised summary rather than this English message.
             return ActionResponse.accepted(
                 str(job.pk),
-                message=(
-                    f"{outcome['issued']} admit card(s) created and queued for rendering; "
-                    f"{outcome['already_issued']} already existed."
-                ),
+                message="Admit cards queued for rendering.",
+                data={"added": outcome["issued"], "existing": outcome["already_issued"]},
             )
 
         return replay_or_execute(
@@ -594,6 +705,39 @@ class AdmitCardViewSet(
             after={"status": card.status, "revoked_reason": card.revoked_reason},
         )
         return ActionResponse.ok(AdmitCardSerializer(card).data, message="Admit card revoked.")
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: CardDownloadSerializer,
+            404: OpenApiResponse(
+                description="Not this caller's card, not rendered yet, or revoked."
+            ),
+        },
+    )
+    def download(self, request: Request, pk: str | None = None):
+        """A short-lived signed link to the admit card's PDF."""
+        # Its own action rather than `core/files`' generic `/files/{id}:download`,
+        # which any staff role reaches for any file (ADR-0021). `get_object()`
+        # runs first, so the record scope decides whose card this caller may
+        # fetch (a student their own, a guardian their children's), and a
+        # foreign or out-of-scope id is a 404 before any file is touched.
+        #
+        # 404, not 409, for a card with no usable document: not rendered yet,
+        # revoked, or its file retired. All say "nothing for you here", and the
+        # file checks mirror `core/files`' `get_display_url`.
+        from core.files.models import FileStatus
+        from core.files.services import get_download_url
+
+        card = self.get_object()
+        if (
+            card.file is None
+            or card.status == AdmitCardStatus.REVOKED
+            or card.file.status != FileStatus.READY
+            or card.file.deleted_at is not None
+        ):
+            raise NotFound("This admit card has no document to download.")
+        return ActionResponse.ok({"download_url": get_download_url(card.file)})
 
 
 class MarksViewSet(
@@ -802,9 +946,9 @@ class ResultViewSet(
     filterset_class = ResultFilterSet
     ordering_fields = ["percentage", "rank_in_section", "created_at"]
     scope_own_field = None
-    scope_campus_field = "student__campus_id"
+    scope_campus_field = services.RESULT_CAMPUS_FIELD
     required_feature = FEATURE
-    required_permission = "exams.result.view"
+    required_permission = services.RESULT_VIEW_KEY
     required_permission_map = {
         "process": "exams.result.create",
         "approve": "exams.result.approve",
@@ -822,13 +966,14 @@ class ResultViewSet(
         return [permission() for permission in STAFF_PERMISSIONS]
 
     def get_queryset(self):
-        queryset = super().get_queryset().select_related("student", "grade_band", "section")
-        if is_restricted_principal(self.request.user):
-            # §5.6 — a student or guardian sees a result only once it is
-            # released. Applied here rather than in the model hook because it is
-            # a question about the *result's* state, not about whose it is.
-            queryset = queryset.filter(status=ResultStatus.PUBLISHED)
-        return queryset
+        queryset = (
+            super()
+            .get_queryset()
+            .select_related("student", "grade_band", "section", "exam", "exam__term")
+        )
+        # §5.6's published-only rule for a student or guardian lives in services,
+        # so the parent portal reads the same set.
+        return services.visible_results(self.request.user, queryset=queryset)
 
     @extend_schema(request=None, responses={202: None})
     def process(self, request: Request, pk: str | None = None):
@@ -839,7 +984,7 @@ class ResultViewSet(
         outstanding. In the job it is what actually holds, because marks can
         change between the request and the worker picking it up.
         """
-        exam = get_object_or_404(Exam.objects.alive(), pk=pk)
+        exam = scoped_exam(request, self, pk)
         services.assert_exam_is_recomputable(exam)
         processing.assert_ready_to_process(processing.collect(exam=exam))
 
@@ -989,9 +1134,9 @@ class ReportCardViewSet(
     filterset_class = ReportCardFilterSet
     ordering_fields = ["created_at", "version"]
     scope_own_field = None
-    scope_campus_field = "student__campus_id"
+    scope_campus_field = services.RESULT_CAMPUS_FIELD
     required_feature = FEATURE
-    required_permission = "exams.report-card.view"
+    required_permission = services.REPORT_CARD_VIEW_KEY
     required_permission_map = {
         "update": "exams.report-card.create",
         "partial_update": "exams.report-card.create",
@@ -1009,9 +1154,7 @@ class ReportCardViewSet(
 
     def get_queryset(self):
         queryset = super().get_queryset().select_related("student", "result")
-        if is_restricted_principal(self.request.user):
-            queryset = queryset.filter(status=ReportCardStatus.PUBLISHED)
-        return queryset
+        return services.visible_report_cards(self.request.user, queryset=queryset)
 
     def perform_update(self, serializer) -> None:
         if serializer.instance.status == ReportCardStatus.PUBLISHED:
@@ -1024,7 +1167,7 @@ class ReportCardViewSet(
     @extend_schema(request=None, responses={202: None})
     def generate(self, request: Request, pk: str | None = None):
         """`POST /exams/{id}:generate-report-cards` — 202 + a job (§16)."""
-        exam = get_object_or_404(Exam.objects.alive(), pk=pk)
+        exam = scoped_exam(request, self, pk)
         services.assert_report_cards_are_generatable(exam)
 
         def execute():

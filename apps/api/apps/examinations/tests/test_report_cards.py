@@ -35,6 +35,7 @@ from apps.examinations.models import (
 from apps.examinations.tests.factories import (
     ReportCardFactory,
     ResultFactory,
+    StaffFactory,
     TermFactory,
     UserFactory,
     authenticate,
@@ -42,6 +43,7 @@ from apps.examinations.tests.factories import (
 )
 from apps.examinations.tests.test_processing import ProcessingTestCase
 from core.api.exceptions import Conflict
+from core.jobs.models import BackgroundJob
 from core.jobs.tests.base import assert_sent_on_commit
 from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
@@ -177,6 +179,21 @@ class GenerationGateTests(PublishedResultsTestCase):
         response = client.post(f"/api/v1/exams/{self.exam.pk}:generate-report-cards")
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_an_exam_outside_the_caller_s_scope_is_a_404(self) -> None:
+        """Resolved through `ExamViewSet`'s record scope, not a bare lookup."""
+        with tenant_context(self.tenant.id):
+            outsider = UserFactory(tenant=self.tenant)
+            StaffFactory(tenant=self.tenant, campus=self.campus, user_id=outsider.pk)
+        grant(outsider, "exams.report-card.create", scope=RecordScope.ASSIGNED)
+        client = APIClient()
+        authenticate(client, outsider)
+
+        response = client.post(f"/api/v1/exams/{self.exam.pk}:generate-report-cards")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        with tenant_context(self.tenant.id):
+            self.assertFalse(BackgroundJob.objects.exists())
 
 
 class UpsertAndVersionTests(PublishedResultsTestCase):

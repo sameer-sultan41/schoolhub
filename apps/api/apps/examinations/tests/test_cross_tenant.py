@@ -395,6 +395,28 @@ class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
             )
         )
 
+    def test_reading_a_foreign_exam_s_clash_list_is_a_404(self) -> None:
+        self.assert404(self.client.get(f"{EXAMS}/{self.foreign_exam.pk}/schedule-conflicts"))
+
+    def test_downloading_a_foreign_admit_card_is_a_404(self) -> None:
+        """The foreign card has a rendered file, so the 404 can only come from
+        tenant scoping, not from the card having nothing to download."""
+        from apps.examinations import uploads
+        from core.files.services import create_ready_file
+
+        with tenant_context(self.other_tenant.id):
+            self.foreign_card.file = create_ready_file(
+                tenant_id=self.other_tenant.pk,
+                purpose=uploads.ADMIT_CARD.key,
+                original_name="admit-card.pdf",
+                mime_type="application/pdf",
+                data=b"%PDF-stub",
+                actor_id=self.user.pk,
+            )
+            self.foreign_card.save(update_fields=["file"])
+
+        self.assert404(self.client.post(f"{ADMIT_CARDS}/{self.foreign_card.pk}:download"))
+
     def test_scheduling_against_a_foreign_exam_subject_does_not_validate(self) -> None:
         """A 400, not a 404: the exam-subject id arrives in the body and fails
         the serializer's tenant-scoped queryset."""

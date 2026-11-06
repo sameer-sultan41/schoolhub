@@ -82,7 +82,6 @@ from apps.fees_finance.models import (
     FeeStructure,
     FeeVoucher,
     Fine,
-    InvoiceStatus,
     LedgerAccount,
     LedgerEntry,
     Payment,
@@ -143,7 +142,6 @@ from core.money import ZERO
 from core.rbac.permissions import (
     DenyRestrictedPrincipals,
     HasPermissionKey,
-    is_restricted_principal,
     required_declaration,
     route_permission,
     scope_queryset,
@@ -474,9 +472,9 @@ class FeeInvoiceViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     filterset_class = FeeInvoiceFilterSet
     search_fields = ["invoice_no", "student__first_name", "student__last_name"]
     ordering_fields = ["issue_date", "due_date", "balance_due", "created_at"]
-    scope_campus_field = "student__campus_id"
+    scope_campus_field = services.INVOICE_CAMPUS_FIELD
     required_feature = FEATURE
-    required_permission = "fees.invoice.view"
+    required_permission = services.INVOICE_VIEW_KEY
     required_permission_map = {
         "create": "fees.invoice.create",
         "generate": "fees.invoice.create",
@@ -508,9 +506,8 @@ class FeeInvoiceViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
             .select_related("student", "fee_structure", "academic_session")
             .prefetch_related("lines__fee_head")
         )
-        if is_restricted_principal(self.request.user):
-            return queryset.exclude(status=InvoiceStatus.DRAFT)
-        return queryset
+        # Drafts hidden from a student or guardian: one rule, shared with the parent portal.
+        return services.visible_invoices(self.request.user, queryset=queryset)
 
     @extend_schema(request=GenerateInvoicesSerializer, responses={202: None})
     def generate(self, request: Request) -> Response:
