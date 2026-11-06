@@ -266,7 +266,7 @@ either this file or `project-status.md`.
     as a holiday from the dashboard; the school calendar's holidays refuse marking instead.
 - **Ten older `examinations` actions look up their parent without the caller's record scope**
   (`get_object_or_404(<Model>.objects.alive(), ...)` in `apps/api/apps/examinations/views.py`),
-  the pattern lesson L46 records: `:lock-marks` and `:unlock-marks` (exam-subject),
+  the pattern lesson L51 records: `:lock-marks` and `:unlock-marks` (exam-subject),
   `marks-progress`, `:approve-results`, `:send-results-back`, `:publish-results` and
   `:publish-report-cards` (exam), `results/{id}:withhold` (result), and the nested grade-band and
   question routes' parent scale and bank. PR B fixed five (`:publish-schedule`,
