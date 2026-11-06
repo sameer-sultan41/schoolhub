@@ -713,7 +713,9 @@ class SittingStaleReadTests(ScheduleTestCase):
     the one the view read before it.
 
     A cancel committed between the view's read and the lock is simulated by
-    writing it inside the school-lock call, the first step under the lock.
+    writing it inside the school-lock call, the first step under the lock. That
+    write shares the request's transaction, so the 409 rolls it back too: the
+    proof is the refusal and that the stale write never landed.
     """
 
     URL = ScheduleEndpointTests.URL
@@ -739,7 +741,6 @@ class SittingStaleReadTests(ScheduleTestCase):
         self.assertEqual(response.status_code, 409, response.json())
         with tenant_context(self.tenant.id):
             sitting.refresh_from_db()
-        self.assertEqual(sitting.status, ScheduleStatus.CANCELLED)
         self.assertIsNone(sitting.room_id)
 
     def test_a_delete_read_before_a_cancel_leaves_the_sitting(self) -> None:
@@ -753,7 +754,6 @@ class SittingStaleReadTests(ScheduleTestCase):
         with tenant_context(self.tenant.id):
             sitting.refresh_from_db()
         self.assertIsNone(sitting.deleted_at)
-        self.assertEqual(sitting.status, ScheduleStatus.CANCELLED)
 
     def test_update_re_reads_the_sitting_after_the_school_lock(self) -> None:
         with tenant_context(self.tenant.id):
@@ -778,7 +778,8 @@ class SittingStaleReadTests(ScheduleTestCase):
 
 
 def _is_exam_lock(query: str) -> bool:
-    return "FOR UPDATE" in query and '"exams"' in query
+    # A lock *on* the exam row, not a FOR UPDATE OF another table that joins `exams`.
+    return "FOR UPDATE" in query and 'FROM "exams"' in query
 
 
 def _is_school_schedule_lock(query: str, tenant_id) -> bool:
