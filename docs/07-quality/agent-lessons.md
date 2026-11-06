@@ -303,7 +303,7 @@
 - **Mistake.** Parent-portal PR B's backend gave guardians and students `platform.file.create` so they could upload, but `FileViewSet` declares `create` and `confirm` under that key while its read key `platform.file.view` stays staff-only. The tests hand-granted keys to a user, so every one passed; only CI's `DefaultRoleReadKeyTests` (ADR-0031 decision 3) caught it. The first fix exempted `confirm` alone because the CI log truncated the offender list (`[1393 chars]`), hiding `create`, so CI failed a second time.
 - **Check.** When a role gains an action key, read the viewset it reaches for its read key and `scope_read_exempt_actions`, and prove the path with the role's real keys (`keys_for_role`), not a hand-granted user. When a list assertion fails, read every element (the full `Diff` lines in the log) before fixing.
 
-### L45. A query parameter named `format` belongs to DRF unless the override is off
+### L54. A query parameter named `format` belongs to DRF unless the override is off
 
 - **Mistake.** Receipt and voucher downloads took `?format=pdf|thermal` (fees-finance §16), but DRF's `URL_FORMAT_OVERRIDE` read `format` as a renderer choice and 404'd before the view ran. Backend tests never sent the parameter, and the dashboard's Jest mocks did, so only parent-portal PR B's live voucher download caught it. Fixed by setting `URL_FORMAT_OVERRIDE = None` (the API renders JSON only).
 - **Check.** A backend test for any endpoint the spec gives query parameters sends those exact parameters; a mocked client call is not evidence the server accepts them.
