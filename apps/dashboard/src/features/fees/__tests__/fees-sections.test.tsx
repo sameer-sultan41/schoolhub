@@ -9,7 +9,7 @@ import { MENU_SIDEBAR } from "@/config/menu-config";
 import { Services } from "@/services";
 import { buildUser, renderWithProviders } from "@/test-utils";
 
-import { FEES_SECTIONS } from "../fees-sections";
+import { FEES_SECTIONS } from "@/features/fees/fees-sections";
 
 const mockReplace = jest.fn();
 const mockRouter = { replace: mockReplace };
