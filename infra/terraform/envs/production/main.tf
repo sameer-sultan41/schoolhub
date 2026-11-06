@@ -80,10 +80,11 @@ locals {
 
   api_secrets = merge(
     {
-      DJANGO_SECRET_KEY = var.django_secret_key_arn
-      DATABASE_URL      = var.app_database_url_arn
-      REDIS_AUTH_TOKEN  = module.cache.auth_token_secret_arn
-      SENTRY_DSN        = var.sentry_dsn_arn
+      DJANGO_SECRET_KEY            = var.django_secret_key_arn
+      DATABASE_URL                 = var.app_database_url_arn
+      INTEGRATIONS_ENCRYPTION_KEYS = var.integrations_encryption_keys_arn
+      REDIS_AUTH_TOKEN             = module.cache.auth_token_secret_arn
+      SENTRY_DSN                   = var.sentry_dsn_arn
     },
     var.payment_gateway_secret_arn != "" ? { PAYMENT_GATEWAY_SECRET = var.payment_gateway_secret_arn } : {},
   )

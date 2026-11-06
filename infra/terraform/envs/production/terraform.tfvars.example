@@ -51,6 +51,10 @@ backup_bucket_name  = "schoolhub-production-backups"
 # admissions or exam-results week.
 django_secret_key_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:schoolhub-production/django/secret-key-AbCdEf"
 
+# INTEGRATIONS_ENCRYPTION_KEYS: comma-separated Fernet keys, newest first. Generate one with
+# python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())".
+integrations_encryption_keys_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:schoolhub-production/integrations/encryption-keys-AbCdEf"
+
 # APPLICATION role only: schoolhub_app, through PgBouncer on 6432.
 #
 # This must NOT be the RDS master URL. The master is rds_superuser-equivalent,

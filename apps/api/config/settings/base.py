@@ -26,6 +26,17 @@ ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.
 # apps/website's NEXT_PUBLIC_PLATFORM_DOMAIN — same concept, backend side.
 PLATFORM_DOMAIN = env("PLATFORM_DOMAIN", default="localhost")
 
+# Encrypts each school's payment-gateway credentials (core.integrations.crypto): Fernet
+# keys, newest first. No default here, so production must set it (prod.py reads it from the
+# environment and fails at boot without it); dev.py and test.py supply their own.
+INTEGRATIONS_ENCRYPTION_KEYS: list[str] = []
+
+# Payment providers that may be used (core.integrations.payments.registry). Empty until a
+# real provider ships; dev and test enable the fake one.
+PAYMENT_PROVIDERS_ENABLED: list[str] = []
+# How far a callback's signed timestamp may be from now (replay window).
+PAYMENT_CALLBACK_TOLERANCE_SECONDS = 300
+
 # Object storage (core.files) — matches infra/compose's MinIO service in dev, real S3 in
 # prod. Empty S3_ENDPOINT_URL selects NullPresigner (core.files.storage.get_presigner),
 # which is what test/CI runs on since neither talks to a real object store.
@@ -71,6 +82,7 @@ CORE_APPS = [
     "core.audit",
     "core.files",
     "core.idempotency",
+    "core.integrations",
     "core.jobs",
     "core.notifications",
 ]

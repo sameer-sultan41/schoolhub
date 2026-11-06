@@ -1,0 +1,2 @@
+# The public dev-only Fernet key in apps/api/.env.example (same value as config/settings/dev.py).
+apps/api/.env.example:generic-api-key:17
