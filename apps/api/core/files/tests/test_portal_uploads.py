@@ -9,9 +9,20 @@ from apps.school_organization.tests.factories import TenantFactory, UserFactory,
 from core.files.models import File
 from core.files.tests.factories import FileFactory
 from core.rbac.models import RecordScope
+from core.rbac.registry import registry as permission_registry
 from core.tenancy.context import tenant_context
 
 FILES = "/api/v1/files"
+
+
+class PortalUploadGrantTests(APITestCase):
+    def test_file_create_defaults_include_the_portal_roles(self) -> None:
+        roles = set(permission_registry.get("platform.file.create").default_roles)
+
+        self.assertTrue({"guardian", "student"} <= roles)
+        # Viewing stays staff-only: the portal reads a file through its module's route.
+        view_roles = set(permission_registry.get("platform.file.view").default_roles)
+        self.assertFalse({"guardian", "student"} & view_roles)
 
 
 class PortalUploadTests(APITestCase):

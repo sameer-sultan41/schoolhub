@@ -57,3 +57,24 @@ class ThreadAttachmentOwnershipTests(ThreadAPITestCase):
         response = self.reply(self.teacher, self.attachment(self.guardian_user))
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.json())
+
+    def test_thread_create_opening_message_with_someone_elses_file_is_422(self) -> None:
+        self.make_class_teacher()
+        theirs = self.attachment(self.teacher)
+        authenticate(self.client, self.guardian_user)
+
+        response = self.client.post(
+            THREADS_URL,
+            {
+                "subject": "A document",
+                "thread_type": ThreadType.GUARDIAN_SCHOOL,
+                "student_id": str(self.student.pk),
+                "body": "Please see this.",
+                "attachments": [str(theirs.pk)],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        fields = {d["field"] for d in response.json()["error"]["details"]}
+        self.assertEqual(fields, {"attachments"})

@@ -42,15 +42,3 @@ class LeavePortalAttachmentTests(LeaveAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
         self.assertEqual(error_fields(response), {"attachment_file_id"})
-
-    def test_guardian_leave_for_unowned_student_is_422(self) -> None:
-        """422 on `student_id`, the rule `test_a_guardian_cannot_submit_for_someone_elses_child`
-        already pins: the student is in the caller's tenant, so there is nothing to hide."""
-        authenticate(self.client, self.guardian_user)
-
-        response = self.client.post(
-            LEAVE_REQUESTS, self.body(student_id=str(self.students[1].pk)), format="json"
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
-        self.assertEqual(error_fields(response), {"student_id"})

@@ -969,9 +969,10 @@ either this file or `project-status.md`.
   - **Campus-narrowed oversight.** `communication.thread.oversee` reads every thread in the
     tenant whatever the overseer's scope (ADR-0030); a campus-scoped principal sees every
     campus's threads.
-  - **Thread attachments are not checked against the uploader.** `post_message` requires a
-    ready `communication.thread-attachment` file of the tenant, but not one the sender uploaded,
-    so a participant could attach another user's upload if they had its id. The id is an
+  - **Staff thread attachments are not checked against the uploader.** `post_message` checks
+    that a guardian or student sends only a file they uploaded, but a staff sender needs only a
+    ready `communication.thread-attachment` file of the tenant, so a staff participant could
+    attach another user's upload if they had its id. The id is an
     unguessable UUID, and the purpose is module-gated, so `GET /files` does not list it to other
     staff; but every participant of a thread it was sent in sees the id, and could re-send it
     into another thread. `created_by == sender` is the full check.
@@ -1035,6 +1036,12 @@ either this file or `project-status.md`.
   - **`platform.notification.view` for custom tenant roles.** The key's default roles are
     `ALL_TENANT_ROLES`; a role a tenant defines later does not get it, so its holders get a 403
     on the inbox until someone grants it. Role management has to grant it by default.
+  - **A guardian can upload a leave attachment but cannot download it again.**
+    `platform.file.view` is staff-only and there is no leave `:download` route, so the portal
+    cannot re-open the document it attached. A `:download` on `/leave-requests/{id}` gated by
+    the request's own scope is the fix.
+  - **Portal users can create unlimited pending upload slots.** Only the per-user throttle
+    caps `POST /files` for a guardian or student; nothing expires or counts unconfirmed slots.
   - **Library and transport panels** (§5.8). Neither module is built.
   - **Announcement browse** for guardians and students. Announcements reach them only as inbox
     notifications.
