@@ -3,6 +3,7 @@ import { AttendanceCorrectionsService } from "./modules/attendance-corrections";
 import { AttendanceReportsService } from "./modules/attendance-reports";
 import { AttendanceSettingsService } from "./modules/attendance-settings";
 import { AuthService } from "./modules/auth";
+import { BroadcastsService } from "./modules/broadcasts";
 import { CurriculumService } from "./modules/curriculum";
 import { DashboardService } from "./modules/dashboard";
 import { ExamReportsService } from "./modules/exam-reports";
@@ -23,8 +24,10 @@ import { ReportCardsService } from "./modules/report-cards";
 import { RoomsService } from "./modules/rooms";
 import { SchoolOrganizationService } from "./modules/school-organization";
 import { StaffService } from "./modules/staff";
+import { MessageThreadsService } from "./modules/message-threads";
 import { StaffAttendanceService } from "./modules/staff-attendance";
 import { StudentAttendanceService } from "./modules/student-attendance";
+import { ThreadOversightService } from "./modules/thread-oversight";
 import { StudentsService } from "./modules/students";
 import { StudentTransfersService } from "./modules/student-transfers";
 import { TeacherAllocationsService } from "./modules/teacher-allocations";
@@ -341,4 +344,7 @@ export const Services = {
   staff: StaffService,
   students: StudentsService,
   studentTransfers: StudentTransfersService,
+  messageThreads: MessageThreadsService,
+  threadOversight: ThreadOversightService,
+  broadcasts: BroadcastsService,
 } as const;

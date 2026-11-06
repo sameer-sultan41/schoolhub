@@ -246,6 +246,31 @@ export const ATTENDANCE_IMPORT_PERMISSIONS: PermissionKey[] = [
   "school.section.view",
 ];
 
+/**
+ * A staff member in the inbox (communication.md §4): reading threads,
+ * replying (which is also what `:mark-read` is keyed on) and closing or reopening them.
+ */
+export const COMMUNICATION_INBOX_PERMISSIONS: PermissionKey[] = [
+  "communication.thread.view",
+  "communication.message.create",
+  "communication.thread.close",
+];
+
+/** A reader of threads who may not reply: no composer, and no `:mark-read` call. */
+export const COMMUNICATION_READER_PERMISSIONS: PermissionKey[] = ["communication.thread.view"];
+
+/** Oversight (§4): every thread in the school, read-only, and nothing in the inbox. */
+export const COMMUNICATION_OVERSIGHT_PERMISSIONS: PermissionKey[] = [
+  "communication.thread.oversee",
+];
+
+/** The emergency broadcast (§4), with the class and section pickers its audience step reads. */
+export const COMMUNICATION_BROADCAST_PERMISSIONS: PermissionKey[] = [
+  "communication.broadcast.send",
+  "school.class.view",
+  "school.section.view",
+];
+
 /** A module this user must *not* see, for the negative half of a filtering assertion. */
 export const MODULE_WITHOUT_PERMISSION = "Fees & Finance";
 

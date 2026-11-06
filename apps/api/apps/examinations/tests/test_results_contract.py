@@ -210,6 +210,24 @@ class ResultActionScopeTests(ProcessedResultsTestCase):
                 response = self.outsider.post(url, body, format="json")
                 self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_an_all_action_role_does_not_reach_an_exam_the_view_role_hides(self) -> None:
+        """L36: the read key's scope, then the action's (ADR-0031 decision 3).
+
+        `exams.result.view` on an `assigned` role that teaches nothing, the action keys
+        at `all`: the wide action role must not lend the exam the view role hides.
+        """
+        with tenant_context(self.tenant.id):
+            mixed = UserFactory(tenant=self.tenant)
+        grant(mixed, "exams.result.view", scope=RecordScope.ASSIGNED)
+        grant(mixed, "exams.result.approve", "exams.result.publish", scope=RecordScope.ALL)
+        client = APIClient()
+        authenticate(client, mixed)
+
+        for url, body in self.exam_actions()[1:]:
+            with self.subTest(url=url):
+                response = client.post(url, body, format="json")
+                self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
     def test_withholding_a_result_outside_the_caller_s_scope_is_a_404(self) -> None:
         row = self.row_for(self.students[0])
 

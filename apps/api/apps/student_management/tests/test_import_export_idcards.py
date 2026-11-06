@@ -39,6 +39,7 @@ from apps.student_management.tests.factories import StudentFactory, enable_featu
 from core.files.models import File
 from core.jobs.models import BackgroundJob, JobStatus
 from core.jobs.tests.base import assert_sent_on_commit, run_on_commit
+from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_atomic, tenant_context
 
 
@@ -467,6 +468,34 @@ class IdCardGenerateTests(StudentManagementJobsAPITestCase):
         self.assertEqual(job.status, JobStatus.SUCCEEDED)
         # Two ids were requested, but only one resolves to a real student — the
         # reported count must reflect what was actually rendered, not the input size.
+        self.assertEqual(job.result["count"], 1)
+
+    def test_a_student_outside_the_generate_keys_scope_is_dropped(self) -> None:
+        """The ids are read under the generate key's record scope, not tenant-wide: a
+        campus-A holder naming a campus-B student gets no card for them, exactly as
+        for an unknown id."""
+        with tenant_context(self.tenant.id):
+            campus_b = CampusFactory(tenant=self.tenant)
+            own = StudentFactory(tenant=self.tenant, campus=self.campus)
+            foreign = StudentFactory(tenant=self.tenant, campus=campus_b)
+        grant(
+            self.user,
+            "students.id-card.generate",
+            scope=RecordScope.CAMPUS,
+            scope_ref=self.campus.pk,
+        )
+
+        response = self.post(
+            "/api/v1/id-cards:generate",
+            {"student_ids": [str(own.pk), str(foreign.pk)]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.json())
+        with tenant_context(self.tenant.id):
+            job = BackgroundJob.objects.get(pk=response.json()["data"]["job_id"])
+        self.assertEqual(job.payload["student_ids"], [str(own.pk)])
+        self.assertEqual(job.status, JobStatus.SUCCEEDED, job.error)
         self.assertEqual(job.result["count"], 1)
 
     def test_requires_at_least_one_student_id(self) -> None:

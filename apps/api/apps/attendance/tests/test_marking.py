@@ -20,7 +20,7 @@ from apps.attendance.models import (
     CorrectionStatus,
     StudentAttendance,
 )
-from apps.attendance.register import may_mark_register
+from apps.attendance.register import may_mark_register, my_registers
 from apps.attendance.tests.base import SESSION_WINDOW
 from apps.attendance.tests.factories import (
     MARKING_DATE,
@@ -501,6 +501,47 @@ class MarkerScopeTests(MarkingTestCase):
         grant(other_user, "attendance.student-attendance.mark", scope=RecordScope.ASSIGNED)
 
         self.assertFalse(self.may_mark(other_user))
+
+    def test_unrelated_all_role_does_not_grant_register(self) -> None:
+        """Only the roles granting the marking key lend their scope.
+
+        The teacher marks under `assigned`, and this is not their section. Against
+        the key-blind union their `all` role for another key let them mark it.
+        """
+        other_user = UserFactory(tenant=self.tenant)
+        with tenant_context(self.tenant.id):
+            StaffFactory(tenant=self.tenant, campus=self.campus, user_id=other_user.pk)
+        grant(other_user, "attendance.student-attendance.mark", scope=RecordScope.ASSIGNED)
+        grant(other_user, "exams.exam.view", scope=RecordScope.ALL)
+
+        self.assertFalse(self.may_mark(other_user))
+
+    def test_my_registers_reads_the_marking_roles_scope(self) -> None:
+        """`my-registers` drops a section the marking key's scope does not reach.
+
+        The class teacher's marking role is campus-scoped to another campus, so they
+        may not mark their own section (`may_mark_register`) and it is not listed.
+        Against the key-blind union, an `all` role for another key listed it.
+        """
+        teacher_user = UserFactory(tenant=self.tenant)
+        with tenant_context(self.tenant.id):
+            elsewhere = CampusFactory(tenant=self.tenant)
+            teacher = StaffFactory(tenant=self.tenant, campus=self.campus, user_id=teacher_user.pk)
+            self.section.class_teacher_staff_id = teacher.pk
+            self.section.save(update_fields=["class_teacher_staff_id", "updated_at"])
+        grant(
+            teacher_user,
+            "attendance.student-attendance.mark",
+            scope=RecordScope.CAMPUS,
+            scope_ref=elsewhere.pk,
+        )
+        grant(teacher_user, "exams.exam.view", scope=RecordScope.ALL)
+
+        with tenant_context(self.tenant.id):
+            entries = my_registers(user=teacher_user, session=self.session, on_date=MARKING_DATE)
+
+        self.assertFalse(self.may_mark(teacher_user))
+        self.assertEqual(entries, [])
 
     def test_own_scope_alone_marks_nothing(self) -> None:
         """A student marking their own register is not a workflow §5 describes."""

@@ -3,7 +3,9 @@
 Mutating colon-actions that support `Idempotency-Key` (module doc §16:
 `:enroll`, `:change-section`, `:withdraw`, and the transfer decision actions)
 store their response here for 24h and replay it verbatim on a repeat key
-instead of re-running the action. See `services.replay_or_execute` for the
+instead of re-running the action — but only for the same request body: a key
+reused with a different body is refused, never answered with the first body's
+response. See `services.replay_or_execute` for the
 replay/store logic and its documented limitation against a true concurrent
 double-submit.
 """
@@ -18,6 +20,17 @@ class IdempotencyRecord(TenantOwnedModel):
     key = models.CharField(max_length=255, help_text="The client's Idempotency-Key header value.")
     endpoint = models.CharField(
         max_length=100, help_text="Caller-chosen identifier, e.g. 'students:enroll'."
+    )
+    # Empty, not NULL, on rows stored before fingerprints existed (Django's convention for
+    # a string column): those still replay for whatever is left of their window.
+    request_fingerprint = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text=(
+            "sha256 hex of the canonical request body the key was first used with; empty on "
+            "rows stored before fingerprints existed, which still replay."
+        ),
     )
     response_status = models.PositiveSmallIntegerField()
     # encoder=DjangoJSONEncoder is load-bearing, not decorative: a stored

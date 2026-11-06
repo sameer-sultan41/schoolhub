@@ -26,6 +26,9 @@ class StaffManagementAPITestCase(_BaseAPITestCase):
         super().setUp()
         with tenant_context(self.tenant.id):
             self.staff = StaffFactory(tenant=self.tenant, campus=self.campus)
+        # The nested route resolves its parent under `/staff`' own key as well as its
+        # own (`_NestedUnderStaffMixin.get_staff`).
+        self.allow("staff.staff.view")
 
 
 class DocumentTests(StaffManagementAPITestCase):
@@ -53,7 +56,7 @@ class DocumentTests(StaffManagementAPITestCase):
         self.assertIn(create_response.json()["data"]["id"], ids)
 
     def test_verify_a_document(self) -> None:
-        self.allow("staff.document.create", "staff.document.verify")
+        self.allow("staff.document.create", "staff.document.view", "staff.document.verify")
         file = self._ready_file()
         create_response = self.client.post(
             f"/api/v1/staff/{self.staff.pk}/documents",
@@ -71,7 +74,7 @@ class DocumentTests(StaffManagementAPITestCase):
         self.assertEqual(verify_response.json()["data"]["verified_by"], str(self.user.pk))
 
     def test_verifying_a_document_twice_is_a_conflict(self) -> None:
-        self.allow("staff.document.create", "staff.document.verify")
+        self.allow("staff.document.create", "staff.document.view", "staff.document.verify")
         file = self._ready_file()
         create_response = self.client.post(
             f"/api/v1/staff/{self.staff.pk}/documents",

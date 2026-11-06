@@ -6,6 +6,7 @@ Not a management command itself (Django only discovers modules directly under a
 own or being discoverable twice.
 """
 
+from core.rbac.cache import evict_rbac_caches
 from core.rbac.models import Permission, RecordScope, Role, RolePermission, User, UserRole
 from core.tenancy.models import Tenant, TenantStatus
 
@@ -47,7 +48,13 @@ def ensure_school_owner_role(*, slug: str = "school_owner", name: str = "School 
         batch_size=500,
         ignore_conflicts=True,
     )
+    _evict_holders(role)
     return role
+
+
+def _evict_holders(role: Role) -> None:
+    # `bulk_create` sends no post_save, so core/rbac/signals.py never hears of these grants.
+    evict_rbac_caches(UserRole.objects.filter(role=role).values_list("user_id", flat=True))
 
 
 def ensure_role_with_permissions(
@@ -114,6 +121,7 @@ def ensure_role_with_permissions(
         ignore_conflicts=True,
     )
     RolePermission.objects.filter(role=role).exclude(permission__in=permissions).delete()
+    _evict_holders(role)
     return role
 
 

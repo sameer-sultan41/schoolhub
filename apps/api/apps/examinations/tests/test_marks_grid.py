@@ -1,9 +1,10 @@
 """§5.4's entry grid, scoped per section by `services.may_enter_marks`.
 
-An assigned teacher writes the sections they are allocated (or homeroom) in the
-exam's session, never every section of the class. Progress, the reminder and the
-view key are in `test_marks_progress.py`; the import and the predicate's
-agreement with `Marks`' scope in `test_marks_import_scope.py`.
+An assigned teacher writes the sections they are allocated in the exam's session,
+never every section of the class; their homeroom they read but do not write (D1).
+Progress, the reminder and the view key are in `test_marks_progress.py`; the
+import and the predicate's agreement with `Marks`' scope in
+`test_marks_import_scope.py`.
 """
 
 from __future__ import annotations
@@ -101,7 +102,12 @@ class SectionWriteScopeTests(GridTestCase):
                 school_class=self.school_class,
                 section=self.other_section,
             )
-        grant(self.subject_teacher_user, "exams.marks.create", scope=RecordScope.ASSIGNED)
+        grant(
+            self.subject_teacher_user,
+            "exams.marks.view",
+            "exams.marks.create",
+            scope=RecordScope.ASSIGNED,
+        )
         client = APIClient()
         authenticate(client, self.subject_teacher_user)
 
@@ -139,25 +145,33 @@ class SectionWriteScopeTests(GridTestCase):
 
         self.assertEqual(self.grid(client).status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_a_homeroom_teacher_reads_and_enters_every_subject_of_their_homeroom(self) -> None:
-        other = self.second_subject()
+    def test_a_homeroom_only_class_teacher_cannot_write_the_grid(self) -> None:
+        """D1: the homeroom reads the class's marks (§3's review role) but entry is the
+        allocated subject teacher's, so the flag and the submit agree on "no"."""
         client = self.client_for(self.teacher_user, "exams.marks.view", "exams.marks.create")
 
-        for exam_subject in (self.exam_subject, other):
-            with self.subTest(subject=str(exam_subject.subject_id)):
-                read = self.grid(client, exam_subject=exam_subject)
-                self.assertEqual(read.status_code, status.HTTP_200_OK, read.json())
-                self.assertTrue(read.json()["meta"]["writable"])
-                written = client.post(
-                    BULK_ENTRY,
-                    {
-                        "exam_subject_id": str(exam_subject.pk),
-                        "section_id": str(self.section.pk),
-                        "entries": self.entries(),
-                    },
-                    format="json",
-                )
-                self.assertEqual(written.status_code, status.HTTP_200_OK, written.json())
+        read = self.grid(client)
+        written = client.post(
+            BULK_ENTRY,
+            {
+                "exam_subject_id": str(self.exam_subject.pk),
+                "section_id": str(self.section.pk),
+                "entries": self.entries(),
+            },
+            format="json",
+        )
+
+        self.assertEqual(read.status_code, status.HTTP_200_OK, read.json())
+        self.assertEqual(
+            (read.json()["meta"]["writable"], read.json()["meta"]["unwritable_reason"]),
+            (False, "no_permission"),
+        )
+        self.assertEqual(len(read.json()["data"]), len(self.students))
+        self.assertEqual(written.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        fields = [detail["field"] for detail in written.json()["error"]["details"]]
+        self.assertEqual(fields, ["section_id"])
+        with tenant_context(self.tenant.id):
+            self.assertFalse(Marks.objects.alive().filter(exam_subject=self.exam_subject).exists())
         self.assertEqual(
             self.grid(client, section=self.other_section).status_code, status.HTTP_404_NOT_FOUND
         )
@@ -354,6 +368,31 @@ class GridWritabilityTests(GridTestCase):
 
         self.assertEqual((writable, reason), (False, "no_permission"))
         self.assertEqual(message, services.NO_PERMISSION_MESSAGE)
+
+    def test_the_grid_is_unwritable_where_the_submit_would_refuse(self) -> None:
+        """The flag runs the submit's section gate under the submit's key: entry on
+        campus A and a tenant-wide read key show a campus-B grid read-only (L36)."""
+        with tenant_context(self.tenant.id):
+            far_campus = CampusFactory(tenant=self.tenant)
+            far_section = SectionFactory(
+                tenant=self.tenant, school_class=self.school_class, campus=far_campus
+            )
+            marker = UserFactory(tenant=self.tenant)
+        far_student = self.enrol(far_section)
+        grant(marker, "exams.marks.create", scope=RecordScope.CAMPUS, scope_ref=self.campus.pk)
+        client = self.client_for(marker, "exams.marks.view", scope=RecordScope.ALL)
+
+        far = self.grid(client, section=far_section).json()["meta"]
+        near = self.grid(client).json()["meta"]
+        written = self.submit(
+            [{"student_id": str(far_student.pk), "theory_marks": "50.00"}],
+            client=client,
+            section=far_section,
+        )
+
+        self.assertEqual((far["writable"], far["unwritable_reason"]), (False, "no_permission"))
+        self.assertTrue(near["writable"])
+        self.assertEqual(written.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     def test_writability_follows_the_submit_endpoints_key(self) -> None:
         # Re-keying `:bulk-entry` must move the grid's flag with it, not leave a stale literal.

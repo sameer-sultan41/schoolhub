@@ -97,7 +97,10 @@ class PredicateAgreementTests(GridTestCase):
                         .first()
                     )
                     if enrollment and services.may_enter_marks(
-                        user=user, exam_subject=mark.exam_subject, section=enrollment.section
+                        user=user,
+                        exam_subject=mark.exam_subject,
+                        section=enrollment.section,
+                        permission="exams.marks.view",
                     ):
                         enterable.add(mark.pk)
 
@@ -136,7 +139,11 @@ class SectionGateMessageTests(GridTestCase):
             entrant = UserFactory(tenant=self.tenant)
         outsider = self.enrol(far_section)
         client = self.client_for(
-            entrant, "exams.marks.create", scope=RecordScope.CAMPUS, scope_ref=self.campus.pk
+            entrant,
+            "exams.marks.view",
+            "exams.marks.create",
+            scope=RecordScope.CAMPUS,
+            scope_ref=self.campus.pk,
         )
 
         response = self.submit(
@@ -190,28 +197,56 @@ class MarksImportScopeTests(GridTestCase):
 
         with self.captureOnCommitCallbacks(execute=True):
             response = self.upload(
-                self.sheet(self.students[0].admission_number, outsider.admission_number),
+                self.sheet(
+                    self.students[0].admission_number, outsider.admission_number, "NOT-A-STUDENT"
+                ),
                 client=client,
             )
 
         result = self.job_result(response)
-        self.assertEqual((result["succeeded"], result["failed"]), (1, 1))
-        self.assertEqual(result["errors"][0]["row"], "3")
-        self.assertEqual(result["errors"][0]["field"], "admission_number")
+        self.assertEqual((result["succeeded"], result["failed"]), (1, 2))
+        out_of_section, unknown = result["errors"]
+        self.assertEqual(
+            (out_of_section["row"], out_of_section["field"]), ("3", "admission_number")
+        )
+        # Worded as an unknown number, so the row does not say the student exists.
+        self.assertEqual(
+            out_of_section["issue"].replace(repr(outsider.admission_number), "<n>"),
+            unknown["issue"].replace(repr("NOT-A-STUDENT"), "<n>"),
+        )
         with tenant_context(self.tenant.id):
             self.assertFalse(Marks.objects.alive().filter(student=outsider).exists())
             self.assertTrue(Marks.objects.alive().filter(student=self.students[0]).exists())
 
     def test_an_importer_with_no_enterable_section_is_refused_before_a_job(self) -> None:
+        """A campus grant reaches the exam-subject (it has no campus) but no section of it."""
         with tenant_context(self.tenant.id):
+            far_campus = CampusFactory(tenant=self.tenant)
             stranger = UserFactory(tenant=self.tenant)
-        client = self.client_for(stranger, "exams.marks.import")
+        client = self.client_for(
+            stranger, "exams.marks.import", scope=RecordScope.CAMPUS, scope_ref=far_campus.pk
+        )
 
         response = self.upload(self.sheet(self.students[0].admission_number), client=client)
 
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
         fields = [detail["field"] for detail in response.json()["error"]["details"]]
         self.assertEqual(fields, ["exam_subject_id"])
+
+    def test_an_exam_subject_outside_the_import_key_s_scope_is_a_404(self) -> None:
+        """Resolved through `ExamSubjectViewSet`'s scope, so no job and nothing said about
+        its sections: an `assigned` importer who teaches none of it."""
+        from core.jobs.models import BackgroundJob
+
+        with tenant_context(self.tenant.id):
+            stranger = UserFactory(tenant=self.tenant)
+        client = self.client_for(stranger, "exams.marks.import")
+
+        response = self.upload(self.sheet(self.students[0].admission_number), client=client)
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        with tenant_context(self.tenant.id):
+            self.assertFalse(BackgroundJob.objects.filter(job_type="exams.marks-import").exists())
 
     def test_a_disallowed_mime_type_is_refused(self) -> None:
         response = self.upload(

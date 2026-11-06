@@ -99,6 +99,7 @@ class StudentTransferViewSet(
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="student-transfers:approve",
+            request_data=request.data,
             execute=execute,
         )
 
@@ -126,6 +127,7 @@ class StudentTransferViewSet(
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="student-transfers:reject",
+            request_data=request.data,
             execute=execute,
         )
 
@@ -159,5 +161,6 @@ class StudentTransferViewSet(
             tenant_id=request.tenant.pk,
             key=request.headers.get("Idempotency-Key"),
             endpoint="student-transfers:complete",
+            request_data=request.data,
             execute=execute,
         )

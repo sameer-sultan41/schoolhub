@@ -56,7 +56,7 @@
 
 ### 2.5 Rate Limiting & Idempotency
 - Redis token-bucket per user and per tenant (defaults: 60 r/min user, 600 r/min tenant; auth endpoints stricter: 10 r/min per IP). `429` + `Retry-After`. The dev settings (local and the throwaway `e2e-live` stack) can override each rate with a `THROTTLE_RATE_*` environment variable; production settings keep them fixed.
-- Mutating endpoints with money or external side effects (fee payments, notification sends, admissions submissions) accept an `Idempotency-Key` header; the key + response are stored 24 h and replayed on retry.
+- Mutating endpoints with money or external side effects (fee payments, notification sends, admissions submissions) accept an `Idempotency-Key` header; the key, a sha256 fingerprint of the canonical request body and the response are stored 24 h and replayed on a retry with the same body. The same key with a different body is `422 idempotency_key_reused`, never a replay of the first response (`core.idempotency.services.replay_or_execute`, as the IETF `Idempotency-Key` draft and Stripe do).
 
 ### 2.6 Webhooks
 - Outbound webhooks per tenant for events (e.g. `student.enrolled`, `fee.paid`, `result.published`): HMAC-SHA256 signature header, at-least-once delivery, exponential-backoff retries (max 8), dead-letter list visible to tenant admins.

@@ -30,9 +30,14 @@ ALL_STAFF = (
 
 CURRICULUM_MANAGERS = ("school_admin", "principal", "vice_principal")
 ALLOCATION_MANAGERS = ("school_admin", "vice_principal", "principal")
-PROMOTION_REVIEWERS = ("principal", "vice_principal", "school_admin", "class_teacher")
 PROMOTION_PREPARERS = ("school_admin", "vice_principal")
 PROMOTION_APPROVERS = ("principal", "school_owner")
+# Every approver reviews too: an approver must be able to see what it approves.
+PROMOTION_REVIEWERS = tuple(
+    dict.fromkeys(
+        ("principal", "vice_principal", "school_admin", "class_teacher", *PROMOTION_APPROVERS)
+    )
+)
 CURRICULUM_IO = ("school_admin", "it_admin")
 
 registry.register(

@@ -9,6 +9,8 @@ export interface BackgroundJob<TResult = unknown> {
   progress: number;
   result: TResult | null;
   error: string | null;
+  /** Server time, so a spec can bound a later search (delivery logs) without the runner's clock. */
+  created_at: string;
 }
 
 const TERMINAL = new Set(["succeeded", "failed"]);

@@ -33,7 +33,15 @@ from apps.school_organization.models import (
     Term,
 )
 from apps.staff_management.models import EmploymentStatus, Staff, StaffType
-from apps.student_management.models import Gender, Guardian, Student
+from apps.student_management.models import (
+    EnrollmentStatus,
+    Gender,
+    Guardian,
+    Relationship,
+    Student,
+    StudentEnrollment,
+    StudentGuardian,
+)
 from apps.timetable.models import (
     Period,
     Room,
@@ -323,6 +331,16 @@ E2E_PRINCIPAL_PERMISSIONS = [
     "exams.result.publish",
     "exams.report-card.view",
     "exams.report-card.publish",
+    # Communication (communication.md §4). `thread.oversee` is the audited read of every
+    # thread, which §4 gives `school_owner` and `principal` only; the live thread journey
+    # proves it as this identity, not as the owner who holds every key anyway. `thread.view`
+    # (every role's) is what lets the same journey show the inbox answering 404 to a
+    # non-participant rather than 403 to a missing key. `broadcast.send` is §4's too, and
+    # the broadcast is a `202` + job, so the poll needs `platform.job.view` (lesson L27).
+    "communication.thread.view",
+    "communication.thread.oversee",
+    "communication.broadcast.send",
+    "platform.job.view",
 ]
 # A `class_teacher` identity, and it exists for one reason: **§4 grants
 # `attendance.student-attendance.mark` to `teacher`/`class_teacher` and to nobody
@@ -351,6 +369,10 @@ E2E_CLASS_TEACHER_PERMISSIONS = [
     # The register's and Records' Class pickers (`GET /classes`): without it the browser
     # journey (`attendance-register-journey.spec.ts`) has no class to pick.
     "school.class.view",
+    # Communication: read the threads routed to them and reply. The `assigned`-scope
+    # identity below holds this role too; it is the one a guardian's thread reaches.
+    "communication.thread.view",
+    "communication.message.create",
 ]
 # A restricted principal (student, guardian) holds only own-scoped keys, narrowed via
 # RecordScope.OWN rather than the grant itself being unsafe.
@@ -363,6 +385,11 @@ E2E_STUDENT_PERMISSIONS = ["students.student.view"]
 E2E_GUARDIAN_PERMISSIONS = [
     "attendance.leave-request.create",
     "attendance.leave-request.view",
+    # communication.md §4: every role starts and replies to threads, a guardian only about
+    # their own children (`threads/services/create.py` checks the link, not the key).
+    "communication.thread.view",
+    "communication.thread.create",
+    "communication.message.create",
 ]
 # The `Guardian` person row's first name, last name and phone. The phone is the addressable
 # part, mirrored in e2e/src/lib/seed-constants.ts: ids are generated per seed run, and
@@ -401,7 +428,7 @@ E2E_EXAM_STAFF_READS = (
 # allocation is seeded, so the teacher sees nothing until a spec gives them one.
 E2E_TEACHER_LOGIN_EMPLOYEE_NUMBER = "E2E-TEACHER-LOGIN"
 E2E_TEACHER_LOGIN_NAME = ("E2E", "Subject Teacher")
-E2E_TEACHER_LOGIN_PHONE = "+15550000003"
+E2E_TEACHER_LOGIN_PHONE = "+15550000004"
 
 
 def _exams_keys_for(role: str) -> list[str]:
@@ -418,6 +445,28 @@ def e2e_teacher_permissions() -> list[str]:
 
 E2E_STUDENT_A_NAME = ("E2E", "Student A")
 E2E_STUDENT_B_NAME = ("E2E", "Student B")
+
+# Communication's thread journey (communication.md §7, parent-portal.md §7). A guardian
+# does not pick who reads their thread: `threads/routing.py` sends it to the class
+# teacher of the child's active section. So the whole chain is seeded: a child enrolled
+# in the baseline section, a guardian linked to that child with portal access and
+# communications on, and a `Staff` row whose `user_id` is a login, set as the section's
+# `class_teacher_staff_id`.
+#
+# Their own identities rather than the guardian and class teacher above, for two reasons.
+# The leave guardian is linked to nobody on purpose (each leave spec links it to its own
+# run-unique child), and a seeded link would chain specs through a shared child. And
+# the class teacher above is `all`-scoped for the marking specs, while this one is
+# `assigned`-scoped, the production default: thread visibility is membership, not record
+# scope (ADR-0030), and only an `assigned` identity proves the routed teacher still sees it.
+E2E_COMMS_GUARDIAN_EMAIL = "e2e-comms-guardian@schoolhub.test"
+E2E_COMMS_GUARDIAN_NAME = ("E2E", "Comms Guardian")
+E2E_COMMS_GUARDIAN_PHONE = "+15550000011"
+E2E_COMMS_CLASS_TEACHER_EMAIL = "e2e-comms-class-teacher@schoolhub.test"
+E2E_COMMS_CLASS_TEACHER_NAME = ("E2E", "Comms Class Teacher")
+E2E_COMMS_CLASS_TEACHER_EMPLOYEE_NUMBER = "E2E-CLASS-TEACHER-1"
+E2E_COMMS_STUDENT_ADMISSION_NUMBER = "E2E-STUDENT-COMMS"
+E2E_COMMS_STUDENT_NAME = ("E2E", "Student Comms")
 
 
 class Command(BaseCommand):
@@ -522,6 +571,24 @@ class Command(BaseCommand):
             last_name=E2E_GUARDIAN_NAME[1],
             scope=RecordScope.OWN,
         )
+        comms_guardian_user = ensure_seed_user(
+            tenant,
+            guardian_role,
+            email=E2E_COMMS_GUARDIAN_EMAIL,
+            password=E2E_ADMIN_PASSWORD,
+            first_name=E2E_COMMS_GUARDIAN_NAME[0],
+            last_name=E2E_COMMS_GUARDIAN_NAME[1],
+            scope=RecordScope.OWN,
+        )
+        comms_class_teacher_user = ensure_seed_user(
+            tenant,
+            class_teacher_role,
+            email=E2E_COMMS_CLASS_TEACHER_EMAIL,
+            password=E2E_ADMIN_PASSWORD,
+            first_name=E2E_COMMS_CLASS_TEACHER_NAME[0],
+            last_name=E2E_COMMS_CLASS_TEACHER_NAME[1],
+            scope=RecordScope.ASSIGNED,
+        )
 
         exam_staff_role = ensure_role_with_permissions(
             tenant, "exam_staff", "Exam Staff", e2e_exam_staff_permissions()
@@ -615,6 +682,26 @@ class Command(BaseCommand):
             self._ensure_examinations_enabled(tenant)
             self._ensure_teacher_login_staff(tenant, campus, user=teacher_user)
 
+            # Communication: the thread-routing chain (see E2E_COMMS_GUARDIAN_EMAIL).
+            self._ensure_communication_enabled(tenant)
+            comms_class_teacher = self._ensure_teaching_staff(
+                tenant,
+                campus,
+                employee_number=E2E_COMMS_CLASS_TEACHER_EMPLOYEE_NUMBER,
+                name=E2E_COMMS_CLASS_TEACHER_NAME,
+                phone="+15550000003",
+                user_id=comms_class_teacher_user.id,
+            )
+            self._ensure_comms_student(
+                tenant,
+                campus,
+                session=session,
+                school_class=school_class,
+                section=section,
+                class_teacher=comms_class_teacher,
+                guardian_user_id=comms_guardian_user.id,
+            )
+
         # The grading scale is the examinations module's to write (ADR-0013: `core`
         # imports no app), so it is seeded by that module's own command, by name.
         call_command("seed_e2e_examinations", tenant=tenant.slug)
@@ -638,6 +725,8 @@ class Command(BaseCommand):
             self._ensure_leave_types(other_tenant)
             # And for examinations.
             self._ensure_examinations_enabled(other_tenant)
+            # And for communication: the thread isolation probes must reach the lookup.
+            self._ensure_communication_enabled(other_tenant)
 
         # TODO(website-cms): no public-content/CMS backend module exists yet
         # (apps/api/config/api_v1.py routes only core.rbac and
@@ -650,7 +739,9 @@ class Command(BaseCommand):
             self.style.SUCCESS(
                 f"Seeded tenant '{tenant.slug}' with admin {E2E_ADMIN_EMAIL}, school admin "
                 f"{E2E_SCHOOL_ADMIN_EMAIL}, principal {E2E_PRINCIPAL_EMAIL}, student "
-                f"{E2E_STUDENT_EMAIL}, and guardian {E2E_GUARDIAN_EMAIL}; tenant "
+                f"{E2E_STUDENT_EMAIL}, guardians {E2E_GUARDIAN_EMAIL} and "
+                f"{E2E_COMMS_GUARDIAN_EMAIL}, and class teacher "
+                f"{E2E_COMMS_CLASS_TEACHER_EMAIL}; tenant "
                 f"'{E2E_OTHER_TENANT_SLUG}' with admin {E2E_OTHER_ADMIN_EMAIL}"
             )
         )
@@ -820,6 +911,96 @@ class Command(BaseCommand):
             defaults={"enabled": True, "reason": "e2e live-lane fixture"},
         )
 
+    def _ensure_communication_enabled(self, tenant: Tenant) -> None:
+        """`module.communication` defaults off (apps/communication/features.py).
+
+        Same `update_or_create`-not-`get_or_create` reasoning as
+        `_ensure_students_module_enabled`, and called for both tenants for the same
+        403-before-404 reason `_ensure_timetable_enabled` is.
+        """
+        flag = FeatureFlag.objects.get(key="module.communication")
+        TenantFeatureOverride.objects.update_or_create(
+            tenant=tenant,
+            feature_flag=flag,
+            defaults={"enabled": True, "reason": "e2e live-lane fixture"},
+        )
+
+    def _ensure_comms_student(
+        self,
+        tenant: Tenant,
+        campus: Campus,
+        *,
+        session: AcademicSession,
+        school_class: Class,
+        section: Section,
+        class_teacher: Staff,
+        guardian_user_id: uuid.UUID,
+    ) -> Student:
+        """The child a guardian's thread is about, wired so routing finds a class teacher.
+
+        `routing.route_guardian_thread` reads the student's *active* enrollment, that
+        section's `class_teacher_staff_id`, and the staff row's `user_id`; any missing
+        link sends the thread to the fallback role instead, and the spec would prove
+        the fallback rather than the class-teacher route.
+
+        Setting the baseline section's class teacher is safe for the other specs: the
+        marking and leave specs build their own sections, and the `all`-scoped class
+        teacher above does not depend on it.
+
+        The guardian link is `update_or_create` so a rerun restores `has_portal_access`
+        and `receives_communications`: a revoked link would hide the thread from the
+        guardian (ADR-0030) and fail the journey for a reason it is not testing.
+        """
+        Section.objects.filter(pk=section.pk).update(class_teacher_staff_id=class_teacher.pk)
+
+        student, _ = Student.objects.get_or_create(
+            tenant=tenant,
+            admission_number=E2E_COMMS_STUDENT_ADMISSION_NUMBER,
+            defaults={
+                "first_name": E2E_COMMS_STUDENT_NAME[0],
+                "last_name": E2E_COMMS_STUDENT_NAME[1],
+                "date_of_birth": "2016-09-01",
+                "gender": Gender.UNSPECIFIED,
+                "campus": campus,
+                "admission_date": "2026-01-01",
+            },
+        )
+        # One row per (student, session), so the lookup is the idempotency key.
+        StudentEnrollment.objects.get_or_create(
+            tenant=tenant,
+            student=student,
+            academic_session=session,
+            defaults={
+                "school_class": school_class,
+                "section": section,
+                "enrollment_date": session.start_date,
+                "status": EnrollmentStatus.ACTIVE,
+            },
+        )
+
+        guardian, _ = Guardian.objects.get_or_create(
+            tenant=tenant,
+            user_id=guardian_user_id,
+            defaults={
+                "first_name": E2E_COMMS_GUARDIAN_NAME[0],
+                "last_name": E2E_COMMS_GUARDIAN_NAME[1],
+                "phone": E2E_COMMS_GUARDIAN_PHONE,
+            },
+        )
+        StudentGuardian.objects.update_or_create(
+            tenant=tenant,
+            student=student,
+            guardian=guardian,
+            defaults={"has_portal_access": True, "receives_communications": True},
+            create_defaults={
+                "relationship": Relationship.MOTHER,
+                "is_primary": True,
+                "has_portal_access": True,
+                "receives_communications": True,
+            },
+        )
+        return student
+
     def _ensure_subject(self, tenant: Tenant) -> Subject:
         subject, _ = Subject.objects.get_or_create(
             tenant=tenant,
@@ -858,6 +1039,7 @@ class Command(BaseCommand):
         employee_number: str,
         name: tuple[str, str],
         phone: str,
+        user_id: uuid.UUID | None = None,
     ) -> Staff:
         """One active teaching staff member — `assert_staff_is_active_teacher` (§11)
         refuses anyone who is not both, so a non-teaching or exited fixture would make
@@ -875,10 +1057,9 @@ class Command(BaseCommand):
         number is the idempotency key, exactly as `admission_number` is for the seeded
         students.
 
-        No `user_id` link: nothing here needs a teacher to *log in* yet. A `teacher`-role
-        identity at `RecordScope.OWN` (which `TeacherSubjectAllocation.filter_owned_by_user`
-        resolves through `staff.user_id`) is the natural next fixture when a spec proves
-        "a teacher sees only their own allocations".
+        `user_id` links the row to a login. The two timetable teachers have none; the
+        communication class teacher does, because thread routing resolves the section's
+        `class_teacher_staff_id` to a user through `staff.user_id`.
         """
         staff, _ = Staff.objects.get_or_create(
             tenant=tenant,
@@ -891,6 +1072,7 @@ class Command(BaseCommand):
                 "campus": campus,
                 "joining_date": "2026-01-01",
                 "phone": phone,
+                "user_id": user_id,
             },
         )
         return staff

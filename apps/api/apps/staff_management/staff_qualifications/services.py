@@ -1,10 +1,9 @@
 """Service logic exclusive to the staff-qualifications resource.
 
 Shared, cross-package logic stays in the module root's
-``apps.staff_management.services``: ``assert_file_usable`` (also used by
-``staff/`` for the photo field and by ``staff_documents/``) and
-``_verify_record`` (the generic verify-with-lock helper shared with
-``staff_documents``'s ``verify_document``).
+``apps.staff_management.services``: ``_verify_record`` (the generic
+verify-with-lock helper shared with ``staff_documents``'s ``verify_document``).
+``assert_file_usable`` is the platform's, in ``core.files.services``.
 """
 
 from __future__ import annotations
@@ -16,8 +15,9 @@ from django.utils import timezone
 
 from apps.staff_management import uploads
 from apps.staff_management.models import Staff, StaffQualification
-from apps.staff_management.services import _verify_record, assert_file_usable
+from apps.staff_management.services import _verify_record
 from core.api.exceptions import DomainRuleViolation
+from core.files.services import assert_file_usable
 
 
 def assert_year_not_future(year_awarded: int) -> None:

@@ -18,7 +18,11 @@ from apps.examinations.report_serializers import REPORT_ROW_SERIALIZERS
 from apps.examinations.tests.factories import QuestionBankFactory, QuestionFactory
 from apps.examinations.tests.test_processing import ProcessingTestCase
 from apps.examinations.tests.test_reports import SUMMARY, ReportDataTestCase
+from apps.examinations.views import ExamReportView
 from core.tenancy.context import tenant_context
+
+# The key the inline report is read under, as the endpoint passes it.
+REPORT_VIEW = ExamReportView.required_permission
 
 
 def _json_schema(node: Any) -> Any:
@@ -91,7 +95,9 @@ class ReportRowSchemaTests(ReportDataTestCase):
 
         for kind in reports.REPORT_KINDS:
             with self.subTest(kind=kind), tenant_context(self.tenant.id):
-                built = services.build_report_rows(kind=kind, exam_id=self.exam.pk, user=self.user)
+                built = services.build_report_rows(
+                    kind=kind, exam_id=self.exam.pk, user=self.user, permission=REPORT_VIEW
+                )
                 fields = set(REPORT_ROW_SERIALIZERS[kind]().fields) - {"kind"}
                 for row in built:
                     self.assertEqual(set(row), fields)
@@ -118,7 +124,9 @@ class ReportAverageAgreementTests(ProcessingTestCase):
 
         # What `export_exam_report_task` renders: the same builder, then the CSV writer.
         with tenant_context(self.tenant.id):
-            rows = services.build_report_rows(kind=kind, exam_id=self.exam.pk, user=self.user)
+            rows = services.build_report_rows(
+                kind=kind, exam_id=self.exam.pk, user=self.user, permission=REPORT_VIEW
+            )
         data, _mime, _ext = tabular.render(rows, fmt="csv", title=kind)
         (record,) = csv.DictReader(io.StringIO(data.decode("utf-8-sig")))
         return record[column]

@@ -11,8 +11,10 @@ from __future__ import annotations
 import logging
 import uuid
 from collections.abc import Callable
+from typing import Any
 
 from django.db import transaction
+from django.db.models import QuerySet
 from django.http import Http404
 from django.utils import timezone
 from rest_framework.exceptions import APIException
@@ -23,6 +25,7 @@ from apps.school_organization.models import AcademicSession, Class, Section
 from apps.school_organization.services import assert_session_writable
 from apps.student_management.models import EnrollmentStatus, StudentEnrollment
 from core.api.exceptions import Conflict, DomainRuleViolation
+from core.rbac.permissions import AnyOf, RbacUser, ScopeKwargs, scope_queryset
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +35,26 @@ GENERIC_FAILURE_MESSAGE = "Unexpected error; see the server log."
 # §12's "promotion batch pending approval" goes to the `principal`; the key is
 # what the endpoint actually gates on, so it is what the fan-out resolves.
 PROMOTION_APPROVAL_KEY = "academics.promotion.approve"
+
+# Both promotion viewsets' record-scope settings, declared once: each sets its `scope_*`
+# attributes from these, and `assert_batch_in_scope` reads them. A promotion row and an
+# enrollment both reach the student's campus through `student`.
+PROMOTION_SCOPE: ScopeKwargs = {
+    "own_field": None,
+    "campus_field": "student__campus_id",
+    "campus_allows_null": False,
+}
+
+BATCH_OUT_OF_SCOPE_MESSAGE = (
+    "This batch includes students outside your record scope for this action. "
+    "Someone whose scope covers every student in it must do this."
+)
+# Creation's answer when the actor can read none of the students: no view key at all, or
+# one scoped elsewhere. Unlike the message above, it does not claim a partial reach.
+BATCH_UNREADABLE_MESSAGE = (
+    "You cannot view the students this batch covers, so you cannot act on it. "
+    "Someone who can view and act on every student in it must do this."
+)
 
 
 def next_class_for(*, from_class: Class, tenant_id: uuid.UUID) -> Class | None:
@@ -143,6 +166,50 @@ def create_promotion_batch(
     ]
     StudentPromotion.objects.bulk_create(rows, batch_size=500)
     return batch_id, rows
+
+
+def assert_batch_in_scope(
+    rows: QuerySet[Any],
+    *,
+    user: RbacUser,
+    read_permission: str | AnyOf | None,
+    permission: str | AnyOf,
+    hide_unreadable: bool = True,
+) -> None:
+    """Every student a batch covers must be in `user`'s scope for `permission` (plan, ruling 10).
+
+    A batch belongs to a class, and classes have no campus, so one batch can hold students
+    of several campuses, and an action on it moves every row. So each row must be readable
+    under `read_permission` and then reachable under `permission`: the two chained
+    `scope_queryset` calls the viewset mixin makes for a detail write (ADR-0031 decision 3),
+    over `PROMOTION_SCOPE`. `read_permission` is the viewset's `scope_read_declaration()`,
+    None only for an action that class exempts.
+
+    All in scope costs two counts. Otherwise a batch of which no row is readable is a 404,
+    like an unknown id (`hide_unreadable`), and one that is readable but not wholly in scope
+    is a 422. Creation passes `hide_unreadable=False` over the rows it has just written: it
+    names a class, which every campus may read, so an unreadable batch is a 422 there too.
+    An empty `rows` is an unknown batch id, so it is a 404 here when `hide_unreadable`, and
+    a new batch action cannot answer 200 for one by calling a service that does not 404.
+    """
+    total = rows.count()
+    if total == 0:
+        if hide_unreadable:
+            raise Http404("No such promotion batch.")
+        return
+    readable = (
+        rows
+        if read_permission is None
+        else scope_queryset(rows, user, permission=read_permission, **PROMOTION_SCOPE)
+    )
+    reachable = scope_queryset(readable, user, permission=permission, **PROMOTION_SCOPE)
+    if reachable.count() == total:
+        return
+    if readable.exists():
+        raise DomainRuleViolation({"non_field": BATCH_OUT_OF_SCOPE_MESSAGE})
+    if hide_unreadable:
+        raise Http404("No such promotion batch.")
+    raise DomainRuleViolation({"non_field": BATCH_UNREADABLE_MESSAGE})
 
 
 def batch_queryset(batch_id: uuid.UUID, *, for_update: bool = False):
@@ -631,6 +698,7 @@ def _promotion_approvers(tenant_id: uuid.UUID) -> set[uuid.UUID]:
             is_active=True,
             deleted_at__isnull=True,
             user_roles__deleted_at__isnull=True,
+            user_roles__role__deleted_at__isnull=True,
             user_roles__role__permissions__key=PROMOTION_APPROVAL_KEY,
         ).values_list("pk", flat=True)
     )

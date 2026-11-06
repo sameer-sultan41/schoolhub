@@ -40,7 +40,9 @@
 
 - **Mistake.** The execute report showed a raw Python dictionary dump for a missing section, and it was deferred as a minor. The decision to make the section rule advisory relied on the report naming each failed student legibly. The whole-PR review reversed the deferral.
 - **Mistake (again, attendance dashboard PR C).** Import was put on the Records toolbar, and Records was gated on `attendance.student-attendance.view`. §4 grants the import key to `it_admin` alone, and `it_admin` does not hold `.view`, so the only role meant to import could not reach the button. The premise "an importer can open Records" was never checked against `permissions.py`.
-- **Check.** For each ruling or decision, write down the premise it rests on, and verify that premise on the real path before ruling a related defect minor. When an action lives on a screen, check that every role §4 grants the action can open that screen.
+- **Mistake (again, per-role record scope PR B).** The marks import was deferred because "the job carries no user". The payload already held `requested_by` and the task received `actor_id`, so the export-job fix applied as-is; the re-review reversed the deferral (plan, ruling 14).
+- **Mistake (again, communication dashboard PR D).** `7e7c74a0` cut a conversation back to its first page after every write, on the premise that TanStack Query replays stored cursors on refetch. The installed `infiniteQueryBehavior.js` recomputes each later cursor from the fresh pages, so the trim only threw away history the user had loaded.
+- **Check.** For each ruling or decision, write down the premise it rests on, and verify that premise on the real path before ruling a related defect minor. When an action lives on a screen, check that every role §4 grants the action can open that screen. A premise about a library's behaviour is checked in its installed source under `node_modules`, not from memory.
 
 ### L4. Trace what the user can do after a failure
 
@@ -80,6 +82,12 @@
 
 - **Mistake.** Hand-formatted code failed Prettier on several files; an old `noqa` was reported unused by ruff; cspell rejected two coined words in a comment and a doc.
 - **Mistake (again, attendance PR A).** `eslint --fix` dropped a type assertion it called unnecessary on a test fixture, which widened `subject_type`/`status` to `string`; the pre-push typecheck failed. The fixture needed a return type, not the assertion.
+- **Mistake (again, communication PR C).** Pre-push mypy rejected DRF attribute overrides twice:
+  an unannotated `filter_backends = []` on `ThreadMessageViewSet` (`[var-annotated]`; moved to
+  the route's `as_view(filter_backends=[])`, `4a49e127`) and a serializer re-declaring
+  `unread_count` with a different field type (`[assignment]`), first silenced with a
+  `type: ignore` and then fixed properly by a shared `ThreadBaseSerializer` (`523c453d`).
+  Read the mypy error, then restructure; a suppressor is not the fix (AGENTS.md stop rule 2).
 - **Check.** Apply the fix the hook prints, on exactly the files it lists. Delete an unused `noqa` rather than re-adding it, reword a flagged word rather than growing `.cspell/project-words.txt`, and never use `--no-verify`. Keep the reason a removed `noqa` carried as a plain comment. When a hook prints no detail (the pre-push mypy check), run the command it names once and read the error before editing; two guessed fixes in a row failed before the real cause (a class variable overridden by an annotated attribute) was read.
 
 ### L11. Briefs to subagents must carry this repository's overrides
@@ -171,6 +179,98 @@
 
 - **Mistake.** `seed_e2e_data.py` gives its `school_admin` an exact list of module keys, not the role's registry grants. It left out `platform.job.view`, which every real staff role holds through `core/jobs/permissions.py`, so the promotion journey's job poll was a 403 and the screen reported a job that had succeeded as failed (e2e-live run 40659453170).
 - **Check.** When a live journey starts a `202` + job, opens a file or reads any other platform resource, add the matching `platform.*` key to that identity's list in `seed_e2e_data.py`, and confirm with the trace's network log that no request in the journey is a 403.
+
+### L28. A new viewset must declare what the endpoint contract tests read
+
+- **Mistake.** Communication PR C added viewsets twice without the declarations
+  `apps/api/tests/test_endpoint_contracts.py` checks: `MessageThreadViewSet` set no
+  `ordering_fields`, so `OrderingContractTests` flagged an open `?ordering=` surface
+  (fixed in `fa71eaef`); and the `:mark-read` POST was missing from `required_permission_map`, so
+  it fell back to `communication.thread.view` and `WritePermissionContractTests` rejected a write
+  authorised by a read key (fixed in `8db9e2a2`). Both were only caught by CI.
+- **Check.** For every new viewset, declare `ordering_fields` (even when the cursor's ordering
+  is the only one, as a one-column allowlist), and put every non-GET action, colon actions
+  included, in `required_permission_map`. The test rejects a *missing* entry, not a read key: a
+  write gets a write key by choice, and a read over POST (a signed download) may map its read
+  key explicitly, as `files:download` does. Read the `ordering_fields` and
+  `required_permission_map` of `threads/viewset.py` as the pattern.
+
+### L29. A file attached to a private record is not served by the generic `/files` routes
+
+- **Mistake.** Communication PR C returned thread attachments as bare file ids, so the generic
+  `GET /files` and `:download` (every `platform.file.view` holder, every staff role) listed and
+  signed a private thread's attachments, unaudited (fixed in `12e0641d`).
+- **Check.** When a module stores file ids on a record whose readers are narrower than "all
+  staff", register its purpose with `module_gated=True` (`core/files/purposes.py`) and serve the
+  download from the record's own route, resolved through the same rule that hides the record.
+
+### L30. A race fix needs a test that fails against the racy version
+
+- **Mistake.** Communication PR C's emergency-broadcast claim (`17f02c5e`) shipped with task
+  tests that ran the task twice in sequence, or after the row was already `running`. Both pass
+  against the read-check-`mark_running` code it replaced, so they proved nothing about the race.
+- **Check.** Before calling a race fixed, name the interleaving that broke and write a test that
+  fails on the old code: hold one side's transaction open and make the other wait on it (a
+  `TransactionTestCase`, two connections, `pg_locks` to know it is waiting), or stub the
+  atomic step to report the loss while a read would still say "go". Running it twice proves only
+  idempotence.
+
+### L31. Strict `tsc` rejects what jest never types: defaulted params and enum casts
+
+- **Mistake.** Communication PR D's jest mock read `query.cursor` in an implementation typed from a service signature whose `query` parameter has a default value, so strict `tsc` saw it as possibly `undefined`. A cast between a generated schema enum and a narrower form union (`as`) failed strict `tsc` too. Jest strips types, so only the pre-push typecheck caught either.
+- **Check.** Type a mock's parameters from the real signature and read defaulted or optional ones with `?.` (`query?.cursor`). Narrow a schema enum with `.find()` over the allowed list, or `satisfies`, never `as`.
+
+### L32. Never render a raw API enum value as user-visible text
+
+- **Mistake.** The broadcast preview listed channels by their API ids (`in_app`, `sms`), which reached the screen as written (fixed in `a7e49cb5`).
+- **Check.** Every enum a user can see (channel, status, type, role) goes through an i18n label map in both locale files, with a fallback for a value the map lacks, and a spec asserts the label, not the id.
+
+### L33. A "do it once" guard must be released when the call fails
+
+- **Mistake.** PR #146's `thread-view.tsx` set its `markedRef` before `:mark-read` resolved and nothing reset it, so a failed mark-read was never tried again while the thread stayed open.
+- **Check.** A ref or flag that stops an async call repeating is released in `onError`, the retry has a trigger (the data's next load, not the error itself, which would loop), and the mutation's `isPending` blocks a second call in flight. Test it: the first call rejects, the data refetches, the call runs exactly once more.
+
+### L34. A picker offers only what the server will accept from this caller
+
+- **Mistake.** PR #146's broadcast Audience step listed every campus and validated only classes and sections, so a campus-restricted sender met the server's `422` only at Confirm.
+- **Check.** When the server narrows a field by the caller's scope, read that scope from its endpoint, intersect it with the loaded options (a stale id may name a deleted record), require the field in that step's validation, and give the "reaches nothing" case its own message and a disabled Next.
+
+### L35. A resolved `invalidateQueries` is not a rendered refetch
+
+- **Mistake.** Two PR #146 Jest tests awaited `act(() => queryClient.invalidateQueries(...))` and then asserted on the screen, or failed a mutation, straight away. TanStack Query hands results to React on a `setTimeout(0)`, so the view still showed the old data, and CI failed (`33fe38c6`, `68521eac`).
+- **Check.** After a refetch, wait for something on screen that only the new data renders (`findBy…`, or `waitFor` on the changed text) before acting or asserting. To prove something did *not* happen, first let TanStack's queued notifications land: an `act` around a `setTimeout(0)`.
+
+### L36. A permission helper takes the key it guards, and checks it against the row
+
+- **Mistake.** `user_scopes` returned every role's record scope whatever the role granted, so a
+  campus-A role plus any unrelated `all` role read tenant-wide on every scoped endpoint. Four
+  row-privilege checks (the capacity override on enrol and change-section, the clearance
+  waiver, substitution cancel) asked `has_permission_key`, "held anywhere", as though it meant
+  "held for this row" (ADR-0031, `fix/per-role-record-scope`). The final review then found
+  the viewset mixin resolving PATCH, DELETE and colon actions by the action's key alone, so an
+  `all` update role reached, and echoed back, a student the caller's campus view role hid.
+- **Mistake (again, PR B final review).** `POST /marks:bulk-entry` resolved its exam subject
+  unscoped, `assert_marker_may_enter` passed any `campus` holder, and the posted student ids
+  were checked against the class roll only, so a campus-A marker wrote campus-B marks.
+  `deferred-work.md` had recorded the hole as a narrower `campus`+`assigned` edge case.
+- **Check.** A permission helper that ignores which key it guards, or a presence check read as a
+  row privilege, is a privilege-escalation path. Take the key as a required argument
+  (`scope_queryset(permission=...)`, `scopes_for`), and check a row privilege against the row
+  (`holds_key_for(user, key, row, **SomeViewSet.scope_kwargs())`). A route that acts on a row
+  must reach it under the read key as well as its own. A write that takes a list of ids under
+  a parent (a grid, a batch) scopes the ids, not only the parent, and a gate that passes
+  `campus` must be followed by a per-row campus check. Test it with a mixed user: the key on
+  campus A, an unrelated or action key at `all`, and a campus-B row.
+
+### L37. Read `captured_queries` before the next request
+
+- **Mistake.** `MixedScopeDetailWriteTests` (`apps/api/tests/test_per_role_scope.py`) captured
+  one PATCH, made two more requests, then read `captured.captured_queries`. That property
+  slices the live `connection.queries` log, and each later request's `request_started` signal
+  runs `reset_queries`, so CI saw an empty list and `max()` raised.
+- **Check.** Copy the SQL out (`[q["sql"] for q in captured.captured_queries]`) right after the
+  `with CaptureQueriesContext(...)` block, before any other client request, and assert the
+  list is non-empty before asserting on its contents.
 
 ### L40. A "matches X" claim must be checked against X's own predicate
 

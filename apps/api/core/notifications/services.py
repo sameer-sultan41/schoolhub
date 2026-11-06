@@ -65,7 +65,9 @@ from core.notifications.models import (
     Notification,
     NotificationCategory,
     NotificationChannel,
+    NotificationPriority,
 )
+from core.notifications.queues import EMERGENCY_QUEUE
 from core.notifications.templates import TemplateError
 from core.notifications.templates import resolve as resolve_template
 
@@ -238,7 +240,7 @@ def notify(
         # on_commit, never inside the transaction: a worker that starts while these
         # rows are still uncommitted would find nothing and fail every delivery.
         ids = [n.pk for n in created]
-        transaction.on_commit(lambda: _dispatch(tenant_id, ids))
+        transaction.on_commit(lambda: _dispatch(tenant_id, ids, priority=trigger.priority))
 
     return created
 
@@ -351,9 +353,21 @@ def _delivery_for(
     )
 
 
-def _dispatch(tenant_id: uuid.UUID, notification_ids: list[uuid.UUID]) -> None:
+def _dispatch(tenant_id: uuid.UUID, notification_ids: list[uuid.UUID], *, priority: str) -> None:
+    """Queue delivery on the trigger's lane.
+
+    An `emergency`-priority trigger goes to the emergency queue, so a school-closure
+    broadcast never waits behind routine transactional traffic. Every other
+    priority keeps `CELERY_TASK_ROUTES`' route for the task; an explicit `queue`
+    overrides that route for this one send only.
+    """
     from core.notifications.tasks import deliver_notifications
 
-    deliver_notifications.delay(
-        tenant_id=str(tenant_id), notification_ids=[str(pk) for pk in notification_ids]
+    options = {"queue": EMERGENCY_QUEUE} if priority == NotificationPriority.EMERGENCY else {}
+    deliver_notifications.apply_async(
+        kwargs={
+            "tenant_id": str(tenant_id),
+            "notification_ids": [str(pk) for pk in notification_ids],
+        },
+        **options,
     )

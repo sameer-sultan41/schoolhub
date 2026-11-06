@@ -322,8 +322,7 @@ class StaffOrderingTests(StaffManagementAPITestCase):
 
 class OwnScopeTests(StaffManagementAPITestCase):
     def test_own_scope_staff_member_sees_only_themself(self) -> None:
-        from django.core.cache import cache
-
+        from core.rbac.cache import evict_rbac_caches
         from core.rbac.models import Permission, RecordScope, Role, RolePermission, UserRole
 
         with tenant_context(self.tenant.id):
@@ -339,7 +338,7 @@ class OwnScopeTests(StaffManagementAPITestCase):
         UserRole.objects.create(
             user=self.user, role=role, tenant=self.tenant, scope=RecordScope.OWN
         )
-        cache.delete(f"perm-keys:{self.user.pk}")
+        evict_rbac_caches([self.user.pk])
 
         response = self.client.get("/api/v1/staff")
 

@@ -1,16 +1,20 @@
 """Permission keys for the communication module — docs/03-modules/communication.md §4.
 
-Mirrors that table, with two additions §4 needs and does not have — the same
-class of gap fees-finance's `fee-structure.view` and `ledger.create` were:
-`communication.announcement.view` and `communication.notice.view` are granted
-in prose (§7's publication workflow, §8's user journeys — staff reading a draft
-before it is published) but §4 lists only create/update/delete/publish for
-each. Registered here, in the same PR that ships the endpoints, per the
-established resolution — never invent a key the doc does not mention anywhere.
+Mirrors that table, including keys §4 first granted only in prose — the same
+class of gap fees-finance's `fee-structure.view` and `ledger.create` were.
+`communication.announcement.view` and `communication.notice.view` (§7's
+publication workflow, §8's user journeys — staff reading a draft before it is
+published) were added this way and now have their own §4 rows. PR C adds three
+thread gap-fills the same way: `communication.thread.view`
+(reading an inbox §8 describes but §4 never keys), `communication.thread.close`
+(§7's close/reopen, staff-side only) and `communication.thread.oversee`
+(read-only safeguarding access to every thread). Each is registered in the same
+PR that ships its endpoints and added to §4's table, per the established
+resolution — never invent a key the doc does not mention anywhere.
 
-**No RBAC registry change ships with this module.** §4's module verbs `send`,
-`broadcast` and `acknowledge` are already in `core/rbac/registry.py`'s
-`EXTRA_ACTIONS`.
+§4's module verbs `send`, `broadcast` and `acknowledge` were already in
+`core/rbac/registry.py`'s `EXTRA_ACTIONS`; `oversee` is the one verb this module
+added there.
 
 Guardians and students hold no key for browsing announcements/notices directly
 in this plan — they consume via the existing `GET /notifications` inbox
@@ -37,12 +41,13 @@ ANNOUNCEMENT_PUBLISHERS = ("school_admin", "principal")
 
 # §4 — "communication.notice.create/update … school_admin".
 NOTICE_AUTHORS = ("school_admin",)
-NOTICE_VIEWERS = COMMS_STAFF
 # §4 — "communication.notice.publish … principal, school_owner". The approval
 # gate: §7's workflow requires the approver differ from the drafter, enforced
 # in services, not by this key alone (holding the key is necessary, not
 # sufficient — the same shape fees_finance's refund-approval key uses).
 NOTICE_PUBLISHERS = ("principal", "school_owner")
+# Every publisher reads notices too: an approver must be able to see what it approves.
+NOTICE_VIEWERS = tuple(dict.fromkeys((*COMMS_STAFF, *NOTICE_PUBLISHERS)))
 # §4 — "communication.notice.acknowledge … guardian, student, staff roles".
 NOTICE_ACKNOWLEDGERS = ("guardian", "student", "school_admin", "principal", "teacher", "reception")
 
@@ -52,6 +57,9 @@ NOTICE_ACKNOWLEDGERS = ("guardian", "student", "school_admin", "principal", "tea
 # the only mitigation — enforced wherever PR C's broadcast/ package ends up
 # sending it, following this module's per-resource-package convention.
 BROADCAST_SENDERS = ("school_owner", "principal", "school_admin")
+# Declared once: the viewset requires it, and the campus check reads the scopes of
+# the roles that grant it (broadcasts/services/scope.py).
+BROADCAST_SEND = "communication.broadcast.send"
 
 # §4 — "communication.thread.create / communication.message.create … all
 # tenant roles (guardian/student scope own)". Every role gets the key; a
@@ -68,6 +76,12 @@ THREAD_PARTICIPANTS = (
     "guardian",
     "student",
 )
+# Closing/reopening is a staff decision about a conversation — a guardian or
+# student cannot close a thread on the school.
+THREAD_CLOSERS = tuple(role for role in THREAD_PARTICIPANTS if role not in ("guardian", "student"))
+# Read-only access to every thread, not just one's own — the safeguarding
+# oversight the user asked for, held by the school's leadership only.
+THREAD_OVERSEERS = ("school_owner", "principal")
 
 # §4 — "communication.template.view/update … school_admin, it_admin".
 TEMPLATE_MANAGERS = ("school_admin", "it_admin")
@@ -128,15 +142,30 @@ registry.register(
 )
 
 registry.register(
-    "communication.broadcast.send",
+    BROADCAST_SEND,
     "Send an emergency multi-channel broadcast, bypassing preferences and quiet hours.",
     BROADCAST_SENDERS,
 )
 
 registry.register(
+    "communication.thread.view",
+    "Read the message threads one takes part in.",
+    THREAD_PARTICIPANTS,
+)
+registry.register(
     "communication.thread.create",
     "Start a message thread.",
     THREAD_PARTICIPANTS,
+)
+registry.register(
+    "communication.thread.close",
+    "Close or reopen a message thread one takes part in.",
+    THREAD_CLOSERS,
+)
+registry.register(
+    "communication.thread.oversee",
+    "Read every message thread in the school, audited, without taking part.",
+    THREAD_OVERSEERS,
 )
 registry.register(
     "communication.message.create",

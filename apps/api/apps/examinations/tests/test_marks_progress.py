@@ -21,6 +21,7 @@ from apps.examinations.tests.factories import (
     StaffFactory,
     TeacherAllocationFactory,
     UserFactory,
+    grant,
 )
 from apps.examinations.tests.test_marks import MARKS
 from apps.examinations.tests.test_marks_grid import GridTestCase
@@ -137,6 +138,13 @@ class ProgressBySectionTests(GridTestCase):
 
         self.assertEqual(set(self.progress(client)), {str(self.section.pk)})
 
+    def test_progress_narrows_by_the_progress_key_s_scope(self) -> None:
+        """L36: an `all` entry role does not widen an `assigned` view role's progress."""
+        grant(self.subject_teacher_user, "exams.marks.create", scope=RecordScope.ALL)
+        client = self.client_for(self.subject_teacher_user, "exams.marks.view")
+
+        self.assertEqual(set(self.progress(client)), {str(self.section.pk)})
+
     def test_progress_of_an_exam_outside_the_caller_s_scope_is_a_404(self) -> None:
         with tenant_context(self.tenant.id):
             stranger = UserFactory(tenant=self.tenant)
@@ -177,8 +185,26 @@ class LockScopeTests(GridTestCase):
             self.exam_subject.refresh_from_db()
         self.assertIsNone(self.exam_subject.marks_locked_at)
 
+    def test_lock_cannot_reach_an_exam_subject_the_marks_view_role_hides(self) -> None:
+        """ADR-0031 decision 3: the read key's `assigned` reach (no allocation in this
+        subject) hides the exam-subject, so an `all` lock role does not reach it."""
+        with tenant_context(self.tenant.id):
+            locker = UserFactory(tenant=self.tenant)
+            StaffFactory(tenant=self.tenant, campus=self.campus, user_id=locker.pk)
+        grant(locker, "exams.marks.lock", scope=RecordScope.ALL)
+        client = self.client_for(locker, "exams.marks.view", scope=RecordScope.ASSIGNED)
+
+        for action in ("lock-marks", "unlock-marks"):
+            with self.subTest(action=action):
+                response = client.post(f"/api/v1/exam-subjects/{self.exam_subject.pk}:{action}")
+                self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        with tenant_context(self.tenant.id):
+            self.exam_subject.refresh_from_db()
+        self.assertIsNone(self.exam_subject.marks_locked_at)
+
     def test_an_assigned_locker_reaches_their_own_exam_subject(self) -> None:
-        client = self.client_for(self.subject_teacher_user, "exams.marks.lock")
+        # Both keys: the route reaches a row under the marks view key and its own.
+        client = self.client_for(self.subject_teacher_user, "exams.marks.view", "exams.marks.lock")
 
         response = client.post(f"/api/v1/exam-subjects/{self.exam_subject.pk}:lock-marks")
 

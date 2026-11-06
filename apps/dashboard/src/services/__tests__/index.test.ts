@@ -36,6 +36,7 @@ describe("Services", () => {
       "attendanceReports",
       "attendanceSettings",
       "auth",
+      "broadcasts",
       "curriculum",
       "dashboard",
       "examReports",
@@ -49,6 +50,7 @@ describe("Services", () => {
       "jobs",
       "leaveRequests",
       "marks",
+      "messageThreads",
       "periods",
       "promotions",
       "questionBanks",
@@ -63,6 +65,7 @@ describe("Services", () => {
       "teacherAllocations",
       "teacherSubstitutions",
       "tenant",
+      "threadOversight",
       "timetableSlots",
     ]);
 
@@ -237,6 +240,25 @@ describe("Services", () => {
     expect(typeof Services.leaveRequests.fetchLeavePage).toBe("function");
     expect(typeof Services.leaveRequests.fetchLeaveTypes).toBe("function");
     expect(typeof Services.leaveRequests.decideLeave).toBe("function");
+
+    expect(typeof Services.messageThreads.listThreads).toBe("function");
+    expect(typeof Services.messageThreads.fetchThread).toBe("function");
+    expect(typeof Services.messageThreads.createThread).toBe("function");
+    expect(typeof Services.messageThreads.listMessages).toBe("function");
+    expect(typeof Services.messageThreads.postMessage).toBe("function");
+    expect(typeof Services.messageThreads.markRead).toBe("function");
+    expect(typeof Services.messageThreads.closeThread).toBe("function");
+    expect(typeof Services.messageThreads.reopenThread).toBe("function");
+    expect(typeof Services.messageThreads.searchRecipients).toBe("function");
+    expect(typeof Services.messageThreads.downloadAttachment).toBe("function");
+
+    expect(typeof Services.threadOversight.listThreads).toBe("function");
+    expect(typeof Services.threadOversight.fetchThread).toBe("function");
+    expect(typeof Services.threadOversight.listMessages).toBe("function");
+    expect(typeof Services.threadOversight.downloadAttachment).toBe("function");
+
+    expect(typeof Services.broadcasts.preview).toBe("function");
+    expect(typeof Services.broadcasts.send).toBe("function");
 
     expect(typeof Services.attendanceReports.runReport).toBe("function");
     expect(typeof Services.attendanceReports.exportReport).toBe("function");

@@ -546,6 +546,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/broadcasts:emergency": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send an emergency broadcast
+         * @description `POST /broadcasts:emergency` — 202 + job; poll `GET /jobs/{id}`.
+         *
+         *     Accepts `Idempotency-Key`: a repeat with the same body within 24 hours
+         *     replays the first 202 and its `job_id`; the same key with a different body
+         *     (a corrected message) is a 422. A 409 is raised, not returned, so it is
+         *     never stored and a retry with the same key re-checks the audience.
+         */
+        post: operations["broadcasts:emergency_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/broadcasts:preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview an emergency broadcast's audience and channels
+         * @description `POST /broadcasts:preview` — the count, digest and channels a send must repeat back.
+         */
+        post: operations["broadcasts:preview_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/broadcasts:scope": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The campuses the caller may broadcast to
+         * @description `GET /broadcasts:scope` — `campus_ids` is null when unrestricted.
+         *
+         *     `sender_campus_ids`, the rule `preview` and `emergency` enforce, so the
+         *     screen can offer only the campuses a send will accept. An empty list is
+         *     a 200, not a 404: this reads the caller's own capability, not a record.
+         */
+        get: operations["broadcasts:scope_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/budgets": {
         parameters: {
             query?: never;
@@ -2866,7 +2935,8 @@ export interface paths {
         /**
          * @description `POST /marks-imports` — §9's marks sheet, as 202 + a job.
          *
-         *     A pure job-launcher: no queryset, no record scope. The uploaded file is
+         *     A pure job-launcher with no queryset. Record scope applies in the job, which
+         *     narrows the class roll to the students this request's key reaches. The uploaded file is
          *     handed to the task base64-encoded in the job payload, matching
          *     `attendance`'s importer — a file small enough to be a marks sheet is small
          *     enough to carry, and staging it in object storage first would add a failure
@@ -2945,6 +3015,257 @@ export interface paths {
          *     UI shows.
          */
         post: operations["marks:bulk_entry_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-thread-oversight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `/message-thread-oversight` — every alive thread in the tenant, read-only. */
+        get: operations["message_thread_oversight_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-thread-oversight/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET /message-thread-oversight/{id}` — one thread; writes an audit row. */
+        get: operations["message_thread_oversight_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-thread-oversight/{id}/attachments/{file_id}:download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get a signed download URL for a thread attachment, audited
+         * @description `POST /message-thread-oversight/{id}/attachments/{file_id}:download`.
+         *
+         *     Internal-note attachments included, as on the messages list. Audited
+         *     once the link is signed, so a miss writes no row.
+         */
+        post: operations["message_thread_oversight_attachments_:download_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-thread-oversight/{thread_pk}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET /message-thread-oversight/{thread_pk}/messages` — the whole conversation.
+         *
+         *     Internal notes included; each request writes an audit row. Never stamps
+         *     `read_by`.
+         */
+        get: operations["message_thread_oversight_messages_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/message-threads` — the caller's own inbox.
+         *
+         *     No `campus_id` column on this table, so `scope_campus_field = None`. It is
+         *     unused in any case: `get_queryset` does not call `scope_queryset` at all.
+         */
+        get: operations["message_threads_list"];
+        put?: never;
+        /** @description `POST /message-threads` — a thread and its first message, together. */
+        post: operations["message_threads_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-threads/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/message-threads` — the caller's own inbox.
+         *
+         *     No `campus_id` column on this table, so `scope_campus_field = None`. It is
+         *     unused in any case: `get_queryset` does not call `scope_queryset` at all.
+         */
+        get: operations["message_threads_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-threads/{id}/attachments/{file_id}:download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get a signed download URL for a thread attachment
+         * @description `POST /message-threads/{id}/attachments/{file_id}:download`.
+         *
+         *     The only way a participant fetches a thread attachment: the purpose is
+         *     module-gated, so the generic `/files` routes never reach it. Not audited,
+         *     as reading the thread's messages is not.
+         */
+        post: operations["message_threads_attachments_:download_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-threads/{id}:close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `POST /message-threads/{id}:close` — open -> closed. */
+        post: operations["message_threads_:close_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-threads/{id}:mark-read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /message-threads/{id}:mark-read` — stamp every unread message as read.
+         *
+         *     Not audited: a read receipt is the caller's own state, not a change to
+         *     the conversation.
+         */
+        post: operations["message_threads_:mark_read_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-threads/{id}:reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `POST /message-threads/{id}:reopen` — closed -> open. */
+        post: operations["message_threads_:reopen_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-threads/{thread_pk}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET/POST /message-threads/{thread_pk}/messages` — one thread's conversation.
+         *
+         *     The thread resolves through `visible_threads`, so a thread the caller does
+         *     not take part in — or no longer owns the child of — is a 404 here exactly
+         *     as on retrieve. Every post goes through `post_message`, which holds the same
+         *     rules again for callers that never reach this view.
+         */
+        get: operations["message_threads_messages_list"];
+        put?: never;
+        /**
+         * @description `POST /message-threads/{thread_pk}/messages` — a reply.
+         *
+         *     Not audited: the message is itself an immutable, attributed record
+         *     (append-only `messages`), so an audit row would only copy it.
+         */
+        post: operations["message_threads_messages_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-threads/recipients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET /message-threads/recipients?search=` — staff for an internal or group thread. */
+        get: operations["message_threads_recipients_retrieve"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6182,6 +6503,10 @@ export interface components {
             title: string;
             sections: components["schemas"]["PaperSection"][];
         };
+        /** @description An attachment's short-lived signed link, as `POST /files/{id}:download` returns one. */
+        AttachmentDownload: {
+            download_url: string;
+        };
         /**
          * @description `attendance_corrections` — the request half. Decisions are colon-actions.
          *
@@ -6366,6 +6691,71 @@ export interface components {
          * @enum {string}
          */
         BackgroundJobStatusEnum: "queued" | "running" | "succeeded" | "failed";
+        /** @description The `audience_filter` keys `audience.resolve_audience` reads. */
+        BroadcastAudienceFilter: {
+            class_ids?: string[];
+            section_ids?: string[];
+            house_ids?: string[];
+            campus_ids?: string[];
+            user_ids?: string[];
+            role_slugs?: string[];
+        };
+        /** @description What a send would do right now. */
+        BroadcastPreview: {
+            recipient_count: number;
+            /** @description sha256 hex of the sorted recipient ids joined by ','; send repeats it back. */
+            audience_digest: string;
+            channels: string[];
+            /** @description Channels the trigger declares that have no adapter yet; recorded as skipped. */
+            unavailable_channels: string[];
+        };
+        BroadcastPreviewResponse: {
+            data: components["schemas"]["BroadcastPreview"];
+        };
+        BroadcastQueued: {
+            /** Format: uuid */
+            job_id: string;
+            status: string;
+        };
+        /** @description `ActionResponse.accepted`'s body; poll `GET /jobs/{job_id}`. */
+        BroadcastQueuedResponse: {
+            data: components["schemas"]["BroadcastQueued"];
+        };
+        /**
+         * @description Who the broadcast goes to and what it says.
+         *
+         *     Every targeting id must be a live row of the caller's tenant, else **404**
+         *     (§11): plain UUIDs, not related fields, because a related field answers an
+         *     unknown id with a 400 naming it. Needs `tenant_id` in the context.
+         *
+         *     `validated_data["audience_filter"]` comes back JSON-ready (ids as strings),
+         *     since it is stored on the job and in the audit row as is.
+         */
+        BroadcastRequest: {
+            audience_type: components["schemas"]["CommunicationAudienceTypeEnum"];
+            audience_filter?: components["schemas"]["BroadcastAudienceFilter"];
+            /** Format: uuid */
+            campus_id?: string | null;
+            message: string;
+        };
+        /** @description Where the caller may broadcast, read from the same rule the send enforces. */
+        BroadcastScope: {
+            /** @description null: unrestricted, so `campus_id` is optional and may be any campus. A list: the only campuses the caller may target, one of which a send must name as `campus_id`; an empty list means the caller can reach no campus. */
+            campus_ids: string[] | null;
+        };
+        BroadcastScopeResponse: {
+            data: components["schemas"]["BroadcastScope"];
+        };
+        /** @description The preview's answer, repeated back: a mismatch on either is a 409. */
+        BroadcastSend: {
+            audience_type: components["schemas"]["CommunicationAudienceTypeEnum"];
+            audience_filter?: components["schemas"]["BroadcastAudienceFilter"];
+            /** Format: uuid */
+            campus_id?: string | null;
+            message: string;
+            confirm_recipient_count: number;
+            audience_digest: string;
+        };
         Budget: {
             /** Format: uuid */
             readonly id: string;
@@ -7976,6 +8366,10 @@ export interface components {
             memo: string;
             lines: components["schemas"]["LedgerLine"][];
         };
+        /** @description `:mark-read`'s result — how many messages it stamped. */
+        MarkReadResult: {
+            marked: number;
+        };
         /**
          * @description `marks` — read shape for `GET /marks` (§16).
          *
@@ -8118,6 +8512,85 @@ export interface components {
             unlocked_rows: number;
             already_unlocked: boolean;
         };
+        /** @description One message in a thread, as its participants read it. */
+        Message: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly thread_id: string;
+            /**
+             * Format: uuid
+             * @description users(id); must be a thread participant.
+             */
+            readonly sender_id: string;
+            readonly body: string;
+            readonly attachments: string[] | null;
+            /** @description Staff-only: hidden from guardians and students. */
+            readonly is_internal_note: boolean;
+            /** @description User id -> ISO 8601 time that participant read the message. */
+            readonly read_by: {
+                [key: string]: string;
+            } | null;
+            /** Format: date-time */
+            readonly sent_at: string;
+        };
+        /** @description Shape only. Who may post, and what, is `services.post_message`'s rule. */
+        MessageCreate: {
+            body: string;
+            attachments?: string[] | null;
+            /** @default false */
+            is_internal_note: boolean;
+        };
+        /** @description One inbox row. `unread_count` is the viewset's per-caller annotation. */
+        MessageThread: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly subject: string;
+            readonly thread_type: components["schemas"]["ThreadTypeEnum"];
+            /** Format: uuid */
+            readonly student_id: string | null;
+            readonly participant_user_ids: string[];
+            /**
+             * Format: uuid
+             * @description users(id); staff member currently responsible.
+             */
+            readonly assigned_to_id: string | null;
+            readonly status: components["schemas"]["MessageThreadStatusEnum"];
+            /**
+             * Format: date-time
+             * @description Denormalized for inbox sorting.
+             */
+            readonly last_message_at: string;
+            /** Format: date-time */
+            readonly closed_at: string | null;
+            /** Format: uuid */
+            readonly created_by: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly unread_count: number;
+        };
+        /**
+         * @description Shape only. Who may start which thread, with whom, is `services.create`'s rule.
+         *
+         *     `student_id` and `participant_user_ids` are plain UUIDs, not related fields:
+         *     a related field answers an unknown id with a 400 naming it, and whether a
+         *     student or user exists outside the caller's reach must stay a 404.
+         */
+        MessageThreadCreate: {
+            subject: string;
+            thread_type: components["schemas"]["ThreadTypeEnum"];
+            /** Format: uuid */
+            student_id?: string | null;
+            participant_user_ids?: string[];
+            body: string;
+            attachments?: string[] | null;
+        };
+        /**
+         * @description * `open` - Open
+         *     * `closed` - Closed
+         * @enum {string}
+         */
+        MessageThreadStatusEnum: "open" | "closed";
         /** @description One register the caller marks on a date. The period fields are null in daily mode. */
         MyRegister: {
             /** Format: uuid */
@@ -8579,6 +9052,26 @@ export interface components {
                 };
             };
         };
+        PaginatedMessageList: {
+            data?: components["schemas"]["Message"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedMessageThreadList: {
+            data?: components["schemas"]["MessageThread"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
         PaginatedNoticeList: {
             data?: components["schemas"]["Notice"][];
             meta?: {
@@ -8851,6 +9344,16 @@ export interface components {
         };
         PaginatedTermList: {
             data?: components["schemas"]["Term"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedThreadOversightList: {
+            data?: components["schemas"]["ThreadOversight"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -11697,6 +12200,56 @@ export interface components {
             readonly updated_at: string;
         };
         /**
+         * @description A thread as an overseer reads it: the inbox row minus `unread_count`.
+         *
+         *     An overseer is never a participant, so there is no per-caller unread state.
+         *     Messages reuse `MessageSerializer` — the same fields, internal notes included.
+         */
+        ThreadOversight: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly subject: string;
+            readonly thread_type: components["schemas"]["ThreadTypeEnum"];
+            /** Format: uuid */
+            readonly student_id: string | null;
+            readonly participant_user_ids: string[];
+            /**
+             * Format: uuid
+             * @description users(id); staff member currently responsible.
+             */
+            readonly assigned_to_id: string | null;
+            readonly status: components["schemas"]["MessageThreadStatusEnum"];
+            /**
+             * Format: date-time
+             * @description Denormalized for inbox sorting.
+             */
+            readonly last_message_at: string;
+            /** Format: date-time */
+            readonly closed_at: string | null;
+            /** Format: uuid */
+            readonly created_by: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /** @description A staff member a caller can add to an internal or group thread. */
+        ThreadRecipient: {
+            /** Format: uuid */
+            user_id: string;
+            name: string;
+            role: string | null;
+        };
+        /** @description `GET /message-threads/recipients`'s real response shape — a capped, unpaginated list. */
+        ThreadRecipientListResponse: {
+            data: components["schemas"]["ThreadRecipient"][];
+        };
+        /**
+         * @description * `guardian_school` - Guardian-school
+         *     * `internal` - Internal
+         *     * `group` - Group
+         * @enum {string}
+         */
+        ThreadTypeEnum: "guardian_school" | "internal" | "group";
+        /**
          * @description One finding of the conflict engine (§6): what `slots.conflicts.detect_conflicts`
          *     returns, typed so the client reads `:validate`, `:publish` and every slot write's
          *     `meta.conflicts` through one generated shape.
@@ -12725,6 +13278,110 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RefreshResponse"];
+                };
+            };
+        };
+    };
+    "broadcasts:emergency_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BroadcastSend"];
+                "application/x-www-form-urlencoded": components["schemas"]["BroadcastSend"];
+                "multipart/form-data": components["schemas"]["BroadcastSend"];
+            };
+        };
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BroadcastQueuedResponse"];
+                };
+            };
+            /** @description A targeting id is not this school's, `campus_id` (or a named user) is outside a campus-scoped sender's campuses, or the sender's scope reaches no campus at all. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `audience_changed`: the count or digest no longer matches; `error.meta` carries the current `recipient_count` and `audience_digest`. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The audience resolves to nobody, or a campus-scoped sender gave no `campus_id`; or `idempotency_key_reused`: the `Idempotency-Key` was already used with a different body. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "broadcasts:preview_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BroadcastRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["BroadcastRequest"];
+                "multipart/form-data": components["schemas"]["BroadcastRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BroadcastPreviewResponse"];
+                };
+            };
+            /** @description A targeting id is not this school's, `campus_id` (or a named user) is outside a campus-scoped sender's campuses, or the sender's scope reaches no campus at all. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The audience resolves to nobody, or a campus-scoped sender gave no `campus_id`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "broadcasts:scope_retrieve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BroadcastScopeResponse"];
                 };
             };
         };
@@ -16935,7 +17592,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The section's active roll in the exam's session, in roll order, each student with their `marks` row or null. `meta.exam_subject` carries `max_marks`, `pass_marks`, `has_practical` and `practical_max_marks`. `meta.writable` says whether `:bulk-entry` would accept this grid now; when false, `meta.unwritable_reason` is one of `no_permission`, `exam_status`, `locked`, `window_not_open` or `window_closed`, and `meta.unwritable_message` is the refusing gate's sentence. An exam-subject or section the caller may not enter (`services.may_enter_marks`) is a 404. */
+            /** @description The section's active roll in the exam's session, in roll order, each student with their `marks` row or null. `meta.exam_subject` carries `max_marks`, `pass_marks`, `has_practical` and `practical_max_marks`. `meta.writable` says whether `:bulk-entry` would accept this grid now; when false, `meta.unwritable_reason` is one of `no_permission`, `exam_status`, `locked`, `window_not_open` or `window_closed`, and `meta.unwritable_message` is the refusing gate's sentence. An exam-subject or section the caller may not read (`services.may_enter_marks`) is a 404. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -16967,6 +17624,352 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BulkMarksEntryResult"];
+                };
+            };
+        };
+    };
+    message_thread_oversight_list: {
+        parameters: {
+            query?: {
+                assigned_to?: string;
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                status?: string;
+                student_id?: string;
+                thread_type?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedThreadOversightList"];
+                };
+            };
+        };
+    };
+    message_thread_oversight_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this message thread. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadOversight"];
+                };
+            };
+        };
+    };
+    "message_thread_oversight_attachments_:download_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_id: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttachmentDownload"];
+                };
+            };
+            /** @description No such thread, or the file is not attached to one of its messages. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    message_thread_oversight_messages_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                thread_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedMessageList"];
+                };
+            };
+        };
+    };
+    message_threads_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                status?: string;
+                student_id?: string;
+                thread_type?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedMessageThreadList"];
+                };
+            };
+        };
+    };
+    message_threads_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageThreadCreate"];
+                "application/x-www-form-urlencoded": components["schemas"]["MessageThreadCreate"];
+                "multipart/form-data": components["schemas"]["MessageThreadCreate"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageThread"];
+                };
+            };
+        };
+    };
+    message_threads_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this message thread. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageThread"];
+                };
+            };
+        };
+    };
+    "message_threads_attachments_:download_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_id: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttachmentDownload"];
+                };
+            };
+            /** @description Not a thread the caller takes part in, or the file is not attached to one of its messages the caller can read (a guardian or student never reaches a file only an internal note carries). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "message_threads_:close_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageThread"];
+                };
+            };
+        };
+    };
+    "message_threads_:mark_read_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkReadResult"];
+                };
+            };
+        };
+    };
+    "message_threads_:reopen_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageThread"];
+                };
+            };
+        };
+    };
+    message_threads_messages_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                thread_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedMessageList"];
+                };
+            };
+        };
+    };
+    message_threads_messages_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageCreate"];
+                "application/x-www-form-urlencoded": components["schemas"]["MessageCreate"];
+                "multipart/form-data": components["schemas"]["MessageCreate"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+        };
+    };
+    message_threads_recipients_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Matches first name, last name or email. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadRecipientListResponse"];
                 };
             };
         };

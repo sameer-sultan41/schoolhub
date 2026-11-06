@@ -6,6 +6,10 @@ import type { StudentsPageQuery, UpdateStudentInput } from "./students-type";
 /** The students module's constants — collected here so every feature file under
  * `src/features/students/` shares one definition instead of repeating the literal. */
 
+/** The query-key module the students reads live under, so a student write stales another
+ * screen's student search too. */
+export const STUDENTS_QUERY_MODULE = "students";
+
 /** The one status a student can be withdrawn from, and the directory's default status
  * filter. */
 export const STUDENT_WITHDRAWABLE_STATUS = "active";
