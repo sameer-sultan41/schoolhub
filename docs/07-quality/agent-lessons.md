@@ -390,6 +390,17 @@
   the state the assertion needs, across the process boundary. If it cannot, give the fake a
   dev-only behaviour behind a setting that tests leave off (`PAYMENT_FAKE_SETTLES_ON_INITIATE`).
 
+### L60. A new required production setting is supplied to every CI job that loads prod settings
+
+- **Mistake.** Online payments made `prod.py` read `INTEGRATIONS_ENCRYPTION_KEYS` with no default,
+  so production fails closed at boot. The `security` job in `.github/workflows/api.yml` runs
+  `manage.py check --deploy` under `config.settings.prod` and did not set it, so it would have
+  failed with `ImproperlyConfigured` on the PR (fee online payments review).
+- **Check.** When a setting in `prod.py` reads `env(...)` with no default, grep
+  `.github/workflows/` and `apps/api/Dockerfile` for `config.settings.prod` and supply the variable
+  in each such step: a throwaway value generated at runtime for a secret (never a committed one),
+  a placeholder for a non-secret. Keep production failing closed; never add a default to get green.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.
