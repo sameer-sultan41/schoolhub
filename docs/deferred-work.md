@@ -782,9 +782,10 @@ either this file or `project-status.md`.
   **no `raw()` helper** — a caller needing markup composes it from escaped
   parts, which puts the escaping in the diff rather than absent from it.
   `core.documents.render_pdf` is now the single WeasyPrint call site on the
-  platform, which matters because WeasyPrint's system libraries exist only in
-  `api.yml`'s `test` job: one place now has to remember that the import must
-  stay inside the function, instead of four. `core.exports.tabular` is
+  platform, which matters because WeasyPrint's system libraries were once
+  installed only in `api.yml`'s `test` job (the API image now carries them too,
+  via `WEASYPRINT_LIBS` in `apps/api/Dockerfile`): one place has to remember that
+  the import must stay inside the function, instead of four. `core.exports.tabular` is
   `apps/attendance/exports.py` moved unchanged — it was always generic over
   `list[dict]`, which is exactly what let it move.
 - **`core.idempotency` now exists** (PR 3): stores a colon-action's response
