@@ -1153,7 +1153,7 @@ class ResultViewSet(
     @extend_schema(request=ResultWithholdSerializer, responses={200: ResultSerializer})
     def withhold(self, request: Request, pk: str | None = None):
         """`POST /results/{id}:withhold` — §5.6's per-student hold."""
-        # Through the record scope (L34): a result outside it is a 404.
+        # Through the record scope (L46): a result outside it is a 404.
         result = get_object_or_404(self.get_queryset(), pk=pk)
         serializer = ResultWithholdSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

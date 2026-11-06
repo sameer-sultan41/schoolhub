@@ -17,7 +17,7 @@ export interface ExamSectionOption {
 /** The sections an exam sits in, as `{ id, name }` filter options ("Grade 5 – A"): the ones its
  * sittings name, read under the Schedule tab's key. The Results, Report cards and Admit cards
  * filters use it. `null` when the viewer lacks `exams.schedule.view`, which `/exam-schedules`
- * needs: the sittings are never read and the caller hides its section filter (L36). */
+ * needs: the sittings are never read and the caller hides its section filter (L48). */
 export function useExamSectionOptions(examId: string): ExamSectionOption[] | null {
   const t = useTranslations("exams");
   const { data: user } = useCurrentUser();
