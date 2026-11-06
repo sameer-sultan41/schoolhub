@@ -293,3 +293,24 @@ export function buildLiveThread(studentId: string) {
 export function buildLiveBroadcastMessage(): string {
   return `E2E drill ${uniqueTag()}: school closes at noon.`;
 }
+
+/** A tuition fee head posting to `ledgerAccountId` (the seeded 4000 fee income account). */
+export function buildLiveFeeHead(ledgerAccountId: string) {
+  const tag = uniqueTag();
+  return {
+    name: `E2E Tuition ${tag}`,
+    code: `E2E-TUI-${tag}`.toUpperCase(),
+    category: "tuition",
+    ledger_account: ledgerAccountId,
+  };
+}
+
+/** A fee structure pricing one class for one session. */
+export function buildLiveFeeStructure(sessionId: string, classId: string) {
+  const tag = uniqueTag();
+  return {
+    name: `E2E Fees ${tag}`,
+    academic_session: sessionId,
+    school_class: classId,
+  };
+}
