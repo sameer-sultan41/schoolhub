@@ -362,7 +362,9 @@ def import_settlement_file_task(self, *, tenant_id: str, job_id: str, actor_id: 
 
 
 @shared_task(base=TenantAwareTask)
-def render_receipt_task(*, tenant_id: str, receipt_id: str, actor_id: str) -> dict[str, str]:
+def render_receipt_task(
+    *, tenant_id: str, receipt_id: str, actor_id: str | None = None
+) -> dict[str, str]:
     """Render one receipt to PDF and attach it.
 
     Asynchronous because WeasyPrint is the slowest thing this platform does and
@@ -393,10 +395,9 @@ def render_receipt_task(*, tenant_id: str, receipt_id: str, actor_id: str) -> di
             original_name=f"receipt-{receipt.receipt_no}.pdf",
             mime_type="application/pdf",
             data=data,
-            # `actor_id` is required by create_ready_file and the task always
-            # receives one: a receipt is rendered on behalf of whoever took the
-            # payment, and a settlement match passes the importing accountant.
-            actor_id=uuid.UUID(actor_id),
+            # Whoever took the payment; None when a gateway callback or the
+            # reconciliation confirmed it and no person did.
+            actor_id=uuid.UUID(actor_id) if actor_id else None,
         )
         Receipt.objects.filter(pk=receipt.pk).update(pdf_file=stored)
 
@@ -414,6 +415,19 @@ def expire_fee_vouchers() -> dict[str, int]:
     from apps.fees_finance.services import expire_tenant_vouchers
 
     return for_each_tenant(expire_tenant_vouchers, job="fees-voucher-expiry")
+
+
+@shared_task
+def expire_pending_online_payments() -> dict[str, int]:
+    """Every 15 minutes: fail online checkouts left pending past their TTL.
+
+    A pending checkout holds back the invoice's available balance, so an
+    abandoned one would keep refusing the cashier. A payment the provider later
+    reports paid still confirms (and is flagged `paid_after_failed`).
+    """
+    from apps.fees_finance.services import expire_tenant_pending_online_payments
+
+    return for_each_tenant(expire_tenant_pending_online_payments, job="fees-online-payment-expiry")
 
 
 @shared_task(base=TenantAwareTask)

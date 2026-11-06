@@ -52,6 +52,9 @@ EXTRA_ACTIONS = frozenset(
         "request",
         "revoke",
         "oversee",
+        # fees-finance §4: a family pays an invoice online; staff manage the school's gateway.
+        "pay-online",
+        "manage",
     }
 )
 

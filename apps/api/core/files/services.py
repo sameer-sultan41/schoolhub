@@ -166,9 +166,12 @@ def create_ready_file(
     original_name: str,
     mime_type: str,
     data: bytes,
-    actor_id: uuid.UUID,
+    actor_id: uuid.UUID | None,
 ) -> File:
     """Register a server-generated file (a background job's export/report/PDF).
+
+    ``actor_id`` is ``None`` for system work with no user behind it, e.g. the receipt
+    for a payment a gateway callback confirmed.
 
     Skips pending -> confirm entirely: the caller already has the bytes in
     hand (there is no client upload to wait for), so this writes them straight

@@ -31,11 +31,19 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from django.core.cache import cache
 from django.utils import timezone
 from rest_framework import status
+from rest_framework.test import APIClient
 
 from apps.fees_finance import services
-from apps.fees_finance.models import LedgerEntry, PaymentStatus, Receipt
+from apps.fees_finance.models import (
+    GatewayIssueKind,
+    GatewayReconciliationIssue,
+    LedgerEntry,
+    PaymentStatus,
+    Receipt,
+)
 from apps.fees_finance.services import ensure_system_accounts
 from apps.fees_finance.tests.base import FEATURE, FeesFinanceAPITestCase
 from apps.fees_finance.tests.factories import (
@@ -60,6 +68,7 @@ from apps.fees_finance.tests.factories import (
     fine_head,
     posting,
 )
+from apps.fees_finance.tests.online_base import ONLINE_FEATURE, make_account
 from core.tenancy.context import tenant_context
 
 
@@ -511,3 +520,96 @@ class FinanceCrossTenantTests(FeesFinanceAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.json()["data"], [])
+
+
+class OnlinePaymentsCrossTenantTests(FeesFinanceAPITestCase):
+    """The online-payment endpoints, under the same all-keys caller.
+
+    The flag is on and this school has its own gateway account, so a denial can
+    only come from tenant scoping. The public callback has no caller at all:
+    there, the URL's slug is what scopes, and another school's token under it
+    must not resolve.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        cache.clear()
+        self.other_tenant = TenantFactory()
+        for tenant in (self.tenant, self.other_tenant):
+            enable_feature(tenant, FEATURE)
+            enable_feature(tenant, ONLINE_FEATURE)
+        with tenant_context(self.other_tenant.id):
+            other_session = AcademicSessionFactory(tenant=self.other_tenant, is_current=True)
+            other_student = StudentFactory(
+                tenant=self.other_tenant, campus=CampusFactory(tenant=self.other_tenant)
+            )
+            self.other_invoice = FeeInvoiceFactory(
+                tenant=self.other_tenant,
+                student=other_student,
+                academic_session=other_session,
+                invoice_no="INV-OTHER-1",
+            )
+        self.account = make_account(self.tenant, self.user.pk)
+        self.other_account = make_account(
+            self.other_tenant,
+            self.user.pk,
+            credentials={"merchant_id": "OTHER-000001", "secret": "other-school-secret"},
+        )
+        with tenant_context(self.other_tenant.id):
+            self.other_issue = GatewayReconciliationIssue.objects.create(
+                tenant=self.other_tenant,
+                kind=GatewayIssueKind.UNKNOWN_REFERENCE,
+                gateway_provider="fake",
+                order_id=f"SH-{self.other_invoice.invoice_no}-0badc0de",
+                gateway_amount=Decimal("100.00"),
+                detected_at=timezone.now(),
+            )
+
+    def test_other_tenant_invoice_is_404(self) -> None:
+        response = self.client.post(
+            f"/api/v1/fee-invoices/{self.other_invoice.pk}:initiate-payment",
+            {"return_path": "/portal/fees"},
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="cross-tenant-1",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_other_tenant_issue_resolve_is_404(self) -> None:
+        response = self.client.post(
+            f"/api/v1/gateway-reconciliation-issues/{self.other_issue.pk}:resolve",
+            {"action": "book_at_gateway_amount"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        with tenant_context(self.other_tenant.id):
+            self.other_issue.refresh_from_db()
+        self.assertIsNone(self.other_issue.resolution)
+
+    def test_a_foreign_issue_is_not_found(self) -> None:
+        response = self.client.get(f"/api/v1/gateway-reconciliation-issues/{self.other_issue.pk}")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_a_foreign_tenant_s_issues_are_never_listed(self) -> None:
+        response = self.client.get("/api/v1/gateway-reconciliation-issues")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["data"], [])
+
+    def test_the_gateway_account_read_is_this_school_s(self) -> None:
+        response = self.client.get("/api/v1/payment-gateway-accounts/current")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["data"]["id"], str(self.account.pk))
+
+    def test_another_school_s_token_under_this_slug_is_404(self) -> None:
+        response = APIClient().post(
+            f"/api/v1/public/payment-callbacks/{self.tenant.slug}/"
+            f"{self.other_account.callback_token}",
+            data=b"{}",
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

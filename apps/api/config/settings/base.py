@@ -25,6 +25,11 @@ ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.
 # Apex domain for tenant wildcard subdomains: `<slug>.<PLATFORM_DOMAIN>`. Mirrors
 # apps/website's NEXT_PUBLIC_PLATFORM_DOMAIN — same concept, backend side.
 PLATFORM_DOMAIN = env("PLATFORM_DOMAIN", default="localhost")
+# Links the API hands out to the dashboard (e.g. a payment's return URL) point at
+# `<slug>.app.<PLATFORM_DOMAIN>`, built from these and never from the request's Host
+# header (host-header poisoning). An empty port means the scheme's default.
+DASHBOARD_URL_SCHEME = "https"
+DASHBOARD_URL_PORT = ""
 
 # Encrypts each school's payment-gateway credentials (core.integrations.crypto): Fernet
 # keys, newest first. No default here, so production must set it (prod.py reads it from the
@@ -36,6 +41,9 @@ INTEGRATIONS_ENCRYPTION_KEYS: list[str] = []
 PAYMENT_PROVIDERS_ENABLED: list[str] = []
 # How far a callback's signed timestamp may be from now (replay window).
 PAYMENT_CALLBACK_TOLERANCE_SECONDS = 300
+# How long an online checkout stays pending before it is failed. Revisit against the chosen
+# provider's session lifetime when it ships.
+PAYMENT_PENDING_TTL_MINUTES = 60
 
 # Object storage (core.files) — matches infra/compose's MinIO service in dev, real S3 in
 # prod. Empty S3_ENDPOINT_URL selects NullPresigner (core.files.storage.get_presigner),
@@ -199,6 +207,9 @@ THROTTLE_RATES: dict[str, str] = {
     "anon": "20/min",
     "auth": "10/min",
     "public_form": "5/min",
+    # The public payment callback: per (school, callback token), and failed signatures per IP.
+    "payment_callback": "600/min",
+    "payment_callback_failure": "30/min",
 }
 
 REST_FRAMEWORK = {
@@ -330,6 +341,14 @@ SPECTACULAR_SETTINGS = {
         "SettlementImportStatusEnum": "apps.fees_finance.models.ImportStatus",
         "ExpenseStatusEnum": "apps.fees_finance.models.ExpenseStatus",
         "BudgetStatusEnum": "apps.fees_finance.models.BudgetStatus",
+        # Online payments: `kind` and `action` are reused field names (the finance report's
+        # `kind`), so these are named for their owner.
+        "GatewayIssueKindEnum": "apps.fees_finance.models.GatewayIssueKind",
+        "GatewayIssueResolutionEnum": "apps.fees_finance.models.GatewayIssueResolution",
+        "GatewayIssueActionEnum": [
+            ("book_at_gateway_amount", "book_at_gateway_amount"),
+            ("dismiss", "dismiss"),
+        ],
         # core.notifications' enums are first exposed through the API here —
         # communication's PR A ships the first endpoints (notification-templates,
         # delivery-logs) that serialize them. Named for the same reason as every
@@ -408,6 +427,7 @@ CELERY_TASK_ROUTES = {
     "apps.fees_finance.tasks.render_receipt_task": {"queue": "bulk"},
     "apps.fees_finance.tasks.expire_fee_vouchers": {"queue": "bulk"},
     "apps.fees_finance.tasks.export_finance_report_task": {"queue": "bulk"},
+    "apps.fees_finance.tasks.expire_pending_online_payments": {"queue": "bulk"},
     # A receipt confirmation is the one fee message a family is actively waiting
     # for — they are standing at the counter — so it takes the transactional
     # lane for the reason attendance's absence alert does.
@@ -503,6 +523,12 @@ CELERY_BEAT_SCHEDULE = {
     "expire-fee-vouchers": {
         "task": "apps.fees_finance.tasks.expire_fee_vouchers",
         "schedule": crontab(hour="5", minute="20"),
+    },
+    # Every 15 minutes: an abandoned online checkout holds back the invoice's available
+    # balance (the cashier is refused past it) until it is failed.
+    "expire-pending-online-payments": {
+        "task": "apps.fees_finance.tasks.expire_pending_online_payments",
+        "schedule": crontab(minute="*/15"),
     },
 }
 

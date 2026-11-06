@@ -44,8 +44,9 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, viewsets
+from rest_framework.exceptions import NotFound, Throttled, ValidationError
 from rest_framework.parsers import MultiPartParser
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -82,10 +83,12 @@ from apps.fees_finance.models import (
     FeeStructure,
     FeeVoucher,
     Fine,
+    GatewayReconciliationIssue,
     InvoiceStatus,
     LedgerAccount,
     LedgerEntry,
     Payment,
+    PaymentGatewayAccount,
     Receipt,
     Refund,
     Scholarship,
@@ -106,11 +109,15 @@ from apps.fees_finance.serializers import (
     FeeVoucherSerializer,
     FinanceReportQuerySerializer,
     FineSerializer,
+    GatewayReconciliationIssueSerializer,
     GenerateInvoicesSerializer,
+    InitiatePaymentResultSerializer,
+    InitiatePaymentSerializer,
     IssueVoucherSerializer,
     LedgerAccountSerializer,
     LedgerEntrySerializer,
     ManualJournalSerializer,
+    PaymentGatewayAccountSerializer,
     PaymentSerializer,
     ProcessRefundSerializer,
     ReceiptSerializer,
@@ -118,6 +125,8 @@ from apps.fees_finance.serializers import (
     RefundDecisionSerializer,
     RefundSerializer,
     RequestRefundSerializer,
+    ResolveGatewayIssueSerializer,
+    SavePaymentGatewayAccountSerializer,
     ScholarshipSerializer,
     VoucherCollectionImportSerializer,
     WaiveSerializer,
@@ -126,18 +135,18 @@ from apps.fees_finance.tasks import (
     export_finance_report_task,
     generate_invoices_task,
     import_settlement_file_task,
-    notify_payment_received,
     notify_refund_status,
-    render_receipt_task,
 )
 from apps.school_organization.models import Term
-from core.api.exceptions import DomainRuleViolation
+from core.api.exceptions import DomainRuleViolation, ModuleDisabled
 from core.api.permissions import RequiresModuleFeature
+from core.api.throttling import PaymentCallbackFailureThrottle, PaymentCallbackThrottle
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
-from core.audit.services import record_audit
+from core.audit.services import record_audit, record_security_event
 from core.exports.scope import SCOPE_PERMISSION, scope_permission_payload
 from core.files.services import create_ready_file
 from core.idempotency.services import replay_or_execute
+from core.integrations.payments.base import GatewayUnavailable, InvalidSignature
 from core.jobs.services import create_job, enqueue_job
 from core.money import ZERO
 from core.rbac.permissions import (
@@ -148,6 +157,9 @@ from core.rbac.permissions import (
     route_permission,
     scope_queryset,
 )
+from core.tenancy.context import tenant_atomic
+from core.tenancy.features import is_feature_enabled
+from core.tenancy.models import Tenant
 
 FEATURE = "module.fees_finance"
 
@@ -484,13 +496,16 @@ class FeeInvoiceViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         "partial_update": "fees.invoice.update",
         "destroy": "fees.invoice.update",
         "cancel": "fees.invoice.update",
+        "initiate_payment": "fees.payment.pay-online",
     }
     http_method_names = ["get", "post", "patch", "head", "options"]
 
-    PORTAL_READABLE_ACTIONS = frozenset({"list", "retrieve"})
+    # `initiate_payment` is the one portal *write*: a family paying its own
+    # child's invoice. `fees.payment.pay-online` and record scope `own` narrow it.
+    PORTAL_READABLE_ACTIONS = frozenset({"list", "retrieve", "initiate_payment"})
 
     def get_permissions(self):
-        """Reads may be portal calls; writes never are.
+        """Reads may be portal calls; writes never are, except paying online.
 
         Inverted deliberately — the staff set is the default and the portal
         exemption is the narrow case. A new action added later inherits the
@@ -500,6 +515,19 @@ class FeeInvoiceViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         if self.action in self.PORTAL_READABLE_ACTIONS:
             return [permission() for permission in PORTAL_READABLE_PERMISSIONS]
         return [permission() for permission in STAFF_PERMISSIONS]
+
+    def initial(self, request, *args, **kwargs):
+        """Run the permission checks inside a transaction on a non-atomic route.
+
+        `:initiate-payment` opts out of ATOMIC_REQUESTS (urls.py) so it can commit
+        the pending payment before calling the provider. The tenant binding is
+        `SET LOCAL`, which only holds inside a transaction, so the checks that
+        read tenant data get one of their own here.
+        """
+        if transaction.get_connection().in_atomic_block:
+            return super().initial(request, *args, **kwargs)
+        with transaction.atomic():
+            return super().initial(request, *args, **kwargs)
 
     def get_queryset(self):
         queryset = (
@@ -578,6 +606,58 @@ class FeeInvoiceViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         )
         record_audit(request, "update", canceled, after={"status": canceled.status})
         return ActionResponse.ok(self.get_serializer(canceled).data, message="Invoice canceled.")
+
+    @extend_schema(
+        request=InitiatePaymentSerializer, responses={201: InitiatePaymentResultSerializer}
+    )
+    def initiate_payment(self, request: Request, pk: str | None = None) -> Response:
+        """⚿ `POST /fee-invoices/{id}:initiate-payment` — pay the available balance online.
+
+        Not wrapped in ATOMIC_REQUESTS (urls.py): the service commits the pending
+        payment, calls the provider with no lock or transaction held, then
+        stores the redirect, so each database step here opens its own
+        `tenant_atomic`. `Idempotency-Key` is required and recorded on the
+        payment: a retry with the same key returns the same checkout.
+        """
+        key = (request.headers.get("Idempotency-Key") or "").strip()
+        if not key:
+            raise ValidationError({"idempotency_key": "An Idempotency-Key header is required."})
+        if len(key) > 64:
+            raise ValidationError({"idempotency_key": "Use a key of at most 64 characters."})
+        serializer = InitiatePaymentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        tenant = request.tenant
+        with tenant_atomic(tenant.pk):
+            if not is_feature_enabled(services.ONLINE_PAYMENTS_FEATURE, tenant_id=tenant.pk):
+                raise ModuleDisabled("Online payments are not enabled for your school.")
+            invoice = self.get_object()
+
+        payment, session = services.initiate_online_payment(
+            invoice=invoice,
+            user=request.user,
+            tenant=tenant,
+            return_path=serializer.validated_data["return_path"],
+            idempotency_key=key,
+            absolute_uri=request.build_absolute_uri,
+        )
+
+        with tenant_atomic(tenant.pk):
+            record_audit(
+                request,
+                "create",
+                payment,
+                after={
+                    "amount": str(payment.amount),
+                    "method": payment.method,
+                    "order_id": payment.reference_no,
+                },
+            )
+        return ActionResponse.ok(
+            {"payment_id": str(payment.pk), "redirect_url": session.redirect_url},
+            message="Checkout started.",
+            status=201,
+        )
 
 
 class DiscountViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
@@ -833,19 +913,7 @@ class PaymentViewSet(
                     idempotency_key=key,
                 )
                 record_audit(request, "create", payment, after={"amount": str(payment.amount)})
-                receipt_id = str(payment.receipt.pk)
-                transaction.on_commit(
-                    lambda: render_receipt_task.delay(
-                        tenant_id=str(request.tenant.pk),
-                        receipt_id=receipt_id,
-                        actor_id=str(request.user.pk),
-                    )
-                )
-                transaction.on_commit(
-                    lambda: notify_payment_received.delay(
-                        tenant_id=str(request.tenant.pk), payment_id=str(payment.pk)
-                    )
-                )
+                services.after_payment_confirmed(payment, actor_id=request.user.pk)
             payment.refresh_from_db()
             return ActionResponse.ok(
                 PaymentSerializer(payment).data, message="Payment recorded.", status=201
@@ -858,6 +926,199 @@ class PaymentViewSet(
             request_data=request.data,
             execute=execute,
         )
+
+
+class PaymentGatewayAccountViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
+    """`/payment-gateway-accounts/current` — the school's own merchant account.
+
+    A singleton per school, so `GET`/`PUT` on `current` rather than a collection.
+    Credentials go in and never come out: the response carries the adapter's
+    masked merchant id and the callback URL to paste into the provider.
+    """
+
+    permission_classes = STAFF_PERMISSIONS
+    queryset = PaymentGatewayAccount.objects
+    serializer_class = PaymentGatewayAccountSerializer
+    scope_campus_field = None
+    required_feature = FEATURE
+    required_permission = "fees.gateway.manage"
+    required_permission_map = {"save_current": "fees.gateway.manage"}
+    http_method_names = ["get", "put", "head", "options"]
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["callback_url"] = lambda account: self.request.build_absolute_uri(
+            services.callback_path(tenant=self.request.tenant, account=account)
+        )
+        return context
+
+    @extend_schema(responses={200: PaymentGatewayAccountSerializer})
+    def current(self, request: Request) -> Response:
+        """`GET` — the active account (or the last one), `data: null` when none is set."""
+        account = services.current_gateway_account()
+        return ActionResponse.ok(self.get_serializer(account).data if account else None)
+
+    @extend_schema(
+        request=SavePaymentGatewayAccountSerializer,
+        responses={200: PaymentGatewayAccountSerializer},
+    )
+    def save_current(self, request: Request) -> Response:
+        """`PUT` — set the provider, credentials and whether online payment is on."""
+        serializer = SavePaymentGatewayAccountSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+        account = services.save_gateway_account(
+            provider=payload["provider"],
+            credentials=payload.get("credentials"),
+            is_active=payload["is_active"],
+            actor_id=request.user.pk,
+            tenant_id=request.tenant.pk,
+        )
+        # Never the credentials: only what the response shows.
+        record_audit(
+            request,
+            "update",
+            account,
+            after={
+                "provider": account.provider,
+                "is_active": account.is_active,
+                "merchant_id_masked": account.merchant_id_masked,
+                "credentials_changed": bool(payload.get("credentials")),
+            },
+        )
+        return ActionResponse.ok(self.get_serializer(account).data, message="Gateway saved.")
+
+
+class GatewayReconciliationIssueViewSet(
+    TenantScopedViewSetMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    """`/gateway-reconciliation-issues` — online-payment discrepancies to decide on.
+
+    `:resolve` books the money at the amount the provider verified (with its
+    receipt and ledger posting) or dismisses the issue with a note.
+    """
+
+    permission_classes = STAFF_PERMISSIONS
+    queryset = GatewayReconciliationIssue.objects
+    serializer_class = GatewayReconciliationIssueSerializer
+    filterset_fields = {"kind": ["exact"], "resolution": ["exact", "isnull"]}
+    ordering_fields = ["detected_at"]
+    scope_campus_field = None
+    required_feature = FEATURE
+    required_permission = "fees.gateway.manage"
+    required_permission_map = {"resolve": "fees.gateway.manage"}
+    http_method_names = ["get", "post", "head", "options"]
+
+    @extend_schema(
+        request=ResolveGatewayIssueSerializer,
+        responses={200: GatewayReconciliationIssueSerializer},
+    )
+    def resolve(self, request: Request, pk: str | None = None) -> Response:
+        """⚿ `POST /gateway-reconciliation-issues/{id}:resolve {action, note}`."""
+        serializer = ResolveGatewayIssueSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        issue = self.get_object()
+
+        def execute() -> Response:
+            resolved = services.resolve_gateway_issue(
+                issue=issue,
+                action=serializer.validated_data["action"],
+                note=serializer.validated_data.get("note"),
+                actor_id=request.user.pk,
+            )
+            record_audit(
+                request,
+                "update",
+                resolved,
+                after={
+                    "resolution": resolved.resolution,
+                    "note": resolved.note,
+                    "payment": str(resolved.payment_id) if resolved.payment_id else None,
+                    "order_id": resolved.order_id,
+                    "provider_txn_id": resolved.provider_txn_id,
+                },
+            )
+            return ActionResponse.ok(
+                GatewayReconciliationIssueSerializer(resolved).data, message="Issue resolved."
+            )
+
+        return replay_or_execute(
+            tenant_id=request.tenant.pk,
+            key=request.headers.get("Idempotency-Key"),
+            endpoint="gateway-reconciliation-issues:resolve",
+            request_data=request.data,
+            execute=execute,
+        )
+
+
+class PaymentCallbackView(APIView):
+    """`POST /public/payment-callbacks/{tenant_slug}/{callback_token}` — the provider calls this.
+
+    Unauthenticated; trust comes from the signature, then from re-fetching the
+    transaction from the provider. The slug finds the school (`tenants` has no
+    RLS), the token finds its account (active or not, so a late callback for an
+    old account still applies), and that account's secret verifies the body.
+    Nothing in the body chooses the tenant.
+
+    Not wrapped in ATOMIC_REQUESTS (urls.py): verifying and re-fetching are
+    provider calls and hold no transaction; the event is applied in
+    `tenant_atomic`. A suspended school's callback is still recorded: the money
+    has moved either way.
+
+    | Case | Response |
+    | --- | --- |
+    | Unknown slug or token | 404 |
+    | Bad signature or stale timestamp | 400 `invalid_signature`, and a security event |
+    | Valid, including replays and out-of-order events | 200 `{"received": true}` |
+
+    Failed attempts (bad signature, unknown slug or token) count against a
+    per-IP budget, so guessing tokens or signatures is slowed without slowing a
+    genuine provider.
+    """
+
+    authentication_classes: list = []
+    permission_classes = [AllowAny]
+    throttle_classes = [PaymentCallbackThrottle]
+
+    @extend_schema(request=None, responses={200: None}, auth=[])
+    def post(self, request: Request, tenant_slug: str, callback_token: str) -> Response:
+        failures = PaymentCallbackFailureThrottle()
+        if failures.is_blocked(request):
+            raise Throttled(wait=failures.retry_after(request))
+
+        tenant = Tenant.objects.filter(slug=tenant_slug, deleted_at__isnull=True).first()
+        account = None
+        if tenant is not None:
+            with tenant_atomic(tenant.pk):
+                account = services.gateway_account_for_token(callback_token)
+        if tenant is None or account is None:
+            failures.record_failure(request)
+            raise NotFound()
+
+        try:
+            event = services.verify_gateway_callback(
+                account=account, headers=request.headers, body=request.body
+            )
+        except InvalidSignature as exc:
+            failures.record_failure(request)
+            record_security_event(
+                request,
+                "payment_callback.invalid_signature",
+                tenant=tenant,
+                provider=account.provider,
+            )
+            raise services.InvalidCallbackSignature() from exc
+
+        try:
+            services.handle_gateway_event(account=account, event=event, source="callback")
+        except GatewayUnavailable as exc:
+            # The provider retries a non-2xx callback, and the nightly reconcile
+            # catches it if it never does.
+            raise services.GatewayUnavailableError() from exc
+        return ActionResponse.ok({"received": True})
 
 
 class ReceiptViewSet(
