@@ -138,6 +138,7 @@ export function buildUser(permissions: PermissionKey[]): AuthenticatedUser {
     tenant_id: "tenant-1",
     roles: [],
     permissions,
+    is_restricted_principal: false,
   };
 }
 

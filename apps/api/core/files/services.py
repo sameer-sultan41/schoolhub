@@ -44,20 +44,42 @@ def assert_upload_allowed(*, purpose: str, mime_type: str, size_bytes: int) -> N
         )
 
 
-def assert_file_usable(*, file: File, purpose: str) -> File:
+def assert_portal_may_upload(*, purpose: str) -> None:
+    """A guardian or student may only request a purpose its module opened to the portal.
+
+    An unknown purpose is left to `assert_upload_allowed`, which names it.
+    """
+    spec = upload_purposes.get(purpose)
+    if spec is not None and not spec.portal_uploadable:
+        raise DomainRuleViolation({"purpose": f"'{purpose}' cannot be uploaded from the portal."})
+
+
+def assert_file_usable(
+    *,
+    file: File,
+    purpose: str,
+    uploaded_by: uuid.UUID | None = None,
+    field: str = "non_field",
+) -> File:
     """Check a resolved File instance matches the caller's intended purpose and is ready.
+
+    ``uploaded_by`` is set for a guardian or student, who may attach only a file they
+    uploaded themselves; staff leave it ``None``. ``field`` names the request field
+    the error lands on.
 
     Tenant scoping and existence are already handled by the serializer's `_fk()`
     field (a `PrimaryKeyRelatedField` bound to the tenant-scoped manager) before
     this ever runs — what that field cannot express is "and it's the right kind
     of file, and the upload actually finished".
     """
+    if uploaded_by is not None and file.created_by != uploaded_by:
+        raise DomainRuleViolation({field: "You can only attach a file you uploaded yourself."})
     if file.purpose != purpose:
         raise DomainRuleViolation(
-            {"non_field": f"This file was uploaded for '{file.purpose}', not '{purpose}'."}
+            {field: f"This file was uploaded for '{file.purpose}', not '{purpose}'."}
         )
     if file.status != FileStatus.READY:
-        raise DomainRuleViolation({"non_field": "This file's upload has not been confirmed yet."})
+        raise DomainRuleViolation({field: "This file's upload has not been confirmed yet."})
     return file
 
 

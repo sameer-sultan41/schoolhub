@@ -6,7 +6,7 @@ import { getCoreRowModel, useReactTable, type ColumnDef } from "@tanstack/react-
 import { EmptyState } from "@schoolhub/ui";
 import { Users } from "lucide-react";
 
-import { CursorDataGridCard } from "@/features/attendance/cursor-data-grid-card";
+import { CursorDataGridCard } from "@/components/cursor-data-grid-card";
 import { useCursorList } from "@/hooks/use-cursor-list";
 import { renderWithClient } from "@/test-utils";
 

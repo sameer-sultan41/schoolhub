@@ -26,3 +26,26 @@ export function filterMenuByAccess(
     return children.length > 0 ? [{ ...item, children }] : [];
   });
 }
+
+/** Every `path` in the menu, children included. */
+export function collectMenuPaths(items: MenuConfig): string[] {
+  return items.flatMap((item) => [
+    ...(item.path ? [item.path] : []),
+    ...(item.children ? collectMenuPaths(item.children) : []),
+  ]);
+}
+
+/**
+ * Whether a menu item at `path` is the active one for `pathname`: the path or a prefix of it, and
+ * no other menu path matches more specifically. Without the second rule an item nested under
+ * another's path (Exams at `/exams`, Grading scales at `/exams/grading-scales`) lights both up.
+ */
+export function isActiveMenuPath(
+  path: string,
+  pathname: string,
+  menuPaths: readonly string[],
+): boolean {
+  const matches = (candidate: string) =>
+    candidate === pathname || (candidate.length > 1 && pathname.startsWith(candidate));
+  return matches(path) && !menuPaths.some((other) => other.length > path.length && matches(other));
+}

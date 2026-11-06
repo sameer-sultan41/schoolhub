@@ -86,6 +86,7 @@ MODULE_APPS = [
     "apps.examinations",
     "apps.fees_finance",
     "apps.communication",
+    "apps.parent_portal",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + CORE_APPS + MODULE_APPS
@@ -195,6 +196,9 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_RENDERER_CLASSES": ("core.api.renderers.EnvelopeJSONRenderer",),
+    # JSON only, so DRF's `?format=` renderer override buys nothing, and it would 404
+    # the documents' own `?format=pdf|thermal` before the view runs.
+    "URL_FORMAT_OVERRIDE": None,
     "DEFAULT_PAGINATION_CLASS": "core.api.pagination.CursorPagination",
     "PAGE_SIZE": 25,
     "DEFAULT_FILTER_BACKENDS": (
@@ -263,9 +267,10 @@ SPECTACULAR_SETTINGS = {
         # any *other* module's status choices move and churns the generated
         # TypeScript client for a diff that has nothing to do with it.
         "AttendanceStatusEnum": "apps.attendance.models.AttendanceStatus",
-        # The conflict engine's `severity`: named for its owner, so a later `severity`
-        # choice elsewhere can't take the bare `SeverityEnum` from it.
-        "TimetableConflictSeverityEnum": [("hard", "hard"), ("soft", "soft")],
+        # Both conflict engines' `severity` (timetable's and examinations'): the
+        # same hard/soft split, so one shared name rather than one owner's. Named
+        # so a later `severity` choice elsewhere can't take the bare `SeverityEnum`.
+        "ConflictSeverityEnum": [("hard", "hard"), ("soft", "soft")],
         "AttendanceCorrectionStatusEnum": "apps.attendance.models.CorrectionStatus",
         "AttendanceSourceEnum": "apps.attendance.models.AttendanceSource",
         "AttendanceCorrectionSubjectTypeEnum": "apps.attendance.models.CorrectionSubjectType",
@@ -284,6 +289,8 @@ SPECTACULAR_SETTINGS = {
         "ExamTypeEnum": "apps.examinations.models.ExamType",
         "GradingScaleTypeEnum": "apps.examinations.models.ScaleType",
         "ExamScheduleStatusEnum": "apps.examinations.models.ScheduleStatus",
+        # The clash engine's finding types, from its own registry.
+        "ExamConflictTypeEnum": "apps.examinations.conflicts.CONFLICT_TYPES",
         "AdmitCardStatusEnum": "apps.examinations.models.AdmitCardStatus",
         "MarksStatusEnum": "apps.examinations.models.MarksStatus",
         "ResultStatusEnum": "apps.examinations.models.ResultStatus",

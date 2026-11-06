@@ -74,6 +74,9 @@ moment `tests/live/` grows past a handful of specs, so don't do that either — 
   `createLiveSession(credentials)` itself — that's one login per test, so keep those to
   one test per file, or share one session per worker, as `attendance-marking.spec.ts`'s
   `markerSession` does, when several tests need the same identity.
+  `src/lib/live-exams.ts` holds two such per-worker identities for the examinations specs —
+  `examStaffSession()` (exam staff) and `teacherSession()` (teacher) — so a worker running
+  them adds at most two logins to the budget above.
 
 ## Mirrored values
 

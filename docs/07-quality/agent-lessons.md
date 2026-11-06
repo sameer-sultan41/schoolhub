@@ -223,7 +223,8 @@
 ### L32. Never render a raw API enum value as user-visible text
 
 - **Mistake.** The broadcast preview listed channels by their API ids (`in_app`, `sms`), which reached the screen as written (fixed in `a7e49cb5`).
-- **Check.** Every enum a user can see (channel, status, type, role) goes through an i18n label map in both locale files, with a fallback for a value the map lacks, and a spec asserts the label, not the id.
+- **Mistake (again, parent portal PR 2).** `NOTIFICATION_CATEGORIES` was a hand-kept array that a new enum member did not break, and every portal label map (category, priority, channel, notice type, fee status, result outcome, attendance status) indexed the messages directly with no fallback, so a value the server adds first would render a raw message key. Fixed by deriving the list from a `Record` over the generated enum and routing every label through one helper (`features/portal/enum-label.ts`).
+- **Check.** Every enum a user can see (channel, status, type, role) goes through an i18n label map in both locale files, and both halves hold: (1) any runtime list of the values (columns, legend, filter options) is derived from a `Record<GeneratedEnum, …>`, never a hand-kept array or an `as` cast, so a new member fails to compile; (2) rendering falls back to the humanised value when the map or the messages lack it (`t.has(key) ? t(key) : humanizeSnakeCase(value)`), because the server can ship a value before the dashboard does. A spec asserts the label, not the id.
 
 ### L33. A "do it once" guard must be released when the call fails
 
@@ -271,6 +272,87 @@
 - **Check.** Copy the SQL out (`[q["sql"] for q in captured.captured_queries]`) right after the
   `with CaptureQueriesContext(...)` block, before any other client request, and assert the
   list is non-empty before asserting on its contents.
+
+### L38. Grep the permission registry for every key a plan or brief names
+
+- **Mistake.** The parent-portal plan (`docs/superpowers/plans/2026-11-04-parent-portal.md`)
+  named its card keys from memory, and two did not exist: `examinations.result.view` is
+  `exams.result.view`, and `attendance.student_attendance.view` is
+  `attendance.student-attendance.view`. Task P2 caught both only while implementing; a key
+  copied unchecked into a permission map fails closed (403) or, in a doc, sends the next reader
+  to a key nobody holds. The same plan's carry-in said the exams marks chain was not on `main`
+  when it was, which would have pushed the seed onto a model-only fallback.
+- **Check.** Before a plan, brief or doc uses a permission key, grep for its
+  `registry.register(`/`register_crud(` call (`apps/*/permissions.py`, `core/*/permissions.py`)
+  and copy the exact string; reference a declared constant in code. Check "not on main yet"
+  claims with `git show origin/main:<path> | grep <name>` before choosing a fallback.
+
+### L39. Never compare two reads of state a parallel sibling test mutates
+
+- **Mistake.** `e2e/tests/live/api/parent-portal.spec.ts` asserted
+  `dashboard.unread_notifications <= unread-count` for the seeded comms guardian, while another
+  test in the same `fullyParallel` file added a notification and marked it read for that same
+  guardian. Either read order could flake; the final branch review caught it (fixed in
+  `test(e2e): drop the parallel-unsafe unread comparison in the portal live spec`).
+- **Check.** In a live spec, never assert a relation between two reads of state that a sibling
+  test changes for the same identity: assert each read on its own (`> 0`), or give the test its
+  own identity. Pin exact equality in a backend unit test, where nothing runs alongside.
+
+### L44. Granting a role an action key means checking the view's read key too
+
+- **Mistake.** Parent-portal PR B's backend gave guardians and students `platform.file.create` so they could upload, but `FileViewSet` declares `create` and `confirm` under that key while its read key `platform.file.view` stays staff-only. The tests hand-granted keys to a user, so every one passed; only CI's `DefaultRoleReadKeyTests` (ADR-0031 decision 3) caught it. The first fix exempted `confirm` alone because the CI log truncated the offender list (`[1393 chars]`), hiding `create`, so CI failed a second time.
+- **Check.** When a role gains an action key, read the viewset it reaches for its read key and `scope_read_exempt_actions`, and prove the path with the role's real keys (`keys_for_role`), not a hand-granted user. When a list assertion fails, read every element (the full `Diff` lines in the log) before fixing.
+
+### L45. A "matches X" claim must be checked against X's own predicate
+
+- **Mistake.** The examinations dashboard's scope ruling and `examinations.md` §20 said the class teacher's exam scope was "not session-limited, matching `Marks`", and that narrowing it "would change what `Marks` returns". `Marks` joins through the student's *active enrolment* in the homeroom section (`student__enrollments__section_id`); `Exam`/`ExamSubject` join through the exam-subject's *class* (`school_class_id`) with no session — different joins, so the claim was false and last session's exams leaked to the class teacher (PR A final review).
+- **Check.** Before writing "matches X" or "would change X" in a ruling, doc or docstring, open both predicates and name the join each uses; if they differ, say what each actually filters on and test the case where they diverge (here, the same class in another session).
+- **Recurred in PR B.** `examinations.md` §20 said a class teacher sees a section's sittings "only through a homeroom with active enrolments in the exam's session, so last session's homeroom opens nothing", and shipped with no test of another session's allocation or homeroom; the sibling `AdmitCard` scope was not session-bound at all (PR B final review). A scope claim in a doc ships with the test of the case it rules out.
+
+### L46. A page-number list's default ordering must be total
+
+- **Mistake.** `ExamViewSet.ordering` was `["-starts_on", "name"]`. Names are unique only per session and an undated draft has no `starts_on`, so two such rows tie and Postgres may return them in either order on each page query — a row repeats on page 2 or never appears (PR A final review). `StableOrderingFilter` appends `pk`, but the declared default did not say so.
+- **Check.** End every list's default `ordering` in a unique column (`id`), and pin it with a test of two rows that tie on every other key, paged with `page_size=1`, asserting the two pages give distinct ids. Mirror the same order in the e2e mock.
+
+### L47. An e2e-only seed command must refuse a non-e2e tenant
+
+- **Mistake.** `seed_e2e_examinations --tenant <slug>` would rewrite *any* tenant's default grading scale; nothing restricted it to the e2e tenants `seed_e2e_data` creates (PR A final review).
+- **Check.** A command that seeds e2e data checks `--tenant` against `E2E_TENANT_SLUG`/`E2E_OTHER_TENANT_SLUG` (`core/rbac/management/commands/seed_e2e_data.py`) before touching the database, raises `CommandError` otherwise, and has a test that a non-e2e tenant is refused and left untouched.
+
+### L48. An e2e file imports only types from `@schoolhub/types`
+
+- **Mistake.** `e2e/tests/live/api/exams-setup.spec.ts` imported the function `isOffsetPagination` from `@schoolhub/types`. Playwright loads that package as CommonJS, so the named import threw at load, every live spec went with it, and `e2e-live` reported zero tests (PR #147). The mocked lane never loads that spec, so the PR's CI stayed green.
+- **Check.** In `e2e/`, import from `@schoolhub/types` with `import type` only; check a runtime value inline (e.g. `toHaveProperty("total_pages")`). Dispatch `e2e-live` on the branch before calling a PR that touches `e2e/tests/live/` done.
+
+### L49. A background job's write must not overwrite state a user can change mid-job
+
+- **Mistake.** `render_admit_cards_task` read the cards, rendered each PDF, then `card.save()`d `status=issued`. A card revoked while its PDF rendered was written back to `issued` with a downloadable file, undoing the revocation (PR B final review).
+- **Check.** A job that writes a row a user can also change saves with a conditional `UPDATE` (`filter(...).exclude(<user-set state>).update(...)`, acting on 0 rows) or re-reads under `select_for_update`. Test it by changing the row between the job's read and its write (patch the slow step's side effect to make the change) and assert the user's change survives.
+
+### L50. "The student's enrolment in session X" does not filter `status=active`
+
+- **Mistake.** The admit-card section (serializer, viewset `Prefetch`, `section_id` filter) read the student's *active* enrolment in the exam's session. Promotion turns that row `promoted`/`retained`/`graduated`, so every card of a closed session lost its section (PR B final review).
+- **Check.** When the session is already pinned, match on session and `deleted_at IS NULL` only: `StudentEnrollment` is one row per (student, session). Keep `status=active` for "where is the student now". Test by promoting the student and asserting the historical read still resolves.
+
+### L51. An action that addresses a parent by id resolves it through the record scope
+
+- **Mistake.** `schedule-conflicts`, `:publish-schedule` and `:issue-admit-cards` looked the exam up with `get_object_or_404(Exam.objects.alive(), pk=pk)`: tenant-scoped, but not record-scoped, so an `assigned` teacher could read or act on any exam of the school by id (PR B final review).
+- **Check.** Grep for `get_object_or_404(<Model>.objects.alive()` in views you touch; resolve the parent through `scope_queryset(...)` with the parent viewset's own `own_field`/`campus_field` (out of scope is a 404), and test that an unassigned caller gets a 404 while an assigned one gets through.
+
+### L52. A check-then-write across rows locks the parent every writer shares, in the gate and in each writer
+
+- **Mistake.** `:publish-schedule` locked the exam and read the clash list, but sitting create, update and delete never took that lock, so a sitting saved mid-publish committed unseen and the exam went to `scheduled` over a hard clash. `issue_admit_cards` read the existing cards with no lock, so two runs both saw none missing and both reported `issued = N` (PR #149 review).
+- **Check.** When a gate reads child rows and decides on them, find every writer of those rows and lock the same parent (`lock_exam`, `select_for_update()` on the parent, several parents in pk order) before it writes, as well as in the gate. When the gate also reads rows of *other* parents (a clash check across exams), lock their common ancestor instead, here a per-tenant advisory lock (`core.tenancy.locks.advisory_xact_lock`), taken before any row lock on every path. A count of rows "this run added" is then just what it inserted. Test each path with `CaptureQueriesContext`: a `FOR UPDATE` on the parent's table before the first read or write of the children.
+
+### L53. A clean merge of two stacks can still break a call whose signature one side changed
+
+- **Mistake.** Merging `feat/exams-schedule` into the portal stack (PR C) raised no conflict in `scoped_exam()`, but the other side had made `scope_queryset(permission=)` required (#148), so five exam actions would 500. Only the pre-push mypy caught it. The first fix also added `exams.exam.view` on top of the route key, which 404'd a schedule-keyed teacher (`ExamLookupScopeTests`).
+- **Check.** After merging two branches, list the shared helpers either side changed (`git diff <base>...<other> -- core/`) and grep every new caller from the other side. When fixing such a caller, keep the behaviour that side's tests pin (here, the route key's own scope).
+
+### L54. A query parameter named `format` belongs to DRF unless the override is off
+
+- **Mistake.** Receipt and voucher downloads took `?format=pdf|thermal` (fees-finance §16), but DRF's `URL_FORMAT_OVERRIDE` read `format` as a renderer choice and 404'd before the view ran. Backend tests never sent the parameter, and the dashboard's Jest mocks did, so only parent-portal PR B's live voucher download caught it. Fixed by setting `URL_FORMAT_OVERRIDE = None` (the API renders JSON only).
+- **Check.** A backend test for any endpoint the spec gives query parameters sends those exact parameters; a mocked client call is not evidence the server accepts them.
 
 ## 4. Adding a lesson
 

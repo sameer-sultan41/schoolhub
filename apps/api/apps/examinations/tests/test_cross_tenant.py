@@ -48,10 +48,13 @@ from apps.examinations.tests.factories import (
     StudentFactory,
     SubjectFactory,
     TenantFactory,
+    authenticate,
     complete_scale,
     enable_feature,
     exam_week,
+    grant,
 )
+from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
 SCALES = "/api/v1/grading-scales"
@@ -233,6 +236,34 @@ class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
         ids = {row["id"] for row in response.json()["data"]}
         self.assertNotIn(str(self.foreign_exam.pk), ids)
 
+    def test_an_assigned_teacher_never_reaches_another_tenant_s_exams(self) -> None:
+        """The `assigned` hooks resolve teaching through tenant-scoped managers,
+        so a foreign exam is neither listed nor retrievable — 404, not 403."""
+        grant(
+            self.subject_teacher_user,
+            "exams.exam.view",
+            "exams.grading-scale.view",
+            scope=RecordScope.ASSIGNED,
+        )
+        authenticate(self.client, self.subject_teacher_user)
+
+        for url in (EXAMS, EXAM_SUBJECTS, SCALES):
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+                ids = {row["id"] for row in response.json()["data"]}
+                self.assertFalse(
+                    ids
+                    & {
+                        str(self.foreign_exam.pk),
+                        str(self.foreign_exam_subject.pk),
+                        str(self.foreign_scale.pk),
+                    }
+                )
+        self.assert404(self.client.get(f"{EXAMS}/{self.foreign_exam.pk}"))
+        self.assert404(self.client.get(f"{EXAM_SUBJECTS}/{self.foreign_exam_subject.pk}"))
+        self.assert404(self.client.get(f"{SCALES}/{self.foreign_scale.pk}"))
+
     def test_creating_an_exam_in_a_foreign_session_does_not_validate(self) -> None:
         """A 400, not a 404: the session id arrives in the body and fails the
         serializer's tenant-scoped queryset. The message says the id is invalid,
@@ -363,6 +394,28 @@ class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
                 format="json",
             )
         )
+
+    def test_reading_a_foreign_exam_s_clash_list_is_a_404(self) -> None:
+        self.assert404(self.client.get(f"{EXAMS}/{self.foreign_exam.pk}/schedule-conflicts"))
+
+    def test_downloading_a_foreign_admit_card_is_a_404(self) -> None:
+        """The foreign card has a rendered file, so the 404 can only come from
+        tenant scoping, not from the card having nothing to download."""
+        from apps.examinations import uploads
+        from core.files.services import create_ready_file
+
+        with tenant_context(self.other_tenant.id):
+            self.foreign_card.file = create_ready_file(
+                tenant_id=self.other_tenant.pk,
+                purpose=uploads.ADMIT_CARD.key,
+                original_name="admit-card.pdf",
+                mime_type="application/pdf",
+                data=b"%PDF-stub",
+                actor_id=self.user.pk,
+            )
+            self.foreign_card.save(update_fields=["file"])
+
+        self.assert404(self.client.post(f"{ADMIT_CARDS}/{self.foreign_card.pk}:download"))
 
     def test_scheduling_against_a_foreign_exam_subject_does_not_validate(self) -> None:
         """A 400, not a 404: the exam-subject id arrives in the body and fails

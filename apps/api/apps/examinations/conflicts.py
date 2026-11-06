@@ -56,6 +56,20 @@ NOT_A_WORKING_DAY = "not_a_working_day"
 ROOM_OVER_CAPACITY = "room_over_capacity"
 CLASHES_WITH_TIMETABLE = "clashes_with_timetable"
 
+# Every finding type, in one place: `ExamConflictSerializer` types `type` from
+# it and `ENUM_NAME_OVERRIDES` names the enum from it, so the enum a client
+# switches on is this list. A new detector's type is added here too.
+CONFLICT_TYPES = (
+    ROOM_DOUBLE_BOOKED,
+    INVIGILATOR_DOUBLE_BOOKED,
+    STUDENT_TWO_PAPERS_AT_ONCE,
+    OUTSIDE_EXAM_WINDOW,
+    NOT_A_WORKING_DAY,
+    ROOM_OVER_CAPACITY,
+    CLASHES_WITH_TIMETABLE,
+)
+SEVERITIES = ("hard", "soft")
+
 HARD_TYPES = frozenset(
     {
         ROOM_DOUBLE_BOOKED,
@@ -216,7 +230,7 @@ def collect_scope(*, exam: Exam) -> Scope:
         room_label={pk: room.code for pk, room in rooms.items()},
         section_label={pk: section.name for pk, section in sections.items()},
         section_campus=section_campus,
-        staff_label={pk: f"{member.first_name} {member.last_name}" for pk, member in staff.items()},
+        staff_label={pk: member.full_name for pk, member in staff.items()},
         section_students=dict(section_students),
         timetabled_weekdays=timetabled_weekdays,
         working_day=working_day,
@@ -230,6 +244,11 @@ def detect_conflicts(*, exam: Exam) -> list[dict]:
     point of an engine over a per-write check: §8's exam-staff journey is
     "resolves the two room clashes the checker flags", and a checker that
     reported one at a time would make that two round trips.
+
+    **Hard findings first.** The list is read top-down by someone deciding what
+    to fix before publishing, and a hard finding is what blocks it. Sorted here,
+    once, so the clash list, `meta.conflicts` and the publish refusal all read
+    in the same order. The sort is stable, so each severity keeps detector order.
     """
     scope = collect_scope(exam=exam)
     findings: list[Conflict] = [
@@ -241,6 +260,7 @@ def detect_conflicts(*, exam: Exam) -> list[dict]:
         *_rooms_over_capacity(scope),
         *_timetable_overlaps(scope),
     ]
+    findings.sort(key=lambda finding: finding.severity != "hard")
     return [finding.as_dict() for finding in findings]
 
 

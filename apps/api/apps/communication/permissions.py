@@ -16,16 +16,17 @@ resolution — never invent a key the doc does not mention anywhere.
 `core/rbac/registry.py`'s `EXTRA_ACTIONS`; `oversee` is the one verb this module
 added there.
 
-Guardians and students hold no key for browsing announcements/notices directly
-in this plan — they consume via the existing `GET /notifications` inbox
-(`core.notifications`), and a guardian-facing browse endpoint is recorded as
-parent-portal's (Tier 5) task in this module's §20. `communication.thread.*`
-and `communication.notification-preference.update` are the two keys they do
-hold, both narrowed by record scope rather than by the key — the same
-delegation `fees_finance`'s invoice ownership and `StudentAttendance` use.
+Guardians and students browse notices through `communication.notice.view` (the
+parent portal's reading path: `GET /notices` returns only the published notices
+that reached them, in `PortalNoticeSerializer`'s shape) and still receive them in
+the `GET /notifications` inbox (`core.notifications`). Announcement browsing stays
+deferred. `communication.thread.*` and `communication.notification-preference.update`
+are the other keys they hold, narrowed by record scope rather than by the key — the
+same delegation `fees_finance`'s invoice ownership and `StudentAttendance` use.
 """
 
 from core.rbac.registry import registry
+from core.rbac.roles import PORTAL_ROLES
 
 # §3's staff roles who publish/manage communication.
 COMMS_STAFF = ("school_admin", "principal", "teacher", "reception")
@@ -47,7 +48,9 @@ NOTICE_AUTHORS = ("school_admin",)
 # sufficient — the same shape fees_finance's refund-approval key uses).
 NOTICE_PUBLISHERS = ("principal", "school_owner")
 # Every publisher reads notices too: an approver must be able to see what it approves.
-NOTICE_VIEWERS = tuple(dict.fromkeys((*COMMS_STAFF, *NOTICE_PUBLISHERS)))
+# Students and guardians read the published notices that reached them (the viewset narrows
+# them to those and to `PortalNoticeSerializer`).
+NOTICE_VIEWERS = tuple(dict.fromkeys((*COMMS_STAFF, *NOTICE_PUBLISHERS, *PORTAL_ROLES)))
 # §4 — "communication.notice.acknowledge … guardian, student, staff roles".
 NOTICE_ACKNOWLEDGERS = ("guardian", "student", "school_admin", "principal", "teacher", "reception")
 
@@ -117,7 +120,8 @@ registry.register(
 
 registry.register(
     "communication.notice.view",
-    "View notices, including drafts and those pending approval.",
+    "View notices. Staff see drafts and those pending approval; a student or guardian "
+    "sees only the published notices sent to them.",
     NOTICE_VIEWERS,
 )
 registry.register(

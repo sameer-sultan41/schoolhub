@@ -603,3 +603,10 @@ today — so payroll is additive rather than a change to anything here.
 `payslips.lop_days` is the dependency that decides the timing: it comes from
 hr-leave's approved-leave outcomes, and while `attendance` owns the five leave
 tables, staff leave *policy* and accrual do not exist yet.
+
+### Built (parent portal PR B)
+
+| Area | State |
+| ---- | ----- |
+| Vouchers in the portal | `GET /vouchers` and `GET /vouchers/{id}/download?format=pdf` were already portal-readable (`fees.payment.view`, `PORTAL_READABLE_ACTIONS`, record-scoped). The guardian's fees page asks for `student=` and `status=issued` and offers each outstanding invoice its slips as a PDF through `ApiClient.downloadBlob` (bearer header); an invoice with none says "Ask the school office for a voucher." A guardian never issues or voids a slip (`fees.payment.collect`, staff-only) |
+| Tests | Jest `features/portal/fees/__tests__/portal-fees.test.tsx`; mocked `e2e/tests/dashboard/portal-leave-vouchers.spec.ts`; live `e2e/tests/live/api/portal-leave.spec.ts` (the school issues a slip, the guardian lists and downloads it) |

@@ -18,9 +18,18 @@ import {
   BroadcastPage,
   CurriculumPage,
   DashboardPage,
+  ExamAdmitCardsPage,
+  ExamPage,
+  ExamSchedulePage,
+  ExamsPage,
+  GradingScalesPage,
   LoginPage,
   MessagesPage,
   OversightPage,
+  PortalChildPage,
+  PortalCommunicationPage,
+  PortalLeavePage,
+  PortalPage,
   PromotionBatchPage,
   PromotionsPage,
   PublicSitePage,
@@ -104,6 +113,15 @@ export interface E2EFixtures {
   messagesPage: MessagesPage;
   oversightPage: OversightPage;
   broadcastPage: BroadcastPage;
+  portalPage: PortalPage;
+  portalChildPage: PortalChildPage;
+  portalCommunicationPage: PortalCommunicationPage;
+  portalLeavePage: PortalLeavePage;
+  examsPage: ExamsPage;
+  examPage: ExamPage;
+  examSchedulePage: ExamSchedulePage;
+  examAdmitCardsPage: ExamAdmitCardsPage;
+  gradingScalesPage: GradingScalesPage;
   /**
    * Signs a **second** identity in, on its own browser context, and hands back that
    * context's page objects.
@@ -296,6 +314,42 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
 
   broadcastPage: async ({ page }, use) => {
     await use(new BroadcastPage(page));
+  },
+
+  portalPage: async ({ page }, use) => {
+    await use(new PortalPage(page));
+  },
+
+  portalChildPage: async ({ page }, use) => {
+    await use(new PortalChildPage(page));
+  },
+
+  portalCommunicationPage: async ({ page }, use) => {
+    await use(new PortalCommunicationPage(page));
+  },
+
+  portalLeavePage: async ({ page }, use) => {
+    await use(new PortalLeavePage(page));
+  },
+
+  examsPage: async ({ page }, use) => {
+    await use(new ExamsPage(page));
+  },
+
+  examPage: async ({ page }, use) => {
+    await use(new ExamPage(page));
+  },
+
+  examSchedulePage: async ({ page }, use) => {
+    await use(new ExamSchedulePage(page));
+  },
+
+  examAdmitCardsPage: async ({ page }, use) => {
+    await use(new ExamAdmitCardsPage(page));
+  },
+
+  gradingScalesPage: async ({ page }, use) => {
+    await use(new GradingScalesPage(page));
   },
 
   signInAsSecondIdentity: async ({ browser }, use) => {

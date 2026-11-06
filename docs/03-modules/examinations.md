@@ -56,6 +56,12 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 
 The approver of a result cannot be the user who ran processing (segregation of duties, RBAC doc §2.4).
 
+A `teacher` reads exams at record scope `assigned`: the exams with a subject they are currently allocated
+to in that exam's session, or any subject of their homeroom's class in the homeroom's session (the session
+of the active enrolments that make the section theirs).
+Grading scales are reference data, readable in full by every holder of `exams.grading-scale.view`. §20
+records how both are resolved.
+
 The last five rows were added during implementation. Each names a capability this
 document already granted in prose while the table omitted the key, so the capability
 was documented and unreachable: §3 says a `student`/`guardian` "views admit cards,
@@ -212,8 +218,63 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - `GET /api/v1/marks` — filters: `exam_subject_id`, `student_id`, `status`; `POST /api/v1/marks:bulk-entry` (idempotent grid submit) · `POST /api/v1/exam-subjects/{id}:lock-marks` · `:unlock-marks`
 - `POST /api/v1/exams/{id}:process-results` — `202` + job resource (API doc §2.7)
 - `POST /api/v1/exams/{id}:approve-results` · `:publish-results` — colon-actions, permission-guarded, audited
-- `GET /api/v1/results` (scoped) · `GET /api/v1/report-cards` · `GET /api/v1/admit-cards` · `POST /api/v1/exams/{id}:generate-report-cards` · `:issue-admit-cards` (jobs)
+- `GET /api/v1/exams/{id}/schedule-conflicts` (the clash list) · `POST /api/v1/exams/{id}:publish-schedule`
+- `GET /api/v1/results` (scoped); each row carries `exam_name` and `term_name` (`null` for a session-wide exam) so a portal can group and label results without a second request · `GET /api/v1/report-cards` · `GET /api/v1/admit-cards` · `POST /api/v1/exams/{id}:generate-report-cards` · `:issue-admit-cards` (jobs) · `POST /api/v1/admit-cards/{id}:revoke` · `:download`
 - `GET/POST/PATCH /api/v1/question-banks` · `/api/v1/questions` · `POST /api/v1/questions/{id}:approve` · `POST /api/v1/question-banks/{id}:generate-questions` (AI, job) · `:assemble-paper` (job → paper PDF file)
+
+List and read shapes the dashboard depends on:
+
+- **Pagination.** `/exams` and `/grading-scales` page by number (`?page=`, `meta.pagination.total_count`), as
+  [`api-architecture.md`](../02-architecture/api-architecture.md) §2.4's bounded admin lists do: one school's exams
+  and its handful of scales are navigated by position. `/exams` is ordered `-starts_on, name, id` by default (`id` makes the order total),
+  `/grading-scales` by `name`. `/exam-subjects` keeps the cursor and is ordered by class, then subject, so a client
+  grouping by class reads each class's rows together. A scale's `/grade-bands` is **unpaginated**, in display order
+  (`sort_order`, then `-min_percent`): a scale has a handful of bands and a client needs all of them.
+- **Names on the row.** An exam carries `academic_session_name`, `term_name` (null without a term),
+  `grading_scale_name` and `subject_count` (all of the exam's live exam-subjects, not only the ones the viewer
+  can see under record scope `assigned`); an exam-subject carries `exam_name`,
+  `class_name` and `subject_name`. All read-only, from joins and one annotation in the list's own query, so a
+  list renders without a lookup per id.
+- **The duplicate subject is a 422.** A second live (exam, class, subject) is refused as a
+  `domain_rule_violation` under `subject_id` ("This subject is already on this exam for this class."), checked
+  before the partial unique index would turn it into a bare 409.
+- **The two state refusals are 409s.** A write to an exam, or to its subjects, once it is past `scheduled`
+  ("… its configuration is frozen."); a delete of any exam but a draft ("This exam is scheduled. Only a draft
+  exam can be deleted.").
+- **A sitting carries its names.** `ExamSchedule` reads `exam_id`, `exam_name`, `subject_name`, `class_name`,
+  `section_name`, `room_name` and `invigilator_name` (null without a room or an invigilator), so the schedule
+  renders without a lookup per id.
+- **The clash list has its own read.** `GET /exams/{id}/schedule-conflicts` returns `ExamConflict[]` (`type`,
+  `severity`, `schedule_ids`, `message`), hard findings first: the same engine every sitting write runs into
+  `meta.conflicts` and `:publish-schedule` blocks on, so a client sees what publishing would refuse without
+  saving a sitting or computing clashes itself. Staff-only (`exams.schedule.view`). Its exam, like
+  `:publish-schedule`'s and `:issue-admit-cards`', resolves through `ExamViewSet`'s record scope, so an exam
+  outside an `assigned` caller's teaching is a 404.
+- **The publish is typed.** `:publish-schedule` answers `{status, conflicts}` (`ExamSchedulePublish`): the
+  exam's new status, `scheduled`, and the soft findings that did not block it. A hard finding is a 422
+  `domain_rule_violation` carrying the **whole** list in `error.meta.conflicts` (never flattened into
+  `details`, which would keep one `schedule_ids` entry); a schedule with no sittings is a 422 under `exam_id`.
+  Only a `draft` or `scheduled` exam publishes: the school's schedule lock, then the exam row (`select_for_update`), are taken first, and any later status is
+  a 409, so a publish can never move an exam back to `scheduled`.
+- **An admit card carries its student and section.** `AdmitCard` reads `student_name`, `admission_number`,
+  `section_id` and `section_name`, the section from the student's enrolment **in the exam's session**, in
+  any status, so a promoted or graduated student's card keeps the section they sat in (both null without one),
+  prefetched once per page. The `section_id` filter reads the same row. An `assigned` reader (a class teacher)
+  sees a card only through a homeroom in the exam's own session. `/admit-cards` keeps the cursor, filters on `exam_id`,
+  `section_id`, `status`, `student_id` and `current` (`true`: the exam is undated or ends on or after the school's
+  own today, `Tenant.local_date()`), and orders by `admit_card_no` or `created_at`. Each card also carries its
+  exam's `exam_name`, `exam_starts_on` and `exam_ends_on`, so a portal labels it without the staff-only exam read.
+- **Issuing reports its counts in the `202`.** `:issue-admit-cards` creates the missing rows synchronously and
+  queues only the PDFs: the `202`'s `data` (`AdmitCardIssueAccepted`) carries `added` and `existing` beside
+  `job_id` and `status`, so a client renders its own localised summary (the job's `result` is
+  `{rendered, failed, cards}`, the render's own count). A card revoked while the job renders stays revoked: the
+  job's save is conditional on the card not being revoked. A re-run tops up and never re-creates a
+  revoked card. A draft exam is a 409 (no published schedule to print).
+- **A card's document has its own action.** `POST /admit-cards/{id}:download` returns `{download_url}`, a
+  short-lived signed link, under `exams.admit-card.view` and the record scope (`get_object()` runs first, so a
+  student or guardian reaches only their own card). It is a **404**, not a 409, while the card has no file
+  (the render job has not written it), once it is revoked, or when its file is not `ready` or was soft-deleted
+  (the same checks as `core/files`' `get_display_url`): either way there is no document to hand out.
 
 ## 17. Integration Requirements
 
@@ -261,7 +322,7 @@ assembly. **The module is complete.**
 | Area | State |
 | ---- | ----- |
 | Entities | **All 11** of §15's tables — `grading_scales`, `grade_bands`, `exams`, `exam_subjects`, `exam_schedules`, `admit_cards`, `marks`, `results`, `report_cards`, `question_banks`, `questions` — tenant-owned with RLS policies |
-| §16 endpoints | `GET/POST/PATCH/DELETE /grading-scales`, `POST /grading-scales/{id}:set-default`, `GET/POST/PATCH/DELETE /grading-scales/{id}/grade-bands`, `GET/POST/PATCH/DELETE /exams`, `GET/POST/PATCH/DELETE /exam-subjects`, `GET/POST/PATCH/DELETE /exam-schedules` (every write returns `meta.conflicts`), `POST /exams/{id}:publish-schedule`, `GET /admit-cards`, `POST /exams/{id}:issue-admit-cards` (202 + job, accepts `Idempotency-Key`), `POST /admit-cards/{id}:revoke`, `GET /marks` (filters `exam_subject_id`, `exam_id`, `student_id`, `status`, `is_absent`, `is_exempt`), `POST /marks:bulk-entry` (accepts `Idempotency-Key`), `POST /exam-subjects/{id}:lock-marks` · `:unlock-marks`, `GET /exams/{id}/marks-progress`, `POST /marks-imports` (202 + job), `GET /results`, `POST /exams/{id}:process-results` (202 + job) · `:approve-results` · `:publish-results` · `:send-results-back`, `POST /results/{id}:withhold`, `GET/PATCH /report-cards` (remarks only), `POST /exams/{id}:generate-report-cards` (202 + job) · `:publish-report-cards`, `GET/POST /reports/exam-summary` (five report kinds, inline under 1,000 rows and a 202 job above), `GET/POST/PATCH/DELETE /question-banks`, `GET/POST/PATCH/DELETE /question-banks/{id}/questions`, `POST /question-banks/{bank}/questions/{id}:approve`, `POST /question-banks/{id}:assemble-paper` (202 + a paper PDF) |
+| §16 endpoints | `GET/POST/PATCH/DELETE /grading-scales`, `POST /grading-scales/{id}:set-default`, `GET/POST/PATCH/DELETE /grading-scales/{id}/grade-bands`, `GET/POST/PATCH/DELETE /exams`, `GET/POST/PATCH/DELETE /exam-subjects`, `GET/POST/PATCH/DELETE /exam-schedules` (every write returns `meta.conflicts`), `GET /exams/{id}/schedule-conflicts`, `POST /exams/{id}:publish-schedule`, `GET /admit-cards`, `POST /exams/{id}:issue-admit-cards` (202 + job, accepts `Idempotency-Key`), `POST /admit-cards/{id}:revoke` · `:download`, `GET /marks` (filters `exam_subject_id`, `exam_id`, `student_id`, `status`, `is_absent`, `is_exempt`), `POST /marks:bulk-entry` (accepts `Idempotency-Key`), `POST /exam-subjects/{id}:lock-marks` · `:unlock-marks`, `GET /exams/{id}/marks-progress`, `POST /marks-imports` (202 + job), `GET /results`, `POST /exams/{id}:process-results` (202 + job) · `:approve-results` · `:publish-results` · `:send-results-back`, `POST /results/{id}:withhold`, `GET/PATCH /report-cards` (remarks only), `POST /exams/{id}:generate-report-cards` (202 + job) · `:publish-report-cards`, `GET/POST /reports/exam-summary` (five report kinds, inline under 1,000 rows and a 202 job above), `GET/POST/PATCH/DELETE /question-banks`, `GET/POST/PATCH/DELETE /question-banks/{id}/questions`, `POST /question-banks/{bank}/questions/{id}:approve`, `POST /question-banks/{id}:assemble-paper` (202 + a paper PDF) |
 | §4 permissions | `exams.exam.{view,create,update,delete}`, `exams.grading-scale.{view,create,update}`, `exams.schedule.{view,create,update}`, `exams.admit-card.{view,issue}`, `exams.marks.{create,update,import,lock}`, `exams.result.{view,create,approve,publish}`, `exams.report-card.{view,create,publish}`. `exams.question-bank.{view,create,update,delete}`, `exams.question.approve`, `exams.result.export`. **All of §4's keys are registered, and every one has an endpoint behind it.** The remaining keys arrive with the PR that ships an endpoint for them, so `tests/test_endpoint_contracts.py` never sees a registered key with nothing behind it |
 | §11 validations | Exam name unique per session · exam dates set together and ordered · dates within the named term, or the session where no term is named · a term must belong to the exam's session · the session must be writable · one `exam_subjects` row per (exam, class, subject) · `pass_marks ≤ max_marks` · a practical component requires a practical maximum · the subject must be in the class's curriculum for the session · grading bands contiguous, non-overlapping and covering 0–100% before an exam may use the scale |
 | §13 reports | All five — result register (ordered by rank, unranked last), pass/fail analysis per section, subject performance over `marks`, marks-entry status, grade distribution — plus question-bank usage, behind one `kind`-parameterised endpoint with a 202 export lane in all three of `core.exports.tabular`'s formats. Every one asserted at **one query** |
@@ -442,6 +503,89 @@ assembly. **The module is complete.**
   the others. Where they disagree, the dashboard is for chasing and the report
   is a record of what was entered. Both docstrings say so.
 
+### The dashboard's Schedule tab (examinations dashboard, PR B)
+
+`/exams/{id}?tab=schedule`, shown to a holder of `exams.schedule.view`. Sittings are read whole
+(`fetchSittings`) and drawn one card per date, by start time, with a clash marker (icon and word) on
+any sitting a finding names. The clash panel reads `GET /exams/{id}/schedule-conflicts`, hard findings
+first, each finding naming its sittings. Every sitting write and a publish invalidate the exam's reads,
+so the table and panel reload from the server together. **Add** needs `exams.schedule.create` and an
+exam up to `scheduled`; **reschedule** and **cancel** (a `status: cancelled` patch) need
+`exams.schedule.update` (reschedule also an exam up to `scheduled`); **delete** needs `.update` on a
+draft exam. The sitting form's section picker follows the paper's class, and its room picker the
+**section's campus**, since an exam has none. **Publish schedule** needs `.update` and a draft or
+scheduled exam (the server refuses any other status with a 409), is disabled while any hard finding stands
+(with the count), and a refused publish shows the server's `error.meta.conflicts`.
+
+### The dashboard's Admit cards tab (examinations dashboard, PR B)
+
+`/exams/{id}?tab=admit-cards`, shown to a holder of `exams.admit-card.view`. The exam's cards, cursor-paged
+(`CursorDataGridCard`), by card number, filtered by **section** (the sections the exam's sittings name,
+read under the Schedule tab's key) and **status**, both in the URL. Each row shows the number, the student,
+the admission number, the section and the status as token, icon and label; a revoked card shows its reason
+under the status. **Download** fetches the card's own `:download` link and appears only once the render job
+wrote a file and on a card not revoked. **Issue admit cards** needs `exams.admit-card.issue` and appears only
+once the schedule is published (any status past `draft`, `assert_exam_is_issuable`); it sends an
+`Idempotency-Key` (kept until the request is accepted, so a retry replays it, then dropped, so pressing it
+again later is a new run), shows the server's own counts from the `202` beside the button (never a tally made
+in the browser), polls the render job, and reloads the list when it ends. **Revoke** needs the same key, is
+offered on a live card only, and asks for a reason (required, 255 characters at most).
+
+**Sitting scope follows `_assigned_teaching`.** `ExamSchedule.filter_assigned_to_user` now reads the same
+helper as `Exam`, `ExamSubject` and `Marks`: a subject teacher sees the sittings of the (section, subject) they
+are allocated in the allocation's session; a **class teacher sees a section's sittings only through a
+homeroom with active enrolments in the exam's session**, so last session's homeroom opens nothing; and an
+invigilator still sees the sittings they supervise. Before, any sitting of a section whose
+`class_teacher_staff_id` was the teacher's matched, whatever the session. `ScheduleAssignedScopeTests` pins both session cases (an
+allocation and a homeroom in another session each hide the sitting). **Admit-card scope** reads the same helper:
+a class teacher sees a card when its exam is in a homeroom's session and the student's enrolment in that
+session (any status) is in that section, so neither last session's homeroom nor this session's reaches the
+other's cards (`AdmitCardAssignedScopeTests`).
+
+### Admit cards in the parent portal (portal PR C)
+
+A guardian's (or student's) **Results** page (`/portal/{studentId}/results`) lists the child's issued cards for
+exams not yet over above the results, each with its exam's name, dates and card number and a **Download**
+button; with none it says so. It reads `GET /admit-cards?student_id=…&status=issued&current=true`
+(`Services.admitCards.fetchCurrentAdmitCardsPage`) and downloads through the card's own `:download` signed link
+(`downloadFile`), as the staff tab does. Nothing new was needed in permissions: `exams.admit-card.view` already
+names `student` and `guardian` (§4), `AdmitCardViewSet` already lists `download` in `PORTAL_READABLE_ACTIONS`,
+and `AdmitCard.filter_owned_by_user` narrows through `Student.filter_owned_by_user` (live, portal-enabled
+guardian links), so another child's card is a 404. `test_guardian_admit_card_download_own_only` pins it with the
+guardian role's real registry keys, not a hand-picked set (L44). The contract change is additive: the `current`
+filter and the three `exam_*` fields on the card.
+
+### The dashboard's setup contract (examinations dashboard, PR A)
+
+The dashboard's Examinations section (`/exams`, `/exams/{id}` with its Subjects tab, `/exams/grading-scales`)
+came with these server changes:
+
+- **Record scope `assigned` for exams and their subjects.** `Exam` and `ExamSubject` gained
+  `filter_assigned_to_user`, resolved through one helper, `models._assigned_teaching`, which `Marks` now reads
+  too, so the three cannot drift apart. A teacher sees an exam-subject they hold a **current** allocation for
+  (`effective_to IS NULL`), matched on (class, subject) **in the exam's own session**, so last year's
+  allocation does not open last year's papers; and every exam-subject of the class of a section they are
+  class teacher of, **in that homeroom's session**. An exam is visible when one of its exam-subjects is, and an assigned teacher opening it
+  sees only those subjects. A teacher with neither sees no exam at all.
+- **The homeroom side is session-limited too.** `_assigned_teaching` carries each homeroom as a
+  `(section_id, session_id)` pair, the session taken from the active enrolments that make the section the
+  teacher's; `Exam`/`ExamSubject` match the section's class **and** `exam.academic_session_id`. So a class
+  teacher does not see last session's exams for the same class. `Marks` keeps its own predicate — it joins
+  through the student's active enrolment in the homeroom section (`student__enrollments__section_id`), which
+  is a different join from the exam's class and session — and reads only the section ids, so its result is
+  unchanged.
+- **Grading scales and bands are reference data at every scope.** Their `filter_assigned_to_user` returns
+  every row, the same reasoning that gives their viewsets `scope_campus_field = None`: a scale belongs to no
+  class, campus or teacher, and a teacher who can see an exam but not the scale it grades against could not
+  read its results. `exams.grading-scale.view` is held by all staff (§4).
+- **The delete refusal names no way out.** It used to say "archive it instead", but nothing sets `archived`
+  (see `docs/deferred-work.md`), so it now reads "Only a draft exam can be deleted." and stops there.
+
+The e2e seed carries two identities for the live lane: `e2e-exam-staff@schoolhub.test` (`exam_staff`, scope
+`all`) and `e2e-teacher@schoolhub.test` (`teacher`, scope `assigned`, with its own teaching `Staff` row and no
+allocation, so a spec allocates it per run), plus the complete default scale `E2E Percentage`
+(`seed_e2e_examinations`). `e2e/tests/live/api/exams-setup.spec.ts` pins the scope against the real stack.
+
 ### Corrected in review
 
 Seven findings. Three describe rules the module now depends on:
@@ -474,13 +618,34 @@ And four smaller ones: `DELETE` on a sitting fell through to the mixin's soft
 delete with no `assert_schedule_is_editable`, making it the way around a rule
 `PATCH` enforced; `exams.admit-card-issued` was registered with templates and
 documented as wired while nothing called `notify()` for it; `issue_admit_cards`
-reported `len(created)` rather than the change in row count, which overstates
-under exactly the race `ignore_conflicts=True` exists to absorb; and the render
+reported `len(created)`, which overstated when two runs raced (both read the
+same `existing` set). It now locks the exam row (`lock_exam`) before reading
+`existing`, so a concurrent run waits and reports 0, and `issued` is simply the
+rows it inserted, with no `ignore_conflicts`; and the render
 job called the single-card `student_sittings` inside its loop — two queries per
 card, so three hundred cards was six hundred round trips, the shape
 `conflicts.collect_scope`'s own docstring warns against. `services.sittings_by_student`
 answers the whole batch in two queries, and a test asserts it agrees with the
 single form.
+
+A later review found `:publish-schedule` locking the exam while sitting writes
+did not, so a sitting saved concurrently could commit after publish had read the
+clash list, and the exam went to `scheduled` over a hard clash nobody saw. Every
+sitting write (create, update including a cancel, delete) now goes through
+`services.save_schedule_with_conflicts` or `services.delete_schedule`, which lock
+the parent exam first (both exams, in pk order, when an update moves the sitting
+to another exam).
+
+Publish also reads room and invigilator clashes against *other* exams'
+sittings, which those exams' locks did not cover. So every sitting write and
+every publish first takes one per-school schedule lock,
+`services.lock_school_schedule`: a transaction-scoped PostgreSQL advisory lock
+(`pg_advisory_xact_lock`) keyed on the tenant, through the shared
+`core.tenancy.locks.advisory_xact_lock`. It is taken before the exam row lock
+everywhere, so the order is the same on every path. The exam row lock stays,
+because results and admit-card actions change the exam's status without the
+schedule lock. The cost is that schedule edits within one school run one at a
+time, which the school chose over a publish that can miss a clash.
 
 ### Corrected in review (PR D)
 

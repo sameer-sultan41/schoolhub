@@ -9,7 +9,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from core.rbac.backends import AmbiguousPrincipal
 from core.rbac.models import User
-from core.rbac.permissions import effective_permission_keys
+from core.rbac.permissions import effective_permission_keys, is_restricted_principal
 
 
 class LoginSerializer(TokenObtainPairSerializer):
@@ -78,6 +78,7 @@ class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source="get_full_name", read_only=True)
     permissions = serializers.SerializerMethodField()
     roles = serializers.SerializerMethodField()
+    is_restricted_principal = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -94,11 +95,16 @@ class UserSerializer(serializers.ModelSerializer):
             "mfa_enabled",
             "permissions",
             "roles",
+            "is_restricted_principal",
         )
         read_only_fields = fields
 
     def get_permissions(self, obj) -> list[str]:
         return sorted(effective_permission_keys(obj))
+
+    def get_is_restricted_principal(self, obj) -> bool:
+        """A student or guardian, so a client routes them to the portal rather than guessing."""
+        return is_restricted_principal(obj)
 
     def get_roles(self, obj) -> list[str]:
         return list(

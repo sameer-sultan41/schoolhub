@@ -107,6 +107,20 @@ describe("AuthService", () => {
     });
   });
 
+  describe("changePassword", () => {
+    it("POSTs both passwords to the change-password path", async () => {
+      const { changePassword } = await import("../auth-service");
+      mockPost.mockResolvedValueOnce({ data: undefined });
+
+      await changePassword({ current_password: "old-secret-1", new_password: "new-secret-123" });
+
+      expect(mockPost).toHaveBeenCalledWith("/auth/change-password", {
+        current_password: "old-secret-1",
+        new_password: "new-secret-123",
+      });
+    });
+  });
+
   describe("fetchCurrentUser", () => {
     it("returns the authenticated user payload", async () => {
       const { fetchCurrentUser } = await import("../auth-service");
