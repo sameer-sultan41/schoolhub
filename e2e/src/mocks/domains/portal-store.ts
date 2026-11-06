@@ -19,6 +19,7 @@ export type PortalAttendanceRow = ApiSchemas["StudentAttendance"];
 export type PortalInvoice = ApiSchemas["FeeInvoice"];
 export type PortalReceipt = ApiSchemas["Receipt"];
 export type PortalResult = ApiSchemas["Result"];
+export type PortalAdmitCard = ApiSchemas["AdmitCard"];
 export type PortalVoucher = ApiSchemas["FeeVoucher"];
 export type PortalLeaveType = ApiSchemas["LeaveType"];
 export type PortalLeaveRequest = Mutable<ApiSchemas["LeaveRequest"]>;
@@ -46,6 +47,9 @@ export const PORTAL_IDS = {
   midTerm: "00000000-0000-4000-b000-000000000041",
   annual: "00000000-0000-4000-b000-000000000042",
   bilalResult: "00000000-0000-4000-b000-000000000043",
+  finals: "00000000-0000-4000-b000-000000000044",
+  admitCard: "00000000-0000-4000-b000-000000000045",
+  bilalAdmitCard: "00000000-0000-4000-b000-000000000046",
   notice: "00000000-0000-4000-b000-000000000051",
   feesNotification: "00000000-0000-4000-b000-000000000061",
   attendanceNotification: "00000000-0000-4000-b000-000000000062",
@@ -216,6 +220,30 @@ export function buildResult(overrides: Partial<PortalResult> = {}): PortalResult
   };
 }
 
+/** Ayesha's issued admit card for an exam not yet over. */
+export function buildPortalAdmitCard(overrides: Partial<PortalAdmitCard> = {}): PortalAdmitCard {
+  return {
+    id: PORTAL_IDS.admitCard,
+    exam_id: PORTAL_IDS.finals,
+    exam_name: "Finals",
+    exam_starts_on: "2026-12-01",
+    exam_ends_on: "2026-12-10",
+    student_id: PORTAL_IDS.ayesha,
+    student_name: "Ayesha Khan",
+    admission_number: "ADM-001",
+    section_id: PORTAL_IDS.section,
+    section_name: "A",
+    admit_card_no: "FIN-ADM-001",
+    file_id: PORTAL_IDS.admitCard,
+    status: "issued",
+    issued_at: "2026-11-10T09:00:00Z",
+    revoked_reason: null,
+    created_at: "2026-11-10T08:59:00Z",
+    updated_at: "2026-11-10T09:00:00Z",
+    ...overrides,
+  };
+}
+
 /** An issued bank slip for the open invoice. */
 export function buildVoucher(overrides: Partial<PortalVoucher> = {}): PortalVoucher {
   return {
@@ -353,6 +381,7 @@ export interface PortalOptions {
   leaveTypes?: PortalLeaveType[];
   leaveRequests?: PortalLeaveRequest[];
   results?: PortalResult[];
+  admitCards?: PortalAdmitCard[];
   notices?: PortalNotice[];
   notifications?: PortalNotification[];
 }
@@ -368,6 +397,7 @@ export class PortalStore {
   readonly leaveTypes: PortalLeaveType[];
   readonly leaveRequests: PortalLeaveRequest[];
   readonly results: PortalResult[];
+  readonly admitCards: PortalAdmitCard[];
   readonly notices: PortalNotice[];
   readonly notifications: PortalNotification[];
   readonly preferences: PreferenceRow[] = buildPreferenceMatrix();
@@ -396,6 +426,7 @@ export class PortalStore {
     this.leaveTypes = options.leaveTypes ?? buildPortalLeaveTypes();
     this.leaveRequests = options.leaveRequests ?? [];
     this.results = options.results ?? [];
+    this.admitCards = options.admitCards ?? [];
     this.notices = options.notices ?? [];
     this.notifications = options.notifications ?? [];
   }

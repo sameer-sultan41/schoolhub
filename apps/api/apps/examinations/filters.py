@@ -14,7 +14,7 @@ to validate against.
 from __future__ import annotations
 
 import django_filters
-from django.db.models import F
+from django.db.models import F, Q
 
 from apps.examinations.models import (
     AdmitCard,
@@ -93,10 +93,19 @@ class AdmitCardFilterSet(django_filters.FilterSet):
     # `AdmitCardSerializer.section_id` reports, so filtering by a section
     # returns exactly the cards that render with it.
     section_id = django_filters.UUIDFilter(method="filter_section_id")
+    # Cards for exams that have not ended by the school's today (the portal's list).
+    current = django_filters.BooleanFilter(method="filter_current")
 
     class Meta:
         model = AdmitCard
         fields = {"status": ["exact"]}
+
+    def filter_current(self, queryset, name, value):
+        # An undated exam has not ended. `false` is no filter rather than "past only".
+        if not value:
+            return queryset
+        today = self.request.tenant.local_date()
+        return queryset.filter(Q(exam__ends_on__isnull=True) | Q(exam__ends_on__gte=today))
 
     def filter_section_id(self, queryset, name, value):
         # One `.filter()` call, so every condition lands on the same enrollment

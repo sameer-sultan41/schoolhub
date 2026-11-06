@@ -17,6 +17,13 @@ export interface AdmitCardPageQuery {
   status?: AdmitCardStatus;
 }
 
+/** One cursor page of a child's issued cards for exams that have not ended (the portal). */
+export interface CurrentAdmitCardQuery {
+  studentId: string;
+  cursor?: string;
+  pageSize?: number;
+}
+
 /** `:issue-admit-cards`' `202`: the render job to poll, and the server's own counts of cards this
  * run added and cards that already existed. */
 export interface AdmitCardIssue {

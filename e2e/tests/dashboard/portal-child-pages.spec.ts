@@ -6,6 +6,7 @@ import {
   PortalStore,
   buildAttendanceRow,
   buildInvoice,
+  buildPortalAdmitCard,
   buildReceipt,
   buildResult,
   portalModule,
@@ -17,7 +18,8 @@ import {
  * `/portal`, through the shell's tab for the selected child. Attendance shows the child's month
  * on the calendar and day by day, with the server's percentage only for the current month
  * (`as_of`); fees lists outstanding and paid invoices, offers a receipt per paid one and has no
- * way to pay; results lists what the API returned, under the exam's term. The stub
+ * way to pay; results lists what the API returned, under the exam's term, below the child's
+ * current admit cards, each downloaded through its own signed link. The stub
  * (`portalModule`) serves the server's shapes (L5) and filters by the child the page asks for,
  * so a sibling's rows showing up would mean the page asked for the wrong child. That unpublished
  * results, drafts and another family's children never reach a guardian is the Django suite's job.
@@ -54,6 +56,15 @@ function stubFamily(mockApi: MockApi): PortalStore {
       }),
     ],
     receipts: [buildReceipt()],
+    admitCards: [
+      buildPortalAdmitCard(),
+      buildPortalAdmitCard({
+        id: PORTAL_IDS.bilalAdmitCard,
+        exam_name: "Bilal finals",
+        student_id: PORTAL_IDS.bilal,
+        admit_card_no: "FIN-ADM-002",
+      }),
+    ],
     results: [
       buildResult(),
       buildResult({
@@ -181,5 +192,48 @@ test.describe("a guardian's child pages", () => {
     // A session-wide exam has no term, so it sits outside the term group.
     await expect(portalChildPage.result("Annual")).toContainText(/74(\.0)?%/);
     await expect(portalChildPage.result("Spelling bee")).toHaveCount(0);
+  });
+
+  test("results offers the child's current admit card as a download", async ({
+    page,
+    mockApi,
+    portalPage,
+    portalChildPage,
+    signedIn: _signedIn,
+  }) => {
+    stubFamily(mockApi);
+    const fileUrl = `https://storage.e2e.test/admit-cards/${PORTAL_IDS.admitCard}.pdf`;
+    await page.route(fileUrl, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/pdf",
+        headers: { "content-disposition": 'attachment; filename="admit-card.pdf"' },
+        body: "%PDF-1.4 e2e admit card",
+      }),
+    );
+    await portalPage.goto();
+    await portalPage.tab("Results").click();
+
+    await expect(portalChildPage.admitCardDownload("Finals")).toBeVisible();
+    // The sibling's card is filtered out by the child the page asks for.
+    await expect(portalChildPage.admitCardDownload("Bilal finals")).toHaveCount(0);
+    const downloadPromise = page.waitForEvent("download");
+    await portalChildPage.admitCardDownload("Finals").click();
+    const download = await downloadPromise;
+
+    expect(download.url()).toBe(fileUrl);
+  });
+
+  test("results says so when the child has no current admit card", async ({
+    mockApi,
+    portalPage,
+    portalChildPage,
+    signedIn: _signedIn,
+  }) => {
+    mockApi.use(portalModule(new PortalStore()));
+    await portalPage.goto();
+    await portalPage.tab("Results").click();
+
+    await expect(portalChildPage.noAdmitCards).toBeVisible();
   });
 });

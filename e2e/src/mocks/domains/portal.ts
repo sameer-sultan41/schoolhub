@@ -32,7 +32,7 @@ function flag(value: string | null): boolean | undefined {
  * A guardian's portal reads and writes, for the family in `store`:
  * `GET /parent-portal/dashboard`; the child's `/student-attendance`, `/fee-invoices`,
  * `/receipts` (and the streamed `/receipts/{id}/download`), `/vouchers` (and its download),
- * `/auth/change-password` and `/results`; `/notices` with
+ * `/auth/change-password`, `/results` and `/admit-cards` (with `:download`); `/notices` with
  * `:acknowledge`; the inbox `/notifications` with `:unread-count`, `:mark-read` and
  * `:mark-all-read`; and `/notification-preferences`.
  *
@@ -126,6 +126,21 @@ export function portalModule(store: PortalStore): MockModule {
         .filter((row) => !studentId || row.student_id === studentId)
         .sort((a, b) => (b.published_at ?? "").localeCompare(a.published_at ?? ""));
       return cursorPageOf(rows, request.searchParams);
+    });
+
+    // Seeded as the server's `status=issued&current=true` answer; the stub narrows by child only.
+    api.get("/admit-cards", (request) => {
+      const studentId = request.searchParams.get("student_id");
+      const rows = store.admitCards.filter((row) => !studentId || row.student_id === studentId);
+      return cursorPageOf(rows, request.searchParams);
+    });
+
+    api.post("/admit-cards/:cardAction", (request) => {
+      const { id, action } = colonAction(request.params["cardAction"]);
+      if (action !== "download" || !store.admitCards.some((row) => row.id === id)) {
+        return fail(404, NOT_FOUND);
+      }
+      return ok({ download_url: `https://storage.e2e.test/admit-cards/${id}.pdf` });
     });
 
     // ---- notices -----------------------------------------------------------------------

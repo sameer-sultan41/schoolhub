@@ -19,6 +19,8 @@ export const ADMIT_CARDS_PAGE_SIZE = 25;
 export const ADMIT_CARDS_ORDERING = "admit_card_no";
 
 export const ADMIT_CARD_STATUS_REVOKED: AdmitCardStatus = "revoked";
+/** Rendered and not withdrawn: the only cards the portal offers. */
+export const ADMIT_CARD_STATUS_ISSUED: AdmitCardStatus = "issued";
 
 /** Every status, keyed so the compiler checks the set against the generated enum. */
 const STATUS_SET: Record<AdmitCardStatus, true> = {

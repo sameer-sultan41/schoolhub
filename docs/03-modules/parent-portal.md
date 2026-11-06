@@ -255,3 +255,14 @@ Guardian uploads, leave, vouchers and change password, on PR 2's shell (the dash
 | Upload client | One client: `Services.files.uploadFile` (the three steps), used by the shared `components/attachment-uploader.tsx` (upload on pick, a chip per file with remove, the server's own refusal text, a stable `onUploadingChange` that holds the host's submit) |
 | Tests | Jest beside each screen (`features/portal/{leave,fees,preferences,messages}/__tests__`) and the service tests; mocked `e2e/tests/dashboard/portal-leave-vouchers.spec.ts`; live `e2e/tests/live/api/portal-leave.spec.ts` |
 | Deferred | Guardian re-download of a leave attachment, cancelling an approved request, editing a request, `issued`-only vouchers, session revocation on password change ([`deferred-work.md`](../deferred-work.md)) |
+
+### Built (admit cards, PR C)
+
+§5's "admit-card download during exam windows", on PR 2's Results page.
+
+| Area | State |
+| ---- | ----- |
+| Screen | `/portal/{studentId}/results` lists the child's issued cards for exams not yet over above the results (`features/portal/results/portal-admit-cards.tsx`): exam name, dates, card number and a Download button; "No admit cards" when there are none; its own load error, so a failure never hides the results |
+| API | `GET /admit-cards?student_id=…&status=issued&current=true` (`current`: the exam is undated or ends on or after the school's today) and `POST /admit-cards/{id}:download`, which returns a short-lived signed link saved with `downloadFile`. The card now carries `exam_name`, `exam_starts_on` and `exam_ends_on` ([`examinations.md`](examinations.md) §16, §20) |
+| Access | Already in place: `exams.admit-card.view` names `student` and `guardian`, `download` is portal-readable, and the record scope keeps a guardian to their own children (another child's card is a 404). `test_guardian_admit_card_download_own_only` proves it with the guardian role's real keys |
+| Tests | `examinations/tests/test_admit_cards.py`; Jest `features/portal/results/__tests__/portal-admit-cards.test.tsx` and the admit-cards service test; mocked `e2e/tests/dashboard/portal-child-pages.spec.ts` (download and the empty state) |

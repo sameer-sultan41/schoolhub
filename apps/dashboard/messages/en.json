@@ -2672,6 +2672,16 @@
         }
       }
     },
+    "admitCards": {
+      "title": "Admit cards",
+      "loadError": "We couldn't load the admit cards. Please try again.",
+      "emptyTitle": "No admit cards",
+      "emptyDescription": "Admit cards for upcoming exams appear here once the school issues them.",
+      "dates": "{start} – {end}",
+      "number": "Card {number}",
+      "download": "Download admit card for {exam}",
+      "downloadFailed": "We couldn't download the admit card. Please try again."
+    },
     "results": {
       "title": "Results",
       "loadError": "We couldn't load the results. Please try again.",

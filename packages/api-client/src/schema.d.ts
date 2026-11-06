@@ -6478,6 +6478,11 @@ export interface components {
             readonly id: string;
             /** Format: uuid */
             readonly exam_id: string;
+            readonly exam_name: string;
+            /** Format: date */
+            readonly exam_starts_on: string | null;
+            /** Format: date */
+            readonly exam_ends_on: string | null;
             /** Format: uuid */
             readonly student_id: string;
             readonly student_name: string;
@@ -12655,6 +12660,7 @@ export interface operations {
     admit_cards_list: {
         parameters: {
             query?: {
+                current?: boolean;
                 /** @description The pagination cursor value. */
                 cursor?: string;
                 exam_id?: string;

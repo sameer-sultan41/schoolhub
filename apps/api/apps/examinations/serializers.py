@@ -445,6 +445,10 @@ class AdmitCardSerializer(serializers.ModelSerializer):
     """
 
     exam_id = serializers.UUIDField(read_only=True)
+    # The exam's name and dates, so a portal can label a card without the staff-only exam read.
+    exam_name = serializers.CharField(source="exam.name", read_only=True)
+    exam_starts_on = serializers.DateField(source="exam.starts_on", read_only=True, allow_null=True)
+    exam_ends_on = serializers.DateField(source="exam.ends_on", read_only=True, allow_null=True)
     student_id = serializers.UUIDField(read_only=True)
     student_name = serializers.CharField(source="student.full_name", read_only=True)
     admission_number = serializers.CharField(source="student.admission_number", read_only=True)
@@ -457,6 +461,9 @@ class AdmitCardSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "exam_id",
+            "exam_name",
+            "exam_starts_on",
+            "exam_ends_on",
             "student_id",
             "student_name",
             "admission_number",

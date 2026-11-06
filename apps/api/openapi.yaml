@@ -308,6 +308,10 @@ paths:
 
         Portal-readable for reads only; see the module docstring.
       parameters:
+      - in: query
+        name: current
+        schema:
+          type: boolean
       - name: cursor
         required: false
         in: query
@@ -14735,6 +14739,19 @@ components:
           type: string
           format: uuid
           readOnly: true
+        exam_name:
+          type: string
+          readOnly: true
+        exam_starts_on:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        exam_ends_on:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
         student_id:
           type: string
           format: uuid
@@ -14787,7 +14804,10 @@ components:
       - admission_number
       - admit_card_no
       - created_at
+      - exam_ends_on
       - exam_id
+      - exam_name
+      - exam_starts_on
       - file_id
       - id
       - issued_at
