@@ -86,6 +86,27 @@ describe("ledger-accounts-service", () => {
     expect(Object.keys(query)).toEqual(["page_size"]);
   });
 
+  it("fetchLedgerAccountOptions reads every matching account in code order, a full page at a time", async () => {
+    const { fetchLedgerAccountOptions } = await import("../ledger-accounts-service");
+    mockGet.mockResolvedValue(PAGE);
+
+    expect(await fetchLedgerAccountOptions({ accountType: "income", isActive: true })).toEqual([
+      { id: "x1" },
+    ]);
+
+    expect(mockGet).toHaveBeenCalledWith(
+      "/ledger-accounts",
+      expect.objectContaining({
+        query: expect.objectContaining({
+          account_type: "income",
+          is_active: true,
+          ordering: "code",
+          page_size: 100,
+        }),
+      }),
+    );
+  });
+
   it("fetchLedgerAccount GETs /ledger-accounts/{id}", async () => {
     const { fetchLedgerAccount } = await import("../ledger-accounts-service");
     mockGet.mockResolvedValue({ data: { id: "x1" } });

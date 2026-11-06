@@ -2,6 +2,7 @@ import {
   createLedgerAccount,
   deleteLedgerAccount,
   fetchLedgerAccount,
+  fetchLedgerAccountOptions,
   listLedgerAccounts,
   updateLedgerAccount,
 } from "./ledger-accounts-service";
@@ -9,6 +10,7 @@ import {
 export const LedgerAccountsService = {
   listLedgerAccounts,
   fetchLedgerAccount,
+  fetchLedgerAccountOptions,
   createLedgerAccount,
   updateLedgerAccount,
   deleteLedgerAccount,

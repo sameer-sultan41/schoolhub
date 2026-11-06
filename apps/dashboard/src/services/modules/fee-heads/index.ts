@@ -2,6 +2,7 @@ import {
   createFeeHead,
   deleteFeeHead,
   fetchFeeHead,
+  fetchFeeHeadOptions,
   listFeeHeads,
   updateFeeHead,
 } from "./fee-heads-service";
@@ -9,6 +10,7 @@ import {
 export const FeeHeadsService = {
   listFeeHeads,
   fetchFeeHead,
+  fetchFeeHeadOptions,
   createFeeHead,
   updateFeeHead,
   deleteFeeHead,

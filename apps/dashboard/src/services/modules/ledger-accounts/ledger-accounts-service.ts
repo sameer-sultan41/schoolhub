@@ -1,4 +1,4 @@
-import { fetchPage } from "@schoolhub/api-client";
+import { collectPages, fetchPage, MAX_PAGE_SIZE } from "@schoolhub/api-client";
 import type { Page } from "@schoolhub/types";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
@@ -16,6 +16,15 @@ export async function listLedgerAccounts(
 ): Promise<Page<LedgerAccountRecord>> {
   return fetchPage<LedgerAccountRecord>(apiClient, endpoints.ledgerAccounts.list, {
     query: toLedgerAccountsQueryParams(query),
+  });
+}
+
+/** Every account matching the filters, for a picker or a name lookup: all pages, in code order. */
+export async function fetchLedgerAccountOptions(
+  query: Pick<LedgerAccountsQuery, "accountType" | "isActive"> = {},
+): Promise<LedgerAccountRecord[]> {
+  return collectPages<LedgerAccountRecord>(apiClient, endpoints.ledgerAccounts.list, {
+    query: toLedgerAccountsQueryParams({ ...query, ordering: "code", pageSize: MAX_PAGE_SIZE }),
   });
 }
 

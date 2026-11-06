@@ -83,6 +83,20 @@ describe("fee-heads-service", () => {
     expect(Object.keys(query)).toEqual(["page_size"]);
   });
 
+  it("fetchFeeHeadOptions reads every head in code order, a full page at a time", async () => {
+    const { fetchFeeHeadOptions } = await import("../fee-heads-service");
+    mockGet.mockResolvedValue(PAGE);
+
+    expect(await fetchFeeHeadOptions()).toEqual([{ id: "x1" }]);
+
+    expect(mockGet).toHaveBeenCalledWith(
+      "/fee-heads",
+      expect.objectContaining({
+        query: expect.objectContaining({ ordering: "code", page_size: 100 }),
+      }),
+    );
+  });
+
   it("fetchFeeHead GETs /fee-heads/{id}", async () => {
     const { fetchFeeHead } = await import("../fee-heads-service");
     mockGet.mockResolvedValue({ data: { id: "x1" } });

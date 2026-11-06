@@ -1,4 +1,4 @@
-import { fetchPage } from "@schoolhub/api-client";
+import { collectPages, fetchPage, MAX_PAGE_SIZE } from "@schoolhub/api-client";
 import type { Page } from "@schoolhub/types";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
@@ -10,6 +10,13 @@ import type { FeeHeadInput, FeeHeadRecord, FeeHeadsQuery } from "./fee-heads-typ
 export async function listFeeHeads(query: FeeHeadsQuery = {}): Promise<Page<FeeHeadRecord>> {
   return fetchPage<FeeHeadRecord>(apiClient, endpoints.feeHeads.list, {
     query: toFeeHeadsQueryParams(query),
+  });
+}
+
+/** Every fee head, for a picker or a name lookup: all pages, in code order. */
+export async function fetchFeeHeadOptions(): Promise<FeeHeadRecord[]> {
+  return collectPages<FeeHeadRecord>(apiClient, endpoints.feeHeads.list, {
+    query: toFeeHeadsQueryParams({ ordering: "code", pageSize: MAX_PAGE_SIZE }),
   });
 }
 
