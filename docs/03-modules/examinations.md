@@ -548,7 +548,10 @@ assembly. **The module is complete.**
   data-entry error found at approval has no route back — someone reaches for a
   database edit. It is also what lets `assert_exam_accepts_marks` and
   `assert_exam_is_recomputable` be strict, since there is a sanctioned way out
-  of `approved`.
+  of `approved`. A send-back returns every unpublished row to `processing`, and
+  the next run moves every one of them back to pending approval, including a row
+  it did not recompute (a student withdrawn since); approval refuses with 409
+  while any row is still `processing` (lesson L40).
 - **A withheld result survives a recompute, and a revoked admit card survives a
   re-issue.** The same rule twice: a decision someone took is not undone by a
   batch operation running again.

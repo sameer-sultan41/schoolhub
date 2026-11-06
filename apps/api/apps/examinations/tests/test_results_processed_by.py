@@ -8,11 +8,11 @@ import importlib
 from django.apps import apps as django_apps
 
 from apps.examinations import services
-from apps.examinations.models import Result, ResultStatus
+from apps.examinations.models import ExamStatus, Result, ResultStatus
 from apps.examinations.tests.factories import ResultFactory, UserFactory
 from apps.examinations.tests.test_processing import ProcessingTestCase
 from apps.examinations.tests.test_result_approval_stamp import ReprocessTestCase
-from core.api.exceptions import DomainRuleViolation
+from core.api.exceptions import Conflict, DomainRuleViolation
 from core.tenancy.context import tenant_context
 
 
@@ -58,6 +58,50 @@ class ProcessedByStampTests(ReprocessTestCase):
         with tenant_context(self.tenant.id):
             approved = services.approve_exam_results(exam=self.exam, approver_id=self.a.pk)
         self.assertEqual(approved, {"approved": 3})
+
+    def test_a_row_sent_back_and_not_recomputed_returns_to_pending_approval(self) -> None:
+        """A processes, B sends back (every row to `processing`), a student is withdrawn, C
+        re-processes: the withdrawn student's row is not recomputed, so the run itself must
+        carry it back to pending, or approval would skip it and it stays `processing` for good."""
+        from apps.student_management.models import EnrollmentStatus, StudentEnrollment
+
+        withdrawn = self.students[2]
+        with tenant_context(self.tenant.id):
+            services.send_results_back(exam=self.exam, actor_id=self.b.pk, reason="Re-key")
+            StudentEnrollment.objects.filter(student=withdrawn).update(
+                status=EnrollmentStatus.WITHDRAWN
+            )
+            outcome = services.process_exam_results(exam=self.exam, actor_id=self.c.pk)
+            stale = Result.objects.alive().get(exam=self.exam, student=withdrawn)
+
+        self.assertEqual(outcome["students"], 2)
+        self.assertEqual(stale.status, ResultStatus.PENDING_APPROVAL)
+        self.assertEqual(stale.processed_by, self.c.pk)
+
+        with tenant_context(self.tenant.id):
+            approved = services.approve_exam_results(exam=self.exam, approver_id=self.a.pk)
+            stale.refresh_from_db()
+        self.assertEqual(approved, {"approved": 3})
+        self.assertEqual(stale.status, ResultStatus.APPROVED)
+
+    def test_approval_is_refused_while_a_row_is_still_processing(self) -> None:
+        """The backstop: a row left in `processing` would never be approved, so the gate
+        refuses the whole exam rather than approving around it."""
+        straggler = self.students[0]
+        with tenant_context(self.tenant.id):
+            Result.objects.alive().filter(exam=self.exam, student=straggler).update(
+                status=ResultStatus.PROCESSING
+            )
+            with self.assertRaises(Conflict) as caught:
+                services.approve_exam_results(exam=self.exam, approver_id=self.b.pk)
+            self.exam.refresh_from_db()
+            statuses = set(
+                Result.objects.alive().filter(exam=self.exam).values_list("status", flat=True)
+            )
+
+        self.assertIn("not been processed yet", str(caught.exception.detail))
+        self.assertEqual(self.exam.status, ExamStatus.PROCESSING)
+        self.assertNotIn(ResultStatus.APPROVED, statuses)
 
 
 class ProcessedByBackfillTests(ProcessingTestCase):

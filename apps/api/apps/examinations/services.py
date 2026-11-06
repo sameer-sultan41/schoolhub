@@ -1586,6 +1586,14 @@ def approve_exam_results(*, exam: Exam, approver_id: uuid.UUID) -> dict:
             "be approved."
         )
 
+    # Backstop: a row still in `processing` was never processed, and approving the exam would
+    # strand it unapproved for good.
+    if Result.objects.alive().filter(exam=exam, status=ResultStatus.PROCESSING).exists():
+        raise Conflict(
+            "Some results on this exam have not been processed yet. Process the exam again "
+            "before approving."
+        )
+
     pending = list(
         Result.objects.alive()
         .select_for_update()

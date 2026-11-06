@@ -10,6 +10,12 @@ either this file or `project-status.md`.
 
 ## Deliberately NOT done
 
+- **A result carried over by a re-process keeps its earlier figures and ranks.** A student
+  withdrawn between `:send-results-back` and the re-process is not recomputed (they are no
+  longer on the active roll), so their row returns to pending approval with the numbers and
+  `rank_in_*` of the earlier run, and its rank can equal a recomputed student's. Recomputing
+  withdrawn students needs a decision on which section they rank in.
+
 - **`tenant`/`files`/`jobs`/`school-organization`/`dashboard` still have only the
   original three service-module files** (`<domain>-service.ts`/`index.ts`, no
   `-type`/`-constant`/`-helper`/`.schema`), not yet retrofitted to the five-file shape
