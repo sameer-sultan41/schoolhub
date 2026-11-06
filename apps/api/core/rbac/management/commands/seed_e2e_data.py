@@ -645,21 +645,25 @@ class Command(BaseCommand):
         # The finance logins. Each default role, built the way `exam_staff` is: a tenant-scoped
         # role holding exactly the registry's keys for that slug.
         for role_slug, role_name, emails in (
-            ("accountant", "Accountant", (E2E_ACCOUNTANT_EMAIL, E2E_ACCOUNTANT_APPROVER_EMAIL)),
-            ("finance_staff", "Finance Staff", (E2E_FINANCE_STAFF_EMAIL,)),
-            ("school_owner", "School Owner", (E2E_FINANCE_OWNER_EMAIL,)),
+            (
+                "accountant",
+                "Accountant",
+                ((E2E_ACCOUNTANT_EMAIL, "Accountant"), (E2E_ACCOUNTANT_APPROVER_EMAIL, "Approver")),
+            ),
+            ("finance_staff", "Finance Staff", ((E2E_FINANCE_STAFF_EMAIL, "Finance Staff"),)),
+            ("school_owner", "School Owner", ((E2E_FINANCE_OWNER_EMAIL, "School Owner"),)),
         ):
             finance_role = ensure_role_with_permissions(
                 tenant, role_slug, role_name, e2e_finance_permissions(role_slug)
             )
-            for email in emails:
+            for email, last_name in emails:
                 ensure_seed_user(
                     tenant,
                     finance_role,
                     email=email,
                     password=E2E_ADMIN_PASSWORD,
                     first_name="E2E",
-                    last_name=role_name,
+                    last_name=last_name,
                 )
 
         with tenant_context(tenant.id):

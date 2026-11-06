@@ -369,6 +369,18 @@ class SeedE2EExaminationsTests(TestCase):
                 with self.subTest(email=email):
                     user = User.objects.get(tenant=self.tenant, email=email)
                     self.assertTrue(user.check_password(E2E_ADMIN_PASSWORD))
+                    self.assertTrue(UserRole.objects.filter(user=user, role__slug=slug).exists())
+        self.assertEqual(
+            UserRole.objects.filter(
+                user__email__in=(E2E_ACCOUNTANT_EMAIL, E2E_ACCOUNTANT_APPROVER_EMAIL),
+                role__tenant=self.tenant,
+                role__slug="accountant",
+            )
+            .values("role")
+            .distinct()
+            .count(),
+            1,
+        )
 
     def test_the_fees_fixtures_are_seeded_and_the_module_is_enabled(self) -> None:
         with tenant_context(self.tenant.id):

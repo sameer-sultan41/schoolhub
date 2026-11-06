@@ -228,7 +228,8 @@ export const E2E_FINANCE_OWNER_EMAIL = "e2e-finance-owner@schoolhub.test";
 /**
  * Mirror `apps/api/apps/fees_finance/management/commands/seed_e2e_fees.py`: a fee head mapped
  * to the income account, and a draft structure (one schedule) for the baseline session and
- * class. Distinct from the portal's active "E2E Grade 1 Fees" structure.
+ * class at the second campus (NORTH), so activating it never clashes with the portal's active
+ * "E2E Grade 1 Fees" structure at the main campus.
  */
 export const E2E_FINANCE_FEE_HEAD_CODE = "E2E-LIBRARY";
 export const E2E_FINANCE_FEE_HEAD_NAME = "E2E Library Fee";

@@ -8,7 +8,10 @@ local or CI database. A command of this app, not a step in `core`, because it wr
 
 Separate from the portal's head and structure on purpose: those are activated and billed so
 the portal has an invoice to show, while the fees dashboard's specs need a structure still in
-`draft` to edit, activate and delete. Later fees-dashboard PRs add their fixtures here.
+`draft` to edit, activate and delete. The draft is scoped to the second campus because
+`activate_fee_structure` refuses a second active structure for the same session, class and
+campus: at the baseline campus it could never be activated beside the portal's.
+Later fees-dashboard PRs add their fixtures here.
 
 Idempotent: each row has a natural key (head code, structure scope and name, head within a
 structure). A re-run never touches an existing row, so a structure a spec has activated stays
@@ -32,8 +35,8 @@ from apps.fees_finance.models import (
 )
 from apps.school_organization.models import AcademicSession, Campus, Class
 from core.rbac.management.commands.seed_e2e_data import (
-    E2E_CAMPUS_CODE,
     E2E_CLASS_NAME,
+    E2E_SECOND_CAMPUS_CODE,
     E2E_SESSION_NAME,
     E2E_TENANT_SLUG,
 )
@@ -61,7 +64,7 @@ class Command(BaseCommand):
         tenant = Tenant.objects.get(slug=E2E_TENANT_SLUG)
         with tenant_context(tenant.id):
             session = AcademicSession.objects.get(name=E2E_SESSION_NAME)
-            campus = Campus.objects.get(code=E2E_CAMPUS_CODE)
+            campus = Campus.objects.get(code=E2E_SECOND_CAMPUS_CODE)
             school_class = Class.objects.get(name=E2E_CLASS_NAME)
 
             accounts = fee_services.ensure_system_accounts(tenant_id=tenant.id)

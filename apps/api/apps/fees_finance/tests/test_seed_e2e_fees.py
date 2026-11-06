@@ -22,6 +22,7 @@ from apps.fees_finance.models import (
     FeeStructureStatus,
     LedgerAccount,
 )
+from apps.fees_finance.services import activate_fee_structure
 from apps.fees_finance.tests.factories import (
     AcademicSessionFactory,
     CampusFactory,
@@ -31,6 +32,7 @@ from apps.fees_finance.tests.factories import (
 from core.rbac.management.commands.seed_e2e_data import (
     E2E_CAMPUS_CODE,
     E2E_CLASS_NAME,
+    E2E_SECOND_CAMPUS_CODE,
     E2E_SESSION_NAME,
     E2E_TENANT_SLUG,
 )
@@ -43,9 +45,12 @@ class SeedE2EFeesTests(TestCase):
         # The command looks the baseline scope up by the names `seed_e2e_data` gives it.
         self.tenant = TenantFactory(slug=E2E_TENANT_SLUG)
         with tenant_context(self.tenant.id):
-            CampusFactory(tenant=self.tenant, code=E2E_CAMPUS_CODE)
-            AcademicSessionFactory(tenant=self.tenant, name=E2E_SESSION_NAME, is_current=True)
-            ClassFactory(tenant=self.tenant, name=E2E_CLASS_NAME)
+            self.main_campus = CampusFactory(tenant=self.tenant, code=E2E_CAMPUS_CODE)
+            CampusFactory(tenant=self.tenant, code=E2E_SECOND_CAMPUS_CODE)
+            self.session = AcademicSessionFactory(
+                tenant=self.tenant, name=E2E_SESSION_NAME, is_current=True
+            )
+            self.school_class = ClassFactory(tenant=self.tenant, name=E2E_CLASS_NAME)
 
     def seed(self) -> None:
         call_command("seed_e2e_fees")
@@ -86,15 +91,20 @@ class SeedE2EFeesTests(TestCase):
         self.assertEqual(before, after)
         self.assertEqual((len(before[0]), len(before[1]), len(before[2])), (1, 1, 1))
 
-    def test_a_rerun_leaves_an_activated_structure_active(self) -> None:
-        self.seed()
+    def test_the_draft_activates_beside_an_active_structure_at_the_baseline_scope(self) -> None:
+        # What the portal seed leaves behind: an active structure at the main campus.
         with tenant_context(self.tenant.id):
-            FeeStructure.objects.filter(name=E2E_FINANCE_DRAFT_STRUCTURE_NAME).update(
-                status=FeeStructureStatus.ACTIVE
+            FeeStructure.objects.create(
+                tenant=self.tenant,
+                academic_session=self.session,
+                school_class=self.school_class,
+                campus=self.main_campus,
+                name="E2E Grade 1 Fees",
+                status=FeeStructureStatus.ACTIVE,
             )
-
         self.seed()
 
         with tenant_context(self.tenant.id):
-            structure = FeeStructure.objects.get(name=E2E_FINANCE_DRAFT_STRUCTURE_NAME)
-            self.assertEqual(structure.status, FeeStructureStatus.ACTIVE)
+            draft = FeeStructure.objects.get(name=E2E_FINANCE_DRAFT_STRUCTURE_NAME)
+            activated = activate_fee_structure(structure=draft, actor_id=None)
+            self.assertEqual(activated.status, FeeStructureStatus.ACTIVE)
