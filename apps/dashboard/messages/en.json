@@ -2965,6 +2965,23 @@
       }
     }
   },
+  "fees": {
+    "nav": {
+      "label": "Fees & Finance sections",
+      "structures": "Structures",
+      "ledger": "Ledger"
+    },
+    "title": "Fees & Finance",
+    "structures": {
+      "title": "Fee structures"
+    },
+    "ledger": {
+      "title": "Ledger"
+    },
+    "stub": {
+      "body": "This screen is coming soon."
+    }
+  },
   "reports": {
     "caption": "{report} report",
     "rowCount": "{count, plural, one {# row} other {# rows}}",

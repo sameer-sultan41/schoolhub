@@ -44,11 +44,15 @@ describe("Services", () => {
       "examSchedules",
       "examSubjects",
       "exams",
+      "feeHeads",
       "feeInvoices",
+      "feeSchedules",
+      "feeStructures",
       "files",
       "gradingScales",
       "guardians",
       "jobs",
+      "ledgerAccounts",
       "leaveRequests",
       "marks",
       "messageThreads",
@@ -236,6 +240,28 @@ describe("Services", () => {
     expect(typeof Services.notices.listNotices).toBe("function");
     expect(typeof Services.notices.acknowledgeNotice).toBe("function");
     expect(typeof Services.feeInvoices.listFeeInvoices).toBe("function");
+    expect(typeof Services.ledgerAccounts.listLedgerAccounts).toBe("function");
+    expect(typeof Services.ledgerAccounts.fetchLedgerAccount).toBe("function");
+    expect(typeof Services.ledgerAccounts.createLedgerAccount).toBe("function");
+    expect(typeof Services.ledgerAccounts.updateLedgerAccount).toBe("function");
+    expect(typeof Services.ledgerAccounts.deleteLedgerAccount).toBe("function");
+    expect(typeof Services.feeHeads.listFeeHeads).toBe("function");
+    expect(typeof Services.feeHeads.fetchFeeHead).toBe("function");
+    expect(typeof Services.feeHeads.createFeeHead).toBe("function");
+    expect(typeof Services.feeHeads.updateFeeHead).toBe("function");
+    expect(typeof Services.feeHeads.deleteFeeHead).toBe("function");
+    expect(typeof Services.feeStructures.listFeeStructures).toBe("function");
+    expect(typeof Services.feeStructures.fetchFeeStructure).toBe("function");
+    expect(typeof Services.feeStructures.createFeeStructure).toBe("function");
+    expect(typeof Services.feeStructures.updateFeeStructure).toBe("function");
+    expect(typeof Services.feeStructures.deleteFeeStructure).toBe("function");
+    expect(typeof Services.feeStructures.activateFeeStructure).toBe("function");
+    expect(typeof Services.feeStructures.archiveFeeStructure).toBe("function");
+    expect(typeof Services.feeSchedules.listFeeSchedules).toBe("function");
+    expect(typeof Services.feeSchedules.fetchFeeSchedule).toBe("function");
+    expect(typeof Services.feeSchedules.createFeeSchedule).toBe("function");
+    expect(typeof Services.feeSchedules.updateFeeSchedule).toBe("function");
+    expect(typeof Services.feeSchedules.deleteFeeSchedule).toBe("function");
     expect(typeof Services.receipts.listReceipts).toBe("function");
     expect(typeof Services.receipts.downloadReceipt).toBe("function");
     expect(typeof Services.results.listResults).toBe("function");

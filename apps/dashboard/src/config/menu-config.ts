@@ -16,6 +16,7 @@ import {
   Theater,
   UserCircle,
   Users,
+  Wallet,
 } from "lucide-react";
 
 import type { MenuConfig } from "@schoolhub/ui";
@@ -25,6 +26,7 @@ import { ACADEMICS_SECTIONS } from "@/features/academics/academics-sections";
 import { ATTENDANCE_SECTIONS } from "@/features/attendance/attendance-sections";
 import { COMMUNICATION_SECTIONS } from "@/features/communication/communication-sections";
 import { EXAMS_SECTIONS } from "@/features/exams/exams-sections";
+import { FEES_SECTIONS } from "@/features/fees/fees-sections";
 import { TIMETABLE_SECTIONS } from "@/features/timetable/timetable-sections";
 
 import { Paths } from "./paths";
@@ -92,6 +94,13 @@ export const MENU_SIDEBAR: MenuConfig = [
     module: "exams",
     // Shared with the Examinations tabs and landing, gated the same way.
     children: sectionMenuItems(EXAMS_SECTIONS),
+  },
+  {
+    title: "Fees & Finance",
+    icon: Wallet,
+    module: "fees",
+    // Shared with the Fees tabs and landing, gated the same way.
+    children: sectionMenuItems(FEES_SECTIONS),
   },
   { heading: "User" },
   {

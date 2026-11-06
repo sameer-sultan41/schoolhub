@@ -2965,6 +2965,23 @@
       }
     }
   },
+  "fees": {
+    "nav": {
+      "label": "فیس و مالیات کے حصے",
+      "structures": "فیس کے ڈھانچے",
+      "ledger": "کھاتہ"
+    },
+    "title": "فیس و مالیات",
+    "structures": {
+      "title": "فیس کے ڈھانچے"
+    },
+    "ledger": {
+      "title": "کھاتہ"
+    },
+    "stub": {
+      "body": "یہ صفحہ جلد دستیاب ہوگا۔"
+    }
+  },
   "reports": {
     "caption": "{report} رپورٹ",
     "rowCount": "{count, plural, one {# قطار} other {# قطاریں}}",
