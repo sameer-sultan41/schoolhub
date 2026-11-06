@@ -953,15 +953,17 @@ UNWRITABLE_WINDOW_CLOSED = "window_closed"
 NO_PERMISSION_MESSAGE = "You can read these marks but not enter them."
 
 
-def marks_grid_writability(*, user, exam_subject: ExamSubject) -> tuple[str, str] | None:
+def marks_grid_writability(
+    *, user, exam_subject: ExamSubject, write_permission: str
+) -> tuple[str, str] | None:
     """None when a grid the caller may read is also writable; else `(reason, message)`.
 
     Runs the gates `bulk_enter_marks` runs, in its order, so the grid never
     offers a write the submit refuses. The message is the gate's own sentence.
     The section gate is not here: a caller failing it never sees the grid.
+    `write_permission` is the submit endpoint's single key, passed in by the view.
     """
-    # A literal, so tests/test_endpoint_contracts.py checks it is registered.
-    if not has_permission_key(user, "exams.marks.create"):
+    if not has_permission_key(user, write_permission):
         return UNWRITABLE_NO_PERMISSION, NO_PERMISSION_MESSAGE
     gates = (
         (UNWRITABLE_EXAM_STATUS, lambda: assert_exam_accepts_marks(exam_subject.exam)),

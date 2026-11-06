@@ -827,7 +827,12 @@ class MarksViewSet(
         ):
             raise NotFound
         entries = services.marks_grid(exam_subject=exam_subject, section=section)
-        blocked = services.marks_grid_writability(user=request.user, exam_subject=exam_subject)
+        # The submit's own key, so the grid can't drift from what `:bulk-entry` enforces.
+        blocked = services.marks_grid_writability(
+            user=request.user,
+            exam_subject=exam_subject,
+            write_permission=self.required_permission_map["bulk_entry"],
+        )
         return Response(
             {
                 "data": MarksGridEntrySerializer(entries, many=True).data,
