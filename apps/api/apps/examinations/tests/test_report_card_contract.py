@@ -1,6 +1,6 @@
 """The report-card wire contract: names and figures on the row, the `section_id`
 filter, flat query counts, the per-field remarks split (ADR-0027's amendment),
-and the record scope on the exam-addressed actions (L46)."""
+and the record scope on the exam-addressed actions (L51)."""
 
 from __future__ import annotations
 
@@ -220,7 +220,7 @@ class RemarksSplitTests(ReportCardsTestCase):
 
 
 class ReportCardActionScopeTests(ReportCardsTestCase):
-    """L46: generation and publishing resolve the exam through the record scope."""
+    """L51: generation and publishing resolve the exam through the record scope."""
 
     KEYS = ("exams.report-card.view", "exams.report-card.create", "exams.report-card.publish")
 

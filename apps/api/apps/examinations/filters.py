@@ -122,7 +122,7 @@ class MarksFilterSet(django_filters.FilterSet):
         fields = {"status": ["exact"], "is_absent": ["exact"], "is_exempt": ["exact"]}
 
     def filter_section(self, queryset, name, value):
-        # The student's enrollment in the exam's own session, in any status (L45):
+        # The student's enrollment in the exam's own session, in any status (L50):
         # one row per (student, session), so a promoted student's marks keep their section.
         return queryset.filter(
             student__enrollments__section_id=value,

@@ -67,7 +67,7 @@ function reasonRefusal(body: unknown): MockResponse | undefined {
   return undefined;
 }
 
-/** `ResultViewSet.ordering_fields`' one use: highest percentage first, then id (L41). */
+/** `ResultViewSet.ordering_fields`' one use: highest percentage first, then id (L46). */
 function byPercentage(a: ExamResult, b: ExamResult): number {
   return Number(b.percentage) - Number(a.percentage) || a.id.localeCompare(b.id);
 }
@@ -81,7 +81,7 @@ function byPercentage(a: ExamResult, b: ExamResult): number {
  * - processing runs only before approval (409), and is refused while marks are outstanding (409,
  *   `marks_outstanding`, naming the subjects); a run upserts every computed row as
  *   `pending_approval`, **keeps a withheld result withheld**, stamps the viewer as `processed_by`
- *   on every pending row (L50), moves the exam to `processing`, and replays its first answer for
+ *   on every pending row (L57), moves the exam to `processing`, and replays its first answer for
  *   a repeated `Idempotency-Key`;
  * - approval needs a `processing` exam with pending rows (409s), and **refuses the latest
  *   processor** (422 under `approved_by`); it approves a withheld row too, which stays withheld;

@@ -277,7 +277,7 @@ either this file or `project-status.md`.
     as a holiday from the dashboard; the school calendar's holidays refuse marking instead.
 - **One `examinations` lookup still finds its parent without the caller's record scope**:
   the QuestionBank nested lookup (`get_bank` in `apps/api/apps/examinations/views.py`, which reads
-  `QuestionBank.objects.alive()` for the question routes), the pattern lesson L46 records. PR B
+  `QuestionBank.objects.alive()` for the question routes), the pattern lesson L51 records. PR B
   converted `:publish-schedule`, `:issue-admit-cards` and `schedule-conflicts`; PR C the marks
   actions; PR D (results and report cards) `:process-results`, `:approve-results`,
   `:send-results-back`, `:publish-results`, `/results/{id}:withhold`, `:generate-report-cards` and
@@ -309,7 +309,7 @@ either this file or `project-status.md`.
   - **`exams.marks.update` gates nothing.** It is registered for `teacher` and `exam_staff`, but
     `:bulk-entry` writes a new row and an update alike under `exams.marks.create`, so no role is
     ever refused for want of it (the audit's suggestion in
-    `07-quality/2026-09-module-audit-findings.md`, lesson L48). Either the update half of a
+    `07-quality/2026-09-module-audit-findings.md`, lesson L55). Either the update half of a
     submission checks it, which needs a ruling on what a teacher holding `.create` alone may do to
     a row they already saved, or the key is dropped from the registry, the seed and §4.
   - **`attendance.import`'s CSV allowlist rejects Windows' `application/vnd.ms-excel` type.** A
@@ -351,7 +351,7 @@ either this file or `project-status.md`.
     (`exams.exam.view`, held only by the exam roles: `exam_staff`, `school_admin`, `principal`,
     `vice_principal`, `teacher`, `class_teacher`). The screen therefore offers a viewer without
     `exams.exam.view` question-bank usage alone, with a note, though `ExamReportView` would serve
-    them the other five (L48). An exam-name source readable with `exams.result.view` (a slim
+    them the other five (L55). An exam-name source readable with `exams.result.view` (a slim
     `/exams` options read keyed on either key, or exam names in a results-side endpoint) would
     open those reports to the `school_owner`, `accountant` and the other result-viewing roles.
   - **The Reports section's exam picker lists the newest 100 exams.** It reads one page of

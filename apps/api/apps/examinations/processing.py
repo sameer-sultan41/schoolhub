@@ -380,7 +380,7 @@ def write(*, exam: Exam, computed: list[dict], actor_id: uuid.UUID) -> dict:
     # Every unpublished row of the exam joins this run's approval set, including one it did not
     # recompute (a student withdrawn since keeps their earlier row): a row a send-back left in
     # `processing` would otherwise never be approved, and a stale stamp would refuse the right
-    # approver (L50, L51).
+    # approver (L57, L58).
     Result.objects.alive().filter(
         exam=exam, status__in=[ResultStatus.PROCESSING, ResultStatus.PENDING_APPROVAL]
     ).update(
