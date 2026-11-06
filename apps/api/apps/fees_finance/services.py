@@ -1758,14 +1758,17 @@ def _raise_issue(
     issue; the partial unique indexes let one insert win, and the loser returns
     the winner's row.
     """
-    key = {
-        "kind": kind,
-        "payment": payment,
-        "gateway_provider": gateway_provider,
-        "order_id": order_id,
-        "provider_txn_id": provider_txn_id,
-    }
-    existing = _matching_issue(**key)
+
+    def matching() -> GatewayReconciliationIssue | None:
+        return _matching_issue(
+            kind=kind,
+            payment=payment,
+            gateway_provider=gateway_provider,
+            order_id=order_id,
+            provider_txn_id=provider_txn_id,
+        )
+
+    existing = matching()
     if existing is not None:
         return existing
     try:
@@ -1782,7 +1785,7 @@ def _raise_issue(
                 detected_at=timezone.now(),
             )
     except IntegrityError:
-        existing = _matching_issue(**key)
+        existing = matching()
         if existing is None:
             raise
         return existing

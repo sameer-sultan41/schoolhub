@@ -1034,14 +1034,14 @@ class GatewayReconciliationIssueViewSet(
                 note=serializer.validated_data.get("note"),
                 actor_id=request.user.pk,
             )
-            after = {
+            after: dict[str, str | None] = {
                 "resolution": resolved.resolution,
                 "note": resolved.note,
                 "payment": str(resolved.payment_id) if resolved.payment_id else None,
                 "order_id": resolved.order_id,
                 "provider_txn_id": resolved.provider_txn_id,
             }
-            before = None
+            before: dict[str, str] | None = None
             if amount_before is not None and resolved.payment_id == issue.payment_id:
                 amount_after = Payment.objects.values_list("amount", flat=True).get(
                     pk=resolved.payment_id
