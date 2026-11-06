@@ -17,4 +17,5 @@ THREAD_ATTACHMENT = registry.register(
     mime_types={"application/pdf", "image/png", "image/jpeg"},
     max_size_bytes=10 * MEGABYTE,
     module_gated=True,
+    portal_uploadable=True,
 )

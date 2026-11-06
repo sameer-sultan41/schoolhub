@@ -200,12 +200,6 @@ either this file or `project-status.md`.
     "today only" through the default window; an explicit `attendance_lock_window_days=0`
     test would keep that boundary pinned if the default ever changes.
 - **The attendance dashboard's PR B (the corrections and leave queues) left these out:**
-  - **A guardian cannot attach a document to a leave request.** `platform.file.create`
-    (`core/files/permissions.py`) is granted to staff roles only, so a guardian or student
-    has no way to upload the `attendance.leave-attachment` file a leave type with
-    `requires_attachment` demands. Their submission arrives with parent-portal, which
-    must grant the upload (scoped to that purpose) or the people §4 says submit leave
-    cannot submit a request of such a type.
   - **A leave attachment downloads through the generic file endpoint, which has no record
     scope.** The Leave detail sheet downloads through `POST /files/{id}:download`, keyed
     `platform.file.view` (every staff role). `FileViewSet.get_queryset`
@@ -985,10 +979,9 @@ either this file or `project-status.md`.
     (ready `communication.thread-attachment` files, uploaded and confirmed through `/files`), but
     the thread composer has no upload control, for staff or for guardians; attachments render
     and download through the thread's own route and the oversight twin. A guardian or student
-    also cannot upload at the API: `platform.file.create` is staff-only
-    (`core/files/permissions.py`), so they can download what staff send them but not upload.
-    Parent-portal must grant the upload, scoped to the `communication.thread-attachment`
-    purpose, as it must for leave attachments. The staff composer's upload (the two-step
+    can upload at the API since the portal uploads change (`platform.file.create`,
+    `portal_uploadable` purposes); the portal composer's upload control is PR B's dashboard
+    work. The staff composer's upload (the two-step
     presigned flow, a chip per file, the same type and size limits) is a dashboard follow-up
     that needs no backend change.
   - **Messages carry `sender_id` only**, no sender name, so the dashboard's bubbles say "You" or
@@ -1042,8 +1035,6 @@ either this file or `project-status.md`.
   - **`platform.notification.view` for custom tenant roles.** The key's default roles are
     `ALL_TENANT_ROLES`; a role a tenant defines later does not get it, so its holders get a 403
     on the inbox until someone grants it. Role management has to grant it by default.
-  - **Guardian uploads**: an attachment on a guardian's thread message, and a guardian's leave
-    attachment. `platform.file.create` is staff-only.
   - **Library and transport panels** (§5.8). Neither module is built.
   - **Announcement browse** for guardians and students. Announcements reach them only as inbox
     notifications.
