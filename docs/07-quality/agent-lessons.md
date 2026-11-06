@@ -234,6 +234,11 @@
 - **Mistake (again, examinations dashboard PR D).** `processing.write` re-stamped only the rows it recomputed, so a pending row of a student withdrawn since kept the earlier processor and the gate refused both the old and the new one. A run now stamps every pending row of the exam in one `UPDATE`.
 - **Check.** For each "the X may not also be the Y" rule, find every code path that can make someone the X again (re-process, regenerate, re-submit) and confirm the column the rule reads is written on each of them, not only on insert, and on every row the rule reads, not only the rows the run touched. Test the sequence: A acts, the row is sent back, B acts again; B is refused and A is allowed.
 
+### L40. A bulk status reset needs a re-advance that covers the same rows
+
+- **Mistake.** `send_results_back` moved every unpublished result of the exam to `processing`, but the next `processing.write` advanced only the rows it recomputed (the active roll) to `pending_approval`. A student withdrawn between the send-back and the re-process kept a `processing` row, and `approve_exam_results`, which approves only pending rows, moved the exam to `approved` around it: the row was never approved or published, silently (examinations PR #154). The run now moves every `processing` row of the exam to pending, and approval refuses while one is left.
+- **Check.** For every bulk status reset, name the step that re-advances those rows and confirm its filter covers the same row set, not a subset recomputed from today's data (an active roll, a current enrolment). Where it cannot, make the next gate refuse leftovers instead of acting on the rows it finds. Test it: reset, change the population, re-advance, then assert no row is left in the reset state.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.

@@ -90,6 +90,15 @@ def _value(attrs: dict, instance, field: str) -> Any:
     return getattr(instance, field, None)
 
 
+def _validate_weightage(value: Decimal) -> Decimal:
+    """A weightage is a percentage contribution: above 0, at most 100 (the DB CHECKs' range)."""
+    if value <= 0 or value > 100:
+        raise serializers.ValidationError(
+            "Weightage is a percentage contribution, so it must be above 0 and at most 100."
+        )
+    return value
+
+
 class GradeBandSerializer(serializers.ModelSerializer):
     """`grade_bands` — one band of a grading scale (§5.5).
 
@@ -221,11 +230,7 @@ class ExamSerializer(serializers.ModelSerializer):
         return exam.exam_subjects.alive().count()
 
     def validate_weightage_percent(self, value: Decimal) -> Decimal:
-        if value <= 0 or value > 100:
-            raise serializers.ValidationError(
-                "Weightage is a percentage contribution, so it must be above 0 and at most 100."
-            )
-        return value
+        return _validate_weightage(value)
 
     def validate(self, attrs: dict) -> dict:
         session = _value(attrs, self.instance, "academic_session")
@@ -308,6 +313,9 @@ class ExamSubjectSerializer(serializers.ModelSerializer):
         # (§5.4), which are permission-gated and audited. A client that could
         # PATCH it could reopen a locked register without leaving a trace.
         read_only_fields = (*READ_ONLY_FIELDS, "marks_locked_at")
+
+    def validate_subject_weightage_percent(self, value: Decimal) -> Decimal:
+        return _validate_weightage(value)
 
     def validate(self, attrs: dict) -> dict:
         exam = _value(attrs, self.instance, "exam")

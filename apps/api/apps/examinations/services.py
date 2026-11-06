@@ -18,6 +18,7 @@ from collections.abc import Callable
 from decimal import Decimal
 
 from django.db import connection, transaction
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
 from apps.examinations import conflicts, grading, processing, reports
@@ -311,6 +312,17 @@ def default_scale() -> GradingScale | None:
 # --- §5.2 scheduling -------------------------------------------------------
 
 
+# Every `*_name` on the sitting serializer rides on these joins.
+SCHEDULE_DISPLAY_RELATIONS = (
+    "exam_subject__exam",
+    "exam_subject__subject",
+    "exam_subject__school_class",
+    "section",
+    "room",
+    "invigilator_staff",
+)
+
+
 def assert_schedule_is_editable(schedule: ExamSchedule) -> None:
     """A completed sitting is history; a cancelled one is a decision already made.
 
@@ -368,12 +380,11 @@ def save_schedule_with_conflicts(
     *,
     exam_subject: ExamSubject,
     save: Callable[[], object],
-    previous_exam_subject: ExamSubject | None = None,
 ) -> list[dict]:
     """Persist a sitting write and return the exam's whole clash list.
 
-    **Locks first**: the school's schedule lock, then the parent exam (both
-    exams, when an update moves the sitting to another exam's subject).
+    **Locks first**: the school's schedule lock, then the parent exam
+    (`update_schedule` also locks the exam a moved sitting leaves).
     `publish_exam_schedule` reads the clash list under the same school lock, so
     a sitting saved concurrently, in this exam or any other, either commits
     before publish reads or waits for it: publish can no longer move the exam
@@ -389,21 +400,55 @@ def save_schedule_with_conflicts(
     lock_school_schedule(exam_subject.tenant_id)
     # The exam rows still serialise this write against status transitions
     # (results, admit cards) that never take the schedule lock.
-    lock_exams(
-        exam_subject.exam_id,
-        previous_exam_subject.exam_id if previous_exam_subject else None,
+    lock_exams(exam_subject.exam_id)
+    save()
+    return conflicts.detect_conflicts(exam=exam_subject.exam)
+
+
+def lock_editable_schedule(schedule: ExamSchedule) -> ExamSchedule:
+    """Take the school lock, re-read the sitting `FOR UPDATE`, and re-check its state.
+
+    The caller's row was read before any lock, so a cancel or complete that
+    committed since would pass a check on it, and saving it would write
+    `scheduled` back. Returns the locked row; a sitting deleted meanwhile is a 404.
+    """
+    lock_school_schedule(schedule.tenant_id)
+    current = get_object_or_404(
+        ExamSchedule.objects.alive()
+        .select_related(*SCHEDULE_DISPLAY_RELATIONS)
+        .select_for_update(of=("self",)),
+        pk=schedule.pk,
     )
+    assert_schedule_is_editable(current)
+    return current
+
+
+@transaction.atomic
+def update_schedule(
+    *,
+    schedule: ExamSchedule,
+    validate: Callable[[ExamSchedule], ExamSubject],
+    save: Callable[[], object],
+) -> list[dict]:
+    """Update a sitting under the locks a create takes, checked on the locked row.
+
+    `validate` binds the write to the re-read row and returns the exam-subject
+    the sitting ends up in; both exams, that one and the one it leaves, are
+    locked before `save`.
+    """
+    current = lock_editable_schedule(schedule)
+    exam_subject = validate(current)
+    lock_exams(exam_subject.exam_id, current.exam_subject.exam_id)
     save()
     return conflicts.detect_conflicts(exam=exam_subject.exam)
 
 
 @transaction.atomic
-def delete_schedule(*, schedule: ExamSchedule, delete: Callable[[], object]) -> None:
-    """Delete a sitting under the locks the save takes, for the same reason."""
-    lock_school_schedule(schedule.tenant_id)
-    lock_exams(schedule.exam_subject.exam_id)
-    assert_schedule_is_editable(schedule)
-    delete()
+def delete_schedule(*, schedule: ExamSchedule, delete: Callable[[ExamSchedule], object]) -> None:
+    """Delete a sitting under the locks the save takes, checked on the locked row."""
+    current = lock_editable_schedule(schedule)
+    lock_exams(current.exam_subject.exam_id)
+    delete(current)
 
 
 @transaction.atomic
@@ -953,15 +998,17 @@ UNWRITABLE_WINDOW_CLOSED = "window_closed"
 NO_PERMISSION_MESSAGE = "You can read these marks but not enter them."
 
 
-def marks_grid_writability(*, user, exam_subject: ExamSubject) -> tuple[str, str] | None:
+def marks_grid_writability(
+    *, user, exam_subject: ExamSubject, write_permission: str
+) -> tuple[str, str] | None:
     """None when a grid the caller may read is also writable; else `(reason, message)`.
 
     Runs the gates `bulk_enter_marks` runs, in its order, so the grid never
     offers a write the submit refuses. The message is the gate's own sentence.
     The section gate is not here: a caller failing it never sees the grid.
+    `write_permission` is the submit endpoint's single key, passed in by the view.
     """
-    # A literal, so tests/test_endpoint_contracts.py checks it is registered.
-    if not has_permission_key(user, "exams.marks.create"):
+    if not has_permission_key(user, write_permission):
         return UNWRITABLE_NO_PERMISSION, NO_PERMISSION_MESSAGE
     gates = (
         (UNWRITABLE_EXAM_STATUS, lambda: assert_exam_accepts_marks(exam_subject.exam)),
@@ -1584,6 +1631,14 @@ def approve_exam_results(*, exam: Exam, approver_id: uuid.UUID) -> dict:
         raise Conflict(
             f"This exam is {exam.get_status_display().lower()}. Only processed results can "
             "be approved."
+        )
+
+    # Backstop: a row still in `processing` was never processed, and approving the exam would
+    # strand it unapproved for good.
+    if Result.objects.alive().filter(exam=exam, status=ResultStatus.PROCESSING).exists():
+        raise Conflict(
+            "Some results on this exam have not been processed yet. Process the exam again "
+            "before approving."
         )
 
     pending = list(

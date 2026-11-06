@@ -319,8 +319,8 @@ def _rank(computed: list[dict], *, key: str, into: str) -> None:
 
 
 def write(*, exam: Exam, computed: list[dict], actor_id: uuid.UUID) -> dict:
-    """Upsert every computed row, then re-stamp the exam's pending rows. Four queries for the
-    whole school.
+    """Upsert every computed row, then move every processing or pending row of the exam to
+    pending approval under this run's stamp. Four queries for the whole school.
 
     Upsert, because §6 makes recompute idempotent and re-runnable — a second run
     updates in place rather than colliding with
@@ -377,11 +377,17 @@ def write(*, exam: Exam, computed: list[dict], actor_id: uuid.UUID) -> dict:
     if to_update:
         Result.objects.bulk_update(to_update, RESULT_COMPUTED_FIELDS, batch_size=500)
 
-    # Every pending row of the exam now names this run, including one it did not recompute (a
-    # student withdrawn since keeps their earlier row): the approval gate reads every pending
-    # row, so a stale stamp would refuse the right approver (L38).
-    Result.objects.alive().filter(exam=exam, status=ResultStatus.PENDING_APPROVAL).update(
-        processed_by=actor_id, updated_by=actor_id, updated_at=timezone.now()
+    # Every unpublished row of the exam joins this run's approval set, including one it did not
+    # recompute (a student withdrawn since keeps their earlier row): a row a send-back left in
+    # `processing` would otherwise never be approved, and a stale stamp would refuse the right
+    # approver (L38, L40).
+    Result.objects.alive().filter(
+        exam=exam, status__in=[ResultStatus.PROCESSING, ResultStatus.PENDING_APPROVAL]
+    ).update(
+        status=ResultStatus.PENDING_APPROVAL,
+        processed_by=actor_id,
+        updated_by=actor_id,
+        updated_at=timezone.now(),
     )
 
     return {"created": len(to_create), "updated": len(to_update)}

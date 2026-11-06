@@ -460,19 +460,7 @@ class ExamScheduleViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         return [permission() for permission in STAFF_PERMISSIONS]
 
     def get_queryset(self):
-        # Every `*_name` on the serializer rides on these joins.
-        return (
-            super()
-            .get_queryset()
-            .select_related(
-                "exam_subject__exam",
-                "exam_subject__subject",
-                "exam_subject__school_class",
-                "section",
-                "room",
-                "invigilator_staff",
-            )
-        )
+        return super().get_queryset().select_related(*services.SCHEDULE_DISPLAY_RELATIONS)
 
     @extend_schema(
         responses={
@@ -515,19 +503,25 @@ class ExamScheduleViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         """200 with `meta.conflicts`, on the same reasoning as `create`."""
         is_partial = kwargs.pop("partial", False)
         instance = self.get_object()
-        services.assert_schedule_is_editable(instance)
+        bound: list[ExamScheduleSerializer] = []
 
-        serializer = self.get_serializer(instance, data=request.data, partial=is_partial)
-        serializer.is_valid(raise_exception=True)
-        # The clash list is exam-scoped, for the exam the sitting ends up in;
-        # the exam it leaves is locked too.
-        findings = services.save_schedule_with_conflicts(
-            exam_subject=serializer.validated_data.get("exam_subject", instance.exam_subject),
-            previous_exam_subject=instance.exam_subject,
-            save=partial(self.perform_update, serializer),
+        def validate(current: ExamSchedule) -> ExamSubject:
+            # Bound to the row re-read under the lock, never the one read above.
+            serializer = ExamScheduleSerializer(
+                current,
+                data=request.data,
+                partial=is_partial,
+                context=self.get_serializer_context(),
+            )
+            serializer.is_valid(raise_exception=True)
+            bound.append(serializer)
+            return serializer.validated_data.get("exam_subject", current.exam_subject)
+
+        findings = services.update_schedule(
+            schedule=instance, validate=validate, save=lambda: self.perform_update(bound[0])
         )
 
-        return Response({"data": serializer.data, "meta": {"conflicts": findings}})
+        return Response({"data": bound[0].data, "meta": {"conflicts": findings}})
 
     @extend_schema(
         responses={
@@ -553,9 +547,7 @@ class ExamScheduleViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         — `cancelled` is the state for calling one off, and it keeps the row
         visible to whoever saw it.
         """
-        services.delete_schedule(
-            schedule=instance, delete=partial(super().perform_destroy, instance)
-        )
+        services.delete_schedule(schedule=instance, delete=super().perform_destroy)
 
     @extend_schema(
         request=None,
@@ -838,7 +830,12 @@ class MarksViewSet(
         ):
             raise NotFound
         entries = services.marks_grid(exam_subject=exam_subject, section=section)
-        blocked = services.marks_grid_writability(user=request.user, exam_subject=exam_subject)
+        # The submit's own key, so the grid can't drift from what `:bulk-entry` enforces.
+        blocked = services.marks_grid_writability(
+            user=request.user,
+            exam_subject=exam_subject,
+            write_permission=self.required_permission_map["bulk_entry"],
+        )
         return Response(
             {
                 "data": MarksGridEntrySerializer(entries, many=True).data,

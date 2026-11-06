@@ -1,6 +1,7 @@
 import type { MenuConfig } from "@schoolhub/ui";
 import type { AuthenticatedUser, PermissionKey } from "@schoolhub/types";
 
+import { mostSpecificPath } from "@/lib/active-path";
 import { canAccessModule, hasAnyPermission } from "@/lib/permissions";
 
 /**
@@ -36,16 +37,14 @@ export function collectMenuPaths(items: MenuConfig): string[] {
 }
 
 /**
- * Whether a menu item at `path` is the active one for `pathname`: the path or a prefix of it, and
- * no other menu path matches more specifically. Without the second rule an item nested under
- * another's path (Exams at `/exams`, Grading scales at `/exams/grading-scales`) lights both up.
+ * Whether a menu item at `path` is the active one for `pathname`: it matches, and no other menu
+ * path matches more specifically (Exams at `/exams` and Grading scales at `/exams/grading-scales`
+ * must not both light up).
  */
 export function isActiveMenuPath(
   path: string,
   pathname: string,
   menuPaths: readonly string[],
 ): boolean {
-  const matches = (candidate: string) =>
-    candidate === pathname || (candidate.length > 1 && pathname.startsWith(candidate));
-  return matches(path) && !menuPaths.some((other) => other.length > path.length && matches(other));
+  return mostSpecificPath([path, ...menuPaths], pathname) === path;
 }
