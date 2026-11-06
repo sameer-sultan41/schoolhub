@@ -1101,7 +1101,6 @@ either this file or `project-status.md`.
     notifications.
   - **Notice attachments** in the portal shape (agent-lessons L29: no attachment field ships
     without its upload and download routes).
-  - **Admit-card download in the portal.**
   - **A results trend chart** (§5.4's term-over-term view).
   - **Attendance percentage for months other than the current one.** The summary computes the
     current month only.
