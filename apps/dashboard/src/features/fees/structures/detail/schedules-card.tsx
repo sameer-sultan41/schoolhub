@@ -25,7 +25,7 @@ import { useCurrentUser } from "@/hooks/use-current-user";
 import { useTerms } from "@/hooks/use-reference-data";
 import { EMPTY_VALUE } from "@/lib/constants";
 import { enumLabel } from "@/lib/enum-label";
-import { formatDecimal } from "@/lib/format-decimal";
+import { formatMoney } from "@/lib/format-decimal";
 import { formatDate } from "@/lib/helpers";
 import { hasPermission } from "@/lib/permissions";
 import type { FeeScheduleRecord, FeeStructureRecord } from "@/services";
@@ -147,7 +147,7 @@ export function SchedulesCard({ structure }: { structure: FeeStructureRecord }) 
                       )}
                     </TableCell>
                     <TableCell className="text-end tabular-nums">
-                      {formatDecimal(locale, schedule.amount)}
+                      {formatMoney(locale, schedule.amount)}
                     </TableCell>
                     <TableCell>
                       {enumLabel(
