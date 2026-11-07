@@ -2079,3 +2079,17 @@ either this file or `project-status.md`.
   with it off gets the API's `module_disabled` 403, whose message the load-error card shows.
 - **Structure clone (§6).** An active structure is fixed and §6's answer is "clone and edit the
   copy", but there is no clone endpoint, so the dashboard offers none.
+- **An ad-hoc invoice cannot carry lines.** `POST /fee-invoices` takes only the header (student,
+  session, dates, period label): `lines` is read-only on `FeeInvoiceSerializer` and no
+  invoice-line endpoint exists, so the New invoice dialog raises a zero-total draft. A priced
+  ad-hoc invoice needs the API to accept lines (with totals computed server-side) first.
+- **The invoice page reads discounts and fines from the invoice's own lines.** It does not call
+  `/discounts` or `/fines`, so it cannot link a line to the grant or fine behind it; PR B's
+  Grants screens add those services, and the page can then link a line to its source.
+- **The invoice's receipts are shown as numbers on its payments.** `GET /receipts` filters by
+  payment, not invoice, so the page lists each payment's `receipt_no` and offers no receipt
+  download until the collection screens (PR C) wire one.
+- **Two shared pieces still live in other features.** The New invoice dialog imports the student
+  picker from `features/communication/messages/` (PR C hoists it), and the generate dialog's
+  job hook is its own (`use-generate-invoices.ts`) because `features/exams/use-exam-job.ts` keeps
+  one idempotency key across form edits; a generic `hooks/` job-start hook would serve both.
