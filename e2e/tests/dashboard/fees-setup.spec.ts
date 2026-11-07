@@ -270,6 +270,10 @@ test.describe("the accountant", () => {
         /referenced by a fee schedule, a fine or an invoice line/,
       ),
     ).toBeVisible();
+    // The open confirm hides the page behind it from the accessibility tree: close it to read the row.
+    await feeStructuresPage.confirmDialog
+      .getByRole("button", { name: "Cancel", exact: true })
+      .click();
     await expect(feeStructuresPage.headRow("Tuition fee")).toBeVisible();
   });
 });
@@ -302,6 +306,7 @@ test.describe("the accountant's ledger", () => {
     await expect(
       ledgerPage.confirmDialog.getByText(/has ledger postings and cannot be deleted/),
     ).toBeVisible();
+    await ledgerPage.confirmDialog.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(ledgerPage.row("Tuition income")).toBeVisible();
   });
 });
