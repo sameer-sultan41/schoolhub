@@ -145,6 +145,32 @@ describe("ledger accounts tab", () => {
     });
   });
 
+  it("offers only parents of the chosen type, and clears a parent the new type no longer fits", async () => {
+    asUser("fees.ledger.view", "fees.ledger.create");
+    createLedgerAccount.mockResolvedValue(accountRecord());
+    const user = await renderTab();
+
+    await user.click(screen.getByRole("button", { name: "New account" }));
+    const dialog = await screen.findByRole("dialog", { name: "New ledger account" });
+    await user.type(within(dialog).getByLabelText("Code"), "4200");
+    await user.type(within(dialog).getByLabelText("Name"), "Fees income");
+
+    // The default type is Asset: only the asset account is a possible parent.
+    await user.click(await within(dialog).findByRole("combobox", { name: "Parent account" }));
+    expect(screen.queryByRole("option", { name: "4001 Tuition income" })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole("option", { name: "1001 Cash" }));
+
+    await user.click(within(dialog).getByRole("combobox", { name: "Type" }));
+    await user.click(await screen.findByRole("option", { name: "Income" }));
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(createLedgerAccount).toHaveBeenCalledWith(
+        expect.objectContaining({ accountType: "income", parentId: null }),
+      );
+    });
+  });
+
   it("shows a server error on the field it names", async () => {
     asUser("fees.ledger.view", "fees.ledger.create");
     createLedgerAccount.mockRejectedValue(

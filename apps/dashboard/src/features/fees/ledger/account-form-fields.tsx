@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import type { UseFormReturn } from "react-hook-form";
+import { useWatch, type UseFormReturn } from "react-hook-form";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage, Input } from "@schoolhub/ui";
 
 import { FormSelectField } from "@/components/form-select-field";
@@ -32,9 +32,21 @@ export interface AccountFormFieldsProps {
 export function AccountFormFields({ form, editingId }: AccountFormFieldsProps) {
   const t = useTranslations("fees");
   const accountsQuery = useLedgerAccountOptions();
-  const parents: readonly LedgerAccountRecord[] = (accountsQuery.data ?? []).filter(
-    (account) => account.id !== editingId,
-  );
+  const accountType = useWatch({ control: form.control, name: "account_type" });
+  // A child sits under an account of its own type (an expense under an expense), and never
+  // under itself.
+  const parentsOf = (type: string): readonly LedgerAccountRecord[] =>
+    (accountsQuery.data ?? []).filter(
+      (account) => account.id !== editingId && account.account_type === type,
+    );
+  const parents = parentsOf(accountType);
+  // A new type that no longer fits the chosen parent clears it, rather than saving a refusal.
+  const clearMisfitParent = (type: string) => {
+    const parent = form.getValues("parent");
+    if (parent !== "" && !parentsOf(type).some((account) => account.id === parent)) {
+      form.setValue("parent", "");
+    }
+  };
 
   return (
     <>
@@ -73,6 +85,7 @@ export function AccountFormFields({ form, editingId }: AccountFormFieldsProps) {
         name="account_type"
         label={t("ledger.accounts.form.type")}
         placeholder={t("ledger.accounts.form.type")}
+        onPick={clearMisfitParent}
         options={LEDGER_ACCOUNT_TYPES.map((type) => ({
           id: type,
           name: enumLabel(t, LEDGER_ACCOUNT_TYPE_LABEL_KEY, type),
