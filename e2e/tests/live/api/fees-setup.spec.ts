@@ -1,10 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { ApiError, type ApiClient } from "@schoolhub/api-client";
+import type { ApiClient } from "@schoolhub/api-client";
 import { expect, test } from "@/fixtures";
 import { buildLiveAcademicSession, buildLiveClass } from "@/data/live-factories";
-import { env } from "@/env";
-import { createLiveSession } from "@/lib/live-api";
-import { E2E_ACCOUNTANT_EMAIL, E2E_FINANCE_FEE_HEAD_CODE } from "@/lib/seed-constants";
+import { accountantSession, refusal, seededHeadId } from "@/lib/live-fees";
 
 /**
  * Live API lane — no browser. See campuses.spec.ts's header for the shared rationale.
@@ -34,27 +32,6 @@ interface FeeStructure {
   schedules: { id: string }[];
 }
 
-/** The seeded `accountant`, one login per worker (`AuthEndpointThrottle`, e2e/AGENTS.md). A failed
- * login is forgotten, so it does not fail every later test with the same cached rejection. */
-let accountantLogin: Promise<ApiClient> | undefined;
-function accountantSession(): Promise<ApiClient> {
-  accountantLogin ??= createLiveSession({
-    identifier: E2E_ACCOUNTANT_EMAIL,
-    // Every seeded e2e login shares the admin's password (seed_e2e_data.py).
-    password: env.LIVE_ADMIN_PASSWORD,
-  }).catch((error: unknown) => {
-    accountantLogin = undefined;
-    throw error;
-  });
-  return accountantLogin;
-}
-
-async function refusal(request: Promise<unknown>): Promise<ApiError> {
-  const outcome = await request.catch((error: unknown) => error);
-  expect(outcome).toBeInstanceOf(ApiError);
-  return outcome as ApiError;
-}
-
 /** A run-unique session and class: a scope no other structure holds, so activation is free. */
 async function freshScope(admin: ApiClient) {
   const [session, schoolClass] = await Promise.all([
@@ -62,15 +39,6 @@ async function freshScope(admin: ApiClient) {
     admin.post("/classes", buildLiveClass()).then((r) => r.data as Identified),
   ]);
   return { academic_session: session.id, school_class: schoolClass.id };
-}
-
-async function seededHeadId(accountant: ApiClient): Promise<string> {
-  const heads = await accountant.get<(Identified & { code: string })[]>("/fee-heads", {
-    query: { search: E2E_FINANCE_FEE_HEAD_CODE },
-  });
-  const head = heads.data.find((row) => row.code === E2E_FINANCE_FEE_HEAD_CODE);
-  if (!head) throw new Error("the seeded fee head is missing — run manage.py seed_e2e_fees");
-  return head.id;
 }
 
 function structureName(label: string): string {

@@ -25,10 +25,10 @@ import { InvoiceVouchersCard } from "./invoice-vouchers-card";
 /**
  * One invoice: its header (number, student, status, Cancel), its lines with the server's totals,
  * then its payments (with their receipt numbers) and vouchers, read-only. Payments, receipts and
- * vouchers share one key, `fees.payment.view`, and are read only for a holder of it (L55): the
- * `principal` may open an invoice and see neither. An invoice the API can't find says so, with a
- * way back: the API answers 404 alike for another school's invoice and for one that does not
- * exist.
+ * vouchers share one key, `fees.payment.view`, and are read only for a holder of it (L55), so a
+ * role holding the invoice key alone sees the invoice and neither. An invoice the API can't find
+ * says so, with a way back: the API answers 404 alike for another school's invoice and for one
+ * that does not exist.
  */
 export function InvoicePage({ invoiceId }: { invoiceId: string }) {
   const t = useTranslations("fees");

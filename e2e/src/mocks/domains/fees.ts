@@ -443,3 +443,309 @@ export function feesSetupModule(options: FeesSetupOptions = {}): MockModule {
     });
   };
 }
+
+export type FeeInvoice = Writable<ApiSchemas["FeeInvoice"]>;
+export type FeePayment = Writable<ApiSchemas["Payment"]>;
+export type FeeVoucher = Writable<ApiSchemas["FeeVoucher"]>;
+
+export function buildFeeInvoice(overrides: Partial<FeeInvoice> = {}): FeeInvoice {
+  return {
+    id: uuid(),
+    invoice_no: "INV-E2E-0001",
+    student: "",
+    student_name: "Ayesha Khan",
+    student_enrollment: null,
+    academic_session: "",
+    fee_structure: null,
+    period_label: null,
+    issue_date: "2026-10-01",
+    due_date: "2026-10-10",
+    status: "issued",
+    subtotal: "0.00",
+    discount_total: "0.00",
+    fine_total: "0.00",
+    paid_total: "0.00",
+    balance_due: "0.00",
+    canceled_reason: null,
+    lines: [],
+    created_at: STAMP,
+    updated_at: STAMP,
+    ...overrides,
+  };
+}
+
+export function buildFeePayment(overrides: Partial<FeePayment> = {}): FeePayment {
+  return {
+    id: uuid(),
+    fee_invoice: "",
+    student: "",
+    amount: "500.00",
+    method: "cash",
+    reference_no: null,
+    gateway_provider: null,
+    status: "confirmed",
+    paid_at: "2026-10-05T09:00:00Z",
+    received_by: null,
+    receipt_no: "RCT-E2E-0001",
+    created_at: STAMP,
+    ...overrides,
+  };
+}
+
+export function buildFeeVoucher(overrides: Partial<FeeVoucher> = {}): FeeVoucher {
+  return {
+    id: uuid(),
+    fee_invoice: "",
+    invoice_no: "INV-E2E-0001",
+    student: "",
+    student_name: "Ayesha Khan",
+    provider: "bank_branch",
+    consumer_number: "1234567890",
+    amount: "1500.00",
+    due_date: "2026-10-10",
+    status: "issued",
+    payment: null,
+    voided_reason: null,
+    issued_by: "",
+    created_at: STAMP,
+    ...overrides,
+  };
+}
+
+/** A student the structure bills: the stub raises one invoice per billable student. */
+export interface BillableStudent {
+  id: string;
+  name: string;
+}
+
+export interface FeesInvoicingOptions {
+  /** Held by reference, so a spec can read what a write left behind. */
+  invoices?: FeeInvoice[];
+  payments?: FeePayment[];
+  vouchers?: FeeVoucher[];
+  /** The structures `:generate` bills from: the same array `feesSetupModule` serves. */
+  structures?: FeeStructure[];
+  /** The students every generation bills, with the session they sit in. */
+  students?: BillableStudent[];
+  /** The job sequences `jobsModule` serves, held by reference: a generation writes its job here,
+   * so the page's poll finds it. Pass the same object to both modules. */
+  jobs?: Record<
+    string,
+    { status: "succeeded"; progress: number; result: Record<string, unknown> }[]
+  >;
+}
+
+const NOT_ACTIVE = (name: string, status: string) =>
+  `'${name}' is ${status}. Only an active structure prices invoices.`;
+const ALREADY_CANCELED = "This invoice is already canceled.";
+const PAID_AGAINST = (paid: string) =>
+  `${paid} has been paid against this invoice. Refund the payment rather than cancelling the charge.`;
+const NEEDS_REASON = "Cancelling an invoice requires a reason.";
+const NAME_ONE_PERIOD =
+  "Name exactly one of `period_start` (to bill a calendar month) or `term` (to bill a whole term).";
+
+interface GenerateBody {
+  fee_structure?: string;
+  period_start?: string | null;
+  term?: string | null;
+}
+
+/**
+ * `/fee-invoices` (list, detail, create, `:generate`, `:cancel`) with the invoice's `/payments`
+ * and `/vouchers` reads, cursor-paged, in the shapes the server sends.
+ *
+ * Mirrors the server's rules the screens surface (lesson L5), in its words:
+ * - `:generate` on a structure that is not active is a 422 under `fee_structure`; naming both or
+ *   neither of `period_start` and `term` is a 400; it answers 202 + a job whose result counts the
+ *   invoices raised and the students already billed for that period (a re-run skips them, which
+ *   is not an error);
+ * - `:cancel` needs a reason (400), refuses an invoice already canceled and one with money paid
+ *   against it (422 under `status`), and replays an `Idempotency-Key` on `:generate`;
+ * - the list filters by student, session, structure, status and `outstanding` (balance owing and
+ *   not canceled), and orders by `issue_date`, `due_date` or `balance_due`.
+ *
+ * Whether the server enforces any of this is the live lane's (`tests/live/api/fees-invoicing.spec.ts`).
+ */
+export function feesInvoicingModule(options: FeesInvoicingOptions = {}): MockModule {
+  return (api) => {
+    const invoices = options.invoices ?? [];
+    const payments = options.payments ?? [];
+    const vouchers = options.vouchers ?? [];
+    const structures = options.structures ?? [];
+    const students = options.students ?? [];
+    const jobs = options.jobs ?? {};
+    const replays = new Map<string, MockResponse>();
+    let sequence = invoices.length;
+
+    const find = (invoiceId: string | undefined) =>
+      invoices.find((invoice) => invoice.id === invoiceId);
+    const owes = (invoice: FeeInvoice) =>
+      Number(invoice.balance_due) > 0 && invoice.status !== "canceled";
+
+    api.get("/fee-invoices", (request) => {
+      const params = request.searchParams;
+      const search = params.get("search")?.toLowerCase();
+      const matching = invoices.filter(
+        (invoice) =>
+          (!params.get("student") || invoice.student === params.get("student")) &&
+          (!params.get("academic_session_id") ||
+            invoice.academic_session === params.get("academic_session_id")) &&
+          (!params.get("fee_structure_id") ||
+            invoice.fee_structure === params.get("fee_structure_id")) &&
+          (!params.get("status") || invoice.status === params.get("status")) &&
+          (!params.get("period_label") || invoice.period_label === params.get("period_label")) &&
+          invoice.due_date >= (params.get("due_date__gte") ?? "") &&
+          invoice.due_date <= (params.get("due_date__lte") ?? "9999-12-31") &&
+          (params.get("outstanding") === null ||
+            owes(invoice) === (params.get("outstanding") === "true")) &&
+          (!search ||
+            `${invoice.invoice_no} ${invoice.student_name}`.toLowerCase().includes(search)),
+      );
+      const ordering = params.get("ordering") ?? "-issue_date";
+      const key = ordering.replace(/^-/, "") as keyof FeeInvoice;
+      const direction = ordering.startsWith("-") ? -1 : 1;
+      const ordered = [...matching].sort((a, b) =>
+        key === "balance_due"
+          ? direction * (Number(a.balance_due) - Number(b.balance_due))
+          : direction * compareValues(a[key], b[key]),
+      );
+      return cursorPageOf(ordered, params);
+    });
+
+    api.get("/fee-invoices/:invoiceId", (request) => {
+      const invoice = find(request.params["invoiceId"]);
+      return invoice ? ok(invoice) : fail(404, "Not found.");
+    });
+
+    // A header only: `lines` and every money field are read-only, so a new invoice is a zero-total draft.
+    api.post("/fee-invoices", (request) => {
+      const body = (request.json() as Partial<FeeInvoice> | null) ?? {};
+      const missing = (["student", "academic_session", "issue_date", "due_date"] as const).filter(
+        (field) => !body[field],
+      );
+      if (missing.length > 0) return invalid(missing.map((field) => ({ field, issue: REQUIRED })));
+      if ((body.due_date ?? "") < (body.issue_date ?? "")) {
+        return invalid([{ field: "due_date", issue: "Due date cannot be before the issue date." }]);
+      }
+      sequence += 1;
+      const created = buildFeeInvoice({
+        ...body,
+        id: uuid(),
+        invoice_no: `INV-E2E-${String(sequence).padStart(4, "0")}`,
+        status: "draft",
+        lines: [],
+      });
+      invoices.push(created);
+      return ok(created, { status: 201 });
+    });
+
+    // `router.ts` reads `:name` as a param, so this compiles to `^/fee-invoices([^/]+)$` and
+    // captures ":generate" whole; it never meets `/fee-invoices/{id}`, which has a `/` there.
+    api.post("/fee-invoices:collectionAction", (request) => {
+      if (request.params["collectionAction"] !== ":generate") return fail(404, "Not found.");
+      const key = request.headers["idempotency-key"];
+      const replay = key ? replays.get(key) : undefined;
+      if (replay) return replay;
+
+      const body = (request.json() as GenerateBody | null) ?? {};
+      if (!body.fee_structure) {
+        return invalid([{ field: "fee_structure", issue: REQUIRED }]);
+      }
+      if (Boolean(body.period_start) === Boolean(body.term)) {
+        return invalid([{ field: "non_field_errors", issue: NAME_ONE_PERIOD }]);
+      }
+      const structure = structures.find((row) => row.id === body.fee_structure);
+      if (!structure) return fail(404, "Not found.");
+      if (structure.status !== "active") {
+        return ruleViolation("fee_structure", NOT_ACTIVE(structure.name, structure.status));
+      }
+
+      const label = body.period_start ? body.period_start.slice(0, 7) : "Term";
+      let issued = 0;
+      let skipped = 0;
+      for (const student of students) {
+        const billed = invoices.some(
+          (invoice) =>
+            invoice.student === student.id &&
+            invoice.fee_structure === structure.id &&
+            invoice.period_label === label &&
+            invoice.status !== "canceled",
+        );
+        if (billed) {
+          skipped += 1;
+          continue;
+        }
+        const lines = structure.schedules.map((schedule) => ({
+          id: uuid(),
+          fee_head: schedule.fee_head,
+          fee_head_code: "TUI",
+          description: "Tuition fee",
+          amount: schedule.amount,
+          discount_amount: "0.00",
+          net_amount: Number(schedule.amount),
+          source_type: "schedule" as const,
+          source_id: schedule.id,
+        }));
+        const subtotal = lines.reduce((sum, line) => sum + Number(line.amount), 0).toFixed(2);
+        sequence += 1;
+        invoices.push(
+          buildFeeInvoice({
+            invoice_no: `INV-E2E-${String(sequence).padStart(4, "0")}`,
+            student: student.id,
+            student_name: student.name,
+            academic_session: structure.academic_session,
+            fee_structure: structure.id,
+            period_label: label,
+            status: "issued",
+            subtotal,
+            balance_due: subtotal,
+            lines,
+          }),
+        );
+        issued += 1;
+      }
+
+      const jobId = uuid();
+      jobs[jobId] = [{ status: "succeeded", progress: 100, result: { issued, skipped, rows: [] } }];
+      const response = ok(
+        { job_id: jobId, status: "queued" },
+        { status: 202, meta: { message: "Invoice generation queued." } },
+      );
+      if (key) replays.set(key, response);
+      return response;
+    });
+
+    // `/fee-invoices/{id}:cancel` lands here whole; no other POST shares this shape.
+    api.post("/fee-invoices/:invoiceAction", (request) => {
+      const [invoiceId, action] = (request.params["invoiceAction"] ?? "").split(":");
+      const invoice = find(invoiceId);
+      if (!invoice || action !== "cancel") return fail(404, "Not found.");
+      const { reason } = (request.json() as { reason?: string } | null) ?? {};
+      if (!reason) return invalid([{ field: "reason", issue: REQUIRED }]);
+      if (!reason.trim()) return ruleViolation("reason", NEEDS_REASON);
+      if (invoice.status === "canceled") return ruleViolation("status", ALREADY_CANCELED);
+      if (Number(invoice.paid_total) > 0) {
+        return ruleViolation("status", PAID_AGAINST(invoice.paid_total));
+      }
+      invoice.status = "canceled";
+      invoice.canceled_reason = reason;
+      return ok(invoice, { meta: { message: "Invoice canceled." } });
+    });
+
+    api.get("/payments", (request) => {
+      const params = request.searchParams;
+      const matching = payments.filter(
+        (payment) => !params.get("invoice") || payment.fee_invoice === params.get("invoice"),
+      );
+      return cursorPageOf(matching, params);
+    });
+
+    api.get("/vouchers", (request) => {
+      const params = request.searchParams;
+      const matching = vouchers.filter(
+        (voucher) => !params.get("invoice") || voucher.fee_invoice === params.get("invoice"),
+      );
+      return cursorPageOf(matching, params);
+    });
+  };
+}

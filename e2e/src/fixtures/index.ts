@@ -26,6 +26,7 @@ import {
   ExamResultsPage,
   ExamSchedulePage,
   ExamsPage,
+  FeeInvoicesPage,
   FeeStructuresPage,
   GradingScalesPage,
   LedgerPage,
@@ -133,6 +134,7 @@ export interface E2EFixtures {
   examReportCardsPage: ExamReportCardsPage;
   examReportsPage: ExamReportsPage;
   gradingScalesPage: GradingScalesPage;
+  feeInvoicesPage: FeeInvoicesPage;
   feeStructuresPage: FeeStructuresPage;
   ledgerPage: LedgerPage;
   questionBanksPage: QuestionBanksPage;
@@ -384,6 +386,10 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
 
   questionBanksPage: async ({ page }, use) => {
     await use(new QuestionBanksPage(page));
+  },
+
+  feeInvoicesPage: async ({ page }, use) => {
+    await use(new FeeInvoicesPage(page));
   },
 
   feeStructuresPage: async ({ page }, use) => {

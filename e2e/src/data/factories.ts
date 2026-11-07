@@ -316,6 +316,21 @@ export const FEES_SETUP_AUTHOR_PERMISSIONS: PermissionKey[] = [
   "school.campus.view",
 ];
 
+/**
+ * The invoicing keys the seeded `accountant` holds (`permissions.py`: `fees.invoice.view|create|update`
+ * and `fees.payment.view`), plus the structure view and session read the pickers make. A role with
+ * a wider set would hide a control that leaks to a narrower one (L55).
+ */
+export const FEES_INVOICING_PERMISSIONS: PermissionKey[] = [
+  "fees.invoice.view",
+  "fees.invoice.create",
+  "fees.invoice.update",
+  "fees.payment.view",
+  "fees.fee-structure.view",
+  "school.academic-session.view",
+  "students.student.view",
+];
+
 /** A module this user must *not* see, for the negative half of a filtering assertion. */
 export const MODULE_WITHOUT_PERMISSION = "Fees & Finance";
 
