@@ -23,6 +23,7 @@ from django.utils import timezone
 from apps.fees_finance import invoicing, numbering, reports
 from apps.fees_finance.ledger import LedgerLine, post_transaction, reverse_transaction
 from apps.fees_finance.models import (
+    SCHOLARSHIP_TRANSITIONS,
     Budget,
     BudgetStatus,
     Discount,
@@ -211,6 +212,25 @@ def assert_structure_is_editable(*, structure: FeeStructure) -> None:
                     "edit the copy."
                 )
             }
+        )
+
+
+def assert_scholarship_transition(*, scholarship: Scholarship, new_status: str) -> None:
+    """A scholarship moves only along `SCHOLARSHIP_TRANSITIONS`.
+
+    A PATCH that names the status it already has is not a move and passes, so a
+    rename or a sponsor edit on a revoked award is not refused for the wrong
+    reason. The refusal is a 422 under `status`: the body is well formed, the
+    lifecycle rule is what it breaks.
+    """
+    current = scholarship.status
+    if new_status == current:
+        return
+    allowed = SCHOLARSHIP_TRANSITIONS.get(current, frozenset())
+    if new_status not in allowed:
+        legal = ", ".join(sorted(allowed)) or "none, it is final"
+        raise DomainRuleViolation(
+            {"status": f"A {current} award cannot become {new_status}. Allowed next: {legal}."}
         )
 
 

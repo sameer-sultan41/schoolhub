@@ -452,6 +452,9 @@ class ScholarshipSerializer(serializers.ModelSerializer):
             instance=self.instance,
             type_field="coverage_type",
         )
+        new_status = attrs.get("status")
+        if self.instance is not None and new_status is not None:
+            services.assert_scholarship_transition(scholarship=self.instance, new_status=new_status)
         # Ending or revoking an award is a decision with no colon-action of its
         # own — §5.3's lifecycle moves through a plain PATCH — but it must not
         # move through one with no explanation. `notes` is optional everywhere
@@ -459,7 +462,6 @@ class ScholarshipSerializer(serializers.ModelSerializer):
         # is heading to a terminal state, which is the same requirement
         # Discount.revoke and Fine.waive both enforce on their own colon-action.
         terminal = {ScholarshipStatus.ENDED, ScholarshipStatus.REVOKED}
-        new_status = attrs.get("status")
         if new_status in terminal and not (attrs.get("notes") or "").strip():
             raise serializers.ValidationError(
                 {

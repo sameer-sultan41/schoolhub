@@ -150,6 +150,19 @@ class ScholarshipStatus(models.TextChoices):
     REVOKED = "revoked", "Revoked"
 
 
+#: The scholarship lifecycle, one table: status -> the statuses it may move to.
+#: `ended` and `revoked` are terminal (an empty set), so a revoked award cannot be
+#: quietly re-activated by a PATCH. Applied -> revoked is allowed because an
+#: application can be turned down before it is ever approved.
+SCHOLARSHIP_TRANSITIONS: dict[str, frozenset[str]] = {
+    ScholarshipStatus.APPLIED: frozenset({ScholarshipStatus.APPROVED, ScholarshipStatus.REVOKED}),
+    ScholarshipStatus.APPROVED: frozenset({ScholarshipStatus.ACTIVE, ScholarshipStatus.REVOKED}),
+    ScholarshipStatus.ACTIVE: frozenset({ScholarshipStatus.ENDED, ScholarshipStatus.REVOKED}),
+    ScholarshipStatus.ENDED: frozenset(),
+    ScholarshipStatus.REVOKED: frozenset(),
+}
+
+
 class FineType(models.TextChoices):
     LATE_FEE = "late_fee", "Late fee"
     LIBRARY = "library", "Library"

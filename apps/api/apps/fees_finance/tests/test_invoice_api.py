@@ -13,6 +13,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from apps.fees_finance.models import (
+    SCHOLARSHIP_TRANSITIONS,
     DiscountStatus,
     FeeInvoice,
     FineStatus,
@@ -468,7 +469,10 @@ class GrantEndpointTests(FeesFinanceAPITestCase):
         termination of a grant is exactly what an audit flags."""
         with tenant_context(self.tenant.id):
             scholarship = ScholarshipFactory(
-                tenant=self.tenant, student=self.student, academic_session=self.session
+                tenant=self.tenant,
+                student=self.student,
+                academic_session=self.session,
+                status=ScholarshipStatus.ACTIVE,
             )
 
         response = self.client.patch(
@@ -483,7 +487,10 @@ class GrantEndpointTests(FeesFinanceAPITestCase):
     def test_ending_a_scholarship_with_notes_is_accepted(self) -> None:
         with tenant_context(self.tenant.id):
             scholarship = ScholarshipFactory(
-                tenant=self.tenant, student=self.student, academic_session=self.session
+                tenant=self.tenant,
+                student=self.student,
+                academic_session=self.session,
+                status=ScholarshipStatus.ACTIVE,
             )
 
         response = self.client.patch(
@@ -494,6 +501,65 @@ class GrantEndpointTests(FeesFinanceAPITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["data"]["status"], ScholarshipStatus.ENDED)
+
+
+class ScholarshipTransitionTests(FeesFinanceAPITestCase):
+    """The lifecycle is one table; every cell of it is exercised here."""
+
+    def _patch(self, current: str, new: str):
+        with tenant_context(self.tenant.id):
+            scholarship = ScholarshipFactory(
+                tenant=self.tenant,
+                student=self.student,
+                academic_session=self.session,
+                status=current,
+            )
+        return self.client.patch(
+            f"/api/v1/scholarships/{scholarship.pk}",
+            {"status": new, "notes": "Decided by the committee"},
+            format="json",
+        )
+
+    def test_every_legal_move_succeeds(self) -> None:
+        for current, allowed in SCHOLARSHIP_TRANSITIONS.items():
+            for new in allowed:
+                with self.subTest(move=f"{current} -> {new}"):
+                    response = self._patch(current, new)
+                    self.assertEqual(response.status_code, 200, response.content)
+                    self.assertEqual(response.json()["data"]["status"], new)
+
+    def test_every_illegal_move_is_refused_under_status(self) -> None:
+        for current in ScholarshipStatus.values:
+            for new in ScholarshipStatus.values:
+                if new == current or new in SCHOLARSHIP_TRANSITIONS[current]:
+                    continue
+                with self.subTest(move=f"{current} -> {new}"):
+                    response = self._patch(current, new)
+                    self.assertEqual(response.status_code, 422, response.content)
+                    self.assertEqual(response.json()["error"]["details"][0]["field"], "status")
+
+    def test_a_revoked_award_cannot_be_reactivated(self) -> None:
+        response = self._patch(ScholarshipStatus.REVOKED, ScholarshipStatus.ACTIVE)
+        self.assertEqual(response.status_code, 422)
+
+    def test_an_ended_award_cannot_be_reactivated(self) -> None:
+        response = self._patch(ScholarshipStatus.ENDED, ScholarshipStatus.ACTIVE)
+        self.assertEqual(response.status_code, 422)
+
+    def test_patching_other_fields_on_a_terminal_award_is_not_a_move(self) -> None:
+        with tenant_context(self.tenant.id):
+            scholarship = ScholarshipFactory(
+                tenant=self.tenant,
+                student=self.student,
+                academic_session=self.session,
+                status=ScholarshipStatus.REVOKED,
+            )
+        response = self.client.patch(
+            f"/api/v1/scholarships/{scholarship.pk}",
+            {"sponsor": "Alumni trust"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
 
 
 class FineEndpointTests(FeesFinanceAPITestCase):
