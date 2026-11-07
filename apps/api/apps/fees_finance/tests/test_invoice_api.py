@@ -349,6 +349,24 @@ class PortalAccessTests(FeesFinanceAPITestCase):
 
 
 class GrantEndpointTests(FeesFinanceAPITestCase):
+    def test_every_register_names_its_student(self) -> None:
+        """A register that shows ids is unreadable, and the client cannot fetch
+        every student to name them: the row carries the name itself."""
+        head = fine_head(self.tenant, self.fine_income)
+        with tenant_context(self.tenant.id):
+            DiscountFactory(tenant=self.tenant, student=self.student, academic_session=self.session)
+            ScholarshipFactory(
+                tenant=self.tenant, student=self.student, academic_session=self.session
+            )
+            FineFactory(tenant=self.tenant, student=self.student, fee_head=head)
+        expected = f"{self.student.first_name} {self.student.last_name}".strip()
+
+        for path in ("discounts", "scholarships", "fines"):
+            with self.subTest(path=path):
+                response = self.client.get(f"/api/v1/{path}")
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()["data"][0]["student_name"], expected)
+
     def test_a_discount_stamps_its_granter_from_the_request(self) -> None:
         """`discounts_active_is_attributable` refuses an active grant with no
         approver, and taking the value from the request is what makes that

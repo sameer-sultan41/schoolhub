@@ -7255,11 +7255,19 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /**
+         * @description `student_name` for a serializer over a model with a `student` FK.
+         *
+         *     Read-only, so a register can name who a grant or fine concerns without the
+         *     client fetching every student (and without needing a student-read key). The
+         *     viewsets `select_related("student")`, so this costs no extra query.
+         */
         Discount: {
             /** Format: uuid */
             readonly id: string;
             /** Format: uuid */
             student: string;
+            readonly student_name: string;
             /** Format: uuid */
             academic_session: string;
             name: string;
@@ -7963,11 +7971,19 @@ export interface components {
             /** @default csv */
             format: components["schemas"]["FormatEnum"];
         };
+        /**
+         * @description `student_name` for a serializer over a model with a `student` FK.
+         *
+         *     Read-only, so a register can name who a grant or fine concerns without the
+         *     client fetching every student (and without needing a student-read key). The
+         *     viewsets `select_related("student")`, so this costs no extra query.
+         */
         Fine: {
             /** Format: uuid */
             readonly id: string;
             /** Format: uuid */
             student: string;
+            readonly student_name: string;
             /** Format: uuid */
             fee_head: string;
             fine_type?: components["schemas"]["FineTypeEnum"];
@@ -9826,11 +9842,19 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        /**
+         * @description `student_name` for a serializer over a model with a `student` FK.
+         *
+         *     Read-only, so a register can name who a grant or fine concerns without the
+         *     client fetching every student (and without needing a student-read key). The
+         *     viewsets `select_related("student")`, so this costs no extra query.
+         */
         PatchedDiscount: {
             /** Format: uuid */
             readonly id?: string;
             /** Format: uuid */
             student?: string;
+            readonly student_name?: string;
             /** Format: uuid */
             academic_session?: string;
             name?: string;
@@ -10137,11 +10161,19 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        /**
+         * @description `student_name` for a serializer over a model with a `student` FK.
+         *
+         *     Read-only, so a register can name who a grant or fine concerns without the
+         *     client fetching every student (and without needing a student-read key). The
+         *     viewsets `select_related("student")`, so this costs no extra query.
+         */
         PatchedFine: {
             /** Format: uuid */
             readonly id?: string;
             /** Format: uuid */
             student?: string;
+            readonly student_name?: string;
             /** Format: uuid */
             fee_head?: string;
             fine_type?: components["schemas"]["FineTypeEnum"];
@@ -10557,11 +10589,19 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        /**
+         * @description `student_name` for a serializer over a model with a `student` FK.
+         *
+         *     Read-only, so a register can name who a grant or fine concerns without the
+         *     client fetching every student (and without needing a student-read key). The
+         *     viewsets `select_related("student")`, so this costs no extra query.
+         */
         PatchedScholarship: {
             /** Format: uuid */
             readonly id?: string;
             /** Format: uuid */
             student?: string;
+            readonly student_name?: string;
             /** Format: uuid */
             academic_session?: string;
             name?: string;
@@ -11602,11 +11642,19 @@ export interface components {
          * @enum {string}
          */
         RoomTypeEnum: "classroom" | "lab" | "library" | "auditorium" | "sports" | "office" | "other";
+        /**
+         * @description `student_name` for a serializer over a model with a `student` FK.
+         *
+         *     Read-only, so a register can name who a grant or fine concerns without the
+         *     client fetching every student (and without needing a student-read key). The
+         *     viewsets `select_related("student")`, so this costs no extra query.
+         */
         Scholarship: {
             /** Format: uuid */
             readonly id: string;
             /** Format: uuid */
             student: string;
+            readonly student_name: string;
             /** Format: uuid */
             academic_session: string;
             name: string;

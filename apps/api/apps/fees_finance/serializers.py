@@ -394,12 +394,28 @@ class CancelInvoiceSerializer(serializers.Serializer):
     reason = serializers.CharField(max_length=2000)
 
 
-class DiscountSerializer(serializers.ModelSerializer):
+class StudentNameMixin:
+    """`student_name` for a serializer over a model with a `student` FK.
+
+    Read-only, so a register can name who a grant or fine concerns without the
+    client fetching every student (and without needing a student-read key). The
+    viewsets `select_related("student")`, so this costs no extra query.
+    """
+
+    def get_student_name(self, obj) -> str:
+        student = obj.student
+        return f"{student.first_name} {student.last_name}".strip()
+
+
+class DiscountSerializer(StudentNameMixin, serializers.ModelSerializer):
+    student_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Discount
         fields = [
             "id",
             "student",
+            "student_name",
             "academic_session",
             "name",
             "discount_type",
@@ -426,12 +442,15 @@ class DiscountSerializer(serializers.ModelSerializer):
         )
 
 
-class ScholarshipSerializer(serializers.ModelSerializer):
+class ScholarshipSerializer(StudentNameMixin, serializers.ModelSerializer):
+    student_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Scholarship
         fields = [
             "id",
             "student",
+            "student_name",
             "academic_session",
             "name",
             "scholarship_type",
@@ -474,12 +493,15 @@ class ScholarshipSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class FineSerializer(serializers.ModelSerializer):
+class FineSerializer(StudentNameMixin, serializers.ModelSerializer):
+    student_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Fine
         fields = [
             "id",
             "student",
+            "student_name",
             "fee_head",
             "fine_type",
             "amount",
