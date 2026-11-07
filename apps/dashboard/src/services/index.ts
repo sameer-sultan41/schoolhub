@@ -1,5 +1,9 @@
 import { AdmitCardsService } from "./modules/admit-cards";
+import { FeeHeadsService } from "./modules/fee-heads";
 import { FeeInvoicesService } from "./modules/fee-invoices";
+import { FeeSchedulesService } from "./modules/fee-schedules";
+import { FeeStructuresService } from "./modules/fee-structures";
+import { LedgerAccountsService } from "./modules/ledger-accounts";
 import { NoticesService } from "./modules/notices";
 import { NotificationPreferencesService } from "./modules/notification-preferences";
 import { NotificationsService } from "./modules/notifications";
@@ -58,6 +62,31 @@ export type {
   StudentDocumentRecord,
   StudentRecord,
 } from "./modules/students";
+
+export type {
+  FeeFrequency,
+  FeeScheduleInput,
+  FeeScheduleRecord,
+  FeeSchedulesQuery,
+} from "./modules/fee-schedules";
+export type {
+  FeeHeadCategory,
+  FeeHeadInput,
+  FeeHeadRecord,
+  FeeHeadsQuery,
+} from "./modules/fee-heads";
+export type {
+  FeeStructureInput,
+  FeeStructureRecord,
+  FeeStructureStatus,
+  FeeStructuresQuery,
+} from "./modules/fee-structures";
+export type {
+  LedgerAccountInput,
+  LedgerAccountRecord,
+  LedgerAccountsQuery,
+  LedgerAccountType,
+} from "./modules/ledger-accounts";
 
 export type { ExamInput, ExamPageQuery, ExamRecord, ExamStatus, ExamType } from "./modules/exams";
 
@@ -385,6 +414,10 @@ export const Services = {
   notificationPreferences: NotificationPreferencesService,
   notices: NoticesService,
   feeInvoices: FeeInvoicesService,
+  ledgerAccounts: LedgerAccountsService,
+  feeHeads: FeeHeadsService,
+  feeStructures: FeeStructuresService,
+  feeSchedules: FeeSchedulesService,
   receipts: ReceiptsService,
   vouchers: VouchersService,
   results: ResultsService,

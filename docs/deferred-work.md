@@ -462,7 +462,8 @@ either this file or `project-status.md`.
 - **No module screens beyond the dashboard home + student-management +
   staff-management + academics + timetable + attendance + communication (#146, merged
   with #145), and examinations' five open PRs.**
-  Fees, parent-portal, … are untouched — the gap against
+  The fees setup screens (structures, fee heads, ledger accounts) are in the fees dashboard PR A;
+  its invoices, collection, grants, expenses and reports are B–E. Parent-portal, … are untouched — the gap against
   [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.md) tier 2+.
   Attendance's screens followed its API as three dashboard PRs (register, Records and
   Settings; the corrections and leave queues; staff attendance, reports and the import),
@@ -1256,6 +1257,8 @@ either this file or `project-status.md`.
     `OpenApiParameter`. The dashboard hand-types `ReceiptFormat` until it does.
   - **Urdu review.** The `portal` namespace in `apps/dashboard/messages/ur.json` was written
     without a native speaker and needs their review.
+  - **Urdu review (fees).** The `fees` namespace in `apps/dashboard/messages/ur.json` was
+    written without a native speaker and needs their review.
   - **Inbox mark-all-read scope.** On page 2 and later, Mark all read sends that page's newest
     `created_at` as `before`. Derive `before` from page 1 instead, so it covers everything
     that was on screen.
@@ -2060,3 +2063,19 @@ either this file or `project-status.md`.
   → `{ variant, icon, label }` map rendered by one badge) would serve both and the next module's
   statuses, but it changes two modules' screens and their tests at once, so it belongs in its own
   PR rather than in attendance PR A's review fixes.
+
+## Fees dashboard (staff screens)
+
+- **Portal money shows `formatDecimal` (no fixed decimals).** The portal fees screens print
+  "1,500" for "1500.00"; switch them to `formatMoney` (`src/lib/format-decimal.ts`), which the
+  staff Fees screens use.
+- **A `school_admin` authors structures but cannot pick an income account.** `school_admin` holds
+  `fees.fee-structure.create|update` but not `fees.ledger.view`, so New and Edit fee head are
+  hidden for it (the income-account picker reads the ledger). A narrow income-account read for
+  structure authors is the follow-up.
+- **No currency symbol.** Staff amounts show the number only. Put `currency` on the tenant in
+  `/auth/me`, then show it beside the amounts.
+- **No client feature-flag gating.** The dashboard does not read `module.fees_finance`; a tenant
+  with it off gets the API's `module_disabled` 403, whose message the load-error card shows.
+- **Structure clone (§6).** An active structure is fixed and §6's answer is "clone and edit the
+  copy", but there is no clone endpoint, so the dashboard offers none.

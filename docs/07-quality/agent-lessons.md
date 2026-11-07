@@ -380,6 +380,11 @@
 - **Mistake.** `send_results_back` moved every unpublished result of the exam to `processing`, but the next `processing.write` advanced only the rows it recomputed (the active roll) to `pending_approval`. A student withdrawn between the send-back and the re-process kept a `processing` row, and `approve_exam_results`, which approves only pending rows, moved the exam to `approved` around it: the row was never approved or published, silently (examinations PR #154). The run now moves every `processing` row of the exam to pending, and approval refuses while one is left.
 - **Check.** For every bulk status reset, name the step that re-advances those rows and confirm its filter covers the same row set, not a subset recomputed from today's data (an active roll, a current enrolment). Where it cannot, make the next gate refuse leftovers instead of acting on the rows it finds. Test it: reset, change the population, re-advance, then assert no row is left in the reset state.
 
+### L59. A write whose required field is picked from a list the writer may not read
+
+- **Mistake.** `school_admin` holds `fees.fee-structure.create|update` but not `fees.ledger.view`, so it could open New fee head and never save it: the required income-account picker reads `GET /ledger-accounts`, which needs the ledger key, and the list came back a 403 (fees dashboard PR A review). The form was gated on the write key alone.
+- **Check.** For every required picker in a form, the form's gating key set includes the picker's read key, so the control is hidden (or the form not offered) for a role that holds the write key but not the read key. Add a Jest case for that role: it holds the write key and lacks the read key, and sees no New or Edit button. A picker that is optional may hide itself instead (L55).
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.

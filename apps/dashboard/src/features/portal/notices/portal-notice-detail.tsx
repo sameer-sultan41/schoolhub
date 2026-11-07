@@ -17,7 +17,7 @@ import { ApiError, Services } from "@/services";
 import { NOTICES_QUERY_MODULE } from "@/services/modules/notices/notices-constant";
 import { isPortalNotice } from "@/services/modules/notices/notices-helper";
 import { NOTICE_TYPE_BADGE, NOTICE_TYPE_LABEL_KEY } from "./notice-type";
-import { enumBadge, enumLabel } from "@/features/portal/enum-label";
+import { enumBadge, enumLabel } from "@/lib/enum-label";
 
 /** One notice, with Acknowledge when it asks for one and the viewer has not given it yet. */
 export function PortalNoticeDetail({ noticeId }: { noticeId: string }) {

@@ -2965,6 +2965,295 @@
       }
     }
   },
+  "fees": {
+    "nav": {
+      "label": "Fees & Finance sections",
+      "structures": "Structures",
+      "ledger": "Ledger"
+    },
+    "structures": {
+      "title": "Fee structures",
+      "summary": "What each class is charged, by session and campus.",
+      "tabs": {
+        "label": "Fee setup sections",
+        "structures": "Structures",
+        "heads": "Fee heads"
+      },
+      "list": {
+        "caption": "Fee structures",
+        "pagination": "Fee structures pages",
+        "loadError": "The fee structures could not be loaded.",
+        "emptyTitle": "No fee structures yet",
+        "emptyDescription": "Create a structure, add its fee schedules, then activate it.",
+        "noMatches": "No structures match",
+        "noMatchesDescription": "Try a different search or filter.",
+        "searchPlaceholder": "Search structures"
+      },
+      "columns": {
+        "name": "Name",
+        "session": "Session",
+        "class": "Class",
+        "campus": "Campus",
+        "status": "Status",
+        "schedules": "Schedules"
+      },
+      "filters": {
+        "search": "Search structures",
+        "clearSearch": "Clear search",
+        "all": "All",
+        "session": "Session",
+        "class": "Class",
+        "campus": "Campus",
+        "status": "Status"
+      },
+      "status": {
+        "draft": "Draft",
+        "active": "Active",
+        "archived": "Archived"
+      },
+      "everyClass": "Every class",
+      "everyCampus": "Every campus",
+      "actions": {
+        "create": "New fee structure",
+        "edit": "Edit",
+        "editRow": "Edit {name}",
+        "delete": "Delete",
+        "activate": "Activate",
+        "archive": "Archive",
+        "backToList": "Back to structures"
+      },
+      "form": {
+        "createTitle": "New fee structure",
+        "editTitle": "Edit fee structure",
+        "intro": "A structure is a named set of fees for one session, optionally for one class and one campus.",
+        "name": "Name",
+        "session": "Session",
+        "selectSession": "Select a session",
+        "class": "Class",
+        "campus": "Campus",
+        "scopeHint": "Leave class and campus on \"Every\" to cover the whole session."
+      },
+      "saved": "Fee structure saved.",
+      "removed": "Fee structure removed.",
+      "activated": "Fee structure activated.",
+      "archivedToast": "Fee structure archived.",
+      "delete": {
+        "titleNamed": "Delete {name}?",
+        "description": "The structure and its fee schedules are removed. This cannot be undone."
+      },
+      "lifecycle": {
+        "activateTitle": "Activate {name}?",
+        "activateDescription": "Invoices will be priced from this structure, and its schedules can no longer be changed.",
+        "archiveTitle": "Archive {name}?",
+        "archiveDescription": "It will no longer be used for new invoices. Invoices already issued are not changed."
+      },
+      "detail": {
+        "notFoundTitle": "Fee structure not found",
+        "notFoundDescription": "It may have been removed, or it belongs to another school.",
+        "loadError": "The fee structure could not be loaded.",
+        "fixed": "This structure is {status}, so its fees are fixed. Archive it and create a new one to change what is charged."
+      },
+      "schedules": {
+        "title": "Fee schedules",
+        "caption": "Fee schedules of this structure",
+        "emptyTitle": "No fee schedules yet",
+        "emptyDescription": "Add a fee head with its amount and due rule. A structure with no schedules cannot be activated.",
+        "loadHeadsError": "The fee heads could not be loaded.",
+        "columns": {
+          "head": "Fee head",
+          "amount": "Amount",
+          "frequency": "Frequency",
+          "dueRule": "Due"
+        },
+        "frequency": {
+          "one_time": "One time",
+          "monthly": "Monthly",
+          "per_term": "Per term",
+          "annual": "Annual"
+        },
+        "due": {
+          "day": "Day {day} of each month",
+          "term": "In {term}",
+          "date": "On {date}"
+        },
+        "actions": {
+          "create": "Add schedule",
+          "edit": "Edit",
+          "editRow": "Edit the schedule for {name}",
+          "deleteRow": "Remove the schedule for {name}"
+        },
+        "form": {
+          "createTitle": "Add a fee schedule",
+          "editTitle": "Edit fee schedule",
+          "intro": "One fee head's amount and when it falls due.",
+          "head": "Fee head",
+          "selectHead": "Select a fee head",
+          "amount": "Amount",
+          "frequency": "Frequency",
+          "term": "Term",
+          "selectTerm": "Select a term",
+          "dueDay": "Due day of the month",
+          "dueDate": "Due date",
+          "amountInvalid": "Enter an amount such as 1500 or 1500.50.",
+          "dueDayInvalid": "Enter a day from 1 to 31."
+        },
+        "saved": "Fee schedule saved.",
+        "removed": "Fee schedule removed.",
+        "delete": {
+          "titleNamed": "Remove the schedule for {name}?",
+          "description": "The fee head stays; only its line in this structure is removed.",
+          "confirm": "Remove"
+        }
+      }
+    },
+    "ledger": {
+      "title": "Ledger",
+      "summary": "The chart of accounts the school's money is booked to.",
+      "tabs": {
+        "label": "Ledger sections",
+        "accounts": "Accounts"
+      },
+      "accounts": {
+        "list": {
+          "caption": "Ledger accounts",
+          "pagination": "Ledger accounts pages",
+          "loadError": "The ledger accounts could not be loaded.",
+          "emptyTitle": "No ledger accounts yet",
+          "emptyDescription": "Add an account to the chart.",
+          "noMatches": "No accounts match",
+          "noMatchesDescription": "Try a different search or filter.",
+          "searchPlaceholder": "Search by code or name"
+        },
+        "columns": {
+          "code": "Code",
+          "name": "Name",
+          "type": "Type",
+          "parent": "Parent",
+          "status": "Status"
+        },
+        "filters": {
+          "search": "Search accounts",
+          "clearSearch": "Clear search",
+          "all": "All",
+          "type": "Type",
+          "active": "Status",
+          "system": "Kind"
+        },
+        "type": {
+          "asset": "Asset",
+          "liability": "Liability",
+          "equity": "Equity",
+          "income": "Income",
+          "expense": "Expense"
+        },
+        "status": {
+          "active": "Active",
+          "inactive": "Archived"
+        },
+        "kind": {
+          "system": "System",
+          "custom": "Custom"
+        },
+        "system": "System account",
+        "noParent": "None",
+        "actions": {
+          "create": "New account",
+          "editRow": "Edit {name}",
+          "deleteRow": "Delete {name}",
+          "delete": "Delete"
+        },
+        "form": {
+          "createTitle": "New ledger account",
+          "editTitle": "Edit ledger account",
+          "intro": "An account's code and type place it in the chart.",
+          "code": "Code",
+          "name": "Name",
+          "type": "Type",
+          "parent": "Parent account",
+          "noParent": "No parent (top level)",
+          "active": "Active",
+          "activeHint": "An archived account takes no new postings but keeps its history."
+        },
+        "saved": "Ledger account saved.",
+        "removed": "Ledger account removed.",
+        "delete": {
+          "titleNamed": "Delete {name}?",
+          "description": "An account with postings cannot be deleted; archive it instead."
+        }
+      }
+    },
+    "heads": {
+      "title": "Fee heads",
+      "list": {
+        "caption": "Fee heads",
+        "pagination": "Fee heads pages",
+        "loadError": "The fee heads could not be loaded.",
+        "emptyTitle": "No fee heads yet",
+        "emptyDescription": "A fee head is a kind of charge, such as tuition or a library fee, posting to one income account.",
+        "noMatches": "No fee heads match",
+        "noMatchesDescription": "Try a different search or filter.",
+        "searchPlaceholder": "Search fee heads"
+      },
+      "columns": {
+        "code": "Code",
+        "name": "Name",
+        "category": "Category",
+        "account": "Income account",
+        "refundable": "Refundable",
+        "status": "Status"
+      },
+      "filters": {
+        "search": "Search fee heads",
+        "clearSearch": "Clear search",
+        "all": "All",
+        "category": "Category",
+        "status": "Status"
+      },
+      "status": {
+        "active": "Active",
+        "inactive": "Inactive"
+      },
+      "refundable": {
+        "yes": "Yes",
+        "no": "No"
+      },
+      "category": {
+        "tuition": "Tuition",
+        "admission": "Admission",
+        "transport": "Transport",
+        "library": "Library",
+        "exam": "Exam",
+        "fine": "Fine",
+        "other": "Other"
+      },
+      "actions": {
+        "create": "New fee head",
+        "editRow": "Edit {name}",
+        "deleteRow": "Delete {name}",
+        "delete": "Delete"
+      },
+      "form": {
+        "createTitle": "New fee head",
+        "editTitle": "Edit fee head",
+        "intro": "A fee head is a kind of charge. It posts to one income account.",
+        "name": "Name",
+        "code": "Code",
+        "category": "Category",
+        "account": "Income account",
+        "selectAccount": "Select an income account",
+        "refundable": "Refundable",
+        "refundableHint": "A payment against this head can be refunded.",
+        "active": "Active",
+        "activeHint": "An inactive head cannot be added to new structures."
+      },
+      "saved": "Fee head saved.",
+      "removed": "Fee head removed.",
+      "delete": {
+        "titleNamed": "Delete {name}?",
+        "description": "A head that a schedule, fine or invoice uses cannot be deleted; deactivate it instead."
+      }
+    }
+  },
   "reports": {
     "caption": "{report} report",
     "rowCount": "{count, plural, one {# row} other {# rows}}",

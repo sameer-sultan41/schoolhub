@@ -2,7 +2,7 @@ import type { FeeInvoiceRecord } from "@/services";
 
 type FeeInvoiceStatus = FeeInvoiceRecord["status"];
 
-/** Every invoice status to its message key under `portal.fees` (L32: exhaustive). */
+/** Every invoice status to its message key under `portal.fees` (L32: exhaustive). A staff screen reusing these passes that namespace (or its own copy of the keys). */
 export const FEE_STATUS_LABEL_KEY: Record<FeeInvoiceStatus, `status.${FeeInvoiceStatus}`> = {
   draft: "status.draft",
   issued: "status.issued",

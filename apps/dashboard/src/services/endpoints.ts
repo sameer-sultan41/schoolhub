@@ -396,4 +396,27 @@ export const endpoints = {
     list: "/receipts",
     download: (id: string) => `/receipts/${id}/download`,
   },
+  /** `/ledger-accounts`: the chart of accounts. Read with `fees.ledger.view`, written with `fees.ledger.create`. */
+  ledgerAccounts: {
+    list: "/ledger-accounts",
+    detail: (id: string) => `/ledger-accounts/${id}`,
+  },
+  /** `/fee-heads`: read with `fees.fee-structure.view`, written with `fees.fee-structure.create|update|delete`. */
+  feeHeads: {
+    list: "/fee-heads",
+    detail: (id: string) => `/fee-heads/${id}`,
+  },
+  /** `/fee-structures` (`fees.fee-structure.view|create|update|delete`) and its lifecycle colon-actions, which need `.update`. */
+  feeStructures: {
+    list: "/fee-structures",
+    detail: (id: string) => `/fee-structures/${id}`,
+    /** Colon-action, not a nested path: the registered route is `/fee-structures/{id}:activate`. */
+    activate: (id: string) => `/fee-structures/${id}:activate`,
+    archive: (id: string) => `/fee-structures/${id}:archive`,
+  },
+  /** `/fee-schedules` (`fees.fee-structure.*`, the same keys as the structure): a structure's lines. */
+  feeSchedules: {
+    list: "/fee-schedules",
+    detail: (id: string) => `/fee-schedules/${id}`,
+  },
 } as const;
