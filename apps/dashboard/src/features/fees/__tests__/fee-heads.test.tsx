@@ -136,6 +136,9 @@ describe("fee heads tab", () => {
     );
     const user = await renderTab();
 
+    // The ledger read that names the account column lands after the rows: it rebuilds the
+    // columns, which remounts the row's buttons, so a click before it would hit a detached one.
+    await screen.findByText("4001 Tuition income");
     await user.click(await screen.findByRole("button", { name: "Edit Library fee" }));
     const dialog = await screen.findByRole("dialog", { name: "Edit fee head" });
     await user.click(await within(dialog).findByRole("button", { name: "Save" }));
