@@ -234,13 +234,13 @@ describe("fee structure page", () => {
     await user.click(await screen.findByRole("option", { name: "Monthly" }));
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
 
-    const message = await within(dialog).findByText(
-      "A monthly schedule needs a day-of-month due rule.",
-    );
-    expect(message).toBeInTheDocument();
-    expect(message.closest("div")).toContainElement(
-      within(dialog).getByLabelText("Due day of the month"),
-    );
+    // The message is the field's accessible description (`aria-describedby` on the input).
+    const dueDay = within(dialog).getByLabelText("Due day of the month");
+    await waitFor(() => {
+      expect(dueDay).toHaveAccessibleDescription(
+        "A monthly schedule needs a day-of-month due rule.",
+      );
+    });
   });
 
   it("shows the server's frequency error under the frequency field", async () => {
