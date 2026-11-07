@@ -221,6 +221,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ai/requests/{id}:feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rate an AI output
+         * @description Thumbs up or down on one AI output, once, by the user it was shown to.
+         *
+         *     Another user's request is a 404, as is another school's (RLS hides it): the
+         *     caller learns nothing about a request that is not theirs. A second vote is a
+         *     409; a racing second vote hits the unique constraint, which the error handler
+         *     turns into the same `conflict`.
+         */
+        post: operations["ai_requests_:feedback_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * AI token usage this month
+         * @description This month's token use against the budget, by feature (ai-governance.md §9).
+         *
+         *     The mixin is here for its tenant binding only (as on `SchoolSettingsView`); RLS
+         *     keeps the sums to the caller's school.
+         */
+        get: operations["ai_usage_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/announcements": {
         parameters: {
             query?: never;
@@ -6474,6 +6522,38 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AIFeatureUsage: {
+            feature_key: string;
+            tokens: number;
+            requests: number;
+        };
+        AIFeedback: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly ai_request_id: string;
+            readonly value: components["schemas"]["AIFeedbackValueEnum"];
+            readonly comment: string;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        AIFeedbackRequest: {
+            value: components["schemas"]["AIFeedbackValueEnum"];
+            /** @default  */
+            comment: string;
+        };
+        /**
+         * @description * `-1` - Thumbs down
+         *     * `1` - Thumbs up
+         * @enum {integer}
+         */
+        AIFeedbackValueEnum: -1 | 1;
+        AIUsage: {
+            /** @description Tokens used this month, tenant timezone. */
+            month_tokens: number;
+            monthly_limit: number;
+            by_feature: components["schemas"]["AIFeatureUsage"][];
+        };
         AcademicSession: {
             /** Format: uuid */
             readonly id: string;
@@ -13093,6 +13173,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdmitCard"];
+                };
+            };
+        };
+    };
+    "ai_requests_:feedback_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AIFeedbackRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AIFeedbackRequest"];
+                "multipart/form-data": components["schemas"]["AIFeedbackRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AIFeedback"];
+                };
+            };
+        };
+    };
+    ai_usage_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AIUsage"];
                 };
             };
         };

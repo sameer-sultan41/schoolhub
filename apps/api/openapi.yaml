@@ -464,6 +464,67 @@ paths:
               schema:
                 $ref: '#/components/schemas/AdmitCard'
           description: ''
+  /api/v1/ai/requests/{id}:feedback:
+    post:
+      operationId: ai_requests_:feedback_create
+      description: |-
+        Thumbs up or down on one AI output, once, by the user it was shown to.
+
+        Another user's request is a 404, as is another school's (RLS hides it): the
+        caller learns nothing about a request that is not theirs. A second vote is a
+        409; a racing second vote hits the unique constraint, which the error handler
+        turns into the same `conflict`.
+      summary: Rate an AI output
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - ai
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AIFeedbackRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AIFeedbackRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AIFeedbackRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIFeedback'
+          description: ''
+  /api/v1/ai/usage:
+    get:
+      operationId: ai_usage_retrieve
+      description: |-
+        This month's token use against the budget, by feature (ai-governance.md §9).
+
+        The mixin is here for its tenant binding only (as on `SchoolSettingsView`); RLS
+        keeps the sums to the caller's school.
+      summary: AI token usage this month
+      tags:
+      - ai
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIUsage'
+          description: ''
   /api/v1/announcements:
     get:
       operationId: announcements_list
@@ -14788,6 +14849,82 @@ paths:
           description: ''
 components:
   schemas:
+    AIFeatureUsage:
+      type: object
+      properties:
+        feature_key:
+          type: string
+        tokens:
+          type: integer
+        requests:
+          type: integer
+      required:
+      - feature_key
+      - requests
+      - tokens
+    AIFeedback:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        ai_request_id:
+          type: string
+          format: uuid
+          readOnly: true
+        value:
+          allOf:
+          - $ref: '#/components/schemas/AIFeedbackValueEnum'
+          readOnly: true
+        comment:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - ai_request_id
+      - comment
+      - created_at
+      - id
+      - value
+    AIFeedbackRequest:
+      type: object
+      properties:
+        value:
+          $ref: '#/components/schemas/AIFeedbackValueEnum'
+        comment:
+          type: string
+          default: ''
+          maxLength: 500
+      required:
+      - value
+    AIFeedbackValueEnum:
+      enum:
+      - -1
+      - 1
+      type: integer
+      description: |-
+        * `-1` - Thumbs down
+        * `1` - Thumbs up
+    AIUsage:
+      type: object
+      properties:
+        month_tokens:
+          type: integer
+          description: Tokens used this month, tenant timezone.
+        monthly_limit:
+          type: integer
+        by_feature:
+          type: array
+          items:
+            $ref: '#/components/schemas/AIFeatureUsage'
+      required:
+      - by_feature
+      - month_tokens
+      - monthly_limit
     AcademicSession:
       type: object
       properties:

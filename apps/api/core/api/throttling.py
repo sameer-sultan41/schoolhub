@@ -54,3 +54,14 @@ class PublicFormThrottle(SimpleRateThrottle):
 
     def get_cache_key(self, request, view):
         return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
+
+
+class AIRequestThrottle(UserRateThrottle):
+    """Per-user bucket for endpoints that call the AI provider (scope ``ai``).
+
+    Stacked on the default throttles by the AI endpoints, never a replacement for
+    them. It bounds how far concurrent calls can overshoot the token budget,
+    which the gateway checks before a call and meters after it.
+    """
+
+    scope = "ai"

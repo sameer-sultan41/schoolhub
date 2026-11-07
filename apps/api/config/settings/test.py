@@ -15,3 +15,6 @@ CELERY_TASK_ALWAYS_EAGER = True
 CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+
+# The scripted provider (core.ai.providers.fake): no test ever reaches a real model.
+AI_PROVIDER = "fake"

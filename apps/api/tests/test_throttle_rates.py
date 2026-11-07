@@ -12,6 +12,7 @@ from django.conf import settings
 from django.test import SimpleTestCase
 
 from core.api.throttling import (
+    AIRequestThrottle,
     AuthEndpointThrottle,
     PublicFormThrottle,
     TenantRateThrottle,
@@ -24,6 +25,7 @@ DEFAULT_RATES = {
     "anon": "20/min",
     "auth": "10/min",
     "public_form": "5/min",
+    "ai": "10/min",
 }
 
 
@@ -37,6 +39,7 @@ class ThrottleRateTests(SimpleTestCase):
             UserRateThrottle,
             AuthEndpointThrottle,
             PublicFormThrottle,
+            AIRequestThrottle,
         ):
             with self.subTest(throttle=throttle.__name__):
                 self.assertNotIn("rate", vars(throttle))
