@@ -97,7 +97,6 @@ export function FeeHeadFormFields({ form }: { form: UseFormReturn<FeeHeadFormVal
             id: account.id,
             name: `${account.code} ${account.name}`,
           }))}
-          description={canReadLedger ? undefined : t("heads.form.noLedgerAccess")}
         />
       )}
       <FormSwitchField

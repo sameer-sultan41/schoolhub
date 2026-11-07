@@ -75,13 +75,29 @@ describe("fee heads tab", () => {
   });
 
   it("gates New, Edit and Delete on their own keys", async () => {
-    asUser("fees.fee-structure.view", "fees.fee-structure.update");
+    asUser("fees.fee-structure.view", "fees.fee-structure.update", "fees.ledger.view");
     await renderTab();
 
     await screen.findByText("Library fee");
     expect(screen.getByRole("button", { name: "Edit Library fee" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "New fee head" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Delete Library fee" })).not.toBeInTheDocument();
+  });
+
+  it("offers no New or Edit to a structure author without the ledger view key", async () => {
+    asUser(
+      "fees.fee-structure.view",
+      "fees.fee-structure.create",
+      "fees.fee-structure.update",
+      "fees.fee-structure.delete",
+    );
+    await renderTab();
+
+    await screen.findByText("Library fee");
+    expect(screen.queryByRole("button", { name: "New fee head" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit Library fee" })).not.toBeInTheDocument();
+    // Delete reads no ledger, so it stays.
+    expect(screen.getByRole("button", { name: "Delete Library fee" })).toBeInTheDocument();
   });
 
   it("filters the income-account picker to income accounts and creates the head", async () => {
@@ -105,7 +121,7 @@ describe("fee heads tab", () => {
       expect(createFeeHead).toHaveBeenCalledWith({
         name: "Sports fee",
         code: "SPORT",
-        category: "tuition",
+        category: "other",
         ledgerAccountId: INCOME_ACCOUNT_ID,
         isRefundable: false,
         isActive: true,

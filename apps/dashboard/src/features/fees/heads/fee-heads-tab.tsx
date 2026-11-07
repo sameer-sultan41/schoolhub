@@ -39,9 +39,9 @@ type FormTarget = { record?: FeeHeadRecord };
 
 /**
  * The Fee heads tab of `/fees/structures`: cursor-paged, filtered in the URL by category and
- * status. New, Edit and Delete follow `fees.fee-structure.create|update|delete`. The income
- * account column reads the ledger, so it shows names only to a holder of `fees.ledger.view`
- * (L55). Each dialog is mounted only while open.
+ * status. New, Edit and Delete follow `fees.fee-structure.create|update|delete`; New and Edit
+ * also need `fees.ledger.view`, as the income account they require is picked from the ledger
+ * (L59). The income account column shows names only to a holder of that key too (L55). Each dialog is mounted only while open.
  */
 export function FeeHeadsTab() {
   const t = useTranslations("fees");
@@ -50,10 +50,12 @@ export function FeeHeadsTab() {
   const [deleteTarget, setDeleteTarget] = useState<FeeHeadRecord | null>(null);
 
   const { data: user } = useCurrentUser();
-  const canCreate = hasPermission(user, "fees.fee-structure.create");
-  const canUpdate = hasPermission(user, "fees.fee-structure.update");
-  const canDelete = hasPermission(user, "fees.fee-structure.delete");
   const canReadLedger = hasPermission(user, "fees.ledger.view");
+  // The form's income account is required and picked from the ledger, so a writer who cannot
+  // read it could open the form but never save it: both write gates need `fees.ledger.view` too.
+  const canCreate = hasPermission(user, "fees.fee-structure.create") && canReadLedger;
+  const canUpdate = hasPermission(user, "fees.fee-structure.update") && canReadLedger;
+  const canDelete = hasPermission(user, "fees.fee-structure.delete");
 
   const accountsQuery = useLedgerAccountOptions({ enabled: canReadLedger });
   const accountNames = useMemo(
