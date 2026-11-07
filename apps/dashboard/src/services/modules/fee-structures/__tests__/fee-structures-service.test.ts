@@ -76,6 +76,20 @@ describe("fee-structures-service", () => {
     expect(Object.keys(query)).toEqual(["page_size"]);
   });
 
+  it("fetchFeeStructureOptions reads every structure of the status, by name, a full page at a time", async () => {
+    const { fetchFeeStructureOptions } = await import("../fee-structures-service");
+    mockGet.mockResolvedValue(PAGE);
+
+    expect(await fetchFeeStructureOptions("active")).toEqual([{ id: "x1" }]);
+
+    expect(mockGet).toHaveBeenCalledWith(
+      "/fee-structures",
+      expect.objectContaining({
+        query: expect.objectContaining({ ordering: "name", page_size: 100, status: "active" }),
+      }),
+    );
+  });
+
   it("fetchFeeStructure GETs /fee-structures/{id}", async () => {
     const { fetchFeeStructure } = await import("../fee-structures-service");
     mockGet.mockResolvedValue({ data: { id: "x1" } });

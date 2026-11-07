@@ -1,7 +1,25 @@
-import { listFeeInvoices, fetchFeeInvoice } from "./fee-invoices-service";
+import {
+  cancelFeeInvoice,
+  createFeeInvoice,
+  fetchFeeInvoice,
+  generateFeeInvoices,
+  listFeeInvoices,
+} from "./fee-invoices-service";
 
 export const FeeInvoicesService = {
   listFeeInvoices,
   fetchFeeInvoice,
+  createFeeInvoice,
+  generateFeeInvoices,
+  cancelFeeInvoice,
 };
-export type { FeeInvoiceRecord, FeeInvoicesQuery } from "./fee-invoices-type";
+export type {
+  FeeInvoiceInput,
+  FeeInvoiceLineRecord,
+  FeeInvoiceRecord,
+  FeeInvoicesQuery,
+  FeeInvoiceStatus,
+  GenerateInvoicesAccepted,
+  GenerateInvoicesInput,
+  GenerateInvoicesResult,
+} from "./fee-invoices-type";

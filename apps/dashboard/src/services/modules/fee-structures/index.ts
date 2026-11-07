@@ -4,6 +4,7 @@ import {
   createFeeStructure,
   deleteFeeStructure,
   fetchFeeStructure,
+  fetchFeeStructureOptions,
   listFeeStructures,
   updateFeeStructure,
 } from "./fee-structures-service";
@@ -11,6 +12,7 @@ import {
 export const FeeStructuresService = {
   listFeeStructures,
   fetchFeeStructure,
+  fetchFeeStructureOptions,
   createFeeStructure,
   updateFeeStructure,
   deleteFeeStructure,

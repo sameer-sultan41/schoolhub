@@ -1,4 +1,4 @@
-import { fetchPage } from "@schoolhub/api-client";
+import { collectPages, fetchPage, MAX_PAGE_SIZE } from "@schoolhub/api-client";
 import type { Page } from "@schoolhub/types";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
@@ -7,6 +7,7 @@ import type {
   FeeStructureInput,
   FeeStructureRecord,
   FeeStructuresQuery,
+  FeeStructureStatus,
 } from "./fee-structures-type";
 
 /** The fee-structures API calls (`/fee-structures`), reached through `Services.feeStructures.*`. */
@@ -16,6 +17,15 @@ export async function listFeeStructures(
 ): Promise<Page<FeeStructureRecord>> {
   return fetchPage<FeeStructureRecord>(apiClient, endpoints.feeStructures.list, {
     query: toFeeStructuresQueryParams(query),
+  });
+}
+
+/** Every structure (of one status, if given), for a picker or filter: all pages, by name. */
+export async function fetchFeeStructureOptions(
+  status?: FeeStructureStatus,
+): Promise<FeeStructureRecord[]> {
+  return collectPages<FeeStructureRecord>(apiClient, endpoints.feeStructures.list, {
+    query: toFeeStructuresQueryParams({ ordering: "name", pageSize: MAX_PAGE_SIZE, status }),
   });
 }
 

@@ -12,6 +12,7 @@ import type {
 export const FEE_STRUCTURES_QUERY_MODULE = "fee-structures";
 export const FEE_STRUCTURES_LIST_RESOURCE = "list";
 export const FEE_STRUCTURES_DETAIL_RESOURCE = "detail";
+export const FEE_STRUCTURES_OPTIONS_RESOURCE = "options";
 
 /** Every FeeStructureStatus value, keyed so the compiler checks the set against the generated enum (L32). */
 const FEE_STRUCTURE_STATUSES_SET: Record<FeeStructureStatus, true> = {

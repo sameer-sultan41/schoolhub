@@ -60,6 +60,7 @@ describe("Services", () => {
       "notificationPreferences",
       "notifications",
       "parentPortal",
+      "payments",
       "periods",
       "promotions",
       "questionBanks",
@@ -240,6 +241,10 @@ describe("Services", () => {
     expect(typeof Services.notices.listNotices).toBe("function");
     expect(typeof Services.notices.acknowledgeNotice).toBe("function");
     expect(typeof Services.feeInvoices.listFeeInvoices).toBe("function");
+    expect(typeof Services.feeInvoices.createFeeInvoice).toBe("function");
+    expect(typeof Services.feeInvoices.generateFeeInvoices).toBe("function");
+    expect(typeof Services.feeInvoices.cancelFeeInvoice).toBe("function");
+    expect(typeof Services.payments.listPayments).toBe("function");
     expect(typeof Services.ledgerAccounts.listLedgerAccounts).toBe("function");
     expect(typeof Services.ledgerAccounts.fetchLedgerAccount).toBe("function");
     expect(typeof Services.ledgerAccounts.createLedgerAccount).toBe("function");

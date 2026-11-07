@@ -8,6 +8,7 @@ import { NoticesService } from "./modules/notices";
 import { NotificationPreferencesService } from "./modules/notification-preferences";
 import { NotificationsService } from "./modules/notifications";
 import { ParentPortalService } from "./modules/parent-portal";
+import { PaymentsService } from "./modules/payments";
 import { ReceiptsService } from "./modules/receipts";
 import { VouchersService } from "./modules/vouchers";
 import { ResultsService } from "./modules/results";
@@ -358,7 +359,22 @@ export type {
   NotificationChannel,
   NotificationPreferenceRow,
 } from "./modules/notification-preferences";
-export type { FeeInvoiceRecord } from "./modules/fee-invoices";
+export type {
+  FeeInvoiceInput,
+  FeeInvoiceLineRecord,
+  FeeInvoiceRecord,
+  FeeInvoicesQuery,
+  FeeInvoiceStatus,
+  GenerateInvoicesAccepted,
+  GenerateInvoicesInput,
+  GenerateInvoicesResult,
+} from "./modules/fee-invoices";
+export type {
+  PaymentMethod,
+  PaymentRecord,
+  PaymentsQuery,
+  PaymentStatus,
+} from "./modules/payments";
 export type { ReceiptFormat, ReceiptRecord } from "./modules/receipts";
 export type { VoucherFormat, VoucherRecord, VoucherStatus } from "./modules/vouchers";
 
@@ -418,6 +434,7 @@ export const Services = {
   feeHeads: FeeHeadsService,
   feeStructures: FeeStructuresService,
   feeSchedules: FeeSchedulesService,
+  payments: PaymentsService,
   receipts: ReceiptsService,
   vouchers: VouchersService,
   results: ResultsService,

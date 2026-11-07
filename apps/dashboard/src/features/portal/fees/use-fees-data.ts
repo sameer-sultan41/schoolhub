@@ -21,7 +21,7 @@ export function useChildInvoices(studentId: string | undefined, kind: "outstandi
           studentId,
           cursor,
           pageSize: PAGE_SIZE,
-          ...(kind === "outstanding" ? { outstanding: true } : { status: "paid" }),
+          ...(kind === "outstanding" ? { outstanding: true } : { status: "paid" as const }),
         }),
       ),
   });

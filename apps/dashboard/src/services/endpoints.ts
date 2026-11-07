@@ -380,10 +380,17 @@ export const endpoints = {
     detail: (id: string) => `/notices/${id}`,
     acknowledge: (id: string) => `/notices/${id}:acknowledge`,
   },
-  /** `/fee-invoices`: read-only for a guardian (published, non-draft rows only). */
+  /** `/fee-invoices`: read-only for a guardian (published, non-draft rows only); staff write with `fees.invoice.create|update`. */
   feeInvoices: {
     list: "/fee-invoices",
     detail: (id: string) => `/fee-invoices/${id}`,
+    /** Colon-actions, not nested paths: the registered routes are `/fee-invoices:generate` and `/fee-invoices/{id}:cancel`. */
+    generate: "/fee-invoices:generate",
+    cancel: (id: string) => `/fee-invoices/${id}:cancel`,
+  },
+  /** `/payments`: read with `fees.payment.view` (also the key for receipts and vouchers). */
+  payments: {
+    list: "/payments",
   },
   /** `/vouchers`: a guardian reads the slips of their own child's invoices; `download` streams
    * a PDF (`?format=pdf|thermal`). */
