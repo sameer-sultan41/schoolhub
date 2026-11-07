@@ -3,14 +3,12 @@ import { FILTER_ALL } from "@/lib/constants";
 import { copyMappedFields } from "@/lib/helpers";
 import {
   FEE_INVOICE_STATUS_CANCELED,
-  FEE_INVOICES_BODY_FIELDS,
   FEE_INVOICES_GENERATE_FIELDS,
   FEE_INVOICES_QUERY_FIELDS,
   OUTSTANDING_ON,
 } from "./fee-invoices-constant";
 import type { CancelInvoiceFormValues, GenerateInvoicesFormValues } from "./fee-invoices.schema";
 import type {
-  FeeInvoiceInput,
   FeeInvoiceRecord,
   FeeInvoicesQuery,
   FeeInvoiceStatus,
@@ -30,18 +28,6 @@ export function toFeeInvoicesQueryParams(query: FeeInvoicesQuery): QueryParams {
     params,
   );
   return params as QueryParams;
-}
-
-/** An ad-hoc invoice's body, in the API's snake_case; a blank period label is not sent. */
-export function toFeeInvoiceBody(input: FeeInvoiceInput): Record<string, unknown> {
-  const body: Record<string, unknown> = {};
-  copyMappedFields(
-    input,
-    FEE_INVOICES_BODY_FIELDS,
-    (value) => value !== undefined && value !== null && value !== "",
-    body,
-  );
-  return body;
 }
 
 /** The generate body: the structure and the one period field the form chose. */

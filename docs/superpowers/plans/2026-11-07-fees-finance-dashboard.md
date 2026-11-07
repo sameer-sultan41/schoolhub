@@ -151,7 +151,7 @@ PR B also ships one backend change: scholarship status transitions enforced on t
 | Report and statement responses | E1 adds one row serializer per kind, a `PolymorphicProxySerializer` (ADR-0022, the attendance precedent), `kind` as a `ChoiceField`, and a statement response serializer, with the contract regenerated | Hand-typing rows in the dashboard: violates ADR-0005/0017 |
 | Hiding self-approval | D1 exposes `created_by` read-only on expenses so Approve is hidden for the submitter; the server's 422 stays the enforcement | Showing the button and relying on the 422 alone: a button that always fails for the person most likely to see it |
 | Refund cap | The request dialog says the cap after the server's 422 (`meta.refundable_remainder`), shown on `amount` | A new read-only field: one more contract change for a value the 422 already gives |
-| Ad-hoc invoice | Built in B1: a Create invoice dialog (`POST /fee-invoices`, `fees.invoice.create`) | Leaving it out: §5.2 and §16 list it and the endpoint exists |
+| Ad-hoc invoice | Deferred (amended during B1): `POST /fee-invoices` takes only the header and lines are read-only, so a Create dialog could only make an empty draft | A dialog that creates a zero-total invoice nobody can price |
 | Expense attachment (`receipt_file`, §8) | Deferred: fees has no upload purpose, so the field has no upload or download route (L29) | Shipping the field without them: L29 |
 | Structure clone (§6) | Not built | No endpoint exists. Deferred |
 | Pay now / online gateway | Not built; `online_gateway` is hidden in the method list | No gateway exists (already deferred) |

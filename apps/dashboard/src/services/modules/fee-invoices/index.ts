@@ -1,6 +1,5 @@
 import {
   cancelFeeInvoice,
-  createFeeInvoice,
   fetchFeeInvoice,
   generateFeeInvoices,
   listFeeInvoices,
@@ -9,12 +8,10 @@ import {
 export const FeeInvoicesService = {
   listFeeInvoices,
   fetchFeeInvoice,
-  createFeeInvoice,
   generateFeeInvoices,
   cancelFeeInvoice,
 };
 export type {
-  FeeInvoiceInput,
   FeeInvoiceLineRecord,
   FeeInvoiceRecord,
   FeeInvoicesQuery,

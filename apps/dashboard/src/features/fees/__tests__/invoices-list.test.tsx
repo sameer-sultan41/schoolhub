@@ -84,21 +84,19 @@ describe("invoices list", () => {
     expect(second.getByText("Paid")).toBeInTheDocument();
   });
 
-  it("offers no Generate or New invoice to a viewer holding only the view key", async () => {
+  it("offers no Generate invoices to a viewer holding only the view key", async () => {
     asUser("fees.invoice.view");
     await renderHome();
 
     await screen.findByText("INV-2026-0001");
     expect(screen.queryByRole("button", { name: "Generate invoices" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "New invoice" })).not.toBeInTheDocument();
   });
 
-  it("offers Generate and New invoice to a holder of the create key", async () => {
+  it("offers Generate invoices to a holder of the create key", async () => {
     asUser("fees.invoice.view", "fees.invoice.create");
     await renderHome();
 
     expect(await screen.findByRole("button", { name: "Generate invoices" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "New invoice" })).toBeInTheDocument();
   });
 
   it("does not read the structure or session lists without their keys", async () => {

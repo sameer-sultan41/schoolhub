@@ -21,18 +21,6 @@ export interface FeeInvoicesQuery {
   pageSize?: number;
 }
 
-/**
- * An ad-hoc invoice's header. The API takes no lines on create (`FeeInvoiceSerializer.lines` is
- * read-only), so the invoice starts as a zero-total draft.
- */
-export interface FeeInvoiceInput {
-  studentId: string;
-  academicSessionId: string;
-  issueDate: string;
-  dueDate: string;
-  periodLabel?: string | null;
-}
-
 /** Exactly one of `periodStart` (a calendar month) or `termId` names the period. */
 export interface GenerateInvoicesInput {
   feeStructureId: string;

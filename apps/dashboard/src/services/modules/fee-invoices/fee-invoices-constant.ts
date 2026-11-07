@@ -1,7 +1,6 @@
 import { FILTER_ALL } from "@/lib/constants";
 import { isUuid } from "@/lib/helpers";
 import type {
-  FeeInvoiceInput,
   FeeInvoiceStatus,
   FeeInvoicesQuery,
   GenerateInvoicesInput,
@@ -44,15 +43,6 @@ export const FEE_INVOICES_QUERY_FIELDS: ReadonlyArray<readonly [keyof FeeInvoice
   ["pageSize", "page_size"],
 ];
 
-/** camelCase `FeeInvoiceInput` key -> the API's body key. */
-export const FEE_INVOICES_BODY_FIELDS: ReadonlyArray<readonly [keyof FeeInvoiceInput, string]> = [
-  ["studentId", "student"],
-  ["academicSessionId", "academic_session"],
-  ["issueDate", "issue_date"],
-  ["dueDate", "due_date"],
-  ["periodLabel", "period_label"],
-];
-
 /** camelCase `GenerateInvoicesInput` key -> the API's body key. */
 export const FEE_INVOICES_GENERATE_FIELDS: ReadonlyArray<
   readonly [keyof GenerateInvoicesInput, string]
@@ -62,7 +52,6 @@ export const FEE_INVOICES_GENERATE_FIELDS: ReadonlyArray<
   ["termId", "term"],
 ];
 
-export const FEE_INVOICE_PERIOD_LABEL_MAX = 40;
 export const FEE_INVOICE_REASON_MAX = 2000;
 /** Rows per page: the cursor list has no page-size picker. */
 export const FEE_INVOICES_PAGE_SIZE = 25;
@@ -101,13 +90,5 @@ export const FEE_INVOICES_URL_FILTERS = {
   },
 };
 
-/** The create form's fields that have an input: a server error on any other folds into the form's message. */
-export const FEE_INVOICE_CREATE_ERROR_FIELDS = [
-  "student",
-  "academic_session",
-  "issue_date",
-  "due_date",
-  "period_label",
-] as const;
 export const FEE_INVOICE_GENERATE_ERROR_FIELDS = ["fee_structure", "period_start", "term"] as const;
 export const FEE_INVOICE_CANCEL_ERROR_FIELDS = ["reason"] as const;

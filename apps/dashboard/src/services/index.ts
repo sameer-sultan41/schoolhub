@@ -360,7 +360,6 @@ export type {
   NotificationPreferenceRow,
 } from "./modules/notification-preferences";
 export type {
-  FeeInvoiceInput,
   FeeInvoiceLineRecord,
   FeeInvoiceRecord,
   FeeInvoicesQuery,

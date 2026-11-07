@@ -2978,7 +2978,6 @@
       "adHoc": "Ad hoc",
       "actions": {
         "generate": "Generate invoices",
-        "create": "New invoice",
         "cancel": "Cancel invoice",
         "backToList": "Back to invoices"
       },
@@ -3012,18 +3011,6 @@
         "balance": "Balance due",
         "status": "Status"
       },
-      "create": {
-        "title": "New invoice",
-        "intro": "Raise an invoice for one student outside any fee structure. It starts as a draft with no lines and a zero balance.",
-        "student": "Student",
-        "session": "Session",
-        "selectSession": "Select a session",
-        "issueDate": "Issue date",
-        "dueDate": "Due date",
-        "period": "Period label (optional)",
-        "dueBeforeIssue": "The due date can't be before the issue date.",
-        "saved": "Invoice {number} created"
-      },
       "generate": {
         "title": "Generate invoices",
         "intro": "Bill every student an active fee structure covers, for one period. Students already billed for that period are skipped.",
@@ -3047,7 +3034,8 @@
         "stalled": "This is taking longer than expected. The job may still be running on the server.",
         "pollFailed": "We couldn't check the job's progress. Reload the invoices to see what was created.",
         "resume": "Keep watching",
-        "another": "Generate another"
+        "another": "Generate another",
+        "done": "Done"
       },
       "detail": {
         "title": "Invoice {number}",

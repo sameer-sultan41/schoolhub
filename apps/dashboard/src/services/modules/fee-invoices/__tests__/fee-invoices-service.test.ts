@@ -91,26 +91,6 @@ describe("fee-invoices-service", () => {
     );
   });
 
-  it("createFeeInvoice POSTs the header in the API's names and leaves a blank label out", async () => {
-    const { createFeeInvoice } = await import("../fee-invoices-service");
-    mockPost.mockResolvedValue({ data: { id: "x1" } });
-
-    await createFeeInvoice({
-      studentId: "s1",
-      academicSessionId: "a1",
-      issueDate: "2026-10-01",
-      dueDate: "2026-10-20",
-      periodLabel: "",
-    });
-
-    expect(mockPost).toHaveBeenCalledWith("/fee-invoices", {
-      student: "s1",
-      academic_session: "a1",
-      issue_date: "2026-10-01",
-      due_date: "2026-10-20",
-    });
-  });
-
   it("generateFeeInvoices POSTs the colon-action with the Idempotency-Key, returning the job id", async () => {
     const { generateFeeInvoices } = await import("../fee-invoices-service");
     mockPost.mockResolvedValue({ data: { job_id: "j1", status: "queued" } });

@@ -3,13 +3,8 @@ import type { Page } from "@schoolhub/types";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
 import type { JobAccepted } from "@/services/modules/jobs/jobs-service";
-import {
-  toFeeInvoiceBody,
-  toFeeInvoicesQueryParams,
-  toGenerateInvoicesBody,
-} from "./fee-invoices-helper";
+import { toFeeInvoicesQueryParams, toGenerateInvoicesBody } from "./fee-invoices-helper";
 import type {
-  FeeInvoiceInput,
   FeeInvoiceRecord,
   FeeInvoicesQuery,
   GenerateInvoicesAccepted,
@@ -28,15 +23,6 @@ export async function listFeeInvoices(
 
 export async function fetchFeeInvoice(id: string): Promise<FeeInvoiceRecord> {
   const { data } = await apiClient.get<FeeInvoiceRecord>(endpoints.feeInvoices.detail(id));
-  return data;
-}
-
-/** An ad-hoc invoice (`fees.invoice.create`): header only, a zero-total draft. */
-export async function createFeeInvoice(input: FeeInvoiceInput): Promise<FeeInvoiceRecord> {
-  const { data } = await apiClient.post<FeeInvoiceRecord>(
-    endpoints.feeInvoices.list,
-    toFeeInvoiceBody(input),
-  );
   return data;
 }
 

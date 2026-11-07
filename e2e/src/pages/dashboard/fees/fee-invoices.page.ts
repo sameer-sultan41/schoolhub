@@ -4,7 +4,7 @@ import { BasePage } from "../../base.page";
 /**
  * `/fees/invoices` and an invoice's own page (`/fees/invoices/{id}`): the invoices table (each
  * number a link to the page) with its Defaulters switch and status filter, the toolbar's
- * "Generate invoices" and "New invoice", the generate dialog (structure, month or term, and the
+ * "Generate invoices", the generate dialog (structure, month or term, and the
  * job's created and skipped counts), and an invoice page's lines, server totals and Cancel
  * dialog. See `apps/dashboard/src/features/fees/invoices/`.
  */
@@ -30,10 +30,6 @@ export class FeeInvoicesPage extends BasePage {
 
   get generateButton(): Locator {
     return this.page.getByRole("button", { name: "Generate invoices", exact: true });
-  }
-
-  get createButton(): Locator {
-    return this.page.getByRole("button", { name: "New invoice", exact: true });
   }
 
   get defaultersSwitch(): Locator {
@@ -62,9 +58,9 @@ export class FeeInvoicesPage extends BasePage {
     return this.generateDialog.getByRole("button", { name: "Generate", exact: true });
   }
 
-  /** The footer's Close, once the run has started (the dialog's corner X is named Close too). */
+  /** The footer's Done, once the run has started (the dialog's corner X is named Close). */
   get closeGenerateButton(): Locator {
-    return this.generateDialog.getByRole("button", { name: "Close", exact: true }).last();
+    return this.generateDialog.getByRole("button", { name: "Done", exact: true });
   }
 
   option(name: string): Locator {

@@ -31,16 +31,15 @@ import {
 } from "@/services/modules/fee-invoices/fee-invoices-helper";
 import { NameLookupProvider, type NameLookups } from "@/features/fees/shared/name-lookup";
 import { useInvoiceReferences } from "@/features/fees/shared/use-invoice-references";
-import { CreateInvoiceDialog } from "./create-invoice-dialog";
 import { GenerateInvoicesDialog } from "./generate-invoices-dialog";
 import { useInvoiceColumns } from "./invoice-columns";
 import { InvoiceFilters } from "./invoice-filters";
 
-type OpenDialog = "create" | "generate" | null;
+type OpenDialog = "generate" | null;
 
 /**
  * `/fees/invoices`: the invoices, cursor-paged and filtered in the URL by session, structure,
- * student and status, with the Defaulters switch (`outstanding=true`). Generate invoices and
+ * student and status, with the Defaulters switch (`outstanding=true`). Generate invoices
  * New invoice both follow `fees.invoice.create`. Each dialog is mounted only while open.
  */
 export function InvoicesHome() {
@@ -139,22 +138,13 @@ export function InvoicesHome() {
         {canCreate && (
           <ToolbarActions>
             <Button
-              variant="outline"
+              variant="primary"
               onClick={() => {
                 setDialog("generate");
               }}
             >
               <Sparkles aria-hidden="true" />
               {t("invoices.actions.generate")}
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => {
-                setDialog("create");
-              }}
-            >
-              <FileText aria-hidden="true" />
-              {t("invoices.actions.create")}
             </Button>
           </ToolbarActions>
         )}
@@ -185,7 +175,6 @@ export function InvoicesHome() {
           />
         }
       />
-      {dialog === "create" && <CreateInvoiceDialog open onOpenChange={close} />}
       {dialog === "generate" && <GenerateInvoicesDialog open onOpenChange={close} />}
     </NameLookupProvider>
   );

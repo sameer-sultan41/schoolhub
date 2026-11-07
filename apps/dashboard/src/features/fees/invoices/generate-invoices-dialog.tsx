@@ -85,7 +85,7 @@ export function GenerateInvoicesDialog({ open, onOpenChange }: GenerateInvoicesD
                   onOpenChange(false);
                 }}
               >
-                {run.isStarted ? tCommon("close") : tCommon("cancel")}
+                {run.isStarted ? t("invoices.generate.done") : tCommon("cancel")}
               </Button>
               {isEnded ? (
                 <Button type="button" onClick={run.reset}>

@@ -617,28 +617,6 @@ export function feesInvoicingModule(options: FeesInvoicingOptions = {}): MockMod
       return invoice ? ok(invoice) : fail(404, "Not found.");
     });
 
-    // A header only: `lines` and every money field are read-only, so a new invoice is a zero-total draft.
-    api.post("/fee-invoices", (request) => {
-      const body = (request.json() as Partial<FeeInvoice> | null) ?? {};
-      const missing = (["student", "academic_session", "issue_date", "due_date"] as const).filter(
-        (field) => !body[field],
-      );
-      if (missing.length > 0) return invalid(missing.map((field) => ({ field, issue: REQUIRED })));
-      if ((body.due_date ?? "") < (body.issue_date ?? "")) {
-        return invalid([{ field: "due_date", issue: "Due date cannot be before the issue date." }]);
-      }
-      sequence += 1;
-      const created = buildFeeInvoice({
-        ...body,
-        id: uuid(),
-        invoice_no: `INV-E2E-${String(sequence).padStart(4, "0")}`,
-        status: "draft",
-        lines: [],
-      });
-      invoices.push(created);
-      return ok(created, { status: 201 });
-    });
-
     // `router.ts` reads `:name` as a param, so this compiles to `^/fee-invoices([^/]+)$` and
     // captures ":generate" whole; it never meets `/fee-invoices/{id}`, which has a `/` there.
     api.post("/fee-invoices:collectionAction", (request) => {

@@ -208,7 +208,7 @@ test.describe("the accountant", () => {
 test.describe("finance staff", () => {
   test.use({ authUser: financeStaff });
 
-  test("raise and generate invoices but are offered no Cancel", async ({
+  test("generate invoices but are offered no Cancel", async ({
     mockApi,
     feeInvoicesPage,
     signedIn: _signedIn,
@@ -217,7 +217,6 @@ test.describe("finance staff", () => {
     if (!invoice) throw new Error("the seeded invoice is missing");
     await feeInvoicesPage.goto();
     await expect(feeInvoicesPage.generateButton).toBeVisible();
-    await expect(feeInvoicesPage.createButton).toBeVisible();
 
     await feeInvoicesPage.gotoInvoice(invoice.id);
     await expect(feeInvoicesPage.linesTable).toBeVisible();
