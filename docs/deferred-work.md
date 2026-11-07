@@ -1257,6 +1257,15 @@ either this file or `project-status.md`.
     `OpenApiParameter`. The dashboard hand-types `ReceiptFormat` until it does.
   - **Urdu review.** The `portal` namespace in `apps/dashboard/messages/ur.json` was written
     without a native speaker and needs their review.
+  - **Grants: student picker and invoice detail.** The Grants create forms import the messaging
+    module's `StudentPicker` (`features/communication/messages/`) across features; the fee
+    counter (PR C) is its second owner and hoists it, with its popover and chip, to
+    `components/`. The invoice page does not list the invoice's own discounts and fines: the
+    `/discounts` and `/fines` filters take a student, not an invoice, so the page keeps its
+    per-line discount and fine display until they do.
+  - **Grants: no edit.** Discounts, scholarships and fines can be created and moved along their
+    lifecycle, but a typo in a name, value or reason cannot be edited from the screen (the
+    `PATCH` services exist). Add edit dialogs if an accountant asks.
   - **Urdu review (fees).** The `fees` namespace in `apps/dashboard/messages/ur.json` was
     written without a native speaker and needs their review.
   - **Inbox mark-all-read scope.** On page 2 and later, Mark all read sends that page's newest
