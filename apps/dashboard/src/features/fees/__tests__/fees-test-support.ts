@@ -49,9 +49,9 @@ export const STRUCTURE_ID = "88888888-8888-4888-8888-888888888888";
 export const SCHEDULE_ID = "99999999-9999-4999-8999-999999999999";
 const STAMP = "2026-10-01T00:00:00Z";
 
-/** The keys the seeded `accountant` holds for these screens (permissions.py: structure authors,
- * the ledger viewer and writer), plus the reference reads the pickers make. */
-export const ACCOUNTANT_KEYS: PermissionKey[] = [
+/** The setup keys the seeded `accountant` holds (permissions.py: structure authors, the ledger
+ * viewer and writer), plus the reference reads the pickers make. Not the role's whole set. */
+export const FEES_SETUP_AUTHOR_PERMISSIONS: PermissionKey[] = [
   "fees.fee-structure.view",
   "fees.fee-structure.create",
   "fees.fee-structure.update",
@@ -129,11 +129,13 @@ export function structureRecord(overrides: Partial<FeeStructureRecord> = {}): Fe
   };
 }
 
-/** A 422 `domain_rule_violation` naming `field`, as the server's `DomainRuleViolation` sends it. */
+/** The server's refusal naming `field`: a 422 `domain_rule_violation` (`DomainRuleViolation`), or
+ * with `status` 400 a serializer's `validation_error`. `message` is the issue text, as the
+ * envelope handler sets it for a single detail (core/api/exceptions.py). */
 export function ruleViolation(field: string, issue: string, status = 422) {
   return new ApiError({
     status,
-    code: "domain_rule_violation",
+    code: status === 422 ? "domain_rule_violation" : "validation_error",
     message: issue,
     url: "/fees",
     details: [{ field, issue }],

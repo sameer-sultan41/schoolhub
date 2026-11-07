@@ -44,7 +44,7 @@ export const FEE_HEADS_QUERY_FIELDS: ReadonlyArray<readonly [keyof FeeHeadsQuery
 
 export const FEE_HEAD_CODE_MAX = 30;
 export const FEE_HEAD_NAME_MAX = 120;
-export const DEFAULT_FEE_HEAD_CATEGORY: FeeHeadCategory = "tuition";
+export const DEFAULT_FEE_HEAD_CATEGORY: FeeHeadCategory = "other";
 /** Rows per page: the cursor list has no page-size picker. */
 export const FEE_HEADS_PAGE_SIZE = 25;
 export const FEE_HEADS_ACTIONS_COLUMN_ID = "actions";

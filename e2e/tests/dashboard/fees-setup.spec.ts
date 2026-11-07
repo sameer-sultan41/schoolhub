@@ -1,10 +1,5 @@
 import { expect, test } from "@/fixtures";
-import {
-  buildRole,
-  buildUser,
-  FINANCE_ACCOUNTANT_SETUP_PERMISSIONS,
-  ORG_IDS,
-} from "@/data/factories";
+import { buildRole, buildUser, FEES_SETUP_AUTHOR_PERMISSIONS, ORG_IDS } from "@/data/factories";
 import { isApiCall } from "@/lib/request-matchers";
 import {
   buildAcademicSession,
@@ -40,11 +35,10 @@ const term1 = buildTerm({ academic_session_id: session.id, name: "Term 1" });
 // The seeded `accountant`'s keys for these screens, no wider (L55).
 const accountant = buildUser({
   roles: [buildRole({ slug: "accountant", name: "Accountant" })],
-  permissions: FINANCE_ACCOUNTANT_SETUP_PERMISSIONS,
+  permissions: FEES_SETUP_AUTHOR_PERMISSIONS,
 });
-// A `finance_staff` or `principal`: the structure view and nothing to write with.
+// Structure-view-only: the structure view and the session read, nothing to write with.
 const viewer = buildUser({
-  roles: [buildRole({ slug: "principal", name: "Principal" })],
   permissions: ["fees.fee-structure.view", "school.academic-session.view"],
 });
 
@@ -175,7 +169,7 @@ test.describe("the accountant", () => {
       term: null,
     });
     const row = feeStructuresPage.scheduleRow("SPORT Sports fee");
-    await expect(row.getByText("1,500", { exact: true })).toBeVisible();
+    await expect(row.getByText("1,500.00", { exact: true })).toBeVisible();
     await expect(row.getByText("Day 10 of each month", { exact: true })).toBeVisible();
 
     // Now it can be activated: it becomes fixed, and only Archive remains.

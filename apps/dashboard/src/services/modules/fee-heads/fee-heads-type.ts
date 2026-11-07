@@ -1,6 +1,6 @@
 import type { ApiSchemas } from "@schoolhub/api-client";
 
-/** Fee heads (`/fee-heads`, `fees.fee-head.*`): a charge type, each posting to one ledger account. The generated wire shape (ADR-0017). */
+/** Fee heads (`/fee-heads`, `fees.fee-structure.*`): a charge type, each posting to one ledger account. The generated wire shape (ADR-0017). */
 export type FeeHeadRecord = ApiSchemas["FeeHead"];
 export type FeeHeadCategory = ApiSchemas["FeeHeadCategoryEnum"];
 

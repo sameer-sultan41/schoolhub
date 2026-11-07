@@ -7,7 +7,7 @@ import { renderWithProviders } from "@/test-utils";
 
 import { StructurePage } from "@/features/fees/structures/detail/structure-page";
 import {
-  ACCOUNTANT_KEYS,
+  FEES_SETUP_AUTHOR_PERMISSIONS,
   activateFeeStructure,
   archiveFeeStructure,
   asUser,
@@ -77,10 +77,10 @@ describe("fee structure page", () => {
     const table = await screen.findByRole("table", { name: "Fee schedules of this structure" });
     const monthly = within(table).getByText("Day 10 of each month").closest("tr");
     expect(monthly).not.toBeNull();
-    expect(within(monthly as HTMLElement).getByText("1,500")).toBeInTheDocument();
+    expect(within(monthly as HTMLElement).getByText("1,500.00")).toBeInTheDocument();
     expect(within(monthly as HTMLElement).getByText("LIB Library fee")).toBeInTheDocument();
     expect(within(table).getByText("In Term 1")).toBeInTheDocument();
-    expect(within(table).getByText("25,000.5")).toBeInTheDocument();
+    expect(within(table).getByText("25,000.50")).toBeInTheDocument();
   });
 
   it("offers no action to a viewer holding only the view key", async () => {
@@ -94,7 +94,7 @@ describe("fee structure page", () => {
   });
 
   it("offers Activate, Edit, Delete and Add schedule on a draft to a holder of every key", async () => {
-    asUser(...ACCOUNTANT_KEYS);
+    asUser(...FEES_SETUP_AUTHOR_PERMISSIONS);
     await renderPage();
 
     expect(await screen.findByRole("button", { name: "Activate" })).toBeInTheDocument();
@@ -105,7 +105,7 @@ describe("fee structure page", () => {
   });
 
   it("offers only Archive on an active structure, and fixes its schedules", async () => {
-    asUser(...ACCOUNTANT_KEYS);
+    asUser(...FEES_SETUP_AUTHOR_PERMISSIONS);
     fetchFeeStructure.mockResolvedValue(
       structureRecord({ status: "active", schedules: [scheduleRecord()] }),
     );
@@ -120,7 +120,7 @@ describe("fee structure page", () => {
   });
 
   it("offers no lifecycle action on an archived structure", async () => {
-    asUser(...ACCOUNTANT_KEYS);
+    asUser(...FEES_SETUP_AUTHOR_PERMISSIONS);
     fetchFeeStructure.mockResolvedValue(structureRecord({ status: "archived" }));
     await renderPage();
 
@@ -131,7 +131,7 @@ describe("fee structure page", () => {
   });
 
   it("shows the server's no-schedules refusal on Activate inline, and keeps the dialog open", async () => {
-    asUser(...ACCOUNTANT_KEYS);
+    asUser(...FEES_SETUP_AUTHOR_PERMISSIONS);
     activateFeeStructure.mockRejectedValue(
       ruleViolation("status", "This structure has no fee schedules, so it would charge nothing."),
     );
@@ -151,7 +151,7 @@ describe("fee structure page", () => {
   });
 
   it("shows the scope-conflict refusal on Activate inline", async () => {
-    asUser(...ACCOUNTANT_KEYS);
+    asUser(...FEES_SETUP_AUTHOR_PERMISSIONS);
     activateFeeStructure.mockRejectedValue(
       ruleViolation(
         "status",
@@ -168,7 +168,7 @@ describe("fee structure page", () => {
   });
 
   it("archives an active structure", async () => {
-    asUser(...ACCOUNTANT_KEYS);
+    asUser(...FEES_SETUP_AUTHOR_PERMISSIONS);
     fetchFeeStructure.mockResolvedValue(
       structureRecord({ status: "active", schedules: [scheduleRecord()] }),
     );
@@ -185,7 +185,7 @@ describe("fee structure page", () => {
   });
 
   it("adds a schedule sending only the due rule its frequency uses", async () => {
-    asUser(...ACCOUNTANT_KEYS);
+    asUser(...FEES_SETUP_AUTHOR_PERMISSIONS);
     createFeeSchedule.mockResolvedValue(scheduleRecord());
     const user = await renderPage();
 
@@ -213,12 +213,12 @@ describe("fee structure page", () => {
   });
 
   it("shows the server's due-rule error under the field it names", async () => {
-    asUser(...ACCOUNTANT_KEYS);
+    asUser(...FEES_SETUP_AUTHOR_PERMISSIONS);
     createFeeSchedule.mockRejectedValue(
       new ApiError({
         status: 400,
         code: "validation_error",
-        message: "Validation failed.",
+        message: "A monthly schedule needs a day-of-month due rule.",
         url: "/fee-schedules",
         details: [{ field: "due_day", issue: "A monthly schedule needs a day-of-month due rule." }],
       }),
@@ -244,14 +244,14 @@ describe("fee structure page", () => {
   });
 
   it("shows the server's frequency error under the frequency field", async () => {
-    asUser(...ACCOUNTANT_KEYS);
+    asUser(...FEES_SETUP_AUTHOR_PERMISSIONS);
     createFeeSchedule.mockRejectedValue(
       new ApiError({
         status: 400,
         code: "validation_error",
-        message: "Validation failed.",
+        message: '"x" is not a valid choice.',
         url: "/fee-schedules",
-        details: [{ field: "frequency", issue: "This frequency is not allowed here." }],
+        details: [{ field: "frequency", issue: '"x" is not a valid choice.' }],
       }),
     );
     const user = await renderPage();
@@ -264,9 +264,7 @@ describe("fee structure page", () => {
     await user.type(within(dialog).getByLabelText("Due date"), "2026-12-01");
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
 
-    expect(
-      await within(dialog).findByText("This frequency is not allowed here."),
-    ).toBeInTheDocument();
+    expect(await within(dialog).findByText('"x" is not a valid choice.')).toBeInTheDocument();
   });
 
   it("says so when the structure does not exist", async () => {

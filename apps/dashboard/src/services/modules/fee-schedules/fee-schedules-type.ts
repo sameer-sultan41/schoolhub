@@ -1,6 +1,6 @@
 import type { ApiSchemas } from "@schoolhub/api-client";
 
-/** Fee schedules (`/fee-schedules`, `fees.fee-schedule.*`): one fee head's amount and due rule within a structure. `amount` is a decimal string, as the API sends it. The generated wire shape (ADR-0017). */
+/** Fee schedules (`/fee-schedules`, `fees.fee-structure.*`): one fee head's amount and due rule within a structure. `amount` is a decimal string, as the API sends it. The generated wire shape (ADR-0017). */
 export type FeeScheduleRecord = ApiSchemas["FeeSchedule"];
 export type FeeFrequency = ApiSchemas["FeeFrequencyEnum"];
 

@@ -1,6 +1,6 @@
 import type { ApiSchemas } from "@schoolhub/api-client";
 
-/** The chart of accounts (`/ledger-accounts`, `fees.ledger-account.*`): a system account is seeded and cannot be deleted. The generated wire shape (ADR-0017). */
+/** The chart of accounts (`/ledger-accounts`, read with `fees.ledger.view`, written with `fees.ledger.create`): a system account is seeded and cannot be deleted. The generated wire shape (ADR-0017). */
 export type LedgerAccountRecord = ApiSchemas["LedgerAccount"];
 export type LedgerAccountType = ApiSchemas["LedgerAccountTypeEnum"];
 

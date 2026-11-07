@@ -2971,7 +2971,6 @@
       "structures": "Structures",
       "ledger": "Ledger"
     },
-    "title": "Fees & Finance",
     "structures": {
       "title": "Fee structures",
       "summary": "What each class is charged, by session and campus.",
@@ -3242,7 +3241,6 @@
         "category": "Category",
         "account": "Income account",
         "selectAccount": "Select an income account",
-        "noLedgerAccess": "Choosing an account needs access to the ledger.",
         "refundable": "Refundable",
         "refundableHint": "A payment against this head can be refunded.",
         "active": "Active",
