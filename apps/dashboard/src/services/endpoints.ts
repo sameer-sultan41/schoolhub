@@ -388,6 +388,24 @@ export const endpoints = {
     generate: "/fee-invoices:generate",
     cancel: (id: string) => `/fee-invoices/${id}:cancel`,
   },
+  /** `/discounts`: read with `fees.discount.view`, written with `fees.discount.create`; `:revoke` needs `fees.discount.waive`. No DELETE route exists. */
+  discounts: {
+    list: "/discounts",
+    detail: (id: string) => `/discounts/${id}`,
+    /** Colon-action, not a nested path: the registered route is `/discounts/{id}:revoke`. */
+    revoke: (id: string) => `/discounts/${id}:revoke`,
+  },
+  /** `/scholarships`: read with `fees.discount.view`, written with `fees.scholarship.create`; the lifecycle moves through PATCH `status`. No DELETE route exists. */
+  scholarships: {
+    list: "/scholarships",
+    detail: (id: string) => `/scholarships/${id}`,
+  },
+  /** `/fines`: read with `fees.fine.view`, written with `fees.fine.create`; `:waive` needs `fees.fine.waive`. No DELETE route exists. */
+  fines: {
+    list: "/fines",
+    detail: (id: string) => `/fines/${id}`,
+    waive: (id: string) => `/fines/${id}:waive`,
+  },
   /** `/payments`: read with `fees.payment.view` (also the key for receipts and vouchers). */
   payments: {
     list: "/payments",

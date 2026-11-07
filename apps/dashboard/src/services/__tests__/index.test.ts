@@ -39,6 +39,7 @@ describe("Services", () => {
       "broadcasts",
       "curriculum",
       "dashboard",
+      "discounts",
       "examReports",
       "examResults",
       "examSchedules",
@@ -49,6 +50,7 @@ describe("Services", () => {
       "feeSchedules",
       "feeStructures",
       "files",
+      "fines",
       "gradingScales",
       "guardians",
       "jobs",
@@ -68,6 +70,7 @@ describe("Services", () => {
       "reportCards",
       "results",
       "rooms",
+      "scholarships",
       "schoolOrganization",
       "staff",
       "staffAttendance",
@@ -261,6 +264,17 @@ describe("Services", () => {
     expect(typeof Services.feeStructures.deleteFeeStructure).toBe("function");
     expect(typeof Services.feeStructures.activateFeeStructure).toBe("function");
     expect(typeof Services.feeStructures.archiveFeeStructure).toBe("function");
+    expect(typeof Services.discounts.listDiscounts).toBe("function");
+    expect(typeof Services.discounts.createDiscount).toBe("function");
+    expect(typeof Services.discounts.updateDiscount).toBe("function");
+    expect(typeof Services.discounts.revokeDiscount).toBe("function");
+    expect(typeof Services.scholarships.listScholarships).toBe("function");
+    expect(typeof Services.scholarships.createScholarship).toBe("function");
+    expect(typeof Services.scholarships.updateScholarship).toBe("function");
+    expect(typeof Services.fines.listFines).toBe("function");
+    expect(typeof Services.fines.createFine).toBe("function");
+    expect(typeof Services.fines.updateFine).toBe("function");
+    expect(typeof Services.fines.waiveFine).toBe("function");
     expect(typeof Services.feeSchedules.listFeeSchedules).toBe("function");
     expect(typeof Services.feeSchedules.fetchFeeSchedule).toBe("function");
     expect(typeof Services.feeSchedules.createFeeSchedule).toBe("function");

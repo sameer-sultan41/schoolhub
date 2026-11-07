@@ -1,8 +1,10 @@
 import { AdmitCardsService } from "./modules/admit-cards";
+import { DiscountsService } from "./modules/discounts";
 import { FeeHeadsService } from "./modules/fee-heads";
 import { FeeInvoicesService } from "./modules/fee-invoices";
 import { FeeSchedulesService } from "./modules/fee-schedules";
 import { FeeStructuresService } from "./modules/fee-structures";
+import { FinesService } from "./modules/fines";
 import { LedgerAccountsService } from "./modules/ledger-accounts";
 import { NoticesService } from "./modules/notices";
 import { NotificationPreferencesService } from "./modules/notification-preferences";
@@ -35,6 +37,7 @@ import { PromotionsService } from "./modules/promotions";
 import { QuestionBanksService } from "./modules/question-banks";
 import { ReportCardsService } from "./modules/report-cards";
 import { RoomsService } from "./modules/rooms";
+import { ScholarshipsService } from "./modules/scholarships";
 import { SchoolOrganizationService } from "./modules/school-organization";
 import { StaffService } from "./modules/staff";
 import { MessageThreadsService } from "./modules/message-threads";
@@ -368,6 +371,14 @@ export type {
   GenerateInvoicesInput,
   GenerateInvoicesResult,
 } from "./modules/fee-invoices";
+export type { DiscountRecord, DiscountStatus, DiscountType } from "./modules/discounts";
+export type {
+  ScholarshipCoverage,
+  ScholarshipRecord,
+  ScholarshipStatus,
+  ScholarshipType,
+} from "./modules/scholarships";
+export type { FineRecord, FineStatus, FineType } from "./modules/fines";
 export type {
   PaymentMethod,
   PaymentRecord,
@@ -429,6 +440,9 @@ export const Services = {
   notificationPreferences: NotificationPreferencesService,
   notices: NoticesService,
   feeInvoices: FeeInvoicesService,
+  discounts: DiscountsService,
+  scholarships: ScholarshipsService,
+  fines: FinesService,
   ledgerAccounts: LedgerAccountsService,
   feeHeads: FeeHeadsService,
   feeStructures: FeeStructuresService,
