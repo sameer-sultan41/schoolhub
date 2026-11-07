@@ -42,11 +42,3 @@ export function createDiscountFormSchema(messages: DiscountFormMessages) {
 }
 export const discountFormSchema = createDiscountFormSchema(DISCOUNT_FORM_MESSAGE_KEYS);
 export type DiscountFormValues = z.infer<typeof discountFormSchema>;
-
-export function createRevokeDiscountFormSchema(messages: Pick<DiscountFormMessages, "required">) {
-  return z.object({
-    reason: z.string().trim().min(1, messages.required).max(DISCOUNT_REASON_MAX),
-  });
-}
-export const revokeDiscountFormSchema = createRevokeDiscountFormSchema({ required: "required" });
-export type RevokeDiscountFormValues = z.infer<typeof revokeDiscountFormSchema>;

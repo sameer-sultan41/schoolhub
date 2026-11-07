@@ -2970,7 +2970,8 @@
       "label": "Fees & Finance sections",
       "invoices": "Invoices",
       "structures": "Structures",
-      "ledger": "Ledger"
+      "ledger": "Ledger",
+      "grants": "Grants"
     },
     "invoices": {
       "title": "Invoices",
@@ -3399,6 +3400,224 @@
       "delete": {
         "titleNamed": "Delete {name}?",
         "description": "A head that a schedule, fine or invoice uses cannot be deleted; deactivate it instead."
+      }
+    },
+    "grants": {
+      "title": "Grants and fines",
+      "summary": "Discounts, scholarships and fines raised against students.",
+      "tabs": {
+        "label": "Grants sections",
+        "discounts": "Discounts",
+        "scholarships": "Scholarships",
+        "fines": "Fines"
+      },
+      "filters": {
+        "status": "Status",
+        "all": "All",
+        "clearStudent": "Show every student",
+        "clearSearch": "Clear search"
+      },
+      "form": {
+        "student": "Student",
+        "session": "Session",
+        "selectSession": "Select a session",
+        "head": "Fee head",
+        "selectHead": "Select a fee head",
+        "allHeads": "Every fee head",
+        "value": "Value",
+        "percentHint": "A percent from 0 to 100.",
+        "fixedHint": "A fixed amount.",
+        "errors": {
+          "invalidValue": "Enter a positive value (a percent cannot exceed 100).",
+          "endBeforeStart": "The end date cannot be before the start date.",
+          "invalidAmount": "Enter a positive amount."
+        },
+        "readOnlyHint": "Needs access to students, sessions and fee heads."
+      },
+      "valueType": {
+        "percent": "Percent",
+        "fixed": "Fixed amount"
+      },
+      "discounts": {
+        "list": {
+          "caption": "Discounts",
+          "pagination": "Discounts pages",
+          "loadError": "The discounts could not be loaded.",
+          "emptyTitle": "No discounts yet",
+          "emptyDescription": "A discount reduces what a student is billed, as a percent or a fixed amount.",
+          "noMatches": "No discounts match",
+          "noMatchesDescription": "Try a different search or filter.",
+          "searchPlaceholder": "Search discounts or students",
+          "search": "Search discounts"
+        },
+        "columns": {
+          "student": "Student",
+          "name": "Discount",
+          "value": "Value",
+          "head": "Fee head",
+          "session": "Session",
+          "validity": "Valid",
+          "status": "Status",
+          "granted": "Granted"
+        },
+        "status": {
+          "active": "Active",
+          "expired": "Expired",
+          "revoked": "Revoked"
+        },
+        "allHeads": "Every head",
+        "validity": {
+          "from": "From {date}",
+          "to": "until {date}",
+          "always": "No end date"
+        },
+        "actions": {
+          "create": "Grant discount",
+          "revoke": "Revoke",
+          "revokeRow": "Revoke {name}"
+        },
+        "form": {
+          "createTitle": "Grant a discount",
+          "intro": "A discount applies to the student's future invoices. Invoices already issued keep their figures.",
+          "name": "Name",
+          "type": "Type",
+          "validFrom": "Valid from",
+          "validTo": "Valid until",
+          "reason": "Reason (optional)"
+        },
+        "saved": "Discount granted.",
+        "revoke": {
+          "title": "Revoke {name}",
+          "intro": "A revoked discount stops applying to new invoices. Invoices already priced with it are not changed.",
+          "reason": "Reason",
+          "submit": "Revoke discount",
+          "done": "Discount {name} revoked"
+        }
+      },
+      "scholarships": {
+        "list": {
+          "caption": "Scholarships",
+          "pagination": "Scholarships pages",
+          "loadError": "The scholarships could not be loaded.",
+          "emptyTitle": "No scholarships yet",
+          "emptyDescription": "A scholarship is an award that covers part of a student's fees for a session.",
+          "noMatches": "No scholarships match",
+          "noMatchesDescription": "Try a different search or filter.",
+          "searchPlaceholder": "Search scholarships, sponsors or students",
+          "search": "Search scholarships"
+        },
+        "columns": {
+          "student": "Student",
+          "name": "Scholarship",
+          "type": "Type",
+          "value": "Coverage",
+          "sponsor": "Sponsor",
+          "session": "Session",
+          "status": "Status",
+          "awarded": "Awarded"
+        },
+        "status": {
+          "applied": "Applied",
+          "approved": "Approved",
+          "active": "Active",
+          "ended": "Ended",
+          "revoked": "Revoked"
+        },
+        "type": {
+          "merit": "Merit",
+          "need": "Need",
+          "sports": "Sports",
+          "staff_ward": "Staff ward",
+          "other": "Other"
+        },
+        "actions": {
+          "create": "Add scholarship",
+          "statusRow": "{action}: {name}",
+          "to": {
+            "applied": "Mark applied",
+            "approved": "Approve",
+            "active": "Activate",
+            "ended": "End",
+            "revoked": "Revoke"
+          }
+        },
+        "form": {
+          "createTitle": "Add a scholarship",
+          "intro": "An award covers a share of what the student owes for the session, before any discount.",
+          "name": "Name",
+          "type": "Type",
+          "coverage": "Coverage",
+          "sponsor": "Sponsor (optional)",
+          "status": "Starts as",
+          "notes": "Notes (optional)"
+        },
+        "saved": "Scholarship added.",
+        "statusDialog": {
+          "title": "{action}: {name}",
+          "intro": "Move this award from {from} to {to}.",
+          "introFinal": "Move this award from {from} to {to}. This is final: it cannot be reopened.",
+          "notes": "Notes",
+          "notesRequired": "Notes (required)",
+          "submit": "Confirm",
+          "done": "{name} is now {to}"
+        }
+      },
+      "fines": {
+        "list": {
+          "caption": "Fines",
+          "pagination": "Fines pages",
+          "loadError": "The fines could not be loaded.",
+          "emptyTitle": "No fines yet",
+          "emptyDescription": "A fine is a penalty added to the student's next invoice.",
+          "noMatches": "No fines match",
+          "noMatchesDescription": "Try a different search or filter.",
+          "searchPlaceholder": "Search fines or students",
+          "search": "Search fines"
+        },
+        "columns": {
+          "student": "Student",
+          "type": "Type",
+          "head": "Fee head",
+          "amount": "Amount",
+          "reason": "Reason",
+          "status": "Status",
+          "raised": "Raised"
+        },
+        "status": {
+          "pending": "Pending",
+          "invoiced": "Invoiced",
+          "paid": "Paid",
+          "waived": "Waived"
+        },
+        "type": {
+          "late_fee": "Late fee",
+          "library": "Library",
+          "transport": "Transport",
+          "damage": "Damage",
+          "discipline": "Discipline",
+          "other": "Other"
+        },
+        "actions": {
+          "create": "Raise fine",
+          "waive": "Waive",
+          "waiveRow": "Waive fine for {name}"
+        },
+        "form": {
+          "createTitle": "Raise a fine",
+          "intro": "A pending fine is added to the student's next invoice. Its fee head must be in the fine category.",
+          "type": "Type",
+          "amount": "Amount",
+          "reason": "Reason",
+          "noHeads": "No fee head is in the fine category yet."
+        },
+        "saved": "Fine raised.",
+        "waive": {
+          "title": "Waive fine for {name}",
+          "intro": "Only a pending fine can be waived. Once it is on an invoice, adjust or cancel the invoice instead.",
+          "reason": "Reason",
+          "submit": "Waive fine",
+          "done": "Fine waived"
+        }
       }
     }
   },

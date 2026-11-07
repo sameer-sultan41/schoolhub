@@ -27,6 +27,8 @@ const mockFetchCurrentUser = Services.auth.fetchCurrentUser as jest.MockedFuncti
 >;
 
 const INVOICE_VIEW: PermissionKey = "fees.invoice.view";
+const DISCOUNT_VIEW: PermissionKey = "fees.discount.view";
+const FINE_VIEW: PermissionKey = "fees.fine.view";
 const STRUCTURE_VIEW: PermissionKey = "fees.fee-structure.view";
 const LEDGER_VIEW: PermissionKey = "fees.ledger.view";
 
@@ -35,9 +37,10 @@ describe("fees sections", () => {
     mockReplace.mockReset();
   });
 
-  it("lists Invoices, Structures then Ledger, each on its own view key", () => {
+  it("lists Invoices, Grants, Structures then Ledger, each on its own view key (Grants on either of two)", () => {
     expect(FEES_SECTIONS.map((section) => [section.href, section.permission])).toEqual([
       ["/fees/invoices", INVOICE_VIEW],
+      ["/fees/grants", [DISCOUNT_VIEW, FINE_VIEW]],
       ["/fees/structures", STRUCTURE_VIEW],
       ["/fees/ledger", LEDGER_VIEW],
     ]);
@@ -45,10 +48,12 @@ describe("fees sections", () => {
 
   it.each([
     [
-      [INVOICE_VIEW, STRUCTURE_VIEW, LEDGER_VIEW],
-      ["/fees/invoices", "/fees/structures", "/fees/ledger"],
+      [INVOICE_VIEW, DISCOUNT_VIEW, STRUCTURE_VIEW, LEDGER_VIEW],
+      ["/fees/invoices", "/fees/grants", "/fees/structures", "/fees/ledger"],
     ],
     [[INVOICE_VIEW], ["/fees/invoices"]],
+    [[DISCOUNT_VIEW], ["/fees/grants"]],
+    [[FINE_VIEW], ["/fees/grants"]],
     [[STRUCTURE_VIEW], ["/fees/structures"]],
     [[LEDGER_VIEW], ["/fees/ledger"]],
     [[], []],
@@ -61,6 +66,7 @@ describe("fees sections", () => {
   it.each([
     [[INVOICE_VIEW, STRUCTURE_VIEW, LEDGER_VIEW], "/fees/invoices"],
     [[INVOICE_VIEW], "/fees/invoices"],
+    [[FINE_VIEW, STRUCTURE_VIEW], "/fees/grants"],
     [[STRUCTURE_VIEW, LEDGER_VIEW], "/fees/structures"],
     [[STRUCTURE_VIEW], "/fees/structures"],
     [[LEDGER_VIEW], "/fees/ledger"],
@@ -88,6 +94,7 @@ describe("fees sections", () => {
   it("gives the sidebar the same children, gated the same way", () => {
     expect(sectionMenuItems(FEES_SECTIONS).map((item) => item.title)).toEqual([
       "Invoices",
+      "Grants",
       "Structures",
       "Ledger",
     ]);

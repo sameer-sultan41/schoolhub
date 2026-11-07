@@ -119,5 +119,5 @@ export const SCHOLARSHIP_ERROR_FIELDS = [
   "status",
   "notes",
 ] as const;
-/** The status dialog's inputs: the server's `status` (an illegal move) and `notes` refusals both show in it. */
-export const SCHOLARSHIP_STATUS_ERROR_FIELDS = ["status", "notes"] as const;
+/** The status dialog's one input; a refusal on `status` (an illegal move) has none, so it shows as the form's message. */
+export const SCHOLARSHIP_STATUS_ERROR_FIELDS = ["notes"] as const;

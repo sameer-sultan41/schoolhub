@@ -32,11 +32,3 @@ export function createFineFormSchema(messages: FineFormMessages) {
 }
 export const fineFormSchema = createFineFormSchema(FINE_FORM_MESSAGE_KEYS);
 export type FineFormValues = z.infer<typeof fineFormSchema>;
-
-export function createWaiveFineFormSchema(messages: Pick<FineFormMessages, "required">) {
-  return z.object({
-    reason: z.string().trim().min(1, messages.required).max(FINE_REASON_MAX),
-  });
-}
-export const waiveFineFormSchema = createWaiveFineFormSchema({ required: "required" });
-export type WaiveFineFormValues = z.infer<typeof waiveFineFormSchema>;

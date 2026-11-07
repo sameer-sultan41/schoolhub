@@ -78,5 +78,5 @@ export const FINES_URL_FILTERS = {
 
 /** The create form's fields that have an input: a server error on any other folds into the form's message. */
 export const FINE_ERROR_FIELDS = ["student", "fee_head", "fine_type", "amount", "reason"] as const;
-/** The waive dialog's inputs: the server's `reason` and `status` (not pending) refusals both show in it. */
-export const FINE_WAIVE_ERROR_FIELDS = ["reason", "status"] as const;
+/** The waive dialog's one input; a refusal on `status` (not pending) has none, so it shows as the form's message. */
+export const FINE_WAIVE_ERROR_FIELDS = ["reason"] as const;
