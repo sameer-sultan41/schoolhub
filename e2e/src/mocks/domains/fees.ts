@@ -727,3 +727,264 @@ export function feesInvoicingModule(options: FeesInvoicingOptions = {}): MockMod
     });
   };
 }
+
+export type FeeDiscount = Writable<ApiSchemas["Discount"]>;
+export type FeeScholarship = Writable<ApiSchemas["Scholarship"]>;
+export type FeeFine = Writable<ApiSchemas["Fine"]>;
+
+export function buildFeeDiscount(overrides: Partial<FeeDiscount> = {}): FeeDiscount {
+  return {
+    id: uuid(),
+    student: "",
+    student_name: "Ayesha Khan",
+    academic_session: "",
+    name: "Sibling discount",
+    discount_type: "percent",
+    value: "10.00",
+    fee_head: null,
+    valid_from: null,
+    valid_to: null,
+    status: "active",
+    reason: null,
+    approved_by: uuid(),
+    created_at: STAMP,
+    updated_at: STAMP,
+    ...overrides,
+  };
+}
+
+export function buildFeeScholarship(overrides: Partial<FeeScholarship> = {}): FeeScholarship {
+  return {
+    id: uuid(),
+    student: "",
+    student_name: "Ayesha Khan",
+    academic_session: "",
+    name: "Merit award",
+    scholarship_type: "merit",
+    coverage_type: "percent",
+    value: "50.00",
+    sponsor: null,
+    status: "approved",
+    approved_by: uuid(),
+    notes: null,
+    created_at: STAMP,
+    updated_at: STAMP,
+    ...overrides,
+  };
+}
+
+export function buildFeeFine(overrides: Partial<FeeFine> = {}): FeeFine {
+  return {
+    id: uuid(),
+    student: "",
+    student_name: "Ayesha Khan",
+    fee_head: "",
+    fine_type: "library",
+    amount: "250.00",
+    reason: "Overdue library book",
+    source_module: null,
+    source_reference: null,
+    status: "pending",
+    waived_by: null,
+    waived_reason: null,
+    created_at: STAMP,
+    updated_at: STAMP,
+    ...overrides,
+  };
+}
+
+export interface FeesGrantsOptions {
+  /** Held by reference, so a spec can read what a write left behind. */
+  discounts?: FeeDiscount[];
+  scholarships?: FeeScholarship[];
+  fines?: FeeFine[];
+  /** The students a created record names (`student_name` is the server's, read from the student). */
+  students?: BillableStudent[];
+}
+
+/** `SCHOLARSHIP_TRANSITIONS` (models.py): status -> the statuses it may move to; the last two are final. */
+const SCHOLARSHIP_TRANSITIONS: Record<string, string[]> = {
+  applied: ["approved", "revoked"],
+  approved: ["active", "revoked"],
+  active: ["ended", "revoked"],
+  ended: [],
+  revoked: [],
+};
+const NEEDS_NOTES = (status: string) =>
+  `Say why the award is being ${status} — an unexplained termination of a grant is what an audit flags.`;
+const ILLEGAL_MOVE = (from: string, to: string) =>
+  `A ${from} award cannot become ${to}. Allowed next: ${
+    [...(SCHOLARSHIP_TRANSITIONS[from] ?? [])].sort().join(", ") || "none, it is final"
+  }.`;
+const NOT_PENDING = (status: string) =>
+  `This fine is ${status}. Only a pending fine can be waived; an invoiced one needs an adjustment ` +
+  "or a cancellation.";
+const POSITIVE = "A grant must have a positive value.";
+const PERCENT_CAP = "A percent grant cannot exceed 100.";
+
+/**
+ * `/discounts`, `/scholarships` and `/fines` (list, create, `:revoke`, `:waive`, scholarship
+ * PATCH), cursor-paged, in the shapes the server sends. There is no DELETE route, as on the server.
+ *
+ * Mirrors the server's rules the screens surface (lesson L5), in its words:
+ * - a discount or scholarship needs a positive value, a percent at most 100 (400 under `value`);
+ * - `:revoke` and `:waive` need a reason (400 under `reason`); only a pending fine can be waived
+ *   (422 under `status`);
+ * - a scholarship PATCH may only follow `SCHOLARSHIP_TRANSITIONS` (422 under `status`, so
+ *   revoked -> active is refused) and ending or revoking needs `notes` (400 under `notes`);
+ * - the lists filter by student and status and search by student name and the record's own text.
+ *
+ * Whether the server enforces any of this is the live lane's (`tests/live/api/fees-invoicing.spec.ts`).
+ */
+export function feesGrantsModule(options: FeesGrantsOptions = {}): MockModule {
+  return (api) => {
+    const discounts = options.discounts ?? [];
+    const scholarships = options.scholarships ?? [];
+    const fines = options.fines ?? [];
+    const students = options.students ?? [];
+    const nameOf = (studentId: string) =>
+      students.find((student) => student.id === studentId)?.name ?? "";
+
+    function listOf<T extends { student: string; status?: string; student_name: string }>(
+      rows: T[],
+      text: (row: T) => string,
+    ) {
+      return (request: { searchParams: URLSearchParams }) => {
+        const params = request.searchParams;
+        const search = params.get("search")?.toLowerCase();
+        const matching = rows.filter(
+          (row) =>
+            (!params.get("student") || row.student === params.get("student")) &&
+            (!params.get("status") || row.status === params.get("status")) &&
+            (!search || `${row.student_name} ${text(row)}`.toLowerCase().includes(search)),
+        );
+        return cursorPageOf(matching, params);
+      };
+    }
+
+    /** The value rule shared by discounts and scholarships, as `_validate_grant_value` words it. */
+    function valueError(type: string | undefined, value: string | undefined): MockResponse | null {
+      if (value === undefined) return null;
+      if (!(Number(value) > 0)) return invalid([{ field: "value", issue: POSITIVE }]);
+      if (type === "percent" && Number(value) > 100) {
+        return invalid([{ field: "value", issue: PERCENT_CAP }]);
+      }
+      return null;
+    }
+
+    function required(body: Record<string, unknown>, fields: string[]): MockResponse | null {
+      const missing = fields.filter((field) => !body[field]);
+      return missing.length > 0
+        ? invalid(missing.map((field) => ({ field, issue: REQUIRED })))
+        : null;
+    }
+
+    // --- discounts
+    api.get(
+      "/discounts",
+      listOf(discounts, (row) => row.name),
+    );
+
+    api.post("/discounts", (request) => {
+      const body = (request.json() as Partial<FeeDiscount> | null) ?? {};
+      const refused =
+        required(body, ["student", "academic_session", "name", "discount_type", "value"]) ??
+        valueError(body.discount_type, body.value);
+      if (refused) return refused;
+      const created = buildFeeDiscount({
+        ...body,
+        id: uuid(),
+        student_name: nameOf(body.student ?? ""),
+        status: "active",
+      });
+      discounts.push(created);
+      return ok(created, { status: 201 });
+    });
+
+    // `/discounts/{id}:revoke` lands here whole; no other POST shares this shape.
+    api.post("/discounts/:discountAction", (request) => {
+      const [discountId, action] = (request.params["discountAction"] ?? "").split(":");
+      const discount = discounts.find((row) => row.id === discountId);
+      if (!discount || action !== "revoke") return fail(404, "Not found.");
+      const { reason } = (request.json() as { reason?: string } | null) ?? {};
+      if (!reason) return invalid([{ field: "reason", issue: REQUIRED }]);
+      discount.status = "revoked";
+      return ok(discount, { meta: { message: "Discount revoked." } });
+    });
+
+    // --- scholarships
+    api.get(
+      "/scholarships",
+      listOf(scholarships, (row) => `${row.name} ${row.sponsor ?? ""}`),
+    );
+
+    api.post("/scholarships", (request) => {
+      const body = (request.json() as Partial<FeeScholarship> | null) ?? {};
+      const refused =
+        required(body, ["student", "academic_session", "name", "coverage_type", "value"]) ??
+        valueError(body.coverage_type, body.value);
+      if (refused) return refused;
+      const created = buildFeeScholarship({
+        ...body,
+        id: uuid(),
+        student_name: nameOf(body.student ?? ""),
+      });
+      scholarships.push(created);
+      return ok(created, { status: 201 });
+    });
+
+    api.patch("/scholarships/:scholarshipId", (request) => {
+      const scholarship = scholarships.find((row) => row.id === request.params["scholarshipId"]);
+      if (!scholarship) return fail(404, "Not found.");
+      const body = (request.json() as Partial<FeeScholarship> | null) ?? {};
+      const current = scholarship.status ?? "approved";
+      const target = body.status;
+      if (target && target !== current) {
+        if (!(SCHOLARSHIP_TRANSITIONS[current] ?? []).includes(target)) {
+          return ruleViolation("status", ILLEGAL_MOVE(current, target));
+        }
+        if ((target === "ended" || target === "revoked") && !(body.notes ?? "").trim()) {
+          return invalid([{ field: "notes", issue: NEEDS_NOTES(target) }]);
+        }
+      }
+      Object.assign(scholarship, body);
+      return ok(scholarship);
+    });
+
+    // --- fines
+    api.get(
+      "/fines",
+      listOf(fines, (row) => row.reason),
+    );
+
+    api.post("/fines", (request) => {
+      const body = (request.json() as Partial<FeeFine> | null) ?? {};
+      const refused = required(body, ["student", "fee_head", "amount", "reason"]);
+      if (refused) return refused;
+      if (!(Number(body.amount) > 0)) {
+        return invalid([{ field: "amount", issue: "A fine must be for a positive amount." }]);
+      }
+      const created = buildFeeFine({
+        ...body,
+        id: uuid(),
+        student_name: nameOf(body.student ?? ""),
+        status: "pending",
+      });
+      fines.push(created);
+      return ok(created, { status: 201 });
+    });
+
+    // `/fines/{id}:waive` lands here whole; no other POST shares this shape.
+    api.post("/fines/:fineAction", (request) => {
+      const [fineId, action] = (request.params["fineAction"] ?? "").split(":");
+      const fine = fines.find((row) => row.id === fineId);
+      if (!fine || action !== "waive") return fail(404, "Not found.");
+      const { reason } = (request.json() as { reason?: string } | null) ?? {};
+      if (!reason) return invalid([{ field: "reason", issue: REQUIRED }]);
+      if (fine.status !== "pending") return ruleViolation("status", NOT_PENDING(fine.status));
+      fine.status = "waived";
+      fine.waived_reason = reason;
+      return ok(fine, { meta: { message: "Fine waived." } });
+    });
+  };
+}

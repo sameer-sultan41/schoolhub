@@ -22,9 +22,14 @@ import { createStudentReadyToEnrol } from "@/lib/live-student";
  * only a real stack shows: the 202 job through a real worker, the re-run that skips what is
  * billed, the cancel refusals the dashboard shows inline, and RLS.
  *
+ * Grants (PR B2) share the lane: the scholarship lifecycle's server-enforced transition table (an
+ * illegal move is a 422 under `status`), `:revoke` and `:waive`, and RLS on all three registers.
+ *
  * Endpoints covered: `POST /fee-structures`, `POST /fee-schedules`, `POST /fee-structures/{id}:activate`,
  * `POST /fee-invoices:generate`, `GET /jobs/{id}`, `GET /fee-invoices`, `GET /fee-invoices/{id}`,
- * `POST /fee-invoices/{id}:cancel`.
+ * `POST /fee-invoices/{id}:cancel`, `POST /fee-heads`, `POST /discounts`, `GET /discounts/{id}`,
+ * `POST /discounts/{id}:revoke`, `POST /scholarships`, `PATCH /scholarships/{id}`, `POST /fines`,
+ * `POST /fines/{id}:waive`.
  */
 
 interface Identified {
@@ -41,6 +46,14 @@ interface Invoice {
   period_label: string | null;
   canceled_reason: string | null;
   lines: unknown[];
+}
+
+interface GrantRecord {
+  id: string;
+  status: string;
+  student_name: string;
+  waived_reason?: string | null;
+  notes?: string | null;
 }
 
 interface GenerationResult {
@@ -115,6 +128,63 @@ async function generate(
   });
   expect(accepted.status).toBe(202);
   return accepted.data.job_id;
+}
+
+/** The seeded income account's id, taken from the seeded head: a fine head needs an income account. */
+async function seededIncomeAccountId(accountant: ApiClient): Promise<string> {
+  const heads = await accountant.get<(Identified & { ledger_account: string })[]>("/fee-heads", {
+    query: { ordering: "code" },
+  });
+  const [head] = heads.data;
+  if (!head) throw new Error("no fee head is seeded — run manage.py seed_e2e_fees");
+  return head.ledger_account;
+}
+
+/** A run-unique fee head in the `fine` category, the only kind a fine accepts. */
+async function fineHeadId(accountant: ApiClient): Promise<string> {
+  const suffix = randomUUID().slice(0, 8).toUpperCase();
+  const head = (
+    await accountant.post("/fee-heads", {
+      name: `E2E Fines ${suffix}`,
+      code: `FN${suffix}`,
+      category: "fine",
+      ledger_account: await seededIncomeAccountId(accountant),
+    })
+  ).data as Identified;
+  return head.id;
+}
+
+/** One discount, one scholarship (as `applied`) and one fine for the scope's student. */
+async function seedGrants(accountant: ApiClient, scope: { sessionId: string; studentId: string }) {
+  const tag = randomUUID().slice(0, 8);
+  const discount = (
+    await accountant.post<GrantRecord>("/discounts", {
+      student: scope.studentId,
+      academic_session: scope.sessionId,
+      name: `E2E discount ${tag}`,
+      discount_type: "percent",
+      value: "10.00",
+    })
+  ).data;
+  const scholarship = (
+    await accountant.post<GrantRecord>("/scholarships", {
+      student: scope.studentId,
+      academic_session: scope.sessionId,
+      name: `E2E scholarship ${tag}`,
+      coverage_type: "percent",
+      value: "25.00",
+      status: "applied",
+    })
+  ).data;
+  const fine = (
+    await accountant.post<GrantRecord>("/fines", {
+      student: scope.studentId,
+      fee_head: await fineHeadId(accountant),
+      amount: "250.00",
+      reason: `E2E fine ${tag}`,
+    })
+  ).data;
+  return { discount, scholarship, fine };
 }
 
 test.describe("fee invoicing (live API)", () => {
@@ -237,5 +307,105 @@ test.describe("fee invoicing (live API)", () => {
     } finally {
       await accountant.post(`/fee-invoices/${invoice.id}:cancel`, { reason: "E2E cleanup" });
     }
+  });
+
+  test("a discount is revoked, a fine waived, and a scholarship follows only its lifecycle", async ({
+    liveApiClient,
+  }) => {
+    test.setTimeout(SETUP_MARGIN_MS);
+    const accountant = await accountantSession();
+    const scope = await enrolledStudentScope(liveApiClient);
+    const { discount, scholarship, fine } = await seedGrants(accountant, scope);
+    expect(discount).toMatchObject({ status: "active" });
+    // The row names its student, so the register needs no student read to be legible.
+    expect(discount.student_name.length).toBeGreaterThan(0);
+
+    // Revoke needs a reason (400 under `reason`) and records the status.
+    const noReason = await refusal(accountant.post(`/discounts/${discount.id}:revoke`, {}));
+    expect(noReason.details.map((detail) => detail.field)).toContain("reason");
+    const revoked = await accountant.post<GrantRecord>(`/discounts/${discount.id}:revoke`, {
+      reason: "E2E revoke",
+    });
+    expect(revoked.data.status).toBe("revoked");
+
+    // Waive: only a pending fine, and only once.
+    expect(fine.status).toBe("pending");
+    const waived = await accountant.post<GrantRecord>(`/fines/${fine.id}:waive`, {
+      reason: "E2E waive",
+    });
+    expect(waived.data).toMatchObject({ status: "waived", waived_reason: "E2E waive" });
+    const again = await refusal(
+      accountant.post(`/fines/${fine.id}:waive`, { reason: "E2E waive again" }),
+    );
+    expect(again.status).toBe(422);
+    expect(again.details.map((detail) => detail.field)).toContain("status");
+
+    // applied -> approved is legal; approved -> ended skips a step and is a 422 under `status`.
+    const approved = await accountant.patch<GrantRecord>(`/scholarships/${scholarship.id}`, {
+      status: "approved",
+    });
+    expect(approved.data.status).toBe("approved");
+    const skipped = await refusal(
+      accountant.patch(`/scholarships/${scholarship.id}`, {
+        status: "ended",
+        notes: "Skipping a step",
+      }),
+    );
+    expect(skipped.status).toBe(422);
+    expect(skipped.details.map((detail) => detail.field)).toContain("status");
+
+    // Revoking needs notes; with them it is legal, and then the award is final.
+    const unexplained = await refusal(
+      accountant.patch(`/scholarships/${scholarship.id}`, { status: "revoked" }),
+    );
+    expect(unexplained.details.map((detail) => detail.field)).toContain("notes");
+    const revokedAward = await accountant.patch<GrantRecord>(`/scholarships/${scholarship.id}`, {
+      status: "revoked",
+      notes: "E2E revoke",
+    });
+    expect(revokedAward.data.status).toBe("revoked");
+    const reopened = await refusal(
+      accountant.patch(`/scholarships/${scholarship.id}`, { status: "active" }),
+    );
+    expect(reopened.status).toBe(422);
+    expect(reopened.details.map((detail) => detail.field)).toContain("status");
+    const stillRevoked = await accountant.get<GrantRecord>(`/scholarships/${scholarship.id}`);
+    expect(stillRevoked.data.status).toBe("revoked");
+  });
+
+  test("another tenant's discount, scholarship and fine are a 404, never a 403", async ({
+    liveApiClient,
+    liveOtherTenantApiClient,
+  }) => {
+    test.setTimeout(SETUP_MARGIN_MS);
+    const accountant = await accountantSession();
+    const scope = await enrolledStudentScope(liveApiClient);
+    const { discount, scholarship, fine } = await seedGrants(accountant, scope);
+
+    for (const [path, id] of [
+      ["discounts", discount.id],
+      ["scholarships", scholarship.id],
+      ["fines", fine.id],
+    ] as const) {
+      // A real row and a real second identity: a 403 would confirm the row exists elsewhere.
+      const read = await refusal(liveOtherTenantApiClient.get(`/${path}/${id}`));
+      expect(read.status).toBe(404);
+      const others = await liveOtherTenantApiClient.get<GrantRecord[]>(`/${path}`, {
+        query: { student: scope.studentId },
+      });
+      expect(others.data).toHaveLength(0);
+    }
+    const revoke = await refusal(
+      liveOtherTenantApiClient.post(`/discounts/${discount.id}:revoke`, { reason: "No." }),
+    );
+    expect(revoke.status).toBe(404);
+    const waive = await refusal(
+      liveOtherTenantApiClient.post(`/fines/${fine.id}:waive`, { reason: "No." }),
+    );
+    expect(waive.status).toBe(404);
+    const move = await refusal(
+      liveOtherTenantApiClient.patch(`/scholarships/${scholarship.id}`, { status: "approved" }),
+    );
+    expect(move.status).toBe(404);
   });
 });

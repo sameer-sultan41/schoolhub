@@ -1,21 +1,36 @@
 import { expect, test } from "@/fixtures";
-import { buildRole, buildUser, FEES_INVOICING_PERMISSIONS, ORG_IDS, uuid } from "@/data/factories";
+import {
+  buildRole,
+  buildUser,
+  FEES_GRANTS_PERMISSIONS,
+  FEES_INVOICING_PERMISSIONS,
+  ORG_IDS,
+  uuid,
+} from "@/data/factories";
 import { isApiCall } from "@/lib/request-matchers";
 import {
   buildAcademicSession,
+  buildFeeFine,
   buildFeeHead,
   buildFeeInvoice,
+  buildFeeScholarship,
+  buildStudent,
   buildFeeSchedule,
   buildFeeStructure,
   buildLedgerAccount,
   buildSchoolClass,
+  feesGrantsModule,
   feesInvoicingModule,
   feesSetupModule,
+  type FeeDiscount,
+  type FeeFine,
   type FeeInvoice,
+  type FeeScholarship,
   type FeesInvoicingOptions,
   jobsModule,
   type MockApi,
   schoolOrganizationModule,
+  studentsModule,
 } from "@/mocks";
 
 /**
@@ -26,6 +41,10 @@ import {
  * is refused once money is paid, and `outstanding` means a balance owing on an invoice not
  * canceled. Whether the server really does is the live lane's
  * (`tests/live/api/fees-invoicing.spec.ts`).
+ *
+ * Grants (PR B2): `/fees/grants`, its Discounts, Scholarships and Fines sub-tabs. The stub
+ * (`feesGrantsModule`) enforces the scholarship transition table, the notes an ending needs and
+ * the fine that only a pending one can be waived.
  */
 
 const session = buildAcademicSession({ id: ORG_IDS.currentSession, name: "2026-27" });
@@ -221,5 +240,218 @@ test.describe("finance staff", () => {
     await feeInvoicesPage.gotoInvoice(invoice.id);
     await expect(feeInvoicesPage.linesTable).toBeVisible();
     await expect(feeInvoicesPage.cancelButton).toHaveCount(0);
+  });
+});
+
+// --- grants: discounts, scholarships and fines
+
+const REVOKE_BUTTON = /^Revoke /;
+const REVOKE_PATH = /\/discounts\/[^/]+:revoke$/;
+const WAIVE_PATH = /\/fines\/[^/]+:waive$/;
+const SCHOLARSHIP_PATH = /\/scholarships\/[^/]+$/;
+
+const fineHead = buildFeeHead({
+  code: "FIN",
+  name: "Fines",
+  category: "fine",
+  ledger_account: income.id,
+});
+const student = buildStudent({ id: ayesha.id, first_name: "Ayesha", last_name: "Khan" });
+// The seeded `accountant`'s grants keys, with the reads the create forms' pickers make (L55).
+const grantsAccountant = buildUser({
+  roles: [buildRole({ slug: "accountant", name: "Accountant" })],
+  permissions: FEES_GRANTS_PERMISSIONS,
+});
+
+function stubGrantsApi(
+  mockApi: MockApi,
+  seed: {
+    discounts?: FeeDiscount[];
+    scholarships?: FeeScholarship[];
+    fines?: FeeFine[];
+  } = {},
+) {
+  const discounts = seed.discounts ?? [];
+  const scholarships = seed.scholarships ?? [];
+  const fines = seed.fines ?? [];
+  mockApi.use(
+    schoolOrganizationModule({ academicSessions: [session], classes: [grade1] }),
+    feesSetupModule({ accounts: [income], heads: [head, fineHead], structures: [structure] }),
+    studentsModule({ students: [student] }),
+    feesGrantsModule({ discounts, scholarships, fines, students: [ayesha] }),
+  );
+  return { discounts, scholarships, fines };
+}
+
+test.describe("the accountant on Grants", () => {
+  test.use({ authUser: grantsAccountant });
+
+  test("grants a discount to a student, then revokes it with a reason", async ({
+    page,
+    mockApi,
+    feeGrantsPage,
+    signedIn: _signedIn,
+  }) => {
+    const { discounts } = stubGrantsApi(mockApi);
+    await feeGrantsPage.goto();
+    await expect(feeGrantsPage.table("Discounts")).toBeVisible();
+
+    await feeGrantsPage.button("Grant discount").click();
+    const dialog = feeGrantsPage.dialog("Grant a discount");
+    await feeGrantsPage.pickStudent(dialog, "Ayesha", "Ayesha Khan");
+    await dialog.getByRole("combobox", { name: "Session", exact: true }).click();
+    await feeGrantsPage.option("2026-27").click();
+    await dialog.getByLabel("Name", { exact: true }).fill("Sibling discount");
+    await dialog.getByLabel("Value", { exact: true }).fill("150");
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+    // The server's own rule is the client's too: a percent over 100 is refused before it is sent.
+    await expect(
+      dialog.getByText("Enter a positive value (a percent cannot exceed 100)."),
+    ).toBeVisible();
+    await dialog.getByLabel("Value", { exact: true }).fill("10");
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+
+    const granted = feeGrantsPage.row("Discounts", "Sibling discount");
+    await expect(granted).toContainText("10%");
+    await expect(granted).toContainText("Ayesha Khan");
+    await expect(granted).toContainText("Active");
+    expect(discounts).toHaveLength(1);
+
+    // Revoke needs a reason; the row reloads as revoked and offers no second Revoke.
+    await granted.getByRole("button", { name: REVOKE_BUTTON }).click();
+    const revoke = feeGrantsPage.dialog("Revoke Sibling discount");
+    await revoke.getByRole("button", { name: "Revoke discount", exact: true }).click();
+    await expect(revoke.getByText("This field is required.")).toBeVisible();
+    await revoke.getByLabel("Reason", { exact: true }).fill("Sibling left the school");
+    const request = page.waitForRequest((r) => isApiCall(r, "POST", REVOKE_PATH));
+    await revoke.getByRole("button", { name: "Revoke discount", exact: true }).click();
+    expect((await request).postDataJSON()).toEqual({ reason: "Sibling left the school" });
+    await expect(granted).toContainText("Revoked");
+    await expect(granted.getByRole("button", { name: REVOKE_BUTTON })).toHaveCount(0);
+  });
+
+  test("waives a pending fine, and offers no Waive on one already invoiced", async ({
+    page,
+    mockApi,
+    feeGrantsPage,
+    signedIn: _signedIn,
+  }) => {
+    stubGrantsApi(mockApi, {
+      fines: [
+        buildFeeFine({ student: ayesha.id, fee_head: fineHead.id, reason: "Overdue library book" }),
+        buildFeeFine({
+          student: ayesha.id,
+          fee_head: fineHead.id,
+          reason: "Broken window",
+          status: "invoiced",
+        }),
+      ],
+    });
+    await feeGrantsPage.gotoTab("fines");
+    await expect(feeGrantsPage.table("Fines")).toBeVisible();
+    await expect(feeGrantsPage.row("Fines", "Broken window")).toContainText("Invoiced");
+    await expect(
+      feeGrantsPage.row("Fines", "Broken window").getByRole("button", { name: /^Waive/ }),
+    ).toHaveCount(0);
+
+    await feeGrantsPage
+      .row("Fines", "Overdue library book")
+      .getByRole("button", { name: "Waive fine for Ayesha Khan" })
+      .click();
+    const dialog = feeGrantsPage.dialog("Waive fine for Ayesha Khan");
+    await dialog.getByLabel("Reason", { exact: true }).fill("Family hardship");
+    const request = page.waitForRequest((r) => isApiCall(r, "POST", WAIVE_PATH));
+    await dialog.getByRole("button", { name: "Waive fine", exact: true }).click();
+    expect((await request).postDataJSON()).toEqual({ reason: "Family hardship" });
+    await expect(feeGrantsPage.row("Fines", "Overdue library book")).toContainText("Waived");
+  });
+
+  test("is refused waiving a fine that was invoiced after the page loaded", async ({
+    mockApi,
+    feeGrantsPage,
+    signedIn: _signedIn,
+  }) => {
+    const { fines } = stubGrantsApi(mockApi, {
+      fines: [buildFeeFine({ student: ayesha.id, fee_head: fineHead.id })],
+    });
+    await feeGrantsPage.gotoTab("fines");
+    const row = feeGrantsPage.row("Fines", "Overdue library book");
+    await expect(row).toBeVisible();
+
+    // The fine is folded onto an invoice elsewhere while the page is open: the server refuses.
+    const [fine] = fines;
+    if (!fine) throw new Error("the seeded fine is missing");
+    fine.status = "invoiced";
+    await row.getByRole("button", { name: "Waive fine for Ayesha Khan" }).click();
+    const dialog = feeGrantsPage.dialog("Waive fine for Ayesha Khan");
+    await dialog.getByLabel("Reason", { exact: true }).fill("Family hardship");
+    await dialog.getByRole("button", { name: "Waive fine", exact: true }).click();
+    await expect(dialog.getByText(/This fine is invoiced\. Only a pending fine/)).toBeVisible();
+    await expect(dialog).toBeVisible();
+  });
+
+  test("moves a scholarship on, and ending it asks for notes", async ({
+    page,
+    mockApi,
+    feeGrantsPage,
+    signedIn: _signedIn,
+  }) => {
+    stubGrantsApi(mockApi, {
+      scholarships: [
+        buildFeeScholarship({
+          student: ayesha.id,
+          academic_session: session.id,
+          name: "Merit award",
+          status: "approved",
+        }),
+      ],
+    });
+    await feeGrantsPage.gotoTab("scholarships");
+    const row = feeGrantsPage.row("Scholarships", "Merit award");
+    await expect(row).toContainText("Approved");
+    // From approved only Activate and Revoke are offered: no way to skip ahead to End.
+    await expect(row.getByRole("button", { name: /^End/ })).toHaveCount(0);
+
+    await row.getByRole("button", { name: "Activate: Merit award" }).click();
+    const activate = feeGrantsPage.dialog("Activate: Merit award");
+    const activated = page.waitForRequest((r) => isApiCall(r, "PATCH", SCHOLARSHIP_PATH));
+    await activate.getByRole("button", { name: "Confirm", exact: true }).click();
+    expect((await activated).postDataJSON()).toEqual({ status: "active" });
+    await expect(row).toContainText("Active");
+
+    await row.getByRole("button", { name: "End: Merit award" }).click();
+    const end = feeGrantsPage.dialog("End: Merit award");
+    await end.getByRole("button", { name: "Confirm", exact: true }).click();
+    await expect(end.getByText("This field is required.")).toBeVisible();
+    await end.getByLabel("Notes (required)", { exact: true }).fill("Family withdrew mid-year");
+    await end.getByRole("button", { name: "Confirm", exact: true }).click();
+    await expect(row).toContainText("Ended");
+    // Ended is final: nothing is offered from here.
+    await expect(row.getByRole("button")).toHaveCount(0);
+  });
+});
+
+test.describe("a fine-only viewer", () => {
+  test.use({
+    authUser: buildUser({
+      roles: [buildRole({ slug: "school_admin", name: "School admin" })],
+      permissions: ["fees.fine.view"],
+    }),
+  });
+
+  test("lands on Grants with only the Fines tab", async ({
+    mockApi,
+    feeGrantsPage,
+    signedIn: _signedIn,
+  }) => {
+    stubGrantsApi(mockApi, {
+      fines: [buildFeeFine({ student: ayesha.id, fee_head: fineHead.id })],
+    });
+    await feeGrantsPage.goto();
+
+    await expect(feeGrantsPage.table("Fines")).toBeVisible();
+    await expect(feeGrantsPage.tab("Fines")).toBeVisible();
+    await expect(feeGrantsPage.tab("Discounts")).toHaveCount(0);
+    await expect(feeGrantsPage.tab("Scholarships")).toHaveCount(0);
   });
 });

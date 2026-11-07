@@ -331,6 +331,24 @@ export const FEES_INVOICING_PERMISSIONS: PermissionKey[] = [
   "students.student.view",
 ];
 
+/**
+ * The grants keys the seeded `accountant` holds (`permissions.py`: the discount, scholarship and
+ * fine keys, view, create and waive), plus the reads the create forms' pickers make: students,
+ * sessions and fee heads (L55, L59).
+ */
+export const FEES_GRANTS_PERMISSIONS: PermissionKey[] = [
+  "fees.discount.view",
+  "fees.discount.create",
+  "fees.discount.waive",
+  "fees.scholarship.create",
+  "fees.fine.view",
+  "fees.fine.create",
+  "fees.fine.waive",
+  "fees.fee-structure.view",
+  "school.academic-session.view",
+  "students.student.view",
+];
+
 /** A module this user must *not* see, for the negative half of a filtering assertion. */
 export const MODULE_WITHOUT_PERMISSION = "Fees & Finance";
 
