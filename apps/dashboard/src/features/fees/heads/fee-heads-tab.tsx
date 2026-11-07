@@ -28,6 +28,7 @@ import {
   feeHeadActiveFilterToFlag,
   feeHeadCategoryFilter,
 } from "@/services/modules/fee-heads/fee-heads-helper";
+import { NameLookupProvider, type NameLookups } from "@/features/fees/shared/name-lookup";
 import { FeesTabHeader } from "@/features/fees/shared/fees-tab-header";
 import { useLedgerAccountOptions } from "@/features/fees/shared/use-fee-options";
 import { DeleteFeeHeadDialog } from "./delete-fee-head-dialog";
@@ -58,14 +59,15 @@ export function FeeHeadsTab() {
   const canDelete = hasPermission(user, "fees.fee-structure.delete");
 
   const accountsQuery = useLedgerAccountOptions({ enabled: canReadLedger });
-  const accountNames = useMemo(
-    () =>
-      new Map(
+  const lookups = useMemo<NameLookups>(
+    () => ({
+      accounts: new Map(
         (accountsQuery.data ?? []).map((account) => [
           account.id,
           `${account.code} ${account.name}`,
         ]),
       ),
+    }),
     [accountsQuery.data],
   );
 
@@ -80,7 +82,6 @@ export function FeeHeadsTab() {
   const columns = useFeeHeadColumns({
     canUpdate,
     canDelete,
-    accountNames,
     onEdit: handleEdit,
     onRemove: handleRemove,
   });
@@ -141,7 +142,7 @@ export function FeeHeadsTab() {
   });
 
   return (
-    <>
+    <NameLookupProvider value={lookups}>
       <FeesTabHeader
         createLabel={t("heads.actions.create")}
         onCreate={
@@ -194,6 +195,6 @@ export function FeeHeadsTab() {
           record={deleteTarget}
         />
       )}
-    </>
+    </NameLookupProvider>
   );
 }

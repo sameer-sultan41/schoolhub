@@ -29,6 +29,7 @@ import {
   ledgerTypeFilter,
   systemFilterToFlag,
 } from "@/services/modules/ledger-accounts/ledger-accounts-helper";
+import { NameLookupProvider, type NameLookups } from "@/features/fees/shared/name-lookup";
 import { FeesTabHeader } from "@/features/fees/shared/fees-tab-header";
 import { useLedgerAccountOptions } from "@/features/fees/shared/use-fee-options";
 import { AccountFilters } from "./account-filters";
@@ -54,11 +55,12 @@ export function AccountsTab() {
 
   // The parent column's names come from the same read the form's picker uses (one cache entry).
   const optionsQuery = useLedgerAccountOptions();
-  const accountNames = useMemo(
-    () =>
-      new Map(
+  const lookups = useMemo<NameLookups>(
+    () => ({
+      accounts: new Map(
         (optionsQuery.data ?? []).map((account) => [account.id, `${account.code} ${account.name}`]),
       ),
+    }),
     [optionsQuery.data],
   );
 
@@ -72,7 +74,6 @@ export function AccountsTab() {
 
   const columns = useAccountColumns({
     canWrite,
-    accountNames,
     onEdit: handleEdit,
     onRemove: handleRemove,
   });
@@ -137,7 +138,7 @@ export function AccountsTab() {
   });
 
   return (
-    <>
+    <NameLookupProvider value={lookups}>
       <FeesTabHeader
         createLabel={t("ledger.accounts.actions.create")}
         onCreate={
@@ -196,6 +197,6 @@ export function AccountsTab() {
           record={deleteTarget}
         />
       )}
-    </>
+    </NameLookupProvider>
   );
 }

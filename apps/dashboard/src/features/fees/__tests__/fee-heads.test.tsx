@@ -6,6 +6,7 @@ import { renderWithProviders } from "@/test-utils";
 
 import { FeeHeadsTab } from "@/features/fees/heads/fee-heads-tab";
 import {
+  accountRecord,
   asUser,
   createFeeHead,
   deleteFeeHead,
@@ -84,6 +85,25 @@ describe("fee heads tab", () => {
     expect(screen.queryByRole("button", { name: "Delete Library fee" })).not.toBeInTheDocument();
   });
 
+  it("keeps a row's buttons when the account names arrive after the rows", async () => {
+    asUser("fees.fee-structure.view", "fees.fee-structure.update", "fees.ledger.view");
+    let landAccounts: (accounts: ReturnType<typeof accountRecord>[]) => void = () => undefined;
+    fetchLedgerAccountOptions.mockReturnValue(
+      new Promise((resolve) => {
+        landAccounts = resolve;
+      }),
+    );
+    await renderTab();
+
+    const edit = await screen.findByRole("button", { name: "Edit Library fee" });
+    landAccounts([accountRecord()]);
+    await screen.findByText("4001 Tuition income");
+
+    // The same element, not a remounted copy: a click in between would not be lost.
+    expect(edit).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit Library fee" })).toBe(edit);
+  });
+
   it("offers no New or Edit to a structure author without the ledger view key", async () => {
     asUser(
       "fees.fee-structure.view",
@@ -136,8 +156,7 @@ describe("fee heads tab", () => {
     );
     const user = await renderTab();
 
-    // The ledger read that names the account column lands after the rows: it rebuilds the
-    // columns, which remounts the row's buttons, so a click before it would hit a detached one.
+    // The account column shows the name once the ledger read lands.
     await screen.findByText("4001 Tuition income");
     await user.click(await screen.findByRole("button", { name: "Edit Library fee" }));
     const dialog = await screen.findByRole("dialog", { name: "Edit fee head" });

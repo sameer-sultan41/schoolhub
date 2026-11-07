@@ -12,16 +12,11 @@ import { EMPTY_VALUE } from "@/lib/constants";
 import type { FeeStructureRecord } from "@/services";
 import { FEE_STRUCTURES_ACTIONS_COLUMN_ID } from "@/services/modules/fee-structures/fee-structures-constant";
 import { isStructureEditable } from "@/services/modules/fee-structures/fee-structures-helper";
+import { LookedUpName } from "@/features/fees/shared/name-lookup";
 import { StructureStatusBadge } from "@/features/fees/shared/structure-status-badge";
 
 export interface StructureRowActions {
   canUpdate: boolean;
-  /** Each scope id's name; an id the viewer cannot read shows as a dash. */
-  names: {
-    sessions: ReadonlyMap<string, string>;
-    classes: ReadonlyMap<string, string>;
-    campuses: ReadonlyMap<string, string>;
-  };
   onEdit: (record: FeeStructureRecord) => void;
 }
 
@@ -33,7 +28,7 @@ export interface StructureRowActions {
  */
 export function useStructureColumns(actions: StructureRowActions): ColumnDef<FeeStructureRecord>[] {
   const t = useTranslations("fees");
-  const { canUpdate, names, onEdit } = actions;
+  const { canUpdate, onEdit } = actions;
 
   return useMemo<ColumnDef<FeeStructureRecord>[]>(
     () => [
@@ -60,7 +55,9 @@ export function useStructureColumns(actions: StructureRowActions): ColumnDef<Fee
         id: "session",
         enableSorting: false,
         header: () => t("structures.columns.session"),
-        cell: ({ row }) => names.sessions.get(row.original.academic_session) ?? EMPTY_VALUE,
+        cell: ({ row }) => (
+          <LookedUpName kind="sessions" id={row.original.academic_session} fallback={EMPTY_VALUE} />
+        ),
         meta: {
           headerTitle: t("structures.columns.session"),
           skeleton: <Skeleton className="h-4 w-24" />,
@@ -71,9 +68,11 @@ export function useStructureColumns(actions: StructureRowActions): ColumnDef<Fee
         enableSorting: false,
         header: () => t("structures.columns.class"),
         cell: ({ row }) =>
-          row.original.school_class
-            ? (names.classes.get(row.original.school_class) ?? EMPTY_VALUE)
-            : t("structures.everyClass"),
+          row.original.school_class ? (
+            <LookedUpName kind="classes" id={row.original.school_class} fallback={EMPTY_VALUE} />
+          ) : (
+            t("structures.everyClass")
+          ),
         meta: {
           headerTitle: t("structures.columns.class"),
           skeleton: <Skeleton className="h-4 w-24" />,
@@ -84,9 +83,11 @@ export function useStructureColumns(actions: StructureRowActions): ColumnDef<Fee
         enableSorting: false,
         header: () => t("structures.columns.campus"),
         cell: ({ row }) =>
-          row.original.campus
-            ? (names.campuses.get(row.original.campus) ?? EMPTY_VALUE)
-            : t("structures.everyCampus"),
+          row.original.campus ? (
+            <LookedUpName kind="campuses" id={row.original.campus} fallback={EMPTY_VALUE} />
+          ) : (
+            t("structures.everyCampus")
+          ),
         meta: {
           headerTitle: t("structures.columns.campus"),
           skeleton: <Skeleton className="h-4 w-24" />,
@@ -137,6 +138,6 @@ export function useStructureColumns(actions: StructureRowActions): ColumnDef<Fee
         meta: { skeleton: <Skeleton className="h-7 w-10" /> },
       },
     ],
-    [t, canUpdate, names, onEdit],
+    [t, canUpdate, onEdit],
   );
 }

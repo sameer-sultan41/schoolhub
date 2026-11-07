@@ -9,12 +9,11 @@ import { RowEditRemoveActions } from "@/components/row-edit-remove-actions";
 import { enumLabel } from "@/lib/enum-label";
 import type { LedgerAccountRecord } from "@/services";
 import { LEDGER_ACCOUNTS_ACTIONS_COLUMN_ID } from "@/services/modules/ledger-accounts/ledger-accounts-constant";
+import { LookedUpName } from "@/features/fees/shared/name-lookup";
 import { LEDGER_ACCOUNT_TYPE_LABEL_KEY } from "@/features/fees/shared/fee-setup-labels";
 
 export interface AccountRowActions {
   canWrite: boolean;
-  /** An account's display name by id, for the parent column. */
-  accountNames: ReadonlyMap<string, string>;
   onEdit: (record: LedgerAccountRecord) => void;
   onRemove: (record: LedgerAccountRecord) => void;
 }
@@ -22,11 +21,12 @@ export interface AccountRowActions {
 /**
  * The accounts table's columns; `code` and `name` are the sortable ids. Edit shows to a holder
  * of `fees.ledger.create`; Delete also needs a non-system account, which the server would
- * refuse. Memoized on its inputs, so the caller passes `useCallback`-stable handlers.
+ * refuse. Memoized on its inputs, so the caller passes `useCallback`-stable handlers; the parent
+ * names come through `LookedUpName`, not an input, so they never rebuild the columns.
  */
 export function useAccountColumns(actions: AccountRowActions): ColumnDef<LedgerAccountRecord>[] {
   const t = useTranslations("fees");
-  const { canWrite, accountNames, onEdit, onRemove } = actions;
+  const { canWrite, onEdit, onRemove } = actions;
 
   return useMemo<ColumnDef<LedgerAccountRecord>[]>(
     () => [
@@ -78,8 +78,15 @@ export function useAccountColumns(actions: AccountRowActions): ColumnDef<LedgerA
         enableSorting: false,
         header: () => t("ledger.accounts.columns.parent"),
         cell: ({ row }) =>
-          (row.original.parent ? accountNames.get(row.original.parent) : undefined) ??
-          t("ledger.accounts.noParent"),
+          row.original.parent ? (
+            <LookedUpName
+              kind="accounts"
+              id={row.original.parent}
+              fallback={t("ledger.accounts.noParent")}
+            />
+          ) : (
+            t("ledger.accounts.noParent")
+          ),
         meta: {
           headerTitle: t("ledger.accounts.columns.parent"),
           skeleton: <Skeleton className="h-4 w-32" />,
@@ -135,6 +142,6 @@ export function useAccountColumns(actions: AccountRowActions): ColumnDef<LedgerA
         meta: { skeleton: <Skeleton className="h-7 w-16" /> },
       },
     ],
-    [t, canWrite, accountNames, onEdit, onRemove],
+    [t, canWrite, onEdit, onRemove],
   );
 }

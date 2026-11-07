@@ -27,6 +27,7 @@ import {
   FEE_STRUCTURES_URL_FILTERS,
 } from "@/services/modules/fee-structures/fee-structures-constant";
 import { feeStructureStatusFilter } from "@/services/modules/fee-structures/fee-structures-helper";
+import { NameLookupProvider, type NameLookups } from "@/features/fees/shared/name-lookup";
 import { FeesTabHeader } from "@/features/fees/shared/fees-tab-header";
 import { useStructureReferences } from "@/features/fees/shared/use-structure-references";
 import { useStructureColumns } from "./structure-columns";
@@ -50,13 +51,17 @@ export function StructuresTab() {
   const canCreate = hasPermission(user, "fees.fee-structure.create");
   const canUpdate = hasPermission(user, "fees.fee-structure.update");
   const { names } = useStructureReferences();
+  const lookups = useMemo<NameLookups>(
+    () => ({ sessions: names.sessions, classes: names.classes, campuses: names.campuses }),
+    [names],
+  );
 
   // Stable, so the columns' own `useMemo` skips a rebuild on a keystroke or a page change.
   const handleEdit = useCallback((record: FeeStructureRecord) => {
     setFormTarget({ record });
   }, []);
 
-  const columns = useStructureColumns({ canUpdate, names, onEdit: handleEdit });
+  const columns = useStructureColumns({ canUpdate, onEdit: handleEdit });
   const hideableIds = useMemo(() => hideableColumnIds(columns), [columns]);
 
   const {
@@ -127,7 +132,7 @@ export function StructuresTab() {
   });
 
   return (
-    <>
+    <NameLookupProvider value={lookups}>
       <FeesTabHeader
         createLabel={t("structures.actions.create")}
         onCreate={
@@ -176,6 +181,6 @@ export function StructuresTab() {
           }}
         />
       )}
-    </>
+    </NameLookupProvider>
   );
 }

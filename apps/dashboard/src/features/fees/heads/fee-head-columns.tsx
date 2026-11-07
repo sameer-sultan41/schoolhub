@@ -10,13 +10,12 @@ import { EMPTY_VALUE } from "@/lib/constants";
 import { enumLabel } from "@/lib/enum-label";
 import type { FeeHeadRecord } from "@/services";
 import { FEE_HEADS_ACTIONS_COLUMN_ID } from "@/services/modules/fee-heads/fee-heads-constant";
+import { LookedUpName } from "@/features/fees/shared/name-lookup";
 import { FEE_HEAD_CATEGORY_LABEL_KEY } from "@/features/fees/shared/fee-setup-labels";
 
 export interface FeeHeadRowActions {
   canUpdate: boolean;
   canDelete: boolean;
-  /** A ledger account's display name by id; empty when the viewer cannot read the ledger. */
-  accountNames: ReadonlyMap<string, string>;
   onEdit: (record: FeeHeadRecord) => void;
   onRemove: (record: FeeHeadRecord) => void;
 }
@@ -27,7 +26,7 @@ export interface FeeHeadRowActions {
  */
 export function useFeeHeadColumns(actions: FeeHeadRowActions): ColumnDef<FeeHeadRecord>[] {
   const t = useTranslations("fees");
-  const { canUpdate, canDelete, accountNames, onEdit, onRemove } = actions;
+  const { canUpdate, canDelete, onEdit, onRemove } = actions;
 
   return useMemo<ColumnDef<FeeHeadRecord>[]>(
     () => [
@@ -66,7 +65,9 @@ export function useFeeHeadColumns(actions: FeeHeadRowActions): ColumnDef<FeeHead
         id: "account",
         enableSorting: false,
         header: () => t("heads.columns.account"),
-        cell: ({ row }) => accountNames.get(row.original.ledger_account) ?? EMPTY_VALUE,
+        cell: ({ row }) => (
+          <LookedUpName kind="accounts" id={row.original.ledger_account} fallback={EMPTY_VALUE} />
+        ),
         meta: {
           headerTitle: t("heads.columns.account"),
           skeleton: <Skeleton className="h-4 w-36" />,
@@ -125,6 +126,6 @@ export function useFeeHeadColumns(actions: FeeHeadRowActions): ColumnDef<FeeHead
         meta: { skeleton: <Skeleton className="h-7 w-16" /> },
       },
     ],
-    [t, canUpdate, canDelete, accountNames, onEdit, onRemove],
+    [t, canUpdate, canDelete, onEdit, onRemove],
   );
 }
