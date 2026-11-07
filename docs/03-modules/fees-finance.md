@@ -21,52 +21,52 @@ All monetary amounts are stored as `numeric(12,2)` in the tenant's configured cu
 
 ## 3. Target Users
 
-| Role | How they use this module |
-| ---- | ------------------------ |
-| `accountant` | Full fee cycle: structures, invoicing, collection, refund approvals, ledgers, closing, financial reports |
-| `finance_staff` | Data entry: record payments, issue receipts, enter expenses; cannot approve refunds or waivers |
-| `school_owner` | Approves budgets and payroll runs; consumes all financial reports |
-| `school_admin` | Configures fee heads/structures and approval chains; monitors collection dashboards |
-| `hr_staff` | Maintains salary structures and payroll inputs (allowances, deductions, leave data) |
-| `guardian` | Views children's invoices, outstanding balance, and payment history; pays online; downloads receipts |
-| `student` | Views own fee status and receipts (read-only) |
-| `principal` | Views collection and defaulter summaries for oversight |
+| Role            | How they use this module                                                                                 |
+| --------------- | -------------------------------------------------------------------------------------------------------- |
+| `accountant`    | Full fee cycle: structures, invoicing, collection, refund approvals, ledgers, closing, financial reports |
+| `finance_staff` | Data entry: record payments, issue receipts, enter expenses; cannot approve refunds or waivers           |
+| `school_owner`  | Approves budgets and payroll runs; consumes all financial reports                                        |
+| `school_admin`  | Configures fee heads/structures and approval chains; monitors collection dashboards                      |
+| `hr_staff`      | Maintains salary structures and payroll inputs (allowances, deductions, leave data)                      |
+| `guardian`      | Views children's invoices, outstanding balance, and payment history; pays online; downloads receipts     |
+| `student`       | Views own fee status and receipts (read-only)                                                            |
+| `principal`     | Views collection and defaulter summaries for oversight                                                   |
 
 ## 4. Permissions
 
 Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/auth-and-rbac.md). Permission keys use `<module>.<resource>.<action>`. This module declares two namespaces — `fees.*` and `payroll.*` — and the module-specific verbs `collect`, `refund`, and `waive`. Financial mutations require record-level scope ≠ `own` and are always audited with before/after amounts.
 
-| Permission key | Description | Default roles |
-| -------------- | ----------- | ------------- |
-| `fees.fee-structure.create` / `.update` / `.delete` | Manage fee heads, structures, schedules | `school_admin`, `accountant` |
-| `fees.invoice.create` | Generate invoices (single or bulk) | `accountant`, `finance_staff` |
-| `fees.invoice.view` | View invoices (guardians/students scoped `own`) | `accountant`, `finance_staff`, `school_owner`, `principal`, `guardian`, `student` |
-| `fees.invoice.update` | Cancel/adjust draft or issued invoices | `accountant` |
-| `fees.payment.collect` | Record payments and issue receipts | `accountant`, `finance_staff` |
-| `fees.payment.refund` | Request a refund | `accountant`, `finance_staff` |
-| `fees.refund.approve` | Approve/reject refund requests | `accountant`, `school_owner` |
-| `fees.discount.create` / `fees.scholarship.create` | Grant discounts/scholarships | `accountant`, `school_admin` |
-| `fees.discount.waive` / `fees.fine.waive` | Waive fines or invoice lines | `accountant`, `school_owner` |
-| `fees.fee-structure.view` † | View fee heads, structures and schedules | `school_admin`, `accountant`, `finance_staff`, `principal`, `school_owner` |
-| `fees.ledger.view` | View general ledger and student ledgers | `accountant`, `school_owner` |
-| `fees.ledger.create` † | Create ledger accounts and post a manual journal entry | `accountant` |
-| `fees.discount.view` † / `fees.fine.view` † | View discounts, scholarships and fines | `accountant`, `finance_staff`, `school_admin`, `school_owner`, `guardian`, `student` (scoped `own`) |
-| `fees.payment.view` † | View payments, receipts and vouchers | `accountant`, `finance_staff`, `school_admin`, `school_owner`, `principal`, `guardian`, `student` (scoped `own`) |
-| `fees.expense.view` † | View expenses, categories and budgets | `school_admin`, `accountant`, `finance_staff`, `principal`, `school_owner` |
-| `fees.expense.create` / `.update` | Record expenses | `accountant`, `finance_staff` |
-| `fees.expense.approve` | Approve submitted expenses | `accountant`, `school_owner` |
-| `fees.budget.create` / `fees.budget.approve` | Define / approve budgets | `accountant` / `school_owner` |
-| `fees.report.view` / `fees.report.export` | Financial reports and exports | `accountant`, `school_owner`, `principal` |
-| `payroll.salary-structure.create` / `.update` | Manage salary structures and components | `hr_staff`, `accountant` |
-| `payroll.run.create` | Prepare/process a payroll run | `accountant`, `hr_staff` |
-| `payroll.run.approve` | Approve a payroll run for payment | `school_owner`, `school_admin` |
-| `payroll.payslip.view` | View payslips (staff scoped `own`) | `hr_staff`, `accountant`, all staff roles (`own`) |
-| `payroll.payslip.publish` | Publish payslips to staff | `hr_staff`, `accountant` |
+| Permission key                                      | Description                                            | Default roles                                                                                                    |
+| --------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `fees.fee-structure.create` / `.update` / `.delete` | Manage fee heads, structures, schedules                | `school_admin`, `accountant`                                                                                     |
+| `fees.invoice.create`                               | Generate invoices (single or bulk)                     | `accountant`, `finance_staff`                                                                                    |
+| `fees.invoice.view`                                 | View invoices (guardians/students scoped `own`)        | `accountant`, `finance_staff`, `school_owner`, `principal`, `guardian`, `student`                                |
+| `fees.invoice.update`                               | Cancel/adjust draft or issued invoices                 | `accountant`                                                                                                     |
+| `fees.payment.collect`                              | Record payments and issue receipts                     | `accountant`, `finance_staff`                                                                                    |
+| `fees.payment.refund`                               | Request a refund                                       | `accountant`, `finance_staff`                                                                                    |
+| `fees.refund.approve`                               | Approve/reject refund requests                         | `accountant`, `school_owner`                                                                                     |
+| `fees.discount.create` / `fees.scholarship.create`  | Grant discounts/scholarships                           | `accountant`, `school_admin`                                                                                     |
+| `fees.discount.waive` / `fees.fine.waive`           | Waive fines or invoice lines                           | `accountant`, `school_owner`                                                                                     |
+| `fees.fee-structure.view` †                         | View fee heads, structures and schedules               | `school_admin`, `accountant`, `finance_staff`, `principal`, `school_owner`                                       |
+| `fees.ledger.view`                                  | View general ledger and student ledgers                | `accountant`, `school_owner`                                                                                     |
+| `fees.ledger.create` †                              | Create ledger accounts and post a manual journal entry | `accountant`                                                                                                     |
+| `fees.discount.view` † / `fees.fine.view` †         | View discounts, scholarships and fines                 | `accountant`, `finance_staff`, `school_admin`, `school_owner`, `guardian`, `student` (scoped `own`)              |
+| `fees.payment.view` †                               | View payments, receipts and vouchers                   | `accountant`, `finance_staff`, `school_admin`, `school_owner`, `principal`, `guardian`, `student` (scoped `own`) |
+| `fees.expense.view` †                               | View expenses, categories and budgets                  | `school_admin`, `accountant`, `finance_staff`, `principal`, `school_owner`                                       |
+| `fees.expense.create` / `.update`                   | Record expenses                                        | `accountant`, `finance_staff`                                                                                    |
+| `fees.expense.approve`                              | Approve submitted expenses                             | `accountant`, `school_owner`                                                                                     |
+| `fees.budget.create` / `fees.budget.approve`        | Define / approve budgets                               | `accountant` / `school_owner`                                                                                    |
+| `fees.report.view` / `fees.report.export`           | Financial reports and exports                          | `accountant`, `school_owner`, `principal`                                                                        |
+| `payroll.salary-structure.create` / `.update`       | Manage salary structures and components                | `hr_staff`, `accountant`                                                                                         |
+| `payroll.run.create`                                | Prepare/process a payroll run                          | `accountant`, `hr_staff`                                                                                         |
+| `payroll.run.approve`                               | Approve a payroll run for payment                      | `school_owner`, `school_admin`                                                                                   |
+| `payroll.payslip.view`                              | View payslips (staff scoped `own`)                     | `hr_staff`, `accountant`, all staff roles (`own`)                                                                |
+| `payroll.payslip.publish`                           | Publish payslips to staff                              | `hr_staff`, `accountant`                                                                                         |
 
 Segregation of duties: the user who processed a payroll run or requested a refund cannot approve it (see auth-and-rbac §2.4).
 
 † Added during implementation. This table granted create/update/delete on fee
-configuration with no way to *read* it; §5.8's automatic postings plus §8's
+configuration with no way to _read_ it; §5.8's automatic postings plus §8's
 accountant journal with no key for either; and the `create`/`waive` halves of
 discounts and fines with no `view` — while §3 gives a guardian a view of
 "children's invoices, outstanding balance" and §13 specifies discount and fine
@@ -85,7 +85,7 @@ invoice or payment behind it.
 2. **Invoice generation** — scheduled or on-demand bulk generation of student invoices from structures; per-student ad-hoc invoices; automatic application of discounts, scholarships, and pending fines.
 3. **Discounts, scholarships & fines** — student-level grants (percent or fixed, optionally per fee head), scholarship lifecycle, and fines raised manually or by other modules (library, transport, late payment).
 4. **Payment collection & receipts** — record cash/cheque/bank/card/gateway payments against invoices; auto-numbered receipts with PDF; gateway payments via the integrations layer with idempotent confirmation.
-5. **Fee vouchers & bank/wallet collection** *(recommendation)* — printable voucher per invoice carrying a tenant-configurable consumer/reference number, payable off-platform at a bank branch or via a mobile-wallet agent (e.g. Easypaisa, JazzCash); daily settlement-file import matches paid vouchers back to invoices (§7.2).
+5. **Fee vouchers & bank/wallet collection** _(recommendation)_ — printable voucher per invoice carrying a tenant-configurable consumer/reference number, payable off-platform at a bank branch or via a mobile-wallet agent (e.g. Easypaisa, JazzCash); daily settlement-file import matches paid vouchers back to invoices (§7.2).
 6. **Refunds with approval workflow** — request → approve/reject → process, with reason, method, and full audit trail.
 7. **Outstanding & aging + student ledger** — real-time balance per student, aging buckets (0–30/31–60/61–90/90+), defaulter lists, and a chronological student ledger (invoices, payments, refunds, adjustments).
 8. **General ledger** — double-entry, immutable `ledger_entries` posted automatically from payments, refunds, expenses, and payroll; chart of accounts per tenant; corrections by reversal only.
@@ -132,7 +132,7 @@ flowchart TD
 
 Steps: (1) generation runs as a background job (`202 Accepted` + job resource); (2) each invoice is atomic — lines, discount application, totals; (3) every confirmed payment posts balanced debit/credit `ledger_entries`; (4) overdue invoices feed the reminder schedule and aging report.
 
-### 7.2 Voucher collection & reconciliation *(recommendation)*
+### 7.2 Voucher collection & reconciliation _(recommendation)_
 
 ```mermaid
 flowchart TD
@@ -192,7 +192,7 @@ flowchart TD
 
 ## 10. Outputs
 
-- Issued invoices and receipt PDFs (WeasyPrint); fee vouchers (bank/wallet collection) and receipts in both A4/letter PDF and 80mm thermal layouts, generated from the same template data so content never diverges between the two *(recommendation)*; refund vouchers; payslip PDFs; bank-transfer export files.
+- Issued invoices and receipt PDFs (WeasyPrint); fee vouchers (bank/wallet collection) and receipts in both A4/letter PDF and 80mm thermal layouts, generated from the same template data so content never diverges between the two _(recommendation)_; refund vouchers; payslip PDFs; bank-transfer export files.
 - Immutable ledger entries; aging snapshots; report exports (CSV/XLSX/PDF).
 - Events for webhooks/notifications: `fee.invoice.issued`, `fee.paid`, `fee.overdue`, `fee.refund.processed`, `payroll.payslip.published`.
 
@@ -208,16 +208,16 @@ flowchart TD
 
 ## 12. Notifications
 
-| Event | Recipients | Channels | Template ref |
-| ----- | ---------- | -------- | ------------ |
-| Invoice issued | `guardian` (and `student` where enabled) | email, push, in-app | `fees.invoice-issued` |
-| Payment received / receipt | `guardian`, cashier | email, in-app | `fees.payment-receipt` |
-| Due-date reminder (T-7/T-1, configurable) | `guardian` | email, SMS, push | `fees.due-reminder` |
-| Overdue + late fee applied | `guardian`; summary to `accountant` | email, SMS, in-app | `fees.overdue` |
-| Refund requested / decided / processed | requester, approver, `guardian` | in-app, email | `fees.refund-status` |
-| Expense pending approval | approver | in-app | `fees.expense-approval` |
-| Payroll run pending approval | `school_owner` | in-app, email | `payroll.run-approval` |
-| Payslip published | each staff member | email, in-app | `payroll.payslip-published` |
+| Event                                     | Recipients                               | Channels            | Template ref                |
+| ----------------------------------------- | ---------------------------------------- | ------------------- | --------------------------- |
+| Invoice issued                            | `guardian` (and `student` where enabled) | email, push, in-app | `fees.invoice-issued`       |
+| Payment received / receipt                | `guardian`, cashier                      | email, in-app       | `fees.payment-receipt`      |
+| Due-date reminder (T-7/T-1, configurable) | `guardian`                               | email, SMS, push    | `fees.due-reminder`         |
+| Overdue + late fee applied                | `guardian`; summary to `accountant`      | email, SMS, in-app  | `fees.overdue`              |
+| Refund requested / decided / processed    | requester, approver, `guardian`          | in-app, email       | `fees.refund-status`        |
+| Expense pending approval                  | approver                                 | in-app              | `fees.expense-approval`     |
+| Payroll run pending approval              | `school_owner`                           | in-app, email       | `payroll.run-approval`      |
+| Payslip published                         | each staff member                        | email, in-app       | `payroll.payslip-published` |
 
 Channels and delivery behavior follow [`notifications.md`](../02-architecture/notifications.md).
 
@@ -246,30 +246,30 @@ Cross-referenced to [`ai-features.md`](../04-ai/ai-features.md); all outputs adv
 
 All tables tenant-scoped with the implicit audit/soft-delete columns; full column specs in [`../05-database/entities/finance.md`](../05-database/entities/finance.md).
 
-| Table | Purpose |
-| ----- | ------- |
-| `fee_heads` | Chargeable fee categories mapped to ledger accounts |
-| `fee_structures` | Named fee set per session/class/campus |
-| `fee_schedules` | Structure lines: fee head, amount, frequency, due rule |
-| `fee_invoices` | Student invoice header with status and totals |
-| `fee_invoice_lines` | Invoice line items (schedule, fine, adjustment origins) |
-| `discounts` | Student-level discount grants |
-| `scholarships` | Scholarship awards and lifecycle |
-| `fines` | Fines raised manually or by other modules |
-| `payments` | Payments received against invoices |
-| `receipts` | Numbered receipts (1:1 with confirmed payments) |
-| `refunds` | Refund requests and approval state |
-| `fee_vouchers` | Printable bank/wallet collection vouchers per invoice: consumer/reference number, provider, due date, status (`issued`/`paid`/`void`/`expired`) |
-| `voucher_collection_imports` | Imported provider settlement files: provider, imported by, row/match counts, exceptions |
-| `ledger_accounts` | Tenant chart of accounts |
-| `ledger_entries` | Immutable double-entry journal lines |
-| `expenses` | Expense records with approval state |
-| `expense_categories` | Expense taxonomy mapped to ledger accounts |
-| `budgets` | Budget amounts per account/category and period |
-| `salary_structures` | Per-staff salary structure versions |
-| `salary_components` | Earning/deduction components of a structure |
-| `payroll_runs` | Payroll processing batches per period |
-| `payslips` | Computed per-staff payslips with snapshots |
+| Table                        | Purpose                                                                                                                                         |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fee_heads`                  | Chargeable fee categories mapped to ledger accounts                                                                                             |
+| `fee_structures`             | Named fee set per session/class/campus                                                                                                          |
+| `fee_schedules`              | Structure lines: fee head, amount, frequency, due rule                                                                                          |
+| `fee_invoices`               | Student invoice header with status and totals                                                                                                   |
+| `fee_invoice_lines`          | Invoice line items (schedule, fine, adjustment origins)                                                                                         |
+| `discounts`                  | Student-level discount grants                                                                                                                   |
+| `scholarships`               | Scholarship awards and lifecycle                                                                                                                |
+| `fines`                      | Fines raised manually or by other modules                                                                                                       |
+| `payments`                   | Payments received against invoices                                                                                                              |
+| `receipts`                   | Numbered receipts (1:1 with confirmed payments)                                                                                                 |
+| `refunds`                    | Refund requests and approval state                                                                                                              |
+| `fee_vouchers`               | Printable bank/wallet collection vouchers per invoice: consumer/reference number, provider, due date, status (`issued`/`paid`/`void`/`expired`) |
+| `voucher_collection_imports` | Imported provider settlement files: provider, imported by, row/match counts, exceptions                                                         |
+| `ledger_accounts`            | Tenant chart of accounts                                                                                                                        |
+| `ledger_entries`             | Immutable double-entry journal lines                                                                                                            |
+| `expenses`                   | Expense records with approval state                                                                                                             |
+| `expense_categories`         | Expense taxonomy mapped to ledger accounts                                                                                                      |
+| `budgets`                    | Budget amounts per account/category and period                                                                                                  |
+| `salary_structures`          | Per-staff salary structure versions                                                                                                             |
+| `salary_components`          | Earning/deduction components of a structure                                                                                                     |
+| `payroll_runs`               | Payroll processing batches per period                                                                                                           |
+| `payslips`                   | Computed per-staff payslips with snapshots                                                                                                      |
 
 ## 16. API Requirements
 
@@ -291,24 +291,24 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md):
 ## 17. Integration Requirements
 
 - **Payment gateways** — via the platform integrations layer (provider-agnostic adapter; tenant selects/configures provider). Checkout initiation from the parent portal; asynchronous confirmation via signed webhooks; reconciliation report for gateway settlements. No gateway credentials in tenant-visible config beyond masked identifiers.
-- **Bank/wallet voucher collection** *(recommendation)* — a batch file-import adapter, not a live callback: each provider (bank branch network, Easypaisa, JazzCash) delivers a daily settlement file in its own format; a per-provider adapter normalizes rows before matching (§7.2). Distinct from the gateway-adapter's initiate/callback pattern in `08-future/extensibility.md` §3, though it follows the same adapter-interface principle — a new provider is a new adapter, never a fees-module change.
+- **Bank/wallet voucher collection** _(recommendation)_ — a batch file-import adapter, not a live callback: each provider (bank branch network, Easypaisa, JazzCash) delivers a daily settlement file in its own format; a per-provider adapter normalizes rows before matching (§7.2). Distinct from the gateway-adapter's initiate/callback pattern in `08-future/extensibility.md` §3, though it follows the same adapter-interface principle — a new provider is a new adapter, never a fees-module change.
 - **Notifications** — reminders, receipts, payslip delivery via [`notifications.md`](../02-architecture/notifications.md) (email/SMS/push/in-app; delivery per webhook conventions in api-architecture).
 - **Object storage** — receipt/payslip/expense-attachment PDFs via presigned uploads and signed download URLs.
 - **Internal** — hr-leave (LOP days), attendance (staff attendance for payroll), library/transport (fines and transport fees as invoice lines), admissions (application fees), platform-admin (plan limits, feature flags).
 
 ## 18. Dependencies on Other Modules
 
-| Module | Direction | What is shared |
-| ------ | --------- | -------------- |
-| student-management | inbound | `students`, `student_guardians`, enrollments to bill |
-| academics | inbound | `academic_sessions`, `terms`, `classes`, `sections`, `campuses` for structure scoping |
-| staff-management | inbound | `staff`, `designations` for payroll |
-| hr-leave | inbound | approved leave / LOP days → payroll deductions |
-| admissions | inbound | application-fee invoices raised on submission |
-| library / transport | inbound | fines and transport fees as invoice lines |
-| parent-portal | outbound | fee visibility and online payment for guardians |
-| communication | outbound | reminder/receipt/payslip notifications |
-| reporting-analytics | outbound | financial KPIs for dashboards |
+| Module              | Direction | What is shared                                                                        |
+| ------------------- | --------- | ------------------------------------------------------------------------------------- |
+| student-management  | inbound   | `students`, `student_guardians`, enrollments to bill                                  |
+| academics           | inbound   | `academic_sessions`, `terms`, `classes`, `sections`, `campuses` for structure scoping |
+| staff-management    | inbound   | `staff`, `designations` for payroll                                                   |
+| hr-leave            | inbound   | approved leave / LOP days → payroll deductions                                        |
+| admissions          | inbound   | application-fee invoices raised on submission                                         |
+| library / transport | inbound   | fines and transport fees as invoice lines                                             |
+| parent-portal       | outbound  | fee visibility and online payment for guardians                                       |
+| communication       | outbound  | reminder/receipt/payslip notifications                                                |
+| reporting-analytics | outbound  | financial KPIs for dashboards                                                         |
 
 ## 19. Open Questions / Recommendations
 
@@ -340,34 +340,34 @@ which is deferred with hr-leave.**
 
 ### Built (PRs A-D)
 
-| Area | State |
-| ---- | ----- |
-| Entities | 5 of §15's 22 tables — `ledger_accounts`, `ledger_entries`, `fee_heads`, `fee_structures`, `fee_schedules` — tenant-owned with RLS policies |
-| Ledger | Double-entry postings through one write path (`ledger.post_transaction`), balance asserted per transaction, archived accounts refused, corrections as reversals, one-query trial balance |
-| Append-only | `ledger_entries` enforced at three levels: model `save`/`delete`, queryset `update`/`delete`, and `REVOKE UPDATE, DELETE` from `schoolhub_app` — with a column-level `GRANT UPDATE (reversed_by_transaction_id)` as the single exception |
-| Fee configuration | Fee heads mapped to income accounts, structures scoped by session/class/campus with a draft→active→archived lifecycle, and installment schedules whose due rule must match their frequency |
-| Endpoints | §16's `/ledger-accounts`, `/ledger-entries` (read-only), `/fee-heads`, `/fee-structures` (+ `:activate`, `:archive`), `/fee-schedules`, plus `/ledger-entries:post-journal` |
-| Seeding | `manage.py seed_finance_accounts` — idempotent system accounts per tenant |
-| Entities (PR B) | `fee_invoices`, `fee_invoice_lines`, `discounts`, `scholarships`, `fines` — 10 of §15's 22 tables now built |
-| Invoicing | `POST /fee-invoices:generate` (202 + job, `Idempotency-Key`), ad-hoc invoices, `:cancel` with a required reason, gapless numbering via `core.tenancy.sequences`, proration on mid-term enrollment, and a duplicate guard that makes a re-run skip rather than double-bill |
-| Grants | Discounts scoped to a session and optionally one head, scholarships with their five-state lifecycle, both attributable to a granter by CHECK; `:revoke` is forward-looking. The scholarship lifecycle is one table, `SCHOLARSHIP_TRANSITIONS` (`models.py`): applied → approved or revoked, approved → active or revoked, active → ended or revoked, and ended and revoked are final. A PATCH naming any other move is a 422 under `status` (`services.assert_scholarship_transition`); a PATCH that repeats the current status is not a move. Ending or revoking still needs `notes` (400). Each row carries a read-only `student_name`, as invoices do |
-| Fines | Raised by hand or by a source module (idempotent on `(source_module, source_reference)`), folded onto the next invoice, `:waive` behind `fees.fine.waive` with actor and reason by CHECK |
-| Notifications | §12's `fees.invoice-issued`, `fees.due-reminder` and `fees.overdue`, one `notify()` per trigger with the whole recipient list, plus the nightly `send-fee-reminders` sweep |
-| Entities (PR C) | `payments`, `receipts`, `refunds`, `fee_vouchers`, `voucher_collection_imports` and `voucher_settlement_rows` — 16 of §15's 22 tables now built, plus one addition explained below |
-| Collection | ⚿ `POST /payments:record` — the invoice locked `FOR UPDATE`, balance checked, gapless receipt allocated, ledger posted and the five money columns recomputed, all in one transaction |
-| Refunds | §7.3's request → approve/reject → process, with the requester barred from approving, the refundable *remainder* bounding the amount, and non-refundable heads refused at request time |
-| Vouchers | Issued per invoice with the balance snapshotted, voided-never-edited, auto-voided when the invoice settles elsewhere, expired nightly, and rendered in A4 and 80mm thermal from one template |
-| Settlement | `POST /voucher-collection-imports` (202 + job), one generic-CSV adapter behind a provider registry, §11's match key as a unique index, and an exceptions queue that keeps one bad row from failing a file |
-| Entities (PR D) | `expense_categories`, `expenses`, `budgets` — **18 of §15's 22 tables built**, plus `voucher_settlement_rows`; only payroll's four remain |
-| Spend | Expenses with a gapless number, `:submit` → `:approve`/`:reject` → `:mark-paid`, the submitter barred from approving, and the ledger posted **on approval** rather than on payment |
-| Budgets | Per account or category (exactly one, by CHECK), approved by the owner alone, with variance computed from posted ledger entries |
-| Reports | §13's eight kinds behind one `kind`-parameterised endpoint — collection, outstanding/aging, student ledger, grant register, income vs expense, budget variance, expense register, trial balance — serving inline under 1000 rows and 202 + job past it |
-| Permissions | **§4's table is now fully registered**, plus the six gap keys added across the four PRs |
+| Area              | State                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Entities          | 5 of §15's 22 tables — `ledger_accounts`, `ledger_entries`, `fee_heads`, `fee_structures`, `fee_schedules` — tenant-owned with RLS policies                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Ledger            | Double-entry postings through one write path (`ledger.post_transaction`), balance asserted per transaction, archived accounts refused, corrections as reversals, one-query trial balance                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Append-only       | `ledger_entries` enforced at three levels: model `save`/`delete`, queryset `update`/`delete`, and `REVOKE UPDATE, DELETE` from `schoolhub_app` — with a column-level `GRANT UPDATE (reversed_by_transaction_id)` as the single exception                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Fee configuration | Fee heads mapped to income accounts, structures scoped by session/class/campus with a draft→active→archived lifecycle, and installment schedules whose due rule must match their frequency                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Endpoints         | §16's `/ledger-accounts`, `/ledger-entries` (read-only), `/fee-heads`, `/fee-structures` (+ `:activate`, `:archive`), `/fee-schedules`, plus `/ledger-entries:post-journal`                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Seeding           | `manage.py seed_finance_accounts` — idempotent system accounts per tenant                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Entities (PR B)   | `fee_invoices`, `fee_invoice_lines`, `discounts`, `scholarships`, `fines` — 10 of §15's 22 tables now built                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Invoicing         | `POST /fee-invoices:generate` (202 + job, `Idempotency-Key`), ad-hoc invoices, `:cancel` with a required reason, gapless numbering via `core.tenancy.sequences`, proration on mid-term enrollment, and a duplicate guard that makes a re-run skip rather than double-bill                                                                                                                                                                                                                                                                                                                                                                                |
+| Grants            | Discounts scoped to a session and optionally one head, scholarships with their five-state lifecycle, both attributable to a granter by CHECK; `:revoke` is forward-looking. The scholarship lifecycle is one table, `SCHOLARSHIP_TRANSITIONS` (`models.py`): applied → approved or revoked, approved → active or revoked, active → ended or revoked, and ended and revoked are final. A PATCH naming any other move is a 422 under `status` (`services.assert_scholarship_transition`); a PATCH that repeats the current status is not a move. Ending or revoking still needs `notes` (400). Each row carries a read-only `student_name`, as invoices do |
+| Fines             | Raised by hand or by a source module (idempotent on `(source_module, source_reference)`), folded onto the next invoice, `:waive` behind `fees.fine.waive` with actor and reason by CHECK                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Notifications     | §12's `fees.invoice-issued`, `fees.due-reminder` and `fees.overdue`, one `notify()` per trigger with the whole recipient list, plus the nightly `send-fee-reminders` sweep                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Entities (PR C)   | `payments`, `receipts`, `refunds`, `fee_vouchers`, `voucher_collection_imports` and `voucher_settlement_rows` — 16 of §15's 22 tables now built, plus one addition explained below                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Collection        | ⚿ `POST /payments:record` — the invoice locked `FOR UPDATE`, balance checked, gapless receipt allocated, ledger posted and the five money columns recomputed, all in one transaction                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Refunds           | §7.3's request → approve/reject → process, with the requester barred from approving, the refundable _remainder_ bounding the amount, and non-refundable heads refused at request time                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Vouchers          | Issued per invoice with the balance snapshotted, voided-never-edited, auto-voided when the invoice settles elsewhere, expired nightly, and rendered in A4 and 80mm thermal from one template                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Settlement        | `POST /voucher-collection-imports` (202 + job), one generic-CSV adapter behind a provider registry, §11's match key as a unique index, and an exceptions queue that keeps one bad row from failing a file                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Entities (PR D)   | `expense_categories`, `expenses`, `budgets` — **18 of §15's 22 tables built**, plus `voucher_settlement_rows`; only payroll's four remain                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Spend             | Expenses with a gapless number, `:submit` → `:approve`/`:reject` → `:mark-paid`, the submitter barred from approving, and the ledger posted **on approval** rather than on payment                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Budgets           | Per account or category (exactly one, by CHECK), approved by the owner alone, with variance computed from posted ledger entries                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Reports           | §13's eight kinds behind one `kind`-parameterised endpoint — collection, outstanding/aging, student ledger, grant register, income vs expense, budget variance, expense register, trial balance — serving inline under 1000 rows and 202 + job past it                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Permissions       | **§4's table is now fully registered**, plus the six gap keys added across the four PRs                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 ### Decisions worth carrying forward
 
 **Invariant 4 needed a new base class, not a convention.** `ledger_entries` is
-the platform's first append-only *tenant-owned* table. `core/audit` had
+the platform's first append-only _tenant-owned_ table. `core/audit` had
 established the shape — Python guards plus `REVOKE UPDATE, DELETE`, with the
 argument in its own migration docstring — but `AuditLog` is platform-scoped,
 with a nullable tenant and no RLS policy, so a ledger could not reuse it. And
@@ -386,7 +386,7 @@ drift.
 
 **The single mutable column is a database fact, not a comment.**
 `reversed_by_transaction_id` is stamped on the original lines when a reversal
-supersedes them, and it is allowed by a PostgreSQL *column-level* `GRANT UPDATE`
+supersedes them, and it is allowed by a PostgreSQL _column-level_ `GRANT UPDATE`
 rather than by convention. An ordinary `save()` writes every column and is still
 refused; only `save(update_fields=["reversed_by_transaction_id"])` gets through.
 The alternative considered was dropping the column and deriving reversal from
@@ -395,7 +395,7 @@ entities doc's column list, and the grant states the intent more strongly than
 its absence would.
 
 **Balance is a service rule and says so.** Σ debit = Σ credit is a property of
-the *set* of lines sharing a `transaction_id`, and a CHECK cannot see a sibling
+the _set_ of lines sharing a `transaction_id`, and a CHECK cannot see a sibling
 row — the same shape examinations' grade-band contiguity rule has, resolved the
 same way. The database holds what it can (exactly one side positive, neither
 negative) and `core.money.assert_balanced` holds the rest, naming both sums when
@@ -415,7 +415,7 @@ found it.** `fee_structures` is unique on
 `(tenant, structure, head, frequency, term)` — and in both, a nullable column
 carries real meaning: `class_id`/`campus_id` NULL means "all campuses / all
 classes", and `term` is NULL on every non-per-term line. PostgreSQL treats
-NULLs as *distinct* in a unique index by default, so both guards were no-ops
+NULLs as _distinct_ in a unique index by default, so both guards were no-ops
 for exactly their most common input: two identical session-wide structures, or
 the same monthly charge priced twice into one structure and then billed twice,
 every month, to a whole class.
@@ -423,12 +423,12 @@ every month, to a whole class.
 `nulls_distinct=False` (PostgreSQL 15+, Django 5.0+) makes "no class" a value
 that collides with itself. Worth recording because the first version of this
 module shipped the constraints without it and the model docstring even
-*described* the NULL-distinctness while drawing the wrong conclusion from it —
+_described_ the NULL-distinctness while drawing the wrong conclusion from it —
 the constraint tests are what turned that into a failure rather than a
 production surprise.
 
 `services.activate_fee_structure` still holds the narrower rule the index
-cannot express: no two *active* structures may cover one scope. The key includes
+cannot express: no two _active_ structures may cover one scope. The key includes
 `name`, so two differently named structures at one scope are legitimately
 storable and only one of them may be active — otherwise invoice generation would
 have to guess which price applies.
@@ -441,7 +441,7 @@ a case that cannot arise — out of the generated TypeScript client, which is
 where the dead nullability first became visible.
 
 **Approval posts to the ledger; payment does not.** §13's income-vs-expense
-report should describe the period a school *committed* a cost in rather than
+report should describe the period a school _committed_ a cost in rather than
 whenever the cheque cleared, so `:approve` is the posting moment and
 `:mark-paid` records only that the money has left the bank. Posting again there
 would double-count it.
@@ -471,7 +471,7 @@ inline, which for money would put one family's balance in another's spreadsheet.
 **`voucher_settlement_rows` is a table §15 does not list, added deliberately.**
 §11 requires that "a settlement-file row can post at most once, keyed on
 `(provider, consumer_number, transaction_reference)`" — and a rule about what
-may happen *at most once* needs somewhere to record that it happened. Resting
+may happen _at most once_ needs somewhere to record that it happened. Resting
 the guarantee on the voucher's status instead cannot distinguish "already
 posted by this exact row" from "paid by some other channel", and re-importing
 yesterday's file is a normal operational event rather than an error. The match
@@ -602,40 +602,40 @@ today — so payroll is additive rather than a change to anything here.
 
 `payslips.lop_days` is the dependency that decides the timing: it comes from
 hr-leave's approved-leave outcomes, and while `attendance` owns the five leave
-tables, staff leave *policy* and accrual do not exist yet.
+tables, staff leave _policy_ and accrual do not exist yet.
 
 ### Built (parent portal PR B)
 
-| Area | State |
-| ---- | ----- |
+| Area                   | State                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Vouchers in the portal | `GET /vouchers` and `GET /vouchers/{id}/download?format=pdf` were already portal-readable (`fees.payment.view`, `PORTAL_READABLE_ACTIONS`, record-scoped). The guardian's fees page asks for `student=` and `status=issued` and offers each outstanding invoice its slips as a PDF through `ApiClient.downloadBlob` (bearer header); an invoice with none says "Ask the school office for a voucher." A guardian never issues or voids a slip (`fees.payment.collect`, staff-only) |
-| Tests | Jest `features/portal/fees/__tests__/portal-fees.test.tsx`; mocked `e2e/tests/dashboard/portal-leave-vouchers.spec.ts`; live `e2e/tests/live/api/portal-leave.spec.ts` (the school issues a slip, the guardian lists and downloads it) |
+| Tests                  | Jest `features/portal/fees/__tests__/portal-fees.test.tsx`; mocked `e2e/tests/dashboard/portal-leave-vouchers.spec.ts`; live `e2e/tests/live/api/portal-leave.spec.ts` (the school issues a slip, the guardian lists and downloads it)                                                                                                                                                                                                                                             |
 
 ### Built (staff dashboard, PR A)
 
-| Area | State |
-| ---- | ----- |
-| `/fees/structures` | Two sub-tabs in `?tab=`: **Structures** (default) and **Fee heads**, each a cursor-paged list with its filters in the URL. Structures filter by session, class, campus and status; a name links to the structure's page. Fee heads filter by category and status; the income-account picker lists only `account_type=income` accounts, so New and Edit need `fees.ledger.view` as well as the structure key (a `school_admin` authors structures but cannot pick an account; see `docs/deferred-work.md`), and the server's in-use refusal on delete shows inline |
+| Area                    | State                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/fees/structures`      | Two sub-tabs in `?tab=`: **Structures** (default) and **Fee heads**, each a cursor-paged list with its filters in the URL. Structures filter by session, class, campus and status; a name links to the structure's page. Fee heads filter by category and status; the income-account picker lists only `account_type=income` accounts, so New and Edit need `fees.ledger.view` as well as the structure key (a `school_admin` authors structures but cannot pick an account; see `docs/deferred-work.md`), and the server's in-use refusal on delete shows inline                |
 | `/fees/structures/{id}` | The structure's scope and status, its schedules (amount via `formatMoney`: always two decimals, no currency symbol) and the header actions, each on its key **and** the structure's state: Activate (a draft) and Archive (an active one) follow `fees.fee-structure.update`; Edit and schedule add/edit/remove need a draft; Delete (a draft) follows `.delete`. The server's activate refusals (no schedules, or another active structure at the same scope) show inline in the confirm; a schedule's frequency and due rule errors land under `term`, `due_day` or `due_date` |
-| `/fees/ledger` | **Accounts** tab (one entry now; the journal joins it): filter by type, status and system; create and edit with a parent picker limited to the chosen type (`fees.ledger.create`); Delete is hidden for a system account and the server's postings refusal shows inline |
-| Tests | Jest `features/fees/__tests__/` (permission matrix, status-gated actions, server errors on the right field, delete refusals); mocked `e2e/tests/dashboard/fees-setup.spec.ts`; live `e2e/tests/live/api/fees-setup.spec.ts` as the seeded accountant (create → activate, a second active structure at one scope is 422, another tenant's structure is 404) |
+| `/fees/ledger`          | **Accounts** tab (one entry now; the journal joins it): filter by type, status and system; create and edit with a parent picker limited to the chosen type (`fees.ledger.create`); Delete is hidden for a system account and the server's postings refusal shows inline                                                                                                                                                                                                                                                                                                          |
+| Tests                   | Jest `features/fees/__tests__/` (permission matrix, status-gated actions, server errors on the right field, delete refusals); mocked `e2e/tests/dashboard/fees-setup.spec.ts`; live `e2e/tests/live/api/fees-setup.spec.ts` as the seeded accountant (create → activate, a second active structure at one scope is 422, another tenant's structure is 404)                                                                                                                                                                                                                       |
 
 ### Built (staff dashboard, PR B: invoices)
 
-| Area | State |
-| ---- | ----- |
-| `/fees/invoices` | The first Fees & Finance section, on `fees.invoice.view`. A cursor-paged list (number, student, structure or "Ad hoc", period, issued, due, balance due, status) filtered in the URL by search (invoice number or student name), session, structure and status, plus a **Defaulters only** switch that writes `?outstanding=true` (`outstanding_invoices`: a balance owing on an invoice that is not canceled). Issued, due and balance sort. Amounts are the server's strings through `formatMoney` |
-| `/fees/invoices/{id}` | The invoice's lines (charge, discount, net, source: schedule, fine or adjustment) and the server's own totals (subtotal, discounts, fines, paid, balance due), never summed in the client. Discounts and fines are read from the invoice itself, so they need no key beyond `fees.invoice.view`. Payments (with their receipt numbers) and vouchers are read-only and read only for a holder of `fees.payment.view` (L55); issuing, voiding and downloading belong to the collection screens. **Cancel** follows `fees.invoice.update` and shows only while nothing is paid and the invoice is not canceled; the reason is required, and the server's 422 (paid meanwhile, or already canceled) shows inline in the dialog |
-| Generate invoices | `fees.invoice.create`. The dashboard offers no ad-hoc Create until the API takes lines: `POST /fee-invoices` takes only the header (`FeeInvoiceSerializer.lines` is read-only, no invoice-line endpoint), so it would raise a zero-total draft (`docs/deferred-work.md`). An active structure (only an active one prices invoices) and one period, a calendar month or a term, then `POST /fee-invoices:generate` with an `Idempotency-Key` held for one intent and dropped when the form changes. The `202` job is polled in the dialog and its **created** (`issued`) and **skipped** counts are the job's own. A re-run that skips everyone is a success that says nobody was left to bill; a failed job shows the server's sentence |
-| Tests | Jest `features/fees/__tests__/invoices-list.test.tsx`, `generate-invoices.test.tsx`, `invoice-page.test.tsx` (permission matrix, rendered amounts equal the fixture's server fields, the defaulters switch in the URL, a generation with skips, the cancel 422 inline); mocked `e2e/tests/dashboard/fees-invoicing.spec.ts` (generate, re-run skips, open, cancel; cancel refused once paid); live `e2e/tests/live/api/fees-invoicing.spec.ts` as the seeded accountant on a run-unique scope (generate and poll the job, a re-run skips, cancel, a draft structure is refused, another tenant's invoice is 404) |
+| Area                  | State                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/fees/invoices`      | The first Fees & Finance section, on `fees.invoice.view`. A cursor-paged list (number, student, structure or "Ad hoc", period, issued, due, balance due, status) filtered in the URL by search (invoice number or student name), session, structure and status, plus a **Defaulters only** switch that writes `?outstanding=true` (`outstanding_invoices`: a balance owing on an invoice that is not canceled). Issued, due and balance sort. Amounts are the server's strings through `formatMoney`                                                                                                                                                                                                                                    |
+| `/fees/invoices/{id}` | The invoice's lines (charge, discount, net, source: schedule, fine or adjustment) and the server's own totals (subtotal, discounts, fines, paid, balance due), never summed in the client. Discounts and fines are read from the invoice itself, so they need no key beyond `fees.invoice.view`. Payments (with their receipt numbers) and vouchers are read-only and read only for a holder of `fees.payment.view` (L55); issuing, voiding and downloading belong to the collection screens. **Cancel** follows `fees.invoice.update` and shows only while nothing is paid and the invoice is not canceled; the reason is required, and the server's 422 (paid meanwhile, or already canceled) shows inline in the dialog              |
+| Generate invoices     | `fees.invoice.create`. The dashboard offers no ad-hoc Create until the API takes lines: `POST /fee-invoices` takes only the header (`FeeInvoiceSerializer.lines` is read-only, no invoice-line endpoint), so it would raise a zero-total draft (`docs/deferred-work.md`). An active structure (only an active one prices invoices) and one period, a calendar month or a term, then `POST /fee-invoices:generate` with an `Idempotency-Key` held for one intent and dropped when the form changes. The `202` job is polled in the dialog and its **created** (`issued`) and **skipped** counts are the job's own. A re-run that skips everyone is a success that says nobody was left to bill; a failed job shows the server's sentence |
+| Tests                 | Jest `features/fees/__tests__/invoices-list.test.tsx`, `generate-invoices.test.tsx`, `invoice-page.test.tsx` (permission matrix, rendered amounts equal the fixture's server fields, the defaulters switch in the URL, a generation with skips, the cancel 422 inline); mocked `e2e/tests/dashboard/fees-invoicing.spec.ts` (generate, re-run skips, open, cancel; cancel refused once paid); live `e2e/tests/live/api/fees-invoicing.spec.ts` as the seeded accountant on a run-unique scope (generate and poll the job, a re-run skips, cancel, a draft structure is refused, another tenant's invoice is 404)                                                                                                                        |
 
 ### Built (staff dashboard, PR B: grants)
 
-| Area | State |
-| ---- | ----- |
-| `/fees/grants` | The Grants section, shown to a holder of either `fees.discount.view` or `fees.fine.view` (`ModuleSection.permission` takes a list). Three sub-tabs in `?tab=`, each only for a holder of its own read key: **Discounts** and **Scholarships** read with `fees.discount.view` (the API's key for both), **Fines** with `fees.fine.view`. Each is a cursor-paged list filtered in the URL by search (student or record text), status and `?student=` (set by a link, cleared by a button); the student is named by the row's `student_name`, so no student read is needed |
-| Discounts | Value (a percent or a fixed amount), fee head or "Every head", session, validity and status. **Grant discount** follows `fees.discount.create`; **Revoke** follows `fees.discount.waive`, needs a reason and shows only on an active discount; a refusal shows inline. There is no edit and no delete (the route does not exist) |
-| Scholarships | Type, coverage, sponsor, session and status. **Add scholarship** follows `fees.scholarship.create`. Each row offers only the moves the server's table allows from its status (applied: Approve, Revoke; approved: Activate, Revoke; active: End, Revoke; ended and revoked: none), through PATCH `status`; ending or revoking asks for the required `notes`, and the server's 422 on `status` or 400 on `notes` shows inline |
-| Fines | Type, fee head, amount, reason and status. **Raise fine** follows `fees.fine.create`; **Waive** follows `fees.fine.waive`, needs a reason and shows only on a pending fine, and an invoiced one's 422 shows inline |
-| Create forms | Student through the messaging module's searchable `StudentPicker` (needs `students.student.view`), session (needs `school.academic-session.view`) and, for a fine, a fee head in the `fine` category (needs `fees.fee-structure.view`). A writer who cannot read what a required picker lists sees no create button (L59); the discount's head picker is optional, so it alone is hidden |
-| Tests | Jest `features/fees/__tests__/grants-*.test.tsx` and `fees-sections.test.tsx` (each lifecycle's legal next states, actions hidden without the key and by status, the terminal dialog requiring notes, server refusals inline, create payloads) and the service and helper tests; mocked `e2e/tests/dashboard/fees-invoicing.spec.ts` (grant then revoke a discount, waive a pending fine and one invoiced meanwhile, a scholarship through approve, activate and end, a fine-only viewer); live `e2e/tests/live/api/fees-invoicing.spec.ts` as the seeded accountant (revoke a discount, waive a fine once, an illegal scholarship move is 422 on `status`, revoked is final, another tenant's three records are 404) |
+| Area           | State                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/fees/grants` | The Grants section, shown to a holder of either `fees.discount.view` or `fees.fine.view` (`ModuleSection.permission` takes a list). Three sub-tabs in `?tab=`, each only for a holder of its own read key: **Discounts** and **Scholarships** read with `fees.discount.view` (the API's key for both), **Fines** with `fees.fine.view`. Each is a cursor-paged list filtered in the URL by search (student or record text), status and `?student=` (set by a link, cleared by a button); the student is named by the row's `student_name`, so no student read is needed                                                                                                                                               |
+| Discounts      | Value (a percent or a fixed amount), fee head or "Every head", session, validity and status. **Grant discount** follows `fees.discount.create`; **Revoke** follows `fees.discount.waive`, needs a reason and shows only on an active discount; a refusal shows inline. There is no edit and no delete (the route does not exist)                                                                                                                                                                                                                                                                                                                                                                                      |
+| Scholarships   | Type, coverage, sponsor, session and status. **Add scholarship** follows `fees.scholarship.create`. Each row offers only the moves the server's table allows from its status (applied: Approve, Revoke; approved: Activate, Revoke; active: End, Revoke; ended and revoked: none), through PATCH `status`; ending or revoking asks for the required `notes`, and the server's 422 on `status` or 400 on `notes` shows inline                                                                                                                                                                                                                                                                                          |
+| Fines          | Type, fee head, amount, reason and status. **Raise fine** follows `fees.fine.create`; **Waive** follows `fees.fine.waive`, needs a reason and shows only on a pending fine, and an invoiced one's 422 shows inline                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Create forms   | Student through the shared searchable `StudentPicker` (`components/student-picker.tsx`) (needs `students.student.view`), session (needs `school.academic-session.view`) and, for a fine, a fee head in the `fine` category (needs `fees.fee-structure.view`). A writer who cannot read what a required picker lists sees no create button (L59); the discount's head picker is optional, so it alone is hidden                                                                                                                                                                                                                                                                                                        |
+| Tests          | Jest `features/fees/__tests__/grants-*.test.tsx` and `fees-sections.test.tsx` (each lifecycle's legal next states, actions hidden without the key and by status, the terminal dialog requiring notes, server refusals inline, create payloads) and the service and helper tests; mocked `e2e/tests/dashboard/fees-invoicing.spec.ts` (grant then revoke a discount, waive a pending fine and one invoiced meanwhile, a scholarship through approve, activate and end, a fine-only viewer); live `e2e/tests/live/api/fees-invoicing.spec.ts` as the seeded accountant (revoke a discount, waive a fine once, an illegal scholarship move is 422 on `status`, revoked is final, another tenant's three records are 404) |

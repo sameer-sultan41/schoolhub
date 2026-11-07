@@ -12,8 +12,8 @@ import { Services } from "@/services";
 import { PICKER_RESULTS_PAGE_SIZE } from "@/services/modules/message-threads/message-threads-constant";
 import { STUDENTS_QUERY_MODULE } from "@/services/modules/students/students-constant";
 
-import { PickerPopover } from "./picker-popover";
-import { RemovableChip } from "./removable-chip";
+import { PickerPopover } from "@/features/communication/messages/picker-popover";
+import { RemovableChip } from "@/features/communication/messages/removable-chip";
 
 /** The student a guardian thread is about; `name` is kept for the chip, `id` is what is sent. */
 export interface PickedStudent {

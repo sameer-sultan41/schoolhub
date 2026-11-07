@@ -41,7 +41,7 @@ jest.mock("@/services", () =>
 );
 
 // The picker searches the students list; a stand-in that picks one student keeps this file on the form.
-jest.mock("@/features/communication/messages/student-picker", () => {
+jest.mock("@/components/student-picker", () => {
   const react = jest.requireActual<typeof ReactModule>("react");
   return {
     StudentPicker: ({ onChange }: { onChange: (value: { id: string; name: string }) => void }) =>

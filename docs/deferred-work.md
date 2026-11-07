@@ -1,7 +1,7 @@
 # Deferred Work — SchoolHub
 
 > **Agent Context**
-> **Summary:** Everything deliberately *not* done yet, and why — review findings deferred to a later PR, scope cut on purpose, known gaps with their reasoning. Split out of `project-status.md` so the status doc stays short enough to load at the start of every session. Read the entry for the area you are about to touch before re-deciding something already decided.
+> **Summary:** Everything deliberately _not_ done yet, and why — review findings deferred to a later PR, scope cut on purpose, known gaps with their reasoning. Split out of `project-status.md` so the status doc stays short enough to load at the start of every session. Read the entry for the area you are about to touch before re-deciding something already decided.
 > **Co-load with:** [`project-status.md`](project-status.md) (current state, start here) · [`decisions/README.md`](decisions/README.md) (settled architecture decisions)
 
 **Update this file in the same PR as the work it describes** — when you defer something, add
@@ -97,7 +97,7 @@ either this file or `project-status.md`.
   use-school-day) — recovered from a stale local branch that predates the shell reset —
   were dropped from this PR rather than committed. Review confirmed they don't just sit
   unused: they import five type/constant files (`features/{academics,students,timetable}/
-  *-types.ts`, `features/dashboard/dashboard-{constants,types}.ts`) that PR #65's shell
+*-types.ts`, `features/dashboard/dashboard-{constants,types}.ts`) that PR #65's shell
   reset deliberately deleted (commit `9548054`), so the files fail to typecheck and their
   own tests fail to even collect. `Services.dashboard`/`dashboard-service.ts` (the one
   piece that depended on them) was dropped too; `Services.tenant`/`tenant-service.ts` has
@@ -123,13 +123,13 @@ either this file or `project-status.md`.
   spreadsheet and a printed register cannot drift) and **§9's historical import**
   (`POST /student-attendance-imports`).
   What remains unbuilt is §14's four AI capabilities (`core/ai` does not exist,
-  and AGENTS.md hard rule 6 forbids a provider SDK) and §6's *scheduled* monthly
+  and AGENTS.md hard rule 6 forbids a provider SDK) and §6's _scheduled_ monthly
   export, which needs the per-tenant schedules `reporting-analytics` is the
   module meant to bring — the static beat dict can run a sweep but has nowhere
   to deliver the result, since no endpoint lists a tenant's generated reports.
 - **The import path deliberately skips three rules the register enforces**, and
   the reasoning generalises to any later migration importer: no calendar gate
-  (today's working week describes *this* year, not the year the register came
+  (today's working week describes _this_ year, not the year the register came
   from), no lock-window check (every imported row is historical by construction),
   and **no guardian notifications** — importing a year of history must not email
   a parent about an absence from last March. A separate write path is what
@@ -142,7 +142,7 @@ either this file or `project-status.md`.
   editing the spec is right: the doc already named the key, and the alternative
   was inventing one it never mentions.
   **`SubstitutionStatus.completed` is still unreachable**, and it is worth being
-  precise about why: the cover *feed* now exists, but "the covered period
+  precise about why: the cover _feed_ now exists, but "the covered period
   actually ran" needs a signal nothing emits — the register records a student's
   presence, not a substitute's delivery of that period. Closing it is a
   module-doc decision about what evidence counts, not a code change.
@@ -154,7 +154,7 @@ either this file or `project-status.md`.
   neither.
 - **A real gap the leave PR could not close: leave types cannot be created
   through the API.** attendance §16 lists `GET/POST/PATCH /leave-types` while
-  attendance §4 keys *no* leave-type permission — the keys are `hr.leave-type.*`,
+  attendance §4 keys _no_ leave-type permission — the keys are `hr.leave-type.*`,
   declared by `hr-leave.md` §4. Registering another module's `hr.*` keys here
   would break the registry the day hr-leave ships its own `permissions.py`, and
   inventing `attendance.leave-type.*` would register keys no module doc declares.
@@ -172,7 +172,7 @@ either this file or `project-status.md`.
     leave in the dashboard (2026-10-24). A guardian now submits and withdraws a request for
     their own child from `/portal/{studentId}/leave` (parent-portal PR B).
   - **Half-day leave mapped to periods.** A `first_half`/`second_half` leave writes a
-    daily `on_leave` row, which refuses the student in *every* period register that
+    daily `on_leave` row, which refuses the student in _every_ period register that
     day ([ADR-0028](decisions/0028-one-attendance-mode-per-tenant.md)). Mapping a half
     to the periods it covers by their start times needs a rule for where a half ends,
     which the module doc does not define.
@@ -278,15 +278,15 @@ either this file or `project-status.md`.
   navigation starts, or flush it on the link's click.
 - **An `assigned` holder of `exams.result.approve` or `.publish` acts on the whole exam.** PR D
   resolves `:approve-results`, `:send-results-back`, `:publish-results` and `:publish-report-cards`
-  through `scoped_exam`, which admits a caller who teaches *any* section of the exam; the action
+  through `scoped_exam`, which admits a caller who teaches _any_ section of the exam; the action
   then approves or publishes every section's rows. No default role grants a teacher those keys
   (only `principal`, `vice_principal` and `school_admin` hold them by default), so this is latent. A
   tenant that grants one to an `assigned` role needs a section-level gate first: approve and
   publish only the caller's sections' rows, or refuse a caller without `all` scope.
 - **The examinations dashboard's PR C (marks) left these out:**
   - **A student whose campus differs from their section's campus.** The marks write gate and the
-    grid's `writable` flag read the *section's* campus; the per-student filter in `_entry_students`
-    keeps `STUDENT_SCOPE`'s *student* campus. A campus-scoped marker therefore sees a grid as
+    grid's `writable` flag read the _section's_ campus; the per-student filter in `_entry_students`
+    keeps `STUDENT_SCOPE`'s _student_ campus. A campus-scoped marker therefore sees a grid as
     writable and is refused that one student on submit, with the unknown-number wording. Resolving
     it needs a ruling on which campus is authoritative for marks (the section's, as `Marks`' read
     hook uses, or the student's); plan `2026-11-07-exams-dashboard-per-role-scope.md` §2.
@@ -426,10 +426,10 @@ either this file or `project-status.md`.
   `holiday_calendar` entity. `apps/school_organization/calendar.py` is the
   single reader. **Two things it deliberately does not do:** §16's
   `campus_id`/`from`/`to` filters are absent, because the resource is a small
-  singleton document rather than a paginated list; and the per-campus *working
-  week* override §5.8 anticipates is not implemented — `working_days()` takes a
+  singleton document rather than a paginated list; and the per-campus _working
+  week_ override §5.8 anticipates is not implemented — `working_days()` takes a
   `campus_id` and ignores it, so callers do not change when it lands, and the
-  per-campus half of the feature that *is* built is holidays, which is the half
+  per-campus half of the feature that _is_ built is holidays, which is the half
   attendance needs. `timetable.services._slot_weekday`'s "correct only while a
   tenant starts its week on Monday" note is now closable, but is left alone in
   this PR rather than changed in a module it does not otherwise touch.
@@ -443,7 +443,7 @@ either this file or `project-status.md`.
   claimed the database mechanism was being exercised and `AGENTS.md`
   invariant 1 claimed the app role had neither `BYPASSRLS` nor table ownership.
   `tests/test_rls_coverage.py` did not catch it because it inspects the
-  *catalogue* (policy present, RLS enabled, FORCEd) rather than enforcement for
+  _catalogue_ (policy present, RLS enabled, FORCEd) rather than enforcement for
   the connecting role. Tests now connect as a `NOSUPERUSER NOBYPASSRLS`
   `schoolhub_app`, and `tests/test_rls_enforcement.py` asserts the outcome
   through the unfiltered `all_tenants` manager, so only the database can be
@@ -483,7 +483,7 @@ either this file or `project-status.md`.
   `/reports/dashboard-summary`). The corresponding `live` specs pin today's
   real degraded behavior instead and say what to replace once each ships.
 - **The School Settings 403 is fixed** (`2de5c3c`). It was real: `GET
-  /api/v1/school-settings` 403'd for every request because `SchoolSettingsView`
+/api/v1/school-settings` 403'd for every request because `SchoolSettingsView`
   was a plain `APIView` rather than a `TenantScopedViewSetMixin`-based viewset,
   so it never got `request.tenant` and `RequiresModuleFeature`'s own
   `if tenant is None: return False` denied it before the flag was ever checked.
@@ -534,13 +534,13 @@ either this file or `project-status.md`.
     (`assert_may_request_for_student`). **Fixed** with a seeded `guardian` identity
     (`e2e-guardian@schoolhub.test`) that each test links to its own run-unique students. Run
     40757778787 confirmed it.
-  The attendance specs' missing guardian, the session-date overlaps and the weekend ("today is
-  not a working day") were fixed with `createStudentReadyToEnrol`, per-worker date bands drawn
-  once per process, and a seven-day working week in the e2e seed. There are four bands
-  (`LIVE_WORKER_BANDS`): the live lane defaults to four workers locally and refuses a fifth,
-  which would share a band. Still open: a worker restarted after a failed test redraws its
-  start within its own band, so a retried test can meet its dead predecessor's windows. A
-  per-run seed plus `TEST_WORKER_INDEX` (which grows on restarts) would close it.
+    The attendance specs' missing guardian, the session-date overlaps and the weekend ("today is
+    not a working day") were fixed with `createStudentReadyToEnrol`, per-worker date bands drawn
+    once per process, and a seven-day working week in the e2e seed. There are four bands
+    (`LIVE_WORKER_BANDS`): the live lane defaults to four workers locally and refuses a fifth,
+    which would share a band. Still open: a worker restarted after a failed test redraws its
+    start within its own band, so a retried test can meet its dead predecessor's windows. A
+    per-run seed plus `TEST_WORKER_INDEX` (which grows on restarts) would close it.
 - **`frontend.yml`'s Playwright browser cache never hits the right key.** Its version step
   runs `require('@playwright/test/package.json')` from the repo root, where the package (an
   `e2e` dependency, not hoisted) can't be found, so the key is always `playwright-Linux-`.
@@ -554,7 +554,7 @@ either this file or `project-status.md`.
   per environment without a rebuild, which `infra/AGENTS.md` rule 5 (one image promoted
   staging → production) will need before a real deploy.
 - **`timetable`'s gaps are named, not hidden.** `POST
-  /timetables/{section_id}:generate-draft` is **not built**: it is AI-TTB-01,
+/timetables/{section_id}:generate-draft` is **not built**: it is AI-TTB-01,
   Phase 3 work that has to go through the `core/ai` gateway (AGENTS.md hard
   rule 6), and that package does not exist — a 202 pointing at a job nothing
   runs would be worse than the omission. Also absent, each lacking a §16
@@ -576,7 +576,7 @@ either this file or `project-status.md`.
   weekday from it, is not checked against the cells that use it (`periods/services.py` guards
   only overlap and removal). Those cells then raise hard `period_is_break` /
   `period_not_on_weekday` findings and block publish; the week grid still shows them, with
-  Discard on a draft, but a *published* cell in that state can't be cleared (the entry below).
+  Discard on a draft, but a _published_ cell in that state can't be cleared (the entry below).
   A guard on the period edit, like the delete guard, is the fix.
 - **The write-fallback contract test doesn't see a write mapped to a read key by name.**
   `WritePermissionContractTests` skips any action that is explicitly in `required_permission_map`,
@@ -716,7 +716,7 @@ either this file or `project-status.md`.
   - **`photo_url`'s purpose gate doesn't reach staff.** `StudentSerializer.photo_url` was
     converted from `SignedFileURLField` to a `SerializerMethodField` that refuses to sign a
     link unless `photo_file.purpose == "student.photo"` (`students-dashboard-phase1` fix
-    wave) — `validate_photo_file_id`'s ownership guard only stops a *new* mismatched file
+    wave) — `validate_photo_file_id`'s ownership guard only stops a _new_ mismatched file
     from being attached by PATCH; it does nothing for a `photo_file` that reached the column
     some other way (a row seeded before the guard existed, a future bulk-import path that
     bypasses the serializer). `GuardianSerializer.photo_url` (Task 1) now carries the identical
@@ -736,7 +736,7 @@ either this file or `project-status.md`.
   issued admit card — but §4 declared no `view` key for either resource, so the
   capability was documented and unreachable. The same held for reading a grading
   scale (§5.5 computes every grade from one), reading a question bank (§13
-  reports on bank usage), and *running* result processing (§3 gives `exam_staff`
+  reports on bank usage), and _running_ result processing (§3 gives `exam_staff`
   the job; §4 listed only approve/publish/view/export). All five are registered
   and §4 now carries the rows — the same correction
   `attendance.student-attendance.import` needed, and the narrow case where
@@ -752,7 +752,7 @@ either this file or `project-status.md`.
   teacher who could see their own bank got an **empty list** of the questions
   in it, including on the `:approve` route that stands between an AI draft and
   a student. **Any new model reachable by an `assigned`-scoped role needs the
-  hook, and the test has to exercise the *nested* routes, not just the parent's
+  hook, and the test has to exercise the _nested_ routes, not just the parent's
   list** — that omission is exactly why this survived review twice.
   (2) Paper assembly checked satisfiability synchronously and then selected
   asynchronously with no lock, silently slicing `[:count]` — producing a short
@@ -769,7 +769,7 @@ either this file or `project-status.md`.
   read-status-then-write-status action needs a lock, and a module that locks in
   some places and not others is telling you where to look.** Fixed with a shared
   `lock_exam` on the row all the actions have in common, plus returning the
-  moved ids *from under the lock* rather than pre-collecting them in the view —
+  moved ids _from under the lock_ rather than pre-collecting them in the view —
   which was the same race producing a duplicate guardian notification.
 - **`examinations` is backend-complete: all 11 tables, all §4 keys, all six §12
   notifications, every one with a caller.** The last PR added §13's five reports
@@ -779,13 +779,13 @@ either this file or `project-status.md`.
   part.** A question a teacher wrote is approved by authorship — asking them to
   approve their own would be friction with no safeguard. An `ai_generated`
   question arrives `is_approved=False` whatever the client sent, and needs a
-  *named* human; the CHECK enforcing attribution is scoped to `ai_generated`,
+  _named_ human; the CHECK enforcing attribution is scoped to `ai_generated`,
   because demanding an approver on a manual question would block ordinary
   creation. `is_approved` is read-only on the serializer **and** forced in
   `create`. **Every later module that takes AI output should copy this shape**:
   the flag defaults to "no approval needed", the AI path overrides it, and the
   constraint demands a signature only where a signature means something.
-  `marks` deliberately has *no* `source` column for the same reason — AI-EXM-02
+  `marks` deliberately has _no_ `source` column for the same reason — AI-EXM-02
   suggests to a teacher, and the confirmed value is a person's.
 - **Paper assembly is deterministic rather than random**, ordered by
   `usage_count` then creation. That buys two things at once: reuse spreads
@@ -794,7 +794,7 @@ either this file or `project-status.md`.
   different exam. Randomness would have looked more natural and been worse.
 - **`examinations` now has two functions answering "what marks are missing", and
   they disagree on purpose.** §6's dashboard (`marks_entry_progress`) computes
-  an *expected* roll from enrolments, so a subject nobody has started shows as
+  an _expected_ roll from enrolments, so a subject nobody has started shows as
   outstanding. §13's report (`reports.marks_entry_status`) counts what exists,
   so it exports over one queryset alongside the other reports. The dashboard is
   for chasing; the report is a record of what was entered. Both docstrings say
@@ -816,9 +816,9 @@ either this file or `project-status.md`.
   workflow diagram can imply an endpoint its API section forgot, and building it
   is right where the alternative is an unrecorded manual fix.**
 - **`core.rbac.permissions.is_restricted_principal` is now public**, extracted
-  from `DenyRestrictedPrincipals` so a *queryset* can ask what the permission
+  from `DenyRestrictedPrincipals` so a _queryset_ can ask what the permission
   class asks. `examinations` needs it because §5.6 releases a result in two
-  steps: record scope decides *whose* result a caller may see, and this decides
+  steps: record scope decides _whose_ result a caller may see, and this decides
   whether they may see an unpublished one. Those are different narrowings, and
   only the first belongs in a model's record-scope hook — putting a publishing
   rule in `filter_owned_by_user` would hide it where nobody looks.
@@ -834,38 +834,38 @@ either this file or `project-status.md`.
 - **Unlike `attendance`'s import, examinations' applies the same rules as its
   grid** — window, lock, maximum. Worth recording because the two importers sit
   in adjacent modules and a reader who has met one will expect the other's
-  exemptions. Attendance's rows are historical *by construction*, so its
+  exemptions. Attendance's rows are historical _by construction_, so its
   calendar and lock gates would reject the whole file; examinations' rows are
   this exam's marks arriving by a different door.
 - **PR #51's review found the #42 privilege-escalation class again, in the
   module whose own docstring warns about it.** `:publish-schedule` was missing
   from `ExamScheduleViewSet.required_permission_map`, so it inherited
-  `required_permission` — the bare *view* key every portal user holds — and
+  `required_permission` — the bare _view_ key every portal user holds — and
   from `STAFF_ONLY_ACTIONS`, so `DenyRestrictedPrincipals` never applied. A
   guardian could have published any exam's timetable for the tenant.
   **The lesson is structural, not a reminder to be careful:** naming the write
   actions means the list has to be updated whenever one is added, and
   forgetting is silent. Both portal-readable viewsets in `examinations` now name
   their **readable** actions instead (`PORTAL_READABLE_ACTIONS = {"list",
-  "retrieve"}`) and everything else is staff-only by default — so a new action
+"retrieve"}`) and everything else is staff-only by default — so a new action
   fails safe, and forgetting to add a read is a 403 someone reports the same
   day. Any later module granting a restricted principal a read on a table staff
   also write — parent-portal is built entirely on that shape — should invert the
   set the same way.
 - **Two real bugs in that clash engine, both found in review, both of the kind
   tests pass over.** `_pairs_by_key` guarded `if group is not None`, but the
-  detectors return a *tuple* (`(room_id, exam_date)`) that is never itself
+  detectors return a _tuple_ (`(room_id, exam_date)`) that is never itself
   None — so unroomed sittings grouped under `(None, date)` and every pair of
   them was a hard room clash, making publish unreachable while a school was
   still assigning halls. And pairs were formed across the whole merged scope,
-  so a clash purely between two *other* exams blocked this exam's publish. Both
+  so a clash purely between two _other_ exams blocked this exam's publish. Both
   now have a control test beside the regression, because each fix could
   otherwise be "fixed" by disabling the detector.
 - **`examinations` needed its own clash engine, and that is not duplication for
   its own sake.** `timetable/conflicts.py` is keyed on `(day_of_week,
-  period_id)` — a cell in a weekly grid whose times come from the period it
+period_id)` — a cell in a weekly grid whose times come from the period it
   names — so a clash there is an equality test on a key tuple. An exam sitting
-  is a wall-clock interval on a calendar date, so a clash is an *overlap* test
+  is a wall-clock interval on a calendar date, so a clash is an _overlap_ test
   and two sittings can conflict without sharing any key. Every detector in that
   file reads `TimetableSlot` attributes, and its own header records that its
   duplication with the database constraints is load-bearing. What
@@ -886,7 +886,7 @@ either this file or `project-status.md`.
   same `school_organization.calendar` `attendance` refuses to mark against.
 - **`exam_schedules.status = cancelled` is a status, not a soft delete**, and
   the reason generalises: a cancelled sitting stays visible to a student who
-  already saw it, *and* is excluded from every clash check and both occupancy
+  already saw it, _and_ is excluded from every clash check and both occupancy
   constraints, because a room freed by a cancellation is free. A `deleted_at`
   would have given the second property and lost the first.
 - **The admit-card batch is idempotent and creates rows synchronously.** §8's
@@ -900,9 +900,9 @@ either this file or `project-status.md`.
   without anyone asking.
 - **The grading scale is the one rule in `examinations` a constraint cannot
   hold.** §11 wants bands "contiguous, non-overlapping, and fully covering
-  0–100%", which is a statement about a *set* of rows: a band is only wrong
+  0–100%", which is a statement about a _set_ of rows: a band is only wrong
   relative to its neighbours. No CHECK can see a sibling row, and enforcing
-  coverage per row would make a scale impossible to *build* — the first band
+  coverage per row would make a scale impossible to _build_ — the first band
   inserted would violate it. So the database holds each band's own range and
   label uniqueness, and `grading.assert_scale_is_complete` holds the rest,
   called **when an exam attaches a scale** rather than on every band write. That
@@ -934,7 +934,7 @@ either this file or `project-status.md`.
   `core.idempotency.tasks.prune_idempotency_records` (PR 0).
 - **The idempotency fingerprint ignores the URL and record id.** `core.idempotency`
   fingerprints the request body only, so a reused `Idempotency-Key` with the same
-  body against a *different* record, on an endpoint whose caller-chosen `endpoint`
+  body against a _different_ record, on an endpoint whose caller-chosen `endpoint`
   string carries no record id (e.g. `students:enroll`), replays the first record's
   response instead of acting on the second. Follow-up: include the resolved path
   or record id in the fingerprint, or in the `endpoint` string.
@@ -965,7 +965,7 @@ either this file or `project-status.md`.
   onboarding link (`:invite`), exit with clearance checks (`:exit`),
   qualification/document verification, bulk import/export. Deliberately
   deferred: **performance reviews** — `staff_performance_reviews` is a §19
-  *recommendation*, absent from the locked entity map in
+  _recommendation_, absent from the locked entity map in
   `05-database/entities/people.md`; its four permission keys
   (`staff.performance-review.*`) are registered so the registry↔seeded-rows
   contract test stays pinned to the full module doc, but no model or endpoint
@@ -975,7 +975,7 @@ either this file or `project-status.md`.
   **`:invite` now emits a `staff.invited` notification, in-app only** (PR 0):
   `core.notifications` exists, but the account is still created inactive with
   an unusable password because no set-password/SSO onboarding flow exists, so
-  an *email* saying "your account is ready" would be untrue. The remaining gap
+  an _email_ saying "your account is ready" would be untrue. The remaining gap
   is the onboarding flow, not the notification layer — adding
   `NotificationChannel.EMAIL` to the trigger is a one-line change once it
   lands. Documented in the same style as `core.files.File.av_scanned_at`.
@@ -1053,7 +1053,7 @@ either this file or `project-status.md`.
   seven viewsets serve tables that have no such column — `/classes`,
   `/subjects`, `/houses`, `/academic-sessions`, `/terms`, `/designations` and
   `/campuses` itself. `scope_queryset` filtered on the missing column and raised
-  `FieldError`. Nothing caught it because it needs a campus-scoped caller *with*
+  `FieldError`. Nothing caught it because it needs a campus-scoped caller _with_
   a campus reference, and every test in the suite used an `all`-scoped user,
   which returns before the campus branch is reached. `scope_campus_field = None`
   is now the explicit opt-out meaning "this table has no campus dimension", and
@@ -1069,7 +1069,7 @@ either this file or `project-status.md`.
   `scope_campus_allows_null` is the shared opt-in for both, and the tests assert
   the row is visible rather than that the query merely does not crash — the
   distinction the first round missed, since `.none()` is also a 200. Asking for
-  it *and* a `filter_by_campus` hook now raises: the hook owns the whole campus
+  it _and_ a `filter_by_campus` hook now raises: the hook owns the whole campus
   predicate, so the widening would have been silently dropped, which is the same
   short-list-and-no-error failure again one level up.
   `periods` is the third table with this shape and is **not** converted here —
@@ -1080,11 +1080,10 @@ either this file or `project-status.md`.
   §12 table needs: the `notifications`/`delivery_logs` tables, the
   `ChannelAdapter` interface with working in-app and email adapters, a
   code-declared trigger catalog and platform template registry, and `notify()`,
-  which persists a row per recipient per channel *before* enqueuing. **Ownership
+  which persists a row per recipient per channel _before_ enqueuing. **Ownership
   decision:** `entities/communication.md` lists both tables under the
   communication module, but `notifications.md` §1/§10 puts the machinery in
-  `core/notifications/`; core owns the tables and delivery, communication (Tier
-  4) later adds announcements/notices/threads, tenant template overrides,
+  `core/notifications/`; core owns the tables and delivery, communication (Tier 4) later adds announcements/notices/threads, tenant template overrides,
   preferences, the delivery dashboard and the SMS/push/WhatsApp adapters — which
   are registered here but raise, naming the module that will implement them.
   Deliberately absent, all communication scope: preferences, quiet hours,
@@ -1257,12 +1256,9 @@ either this file or `project-status.md`.
     `OpenApiParameter`. The dashboard hand-types `ReceiptFormat` until it does.
   - **Urdu review.** The `portal` namespace in `apps/dashboard/messages/ur.json` was written
     without a native speaker and needs their review.
-  - **Grants: student picker and invoice detail.** The Grants create forms import the messaging
-    module's `StudentPicker` (`features/communication/messages/`) across features; the fee
-    counter (PR C) is its second owner and hoists it, with its popover and chip, to
-    `components/`. The invoice page does not list the invoice's own discounts and fines: the
-    `/discounts` and `/fines` filters take a student, not an invoice, so the page keeps its
-    per-line discount and fine display until they do.
+  - **Grants: invoice detail.** The invoice page does not list the invoice's own discounts and
+    fines: the `/discounts` and `/fines` filters take a student, not an invoice, so the page keeps
+    its per-line discount and fine display until they do.
   - **Grants: no edit.** Discounts, scholarships and fines can be created and moved along their
     lifecycle, but a typo in a name, value or reason cannot be edited from the screen (the
     `PATCH` services exist). Add edit dialogs if an accountant asks.
@@ -1284,7 +1280,7 @@ either this file or `project-status.md`.
   `flat/recommended` config for `tests/**`, then regenerate the e2e baseline).
 
 - **Build-time `NEXT_PUBLIC_*` exposure in `apps/dashboard`.** Next.js inlines `NEXT_PUBLIC_*` at
-  `next build`, and `apps/dashboard/src/lib/env.ts` *requires* several of them, but
+  `next build`, and `apps/dashboard/src/lib/env.ts` _requires_ several of them, but
   `apps/dashboard/Dockerfile` sets none at build time. An image built from it would throw when the
   env module loads in the browser. (The website's public env was made all-optional for this
   reason.) Fix by passing the values as Docker build args, or make the client-side ones optional.
@@ -1329,7 +1325,7 @@ either this file or `project-status.md`.
   that fix removed. Today's only cap is the `bulk` Celery lane's concurrency (`export_staff_task`/
   `export_students_task` route there; compose runs one worker at `--concurrency 2`, shared with
   every lane). Fix: keyset pagination, one short `tenant_atomic` per chunk — `WHERE (last_name,
-  first_name, id) > (<previous chunk's last row>) ORDER BY last_name, first_name, id LIMIT 2000` —
+first_name, id) > (<previous chunk's last row>) ORDER BY last_name, first_name, id LIMIT 2000` —
   which releases the connection and the snapshot between chunks, at the price of the export no
   longer being one point-in-time snapshot (a row renamed mid-export can be skipped or repeated;
   likely tolerable for an admin CSV, but a call for that change's own review). Routing both tasks to
@@ -1381,7 +1377,7 @@ either this file or `project-status.md`.
 
 - **`enroll_student` and `change_section` don't check that a chosen section's campus matches
   the student's own campus.** A real, pre-existing backend gap — neither `services
-  .enroll_student` nor `services.change_section` has such a check. Closed client-side only
+.enroll_student` nor `services.change_section` has such a check. Closed client-side only
   in Phase 3: `ClassSectionFields` always scopes its section picker by the student's own
   `campusId` in both of this shared component's modes (unlocked, used by enroll; locked,
   used by change-section), so reaching this gap needs deliberately working around the UI. A
@@ -1546,7 +1542,7 @@ either this file or `project-status.md`.
     `` `${t("documents.download")} — ${document.title}` `` in
     `student-documents-tab.tsx:202` (and the identical pattern at lines 215/226/239 for
     verify/reject/delete), `` `${t("guardians.editLinkTitle")} — ${guardian.first_name}
-    ${guardian.last_name}` `` in `student-guardians-tab.tsx:237` (and the identical
+${guardian.last_name}` `` in `student-guardians-tab.tsx:237` (and the identical
     pattern at lines 210/250 for makePrimary/editGuardian), the hardcoded `" / "`
     separator in `` ` / ${contact.alt_phone}` `` (`student-emergency-contacts-tab.tsx:111`),
     and the hardcoded `"·"` separator in `{g.first_name} {g.last_name} · {g.phone}`
@@ -1767,7 +1763,7 @@ either this file or `project-status.md`.
 
 - **The clone toast reads "1 mappings created".** `academics.curriculum.clone.result` is
   `"{created} mappings created, {skipped} skipped (already in the target, or for an inactive class
-  or subject)."` in English, with no plural form, so a count of one is ungrammatical. It needs an
+or subject)."` in English, with no plural form, so a count of one is ungrammatical. It needs an
   ICU `plural` for each count in `en.json` and `ur.json`, and the e2e assertion on "1 mappings
   created, 1 skipped (…)." (`e2e/tests/dashboard/academics-curriculum.spec.ts`) updated with it.
 
