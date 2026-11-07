@@ -62,6 +62,7 @@ export const Paths = {
   PORTAL_NOTIFICATIONS: "/portal/notifications",
   PORTAL_SETTINGS: "/portal/settings",
   FEES: "/fees",
+  FEES_INVOICES: "/fees/invoices",
   FEES_STRUCTURES: "/fees/structures",
   FEES_LEDGER: "/fees/ledger",
   EXAMS: "/exams",
@@ -81,6 +82,9 @@ export const examPath = (examId: string) => `${Paths.EXAMS}/${examId}`;
 
 /** One question bank's page, under the banks list. */
 export const questionBankPath = (bankId: string) => `${Paths.EXAMS_QUESTION_BANKS}/${bankId}`;
+
+/** One invoice's page, under the invoices list. */
+export const feeInvoicePath = (invoiceId: string) => `${Paths.FEES_INVOICES}/${invoiceId}`;
 
 /** One fee structure's page, under the structures list. */
 export const feeStructurePath = (structureId: string) => `${Paths.FEES_STRUCTURES}/${structureId}`;

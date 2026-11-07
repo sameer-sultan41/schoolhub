@@ -5,9 +5,12 @@ import type { Page } from "@schoolhub/types";
 import { Services } from "@/services";
 import type {
   FeeHeadRecord,
+  FeeInvoiceRecord,
   FeeScheduleRecord,
   FeeStructureRecord,
   LedgerAccountRecord,
+  PaymentRecord,
+  VoucherRecord,
 } from "@/services";
 import { mocked } from "@/test-fixtures/list-screen";
 import { buildUser, setUrl } from "@/test-utils";
@@ -29,6 +32,16 @@ export const deleteFeeHead = mocked(Services.feeHeads.deleteFeeHead);
 export const listFeeStructures = mocked(Services.feeStructures.listFeeStructures);
 export const fetchFeeStructure = mocked(Services.feeStructures.fetchFeeStructure);
 export const createFeeStructure = mocked(Services.feeStructures.createFeeStructure);
+export const fetchFeeStructureOptions = mocked(Services.feeStructures.fetchFeeStructureOptions);
+export const listFeeInvoices = mocked(Services.feeInvoices.listFeeInvoices);
+export const fetchFeeInvoice = mocked(Services.feeInvoices.fetchFeeInvoice);
+export const createFeeInvoice = mocked(Services.feeInvoices.createFeeInvoice);
+export const generateFeeInvoices = mocked(Services.feeInvoices.generateFeeInvoices);
+export const cancelFeeInvoice = mocked(Services.feeInvoices.cancelFeeInvoice);
+export const listPayments = mocked(Services.payments.listPayments);
+export const listVouchers = mocked(Services.vouchers.listVouchers);
+export const fetchJob = mocked(Services.jobs.fetchJob);
+export const fetchStudentsPage = mocked(Services.students.fetchStudentsPage);
 export const activateFeeStructure = mocked(Services.feeStructures.activateFeeStructure);
 export const archiveFeeStructure = mocked(Services.feeStructures.archiveFeeStructure);
 export const createFeeSchedule = mocked(Services.feeSchedules.createFeeSchedule);
@@ -46,6 +59,8 @@ export const INCOME_ACCOUNT_ID = "55555555-5555-4555-8555-555555555555";
 export const ASSET_ACCOUNT_ID = "66666666-6666-4666-8666-666666666666";
 export const HEAD_ID = "77777777-7777-4777-8777-777777777777";
 export const STRUCTURE_ID = "88888888-8888-4888-8888-888888888888";
+export const INVOICE_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+export const STUDENT_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 export const SCHEDULE_ID = "99999999-9999-4999-8999-999999999999";
 const STAMP = "2026-10-01T00:00:00Z";
 
@@ -61,6 +76,16 @@ export const FEES_SETUP_AUTHOR_PERMISSIONS: PermissionKey[] = [
   "school.academic-session.view",
   "school.class.view",
   "school.campus.view",
+];
+
+/** The keys the seeded `accountant` holds for invoicing, plus the reference reads its pickers make. */
+export const INVOICING_PERMISSIONS: PermissionKey[] = [
+  "fees.invoice.view",
+  "fees.invoice.create",
+  "fees.invoice.update",
+  "fees.payment.view",
+  "fees.fee-structure.view",
+  "school.academic-session.view",
 ];
 
 export function cursorPage<T>(items: T[], nextCursor: string | null = null): Page<T> {
@@ -166,4 +191,98 @@ export function stubFeesServices(url = "/fees/structures") {
     ReturnType<typeof fetchCampuses>
   >);
   fetchTerms.mockResolvedValue([{ id: TERM_ID, name: "Term 1", sequence: 1 }]);
+  fetchFeeStructureOptions.mockResolvedValue([structureRecord({ status: "active" })]);
+  listFeeInvoices.mockResolvedValue(cursorPage([invoiceRecord()]));
+  fetchFeeInvoice.mockResolvedValue(invoiceRecord());
+  listPayments.mockResolvedValue(cursorPage([]));
+  listVouchers.mockResolvedValue(cursorPage([]));
+}
+
+/** An issued, unpaid invoice with one fee line and one fine line. Every money field is the
+ * server's own string, so a test asserts what the screen renders against these. */
+export function invoiceRecord(overrides: Partial<FeeInvoiceRecord> = {}): FeeInvoiceRecord {
+  return {
+    id: INVOICE_ID,
+    invoice_no: "INV-2026-0001",
+    student: STUDENT_ID,
+    student_name: "Ayesha Khan",
+    student_enrollment: null,
+    academic_session: SESSION_ID,
+    fee_structure: STRUCTURE_ID,
+    period_label: "2026-10",
+    issue_date: "2026-10-01",
+    due_date: "2026-10-10",
+    status: "issued",
+    subtotal: "1500.00",
+    discount_total: "200.00",
+    fine_total: "50.00",
+    paid_total: "0.00",
+    balance_due: "1350.00",
+    canceled_reason: null,
+    lines: [
+      {
+        id: "l1111111-1111-4111-8111-111111111111",
+        fee_head: HEAD_ID,
+        fee_head_code: "TUI",
+        description: "Tuition fee",
+        amount: "1500.00",
+        discount_amount: "200.00",
+        net_amount: 1300,
+        source_type: "schedule",
+        source_id: SCHEDULE_ID,
+      },
+      {
+        id: "l2222222-2222-4222-8222-222222222222",
+        fee_head: HEAD_ID,
+        fee_head_code: "LIB",
+        description: "Library fine",
+        amount: "50.00",
+        discount_amount: "0.00",
+        net_amount: 50,
+        source_type: "fine",
+        source_id: null,
+      },
+    ],
+    created_at: STAMP,
+    updated_at: STAMP,
+    ...overrides,
+  };
+}
+
+export function paymentRecord(overrides: Partial<PaymentRecord> = {}): PaymentRecord {
+  return {
+    id: "d1111111-1111-4111-8111-111111111111",
+    fee_invoice: INVOICE_ID,
+    student: STUDENT_ID,
+    amount: "500.00",
+    method: "cash",
+    reference_no: null,
+    gateway_provider: null,
+    status: "confirmed",
+    paid_at: "2026-10-05T09:00:00Z",
+    received_by: null,
+    receipt_no: "RCT-2026-0001",
+    created_at: STAMP,
+    ...overrides,
+  };
+}
+
+export function voucherRecord(overrides: Partial<VoucherRecord> = {}): VoucherRecord {
+  return {
+    id: "e1111111-1111-4111-8111-111111111111",
+    fee_invoice: INVOICE_ID,
+    invoice_no: "INV-2026-0001",
+    student: STUDENT_ID,
+    student_name: "Ayesha Khan",
+    provider: "bank_branch",
+    consumer_number: "1234567890",
+    amount: "1350.00",
+    due_date: "2026-10-10",
+    status: "issued",
+    payment: null,
+    voided_reason: null,
+    issued_by: "f1111111-1111-4111-8111-111111111111",
+    created_at: STAMP,
+    ...overrides,
+  };
 }

@@ -26,6 +26,7 @@ const mockFetchCurrentUser = Services.auth.fetchCurrentUser as jest.MockedFuncti
   typeof Services.auth.fetchCurrentUser
 >;
 
+const INVOICE_VIEW: PermissionKey = "fees.invoice.view";
 const STRUCTURE_VIEW: PermissionKey = "fees.fee-structure.view";
 const LEDGER_VIEW: PermissionKey = "fees.ledger.view";
 
@@ -34,8 +35,9 @@ describe("fees sections", () => {
     mockReplace.mockReset();
   });
 
-  it("lists Structures then Ledger, each on its own view key", () => {
+  it("lists Invoices, Structures then Ledger, each on its own view key", () => {
     expect(FEES_SECTIONS.map((section) => [section.href, section.permission])).toEqual([
+      ["/fees/invoices", INVOICE_VIEW],
       ["/fees/structures", STRUCTURE_VIEW],
       ["/fees/ledger", LEDGER_VIEW],
     ]);
@@ -43,9 +45,10 @@ describe("fees sections", () => {
 
   it.each([
     [
-      [STRUCTURE_VIEW, LEDGER_VIEW],
-      ["/fees/structures", "/fees/ledger"],
+      [INVOICE_VIEW, STRUCTURE_VIEW, LEDGER_VIEW],
+      ["/fees/invoices", "/fees/structures", "/fees/ledger"],
     ],
+    [[INVOICE_VIEW], ["/fees/invoices"]],
     [[STRUCTURE_VIEW], ["/fees/structures"]],
     [[LEDGER_VIEW], ["/fees/ledger"]],
     [[], []],
@@ -56,6 +59,8 @@ describe("fees sections", () => {
   });
 
   it.each([
+    [[INVOICE_VIEW, STRUCTURE_VIEW, LEDGER_VIEW], "/fees/invoices"],
+    [[INVOICE_VIEW], "/fees/invoices"],
     [[STRUCTURE_VIEW, LEDGER_VIEW], "/fees/structures"],
     [[STRUCTURE_VIEW], "/fees/structures"],
     [[LEDGER_VIEW], "/fees/ledger"],
@@ -82,6 +87,7 @@ describe("fees sections", () => {
 
   it("gives the sidebar the same children, gated the same way", () => {
     expect(sectionMenuItems(FEES_SECTIONS).map((item) => item.title)).toEqual([
+      "Invoices",
       "Structures",
       "Ledger",
     ]);

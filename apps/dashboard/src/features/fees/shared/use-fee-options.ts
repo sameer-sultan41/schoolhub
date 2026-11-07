@@ -3,11 +3,15 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { queryKeys } from "@/lib/query-client";
-import { Services, type LedgerAccountType } from "@/services";
+import { Services, type FeeStructureStatus, type LedgerAccountType } from "@/services";
 import {
   LEDGER_ACCOUNTS_OPTIONS_RESOURCE,
   LEDGER_ACCOUNTS_QUERY_MODULE,
 } from "@/services/modules/ledger-accounts/ledger-accounts-constant";
+import {
+  FEE_STRUCTURES_OPTIONS_RESOURCE,
+  FEE_STRUCTURES_QUERY_MODULE,
+} from "@/services/modules/fee-structures/fee-structures-constant";
 import {
   FEE_HEADS_OPTIONS_RESOURCE,
   FEE_HEADS_QUERY_MODULE,
@@ -43,6 +47,20 @@ export function useFeeHeadOptions({ enabled = true }: { enabled?: boolean } = {}
   return useQuery({
     queryKey: queryKeys.list(FEE_HEADS_QUERY_MODULE, FEE_HEADS_OPTIONS_RESOURCE),
     queryFn: () => Services.feeHeads.fetchFeeHeadOptions(),
+    enabled,
+  });
+}
+
+/** Every fee structure (of one status, if given), with its session: a picker offers them, and a name lookup reads them. */
+export function useFeeStructureOptions({
+  status,
+  enabled = true,
+}: { status?: FeeStructureStatus; enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: queryKeys.list(FEE_STRUCTURES_QUERY_MODULE, FEE_STRUCTURES_OPTIONS_RESOURCE, {
+      status,
+    }),
+    queryFn: () => Services.feeStructures.fetchFeeStructureOptions(status),
     enabled,
   });
 }

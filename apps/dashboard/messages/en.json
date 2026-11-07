@@ -2968,8 +2968,168 @@
   "fees": {
     "nav": {
       "label": "Fees & Finance sections",
+      "invoices": "Invoices",
       "structures": "Structures",
       "ledger": "Ledger"
+    },
+    "invoices": {
+      "title": "Invoices",
+      "summary": "Every fee invoice. Filter by status, session or structure, or switch on Defaulters to see who still owes.",
+      "adHoc": "Ad hoc",
+      "actions": {
+        "generate": "Generate invoices",
+        "create": "New invoice",
+        "cancel": "Cancel invoice",
+        "backToList": "Back to invoices"
+      },
+      "filters": {
+        "search": "Search invoices",
+        "clearSearch": "Clear search",
+        "session": "Session",
+        "structure": "Structure",
+        "status": "Status",
+        "all": "All",
+        "defaulters": "Defaulters only",
+        "clearStudent": "Showing one student's invoices. Show all"
+      },
+      "list": {
+        "caption": "Fee invoices",
+        "pagination": "Fee invoices pages",
+        "loadError": "The invoices could not be loaded.",
+        "emptyTitle": "No invoices yet",
+        "emptyDescription": "Generate invoices from an active fee structure, or raise one for a single student.",
+        "noMatches": "No invoices match",
+        "noMatchesDescription": "Try a different search or filter.",
+        "searchPlaceholder": "Search by invoice number or student"
+      },
+      "columns": {
+        "number": "Invoice",
+        "student": "Student",
+        "structure": "Structure",
+        "period": "Period",
+        "issued": "Issued",
+        "due": "Due",
+        "balance": "Balance due",
+        "status": "Status"
+      },
+      "create": {
+        "title": "New invoice",
+        "intro": "Raise an invoice for one student outside any fee structure. It starts as a draft with no lines and a zero balance.",
+        "student": "Student",
+        "session": "Session",
+        "selectSession": "Select a session",
+        "issueDate": "Issue date",
+        "dueDate": "Due date",
+        "period": "Period label (optional)",
+        "dueBeforeIssue": "The due date can't be before the issue date.",
+        "saved": "Invoice {number} created"
+      },
+      "generate": {
+        "title": "Generate invoices",
+        "intro": "Bill every student an active fee structure covers, for one period. Students already billed for that period are skipped.",
+        "structure": "Fee structure",
+        "selectStructure": "Select an active structure",
+        "structureHint": "Only an active structure can bill.",
+        "by": "Bill by",
+        "by_month": "A month",
+        "by_term": "A term",
+        "month": "Month",
+        "term": "Term",
+        "selectTerm": "Select a term",
+        "termHint": "The terms of the structure's session.",
+        "submit": "Generate",
+        "starting": "Starting",
+        "running": "Generating invoices, {progress}% done",
+        "created": "{count, plural, one {# invoice created} other {# invoices created}}",
+        "skipped": "{count, plural, one {# student skipped (already billed for this period)} other {# students skipped (already billed for this period)}}",
+        "nothingNew": "Nothing new to bill: everyone was already billed for this period.",
+        "failed": "Invoice generation failed.",
+        "stalled": "This is taking longer than expected. The job may still be running on the server.",
+        "pollFailed": "We couldn't check the job's progress. Reload the invoices to see what was created.",
+        "resume": "Keep watching",
+        "another": "Generate another"
+      },
+      "detail": {
+        "title": "Invoice {number}",
+        "dates": "Issued {issued}, due {due}",
+        "canceledBecause": "Canceled: {reason}",
+        "loadError": "We couldn't load this invoice. Please try again.",
+        "notFoundTitle": "Invoice not found",
+        "notFoundDescription": "This invoice doesn't exist or isn't one you can open.",
+        "linesTitle": "Lines",
+        "linesCaption": "Invoice lines and totals",
+        "noLinesTitle": "No lines",
+        "noLinesDescription": "This invoice has no lines. An ad-hoc invoice starts empty.",
+        "description": "Description",
+        "amount": "Amount",
+        "discount": "Discount",
+        "net": "Net",
+        "subtotal": "Subtotal",
+        "discounts": "Discounts",
+        "fines": "Fines",
+        "paid": "Paid",
+        "balance": "Balance due",
+        "source": {
+          "label": "Source",
+          "schedule": "Fee schedule",
+          "fine": "Fine",
+          "adjustment": "Adjustment"
+        }
+      },
+      "cancel": {
+        "title": "Cancel invoice {number}",
+        "intro": "Cancelling voids the invoice and frees its period so it can be issued again. It isn't possible once any money has been paid against it.",
+        "reason": "Reason",
+        "submit": "Cancel invoice",
+        "done": "Invoice {number} canceled"
+      },
+      "payments": {
+        "title": "Payments",
+        "caption": "Payments against this invoice",
+        "loadError": "The payments could not be loaded.",
+        "emptyTitle": "No payments yet",
+        "emptyDescription": "Payments recorded against this invoice appear here with their receipt numbers.",
+        "columns": {
+          "receipt": "Receipt",
+          "paidAt": "Paid",
+          "method": "Method",
+          "status": "Status",
+          "amount": "Amount"
+        },
+        "method": {
+          "cash": "Cash",
+          "cheque": "Cheque",
+          "bank_transfer": "Bank transfer",
+          "card": "Card",
+          "online_gateway": "Online gateway"
+        },
+        "status": {
+          "pending": "Pending",
+          "confirmed": "Confirmed",
+          "failed": "Failed",
+          "reversed": "Reversed"
+        }
+      },
+      "vouchers": {
+        "title": "Vouchers",
+        "caption": "Vouchers issued for this invoice",
+        "loadError": "The vouchers could not be loaded.",
+        "emptyTitle": "No vouchers",
+        "emptyDescription": "Bank vouchers issued for this invoice appear here.",
+        "columns": {
+          "provider": "Provider",
+          "consumer": "Consumer number",
+          "due": "Due",
+          "status": "Status",
+          "amount": "Amount"
+        },
+        "status": {
+          "issued": "Issued",
+          "paid": "Paid",
+          "void": "Void",
+          "expired": "Expired"
+        }
+      }
     },
     "structures": {
       "title": "Fee structures",
