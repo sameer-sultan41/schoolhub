@@ -100,7 +100,8 @@ class SummaryEndpointTests(ReportSummaryTestCase):
         self.assertIn("500.00", data["summary"])
         self.assertEqual(data["facts"]["payment_count"], "1")
         self.assertEqual(data["prompt_version"], ai.PROMPT_VERSION)
-        self.assertEqual(body["meta"], {"budget_warning": False})
+        # The renderer adds `request_id` to every success envelope's meta.
+        self.assertFalse(body["meta"]["budget_warning"])
         (row,) = self.rows()
         self.assertEqual(str(row.pk), data["ai_request_id"])
         self.assertEqual(row.outcome, AIOutcome.OK)
@@ -272,7 +273,8 @@ class SummaryContextTests(ReportSummaryTestCase):
     def setUp(self) -> None:
         super().setUp()
         self.paid_invoice()
-        self._invoice(due=datetime.date(2026, 7, 1))
+        # Its own label: `_invoice` derives `invoice_no` from it; `paid_invoice` took the default.
+        self._invoice(due=datetime.date(2026, 7, 1), label="2026-07")
         with tenant_context(self.tenant.id):
             DiscountFactory(
                 tenant=self.tenant,
