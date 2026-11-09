@@ -100,6 +100,20 @@ function unpaid(overrides: Partial<FeeInvoice> = {}): FeeInvoice {
     period_label: "2026-09",
     subtotal: "1500.00",
     balance_due: "1500.00",
+    // The page draws its lines table only when the invoice has lines (an empty one says so instead).
+    lines: [
+      {
+        id: uuid(),
+        fee_head: head.id,
+        fee_head_code: head.code,
+        description: "Tuition fee",
+        amount: "1500.00",
+        discount_amount: "0.00",
+        net_amount: 1500,
+        source_type: "schedule",
+        source_id: null,
+      },
+    ],
     ...overrides,
   });
 }
