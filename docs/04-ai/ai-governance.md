@@ -15,7 +15,8 @@ The platform processes minors' PII (SEC-17). AI features add an external data fl
    | ---- | ------------ | ---------- |
    | **Always removed** | Government ID numbers, credentials/secrets, bank/salary details, medical notes, guardian contact details (phone/email/address), photos and document images | Every feature — except OCR intake features, where the document *is* the input and is sent for extraction only |
    | **Pseudonymized** | Student/staff names and admission numbers, replaced by stable per-request tokens (`Student-A`, `S-104`) | Analytics and scoring features (`AI-STU-01/02`, `AI-ATT-01/02`, `AI-FEE-01/04`, `AI-HRL-01/02`, `AI-ADM-01`, `AI-STF-01`); the token map never leaves the backend and is re-applied to responses before display |
-   | **Retained only where essential** | First name and class for drafting that must address a person; a child's records within `own` scope for that child's guardian | `AI-ATT-03`/`AI-COM-01`/`AI-FEE-03` drafts; `AI-PAR-01/02` guardian features |
+   | **Aggregates only, per-kind allowlist** | Report figures as SQL totals and grouped rows over the caller's scoped set; no student, guardian or staff name, admission number, user id, expense number or description, vendor, discount/scholarship/budget name, or row id. Cashiers and budgets become `Cashier-N` / `Budget-N`, restored after validation; ledger-account and expense-category names are fenced in `<report_data>` as untrusted; the student ledger is refused | `AI-FEE-02` (`apps/fees_finance/ai.py`, `CONTEXT_ALLOWLIST`; tested by `test_context_keys_are_allowlisted_for_every_kind`) |
+| **Retained only where essential** | First name and class for drafting that must address a person; a child's records within `own` scope for that child's guardian | `AI-ATT-03`/`AI-COM-01`/`AI-FEE-03` drafts; `AI-PAR-01/02` guardian features |
 
    Redaction rules are code (declared per feature next to its context schema), unit-tested, and covered by the adversarial CI suite — not an operational habit.
 3. **Children's data guardrails.** Student-facing assistants (`AI-PAR-03`) run age-appropriate system prompts with hard topic guardrails; student/parent assistants access `own`-scoped records only; dropout/at-risk scores are never shown to students or guardians.
@@ -56,7 +57,7 @@ Design rule (from [`../01-phases/phase-3-ai.md`](../01-phases/phase-3-ai.md) §3
 ## 4. Provider Selection & Exit Strategy
 
 - **Selection criteria (in priority order):** contractual no-training + retention terms (§1.4); safety/guardrail quality for child-adjacent use; tool-use and structured-output reliability; latency and streaming support; regional availability; price per token across tiers.
-- **Primary:** Anthropic Claude API *(recommendation, per [`ai-architecture.md`](../02-architecture/ai-architecture.md))*; **secondary:** one alternative provider configured for failover and price leverage.
+- **Primary:** Anthropic Claude API, the only provider at launch; a secondary provider for failover and price leverage is deferred until a second feature class needs it ([ADR-0035](../decisions/0035-ai-gateway-shape.md)).
 - **Exit strategy:** all provider access goes through the Provider Adapter — no provider SDK types outside it; prompts are provider-neutral templates versioned in-repo; the evaluation harness (§6) re-baselines any candidate model, so switching provider or model is a config change plus an eval run, not a rewrite. Contracts avoid volume lock-in beyond 12 months (recommendation).
 - **Deprecation handling:** provider model-retirement notices tracked; every feature pins a model version and upgrades only through an eval-gated change.
 
@@ -79,7 +80,7 @@ Design rule (from [`../01-phases/phase-3-ai.md`](../01-phases/phase-3-ai.md) §3
 
 ## 7. Fallback & Degradation
 
-1. Provider timeout → one retry → secondary provider → feature-specific degradation.
+1. Provider timeout or error → one retry inside the 30 s deadline → explicit `503 ai_unavailable` and feature-specific degradation (no secondary provider at launch, ADR-0035).
 2. **Degradation is explicit, never silent:** assistants state that AI is unavailable; batch jobs reschedule; NL catalog search falls back to deterministic full-text search (`AI-LIB-02` pattern); UI hides AI panels when a feature flag is off.
 3. **Deterministic cores never depend on AI:** timetable conflict detection, attendance capture, marks computation, and fee math all run without the gateway — AI outage degrades convenience, never correctness.
 4. Budget exhaustion (§5) degrades identically to provider outage from the user's perspective, with a quota-specific message for tenant admins.
@@ -98,6 +99,15 @@ Design rule (from [`../01-phases/phase-3-ai.md`](../01-phases/phase-3-ai.md) §3
 - **Every approval/rejection** of AI output logs approver, timestamp, and the edit delta reference on the owning module's audit trail.
 - **Retention:** AI audit records follow the platform audit-retention policy ([`../07-quality/non-functional.md`](../07-quality/non-functional.md)); raw provider payload logs, where kept for debugging, are PII-redacted and short-lived (≤ 30 days, recommendation).
 - **Tenant visibility:** `school_owner`/`it_admin` can view their tenant's AI usage and approval logs; platform staff see cross-tenant *metrics*, never row-level content.
+- **Where it is stored:** `ai_requests` and `ai_request_feedback` ([`entities/ai.md`](../05-database/entities/ai.md)), append-only and RLS-isolated, holding references and counts only (`input_ref`/`output_ref` are hashes, never prompt or answer text).
+
+**Permission keys** (registered in `core/ai/permissions.py` and each feature's module):
+
+| Key | What it allows | Default roles |
+| --- | -------------- | ------------- |
+| `ai.usage.view` | `GET /ai/usage`: this month's tokens against the budget, by feature | `school_owner`, `it_admin` |
+| `ai.feedback.create` | `POST /ai/requests/{id}:feedback`: thumbs up/down and a comment on one's own AI output | every staff role |
+| `fees.report.summarize` | `POST /reports/finance-summary:summarize` (AI-FEE-02) | the `fees.report.view` roles: `accountant`, `school_owner`, `principal`, `school_admin` |
 
 ## 10. Per-Feature Governance Checklist (ship gate)
 

@@ -380,6 +380,11 @@
 - **Mistake.** `send_results_back` moved every unpublished result of the exam to `processing`, but the next `processing.write` advanced only the rows it recomputed (the active roll) to `pending_approval`. A student withdrawn between the send-back and the re-process kept a `processing` row, and `approve_exam_results`, which approves only pending rows, moved the exam to `approved` around it: the row was never approved or published, silently (examinations PR #154). The run now moves every `processing` row of the exam to pending, and approval refuses while one is left.
 - **Check.** For every bulk status reset, name the step that re-advances those rows and confirm its filter covers the same row set, not a subset recomputed from today's data (an active roll, a current enrolment). Where it cannot, make the next gate refuse leftovers instead of acting on the rows it finds. Test it: reset, change the population, re-advance, then assert no row is left in the reset state.
 
+### L59. A `non_atomic_requests` route binds its tenant per transaction, and its error tests mirror production's rollback
+
+- **Mistake.** The AI gateway plan made `FinanceReportSummaryView` `non_atomic_requests` so the provider call holds no transaction, but the tenant binding is a `SET LOCAL`: with no transaction around `initial()`, the role and flag reads ran unbound (caught in Task 1's report, before Task 2 built the view). On the sibling online-payments branch, every error-path test of such a route failed later queries, because DRF's `set_rollback` marked `TestCase`'s own transaction for rollback, which production never has.
+- **Check.** On a `non_atomic_requests` view, wrap `initial()` in `transaction.atomic()` and every database read in `tenant_atomic`, then call the long external step with nothing open (`FinanceReportSummaryView` is the pattern). Its error-path tests call `core.api.tests.rollback.rollback_as_in_production(self)` in `setUp`, or use `TransactionTestCase`.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.

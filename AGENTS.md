@@ -148,7 +148,9 @@ commit has a `Root cause:` line (the commit-msg hook and CI check it — ADR-001
 - **CI workflows** (`.github/workflows/`): `api`, `frontend`, `infra-compose` and
   `infra-terraform` are path-filtered to their area; `repo-hygiene` (links, spelling, formatting,
   secrets, doc-sync, plan-review checks) has no path filter and runs on PRs to `main` and the branch prefixes above;
-  `e2e-live` runs nightly and on manual dispatch, not on PRs.
+  `e2e-live` runs nightly and on manual dispatch, not on PRs; `ai-evals` runs AI golden sets on
+  the real provider (weekly, on dispatch, and on PRs touching prompts, `ai.py` or `core/ai`) and
+  fails until the protected `ai-evals` environment holds its key (ADR-0035).
 - **A repeated multi-step task becomes a skill**, not muscle memory: a scoped
   `.claude/skills/<name>/SKILL.md` with the exact commands, paths and gotchas (see `CLAUDE.md`).
 - **A mistake a reviewer, CI or the user catches becomes a lesson.** Add it to

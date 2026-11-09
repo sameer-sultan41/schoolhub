@@ -10,6 +10,29 @@ either this file or `project-status.md`.
 
 ## Deliberately NOT done
 
+- **AI gateway and AI-FEE-02 follow-ups** (`feat/ai-gateway`, plan
+  `docs/superpowers/plans/2026-11-07-ai-gateway.md`, [ADR-0035](decisions/0035-ai-gateway-shape.md)).
+  The gateway and the on-demand finance report summary shipped backend only. Left out on purpose:
+  - **SSE streaming.** `:summarize` answers in one JSON response inside the 30 s deadline;
+    ai-architecture §3's streamed synchronous ask waits for an assistant that needs it.
+  - **Free-form natural-language finance questions.** They need a campus filter on the report
+    endpoint first, so a question about "campus B" cannot read past the caller's scope.
+  - **Summaries attached to scheduled reports.** §13's scheduled delivery does not exist yet.
+  - **The dashboard panel.** No dashboard screen hosts the finance reports yet; the panel (with the
+    "AI-generated" label and the feedback thumbs) comes with that screen.
+  - **Platform-admin usage views and plan quotas.** `GET /ai/usage` is per school; cross-tenant
+    metrics and a quota per plan (multi-tenancy §6) come with platform-admin.
+  - **A Redis budget reservation.** The meter is a database sum, with an overshoot bound of
+    concurrency × (context + `max_output_tokens`) recorded in ADR-0035.
+  - **The 80 % notification to school admins.** The response carries `meta.budget_warning`; the
+    `pla-quota-threshold` notification (platform-admin §12) is not sent yet.
+  - **A second provider.** One provider, one bounded retry, then `503 ai_unavailable` (ADR-0035).
+  - **Response caching** for idempotent reads (ai-governance §5).
+  - **Per-feature sub-limits** within a school's monthly budget (ai-governance §5).
+  - **Before any school's flag is turned on** (governance §10, outside the PR): the DPA with
+    no-training terms signed, staging exercising timeout, quota and kill switch, the `ai-evals`
+    baseline committed from the first dispatched run and green, and usage visible at `/ai/usage`.
+
 - **`notify_results_pending_approval` picks recipients by "holds `exams.result.approve` anywhere".**
   It predates ADR-0031 and is on `main` too (`apps/examinations/tasks.py`). It sends only an exam name and a
   count, so nothing leaks beyond the exam's existence, but a campus-scoped approver of another campus is

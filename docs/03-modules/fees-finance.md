@@ -34,7 +34,7 @@ All monetary amounts are stored as `numeric(12,2)` in the tenant's configured cu
 
 ## 4. Permissions
 
-Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/auth-and-rbac.md). Permission keys use `<module>.<resource>.<action>`. This module declares two namespaces — `fees.*` and `payroll.*` — and the module-specific verbs `collect`, `refund`, and `waive`. Financial mutations require record-level scope ≠ `own` and are always audited with before/after amounts.
+Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/auth-and-rbac.md). Permission keys use `<module>.<resource>.<action>`. This module declares two namespaces — `fees.*` and `payroll.*` — and the module-specific verbs `collect`, `refund`, `waive` and `summarize`. Financial mutations require record-level scope ≠ `own` and are always audited with before/after amounts.
 
 | Permission key | Description | Default roles |
 | -------------- | ----------- | ------------- |
@@ -57,6 +57,7 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 | `fees.expense.approve` | Approve submitted expenses | `accountant`, `school_owner` |
 | `fees.budget.create` / `fees.budget.approve` | Define / approve budgets | `accountant` / `school_owner` |
 | `fees.report.view` / `fees.report.export` | Financial reports and exports | `accountant`, `school_owner`, `principal` |
+| `fees.report.summarize` † | Ask for an AI-generated summary of a financial report (AI-FEE-02, §14) | the same roles as `fees.report.view` as registered: `accountant`, `school_owner`, `principal`, `school_admin` |
 | `payroll.salary-structure.create` / `.update` | Manage salary structures and components | `hr_staff`, `accountant` |
 | `payroll.run.create` | Prepare/process a payroll run | `accountant`, `hr_staff` |
 | `payroll.run.approve` | Approve a payroll run for payment | `school_owner`, `school_admin` |
@@ -77,7 +78,8 @@ PR, which is how `attendance.student-attendance.import` and examinations' five
 gap keys were resolved. `fees.ledger.create` is `accountant`-only and
 deliberately excludes `finance_staff`: §3 makes them a data-entry role, and a
 manual journal is the one operation that moves money between accounts with no
-invoice or payment behind it.
+invoice or payment behind it. `fees.report.summarize` was added with AI-FEE-02 (§14): a POST
+needs a key of its own rather than the read key, and a school can grant reports without AI.
 
 ## 5. Main Features
 
@@ -239,6 +241,11 @@ Cross-referenced to [`ai-features.md`](../04-ai/ai-features.md); all outputs adv
 
 - **`AI-FEE-01` Fee/payment prediction** — per-student late/default likelihood from payment history, invoice size, and engagement signals; surfaces a prioritized follow-up list on the accountant dashboard. Human approval required before any communication is sent.
 - **`AI-FEE-02` Natural-language finance queries & report summaries** — "collection this term vs last, by campus" answered from report data; AI-generated narrative summaries attached to scheduled reports. Read-only.
+  - **Built: on-demand report summaries.** `POST /reports/finance-summary:summarize` takes a §13 `kind`, a period and (for collection) a `group_by`, and returns `{data: {summary, facts, model, prompt_version, ai_request_id, ai_generated: true}, meta: {budget_warning}}`. Behind `fees.report.summarize` (§4), the module flag and the default-off `ai.fee-report-summary` flag, under the gateway's `ai.gateway` kill switch ([ADR-0035](../decisions/0035-ai-gateway-shape.md)).
+  - **What the model sees:** SQL aggregates over the caller's scoped set (scoped by both `fees.report.view` and `fees.report.summarize`), never the inline report rows, so a report too large to return inline still gets its summary; a table of at most fifty grouped rows (first, last and largest kept). Only the fields `apps/fees_finance/ai.py`'s per-kind `CONTEXT_ALLOWLIST` names: no names, admission numbers, user ids, expense numbers, descriptions, vendors, grant or budget names, or row ids. Cashiers and budgets appear as `Cashier-N` / `Budget-N` and are restored in the answer. Ledger-account and category names are fenced in `<report_data>` as untrusted. `student-ledger` is refused (`422` on `kind`).
+  - **Numbers are the server's:** the model cites `{{fact:<key>}}` and the server substitutes the value; an answer with a figure of its own is refused (`503 ai_unavailable`) and still metered. An empty report returns `summary: ""` with its facts, records an `ok` row with zero tokens and calls no model.
+  - **Errors:** `403 module_disabled` (a flag off), `429 ai_quota_exceeded` with `meta.scope` `tenant` or `user`, `503 ai_unavailable` (provider down, not configured, or the answer refused). Every call leaves one `ai_requests` row.
+  - **Not built yet:** free-form NL questions, summaries attached to scheduled reports, the dashboard panel (`docs/deferred-work.md`).
 - **`AI-FEE-03` Smart reminder suggestions** — recommended reminder timing/wording per guardian (ties to automated parent-communication suggestions); drafts require staff approval before sending.
 - **`AI-FEE-04` Payroll & expense anomaly detection** — flags outlier payslip deltas and unusual expense patterns during review (recommendation).
 
@@ -610,3 +617,19 @@ tables, staff leave *policy* and accrual do not exist yet.
 | ---- | ----- |
 | Vouchers in the portal | `GET /vouchers` and `GET /vouchers/{id}/download?format=pdf` were already portal-readable (`fees.payment.view`, `PORTAL_READABLE_ACTIONS`, record-scoped). The guardian's fees page asks for `student=` and `status=issued` and offers each outstanding invoice its slips as a PDF through `ApiClient.downloadBlob` (bearer header); an invoice with none says "Ask the school office for a voucher." A guardian never issues or voids a slip (`fees.payment.collect`, staff-only) |
 | Tests | Jest `features/portal/fees/__tests__/portal-fees.test.tsx`; mocked `e2e/tests/dashboard/portal-leave-vouchers.spec.ts`; live `e2e/tests/live/api/portal-leave.spec.ts` (the school issues a slip, the guardian lists and downloads it) |
+
+### Built (AI gateway: AI-FEE-02)
+
+| Area | State |
+| ---- | ----- |
+| Endpoint | `POST /reports/finance-summary:summarize` (`FinanceReportSummaryView`), `non_atomic_requests`: its auth, flag and key checks run in one short transaction, its facts are read in a `tenant_atomic`, and the gateway calls the model with no transaction open ([ADR-0035](../decisions/0035-ai-gateway-shape.md)). Throttled by the defaults plus the per-user `ai` rate |
+| Key and flag | `fees.report.summarize` (§4 †, the report roles) and `ai.fee-report-summary` (default off, the per-school opt-in) |
+| Context | `services.report_summary_facts`: one aggregate per kind over the scoped set (`reports.collection_totals`, `aging_totals`, `grant_register_counts`, `expense_totals`, and the existing grouped income, budget and trial-balance reports), shaped by `ai.py`'s `CONTEXT_ALLOWLIST`; the aging buckets are shared with §13.2's report (`reports._aging_sums`) so day thirty lands in the same bucket in both |
+| Prompt | `apps/fees_finance/prompts/report_summary_v1.txt`, `prompt_version` `fees.report-summary@1`, tier `fast`, at most 600 output tokens |
+| Evals | `tests/evals/report_summary_golden.json` (20 cases, 6 adversarial), scored by `run_ai_evals --feature fees.report-summary` in the `ai-evals` workflow; `tests/evals/baseline.json` is committed from the first dispatched run, before any school's flag is turned on |
+| Tests | `tests/test_report_summary.py` (narrative, campus scope, allowlist per kind, fencing, grounding, the row cap, the empty report, access and flags), `tests/test_ai_evals_golden.py`, and the cross-tenant case in `tests/test_cross_tenant.py` |
+
+**`school_admin` holds `fees.report.summarize`.** §4's row for `fees.report.view` lists three roles,
+but the registry grants it to `school_admin` as well (`REPORT_VIEWERS`). The summary key reuses that
+tuple, so it can never be granted to someone the report itself is not.
+
