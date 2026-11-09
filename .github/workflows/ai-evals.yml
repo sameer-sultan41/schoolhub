@@ -4,8 +4,17 @@ name: ai-evals
 # baseline (ai-governance.md §6, ADR-0035). It spends real tokens, so it runs only
 # where a prompt, a feature's context, the gateway or the model settings change,
 # weekly for model drift, and by hand. The key is a spend-capped one held in the
-# protected `ai-evals` environment; without it the job fails and says so. It is
-# not a required check until that secret exists.
+# protected `ai-evals` environment; without it the job fails and says so.
+#
+# The first baseline comes from a PR, because `workflow_dispatch` only works once
+# this file is on main:
+#   1. add the ANTHROPIC_API_KEY secret to the `ai-evals` environment;
+#   2. add the `ai-evals:write-baseline` label to the PR: this run writes the
+#      baseline instead of comparing, and uploads it as the `ai-eval-baseline` artifact;
+#   3. download it (`gh run download <run-id> -n ai-eval-baseline`), review it and
+#      commit it under apps/api/;
+#   4. remove the label, then push that commit: the push runs the comparison.
+# Without a committed baseline the comparison fails.
 
 on:
   workflow_dispatch:
@@ -22,6 +31,7 @@ on:
     # Mondays 03:17 UTC: drift in the pinned models with no code change.
     - cron: "17 3 * * 1"
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - "apps/**/prompts/**"
       - "apps/**/ai.py"
@@ -46,12 +56,17 @@ env:
 
 jobs:
   evals:
+    # Adding any other label must not spend tokens on a second comparison.
+    if: >-
+      github.event_name != 'pull_request' || github.event.action != 'labeled' ||
+      github.event.label.name == 'ai-evals:write-baseline'
     runs-on: ubuntu-latest
     environment: ai-evals
     timeout-minutes: 20
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       FEATURE: ${{ inputs.feature || 'fees.report-summary' }}
+      WRITE_BASELINE: ${{ inputs.write_baseline || contains(github.event.pull_request.labels.*.name, 'ai-evals:write-baseline') }}
     steps:
       - name: Require the eval key
         run: |
@@ -64,16 +79,17 @@ jobs:
       - uses: ./.github/actions/setup-api-env
 
       - name: Write the baseline
-        if: ${{ inputs.write_baseline }}
+        if: env.WRITE_BASELINE == 'true'
         run: uv run manage.py run_ai_evals --feature "$FEATURE" --write-baseline
 
       - name: Upload the baseline for review
-        if: ${{ inputs.write_baseline }}
+        if: env.WRITE_BASELINE == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ai-eval-baseline
           path: apps/api/apps/*/tests/evals/baseline.json
+          if-no-files-found: error
 
       - name: Compare with the committed baseline
-        if: ${{ !inputs.write_baseline }}
+        if: env.WRITE_BASELINE != 'true'
         run: uv run manage.py run_ai_evals --feature "$FEATURE"
