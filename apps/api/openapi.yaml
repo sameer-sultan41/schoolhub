@@ -17339,6 +17339,11 @@ components:
           format: uuid
           readOnly: true
           nullable: true
+        created_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
         receipt_file:
           type: string
           format: uuid
@@ -17356,6 +17361,7 @@ components:
       - approved_by
       - category_name
       - created_at
+      - created_by
       - description
       - expense_category
       - expense_date
@@ -22187,6 +22193,11 @@ components:
           - $ref: '#/components/schemas/ExpenseStatusEnum'
           readOnly: true
         approved_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        created_by:
           type: string
           format: uuid
           readOnly: true

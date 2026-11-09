@@ -7663,6 +7663,8 @@ export interface components {
             /** Format: uuid */
             readonly approved_by: string | null;
             /** Format: uuid */
+            readonly created_by: string | null;
+            /** Format: uuid */
             receipt_file?: string | null;
             /** Format: date-time */
             readonly created_at: string;
@@ -10010,6 +10012,8 @@ export interface components {
             readonly status?: components["schemas"]["ExpenseStatusEnum"];
             /** Format: uuid */
             readonly approved_by?: string | null;
+            /** Format: uuid */
+            readonly created_by?: string | null;
             /** Format: uuid */
             receipt_file?: string | null;
             /** Format: date-time */

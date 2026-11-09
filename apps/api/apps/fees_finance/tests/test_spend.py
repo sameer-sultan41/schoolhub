@@ -204,6 +204,32 @@ class ExpenseApprovalTests(SpendTestCase):
         self.assertEqual(credit.ledger_account_id, self.cash.pk)
 
 
+class ExpenseCreatedByTests(SpendTestCase):
+    def test_an_expense_exposes_who_created_it(self) -> None:
+        expense = self._expense()
+
+        response = self.client.get(f"/api/v1/expenses/{expense.pk}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"]["created_by"], str(self.user.pk))
+
+    def test_created_by_is_stamped_on_create_and_ignores_the_body(self) -> None:
+        response = self.client.post(
+            "/api/v1/expenses",
+            {
+                "expense_category": str(self.category.pk),
+                "description": "Chalk",
+                "amount": "100.00",
+                "expense_date": "2026-09-15",
+                "created_by": str(self.approver.pk),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(response.json()["data"]["created_by"], str(self.user.pk))
+
+
 class ExpenseReversalTests(SpendTestCase):
     def _approved(self, **kwargs) -> Expense:
         expense = self._expense(**kwargs)

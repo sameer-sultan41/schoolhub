@@ -879,18 +879,21 @@ class ExpenseSerializer(serializers.ModelSerializer):
             "payment_method",
             "status",
             "approved_by",
+            "created_by",
             "receipt_file",
             "created_at",
             "updated_at",
         ]
         # `status` and `approved_by` move through the colon-actions, which run
         # the segregation-of-duties check and the ledger posting a PATCH would
-        # bypass. `expense_no` is allocated at creation.
+        # bypass. `expense_no` is allocated at creation. `created_by` is shown so
+        # a client can hide Approve from the submitter; the service still enforces it.
         read_only_fields = [
             "id",
             "expense_no",
             "status",
             "approved_by",
+            "created_by",
             "gross_amount",
             "created_at",
             "updated_at",
