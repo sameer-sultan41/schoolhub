@@ -31,7 +31,28 @@ either this file or `project-status.md`.
   - **Per-feature sub-limits** within a school's monthly budget (ai-governance §5).
   - **Before any school's flag is turned on** (governance §10, outside the PR): the DPA with
     no-training terms signed, staging exercising timeout, quota and kill switch, the `ai-evals`
-    baseline committed from the first dispatched run and green, and usage visible at `/ai/usage`.
+    baseline committed and green (add the environment's `ANTHROPIC_API_KEY` secret, add the PR
+    label `ai-evals:write-baseline`, commit the uploaded `baseline.json`, remove the label and push:
+    the comparison then passes), and usage visible at `/ai/usage`.
+
+- **`GET/POST /reports/finance-summary` and `GET /students/{id}/ledger` refuse a token-only caller
+  (pre-existing, on `main`; needs its own `fix/` PR).** `FinanceReportView` and `StudentLedgerView`
+  (`apps/fees_finance/views.py`) are plain `APIView`s without `TenantScopedViewSetMixin`, so nothing
+  resolves `request.tenant` after DRF's JWT authentication. `TenantMiddleware` resolves it from the
+  Django session only, and a production client sends a bearer token and no session
+  (`apps/api/tests/test_tenant_binding.py`). `RequiresModuleFeature` then finds no tenant and fails
+  closed, so both endpoints answer 403 in production. Their tests pass because `authenticate()`
+  also calls `force_login`. The fix: add the mixin (set `scope_campus_field = None`, as
+  `FinanceReportSummaryView` does, since the reports scope their own campus fields), plus a
+  token-only test per endpoint. Found while building AI-FEE-02, which has the mixin and a token-only
+  `TransactionTestCase` (`test_report_summary_commit.py`); not fixed in `feat/ai-gateway` to keep
+  that PR to its own feature.
+
+- **Two copies of the `non_atomic_requests` rollback test helper.** `core/api/tests/rollback.py`
+  (`feat/ai-gateway`) and `OnlinePaymentsTestCase`'s `set_rollback` patch in
+  `apps/fees_finance/tests/online_base.py` (`feat/fee-online-payments`, lesson L62) are the same
+  patch. Whichever branch merges second makes the other import `rollback_as_in_production`
+  and deletes its copy.
 
 - **`notify_results_pending_approval` picks recipients by "holds `exams.result.approve` anywhere".**
   It predates ADR-0031 and is on `main` too (`apps/examinations/tasks.py`). It sends only an exam name and a

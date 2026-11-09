@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-10
-- **Enforced by:** `apps/api/core/ai/tests/test_boundaries.py` (`test_anthropic_imported_only_in_adapter`: the SDK is imported in the adapter only); `core/ai/tests/test_service.py` and `test_audit_commit.py` (gate order, one committed row per call, the 429/503 codes); `core/ai/tests/test_anthropic_adapter.py` (`test_deadline_bounds_total_retry_time`); `apps/fees_finance/tests/test_report_summary.py` (the first feature end to end); `core/ai/tests/test_evals.py` and the `ai-evals` workflow (a missing baseline or secret fails). Putting a new feature's endpoint in its own module rather than in `core/ai` is review only
+- **Enforced by:** `apps/api/core/ai/tests/test_boundaries.py` (`test_anthropic_imported_only_in_adapter`: the SDK is imported in the adapter only); `core/ai/tests/test_service.py` and `test_audit_commit.py` (gate order, one committed row per call, the 429/503 codes); `core/ai/tests/test_anthropic_adapter.py` (`test_deadline_bounds_total_retry_time`); `apps/fees_finance/tests/test_report_summary.py` (the first feature end to end) and `test_report_summary_commit.py` (decision 4 under token-only auth and real transactions); `core/ai/tests/test_evals.py` and the `ai-evals` workflow (a missing baseline or secret fails). Putting a new feature's endpoint in its own module rather than in `core/ai` is review only
 
 ## Context
 
@@ -38,12 +38,19 @@ showed three of those choices do not fit yet. Decided in plan
    before any exception leaves it. A 403, 429 or 503 therefore still leaves exactly one row.
 5. **Numbers are grounded, not trusted.** The model writes `{{fact:<key>}}`; the server substitutes
    the value. An answer with a digit outside a placeholder or an allowlisted label is refused
-   (`core.ai.grounding`), and still counts toward the budget.
+   (`core.ai.grounding`), and still counts toward the budget. **Limitation:** the check sees digits
+   only, so a figure spelled in words ("twelve families") passes it. The prompt forbids that, and the
+   golden case `adversarial-numbers-in-words` fails the evals if the model does it; parsing number
+   words in every language a school writes in is not attempted.
 6. **Evals run on the real provider, against a committed baseline.** `run_ai_evals --feature <key>`
    scores the feature's golden set and fails when a score falls below the baseline's tolerance,
    when an adversarial case leaks, when the baseline is missing, or when no API key is set. Current
    Claude models take no sampling parameters (the SDK removed `temperature`), so runs are not
-   bit-for-bit repeatable; the tolerance absorbs that.
+   bit-for-bit repeatable; the tolerance absorbs that. `workflow_dispatch` runs only once the
+   workflow is on `main`, so the first baseline comes from the PR itself: add the environment's
+   `ANTHROPIC_API_KEY` secret, add the label `ai-evals:write-baseline` (that run writes the baseline
+   and uploads it as an artifact instead of comparing), commit the artifact's `baseline.json`,
+   remove the label and push; the comparison then passes.
 
 ## Alternatives considered
 

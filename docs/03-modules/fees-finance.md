@@ -626,7 +626,7 @@ tables, staff leave *policy* and accrual do not exist yet.
 | Key and flag | `fees.report.summarize` (§4 †, the report roles) and `ai.fee-report-summary` (default off, the per-school opt-in) |
 | Context | `services.report_summary_facts`: one aggregate per kind over the scoped set (`reports.collection_totals`, `aging_totals`, `grant_register_counts`, `expense_totals`, and the existing grouped income, budget and trial-balance reports), shaped by `ai.py`'s `CONTEXT_ALLOWLIST`; the aging buckets are shared with §13.2's report (`reports._aging_sums`) so day thirty lands in the same bucket in both |
 | Prompt | `apps/fees_finance/prompts/report_summary_v1.txt`, `prompt_version` `fees.report-summary@1`, tier `fast`, at most 600 output tokens |
-| Evals | `tests/evals/report_summary_golden.json` (20 cases, 6 adversarial), scored by `run_ai_evals --feature fees.report-summary` in the `ai-evals` workflow; `tests/evals/baseline.json` is committed from the first dispatched run, before any school's flag is turned on |
+| Evals | `tests/evals/report_summary_golden.json` (21 cases, 7 adversarial, one of them a figure spelled in words, which grounding cannot see), scored by `run_ai_evals --feature fees.report-summary` in the `ai-evals` workflow; `tests/evals/baseline.json` is committed before any school's flag is turned on, from the run the PR label `ai-evals:write-baseline` triggers (ADR-0035 decision 6) |
 | Tests | `tests/test_report_summary.py` (narrative, campus scope, allowlist per kind, fencing, grounding, the row cap, the empty report, access and flags), `tests/test_ai_evals_golden.py`, and the cross-tenant case in `tests/test_cross_tenant.py` |
 
 **`school_admin` holds `fees.report.summarize`.** §4's row for `fees.report.view` lists three roles,

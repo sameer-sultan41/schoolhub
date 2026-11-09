@@ -6,6 +6,10 @@ nothing. Under `TestCase` it finds the test's own wrapping transaction and marks
 *that*, so every later query in the test fails with `TransactionManagementError`.
 This patch skips the blocks `TestCase` opened, the way Django itself does for
 `atomic(durable=True)` (`Atomic._from_testcase`).
+
+`feat/fee-online-payments` carries the same patch in `OnlinePaymentsTestCase`
+(lesson L62); whichever branch merges second consolidates on this one
+(`docs/deferred-work.md`).
 """
 
 from __future__ import annotations

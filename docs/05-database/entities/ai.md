@@ -12,10 +12,11 @@ so a refused call (403, 429, 503) still leaves its row. The budget meter sums th
 | Column | Type | Null | Default | Notes |
 | ------ | ---- | ---- | ------- | ----- |
 | user_id | uuid | no | — | The user who asked; `users.id` without a FK, as on other audit tables |
+| created_by | uuid | yes | — | The base column (`AppendOnlyTenantModel`); set to the same user as `user_id` |
 | feature_key | varchar(60) | no | — | The registered feature, e.g. `fees.report-summary` |
 | prompt_version | varchar(40) | no | — | e.g. `fees.report-summary@1` (ai-governance §6) |
 | model | varchar(60) | no | `''` | The model that answered; empty when no call was made |
-| input_ref | varchar(200) | no | — | A reference to the input, never the input: `sha256:<hex>` of the context sent |
+| input_ref | varchar(200) | no | — | What the context was built from, named by the feature, never the input itself. `fees.report-summary` stores `sha256:<hex>` of the kind, facts and table rows before they were rendered into the prompt |
 | output_ref | varchar(200) | no | `''` | `sha256:<hex>` of the raw answer; empty when no call was made |
 | input_tokens | integer ≥ 0 | no | `0` | |
 | output_tokens | integer ≥ 0 | no | `0` | |
@@ -25,7 +26,9 @@ so a refused call (403, 429, 503) still leaves its row. The budget meter sums th
 | outcome | varchar(20) | no | — | Enum: `ok`, `fallback` (provider failed or not configured), `refused` (stop reason or validator), `quota`, `disabled` |
 | created_at | timestamptz | no | `now()` | Explicit, not auto: the budget windows read it in the tenant's timezone |
 
-Indexes: `(tenant_id, created_at)`; `(tenant_id, user_id, created_at)`.
+Plus `id` (uuid PK) and `tenant_id`, as on every tenant-owned table.
+Indexes: `(tenant_id, created_at)`; `(tenant_id, user_id, created_at)`. No index on `created_at` alone:
+RLS adds `tenant_id` to every query, so the composite indexes serve every read.
 Relationships: 1:1 `ai_request_feedback`.
 
 ### ai_request_feedback
@@ -37,6 +40,7 @@ second vote is `409`.
 | ------ | ---- | ---- | ------- | ----- |
 | ai_request_id | uuid | no | — | FK → `ai_requests.id`, unique, `PROTECT` |
 | user_id | uuid | no | — | Must be the request's own user |
+| created_by | uuid | yes | — | The base column; set to the same user as `user_id` |
 | value | smallint | no | — | `-1` or `1` (CHECK `ai_request_feedback_value_check`) |
 | comment | varchar(500) | no | `''` | Stored for prompt review; never sent to a provider |
 | created_at | timestamptz | no | `now()` | |
