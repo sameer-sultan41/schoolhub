@@ -1767,7 +1767,8 @@ def _ledger_report_queryset(*, user, permission: str | AnyOf) -> models.QuerySet
     scopes = scopes_for(user, permission)
     if RecordScope.CAMPUS in scopes and RecordScope.ALL not in scopes:
         return LedgerEntry.objects.none()
-    return scope_queryset(LedgerEntry.objects, user, permission=permission, campus_field=None)
+    # `.all()`: an `all` scope returns the input unchanged, and the summary ANDs two of these.
+    return scope_queryset(LedgerEntry.objects.all(), user, permission=permission, campus_field=None)
 
 
 def build_report_rows(
