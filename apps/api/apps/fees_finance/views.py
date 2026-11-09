@@ -708,13 +708,24 @@ class ScholarshipViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         record_audit(self.request, "create", instance)
 
     def perform_update(self, serializer):
-        """Deciding an applied award stamps the approver at that moment."""
-        status = serializer.validated_data.get("status", serializer.instance.status)
-        approver = serializer.instance.approved_by
-        if status != ScholarshipStatus.APPLIED and approver is None:
-            approver = self.request.user.pk
-        instance = serializer.save(updated_by=self.request.user.pk, approved_by=approver)
-        record_audit(self.request, "update", instance)
+        """Deciding an applied award stamps the approver at that moment.
+
+        The row is re-read under a lock and the move re-checked against its stored status,
+        so two racing PATCHes cannot both pass validation on a stale read and re-activate a
+        revoked award.
+        """
+        with transaction.atomic():
+            locked = services.lock_scholarship_for_transition(
+                scholarship=serializer.instance,
+                new_status=serializer.validated_data.get("status"),
+            )
+            serializer.instance = locked
+            status = serializer.validated_data.get("status", locked.status)
+            approver = locked.approved_by
+            if status != ScholarshipStatus.APPLIED and approver is None:
+                approver = self.request.user.pk
+            instance = serializer.save(updated_by=self.request.user.pk, approved_by=approver)
+            record_audit(self.request, "update", instance)
 
 
 class FineViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):

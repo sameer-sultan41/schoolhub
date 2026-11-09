@@ -54,6 +54,7 @@ from apps.fees_finance.models import (
     Refund,
     RefundStatus,
     Scholarship,
+    ScholarshipStatus,
     SettlementRow,
     VoucherCollectionImport,
     VoucherStatus,
@@ -230,8 +231,36 @@ def assert_scholarship_transition(*, scholarship: Scholarship, new_status: str) 
     if new_status not in allowed:
         legal = ", ".join(sorted(allowed)) or "none, it is final"
         raise DomainRuleViolation(
-            {"status": f"A {current} award cannot become {new_status}. Allowed next: {legal}."}
+            {
+                "status": (
+                    f"{_with_article(ScholarshipStatus(current).label)} award cannot become "
+                    f"{ScholarshipStatus(new_status).label.lower()}. Allowed next: {legal}."
+                )
+            }
         )
+
+
+def _with_article(label: str) -> str:
+    """ "An approved", "A revoked": the indefinite article for a lower-cased status label."""
+    word = label.lower()
+    return f"{'An' if word.startswith(('a', 'e', 'i', 'o', 'u')) else 'A'} {word}"
+
+
+def lock_scholarship_for_transition(
+    *, scholarship: Scholarship, new_status: str | None
+) -> Scholarship:
+    """Re-read the award under a row lock and check the move against what is stored now.
+
+    The serializer validated against the instance `get_object` loaded, which another
+    request may have moved since (a revoke landing between the read and the save). Only
+    the locked row's status is authoritative, so the transition is checked here too, and
+    the caller saves the locked row. `new_status=None` is a PATCH that names no status: no
+    move, only the lock. Call inside `transaction.atomic`.
+    """
+    locked = Scholarship.objects.select_for_update().get(pk=scholarship.pk)
+    if new_status is not None:
+        assert_scholarship_transition(scholarship=locked, new_status=new_status)
+    return locked
 
 
 def assert_session_is_writable(*, academic_session) -> None:

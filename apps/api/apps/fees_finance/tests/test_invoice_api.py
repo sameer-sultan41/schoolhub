@@ -11,6 +11,10 @@ the same guardian is refused every write.
 from __future__ import annotations
 
 from decimal import Decimal
+from unittest import mock
+
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 
 from apps.fees_finance.models import (
     SCHOLARSHIP_TRANSITIONS,
@@ -18,6 +22,7 @@ from apps.fees_finance.models import (
     FeeInvoice,
     FineStatus,
     InvoiceStatus,
+    Scholarship,
     ScholarshipStatus,
 )
 from apps.fees_finance.tasks import generate_invoices_task
@@ -32,6 +37,7 @@ from apps.fees_finance.tests.factories import (
     fine_head,
     grant,
 )
+from apps.fees_finance.views import ScholarshipViewSet
 from core.jobs.tests.base import assert_sent_on_commit
 from core.tenancy.context import tenant_context
 
@@ -349,6 +355,32 @@ class PortalAccessTests(FeesFinanceAPITestCase):
 
 
 class GrantEndpointTests(FeesFinanceAPITestCase):
+    def test_naming_the_student_costs_no_query_per_row(self) -> None:
+        """`student_name` reads the student, so each register must fetch it in the
+        list query: the count with one row must equal the count with four."""
+        head = fine_head(self.tenant, self.fine_income)
+        makers = {
+            "discounts": lambda: DiscountFactory(
+                tenant=self.tenant, student=self.student, academic_session=self.session
+            ),
+            "scholarships": lambda: ScholarshipFactory(
+                tenant=self.tenant, student=self.student, academic_session=self.session
+            ),
+            "fines": lambda: FineFactory(tenant=self.tenant, student=self.student, fee_head=head),
+        }
+        for path, make in makers.items():
+            with self.subTest(path=path):
+                with tenant_context(self.tenant.id):
+                    make()
+                with CaptureQueriesContext(connection) as one:
+                    self.assertEqual(self.client.get(f"/api/v1/{path}").status_code, 200)
+                with tenant_context(self.tenant.id):
+                    for _ in range(3):
+                        make()
+                with self.assertNumQueries(len(one)):
+                    response = self.client.get(f"/api/v1/{path}")
+                self.assertGreaterEqual(len(response.json()["data"]), 4)
+
     def test_every_register_names_its_student(self) -> None:
         """A register that shows ids is unreadable, and the client cannot fetch
         every student to name them: the row carries the name itself."""
@@ -563,6 +595,50 @@ class ScholarshipTransitionTests(FeesFinanceAPITestCase):
     def test_an_ended_award_cannot_be_reactivated(self) -> None:
         response = self._patch(ScholarshipStatus.ENDED, ScholarshipStatus.ACTIVE)
         self.assertEqual(response.status_code, 422)
+
+    def test_the_refusal_names_the_move_in_plain_words(self) -> None:
+        cases = [
+            (
+                ScholarshipStatus.APPROVED,
+                ScholarshipStatus.ENDED,
+                "An approved award cannot become ended. Allowed next: active, revoked.",
+            ),
+            (
+                ScholarshipStatus.REVOKED,
+                ScholarshipStatus.ACTIVE,
+                "A revoked award cannot become active. Allowed next: none, it is final.",
+            ),
+        ]
+        for current, new, sentence in cases:
+            with self.subTest(move=f"{current} -> {new}"):
+                response = self._patch(current, new)
+                self.assertEqual(response.json()["error"]["details"][0]["issue"], sentence)
+
+    def test_a_stale_read_cannot_reactivate_a_revoked_award(self) -> None:
+        """Validation ran against the row `get_object` loaded; a revoke that lands after
+        that read must still win, because only the locked row's status is current."""
+        with tenant_context(self.tenant.id):
+            scholarship = ScholarshipFactory(
+                tenant=self.tenant,
+                student=self.student,
+                academic_session=self.session,
+                status=ScholarshipStatus.APPROVED,
+            )
+            stale = Scholarship.objects.get(pk=scholarship.pk)
+            Scholarship.objects.filter(pk=scholarship.pk).update(status=ScholarshipStatus.REVOKED)
+
+        with mock.patch.object(ScholarshipViewSet, "get_object", return_value=stale):
+            response = self.client.patch(
+                f"/api/v1/scholarships/{scholarship.pk}",
+                {"status": ScholarshipStatus.ACTIVE},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["error"]["details"][0]["field"], "status")
+        with tenant_context(self.tenant.id):
+            scholarship.refresh_from_db()
+        self.assertEqual(scholarship.status, ScholarshipStatus.REVOKED)
 
     def test_patching_other_fields_on_a_terminal_award_is_not_a_move(self) -> None:
         with tenant_context(self.tenant.id):
