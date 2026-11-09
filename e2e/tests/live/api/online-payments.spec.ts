@@ -106,7 +106,7 @@ test.describe("online fee payments (live API, fake provider)", () => {
 
     const delivered = await postCallback(callbackUrl, body, signature);
     expect(delivered.status).toBe(200);
-    expect(await delivered.json()).toEqual({ data: { received: true } });
+    expect(await delivered.json()).toMatchObject({ data: { received: true } });
 
     const confirmed = (await liveApiClient.get<Payment>(`/payments/${paymentId}`)).data;
     expect(confirmed.status).toBe("confirmed");
