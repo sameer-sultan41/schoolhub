@@ -409,6 +409,8 @@ export const endpoints = {
   /** `/payments`: read with `fees.payment.view` (also the key for receipts and vouchers). */
   payments: {
     list: "/payments",
+    /** Colon-action, not a nested path: the registered route is `/payments:record` (`fees.payment.collect`). */
+    record: "/payments:record",
   },
   /** `/vouchers`: a guardian reads the slips of their own child's invoices; `download` streams
    * a PDF (`?format=pdf|thermal`). */

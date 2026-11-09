@@ -1,6 +1,14 @@
-import { listPayments } from "./payments-service";
+import { listPayments, recordPayment } from "./payments-service";
 
 export const PaymentsService = {
   listPayments,
+  recordPayment,
 };
-export type { PaymentMethod, PaymentRecord, PaymentsQuery, PaymentStatus } from "./payments-type";
+export type {
+  CounterPaymentMethod,
+  PaymentMethod,
+  PaymentRecord,
+  PaymentsQuery,
+  PaymentStatus,
+  RecordPaymentInput,
+} from "./payments-type";

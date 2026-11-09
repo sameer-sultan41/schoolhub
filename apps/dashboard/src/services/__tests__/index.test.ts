@@ -247,6 +247,7 @@ describe("Services", () => {
     expect(typeof Services.feeInvoices.generateFeeInvoices).toBe("function");
     expect(typeof Services.feeInvoices.cancelFeeInvoice).toBe("function");
     expect(typeof Services.payments.listPayments).toBe("function");
+    expect(typeof Services.payments.recordPayment).toBe("function");
     expect(typeof Services.ledgerAccounts.listLedgerAccounts).toBe("function");
     expect(typeof Services.ledgerAccounts.fetchLedgerAccount).toBe("function");
     expect(typeof Services.ledgerAccounts.createLedgerAccount).toBe("function");

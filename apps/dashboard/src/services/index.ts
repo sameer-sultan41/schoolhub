@@ -380,6 +380,7 @@ export type {
 } from "./modules/scholarships";
 export type { FineRecord, FineStatus, FineType } from "./modules/fines";
 export type {
+  CounterPaymentMethod,
   PaymentMethod,
   PaymentRecord,
   PaymentsQuery,

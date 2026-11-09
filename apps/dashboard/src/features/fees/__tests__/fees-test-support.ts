@@ -38,6 +38,8 @@ export const fetchFeeInvoice = mocked(Services.feeInvoices.fetchFeeInvoice);
 export const generateFeeInvoices = mocked(Services.feeInvoices.generateFeeInvoices);
 export const cancelFeeInvoice = mocked(Services.feeInvoices.cancelFeeInvoice);
 export const listPayments = mocked(Services.payments.listPayments);
+export const recordPayment = mocked(Services.payments.recordPayment);
+export const downloadReceipt = mocked(Services.receipts.downloadReceipt);
 export const listVouchers = mocked(Services.vouchers.listVouchers);
 export const fetchJob = mocked(Services.jobs.fetchJob);
 export const activateFeeStructure = mocked(Services.feeStructures.activateFeeStructure);
@@ -84,6 +86,14 @@ export const INVOICING_PERMISSIONS: PermissionKey[] = [
   "fees.payment.view",
   "fees.fee-structure.view",
   "school.academic-session.view",
+];
+
+/** The keys the seeded `finance_staff` holds for the counter (`fees.payment.collect`, the invoice
+ * read), plus the student read its picker makes. */
+export const COUNTER_PERMISSIONS: PermissionKey[] = [
+  "fees.payment.collect",
+  "fees.invoice.view",
+  "students.student.view",
 ];
 
 export function cursorPage<T>(items: T[], nextCursor: string | null = null): Page<T> {
@@ -259,6 +269,7 @@ export function paymentRecord(overrides: Partial<PaymentRecord> = {}): PaymentRe
     status: "confirmed",
     paid_at: "2026-10-05T09:00:00Z",
     received_by: null,
+    receipt: "b1111111-1111-4111-8111-111111111111",
     receipt_no: "RCT-2026-0001",
     created_at: STAMP,
     ...overrides,

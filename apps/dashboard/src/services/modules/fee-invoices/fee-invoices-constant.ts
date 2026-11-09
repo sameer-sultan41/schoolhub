@@ -12,6 +12,10 @@ import type {
 export const FEE_INVOICES_QUERY_MODULE = "fee-invoices";
 export const FEE_INVOICES_LIST_RESOURCE = "list";
 export const FEE_INVOICES_DETAIL_RESOURCE = "detail";
+/** One student's outstanding invoices on the fee counter. */
+export const FEE_INVOICES_COUNTER_RESOURCE = "counter-outstanding";
+/** Rows read for the counter: a student has a handful owing, so one page is the whole list. */
+export const FEE_INVOICES_COUNTER_PAGE_SIZE = 100;
 /** Namespaces the generation job's poll (`useJobPolling`). */
 export const FEE_INVOICES_JOB_MODULE = "fee-invoices-generate";
 
