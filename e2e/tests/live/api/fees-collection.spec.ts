@@ -72,8 +72,8 @@ function record(
   return counter.post<Payment>("/payments:record", body, { idempotencyKey });
 }
 
-function fieldsOf(error: { details: { field: string }[] }) {
-  return error.details.map((detail) => detail.field);
+function fieldsOf(error: { details: { field?: string }[] }) {
+  return error.details.flatMap((detail) => (detail.field === undefined ? [] : [detail.field]));
 }
 
 test.describe("fee counter (live API)", () => {
