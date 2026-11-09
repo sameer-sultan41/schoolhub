@@ -1256,9 +1256,6 @@ period_id)` — a cell in a weekly grid whose times come from the period it
     `OpenApiParameter`. The dashboard hand-types `ReceiptFormat` until it does.
   - **Urdu review.** The `portal` namespace in `apps/dashboard/messages/ur.json` was written
     without a native speaker and needs their review.
-  - **Grants: invoice detail.** The invoice page does not list the invoice's own discounts and
-    fines: the `/discounts` and `/fines` filters take a student, not an invoice, so the page keeps
-    its per-line discount and fine display until they do.
   - **Grants: no edit.** Discounts, scholarships and fines can be created and moved along their
     lifecycle, but a typo in a name, value or reason cannot be edited from the screen (the
     `PATCH` services exist). Add edit dialogs if an accountant asks.
@@ -2086,9 +2083,10 @@ or subject)."` in English, with no plural form, so a count of one is ungrammatic
   copy", but there is no clone endpoint, so the dashboard offers none.
 - **Ad-hoc invoice needs a writable lines contract** (`POST /fee-invoices` takes only the header;
   `lines` is read-only and no invoice-line endpoint exists); the dashboard offers no Create until then.
-- **The invoice page reads discounts and fines from the invoice's own lines.** It does not call
-  `/discounts` or `/fines`, so it cannot link a line to the grant or fine behind it; PR B's
-  Grants screens add those services, and the page can then link a line to its source.
+- **The invoice page reads discounts and fines from the invoice's own lines.** It does not link a
+  line to the grant or fine behind it. The `discounts` and `fines` services now exist (PR B's
+  Grants screens), but linking is deferred: `/discounts` and `/fines` filter by student, not by
+  invoice, so the page cannot ask for just this invoice's records.
 - **The invoice's receipts are shown as numbers on its payments.** `GET /receipts` filters by
   payment, not invoice, so the page lists each payment's `receipt_no` and offers no receipt
   download until the collection screens (PR C) wire one.

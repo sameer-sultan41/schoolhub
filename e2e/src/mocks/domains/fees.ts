@@ -540,7 +540,8 @@ const NOT_ACTIVE = (name: string, status: string) =>
 const ALREADY_CANCELED = "This invoice is already canceled.";
 const PAID_AGAINST = (paid: string) =>
   `${paid} has been paid against this invoice. Refund the payment rather than cancelling the charge.`;
-const NEEDS_REASON = "Cancelling an invoice requires a reason.";
+/** DRF's `CharField` answer to `""` or whitespace only; a missing key is `REQUIRED`. */
+const BLANK = "This field may not be blank.";
 const NAME_ONE_PERIOD =
   "Name exactly one of `period_start` (to bill a calendar month) or `term` (to bill a whole term).";
 
@@ -699,8 +700,8 @@ export function feesInvoicingModule(options: FeesInvoicingOptions = {}): MockMod
       const invoice = find(invoiceId);
       if (!invoice || action !== "cancel") return fail(404, "Not found.");
       const { reason } = (request.json() as { reason?: string } | null) ?? {};
-      if (!reason) return invalid([{ field: "reason", issue: REQUIRED }]);
-      if (!reason.trim()) return ruleViolation("reason", NEEDS_REASON);
+      if (reason === undefined) return invalid([{ field: "reason", issue: REQUIRED }]);
+      if (!reason.trim()) return invalid([{ field: "reason", issue: BLANK }]);
       if (invoice.status === "canceled") return ruleViolation("status", ALREADY_CANCELED);
       if (Number(invoice.paid_total) > 0) {
         return ruleViolation("status", PAID_AGAINST(invoice.paid_total));
@@ -812,8 +813,11 @@ const SCHOLARSHIP_TRANSITIONS: Record<string, string[]> = {
 };
 const NEEDS_NOTES = (status: string) =>
   `Say why the award is being ${status} — an unexplained termination of a grant is what an audit flags.`;
+/** "An approved", "A revoked": the server's article plus the status's lower-cased label. */
+const withArticle = (status: string) =>
+  `${["a", "e", "i", "o", "u"].includes(status.charAt(0)) ? "An" : "A"} ${status}`;
 const ILLEGAL_MOVE = (from: string, to: string) =>
-  `A ${from} award cannot become ${to}. Allowed next: ${
+  `${withArticle(from)} award cannot become ${to}. Allowed next: ${
     [...(SCHOLARSHIP_TRANSITIONS[from] ?? [])].sort().join(", ") || "none, it is final"
   }.`;
 const NOT_PENDING = (status: string) =>
@@ -872,11 +876,15 @@ export function feesGrantsModule(options: FeesGrantsOptions = {}): MockModule {
       return null;
     }
 
+    /** A missing key is `REQUIRED`; a blank string is DRF's `BLANK`. */
     function required(body: Record<string, unknown>, fields: string[]): MockResponse | null {
-      const missing = fields.filter((field) => !body[field]);
-      return missing.length > 0
-        ? invalid(missing.map((field) => ({ field, issue: REQUIRED })))
-        : null;
+      const problems = fields.flatMap((field) => {
+        const value = body[field];
+        if (value === undefined || value === null) return [{ field, issue: REQUIRED }];
+        if (typeof value === "string" && !value.trim()) return [{ field, issue: BLANK }];
+        return [];
+      });
+      return problems.length > 0 ? invalid(problems) : null;
     }
 
     // --- discounts
@@ -907,7 +915,8 @@ export function feesGrantsModule(options: FeesGrantsOptions = {}): MockModule {
       const discount = discounts.find((row) => row.id === discountId);
       if (!discount || action !== "revoke") return fail(404, "Not found.");
       const { reason } = (request.json() as { reason?: string } | null) ?? {};
-      if (!reason) return invalid([{ field: "reason", issue: REQUIRED }]);
+      if (reason === undefined) return invalid([{ field: "reason", issue: REQUIRED }]);
+      if (!reason.trim()) return invalid([{ field: "reason", issue: BLANK }]);
       discount.status = "revoked";
       return ok(discount, { meta: { message: "Discount revoked." } });
     });
@@ -980,7 +989,8 @@ export function feesGrantsModule(options: FeesGrantsOptions = {}): MockModule {
       const fine = fines.find((row) => row.id === fineId);
       if (!fine || action !== "waive") return fail(404, "Not found.");
       const { reason } = (request.json() as { reason?: string } | null) ?? {};
-      if (!reason) return invalid([{ field: "reason", issue: REQUIRED }]);
+      if (reason === undefined) return invalid([{ field: "reason", issue: REQUIRED }]);
+      if (!reason.trim()) return invalid([{ field: "reason", issue: BLANK }]);
       if (fine.status !== "pending") return ruleViolation("status", NOT_PENDING(fine.status));
       fine.status = "waived";
       fine.waived_reason = reason;
