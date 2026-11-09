@@ -2972,7 +2972,8 @@
       "counter": "Counter",
       "structures": "Structures",
       "ledger": "Ledger",
-      "grants": "Grants"
+      "grants": "Grants",
+      "payments": "Payments"
     },
     "invoices": {
       "title": "Invoices",
@@ -2981,7 +2982,9 @@
       "actions": {
         "generate": "Generate invoices",
         "cancel": "Cancel invoice",
-        "backToList": "Back to invoices"
+        "backToList": "Back to invoices",
+        "recordPayment": "Record payment",
+        "issueVoucher": "Issue voucher"
       },
       "filters": {
         "search": "Search invoices",
@@ -3084,7 +3087,8 @@
           "paidAt": "Paid",
           "method": "Method",
           "status": "Status",
-          "amount": "Amount"
+          "amount": "Amount",
+          "actions": "Actions"
         },
         "method": {
           "cash": "Cash",
@@ -3098,7 +3102,9 @@
           "confirmed": "Confirmed",
           "failed": "Failed",
           "reversed": "Reversed"
-        }
+        },
+        "requestRefund": "Request refund",
+        "requestRefundRow": "Request a refund for receipt {receipt}"
       },
       "vouchers": {
         "title": "Vouchers",
@@ -3119,6 +3125,27 @@
           "void": "Void",
           "expired": "Expired"
         }
+      },
+      "voucherDialog": {
+        "title": "Issue voucher: {number}",
+        "intro": "Print a bank slip for what this invoice still owes. The amount, consumer number and due date come from the invoice.",
+        "provider": "Provider",
+        "validity": "Valid for (days)",
+        "validityHint": "Leave blank to use the school's default.",
+        "validityInvalid": "Enter a whole number of days, from 1 to {max}.",
+        "submit": "Issue voucher",
+        "done": "Voucher {number} issued."
+      },
+      "refundDialog": {
+        "title": "Request refund: {receipt}",
+        "intro": "Ask for money back on this payment of {amount}. An approver other than you decides it.",
+        "amount": "Amount to refund",
+        "reason": "Reason",
+        "positive": "Enter a positive amount with at most two decimals.",
+        "remainder": "At most {amount} can still be refunded on this payment.",
+        "submit": "Request refund",
+        "requested": "Refund of {amount} requested. It now awaits an approver.",
+        "done": "Done"
       }
     },
     "structures": {
@@ -3670,6 +3697,230 @@
         "pending": "The receipt is still being issued.",
         "openPayments": "Open the payments list",
         "done": "Done"
+      }
+    },
+    "payments": {
+      "title": "Payments",
+      "summary": "Payments taken, their receipts and vouchers, refund requests and the settlement files from banks.",
+      "tabs": {
+        "label": "Payments sections",
+        "payments": "Payments",
+        "receipts": "Receipts",
+        "vouchers": "Vouchers",
+        "refunds": "Refunds",
+        "imports": "Settlement imports"
+      },
+      "filters": {
+        "all": "All",
+        "noMatches": "Nothing matches",
+        "noMatchesDescription": "Try different filters.",
+        "clearSearch": "Clear search"
+      },
+      "download": {
+        "pdf": "PDF",
+        "thermal": "Thermal",
+        "pdfLabel": "Download {label} as PDF",
+        "thermalLabel": "Download {label} as thermal print",
+        "preparing": "Preparing",
+        "failed": "{label} couldn't be downloaded."
+      },
+      "payments": {
+        "list": {
+          "caption": "Payments",
+          "pagination": "Payments pages",
+          "loadError": "The payments could not be loaded.",
+          "emptyTitle": "No payments yet",
+          "emptyDescription": "Payments taken at the counter, by voucher or online appear here."
+        },
+        "columns": {
+          "receipt": "Receipt",
+          "paidAt": "Paid",
+          "method": "Method",
+          "reference": "Reference",
+          "status": "Status",
+          "amount": "Amount"
+        },
+        "filters": {
+          "method": "Method",
+          "status": "Status",
+          "cashier": "Cashier",
+          "cashierAll": "All cashiers",
+          "cashierMe": "My collections",
+          "cashierLinked": "Selected cashier",
+          "from": "Paid from",
+          "to": "Paid to"
+        },
+        "openInvoice": "Open invoice",
+        "openInvoiceRow": "Open the invoice for receipt {number}"
+      },
+      "receipts": {
+        "list": {
+          "caption": "Receipts",
+          "pagination": "Receipts pages",
+          "loadError": "The receipts could not be loaded.",
+          "emptyTitle": "No receipts yet",
+          "emptyDescription": "A receipt is issued with every payment.",
+          "search": "Search receipts",
+          "searchPlaceholder": "Search by receipt number"
+        },
+        "columns": {
+          "receipt": "Receipt",
+          "student": "Student",
+          "invoice": "Invoice",
+          "issued": "Issued",
+          "amount": "Amount"
+        }
+      },
+      "vouchers": {
+        "list": {
+          "caption": "Vouchers",
+          "pagination": "Vouchers pages",
+          "loadError": "The vouchers could not be loaded.",
+          "emptyTitle": "No vouchers yet",
+          "emptyDescription": "Issue a voucher from an invoice to give a family a bank slip."
+        },
+        "columns": {
+          "consumer": "Consumer number",
+          "student": "Student",
+          "invoice": "Invoice",
+          "provider": "Provider",
+          "due": "Due",
+          "status": "Status",
+          "amount": "Amount"
+        },
+        "filters": {
+          "status": "Status",
+          "provider": "Provider"
+        },
+        "actions": {
+          "void": "Void",
+          "voidRow": "Void voucher {number}"
+        },
+        "void": {
+          "title": "Void voucher {number}",
+          "intro": "A voided voucher can no longer be paid at the bank. Issue a new one if the family still needs a slip.",
+          "reason": "Reason",
+          "submit": "Void voucher",
+          "done": "Voucher {number} voided."
+        }
+      },
+      "refunds": {
+        "list": {
+          "caption": "Refunds",
+          "pagination": "Refunds pages",
+          "loadError": "The refunds could not be loaded.",
+          "emptyTitle": "No refund requests",
+          "emptyDescription": "Request a refund from a payment on its invoice."
+        },
+        "columns": {
+          "requested": "Requested",
+          "amount": "Amount",
+          "reason": "Reason",
+          "status": "Status",
+          "note": "Decision note"
+        },
+        "filters": {
+          "status": "Status"
+        },
+        "status": {
+          "requested": "Requested",
+          "approved": "Approved",
+          "rejected": "Rejected",
+          "processed": "Processed"
+        },
+        "actions": {
+          "approve": "Approve",
+          "reject": "Reject",
+          "process": "Process",
+          "approveRow": "Approve the refund of {amount}",
+          "rejectRow": "Reject the refund of {amount}",
+          "processRow": "Process the refund of {amount}"
+        },
+        "note": "Note (optional)",
+        "noteRequired": "Note",
+        "approve": {
+          "title": "Approve refund of {amount}",
+          "intro": "Reason given: {reason}",
+          "submit": "Approve",
+          "done": "Refund of {amount} approved."
+        },
+        "reject": {
+          "title": "Reject refund of {amount}",
+          "intro": "Reason given: {reason}. Say why it is refused.",
+          "submit": "Reject",
+          "done": "Refund of {amount} rejected."
+        },
+        "process": {
+          "title": "Process refund of {amount}",
+          "intro": "Pay the refund out and reverse its posting in the ledger. This cannot be undone.",
+          "method": "Paid back by",
+          "reference": "Reference (optional)",
+          "submit": "Process refund",
+          "done": "Refund of {amount} processed."
+        }
+      },
+      "imports": {
+        "list": {
+          "caption": "Settlement imports",
+          "pagination": "Settlement imports pages",
+          "loadError": "The settlement imports could not be loaded.",
+          "emptyTitle": "No settlement files yet",
+          "emptyDescription": "Upload a bank's settlement file to post the vouchers it paid."
+        },
+        "columns": {
+          "uploaded": "Uploaded",
+          "provider": "Provider",
+          "status": "Status",
+          "rows": "Rows",
+          "matched": "Matched",
+          "exceptions": "Exceptions",
+          "completed": "Completed"
+        },
+        "filters": {
+          "status": "Status",
+          "provider": "Provider"
+        },
+        "status": {
+          "processing": "Processing",
+          "completed": "Completed",
+          "failed": "Failed"
+        },
+        "actions": {
+          "upload": "Upload settlement file",
+          "view": "View",
+          "viewRow": "View the import uploaded {date}"
+        },
+        "upload": {
+          "title": "Upload settlement file",
+          "intro": "Choose the provider and its settlement CSV. Each row that matches an open voucher is posted as a payment; the rest are listed as exceptions.",
+          "provider": "Provider",
+          "file": "Settlement file",
+          "fileHint": "A CSV file from the provider.",
+          "submit": "Upload",
+          "done": "Done",
+          "starting": "Starting the import…",
+          "running": "Reconciling the file… {progress}%",
+          "matched": "{matched} of {rows} rows matched and posted.",
+          "noExceptions": "Every row was matched.",
+          "exceptions": "{count, plural, one {# row didn't post. Open the import to see why.} other {# rows didn't post. Open the import to see why.}}",
+          "failed": "The import failed.",
+          "pollFailed": "The import's progress couldn't be checked.",
+          "stalled": "The import is taking longer than expected.",
+          "resume": "Check again"
+        },
+        "detail": {
+          "title": "Settlement import",
+          "loadError": "The import could not be loaded.",
+          "exceptionsTitle": "Rows that did not post",
+          "noExceptions": "Every row in the file was matched and posted.",
+          "caption": "Rows that did not post",
+          "columns": {
+            "row": "Row",
+            "reference": "Provider reference",
+            "amount": "Amount",
+            "reason": "Reason"
+          }
+        }
       }
     }
   },

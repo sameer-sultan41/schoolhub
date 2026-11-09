@@ -14,3 +14,14 @@ export const VOUCHER_STATUS_LABEL_KEY: Record<VoucherRecord["status"], string> =
   void: "invoices.vouchers.status.void",
   expired: "invoices.vouchers.status.expired",
 };
+
+/** Each voucher status's badge variant (exhaustive, L32). */
+export const VOUCHER_STATUS_BADGE: Record<
+  VoucherRecord["status"],
+  "primary" | "success" | "warning" | "destructive" | "secondary"
+> = {
+  issued: "primary",
+  paid: "success",
+  void: "secondary",
+  expired: "warning",
+};

@@ -19,3 +19,14 @@ export const PAYMENT_STATUS_LABEL_KEY: Record<PaymentStatus, string> = {
   failed: "invoices.payments.status.failed",
   reversed: "invoices.payments.status.reversed",
 };
+
+/** Each payment status's badge variant (exhaustive, L32). */
+export const PAYMENT_STATUS_BADGE: Record<
+  PaymentStatus,
+  "primary" | "success" | "warning" | "destructive" | "secondary"
+> = {
+  pending: "warning",
+  confirmed: "success",
+  failed: "destructive",
+  reversed: "secondary",
+};

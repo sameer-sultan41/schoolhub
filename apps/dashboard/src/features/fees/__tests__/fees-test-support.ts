@@ -10,6 +10,9 @@ import type {
   FeeStructureRecord,
   LedgerAccountRecord,
   PaymentRecord,
+  ReceiptRecord,
+  RefundRecord,
+  SettlementImportRecord,
   VoucherRecord,
 } from "@/services";
 import { mocked } from "@/test-fixtures/list-screen";
@@ -41,6 +44,18 @@ export const listPayments = mocked(Services.payments.listPayments);
 export const recordPayment = mocked(Services.payments.recordPayment);
 export const downloadReceipt = mocked(Services.receipts.downloadReceipt);
 export const listVouchers = mocked(Services.vouchers.listVouchers);
+export const downloadVoucher = mocked(Services.vouchers.downloadVoucher);
+export const issueVoucher = mocked(Services.vouchers.issueVoucher);
+export const voidVoucher = mocked(Services.vouchers.voidVoucher);
+export const listReceipts = mocked(Services.receipts.listReceipts);
+export const listRefunds = mocked(Services.refunds.listRefunds);
+export const createRefund = mocked(Services.refunds.createRefund);
+export const approveRefund = mocked(Services.refunds.approveRefund);
+export const rejectRefund = mocked(Services.refunds.rejectRefund);
+export const processRefund = mocked(Services.refunds.processRefund);
+export const listSettlementImports = mocked(Services.settlementImports.listSettlementImports);
+export const fetchSettlementImport = mocked(Services.settlementImports.fetchSettlementImport);
+export const uploadSettlementImport = mocked(Services.settlementImports.uploadSettlementImport);
 export const fetchJob = mocked(Services.jobs.fetchJob);
 export const activateFeeStructure = mocked(Services.feeStructures.activateFeeStructure);
 export const archiveFeeStructure = mocked(Services.feeStructures.archiveFeeStructure);
@@ -95,6 +110,20 @@ export const COUNTER_PERMISSIONS: PermissionKey[] = [
   "fees.invoice.view",
   "students.student.view",
 ];
+
+/** The keys the seeded `accountant` holds on the Payments page: the five reads behind
+ * `fees.payment.view`, and the collect, refund and approve keys behind its write controls. */
+export const PAYMENTS_VIEW_PERMISSIONS: PermissionKey[] = [
+  "fees.payment.view",
+  "fees.invoice.view",
+];
+
+/** The requester's id in `asUser` is `buildUser`'s own: "user-1". */
+export const CURRENT_USER_ID = "user-1";
+export const OTHER_USER_ID = "user-2";
+export const REFUND_ID = "a2222222-2222-4222-8222-222222222222";
+export const PAYMENT_ID = "d1111111-1111-4111-8111-111111111111";
+export const IMPORT_ID = "a3333333-3333-4333-8333-333333333333";
 
 export function cursorPage<T>(items: T[], nextCursor: string | null = null): Page<T> {
   return { items, pagination: { page_size: 25, next_cursor: nextCursor, previous_cursor: null } };
@@ -204,6 +233,9 @@ export function stubFeesServices(url = "/fees/structures") {
   fetchFeeInvoice.mockResolvedValue(invoiceRecord());
   listPayments.mockResolvedValue(cursorPage([]));
   listVouchers.mockResolvedValue(cursorPage([]));
+  listReceipts.mockResolvedValue(cursorPage([]));
+  listRefunds.mockResolvedValue(cursorPage([]));
+  listSettlementImports.mockResolvedValue(cursorPage([]));
 }
 
 /** An issued, unpaid invoice with one fee line and one fine line. Every money field is the
@@ -291,6 +323,65 @@ export function voucherRecord(overrides: Partial<VoucherRecord> = {}): VoucherRe
     payment: null,
     voided_reason: null,
     issued_by: "f1111111-1111-4111-8111-111111111111",
+    created_at: STAMP,
+    ...overrides,
+  };
+}
+
+export function receiptRecord(overrides: Partial<ReceiptRecord> = {}): ReceiptRecord {
+  return {
+    id: "b1111111-1111-4111-8111-111111111111",
+    receipt_no: "RCT-2026-0001",
+    payment: PAYMENT_ID,
+    invoice_no: "INV-2026-0001",
+    student_name: "Ayesha Khan",
+    amount: "500.00",
+    issued_at: "2026-10-05T09:00:00Z",
+    pdf_file: null,
+    ...overrides,
+  };
+}
+
+/** A refund a user other than the signed-in one requested, so Approve is offered by default. */
+export function refundRecord(overrides: Partial<RefundRecord> = {}): RefundRecord {
+  return {
+    id: REFUND_ID,
+    payment: PAYMENT_ID,
+    student: STUDENT_ID,
+    amount: "200.00",
+    reason: "Charged twice",
+    status: "requested",
+    requested_by: OTHER_USER_ID,
+    approved_by: null,
+    decision_note: null,
+    method: null,
+    reference_no: null,
+    processed_at: null,
+    created_at: STAMP,
+    ...overrides,
+  };
+}
+
+export function importRecord(
+  overrides: Partial<SettlementImportRecord> = {},
+): SettlementImportRecord {
+  return {
+    id: IMPORT_ID,
+    provider: "easypaisa",
+    file: "a4444444-4444-4444-8444-444444444444",
+    imported_by: OTHER_USER_ID,
+    status: "completed",
+    row_count: 4,
+    matched_count: 3,
+    exceptions: [
+      {
+        row: 3,
+        provider_reference: "TXN-77",
+        amount: "900.00",
+        reason: "No open voucher with consumer number '999' for easypaisa.",
+      },
+    ],
+    completed_at: "2026-10-06T10:00:00Z",
     created_at: STAMP,
     ...overrides,
   };
