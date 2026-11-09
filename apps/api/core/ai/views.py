@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import uuid
 
-from django.db.models import Count, F, Sum
+from django.db.models import Count, Sum
 from django.db.models.functions import Coalesce
 from django.http import Http404
 from drf_spectacular.utils import extend_schema
@@ -32,13 +32,6 @@ from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.rbac.permissions import HasPermissionKey
 
-_TOTAL_TOKENS = (
-    F("input_tokens")
-    + F("output_tokens")
-    + F("cache_creation_input_tokens")
-    + F("cache_read_input_tokens")
-)
-
 
 class AIUsageView(TenantScopedViewSetMixin, APIView):
     """This month's token use against the budget, by feature (ai-governance.md §9).
@@ -59,7 +52,7 @@ class AIUsageView(TenantScopedViewSetMixin, APIView):
         rows = (
             AIRequest.objects.filter(created_at__gte=since)
             .values("feature_key")
-            .annotate(tokens=Coalesce(Sum(_TOTAL_TOKENS), 0), requests=Count("id"))
+            .annotate(tokens=Coalesce(Sum(budget.TOTAL_TOKENS), 0), requests=Count("id"))
             .order_by("feature_key")
         )
         by_feature = [

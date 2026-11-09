@@ -38,7 +38,7 @@ class Migration(migrations.Migration):
                 ('cache_read_input_tokens', models.PositiveIntegerField(default=0)),
                 ('latency_ms', models.PositiveIntegerField(default=0)),
                 ('outcome', models.CharField(choices=[('ok', 'OK'), ('fallback', 'Fallback'), ('refused', 'Refused'), ('quota', 'Quota'), ('disabled', 'Disabled')], max_length=20)),
-                ('created_at', models.DateTimeField(db_index=True, default=django.utils.timezone.now)),
+                ('created_at', models.DateTimeField(default=django.utils.timezone.now)),
                 ('tenant', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='+', to='tenancy.tenant')),
             ],
             options={

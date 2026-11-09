@@ -48,7 +48,8 @@ class AIRequest(AppendOnlyTenantModel):
     outcome = models.CharField(max_length=20, choices=AIOutcome.choices)
     # Explicit rather than the base's auto_now_add: the budget windows read it, and a
     # test of a window's edge has to place a row on either side of it.
-    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+    # No index of its own: RLS puts `tenant_id` in every query, so the composite ones serve.
+    created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
         db_table = "ai_requests"

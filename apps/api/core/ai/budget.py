@@ -28,7 +28,8 @@ from core.tenancy.models import Tenant, TenantSettings
 #: The share of the monthly budget at which callers are warned (governance §5).
 WARNING_THRESHOLD = 0.8
 
-_TOTAL_TOKENS = (
+#: Every token a request is billed for; the budget and `GET /ai/usage` both sum it.
+TOTAL_TOKENS = (
     F("input_tokens")
     + F("output_tokens")
     + F("cache_creation_input_tokens")
@@ -68,7 +69,7 @@ def daily_user_cap() -> int:
 
 def _sum_since(since: datetime.datetime, **filters: object) -> int:
     total = AIRequest.objects.filter(created_at__gte=since, **filters).aggregate(
-        total=Coalesce(Sum(_TOTAL_TOKENS), 0)
+        total=Coalesce(Sum(TOTAL_TOKENS), 0)
     )["total"]
     return int(total)
 

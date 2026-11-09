@@ -1554,6 +1554,8 @@ class FinanceReportSummaryView(TenantScopedViewSetMixin, APIView):
         payload = serializer.validated_data
         tenant = request.tenant
 
+        # Facts before the AI flag on purpose: `run_feature` checks the flag and writes
+        # the `disabled` audit row, so checking it here first would leave no row.
         with tenant_atomic(tenant.pk):
             facts = services.report_summary_facts(
                 kind=payload["kind"],

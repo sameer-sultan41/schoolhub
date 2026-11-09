@@ -954,11 +954,16 @@ class FinanceReportQuerySerializer(serializers.Serializer):
             )
         return value
 
-    def validate(self, attrs: dict) -> dict:
+    @staticmethod
+    def check_period_order(attrs: dict) -> None:
+        """Shared with the summary request, which keeps this rule and drops `student`'s."""
         if attrs["date_to"] < attrs["date_from"]:
             raise serializers.ValidationError(
                 {"date_to": "The end of the period cannot precede its start."}
             )
+
+    def validate(self, attrs: dict) -> dict:
+        self.check_period_order(attrs)
         if attrs["kind"] == "student-ledger" and not attrs.get("student"):
             raise serializers.ValidationError(
                 {"student": "A student ledger needs the student it is for."}
@@ -978,10 +983,7 @@ class FinanceReportSummaryRequestSerializer(FinanceReportQuerySerializer):
     format = None
 
     def validate(self, attrs: dict) -> dict:
-        if attrs["date_to"] < attrs["date_from"]:
-            raise serializers.ValidationError(
-                {"date_to": "The end of the period cannot precede its start."}
-            )
+        self.check_period_order(attrs)
         return attrs
 
 

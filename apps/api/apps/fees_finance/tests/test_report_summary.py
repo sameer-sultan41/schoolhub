@@ -167,6 +167,17 @@ class SummaryEndpointTests(ReportSummaryTestCase):
         self.assertEqual(self.rows(), [])
         self.assertEqual(fake_provider.calls, [])
 
+    def test_a_period_that_ends_before_it_starts_is_400(self) -> None:
+        response = self.client.post(
+            URL,
+            {"kind": "collection", "date_from": "2026-12-31", "date_to": "2026-01-01"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"]["details"][0]["field"], "date_to")
+        self.assertEqual(self.rows(), [])
+
     def test_large_aging_report_summarises_without_row_limit(self) -> None:
         """More families owe than the inline report returns: the summary still answers,
         and its facts count every one of them."""
