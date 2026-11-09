@@ -98,6 +98,8 @@ class PaymentReceiptIdTests(CollectionContractTestCase):
         self.assertIsNone(rows[str(without.pk)]["receipt"])
 
     def test_the_list_query_count_does_not_grow_with_rows(self) -> None:
+        # One throwaway read warms what a first request caches (permissions, tenant).
+        self.client.get("/api/v1/payments")
         self.paid(self.students[0], "1")
         with CaptureQueriesContext(connection) as one:
             self.client.get("/api/v1/payments")
@@ -108,6 +110,54 @@ class PaymentReceiptIdTests(CollectionContractTestCase):
             response = self.client.get("/api/v1/payments")
 
         self.assertGreaterEqual(len(response.json()["data"]), 4)
+
+
+class PaymentNamesTests(CollectionContractTestCase):
+    def test_a_payment_names_its_student_and_invoice(self) -> None:
+        payment, _ = self.paid(self.students[0], "1")
+        student = self.students[0]
+
+        row = self.client.get(f"/api/v1/payments/{payment.pk}").json()["data"]
+
+        self.assertEqual(row["student_name"], f"{student.first_name} {student.last_name}".strip())
+        self.assertEqual(row["invoice_no"], "INV-CC-1")
+
+
+class RefundNamesTests(CollectionContractTestCase):
+    def refund(self, payment) -> Refund:
+        with tenant_context(self.tenant.id):
+            return Refund.objects.create(
+                tenant=self.tenant,
+                payment=payment,
+                student=payment.student,
+                amount=payment.amount,
+                reason="Duplicate",
+                requested_by=self.user.pk,
+            )
+
+    def test_a_refund_names_its_student_and_invoice(self) -> None:
+        payment, _ = self.paid(self.students[0], "1")
+        refund = self.refund(payment)
+        student = self.students[0]
+
+        row = self.client.get(f"/api/v1/refunds/{refund.pk}").json()["data"]
+
+        self.assertEqual(row["student_name"], f"{student.first_name} {student.last_name}".strip())
+        self.assertEqual(row["invoice_no"], "INV-CC-1")
+
+    def test_the_list_query_count_does_not_grow_with_rows(self) -> None:
+        # One throwaway read warms what a first request caches (permissions, tenant).
+        self.assertEqual(self.client.get("/api/v1/refunds").status_code, 200)
+        self.refund(self.paid(self.students[0], "1")[0])
+        with CaptureQueriesContext(connection) as one:
+            self.client.get("/api/v1/refunds")
+        for n in range(2, 5):
+            self.refund(self.paid(self.students[1], str(n))[0])
+
+        with self.assertNumQueries(len(one)):
+            response = self.client.get("/api/v1/refunds")
+
+        self.assertEqual(len(response.json()["data"]), 4)
 
 
 class RefundRequesterTests(CollectionContractTestCase):

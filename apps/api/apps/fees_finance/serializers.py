@@ -589,7 +589,9 @@ def _validate_grant_value(attrs: dict, *, instance, type_field: str) -> dict:
     return attrs
 
 
-class PaymentSerializer(serializers.ModelSerializer):
+class PaymentSerializer(StudentNameMixin, serializers.ModelSerializer):
+    student_name = serializers.SerializerMethodField()
+    invoice_no = serializers.CharField(source="fee_invoice.invoice_no", read_only=True)
     receipt_no = serializers.CharField(source="receipt.receipt_no", read_only=True)
     # The receipt's id, so a counter downloads it without a second lookup.
     receipt = serializers.UUIDField(source="receipt.id", read_only=True, allow_null=True)
@@ -599,7 +601,9 @@ class PaymentSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "fee_invoice",
+            "invoice_no",
             "student",
+            "student_name",
             "amount",
             "method",
             "reference_no",
@@ -696,7 +700,9 @@ class ReceiptSerializer(serializers.ModelSerializer):
         return f"{student.first_name} {student.last_name}".strip()
 
 
-class RefundSerializer(serializers.ModelSerializer):
+class RefundSerializer(StudentNameMixin, serializers.ModelSerializer):
+    student_name = serializers.SerializerMethodField()
+    invoice_no = serializers.CharField(source="payment.fee_invoice.invoice_no", read_only=True)
     # Read-only and declared explicitly: `method` is set by `:process`, so a
     # requested refund has none and a client never supplies one. (The schema
     # shape of nullable enums is handled globally by
@@ -709,7 +715,9 @@ class RefundSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "payment",
+            "invoice_no",
             "student",
+            "student_name",
             "amount",
             "reason",
             "status",

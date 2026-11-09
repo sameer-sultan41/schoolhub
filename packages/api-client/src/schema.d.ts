@@ -10899,11 +10899,13 @@ export interface components {
             readonly id: string;
             /** Format: uuid */
             fee_invoice: string;
+            readonly invoice_no: string;
             /**
              * Format: uuid
              * @description Denormalized from the invoice so the student ledger is one query.
              */
             readonly student: string;
+            readonly student_name: string;
             /** Format: decimal */
             amount: string;
             method: components["schemas"]["PaymentMethodEnum"];
@@ -11334,8 +11336,10 @@ export interface components {
             readonly id: string;
             /** Format: uuid */
             payment: string;
+            readonly invoice_no: string;
             /** Format: uuid */
             readonly student: string;
+            readonly student_name: string;
             /** Format: decimal */
             amount: string;
             reason: string;

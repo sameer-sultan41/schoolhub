@@ -977,7 +977,7 @@ class RefundViewSet(
         return [permission() for permission in STAFF_PERMISSIONS]
 
     def get_queryset(self):
-        return super().get_queryset().select_related("student", "payment")
+        return super().get_queryset().select_related("student", "payment__fee_invoice")
 
     @extend_schema(request=RequestRefundSerializer, responses={201: RefundSerializer})
     def request_refund(self, request: Request) -> Response:

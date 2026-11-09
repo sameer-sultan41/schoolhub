@@ -23921,12 +23921,18 @@ components:
         fee_invoice:
           type: string
           format: uuid
+        invoice_no:
+          type: string
+          readOnly: true
         student:
           type: string
           format: uuid
           readOnly: true
           description: Denormalized from the invoice so the student ledger is one
             query.
+        student_name:
+          type: string
+          readOnly: true
         amount:
           type: string
           format: decimal
@@ -23973,6 +23979,7 @@ components:
       - created_at
       - fee_invoice
       - id
+      - invoice_no
       - method
       - paid_at
       - receipt
@@ -23980,6 +23987,7 @@ components:
       - received_by
       - status
       - student
+      - student_name
     PaymentMethodEnum:
       enum:
       - cash
@@ -24842,9 +24850,15 @@ components:
         payment:
           type: string
           format: uuid
+        invoice_no:
+          type: string
+          readOnly: true
         student:
           type: string
           format: uuid
+          readOnly: true
+        student_name:
+          type: string
           readOnly: true
         amount:
           type: string
@@ -24892,6 +24906,7 @@ components:
       - created_at
       - decision_note
       - id
+      - invoice_no
       - method
       - payment
       - processed_at
@@ -24900,6 +24915,7 @@ components:
       - requested_by
       - status
       - student
+      - student_name
     RefundDecision:
       type: object
       description: '`:approve` / `:reject` — the note is optional on approval, not
