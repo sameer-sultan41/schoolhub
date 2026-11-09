@@ -120,6 +120,14 @@ describe("scholarships tab", () => {
     expect(screen.queryByRole("button", { name: "Add scholarship" })).not.toBeInTheDocument();
   });
 
+  it("offers no Add scholarship to a creator who cannot read the students or sessions its form needs", async () => {
+    asUser("fees.discount.view", "fees.scholarship.create");
+    await renderTab();
+
+    await screen.findByText("Merit award");
+    expect(screen.queryByRole("button", { name: "Add scholarship" })).not.toBeInTheDocument();
+  });
+
   it("moves an award on with optional notes left unsent", async () => {
     updateScholarship.mockResolvedValue(scholarshipRecord({ status: "active" }));
     asUser("fees.discount.view", "fees.scholarship.create");
@@ -165,7 +173,8 @@ describe("scholarships tab", () => {
   });
 
   it("shows the server's refusal of a move inline and keeps the dialog open", async () => {
-    const refusal = "A approved award cannot become ended. Allowed next: active, revoked.";
+    // A race: the award was revoked after the page loaded, so the server refuses the Activate asked for.
+    const refusal = "A revoked award cannot become active. Allowed next: none, it is final.";
     updateScholarship.mockRejectedValue(ruleViolation("status", refusal));
     asUser("fees.discount.view", "fees.scholarship.create");
     const user = await renderTab();

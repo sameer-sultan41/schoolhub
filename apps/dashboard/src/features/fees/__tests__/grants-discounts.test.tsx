@@ -1,4 +1,5 @@
 import type * as ReactModule from "react";
+import { ApiError } from "@schoolhub/api-client";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -168,9 +169,10 @@ describe("discounts tab", () => {
     expect(revokeDiscount).not.toHaveBeenCalled();
   });
 
-  it("shows a server refusal inline and keeps the dialog open", async () => {
+  it("shows the refusal inline, and keeps the dialog open, when the discount is gone", async () => {
+    // The dialog trims and requires the reason, so what the endpoint can still send is a 404.
     revokeDiscount.mockRejectedValue(
-      ruleViolation("reason", "Revoking a discount requires a reason."),
+      new ApiError({ status: 404, code: "not_found", message: "Not found.", url: "/discounts" }),
     );
     asUser(...GRANTS_PERMISSIONS);
     const user = await renderTab();
@@ -181,7 +183,7 @@ describe("discounts tab", () => {
     await user.click(within(dialog).getByRole("button", { name: "Revoke discount" }));
 
     expect(
-      await within(dialog).findByText("Revoking a discount requires a reason."),
+      await within(dialog).findByText("We could not find what you were looking for."),
     ).toBeInTheDocument();
     expect(screen.getByRole("dialog", { name: "Revoke Sibling discount" })).toBeInTheDocument();
   });
