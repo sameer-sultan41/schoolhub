@@ -7,14 +7,16 @@ and every SDK error becomes ``ProviderUnavailable``.
 Retries are ours, not the SDK's. The client is built with ``max_retries=0`` and
 the adapter retries once, only for a retryable failure (a connection error or
 timeout, 408, 409, 429, 5xx: the SDK's own retry policy) and only while the
-deadline leaves time for it. A ``retry-after`` longer than what remains is not
-waited out: the caller degrades instead (ADR-0035, ai-governance.md §7).
+deadline leaves time for it. A ``retry-after-ms`` (preferred, as the SDK does) or
+``retry-after`` longer than what remains is not waited out: the caller degrades
+instead (ADR-0035, ai-governance.md §7).
 """
 
 from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Mapping
 
 import anthropic
 
@@ -35,7 +37,15 @@ def _is_retryable(status_code: int) -> bool:
     return status_code in _RETRYABLE_STATUSES or status_code >= 500
 
 
-def _retry_delay(retry_after: str | None) -> float:
+def _retry_delay(headers: Mapping[str, str]) -> float:
+    # `retry-after-ms` first, as the SDK's own retry policy reads it: it is the precise one.
+    retry_after_ms = headers.get("retry-after-ms")
+    if retry_after_ms is not None:
+        try:
+            return max(float(retry_after_ms) / 1000, 0.0)
+        except ValueError:
+            pass
+    retry_after = headers.get("retry-after")
     if retry_after is None:
         return DEFAULT_RETRY_DELAY_SECONDS
     try:
@@ -102,7 +112,7 @@ class AnthropicProvider:
                     raise ProviderUnavailable(
                         f"provider returned {exc.status_code}", status_code=exc.status_code
                     ) from exc
-                delay = _retry_delay(exc.response.headers.get("retry-after"))
+                delay = _retry_delay(exc.response.headers)
                 failure = ProviderUnavailable(
                     f"provider returned {exc.status_code}", status_code=exc.status_code
                 )

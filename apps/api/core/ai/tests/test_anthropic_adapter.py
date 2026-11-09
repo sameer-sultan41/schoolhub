@@ -11,8 +11,9 @@ from unittest import mock
 
 import anthropic
 import httpx2
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 
+from core.ai.providers import get_provider
 from core.ai.providers.anthropic import AnthropicProvider
 from core.ai.providers.base import ProviderUnavailable
 
@@ -83,6 +84,18 @@ class DeadlineTests(SimpleTestCase):
                 self.complete()
             self.assertEqual(self.client.messages.create.call_count, 1)
             self.assertEqual(self.clock.sleeps, [])
+
+        with self.subTest("retry-after-ms is preferred to retry-after, as the SDK does"):
+            self.client.reset_mock()
+            self.clock.sleeps = []
+            self.client.messages.create.side_effect = [
+                status_error(529, {"retry-after-ms": "250", "retry-after": "120"}),
+                status_error(529),
+            ]
+            with self.assertRaises(ProviderUnavailable):
+                self.complete()
+            self.assertEqual(self.client.messages.create.call_count, 2)
+            self.assertEqual(self.clock.sleeps, [0.25])
 
         with self.subTest("a timeout that used up the deadline is not retried"):
             self.client.reset_mock()
@@ -158,3 +171,13 @@ class DeadlineTests(SimpleTestCase):
 
         self.assertEqual(raised.exception.status_code, 400)
         self.assertEqual(self.client.messages.create.call_count, 1)
+
+
+class ProviderCacheTests(SimpleTestCase):
+    @override_settings(AI_PROVIDER="anthropic", ANTHROPIC_API_KEY="key-one")
+    def test_one_provider_per_api_key(self) -> None:
+        first = get_provider()
+
+        self.assertIs(get_provider(), first)
+        with override_settings(ANTHROPIC_API_KEY="key-two"):
+            self.assertIsNot(get_provider(), first)
