@@ -14,10 +14,14 @@ This patch skips the blocks `TestCase` opened, the way Django itself does for
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from unittest import mock
 
 from django.db import connections
 from django.test import SimpleTestCase
+
+_TARGET = "rest_framework.views.set_rollback"
 
 
 def _set_rollback_as_in_production() -> None:
@@ -28,8 +32,15 @@ def _set_rollback_as_in_production() -> None:
             db.set_rollback(True)
 
 
+@contextmanager
+def production_rollback() -> Iterator[None]:
+    """The same patch for one `with` block, around a direct call into DRF's exception handler."""
+    with mock.patch(_TARGET, _set_rollback_as_in_production):
+        yield
+
+
 def rollback_as_in_production(test: SimpleTestCase) -> None:
     """Call from `setUp` of a test that drives a `non_atomic_requests` route to an error."""
-    patcher = mock.patch("rest_framework.views.set_rollback", _set_rollback_as_in_production)
+    patcher = mock.patch(_TARGET, _set_rollback_as_in_production)
     patcher.start()
     test.addCleanup(patcher.stop)

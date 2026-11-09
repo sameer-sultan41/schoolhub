@@ -14,6 +14,7 @@ from core.ai.models import AIOutcome, AIRequest
 from core.ai.providers.fake import fake_provider
 from core.ai.registry import AIFeature, registry
 from core.api.exceptions import envelope_exception_handler
+from core.api.tests.rollback import production_rollback
 from core.tenancy.context import tenant_context
 from core.tenancy.models import FeatureFlag, Tenant, TenantFeatureOverride, TenantSettings
 
@@ -95,6 +96,8 @@ def rows(tenant: Tenant) -> list[AIRequest]:
 def render_error(exc: Exception) -> Response:
     """What the API would answer for ``exc``: the real envelope handler."""
     request = APIRequestFactory().post("/api/v1/anything")
-    response = envelope_exception_handler(exc, {"request": request})
+    # DRF's handler calls `set_rollback`, which would mark this TestCase's own transaction.
+    with production_rollback():
+        response = envelope_exception_handler(exc, {"request": request})
     assert response is not None
     return response
