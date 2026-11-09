@@ -370,6 +370,9 @@ class GrantEndpointTests(FeesFinanceAPITestCase):
         }
         for path, make in makers.items():
             with self.subTest(path=path):
+                # One throwaway read warms what a first request caches (permissions, tenant),
+                # so the two counts below differ only by what the rows cost.
+                self.assertEqual(self.client.get(f"/api/v1/{path}").status_code, 200)
                 with tenant_context(self.tenant.id):
                     make()
                 with CaptureQueriesContext(connection) as one:
