@@ -9122,6 +9122,11 @@ paths:
         description: A search term.
         schema:
           type: string
+      - in: query
+        name: student
+        schema:
+          type: string
+          format: uuid
       tags:
       - receipts
       security:
@@ -9173,6 +9178,14 @@ paths:
         The A4 one is still stored — that is what `render_receipt_task` does —
         so an audit has a fixed artefact.
       parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+          enum:
+          - pdf
+          - thermal
+        description: 'Layout: A4 `pdf` (default) or `thermal` roll.'
       - in: path
         name: id
         schema:
@@ -14601,6 +14614,12 @@ paths:
         import shape.
       tags:
       - voucher-collection-imports
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SettlementImportRequest'
+        required: true
       security:
       - jwtAuth: []
       responses:
@@ -14738,6 +14757,14 @@ paths:
       operationId: vouchers_download_retrieve
       description: '`GET /vouchers/{id}/download?format=pdf|thermal`.'
       parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+          enum:
+          - pdf
+          - thermal
+        description: 'Layout: A4 `pdf` (default) or `thermal` roll.'
       - in: path
         name: id
         schema:
@@ -23929,6 +23956,11 @@ components:
           readOnly: true
           nullable: true
           description: Null for a gateway or voucher self-service payment.
+        receipt:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
         receipt_no:
           type: string
           readOnly: true
@@ -23943,6 +23975,7 @@ components:
       - id
       - method
       - paid_at
+      - receipt
       - receipt_no
       - received_by
       - status
@@ -25693,6 +25726,22 @@ components:
       - end_date
       - name
       - start_date
+    SettlementImportRequest:
+      type: object
+      description: |-
+        `POST /voucher-collection-imports` — the multipart body, for the contract.
+
+        Documentation only: the view validates by hand so a missing file or unknown
+        provider keeps its 422 `DomainRuleViolation` shape.
+      properties:
+        file:
+          type: string
+          format: uri
+        provider:
+          $ref: '#/components/schemas/VoucherProviderEnum'
+      required:
+      - file
+      - provider
     SettlementImportStatusEnum:
       enum:
       - processing

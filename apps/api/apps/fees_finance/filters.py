@@ -178,6 +178,7 @@ class PaymentFilterSet(django_filters.FilterSet):
 
 class ReceiptFilterSet(django_filters.FilterSet):
     payment = django_filters.UUIDFilter(field_name="payment_id")
+    student = django_filters.UUIDFilter(field_name="payment__student_id")
     receipt_no = django_filters.CharFilter(field_name="receipt_no", lookup_expr="exact")
     issued_at__gte = django_filters.DateTimeFilter(field_name="issued_at", lookup_expr="gte")
     issued_at__lte = django_filters.DateTimeFilter(field_name="issued_at", lookup_expr="lte")

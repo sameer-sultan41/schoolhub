@@ -277,8 +277,8 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md):
 
 - `GET/POST /api/v1/fee-heads` · `GET/POST/PATCH /api/v1/fee-structures` · `GET/POST /api/v1/fee-schedules`
 - `POST /api/v1/fee-invoices:generate` — bulk generation (202 + job); `GET /api/v1/fee-invoices?student=&status=&due_date__lte=` · `POST /api/v1/fee-invoices` (ad-hoc) · `POST /api/v1/fee-invoices/{id}:cancel`
-- ⚿ `POST /api/v1/payments` · `GET /api/v1/payments?invoice=&method=` · `GET /api/v1/receipts/{id}` (PDF or thermal via signed URL, `?format=pdf|thermal`)
-- `POST /api/v1/fee-invoices/{id}/vouchers` — generate a voucher; `GET /api/v1/vouchers/{id}` (PDF or thermal via signed URL); ⚿ `POST /api/v1/voucher-collection-imports` — upload a provider settlement file (202 + job; matched/exception counts on completion)
+- ⚿ `POST /api/v1/payments` · `GET /api/v1/payments?invoice=&method=` (each row carries its `receipt` id, null until issued) · `GET /api/v1/receipts?student=&payment=` · `GET /api/v1/receipts/{id}/download?format=pdf|thermal`
+- `POST /api/v1/fee-invoices/{id}/vouchers` — generate a voucher; `GET /api/v1/vouchers/{id}/download?format=pdf|thermal`; ⚿ `POST /api/v1/voucher-collection-imports` — upload a provider settlement file (`multipart/form-data`: `file` + `provider`; 202 + job; matched/exception counts on completion)
 - ⚿ `POST /api/v1/refunds` · `POST /api/v1/refunds/{id}:approve` · `POST /api/v1/refunds/{id}:reject` · ⚿ `POST /api/v1/refunds/{id}:process`
 - `GET/POST /api/v1/discounts` · `GET/POST /api/v1/scholarships` · `GET/POST /api/v1/fines` · `POST /api/v1/fines/{id}:waive`
 - `GET /api/v1/students/{id}/ledger` — student ledger statement
@@ -337,6 +337,8 @@ match key and exceptions queue.
 posts on approval, budgets whose variance comes from the ledger, and §13's
 reports with the 202 export lane. **The module is complete apart from payroll,
 which is deferred with hr-leave.**
+
+**Dashboard collection gaps closed in the contract.** `GET /receipts?student=` (through `payment__student`), a read-only `receipt` id on each payment, `?format=pdf|thermal` declared on both download routes, and the settlement upload's multipart body (`file` + `provider`) declared on its `create`. `requested_by` was already on a refund.
 
 ### Built (PRs A-D)
 

@@ -42,7 +42,7 @@ import uuid
 from django.db import models, transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import mixins, viewsets
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated
@@ -118,6 +118,7 @@ from apps.fees_finance.serializers import (
     RefundSerializer,
     RequestRefundSerializer,
     ScholarshipSerializer,
+    SettlementImportRequestSerializer,
     VoucherCollectionImportSerializer,
     WaiveSerializer,
 )
@@ -148,6 +149,14 @@ from core.rbac.permissions import (
 )
 
 FEATURE = "module.fees_finance"
+
+# `?format=` on the receipt and voucher downloads; declared once so the contract
+# carries the enum and the dashboard stops hand-typing it.
+DOCUMENT_FORMAT_PARAMETER = OpenApiParameter(
+    "format",
+    enum=["pdf", "thermal"],
+    description="Layout: A4 `pdf` (default) or `thermal` roll.",
+)
 
 # A chart of accounts and a fee structure have no per-family reading, so the
 # PR A viewsets are staff-only outright.
@@ -905,7 +914,7 @@ class ReceiptViewSet(
             .select_related("payment__student", "payment__fee_invoice", "pdf_file")
         )
 
-    @extend_schema(responses={200: None})
+    @extend_schema(parameters=[DOCUMENT_FORMAT_PARAMETER], responses={200: None})
     def download(self, request: Request, pk: str | None = None) -> Response:
         """`GET /receipts/{id}/download?format=pdf|thermal`.
 
@@ -1132,7 +1141,7 @@ class FeeVoucherViewSet(
         record_audit(request, "update", voided, after={"status": voided.status})
         return ActionResponse.ok(self.get_serializer(voided).data, message="Voucher voided.")
 
-    @extend_schema(responses={200: None})
+    @extend_schema(parameters=[DOCUMENT_FORMAT_PARAMETER], responses={200: None})
     def download(self, request: Request, pk: str | None = None) -> Response:
         """`GET /vouchers/{id}/download?format=pdf|thermal`."""
         voucher = self.get_object()
@@ -1177,7 +1186,10 @@ class VoucherCollectionImportViewSet(
     parser_classes = [MultiPartParser]
     http_method_names = ["get", "post", "head", "options"]
 
-    @extend_schema(request=None, responses={202: None})
+    @extend_schema(
+        request={"multipart/form-data": SettlementImportRequestSerializer},
+        responses={202: None},
+    )
     def create(self, request: Request, *args, **kwargs) -> Response:
         """⚿ `POST /voucher-collection-imports` — 202 + job.
 

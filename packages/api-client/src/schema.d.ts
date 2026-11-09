@@ -10917,6 +10917,8 @@ export interface components {
              * @description Null for a gateway or voucher self-service payment.
              */
             readonly received_by: string | null;
+            /** Format: uuid */
+            readonly receipt: string | null;
             readonly receipt_no: string;
             /** Format: date-time */
             readonly created_at: string;
@@ -11717,6 +11719,17 @@ export interface components {
             start_date: string;
             /** Format: date */
             end_date: string;
+        };
+        /**
+         * @description `POST /voucher-collection-imports` — the multipart body, for the contract.
+         *
+         *     Documentation only: the view validates by hand so a missing file or unknown
+         *     provider keeps its 422 `DomainRuleViolation` shape.
+         */
+        SettlementImportRequest: {
+            /** Format: uri */
+            file: string;
+            provider: components["schemas"]["VoucherProviderEnum"];
         };
         /**
          * @description * `processing` - Processing
@@ -19360,6 +19373,7 @@ export interface operations {
                 receipt_no?: string;
                 /** @description A search term. */
                 search?: string;
+                student?: string;
             };
             header?: never;
             path?: never;
@@ -19401,7 +19415,10 @@ export interface operations {
     };
     receipts_download_retrieve: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Layout: A4 `pdf` (default) or `thermal` roll. */
+                format?: "pdf" | "thermal";
+            };
             header?: never;
             path: {
                 id: string;
@@ -23224,7 +23241,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["SettlementImportRequest"];
+            };
+        };
         responses: {
             /** @description No response body */
             202: {
@@ -23315,7 +23336,10 @@ export interface operations {
     };
     vouchers_download_retrieve: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Layout: A4 `pdf` (default) or `thermal` roll. */
+                format?: "pdf" | "thermal";
+            };
             header?: never;
             path: {
                 id: string;

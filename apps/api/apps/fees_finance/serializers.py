@@ -591,6 +591,8 @@ def _validate_grant_value(attrs: dict, *, instance, type_field: str) -> dict:
 
 class PaymentSerializer(serializers.ModelSerializer):
     receipt_no = serializers.CharField(source="receipt.receipt_no", read_only=True)
+    # The receipt's id, so a counter downloads it without a second lookup.
+    receipt = serializers.UUIDField(source="receipt.id", read_only=True, allow_null=True)
 
     class Meta:
         model = Payment
@@ -605,6 +607,7 @@ class PaymentSerializer(serializers.ModelSerializer):
             "status",
             "paid_at",
             "received_by",
+            "receipt",
             "receipt_no",
             "created_at",
         ]
@@ -617,6 +620,7 @@ class PaymentSerializer(serializers.ModelSerializer):
             "status",
             "paid_at",
             "received_by",
+            "receipt",
             "receipt_no",
             "created_at",
         ]
@@ -795,6 +799,17 @@ class FeeVoucherSerializer(serializers.ModelSerializer):
 class IssueVoucherSerializer(serializers.Serializer):
     provider = serializers.ChoiceField(choices=VoucherProvider.choices)
     validity_days = serializers.IntegerField(required=False, min_value=1, max_value=365)
+
+
+class SettlementImportRequestSerializer(serializers.Serializer):
+    """`POST /voucher-collection-imports` — the multipart body, for the contract.
+
+    Documentation only: the view validates by hand so a missing file or unknown
+    provider keeps its 422 `DomainRuleViolation` shape.
+    """
+
+    file = serializers.FileField()
+    provider = serializers.ChoiceField(choices=VoucherProvider.choices)
 
 
 class VoucherCollectionImportSerializer(serializers.ModelSerializer):
