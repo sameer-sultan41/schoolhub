@@ -486,6 +486,7 @@ export function buildFeePayment(overrides: Partial<FeePayment> = {}): FeePayment
     status: "confirmed",
     paid_at: "2026-10-05T09:00:00Z",
     received_by: null,
+    receipt: null,
     receipt_no: "RCT-E2E-0001",
     created_at: STAMP,
     ...overrides,
