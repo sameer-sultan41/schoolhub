@@ -2,7 +2,11 @@ import { ApiError, type ApiClient } from "@schoolhub/api-client";
 import { expect } from "@/fixtures";
 import { env } from "@/env";
 import { createLiveSession } from "@/lib/live-api";
-import { E2E_ACCOUNTANT_EMAIL, E2E_FINANCE_FEE_HEAD_CODE } from "@/lib/seed-constants";
+import {
+  E2E_ACCOUNTANT_EMAIL,
+  E2E_FINANCE_FEE_HEAD_CODE,
+  E2E_FINANCE_STAFF_EMAIL,
+} from "@/lib/seed-constants";
 
 /** What the fees live specs share: the seeded `accountant`'s session, a refusal's `ApiError`, and
  * the seeded fee head. */
@@ -24,6 +28,19 @@ export function accountantSession(): Promise<ApiClient> {
     throw error;
   });
   return accountantLogin;
+}
+
+/** The seeded `finance_staff` (the counter's role), one login per worker like the accountant's. */
+let financeStaffLogin: Promise<ApiClient> | undefined;
+export function financeStaffSession(): Promise<ApiClient> {
+  financeStaffLogin ??= createLiveSession({
+    identifier: E2E_FINANCE_STAFF_EMAIL,
+    password: env.LIVE_ADMIN_PASSWORD,
+  }).catch((error: unknown) => {
+    financeStaffLogin = undefined;
+    throw error;
+  });
+  return financeStaffLogin;
 }
 
 /** The `ApiError` a request is refused with: fails the test if it succeeds or fails otherwise. */
