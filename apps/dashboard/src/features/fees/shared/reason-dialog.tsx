@@ -16,7 +16,7 @@ const reasonSchema = (required: string, max: number) =>
   z.object({ reason: z.string().trim().min(1, required).max(max) });
 type ReasonValues = z.infer<ReturnType<typeof reasonSchema>>;
 
-export interface GrantReasonDialogProps {
+export interface ReasonDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
@@ -28,7 +28,7 @@ export interface GrantReasonDialogProps {
   doneMessage: string;
   /** The query module the write stales (the tab's own list). */
   queryModule: string;
-  /** The colon-action: Revoke discount, Waive fine. Resolves once the server accepted it. */
+  /** The colon-action: Revoke discount, Waive fine, Void voucher. Resolves once the server accepted it. */
   action: (reason: string) => Promise<unknown>;
   /** The fields with an input (`reason`): a server error on any other, like a refused `status`, shows as the form's message. */
   knownFields: readonly string[];
@@ -36,12 +36,12 @@ export interface GrantReasonDialogProps {
 
 /**
  * A confirm dialog that asks for the reason a lifecycle action needs (Revoke a discount, Waive a
- * fine). The server's refusal (422) shows inline and the dialog stays open; the tab's list
+ * fine, Void a voucher). The server's refusal (422) shows inline and the dialog stays open; the tab's list
  * reloads on success.
  *
  * Mounting contract: the caller mounts this only while it is open, so every open is a fresh form.
  */
-export function GrantReasonDialog({
+export function ReasonDialog({
   open,
   onOpenChange,
   title,
@@ -53,7 +53,7 @@ export function GrantReasonDialog({
   queryModule,
   action,
   knownFields,
-}: GrantReasonDialogProps) {
+}: ReasonDialogProps) {
   const tCommon = useTranslations("common");
   const invalidate = useInvalidateModule(queryModule);
 

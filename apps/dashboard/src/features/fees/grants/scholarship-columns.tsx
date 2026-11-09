@@ -19,7 +19,7 @@ import {
   SCHOLARSHIP_TYPE_LABEL_KEY,
 } from "@/features/fees/shared/grant-labels";
 import { LookedUpName } from "@/features/fees/shared/name-lookup";
-import { GrantStatusBadge } from "./grant-status-badge";
+import { StatusBadge } from "@/features/fees/shared/status-badge";
 
 export interface ScholarshipRowActions {
   /** Whether the viewer holds `fees.scholarship.create`, the key every status move needs. */
@@ -134,7 +134,7 @@ export function useScholarshipColumns({
         enableSorting: false,
         header: () => t("grants.scholarships.columns.status"),
         cell: ({ row }) => (
-          <GrantStatusBadge
+          <StatusBadge
             status={row.original.status ?? "applied"}
             labels={SCHOLARSHIP_STATUS_LABEL_KEY}
             variants={SCHOLARSHIP_STATUS_BADGE}

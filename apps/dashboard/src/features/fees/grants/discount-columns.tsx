@@ -17,7 +17,7 @@ import {
   GRANT_VALUE_TYPE_LABEL_KEY,
 } from "@/features/fees/shared/grant-labels";
 import { LookedUpName } from "@/features/fees/shared/name-lookup";
-import { GrantStatusBadge } from "./grant-status-badge";
+import { StatusBadge } from "@/features/fees/shared/status-badge";
 
 export interface DiscountRowActions {
   canRevoke: boolean;
@@ -142,7 +142,7 @@ export function useDiscountColumns({
         enableSorting: false,
         header: () => t("grants.discounts.columns.status"),
         cell: ({ row }) => (
-          <GrantStatusBadge
+          <StatusBadge
             status={row.original.status}
             labels={DISCOUNT_STATUS_LABEL_KEY}
             variants={DISCOUNT_STATUS_BADGE}

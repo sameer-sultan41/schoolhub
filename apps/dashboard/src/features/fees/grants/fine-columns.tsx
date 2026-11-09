@@ -17,7 +17,7 @@ import {
   FINE_TYPE_LABEL_KEY,
 } from "@/features/fees/shared/grant-labels";
 import { LookedUpName } from "@/features/fees/shared/name-lookup";
-import { GrantStatusBadge } from "./grant-status-badge";
+import { StatusBadge } from "@/features/fees/shared/status-badge";
 
 export interface FineRowActions {
   canWaive: boolean;
@@ -113,7 +113,7 @@ export function useFineColumns({ canWaive, onWaive }: FineRowActions): ColumnDef
         enableSorting: false,
         header: () => t("grants.fines.columns.status"),
         cell: ({ row }) => (
-          <GrantStatusBadge
+          <StatusBadge
             status={row.original.status}
             labels={FINE_STATUS_LABEL_KEY}
             variants={FINE_STATUS_BADGE}

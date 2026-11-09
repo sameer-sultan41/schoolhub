@@ -12,7 +12,7 @@ import {
 } from "@/services/modules/payments/payments-constant";
 import { needsReference } from "@/services/modules/payments/payments-helper";
 import type { RecordPaymentFormValues } from "@/services/modules/payments/payments.schema";
-import { PAYMENT_METHOD_LABEL_KEY } from "@/features/fees/shared/payment-labels";
+import { PAYMENT_METHOD_LABEL_KEY } from "./payment-labels";
 
 /** The record-payment inputs: amount, method (never the gateway) and the reference a cheque or
  * transfer needs. Every server field error shows under its input. */

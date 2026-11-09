@@ -10,8 +10,8 @@ import { StudentPicker, type PickedStudent } from "@/components/student-picker";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { hasPermission } from "@/lib/permissions";
 import type { FeeInvoiceRecord } from "@/services";
+import { RecordPaymentDialog } from "@/features/fees/shared/record-payment-dialog";
 import { OutstandingInvoicesCard } from "./outstanding-invoices-card";
-import { RecordPaymentDialog } from "./record-payment-dialog";
 
 /**
  * `/fees/counter`: pick a student, see the invoices that still owe money, record a payment. The

@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import type { UseFormReturn } from "react-hook-form";
 
 import { useFormDialogSubmit } from "@/hooks/use-form-dialog-submit";
+import { useIdempotencyKey } from "@/hooks/use-idempotency-key";
 import { useInvalidateModule } from "@/hooks/use-invalidate-module";
 import { useJobPolling } from "@/hooks/use-job-polling";
 import { ApiError, Services } from "@/services";
@@ -26,32 +27,21 @@ import type { GenerateInvoicesFormValues } from "@/services/modules/fee-invoices
 export function useGenerateInvoices(form: UseFormReturn<GenerateInvoicesFormValues>) {
   const tCommon = useTranslations("common");
   const invalidateInvoices = useInvalidateModule(FEE_INVOICES_QUERY_MODULE);
-  const keyRef = useRef<string | null>(null);
+  const idempotencyKey = useIdempotencyKey(form);
   const [jobId, setJobId] = useState<string | null>(null);
   // The job whose end was already acted on, so a re-render never reloads twice.
   const handledJobRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    const subscription = form.watch(() => {
-      keyRef.current = null;
-    });
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [form]);
-
   const submit = useFormDialogSubmit({
     form,
-    mutationFn: (values: GenerateInvoicesFormValues) => {
-      keyRef.current ??= crypto.randomUUID();
-      return Services.feeInvoices.generateFeeInvoices(
+    mutationFn: (values: GenerateInvoicesFormValues) =>
+      Services.feeInvoices.generateFeeInvoices(
         buildGenerateInvoicesInput(values),
-        keyRef.current,
-      );
-    },
+        idempotencyKey.current(),
+      ),
     knownFields: FEE_INVOICE_GENERATE_ERROR_FIELDS,
     onSuccess: (accepted) => {
-      keyRef.current = null;
+      idempotencyKey.clear();
       setJobId(accepted.jobId);
       invalidateInvoices();
     },
@@ -84,7 +74,7 @@ export function useGenerateInvoices(form: UseFormReturn<GenerateInvoicesFormValu
     resume,
     /** Back to the form for another run. */
     reset: () => {
-      keyRef.current = null;
+      idempotencyKey.clear();
       setJobId(null);
     },
   };

@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useTranslations } from "next-intl";
 import type { UseFormReturn } from "react-hook-form";
 
 import { useFormDialogSubmit } from "@/hooks/use-form-dialog-submit";
+import { useIdempotencyKey } from "@/hooks/use-idempotency-key";
 import { useInvalidateModule } from "@/hooks/use-invalidate-module";
 import { Services } from "@/services";
 import { FEE_INVOICES_QUERY_MODULE } from "@/services/modules/fee-invoices/fee-invoices-constant";
@@ -28,30 +29,19 @@ export function useRecordPayment(form: UseFormReturn<RecordPaymentFormValues>, i
   const tCommon = useTranslations("common");
   const invalidateInvoices = useInvalidateModule(FEE_INVOICES_QUERY_MODULE);
   const invalidatePayments = useInvalidateModule(PAYMENTS_QUERY_MODULE);
-  const keyRef = useRef<string | null>(null);
+  const idempotencyKey = useIdempotencyKey(form);
   const [payment, setPayment] = useState<PaymentRecord | null>(null);
-
-  useEffect(() => {
-    const subscription = form.watch(() => {
-      keyRef.current = null;
-    });
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [form]);
 
   const submit = useFormDialogSubmit({
     form,
-    mutationFn: (values: RecordPaymentFormValues) => {
-      keyRef.current ??= crypto.randomUUID();
-      return Services.payments.recordPayment(
+    mutationFn: (values: RecordPaymentFormValues) =>
+      Services.payments.recordPayment(
         buildRecordPaymentInput(invoiceId, values),
-        keyRef.current,
-      );
-    },
+        idempotencyKey.current(),
+      ),
     knownFields: RECORD_PAYMENT_ERROR_FIELDS,
     onSuccess: (recorded) => {
-      keyRef.current = null;
+      idempotencyKey.clear();
       setPayment(recorded);
       invalidateInvoices();
       invalidatePayments();

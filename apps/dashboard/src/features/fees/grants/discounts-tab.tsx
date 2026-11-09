@@ -23,9 +23,9 @@ import { discountStatusFilter } from "@/services/modules/discounts/discounts-hel
 import { FeesTabHeader } from "@/features/fees/shared/fees-tab-header";
 import { DISCOUNT_STATUS_LABEL_KEY } from "@/features/fees/shared/grant-labels";
 import { NameLookupProvider } from "@/features/fees/shared/name-lookup";
+import { ReasonDialog } from "@/features/fees/shared/reason-dialog";
 import { useDiscountColumns } from "./discount-columns";
 import { DiscountFormDialog } from "./discount-form-dialog";
-import { GrantReasonDialog } from "./grant-reason-dialog";
 import { GrantsListCard } from "./grants-list-card";
 import { useGrantList } from "./use-grant-list";
 import { useGrantReferences } from "./use-grant-references";
@@ -108,7 +108,7 @@ export function DiscountsTab() {
         />
       )}
       {revokeTarget && (
-        <GrantReasonDialog
+        <ReasonDialog
           open
           onOpenChange={(open) => {
             if (!open) setRevokeTarget(null);

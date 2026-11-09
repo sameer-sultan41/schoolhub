@@ -23,9 +23,9 @@ import { fineStatusFilter } from "@/services/modules/fines/fines-helper";
 import { FeesTabHeader } from "@/features/fees/shared/fees-tab-header";
 import { FINE_STATUS_LABEL_KEY } from "@/features/fees/shared/grant-labels";
 import { NameLookupProvider } from "@/features/fees/shared/name-lookup";
+import { ReasonDialog } from "@/features/fees/shared/reason-dialog";
 import { useFineColumns } from "./fine-columns";
 import { FineFormDialog } from "./fine-form-dialog";
-import { GrantReasonDialog } from "./grant-reason-dialog";
 import { GrantsListCard } from "./grants-list-card";
 import { useGrantList } from "./use-grant-list";
 import { useGrantReferences } from "./use-grant-references";
@@ -106,7 +106,7 @@ export function FinesTab() {
         />
       )}
       {waiveTarget && (
-        <GrantReasonDialog
+        <ReasonDialog
           open
           onOpenChange={(open) => {
             if (!open) setWaiveTarget(null);
