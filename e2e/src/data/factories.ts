@@ -344,6 +344,30 @@ export const FEES_COUNTER_PERMISSIONS: PermissionKey[] = [
 ];
 
 /**
+ * The Payments page's keys the seeded `accountant` holds (`permissions.py`: `FINANCE_STAFF` for
+ * `fees.payment.collect|refund`, `REFUND_APPROVERS` for `fees.refund.approve`, `INVOICE_VIEWERS`
+ * for the two reads). No `students.student.view`: the Payments page reads no student list.
+ */
+export const FEES_PAYMENTS_ACCOUNTANT_PERMISSIONS: PermissionKey[] = [
+  "fees.invoice.view",
+  "fees.payment.view",
+  "fees.payment.collect",
+  "fees.payment.refund",
+  "fees.refund.approve",
+];
+
+/**
+ * The Payments page's keys the seeded `finance_staff` holds: the same, without
+ * `fees.refund.approve` (§3: finance staff cannot approve refunds) (L55).
+ */
+export const FEES_PAYMENTS_STAFF_PERMISSIONS: PermissionKey[] = [
+  "fees.invoice.view",
+  "fees.payment.view",
+  "fees.payment.collect",
+  "fees.payment.refund",
+];
+
+/**
  * The grants keys the seeded `accountant` holds (`permissions.py`: the discount, scholarship and
  * fine keys, view, create and waive), plus the reads the create forms' pickers make: students,
  * sessions and fee heads (L55, L59).
