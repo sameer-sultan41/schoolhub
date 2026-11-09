@@ -52,6 +52,8 @@ EXTRA_ACTIONS = frozenset(
         "request",
         "revoke",
         "oversee",
+        # Ask the AI gateway for a summary (fees.report.summarize, AI-FEE-02).
+        "summarize",
     }
 )
 

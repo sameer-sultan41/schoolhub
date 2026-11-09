@@ -4377,6 +4377,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/finance-summary:summarize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * AI summary of a finance report
+         * @description `POST /reports/finance-summary:summarize`: AI-FEE-02, a plain-language summary.
+         *
+         *     **Not wrapped in `ATOMIC_REQUESTS`** (urls.py): the gateway calls the provider
+         *     with no transaction open and commits its audit row in its own, so a refusal
+         *     still leaves its row (`core.ai.service`). That moves every database read here
+         *     into an explicit tenant transaction, because the tenant binding is a `SET
+         *     LOCAL` and lasts only as long as the transaction around it:
+         *
+         *     1. `initial` (authentication, the flag, the permission key, the throttles) runs
+         *        in one short transaction, so the role and flag reads see the tenant.
+         *     2. The report's facts are read in a `tenant_atomic`, under the route's key.
+         *     3. `services.summarize_report` then runs with no transaction open.
+         *
+         *     Read-only advisory output, labelled `ai_generated` (ai-governance.md §2, §8).
+         *     The `ai` throttle sits on top of the defaults: it bounds how far concurrent
+         *     calls can overshoot the token budget (ADR-0035).
+         */
+        post: operations["reports_finance_summary:summarize_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/results": {
         parameters: {
             query?: never;
@@ -8042,6 +8077,44 @@ export interface components {
             group_by: components["schemas"]["GroupByEnum"];
             /** @default csv */
             format: components["schemas"]["FormatEnum"];
+        };
+        /**
+         * @description An AI-generated summary (AI-FEE-02). `ai_generated` is always true: the client
+         *     labels the text "AI-generated" wherever it shows it (ai-governance.md §8).
+         */
+        FinanceReportSummary: {
+            summary: string;
+            facts: {
+                [key: string]: string;
+            };
+            model: string;
+            prompt_version: string;
+            /** Format: uuid */
+            ai_request_id: string;
+            ai_generated: boolean;
+        };
+        FinanceReportSummaryMeta: {
+            budget_warning: boolean;
+        };
+        /**
+         * @description `POST /reports/finance-summary:summarize`: which report, over which period.
+         *
+         *     The report's own parameters minus `student` and `format`: a student ledger is
+         *     never summarised (`services.report_summary_facts` answers 422 on `kind`), and a
+         *     summary is not an export.
+         */
+        FinanceReportSummaryRequest: {
+            kind: string;
+            /** Format: date */
+            date_from: string;
+            /** Format: date */
+            date_to: string;
+            /** @default day */
+            group_by: components["schemas"]["GroupByEnum"];
+        };
+        FinanceReportSummaryResponse: {
+            data: components["schemas"]["FinanceReportSummary"];
+            meta: components["schemas"]["FinanceReportSummaryMeta"];
         };
         Fine: {
             /** Format: uuid */
@@ -19999,6 +20072,31 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    "reports_finance_summary:summarize_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinanceReportSummaryRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["FinanceReportSummaryRequest"];
+                "multipart/form-data": components["schemas"]["FinanceReportSummaryRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceReportSummaryResponse"];
+                };
             };
         };
     };

@@ -96,6 +96,7 @@ ALL_KEYS = (
     "fees.budget.approve",
     "fees.report.view",
     "fees.report.export",
+    "fees.report.summarize",
 )
 
 

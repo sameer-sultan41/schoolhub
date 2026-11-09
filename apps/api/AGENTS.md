@@ -31,6 +31,7 @@ core/jobs/         the job resource for long-running operations (202 + polling)
 core/idempotency/  Idempotency-Key replay for mutating colon-actions (money, enrol, transfers, …)
 core/money/        money primitives shared by finance code
 core/notifications/ notify(), templates, delivery lanes (Tier-4 apps hook in via AppConfig.ready)
+core/ai/           the AI gateway: provider adapter, feature registry, budgets, grounding, audit, evals
 core/common/       empty placeholder (nothing lives here yet)
 apps/<module>/     one app per module doc. Layout: models.py + permissions.py at the app root,
                    one package per resource (serializers/viewset/urls/filters/services + tests) —
@@ -69,9 +70,14 @@ AGENTS.md:
 4. **Cross-tenant access returns 404**, never 403.
 5. **Money is append-only.** Ledger entries are never updated or deleted; corrections are
    new entries. Money endpoints honor `Idempotency-Key`.
-6. **AI calls go through the gateway** in `core/ai` (planned — it does not exist yet; build it
-   before the first AI feature) — never import a provider SDK in an app.
-   AI output that reaches a person is stored as a draft pending human approval.
+6. **AI calls go through the gateway**, `core.ai.service.run_feature` — never import a provider
+   SDK outside `core/ai/providers/anthropic.py` (`core/ai/tests/test_boundaries.py`). A feature
+   lives in its module's `ai.py` (registration, per-kind context allowlist, eval suite) with its
+   prompt under `prompts/`, a default-off flag, and an endpoint that is `non_atomic_requests`,
+   reads its context in a `tenant_atomic` and calls the gateway with no transaction open
+   (ADR-0035; `fees_finance`'s `FinanceReportSummaryView` is the pattern). Figures are cited as
+   `{{fact:key}}`, never written by the model. AI output that reaches a student, parent or the
+   public is stored as a draft pending human approval.
 7. **Every module PR ships:** migrations + seeds, RBAC permission rows, tests including a
    cross-tenant access test per new endpoint, OpenAPI annotations, and feature-flag wiring.
 8. **Do not run tests, linters, or typechecks locally.** Commit, push, and let CI report —

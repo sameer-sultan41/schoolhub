@@ -511,3 +511,31 @@ class FinanceCrossTenantTests(FeesFinanceAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.json()["data"], [])
+
+    def test_a_report_summary_never_reads_another_tenant_s_figures(self) -> None:
+        """AI-FEE-02 aggregates over the caller's scoped set: the other school's
+        payment, invoice and expense count for nothing, so this tenant's summary is
+        the empty one and the provider is never asked."""
+        from apps.fees_finance.ai import FEATURE_FLAG
+        from core.ai.providers.fake import fake_provider
+
+        enable_feature(self.tenant, FEATURE_FLAG)
+        enable_feature(self.other_tenant, FEATURE_FLAG)
+        fake_provider.reset()
+        counts = {
+            "collection": "payment_count",
+            "outstanding-aging": "invoice_count",
+            "expense-register": "expense_count",
+        }
+        for kind, count_key in counts.items():
+            with self.subTest(kind=kind):
+                response = self.client.post(
+                    "/api/v1/reports/finance-summary:summarize",
+                    {"kind": kind, "date_from": "2026-01-01", "date_to": "2027-12-31"},
+                    format="json",
+                )
+                self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+                data = response.json()["data"]
+                self.assertEqual(data["summary"], "")
+                self.assertEqual(data["facts"][count_key], "0")
+        self.assertEqual(fake_provider.calls, [])

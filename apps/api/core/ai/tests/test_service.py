@@ -292,3 +292,20 @@ class ProviderBehaviourTests(GatewayTestCase):
             (120, 40, 10, 5),
         )
         self.assertGreaterEqual(row.latency_ms, 0)
+
+    def test_empty_input_records_ok_with_zero_tokens_and_no_provider_call(self) -> None:
+        run = self.run_probe(empty_input=True)
+
+        self.assertEqual(run.text, "")
+        self.assertEqual(fake_provider.calls, [])
+        (row,) = rows(self.tenant)
+        self.assertEqual(row.outcome, AIOutcome.OK)
+        self.assertEqual(row.input_tokens + row.output_tokens, 0)
+
+    def test_empty_input_still_runs_the_gates(self) -> None:
+        set_flag(self.tenant, PROBE_FLAG, enabled=False)
+
+        with self.assertRaises(ModuleDisabled):
+            self.run_probe(empty_input=True)
+
+        self.assertEqual([r.outcome for r in rows(self.tenant)], [AIOutcome.DISABLED])

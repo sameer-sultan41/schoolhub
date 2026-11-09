@@ -964,3 +964,43 @@ class FinanceReportQuerySerializer(serializers.Serializer):
                 {"student": "A student ledger needs the student it is for."}
             )
         return attrs
+
+
+class FinanceReportSummaryRequestSerializer(FinanceReportQuerySerializer):
+    """`POST /reports/finance-summary:summarize`: which report, over which period.
+
+    The report's own parameters minus `student` and `format`: a student ledger is
+    never summarised (`services.report_summary_facts` answers 422 on `kind`), and a
+    summary is not an export.
+    """
+
+    student = None
+    format = None
+
+    def validate(self, attrs: dict) -> dict:
+        if attrs["date_to"] < attrs["date_from"]:
+            raise serializers.ValidationError(
+                {"date_to": "The end of the period cannot precede its start."}
+            )
+        return attrs
+
+
+class FinanceReportSummarySerializer(serializers.Serializer):
+    """An AI-generated summary (AI-FEE-02). `ai_generated` is always true: the client
+    labels the text "AI-generated" wherever it shows it (ai-governance.md §8)."""
+
+    summary = serializers.CharField(allow_blank=True)
+    facts = serializers.DictField(child=serializers.CharField())
+    model = serializers.CharField(allow_blank=True)
+    prompt_version = serializers.CharField()
+    ai_request_id = serializers.UUIDField()
+    ai_generated = serializers.BooleanField()
+
+
+class FinanceReportSummaryMetaSerializer(serializers.Serializer):
+    budget_warning = serializers.BooleanField()
+
+
+class FinanceReportSummaryResponseSerializer(serializers.Serializer):
+    data = FinanceReportSummarySerializer()
+    meta = FinanceReportSummaryMetaSerializer()

@@ -85,15 +85,21 @@ def run_feature(
     input_ref: str,
     grounding: GroundingContext,
     pseudonymizer: Pseudonymizer | None = None,
+    empty_input: bool = False,
 ) -> AIRun:
     """Run one AI feature for ``user``. Raises ``ModuleDisabled`` (403),
-    ``AIQuotaExceeded`` (429) or ``AIUnavailable`` (503); records exactly one row."""
+    ``AIQuotaExceeded`` (429) or ``AIUnavailable`` (503); records exactly one row.
+
+    ``empty_input`` is a feature's "nothing to say": the gates still run, but the
+    provider is not called and the row is an ``ok`` with zero tokens."""
     feature = registry.get(feature_key)
     started = time.monotonic()
     # Anything unexpected that escapes is recorded as the degraded path, not lost.
     audit = _Audit(id=uuid.uuid4(), outcome=AIOutcome.FALLBACK)
     try:
-        return _run(feature, audit, user, tenant, user_prompt, grounding, pseudonymizer)
+        return _run(
+            feature, audit, user, tenant, user_prompt, grounding, pseudonymizer, empty_input
+        )
     finally:
         _record(
             audit,
@@ -113,6 +119,7 @@ def _run(
     user_prompt: str,
     grounding: GroundingContext,
     pseudonymizer: Pseudonymizer | None,
+    empty_input: bool,
 ) -> AIRun:
     provider = get_provider()
 
@@ -134,6 +141,16 @@ def _run(
         if budget.used_today(tenant, user.pk) >= budget.daily_user_cap():
             audit.outcome = AIOutcome.QUOTA
             raise AIQuotaExceeded("user")
+
+    if empty_input:
+        audit.outcome = AIOutcome.OK
+        return AIRun(
+            request_id=audit.id,
+            text="",
+            model="",
+            prompt_version=feature.prompt_version,
+            budget_warning=budget.is_warning(used_month, limit),
+        )
 
     # No transaction from here: the call may take up to the full deadline.
     audit.model = model_for_tier(feature.tier)

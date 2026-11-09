@@ -9,6 +9,7 @@ the thing being created is a whole balanced posting rather than a change to one
 entry. `LedgerEntryViewSet` has no create route for the same reason.
 """
 
+from django.db import transaction
 from django.urls import path
 from rest_framework.routers import SimpleRouter
 
@@ -22,6 +23,7 @@ from apps.fees_finance.views import (
     FeeScheduleViewSet,
     FeeStructureViewSet,
     FeeVoucherViewSet,
+    FinanceReportSummaryView,
     FinanceReportView,
     FineViewSet,
     LedgerAccountViewSet,
@@ -179,6 +181,13 @@ urlpatterns = [
         "reports/finance-summary",
         FinanceReportView.as_view(),
         name="reports-finance-summary",
+    ),
+    # AI-FEE-02. `non_atomic_requests`: the gateway calls the provider with no
+    # transaction open and commits its audit row in its own (ADR-0035).
+    path(
+        "reports/finance-summary:summarize",
+        transaction.non_atomic_requests(FinanceReportSummaryView.as_view()),
+        name="reports-finance-summary-summarize",
     ),
     # §16 declares this path under the student rather than under /reports,
     # because it is the one financial report a family reads.

@@ -13,14 +13,19 @@ from __future__ import annotations
 
 import calendar
 import datetime
+import hashlib
+import json
 import uuid
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from decimal import Decimal
+from typing import TYPE_CHECKING, Any
 
 from django.db import models, transaction
 from django.utils import timezone
 
-from apps.fees_finance import invoicing, numbering, reports
+from apps.fees_finance import ai, invoicing, numbering, reports
+from apps.fees_finance.ai import SummaryFacts
 from apps.fees_finance.ledger import LedgerLine, post_transaction, reverse_transaction
 from apps.fees_finance.models import (
     Budget,
@@ -57,6 +62,7 @@ from apps.fees_finance.models import (
     VoucherCollectionImport,
     VoucherStatus,
 )
+from core.ai.redaction import Pseudonymizer
 from core.api.exceptions import DomainRuleViolation
 from core.money import ZERO, quantize_money
 
@@ -1864,6 +1870,291 @@ def build_report_rows(
         date_from=date_from,
         date_to=date_to,
         limit=limit,
+    )
+
+
+# ------------------------------------------------------- AI report summaries
+
+#: The report's read key. A summary is scoped by it as well as by the route's own
+#: key, so it never shows figures the caller could not open as the report (ADR-0031
+#: decision 3).
+REPORT_VIEW_KEY = "fees.report.view"
+
+
+@dataclass(frozen=True)
+class ReportSummary:
+    summary: str
+    facts: dict[str, str]
+    model: str
+    prompt_version: str
+    ai_request_id: uuid.UUID
+    budget_warning: bool
+
+
+def _money(value: Decimal, currency: str) -> str:
+    amount = f"{quantize_money(value):,.2f}"
+    return f"{currency} {amount}" if currency else amount
+
+
+def _label(value: object) -> str:
+    """An enum value as a reader writes it: `bank_transfer` becomes `bank transfer`."""
+    return str(value or "").replace("_", " ")
+
+
+def _cashier_names(user_ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
+    """Staff display names for the cashiers' user ids, one query. Never sent to the
+    provider: they are what `Cashier-N` is restored to after validation."""
+    from apps.staff_management.models import Staff
+
+    return {
+        row["user_id"]: f"{row['first_name']} {row['last_name']}".strip()
+        for row in Staff.objects.alive()
+        .filter(user_id__in=user_ids)
+        .values("user_id", "first_name", "last_name")
+    }
+
+
+def report_summary_facts(
+    *,
+    kind: str,
+    user: Any,
+    permission: str | AnyOf,
+    date_from: datetime.date,
+    date_to: datetime.date,
+    group_by: str = "day",
+    currency: str = "",
+) -> SummaryFacts:
+    """The facts and table an AI summary of one §13 report reads (AI-FEE-02).
+
+    **Aggregates over the caller's scoped set, never the inline rows**: the facts
+    cover every row the caller may see, however many, and the table is grouped
+    (by day, method, cashier, account, category, status) and cut to
+    `ai.MAX_TABLE_ROWS`. A school with more families owing than the inline
+    report's cap still gets its summary.
+
+    Each queryset is scoped by the report's read key and by `permission`, the
+    route's own key, so a summary reaches only rows both grant. Only what
+    `ai.CONTEXT_ALLOWLIST` names is sent on; cashiers and budgets are aliased
+    through the returned `pseudonymizer`. `student-ledger` is refused: it is one
+    family's statement.
+    """
+    from core.rbac.permissions import scope_queryset
+
+    if kind in ai.REFUSED_KINDS:
+        raise DomainRuleViolation(
+            {"kind": "A student ledger is one family's statement and is not summarised."}
+        )
+    if kind not in reports.REPORT_KINDS:
+        raise DomainRuleViolation(
+            {"kind": f"Unknown report. Expected one of: {', '.join(reports.REPORT_KINDS)}."}
+        )
+
+    def scoped(queryset: Any, campus_field: str = "student__campus_id") -> Any:
+        for key in (REPORT_VIEW_KEY, permission):
+            queryset = scope_queryset(queryset, user, permission=key, campus_field=campus_field)
+        return queryset
+
+    def ledger() -> models.QuerySet[LedgerEntry]:
+        read = _ledger_report_queryset(user=user, permission=REPORT_VIEW_KEY)
+        return read & _ledger_report_queryset(user=user, permission=permission)
+
+    names = Pseudonymizer()
+    facts: dict[str, str] = {
+        "period_start": date_from.isoformat(),
+        "period_end": date_to.isoformat(),
+    }
+    table: list[dict[str, str]] = []
+    size_key = "total"
+    empty: bool
+
+    if kind == "collection":
+        payments = scoped(Payment.objects.alive())
+        totals = reports.collection_totals(payments, date_from=date_from, date_to=date_to)
+        facts["total_collected"] = _money(totals["total"], currency)
+        facts["payment_count"] = str(totals["count"])
+        empty = not totals["count"]
+        rows = reports.collection_report(
+            payments, date_from=date_from, date_to=date_to, group_by=group_by
+        )
+        cashiers = (
+            _cashier_names({row["received_by"] for row in rows if row["received_by"]})
+            if group_by == "cashier"
+            else {}
+        )
+        for row in rows:
+            entry = {"total": _money(row["total"], currency), "count": str(row["count"])}
+            if group_by == "method":
+                entry["method"] = _label(row["method"])
+            elif group_by == "cashier":
+                name = cashiers.get(row["received_by"]) or "an unnamed cashier"
+                entry["cashier"] = names.alias("Cashier", name)
+            else:
+                entry["day"] = row["day"].isoformat()
+            table.append(entry)
+    elif kind == "outstanding-aging":
+        aging = reports.aging_totals(scoped(FeeInvoice.objects.alive()), as_of=date_to)
+        facts |= {
+            "total_outstanding": _money(aging["total_outstanding"], currency),
+            "invoice_count": str(aging["invoice_count"]),
+            "student_count": str(aging["student_count"]),
+            "not_yet_due": _money(aging["not_yet_due"], currency),
+            "overdue_0_30": _money(aging["bucket_0_30"], currency),
+            "overdue_31_60": _money(aging["bucket_31_60"], currency),
+            "overdue_61_90": _money(aging["bucket_61_90"], currency),
+            "overdue_90_plus": _money(aging["bucket_90_plus"], currency),
+        }
+        empty = not aging["invoice_count"]
+    elif kind == "grant-register":
+        register = reports.grant_register_counts(
+            discounts=scoped(Discount.objects.alive()),
+            scholarships=scoped(Scholarship.objects.alive()),
+            fines=scoped(Fine.objects.alive()),
+        )
+        counts = {"discount": 0, "scholarship": 0}
+        for row in register["rows"]:
+            counts[row["kind"]] = counts.get(row["kind"], 0) + row["count"]
+            table.append(
+                {"kind": row["kind"], "status": _label(row["status"]), "count": str(row["count"])}
+            )
+        facts |= {
+            "discount_count": str(counts["discount"]),
+            "scholarship_count": str(counts["scholarship"]),
+            "fine_waiver_count": str(register["fine_waiver_count"]),
+            "fine_waived_total": _money(register["fine_waived_total"], currency),
+        }
+        size_key = "count"
+        empty = not table
+    elif kind == "income-vs-expense":
+        accounts = reports.income_vs_expense(ledger(), date_from=date_from, date_to=date_to)
+        net_by_type: dict[str, Decimal] = {}
+        for row in accounts:
+            account_type = row["ledger_account__account_type"]
+            net_by_type[account_type] = net_by_type.get(account_type, ZERO) + row["net"]
+        income = net_by_type.get(LedgerAccountType.INCOME, ZERO)
+        expense = net_by_type.get(LedgerAccountType.EXPENSE, ZERO)
+        facts |= {
+            "total_income": _money(income, currency),
+            "total_expense": _money(expense, currency),
+            "net_result": _money(income - expense, currency),
+        }
+        table = [
+            {
+                "account": row["ledger_account__name"],
+                "account_type": _label(row["ledger_account__account_type"]),
+                "net": _money(row["net"], currency),
+            }
+            for row in accounts
+        ]
+        size_key = "net"
+        empty = not accounts
+    elif kind == "budget-variance":
+        budgets = reports.budget_variance(
+            scoped(Budget.objects.alive(), campus_field="campus_id"), as_of=date_to
+        )
+        facts |= {
+            "budget_count": str(len(budgets)),
+            "total_budgeted": _money(sum((b["budgeted"] for b in budgets), ZERO), currency),
+            "total_actual": _money(sum((b["actual"] for b in budgets), ZERO), currency),
+            "total_variance": _money(sum((b["variance"] for b in budgets), ZERO), currency),
+            "over_budget_count": str(sum(1 for b in budgets if b["variance"] < 0)),
+        }
+        table = [
+            {
+                "budget": names.alias("Budget", row["name"]),
+                "period_start": row["period_start"].isoformat(),
+                "period_end": row["period_end"].isoformat(),
+                "budgeted": _money(row["budgeted"], currency),
+                "actual": _money(row["actual"], currency),
+                "variance": _money(row["variance"], currency),
+                "utilisation_percent": f"{row['utilisation_percent']}%",
+            }
+            for row in budgets
+        ]
+        size_key = "budgeted"
+        empty = not budgets
+    elif kind == "expense-register":
+        groups = reports.expense_totals(
+            scoped(Expense.objects.alive(), campus_field="campus_id"),
+            date_from=date_from,
+            date_to=date_to,
+        )
+        facts |= {
+            "expense_count": str(sum(row["count"] for row in groups)),
+            "total_amount": _money(sum((row["total"] for row in groups), ZERO), currency),
+            "total_tax": _money(sum((row["tax"] for row in groups), ZERO), currency),
+        }
+        table = [
+            {
+                "category": row["expense_category__name"] or "uncategorised",
+                "status": _label(row["status"]),
+                "count": str(row["count"]),
+                "total": _money(row["total"], currency),
+                "tax": _money(row["tax"], currency),
+            }
+            for row in groups
+        ]
+        empty = not groups
+    else:  # trial-balance
+        balances = reports.trial_balance_extract(ledger(), date_from=date_from, date_to=date_to)
+        debit = sum((row["total_debit"] for row in balances), ZERO)
+        credit = sum((row["total_credit"] for row in balances), ZERO)
+        facts |= {
+            "total_debit": _money(debit, currency),
+            "total_credit": _money(credit, currency),
+            "difference": _money(debit - credit, currency),
+        }
+        table = [
+            {
+                "account": row["name"],
+                "account_type": _label(row["account_type"]),
+                "debit": _money(row["total_debit"], currency),
+                "credit": _money(row["total_credit"], currency),
+                "balance": _money(row["balance"], currency),
+            }
+            for row in balances
+        ]
+        size_key = "balance"
+        empty = not balances
+
+    shown = ai.downsample(table, size_key=size_key)
+    facts["row_count"] = str(len(table))
+    facts["rows_shown"] = str(len(shown))
+    digest = hashlib.sha256(
+        json.dumps({"kind": kind, "facts": facts, "table": shown}, sort_keys=True).encode()
+    ).hexdigest()
+    return SummaryFacts(
+        facts=facts,
+        table=shown,
+        input_ref=f"sha256:{digest}",
+        is_empty=empty,
+        pseudonymizer=names,
+    )
+
+
+def summarize_report(*, kind: str, summary: SummaryFacts, user: Any, tenant: Any) -> ReportSummary:
+    """Ask the gateway for the summary. Call with **no transaction open**: the gateway
+    calls the provider outside one and commits its audit row in its own
+    (`core.ai.service`). An empty report records an `ok` row and calls nothing."""
+    from core.ai.service import run_feature
+
+    context = ai.build_summary_context(kind=kind, summary=summary)
+    run = run_feature(
+        feature_key=ai.FEATURE_KEY,
+        user=user,
+        tenant=tenant,
+        user_prompt=context.user_prompt,
+        input_ref=summary.input_ref,
+        grounding=context.grounding,
+        pseudonymizer=summary.pseudonymizer,
+        empty_input=summary.is_empty,
+    )
+    return ReportSummary(
+        summary=run.text,
+        facts=context.grounding.facts,
+        model=run.model,
+        prompt_version=run.prompt_version,
+        ai_request_id=run.request_id,
+        budget_warning=run.budget_warning,
     )
 
 
