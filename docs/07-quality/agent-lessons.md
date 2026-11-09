@@ -401,6 +401,28 @@
   in each such step: a throwaway value generated at runtime for a secret (never a committed one),
   a placeholder for a non-secret. Keep production failing closed; never add a default to get green.
 
+### L61. A queryset on a tenant-scoped manager is built inside the tenant binding, not before it
+
+- **Mistake.** `reconcile_gateway_day` runs with no tenant bound and built
+  `Payment.objects.alive().filter(...)` once, before its `tenant_atomic` blocks. The tenant
+  manager filters on the tenant bound *when the queryset is built*, so it was `.none()`: a
+  confirmed payment the provider lacked never raised `missing_at_gateway`, and every re-run
+  counted the day's payments as changed (fee online payments CI).
+- **Check.** In code that opens its own `tenant_atomic` per unit of work, build each
+  `Model.objects` queryset inside the block that runs it (a small function is fine); never hoist
+  one above the binding. Test it by calling the function with no tenant bound, as the sweep does.
+
+### L62. An error response from a `non_atomic_requests` view breaks the `TestCase` transaction
+
+- **Mistake.** `:initiate-payment` and the payment callback opt out of `ATOMIC_REQUESTS`. On a
+  4xx/5xx, DRF's `set_rollback` marks the open atomic block for rollback; under `TestCase` that
+  is the test's own transaction, so every later query failed with `TransactionManagementError`
+  (chained to a stale, unrelated `IntegrityError`). Production has no open block there.
+- **Check.** A test of a `non_atomic_requests` route that queries after an error response
+  inherits `OnlinePaymentsTestCase`'s `set_rollback` patch (it skips `TestCase`'s own blocks, as
+  `atomic(durable=True)` does), or uses `TransactionTestCase`. Read a
+  `TransactionManagementError`'s chained cause as possibly stale: `rollback_exc` is never reset.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.

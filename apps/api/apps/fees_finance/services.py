@@ -2465,12 +2465,17 @@ def reconcile_gateway_day(*, account: PaymentGatewayAccount, day: datetime.date)
     events = adapter.list_transactions(_credentials(account), day)
 
     order_ids = {event.order_id for event in events}
-    online = Payment.objects.alive().filter(
-        method=PaymentMethod.ONLINE_GATEWAY, gateway_provider=account.provider
-    )
+
+    def online() -> models.QuerySet[Payment]:
+        # Built per call, inside `tenant_atomic`: the tenant manager filters on the
+        # tenant bound when the queryset is built, and none is bound out here.
+        return Payment.objects.alive().filter(
+            method=PaymentMethod.ONLINE_GATEWAY, gateway_provider=account.provider
+        )
+
     with tenant_atomic(tenant_id):
         status_before = dict(
-            online.filter(reference_no__in=order_ids).values_list("reference_no", "status")
+            online().filter(reference_no__in=order_ids).values_list("reference_no", "status")
         )
 
     changed = 0
@@ -2496,7 +2501,7 @@ def reconcile_gateway_day(*, account: PaymentGatewayAccount, day: datetime.date)
         if len(txn_ids) < 2:
             continue
         with tenant_atomic(tenant_id):
-            payment = online.filter(reference_no=order_id).first()
+            payment = online().filter(reference_no=order_id).first()
             if payment is None or payment.status != PaymentStatus.CONFIRMED:
                 continue
             extra = sorted(txn_ids - {payment.provider_txn_id})
@@ -2516,7 +2521,8 @@ def reconcile_gateway_day(*, account: PaymentGatewayAccount, day: datetime.date)
         # This account's payments, plus any with no account recorded (a booked
         # unknown reference), which any account of the provider may have taken.
         unlisted = list(
-            online.filter(status=PaymentStatus.CONFIRMED, paid_at__gte=start, paid_at__lt=end)
+            online()
+            .filter(status=PaymentStatus.CONFIRMED, paid_at__gte=start, paid_at__lt=end)
             .filter(models.Q(gateway_account=account) | models.Q(gateway_account__isnull=True))
             .exclude(reference_no__in=list(paid_by_order))
             .only("pk", "reference_no", "provider_txn_id", "amount", "gateway_account_id")

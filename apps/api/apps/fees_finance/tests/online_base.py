@@ -16,8 +16,10 @@ import datetime
 import json
 import time
 from decimal import Decimal
+from unittest import mock
 
 from django.core.cache import cache
+from django.db import connections
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -51,6 +53,23 @@ def fake_adapter() -> FakeAdapter:
     return adapter
 
 
+def _set_rollback_as_in_production() -> None:
+    """DRF's `set_rollback`, blind to the atomic blocks `TestCase` itself opens.
+
+    `:initiate-payment` and the callback are `non_atomic_requests`. In production
+    an error response there finds no open transaction, so DRF's `set_rollback`
+    does nothing. Under `TestCase` it finds the test's own wrapping transaction
+    and marks *that* for rollback, so every later query in the test fails with
+    `TransactionManagementError`. Django treats those blocks the same way for
+    `atomic(durable=True)` (`Atomic._from_testcase`).
+    """
+    for db in connections.all(initialized_only=True):
+        if db.settings_dict["ATOMIC_REQUESTS"] and any(
+            not block._from_testcase for block in db.atomic_blocks
+        ):
+            db.set_rollback(True)
+
+
 def make_account(tenant, actor_id, credentials=None) -> PaymentGatewayAccount:
     with tenant_context(tenant.id):
         return services.save_gateway_account(
@@ -68,6 +87,9 @@ class OnlinePaymentsTestCase(FeesFinanceAPITestCase):
         # The failure throttle counts in the cache; a previous test's bad
         # signatures must not throttle this one.
         cache.clear()
+        patcher = mock.patch("rest_framework.views.set_rollback", _set_rollback_as_in_production)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.adapter = fake_adapter()
         self.adapter.reset()
         self.addCleanup(self.adapter.reset)
