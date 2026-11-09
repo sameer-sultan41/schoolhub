@@ -478,7 +478,9 @@ export function buildFeePayment(overrides: Partial<FeePayment> = {}): FeePayment
   return {
     id: uuid(),
     fee_invoice: "",
+    invoice_no: "INV-E2E-0001",
     student: "",
+    student_name: "Ayesha Khan",
     amount: "500.00",
     method: "cash",
     reference_no: null,

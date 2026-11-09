@@ -3738,7 +3738,9 @@
           "method": "طریقہ",
           "reference": "حوالہ",
           "status": "حالت",
-          "amount": "رقم"
+          "amount": "رقم",
+          "student": "طالب علم",
+          "invoice": "انوائس"
         },
         "filters": {
           "method": "طریقہ",
@@ -3817,7 +3819,9 @@
           "amount": "رقم",
           "reason": "وجہ",
           "status": "حالت",
-          "note": "فیصلے کا نوٹ"
+          "note": "فیصلے کا نوٹ",
+          "student": "طالب علم",
+          "invoice": "انوائس"
         },
         "filters": {
           "status": "حالت"

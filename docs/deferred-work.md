@@ -2084,13 +2084,6 @@ or subject)."` in English, with no plural form, so a count of one is ungrammatic
 - **The invoice's receipts are shown as numbers on its payments.** `GET /receipts` filters by
   payment, not invoice, so the page lists each payment's `receipt_no` and offers no receipt
   download; receipts download from the Payments page's Receipts tab (PR C).
-- **Payments and refunds name no student, invoice or cashier.** `Payment` and `Refund` carry ids
-  only (`student`, `fee_invoice`, `received_by`), so the Payments and Refunds tables show the
-  receipt number, amount, reason and status, and a payment row links to its invoice, which names
-  the student. Adding read-only `student_name` and `invoice_no` to `PaymentSerializer` and
-  `RefundSerializer` (the queries already join both) would let those tables name them and let the
-  cashier filter take a name; until a finance role can read a user lookup, the cashier filter is
-  "My collections" plus a cashier id from a link.
 - **A settlement import lists its exceptions, not the rows it matched.** The API keeps matched rows
   in `voucher_settlement_rows` but exposes no endpoint for them, so the import sheet shows the
   matched count and the exception rows. A `GET /voucher-collection-imports/{id}/rows` would let

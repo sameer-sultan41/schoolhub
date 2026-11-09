@@ -23,7 +23,9 @@ export function buildFeeRefund(overrides: Partial<FeeRefund> = {}): FeeRefund {
   return {
     id: uuid(),
     payment: "",
+    invoice_no: "INV-E2E-0001",
     student: "",
+    student_name: "Ayesha Khan",
     amount: "200.00",
     reason: "Charged twice",
     status: "requested",
@@ -176,7 +178,9 @@ export function feesCollectionModule(options: FeesCollectionOptions = {}): MockM
       const receiptNo = `RCT-E2E-${String(receipts.length + 1).padStart(4, "0")}`;
       const payment = buildFeePayment({
         fee_invoice: invoice.id,
+        invoice_no: invoice.invoice_no,
         student: invoice.student,
+        student_name: invoice.student_name,
         amount,
         method: body.method as FeePayment["method"],
         reference_no: body.reference_no ?? null,
@@ -442,7 +446,9 @@ function registerRefundRoutes(api: MockApi, state: CollectionState) {
       }
       const refund = buildFeeRefund({
         payment: payment.id,
+        invoice_no: payment.invoice_no,
         student: payment.student,
+        student_name: payment.student_name,
         amount,
         reason: body.reason ?? "",
         requested_by: state.actorId,
@@ -603,7 +609,9 @@ function reconcile(state: CollectionState, provider: string, csv: string) {
     const invoice = state.invoices.find((candidate) => candidate.id === voucher.fee_invoice);
     const payment = buildFeePayment({
       fee_invoice: voucher.fee_invoice,
+      invoice_no: voucher.invoice_no,
       student: voucher.student,
+      student_name: voucher.student_name,
       amount: voucher.amount,
       method: "bank_transfer",
       reference_no: reference,

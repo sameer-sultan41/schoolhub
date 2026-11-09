@@ -41,6 +41,26 @@ export function useRefundColumns({
   return useMemo<ColumnDef<RefundRecord>[]>(
     () => [
       {
+        id: "student",
+        enableSorting: false,
+        header: () => t("payments.refunds.columns.student"),
+        cell: ({ row }) => row.original.student_name,
+        meta: {
+          headerTitle: t("payments.refunds.columns.student"),
+          skeleton: <Skeleton className="h-4 w-32" />,
+        },
+      },
+      {
+        id: "invoice_no",
+        enableSorting: false,
+        header: () => t("payments.refunds.columns.invoice"),
+        cell: ({ row }) => row.original.invoice_no,
+        meta: {
+          headerTitle: t("payments.refunds.columns.invoice"),
+          skeleton: <Skeleton className="h-4 w-24" />,
+        },
+      },
+      {
         id: "created_at",
         accessorKey: "created_at",
         header: ({ column }) => (

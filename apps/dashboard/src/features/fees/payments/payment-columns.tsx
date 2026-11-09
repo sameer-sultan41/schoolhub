@@ -20,9 +20,9 @@ import {
 import { StatusBadge } from "@/features/fees/shared/status-badge";
 
 /**
- * The payments table's columns; `paid_at` and `amount` are the sortable ids. The record carries
- * ids, not names, so a row points to its invoice, which names the student; that link shows only
- * to a holder of the invoice read (`canOpenInvoice`, L55).
+ * The payments table's columns; `paid_at` and `amount` are the sortable ids. A row names its
+ * student and invoice and links to the invoice, which shows only to a holder of the invoice
+ * read (`canOpenInvoice`, L55).
  */
 export function usePaymentColumns({
   canOpenInvoice,
@@ -45,6 +45,26 @@ export function usePaymentColumns({
         ),
         meta: {
           headerTitle: t("payments.payments.columns.receipt"),
+          skeleton: <Skeleton className="h-4 w-24" />,
+        },
+      },
+      {
+        id: "student",
+        enableSorting: false,
+        header: () => t("payments.payments.columns.student"),
+        cell: ({ row }) => row.original.student_name,
+        meta: {
+          headerTitle: t("payments.payments.columns.student"),
+          skeleton: <Skeleton className="h-4 w-32" />,
+        },
+      },
+      {
+        id: "invoice_no",
+        enableSorting: false,
+        header: () => t("payments.payments.columns.invoice"),
+        cell: ({ row }) => row.original.invoice_no,
+        meta: {
+          headerTitle: t("payments.payments.columns.invoice"),
           skeleton: <Skeleton className="h-4 w-24" />,
         },
       },

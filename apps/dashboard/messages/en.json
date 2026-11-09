@@ -3738,7 +3738,9 @@
           "method": "Method",
           "reference": "Reference",
           "status": "Status",
-          "amount": "Amount"
+          "amount": "Amount",
+          "student": "Student",
+          "invoice": "Invoice"
         },
         "filters": {
           "method": "Method",
@@ -3817,7 +3819,9 @@
           "amount": "Amount",
           "reason": "Reason",
           "status": "Status",
-          "note": "Decision note"
+          "note": "Decision note",
+          "student": "Student",
+          "invoice": "Invoice"
         },
         "filters": {
           "status": "Status"

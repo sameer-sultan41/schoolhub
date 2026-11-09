@@ -293,7 +293,9 @@ export function paymentRecord(overrides: Partial<PaymentRecord> = {}): PaymentRe
   return {
     id: "d1111111-1111-4111-8111-111111111111",
     fee_invoice: INVOICE_ID,
+    invoice_no: "INV-2026-0001",
     student: STUDENT_ID,
+    student_name: "Ayesha Khan",
     amount: "500.00",
     method: "cash",
     reference_no: null,
@@ -347,7 +349,9 @@ export function refundRecord(overrides: Partial<RefundRecord> = {}): RefundRecor
   return {
     id: REFUND_ID,
     payment: PAYMENT_ID,
+    invoice_no: "INV-2026-0001",
     student: STUDENT_ID,
+    student_name: "Ayesha Khan",
     amount: "200.00",
     reason: "Charged twice",
     status: "requested",
