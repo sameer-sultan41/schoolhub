@@ -7,7 +7,8 @@ import {
   buildLiveClass,
   buildLiveSection,
 } from "@/data/live-factories";
-import { seededHeadId } from "@/lib/live-fees";
+import { accountantSession, seededHeadId } from "@/lib/live-fees";
+import { awaitJobResult } from "@/lib/live-jobs";
 import { createStudentReadyToEnrol } from "@/lib/live-student";
 
 /** What the live fees specs share to bill a student: a run-unique scope, an active structure
@@ -43,6 +44,8 @@ export async function enrolledStudentScope(admin: ApiClient) {
     sessionId: session.id,
     classId: schoolClass.id,
     studentId: student.id,
+    // What the counter's picker is searched by and shows.
+    studentName: `${student.first_name} ${student.last_name}`,
     // The first of the month the session starts in: the period a run bills.
     periodStart: `${sessionPayload.start_date.slice(0, 7)}-01`,
   };
@@ -81,4 +84,39 @@ export async function generate(
   });
   expect(accepted.status).toBe(202);
   return accepted.data.job_id;
+}
+
+/** An invoice as the live specs read it: the server's own money columns. */
+export interface LiveInvoice {
+  id: string;
+  invoice_no: string;
+  status: string;
+  subtotal: string;
+  paid_total: string;
+  balance_due: string;
+}
+
+/** One polled job, two cold logins and the scope's dozen writes (L6). */
+export const SETUP_MARGIN_MS = 60_000;
+
+/**
+ * A run-unique student billed once: the invoice the counter takes money against. The structure is
+ * the seeded accountant's to build; `biller` (the counter's own session) runs the generation and
+ * reads the invoice back, so the real role's keys are what is exercised.
+ */
+export async function billedInvoice(admin: ApiClient, biller: ApiClient) {
+  const accountant = await accountantSession();
+  const scope = await enrolledStudentScope(admin);
+  const structureId = await activeStructure(accountant, scope);
+  const jobId = await generate(biller, {
+    fee_structure: structureId,
+    period_start: scope.periodStart,
+  });
+  const result = await awaitJobResult<{ issued: number; skipped: number }>(biller, jobId);
+  expect(result).toMatchObject({ issued: 1, skipped: 0 });
+  const listed = await biller.get<LiveInvoice[]>("/fee-invoices", {
+    query: { student: scope.studentId },
+  });
+  const [invoice] = listed.data as [LiveInvoice];
+  return { scope, invoice };
 }

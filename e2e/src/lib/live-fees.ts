@@ -3,6 +3,7 @@ import { expect } from "@/fixtures";
 import { env } from "@/env";
 import { createLiveSession } from "@/lib/live-api";
 import {
+  E2E_ACCOUNTANT_APPROVER_EMAIL,
   E2E_ACCOUNTANT_EMAIL,
   E2E_FINANCE_FEE_HEAD_CODE,
   E2E_FINANCE_STAFF_EMAIL,
@@ -28,6 +29,19 @@ export function accountantSession(): Promise<ApiClient> {
     throw error;
   });
   return accountantLogin;
+}
+
+/** The seeded second accountant: the other approver, who may decide a refund the first requested. */
+let approverLogin: Promise<ApiClient> | undefined;
+export function accountantApproverSession(): Promise<ApiClient> {
+  approverLogin ??= createLiveSession({
+    identifier: E2E_ACCOUNTANT_APPROVER_EMAIL,
+    password: env.LIVE_ADMIN_PASSWORD,
+  }).catch((error: unknown) => {
+    approverLogin = undefined;
+    throw error;
+  });
+  return approverLogin;
 }
 
 /** The seeded `finance_staff` (the counter's role), one login per worker like the accountant's. */
