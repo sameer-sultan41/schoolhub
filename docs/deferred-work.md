@@ -2083,7 +2083,29 @@ or subject)."` in English, with no plural form, so a count of one is ungrammatic
   invoice, so the page cannot ask for just this invoice's records.
 - **The invoice's receipts are shown as numbers on its payments.** `GET /receipts` filters by
   payment, not invoice, so the page lists each payment's `receipt_no` and offers no receipt
-  download until the collection screens (PR C) wire one.
+  download; receipts download from the Payments page's Receipts tab (PR C).
+- **Payments and refunds name no student, invoice or cashier.** `Payment` and `Refund` carry ids
+  only (`student`, `fee_invoice`, `received_by`), so the Payments and Refunds tables show the
+  receipt number, amount, reason and status, and a payment row links to its invoice, which names
+  the student. Adding read-only `student_name` and `invoice_no` to `PaymentSerializer` and
+  `RefundSerializer` (the queries already join both) would let those tables name them and let the
+  cashier filter take a name; until a finance role can read a user lookup, the cashier filter is
+  "My collections" plus a cashier id from a link.
+- **A settlement import lists its exceptions, not the rows it matched.** The API keeps matched rows
+  in `voucher_settlement_rows` but exposes no endpoint for them, so the import sheet shows the
+  matched count and the exception rows. A `GET /voucher-collection-imports/{id}/rows` would let
+  it list the payments each import posted.
+- **The settlement import accepts one CSV layout.** The server's only adapter is the neutral
+  `GenericCsvAdapter` (`consumer_number,transaction_reference,amount,paid_on`), registered for
+  all three providers, so the upload dialog does not name a provider-specific layout; it hints
+  "a CSV file from the provider". A real per-provider layout replaces one registration line
+  server-side and the hint here.
+- **Vouchers are issued only from an invoice.** The Vouchers tab lists, downloads and voids; Issue
+  needs its invoice (`POST /fee-invoices/{id}/vouchers`), so it lives on the invoice page. A bulk
+  issue per class or defaulters list is not built.
+- **Refunds are requested only from an invoice's payment row.** The Refunds tab lists and decides;
+  a request needs its payment, which the invoice page lists. There is no payment detail page to
+  request from.
 - **The generate dialog has its own job hook.** `use-generate-invoices.ts` exists because
   `features/exams/use-exam-job.ts` keeps one idempotency key across form edits; a generic `hooks/`
   job-start hook would serve both.
