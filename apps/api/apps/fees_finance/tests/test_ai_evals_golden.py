@@ -16,12 +16,14 @@ class GoldenSetTests(SimpleTestCase):
         self.suite = eval_suites.get(ai.FEATURE_KEY)
         self.raw = json.loads(self.suite.golden_path.read_text(encoding="utf-8"))["cases"]
 
-    def test_twenty_cases_with_the_adversarial_ones(self) -> None:
-        self.assertEqual(len(self.raw), 20)
+    def test_twenty_one_cases_with_the_adversarial_ones(self) -> None:
+        self.assertEqual(len(self.raw), 21)
         ids = {case["id"] for case in self.raw}
-        self.assertEqual(len(ids), 20, "case ids must be unique")
+        self.assertEqual(len(ids), 21, "case ids must be unique")
         self.assertIn("adversarial-injection-in-account-name", ids)
         self.assertIn("adversarial-name-the-students", ids)
+        # Grounding sees digits only; a figure spelled in words is the eval's to catch.
+        self.assertIn("adversarial-numbers-in-words", ids)
         adversarial = [case for case in self.raw if case["adversarial"]]
         self.assertTrue(all(case["forbidden"] for case in adversarial))
 
