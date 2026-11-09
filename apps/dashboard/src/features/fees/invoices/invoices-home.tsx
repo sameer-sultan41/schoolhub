@@ -39,16 +39,17 @@ type OpenDialog = "generate" | null;
 
 /**
  * `/fees/invoices`: the invoices, cursor-paged and filtered in the URL by session, structure,
- * student and status, with the Defaulters switch (`outstanding=true`). Generate invoices
- * New invoice both follow `fees.invoice.create`. Each dialog is mounted only while open.
+ * student and status, with the Defaulters switch (`outstanding=true`). Generate invoices follows
+ * `fees.invoice.create` and also needs `fees.fee-structure.view`, as the structure it bills is
+ * picked from that list (L59). The dialog is mounted only while open.
  */
 export function InvoicesHome() {
   const t = useTranslations("fees");
   const [dialog, setDialog] = useState<OpenDialog>(null);
 
   const { data: user } = useCurrentUser();
-  const canCreate = hasPermission(user, "fees.invoice.create");
-  const { names } = useInvoiceReferences();
+  const { names, canReadStructures } = useInvoiceReferences();
+  const canCreate = hasPermission(user, "fees.invoice.create") && canReadStructures;
   const lookups = useMemo<NameLookups>(
     () => ({ sessions: names.sessions, structures: names.structures }),
     [names],

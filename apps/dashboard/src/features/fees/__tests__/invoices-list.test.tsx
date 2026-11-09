@@ -92,8 +92,16 @@ describe("invoices list", () => {
     expect(screen.queryByRole("button", { name: "Generate invoices" })).not.toBeInTheDocument();
   });
 
-  it("offers Generate invoices to a holder of the create key", async () => {
+  it("offers no Generate invoices to a creator who cannot read the structures it bills", async () => {
     asUser("fees.invoice.view", "fees.invoice.create");
+    await renderHome();
+
+    await screen.findByText("INV-2026-0001");
+    expect(screen.queryByRole("button", { name: "Generate invoices" })).not.toBeInTheDocument();
+  });
+
+  it("offers Generate invoices to a holder of the create and structure keys", async () => {
+    asUser("fees.invoice.view", "fees.invoice.create", "fees.fee-structure.view");
     await renderHome();
 
     expect(await screen.findByRole("button", { name: "Generate invoices" })).toBeInTheDocument();

@@ -98,6 +98,36 @@ describe("generate invoices", () => {
     });
   });
 
+  it("reuses the Idempotency-Key when the same request is retried after a failed one", async () => {
+    generateFeeInvoices.mockRejectedValueOnce(new Error("network down"));
+    const { user, dialog } = await openDialog();
+
+    await generateForMonth(user, dialog);
+    expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Generate" }));
+
+    expect(await within(dialog).findByText("3 invoices created")).toBeInTheDocument();
+    const keys = generateFeeInvoices.mock.calls.map(([, key]) => key);
+    expect(keys).toHaveLength(2);
+    expect(keys[1]).toBe(keys[0]);
+  });
+
+  it("uses a new Idempotency-Key once the form changed, as the body is a different request", async () => {
+    generateFeeInvoices.mockRejectedValueOnce(new Error("network down"));
+    const { user, dialog } = await openDialog();
+
+    await generateForMonth(user, dialog, "2026-10");
+    expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText("Month"), { target: { value: "2026-11" } });
+    await user.click(within(dialog).getByRole("button", { name: "Generate" }));
+
+    await waitFor(() => {
+      expect(generateFeeInvoices).toHaveBeenCalledTimes(2);
+    });
+    const keys = generateFeeInvoices.mock.calls.map(([, key]) => key);
+    expect(keys[1]).not.toBe(keys[0]);
+  });
+
   it("says nothing new was billed, not an error, when a re-run skips everyone", async () => {
     fetchJob.mockResolvedValue(job({ result: { issued: 0, skipped: 5, rows: [] } }));
     const { user, dialog } = await openDialog();
