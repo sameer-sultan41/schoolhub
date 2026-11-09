@@ -246,7 +246,7 @@ PR B also ships one backend change: scholarship status transitions enforced on t
 
 ### Task B1: Invoices
 - **Extend `feeInvoices`:** `create` (ad hoc, `fees.invoice.create`), `generate` (202 with idempotency), `cancel`, and the remaining filters (session, structure, status, period, due range).
-- **Create invoice:** a dialog for one student's ad-hoc invoice, with lines.
+- **Create invoice:** deferred (see the Ad-hoc invoice row and the amendment below).
 - **Invoices list:**
   - filters for status, session, structure and student, plus a "Defaulters" toggle (`outstanding=true`);
   - row link to the detail.
@@ -377,7 +377,7 @@ PR B also ships one backend change: scholarship status transitions enforced on t
   8. **Student picker:** the existing communication `StudentPicker` is moved to `components/` and reused.
   9. **Reads behind other keys:** each part of a screen is read only by holders of its own key (L55), for example the invoice detail's discounts and fines.
   10. **Uncovered spec items:**
-      - ad-hoc invoice: built in B1;
+      - ad-hoc invoice: planned for B1, then deferred by the amendment below;
       - expense attachment: deferred (no upload purpose, L29);
       - collection dashboard and cashier register: mapped to the collection report (today, `group_by=cashier`) and the payments list's `received_by`.
   11. **Report export:** uses the shared `components/reports/report-job-panel.tsx`, with the flow written out (422 → POST → `jobId`).
@@ -386,6 +386,13 @@ PR B also ships one backend change: scholarship status transitions enforced on t
   14. **Lesson number:** the L59 reason is corrected.
 - **Unresolved:** none. Rulings made under the user's "plan and go ahead" (2026-11-07):
   - scholarship transitions are enforced on the server;
-  - ad-hoc invoices are in scope;
+  - ad-hoc invoices were ruled in scope, then deferred by the amendment below;
   - §13's campus, session and class report filters are added in E1;
   - no currency symbol, no client feature-flag gating and the expense attachment are deferred to `deferred-work.md`.
+
+### Amendment, 2026-11-08 (during B1)
+
+- **Ad-hoc invoice deferred.** `POST /fee-invoices` accepts only the invoice header and `lines` is read-only, with no line endpoint. A Create dialog could only make a zero-total draft that nobody can price.
+- **What it would take:** a writable lines contract (a backend change outside this plan's scope). It is recorded in `deferred-work.md` and surfaced to the user in the PR B call-outs.
+- **Who can reverse it:** the user, by asking for that backend change in PR B.
+- **Re-review:** PR B's change-reviewer flagged the amendment (finding 1). This entry records it, and it stands unless the user reverses it.
