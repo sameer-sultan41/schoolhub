@@ -63,6 +63,8 @@ export const Paths = {
   PORTAL_SETTINGS: "/portal/settings",
   FEES: "/fees",
   FEES_INVOICES: "/fees/invoices",
+  FEES_COUNTER: "/fees/counter",
+  FEES_PAYMENTS: "/fees/payments",
   FEES_GRANTS: "/fees/grants",
   FEES_STRUCTURES: "/fees/structures",
   FEES_LEDGER: "/fees/ledger",

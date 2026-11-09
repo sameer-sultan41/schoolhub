@@ -2969,6 +2969,7 @@
     "nav": {
       "label": "Fees & Finance sections",
       "invoices": "Invoices",
+      "counter": "Counter",
       "structures": "Structures",
       "ledger": "Ledger",
       "grants": "Grants"
@@ -3618,6 +3619,57 @@
           "submit": "Waive fine",
           "done": "Fine waived"
         }
+      }
+    },
+    "counter": {
+      "title": "Fee counter",
+      "summary": "Take a payment at the counter: find the student, pick an invoice and record the money.",
+      "student": "Student",
+      "restricted": {
+        "title": "The counter isn't available to you",
+        "description": "Taking a payment also needs permission to read students and invoices. Ask an administrator to grant them."
+      },
+      "pick": {
+        "title": "Choose a student",
+        "description": "Their outstanding invoices appear here."
+      },
+      "invoices": {
+        "title": "Outstanding invoices for {name}",
+        "caption": "Outstanding invoices",
+        "loadError": "The invoices could not be loaded.",
+        "emptyTitle": "Nothing outstanding",
+        "emptyDescription": "{name} has no invoice with a balance due.",
+        "columns": {
+          "number": "Invoice",
+          "period": "Period",
+          "due": "Due",
+          "status": "Status",
+          "balance": "Balance due",
+          "actions": "Actions"
+        },
+        "record": "Record payment",
+        "recordFor": "Record payment for {number}"
+      },
+      "dialog": {
+        "title": "Record payment: {number}",
+        "balance": "{student} owes {amount} on this invoice.",
+        "amount": "Amount",
+        "method": "Method",
+        "reference": "Reference number (optional)",
+        "referenceRequired": "Reference number",
+        "positive": "Enter an amount above zero, with at most two decimals.",
+        "referenceMissing": "Enter the cheque or transfer reference.",
+        "submit": "Record payment"
+      },
+      "receipt": {
+        "recorded": "Payment of {amount} recorded. Receipt {number}.",
+        "print_pdf": "Print PDF",
+        "print_thermal": "Print thermal",
+        "preparing": "Preparing",
+        "failed": "We couldn't download the receipt. Please try again.",
+        "pending": "The receipt is still being issued.",
+        "openPayments": "Open the payments list",
+        "done": "Done"
       }
     }
   },

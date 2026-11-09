@@ -31,15 +31,17 @@ const DISCOUNT_VIEW: PermissionKey = "fees.discount.view";
 const FINE_VIEW: PermissionKey = "fees.fine.view";
 const STRUCTURE_VIEW: PermissionKey = "fees.fee-structure.view";
 const LEDGER_VIEW: PermissionKey = "fees.ledger.view";
+const PAYMENT_COLLECT: PermissionKey = "fees.payment.collect";
 
 describe("fees sections", () => {
   beforeEach(() => {
     mockReplace.mockReset();
   });
 
-  it("lists Invoices, Grants, Structures then Ledger, each on its own view key (Grants on either of two)", () => {
+  it("lists Invoices, Counter, Grants, Structures then Ledger, each on its own view key (Grants on either of two)", () => {
     expect(FEES_SECTIONS.map((section) => [section.href, section.permission])).toEqual([
       ["/fees/invoices", INVOICE_VIEW],
+      ["/fees/counter", PAYMENT_COLLECT],
       ["/fees/grants", [DISCOUNT_VIEW, FINE_VIEW]],
       ["/fees/structures", STRUCTURE_VIEW],
       ["/fees/ledger", LEDGER_VIEW],
@@ -48,10 +50,11 @@ describe("fees sections", () => {
 
   it.each([
     [
-      [INVOICE_VIEW, DISCOUNT_VIEW, STRUCTURE_VIEW, LEDGER_VIEW],
-      ["/fees/invoices", "/fees/grants", "/fees/structures", "/fees/ledger"],
+      [INVOICE_VIEW, PAYMENT_COLLECT, DISCOUNT_VIEW, STRUCTURE_VIEW, LEDGER_VIEW],
+      ["/fees/invoices", "/fees/counter", "/fees/grants", "/fees/structures", "/fees/ledger"],
     ],
     [[INVOICE_VIEW], ["/fees/invoices"]],
+    [[PAYMENT_COLLECT], ["/fees/counter"]],
     [[DISCOUNT_VIEW], ["/fees/grants"]],
     [[FINE_VIEW], ["/fees/grants"]],
     [[STRUCTURE_VIEW], ["/fees/structures"]],
@@ -66,6 +69,7 @@ describe("fees sections", () => {
   it.each([
     [[INVOICE_VIEW, STRUCTURE_VIEW, LEDGER_VIEW], "/fees/invoices"],
     [[INVOICE_VIEW], "/fees/invoices"],
+    [[PAYMENT_COLLECT, FINE_VIEW], "/fees/counter"],
     [[FINE_VIEW, STRUCTURE_VIEW], "/fees/grants"],
     [[STRUCTURE_VIEW, LEDGER_VIEW], "/fees/structures"],
     [[STRUCTURE_VIEW], "/fees/structures"],
@@ -94,6 +98,7 @@ describe("fees sections", () => {
   it("gives the sidebar the same children, gated the same way", () => {
     expect(sectionMenuItems(FEES_SECTIONS).map((item) => item.title)).toEqual([
       "Invoices",
+      "Counter",
       "Grants",
       "Structures",
       "Ledger",

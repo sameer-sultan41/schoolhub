@@ -5,7 +5,7 @@ import { Paths } from "@/config/paths";
  * The one list of Fees & Finance sections, in tab order: tabs, the `/fees` landing and the
  * sidebar's children all derive from it. Final order: Invoices, Counter, Payments, Grants,
  * Structures, Expenses, Ledger, Reports; the later PRs insert their own sections in that place
- * (so far Invoices, Grants, Structures and Ledger). Every tab is gated on the key its screen
+ * (so far Invoices, Counter, Grants, Structures and Ledger). Every tab is gated on the key its screen
  * needs (Grants: either of its two read keys, as each sub-tab has its own), so a viewer lands on
  * the first screen they may open.
  */
@@ -15,6 +15,12 @@ export const FEES_SECTIONS = [
     labelKey: "nav.invoices",
     menuTitle: "Invoices",
     permission: "fees.invoice.view",
+  },
+  {
+    href: Paths.FEES_COUNTER,
+    labelKey: "nav.counter",
+    menuTitle: "Counter",
+    permission: "fees.payment.collect",
   },
   {
     href: Paths.FEES_GRANTS,
