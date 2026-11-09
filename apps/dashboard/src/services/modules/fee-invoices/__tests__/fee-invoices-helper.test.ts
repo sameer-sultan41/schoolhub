@@ -2,6 +2,7 @@ import {
   buildGenerateInvoicesInput,
   generationCounts,
   isInvoiceCancelable,
+  isInvoiceCollectible,
   outstandingFilter,
 } from "../fee-invoices-helper";
 
@@ -14,6 +15,19 @@ describe("isInvoiceCancelable", () => {
     ["canceled", "0.00", false],
   ] as const)("a %s invoice with %s paid: %s", (status, paid, expected) => {
     expect(isInvoiceCancelable({ status, paid_total: paid })).toBe(expected);
+  });
+});
+
+describe("isInvoiceCollectible", () => {
+  it.each([
+    ["issued", true],
+    ["partially_paid", true],
+    ["overdue", true],
+    ["draft", false],
+    ["paid", false],
+    ["canceled", false],
+  ] as const)("a %s invoice: %s", (status, expected) => {
+    expect(isInvoiceCollectible({ status })).toBe(expected);
   });
 });
 

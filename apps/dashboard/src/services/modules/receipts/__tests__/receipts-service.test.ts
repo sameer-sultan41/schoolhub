@@ -48,6 +48,18 @@ describe("receipts-service", () => {
     );
   });
 
+  it("listReceipts sends the number search and the sort", async () => {
+    const { listReceipts } = await import("../receipts-service");
+    mockGet.mockResolvedValue(PAGE);
+
+    await listReceipts({ search: "RCT-9", ordering: "-issued_at" });
+
+    expect(mockGet).toHaveBeenCalledWith(
+      "/receipts",
+      expect.objectContaining({ query: { search: "RCT-9", ordering: "-issued_at" } }),
+    );
+  });
+
   it("listReceipts sends the student filter", async () => {
     const { listReceipts } = await import("../receipts-service");
     mockGet.mockResolvedValue(PAGE);

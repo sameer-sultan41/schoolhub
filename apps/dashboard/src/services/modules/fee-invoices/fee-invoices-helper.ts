@@ -2,6 +2,7 @@ import type { QueryParams } from "@schoolhub/api-client";
 import { FILTER_ALL } from "@/lib/constants";
 import { copyMappedFields } from "@/lib/helpers";
 import {
+  FEE_INVOICE_COLLECTIBLE_STATUSES,
   FEE_INVOICE_STATUS_CANCELED,
   FEE_INVOICES_GENERATE_FIELDS,
   FEE_INVOICES_QUERY_FIELDS,
@@ -66,6 +67,14 @@ export function isInvoiceCancelable(
   invoice: Pick<FeeInvoiceRecord, "status" | "paid_total">,
 ): boolean {
   return invoice.status !== FEE_INVOICE_STATUS_CANCELED && !hasPayments(invoice);
+}
+
+/**
+ * Whether Record payment and Issue voucher are offered on this invoice: only while it can still
+ * take money. The server decides regardless (a canceled or settled invoice is a 422).
+ */
+export function isInvoiceCollectible(invoice: Pick<FeeInvoiceRecord, "status">): boolean {
+  return FEE_INVOICE_COLLECTIBLE_STATUSES.includes(invoice.status);
 }
 
 export function defaultGenerateInvoicesFormValues(): GenerateInvoicesFormValues {

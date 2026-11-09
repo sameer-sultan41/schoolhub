@@ -30,6 +30,12 @@ const FEE_INVOICE_STATUSES_SET: Record<FeeInvoiceStatus, true> = {
 };
 export const FEE_INVOICE_STATUSES = Object.keys(FEE_INVOICE_STATUSES_SET) as FeeInvoiceStatus[];
 export const FEE_INVOICE_STATUS_CANCELED: FeeInvoiceStatus = "canceled";
+/** The statuses an invoice can still take money in: issued, part paid or overdue. A draft is not billed yet, a paid one owes nothing and a canceled one takes none. */
+export const FEE_INVOICE_COLLECTIBLE_STATUSES: readonly FeeInvoiceStatus[] = [
+  "issued",
+  "partially_paid",
+  "overdue",
+];
 
 /** camelCase `FeeInvoicesQuery` key -> the list's query param. */
 export const FEE_INVOICES_QUERY_FIELDS: ReadonlyArray<readonly [keyof FeeInvoicesQuery, string]> = [

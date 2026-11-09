@@ -9,6 +9,9 @@ export type ReceiptFormat = NonNullable<
 export interface ReceiptsQuery {
   payment?: string;
   student?: string;
+  /** Matches the receipt number. */
+  search?: string;
+  ordering?: string;
   cursor?: string;
   pageSize?: number;
 }

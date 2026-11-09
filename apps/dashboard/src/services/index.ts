@@ -12,6 +12,8 @@ import { NotificationsService } from "./modules/notifications";
 import { ParentPortalService } from "./modules/parent-portal";
 import { PaymentsService } from "./modules/payments";
 import { ReceiptsService } from "./modules/receipts";
+import { RefundsService } from "./modules/refunds";
+import { SettlementImportsService } from "./modules/settlement-imports";
 import { VouchersService } from "./modules/vouchers";
 import { ResultsService } from "./modules/results";
 import { AttendanceCorrectionsService } from "./modules/attendance-corrections";
@@ -379,14 +381,10 @@ export type {
   ScholarshipType,
 } from "./modules/scholarships";
 export type { FineRecord, FineStatus, FineType } from "./modules/fines";
-export type {
-  CounterPaymentMethod,
-  PaymentMethod,
-  PaymentRecord,
-  PaymentsQuery,
-  PaymentStatus,
-} from "./modules/payments";
+export type { PaymentMethod, PaymentRecord, PaymentStatus } from "./modules/payments";
 export type { ReceiptFormat, ReceiptRecord } from "./modules/receipts";
+export type { RefundRecord, RefundStatus } from "./modules/refunds";
+export type { SettlementImportRecord, SettlementImportStatus } from "./modules/settlement-imports";
 export type { VoucherFormat, VoucherRecord, VoucherStatus } from "./modules/vouchers";
 
 /**
@@ -450,6 +448,8 @@ export const Services = {
   feeSchedules: FeeSchedulesService,
   payments: PaymentsService,
   receipts: ReceiptsService,
+  refunds: RefundsService,
+  settlementImports: SettlementImportsService,
   vouchers: VouchersService,
   results: ResultsService,
 } as const;

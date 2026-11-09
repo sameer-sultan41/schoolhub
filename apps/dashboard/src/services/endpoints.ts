@@ -417,6 +417,26 @@ export const endpoints = {
   vouchers: {
     list: "/vouchers",
     download: (id: string) => `/vouchers/${id}/download`,
+    /** Nested under the invoice (`fees.payment.collect`): the registered route is `/fee-invoices/{id}/vouchers`. */
+    issue: (invoiceId: string) => `/fee-invoices/${invoiceId}/vouchers`,
+    /** Colon-action, not a nested path: the registered route is `/vouchers/{id}:void` (`fees.payment.collect`). */
+    void: (id: string) => `/vouchers/${id}:void`,
+  },
+  /** `/refunds`: read with `fees.payment.view`. Every transition is a colon-action: `:create` needs
+   * `fees.payment.refund` (a collection action, not a plain POST), `:approve`, `:reject` and
+   * `:process` need `fees.refund.approve`. */
+  refunds: {
+    list: "/refunds",
+    create: "/refunds:create",
+    approve: (id: string) => `/refunds/${id}:approve`,
+    reject: (id: string) => `/refunds/${id}:reject`,
+    process: (id: string) => `/refunds/${id}:process`,
+  },
+  /** `/voucher-collection-imports`: read with `fees.payment.view`; the multipart POST (202 + job)
+   * needs `fees.payment.collect`. Staff-only. */
+  settlementImports: {
+    list: "/voucher-collection-imports",
+    detail: (id: string) => `/voucher-collection-imports/${id}`,
   },
   /** `/receipts`; `download` streams a PDF (`?format=pdf|thermal`). */
   receipts: {

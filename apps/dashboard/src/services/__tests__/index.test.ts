@@ -67,11 +67,13 @@ describe("Services", () => {
       "promotions",
       "questionBanks",
       "receipts",
+      "refunds",
       "reportCards",
       "results",
       "rooms",
       "scholarships",
       "schoolOrganization",
+      "settlementImports",
       "staff",
       "staffAttendance",
       "studentAttendance",
@@ -93,6 +95,16 @@ describe("Services", () => {
 
     expect(typeof Services.vouchers.listVouchers).toBe("function");
     expect(typeof Services.vouchers.downloadVoucher).toBe("function");
+    expect(typeof Services.vouchers.issueVoucher).toBe("function");
+    expect(typeof Services.vouchers.voidVoucher).toBe("function");
+    expect(typeof Services.refunds.listRefunds).toBe("function");
+    expect(typeof Services.refunds.createRefund).toBe("function");
+    expect(typeof Services.refunds.approveRefund).toBe("function");
+    expect(typeof Services.refunds.rejectRefund).toBe("function");
+    expect(typeof Services.refunds.processRefund).toBe("function");
+    expect(typeof Services.settlementImports.listSettlementImports).toBe("function");
+    expect(typeof Services.settlementImports.fetchSettlementImport).toBe("function");
+    expect(typeof Services.settlementImports.uploadSettlementImport).toBe("function");
     expect(typeof Services.leaveRequests.createLeave).toBe("function");
     expect(typeof Services.leaveRequests.cancelLeave).toBe("function");
 
