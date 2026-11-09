@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { Button } from "@schoolhub/ui";
-import { ArrowLeft, Ban } from "lucide-react";
+import { ArrowLeft, Ban, Landmark, Wallet } from "lucide-react";
 
 import { Toolbar, ToolbarActions, ToolbarHeading } from "@/app/(app)/shell/toolbar";
 import { Paths } from "@/config/paths";
@@ -13,25 +13,34 @@ import { EMPTY_VALUE } from "@/lib/constants";
 import { formatDate } from "@/lib/helpers";
 import { hasPermission } from "@/lib/permissions";
 import type { FeeInvoiceRecord } from "@/services";
-import { isInvoiceCancelable } from "@/services/modules/fee-invoices/fee-invoices-helper";
+import {
+  isInvoiceCancelable,
+  isInvoiceCollectible,
+} from "@/services/modules/fee-invoices/fee-invoices-helper";
 import { InvoiceStatusBadge } from "@/features/fees/shared/invoice-status-badge";
+import { RecordPaymentDialog } from "@/features/fees/shared/record-payment-dialog";
 import { useInvoiceReferences } from "@/features/fees/shared/use-invoice-references";
 import { CancelInvoiceDialog } from "./cancel-invoice-dialog";
+import { IssueVoucherDialog } from "./issue-voucher-dialog";
 
 /**
- * The invoice's number, student, dates, scope and status, and Cancel. Cancel follows
- * `fees.invoice.update` and shows only while nothing is paid and the invoice is not already
- * canceled; the server decides regardless (a 422, shown in the dialog). A canceled invoice
- * says why. The dialog is mounted only while open.
+ * The invoice's number, student, dates, scope and status, with Record payment, Issue voucher and
+ * Cancel. Record payment and Issue voucher follow `fees.payment.collect` and show only while the
+ * invoice can still take money. Cancel follows `fees.invoice.update` and shows only while nothing
+ * is paid and the invoice is not already canceled; the server decides regardless (a 422, shown
+ * in the dialog). A canceled invoice says why. Each dialog is mounted only while open.
  */
 export function InvoiceHeader({ invoice }: { invoice: FeeInvoiceRecord }) {
   const t = useTranslations("fees");
   const locale = useLocale();
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [recordOpen, setRecordOpen] = useState(false);
+  const [voucherOpen, setVoucherOpen] = useState(false);
   const { names } = useInvoiceReferences();
 
   const { data: user } = useCurrentUser();
   const canCancel = hasPermission(user, "fees.invoice.update") && isInvoiceCancelable(invoice);
+  const canCollect = hasPermission(user, "fees.payment.collect") && isInvoiceCollectible(invoice);
 
   return (
     <>
@@ -64,6 +73,28 @@ export function InvoiceHeader({ invoice }: { invoice: FeeInvoiceRecord }) {
               {t("invoices.actions.backToList")}
             </Link>
           </Button>
+          {canCollect && (
+            <>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setRecordOpen(true);
+                }}
+              >
+                <Wallet aria-hidden="true" />
+                {t("invoices.actions.recordPayment")}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setVoucherOpen(true);
+                }}
+              >
+                <Landmark aria-hidden="true" />
+                {t("invoices.actions.issueVoucher")}
+              </Button>
+            </>
+          )}
           {canCancel && (
             <Button
               variant="destructive"
@@ -84,6 +115,8 @@ export function InvoiceHeader({ invoice }: { invoice: FeeInvoiceRecord }) {
         </p>
       )}
       {cancelOpen && <CancelInvoiceDialog open onOpenChange={setCancelOpen} invoice={invoice} />}
+      {recordOpen && <RecordPaymentDialog open onOpenChange={setRecordOpen} invoice={invoice} />}
+      {voucherOpen && <IssueVoucherDialog open onOpenChange={setVoucherOpen} invoice={invoice} />}
     </>
   );
 }
