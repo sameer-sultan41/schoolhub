@@ -24,7 +24,7 @@ export function PortalInvoiceDetail() {
   const t = useTranslations("portal.fees");
   const locale = useLocale();
   const { studentId, invoiceId } = useParams<{ studentId: string; invoiceId: string }>();
-  const receipts = useReceiptsByInvoice();
+  const receipts = useReceiptsByInvoice(studentId);
   const query = useQuery({
     queryKey: queryKeys.detail(PARENT_PORTAL_QUERY_MODULE, "invoice", invoiceId),
     queryFn: () => Services.feeInvoices.fetchFeeInvoice(invoiceId),

@@ -1251,9 +1251,6 @@ period_id)` — a cell in a weekly grid whose times come from the period it
   (dashboard, PR 2)"). The portal screens are built; the live lane needs no new journey.
   - **Portal report-card download button.** It waits on PR #154's
     `POST /report-cards/{id}:download`; the portal lists no report cards until then.
-  - **Receipt `format` query param.** `GET /receipts/{id}/download` takes a `format`
-    (`pdf` or `thermal`) that is not in the OpenAPI contract, because the view declares no
-    `OpenApiParameter`. The dashboard hand-types `ReceiptFormat` until it does.
   - **Urdu review.** The `portal` namespace in `apps/dashboard/messages/ur.json` was written
     without a native speaker and needs their review.
   - **Grants: no edit.** Discounts, scholarships and fines can be created and moved along their
@@ -1265,9 +1262,6 @@ period_id)` — a cell in a weekly grid whose times come from the period it
     `created_at` as `before`. Derive `before` from page 1 instead, so it covers everything
     that was on screen.
   - **Attendance legend.** The legend badges carry the status name but no colour swatch.
-  - **Receipts lookup.** Receipts are fetched tenant-wide (up to 2000) and matched to invoices
-    by `invoice_no`; a partial payment's receipt is reachable only from the invoice detail, since
-    the fees list offers receipts on paid rows only. Filter by student once `/receipts` supports it.
 
 - **`eslint-plugin-playwright` for `e2e/`** (planned in the engineering-standards spec, PR 4) was
   deferred: adding a dependency means `pnpm install`, which runs PR 3's `prepare` script and

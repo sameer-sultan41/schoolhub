@@ -48,6 +48,18 @@ describe("receipts-service", () => {
     );
   });
 
+  it("listReceipts sends the student filter", async () => {
+    const { listReceipts } = await import("../receipts-service");
+    mockGet.mockResolvedValue(PAGE);
+
+    await listReceipts({ student: "s1" });
+
+    expect(mockGet).toHaveBeenCalledWith(
+      "/receipts",
+      expect.objectContaining({ query: { student: "s1" } }),
+    );
+  });
+
   it("downloadReceipt streams the download path with the format", async () => {
     const { downloadReceipt } = await import("../receipts-service");
     const blob = new Blob(["%PDF"]);

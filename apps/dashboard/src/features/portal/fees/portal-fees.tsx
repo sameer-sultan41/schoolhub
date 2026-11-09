@@ -119,7 +119,7 @@ export function PortalFees() {
 
 function ChildFees({ studentId }: { studentId: string }) {
   const t = useTranslations("portal.fees");
-  const receipts = useReceiptsByInvoice();
+  const receipts = useReceiptsByInvoice(studentId);
   const vouchers = useChildVouchers(studentId);
 
   return (

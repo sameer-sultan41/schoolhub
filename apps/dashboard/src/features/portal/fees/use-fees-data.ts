@@ -27,12 +27,15 @@ export function useChildInvoices(studentId: string | undefined, kind: "outstandi
   });
 }
 
-/** The viewer's receipts by invoice number, so a row can offer its own receipts. */
-export function useReceiptsByInvoice() {
+/** One child's receipts by invoice number, so a row can offer its own receipts. */
+export function useReceiptsByInvoice(studentId: string | undefined) {
   return useQuery({
-    queryKey: queryKeys.list(PARENT_PORTAL_QUERY_MODULE, "receipts"),
+    queryKey: queryKeys.list(PARENT_PORTAL_QUERY_MODULE, "receipts", { studentId }),
+    enabled: studentId !== undefined,
     queryFn: () =>
-      fetchAllPages((cursor) => Services.receipts.listReceipts({ cursor, pageSize: PAGE_SIZE })),
+      fetchAllPages((cursor) =>
+        Services.receipts.listReceipts({ student: studentId, cursor, pageSize: PAGE_SIZE }),
+      ),
     select: (receipts) => {
       const byInvoice = new Map<string, ReceiptRecord[]>();
       for (const receipt of receipts) {
