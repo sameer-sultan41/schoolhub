@@ -27,6 +27,18 @@ const FEE_INCOME_ACCOUNT_CODE = "4000";
 const MONTHLY_FEE = "1500.00";
 const DUE_DAY = 10;
 
+/**
+ * A billing month that starts on the 1st. The generator clamps the window to the session, so a
+ * session starting after `DUE_DAY` would issue on day N and fall due on day `DUE_DAY` < N, which
+ * the `fee_invoices_due_after_issue` CHECK refuses. The next month's 1st is always inside the
+ * 365-day session and never clamped.
+ */
+function firstOfNextMonth(isoDate: string): string {
+  const start = new Date(`${isoDate}T00:00:00Z`);
+  const next = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1));
+  return next.toISOString().slice(0, 10);
+}
+
 async function feeIncomeAccountId(client: ApiClient): Promise<string> {
   const listed = await client.get<{ id: string; code: string }[]>("/ledger-accounts", {
     query: { account_type: "income", is_system: "true" },
@@ -67,7 +79,7 @@ export async function seedIssuedInvoice(client: ApiClient): Promise<IssuedInvoic
 
   const accepted = await client.post(
     "/fee-invoices:generate",
-    { fee_structure: structure.id, period_start: scaffold.sessionStartDate },
+    { fee_structure: structure.id, period_start: firstOfNextMonth(scaffold.sessionStartDate) },
     { idempotencyKey: crypto.randomUUID() },
   );
   await awaitJobResult(client, (accepted.data as { job_id: string }).job_id);
