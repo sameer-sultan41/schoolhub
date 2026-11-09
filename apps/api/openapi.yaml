@@ -16473,12 +16473,7 @@ components:
       - updated_at
     Discount:
       type: object
-      description: |-
-        `student_name` for a serializer over a model with a `student` FK.
-
-        Read-only, so a register can name who a grant or fine concerns without the
-        client fetching every student (and without needing a student-read key). The
-        viewsets `select_related("student")`, so this costs no extra query.
+      description: A student-level reduction; `status` moves only through `:revoke`.
       properties:
         id:
           type: string
@@ -17980,12 +17975,8 @@ components:
       - kind
     Fine:
       type: object
-      description: |-
-        `student_name` for a serializer over a model with a `student` FK.
-
-        Read-only, so a register can name who a grant or fine concerns without the
-        client fetching every student (and without needing a student-read key). The
-        viewsets `select_related("student")`, so this costs no extra query.
+      description: A penalty on a fine-category fee head; `status` moves only through
+        `:waive`.
       properties:
         id:
           type: string
@@ -21841,12 +21832,7 @@ components:
           readOnly: true
     PatchedDiscount:
       type: object
-      description: |-
-        `student_name` for a serializer over a model with a `student` FK.
-
-        Read-only, so a register can name who a grant or fine concerns without the
-        client fetching every student (and without needing a student-read key). The
-        viewsets `select_related("student")`, so this costs no extra query.
+      description: A student-level reduction; `status` moves only through `:revoke`.
       properties:
         id:
           type: string
@@ -22426,12 +22412,8 @@ components:
           readOnly: true
     PatchedFine:
       type: object
-      description: |-
-        `student_name` for a serializer over a model with a `student` FK.
-
-        Read-only, so a register can name who a grant or fine concerns without the
-        client fetching every student (and without needing a student-read key). The
-        viewsets `select_related("student")`, so this costs no extra query.
+      description: A penalty on a fine-category fee head; `status` moves only through
+        `:waive`.
       properties:
         id:
           type: string
@@ -23251,12 +23233,7 @@ components:
           readOnly: true
     PatchedScholarship:
       type: object
-      description: |-
-        `student_name` for a serializer over a model with a `student` FK.
-
-        Read-only, so a register can name who a grant or fine concerns without the
-        client fetching every student (and without needing a student-read key). The
-        viewsets `select_related("student")`, so this costs no extra query.
+      description: An award whose `status` follows `SCHOLARSHIP_TRANSITIONS`.
       properties:
         id:
           type: string
@@ -25523,12 +25500,7 @@ components:
         * `other` - Other
     Scholarship:
       type: object
-      description: |-
-        `student_name` for a serializer over a model with a `student` FK.
-
-        Read-only, so a register can name who a grant or fine concerns without the
-        client fetching every student (and without needing a student-read key). The
-        viewsets `select_related("student")`, so this costs no extra query.
+      description: An award whose `status` follows `SCHOLARSHIP_TRANSITIONS`.
       properties:
         id:
           type: string

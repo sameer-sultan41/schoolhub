@@ -7255,13 +7255,7 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
-        /**
-         * @description `student_name` for a serializer over a model with a `student` FK.
-         *
-         *     Read-only, so a register can name who a grant or fine concerns without the
-         *     client fetching every student (and without needing a student-read key). The
-         *     viewsets `select_related("student")`, so this costs no extra query.
-         */
+        /** @description A student-level reduction; `status` moves only through `:revoke`. */
         Discount: {
             /** Format: uuid */
             readonly id: string;
@@ -7971,13 +7965,7 @@ export interface components {
             /** @default csv */
             format: components["schemas"]["FormatEnum"];
         };
-        /**
-         * @description `student_name` for a serializer over a model with a `student` FK.
-         *
-         *     Read-only, so a register can name who a grant or fine concerns without the
-         *     client fetching every student (and without needing a student-read key). The
-         *     viewsets `select_related("student")`, so this costs no extra query.
-         */
+        /** @description A penalty on a fine-category fee head; `status` moves only through `:waive`. */
         Fine: {
             /** Format: uuid */
             readonly id: string;
@@ -9842,13 +9830,7 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
-        /**
-         * @description `student_name` for a serializer over a model with a `student` FK.
-         *
-         *     Read-only, so a register can name who a grant or fine concerns without the
-         *     client fetching every student (and without needing a student-read key). The
-         *     viewsets `select_related("student")`, so this costs no extra query.
-         */
+        /** @description A student-level reduction; `status` moves only through `:revoke`. */
         PatchedDiscount: {
             /** Format: uuid */
             readonly id?: string;
@@ -10161,13 +10143,7 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
-        /**
-         * @description `student_name` for a serializer over a model with a `student` FK.
-         *
-         *     Read-only, so a register can name who a grant or fine concerns without the
-         *     client fetching every student (and without needing a student-read key). The
-         *     viewsets `select_related("student")`, so this costs no extra query.
-         */
+        /** @description A penalty on a fine-category fee head; `status` moves only through `:waive`. */
         PatchedFine: {
             /** Format: uuid */
             readonly id?: string;
@@ -10589,13 +10565,7 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
-        /**
-         * @description `student_name` for a serializer over a model with a `student` FK.
-         *
-         *     Read-only, so a register can name who a grant or fine concerns without the
-         *     client fetching every student (and without needing a student-read key). The
-         *     viewsets `select_related("student")`, so this costs no extra query.
-         */
+        /** @description An award whose `status` follows `SCHOLARSHIP_TRANSITIONS`. */
         PatchedScholarship: {
             /** Format: uuid */
             readonly id?: string;
@@ -11642,13 +11612,7 @@ export interface components {
          * @enum {string}
          */
         RoomTypeEnum: "classroom" | "lab" | "library" | "auditorium" | "sports" | "office" | "other";
-        /**
-         * @description `student_name` for a serializer over a model with a `student` FK.
-         *
-         *     Read-only, so a register can name who a grant or fine concerns without the
-         *     client fetching every student (and without needing a student-read key). The
-         *     viewsets `select_related("student")`, so this costs no extra query.
-         */
+        /** @description An award whose `status` follows `SCHOLARSHIP_TRANSITIONS`. */
         Scholarship: {
             /** Format: uuid */
             readonly id: string;

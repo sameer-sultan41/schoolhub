@@ -394,20 +394,18 @@ class CancelInvoiceSerializer(serializers.Serializer):
     reason = serializers.CharField(max_length=2000)
 
 
+# `student_name` for a serializer over a model with a `student` FK. Read-only, so a register
+# can name who a grant or fine concerns without the client fetching every student (or needing
+# a student-read key). The viewsets `select_related("student")`, so it costs no extra query.
 class StudentNameMixin:
-    """`student_name` for a serializer over a model with a `student` FK.
-
-    Read-only, so a register can name who a grant or fine concerns without the
-    client fetching every student (and without needing a student-read key). The
-    viewsets `select_related("student")`, so this costs no extra query.
-    """
-
     def get_student_name(self, obj) -> str:
         student = obj.student
         return f"{student.first_name} {student.last_name}".strip()
 
 
 class DiscountSerializer(StudentNameMixin, serializers.ModelSerializer):
+    """A student-level reduction; `status` moves only through `:revoke`."""
+
     student_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -443,6 +441,8 @@ class DiscountSerializer(StudentNameMixin, serializers.ModelSerializer):
 
 
 class ScholarshipSerializer(StudentNameMixin, serializers.ModelSerializer):
+    """An award whose `status` follows `SCHOLARSHIP_TRANSITIONS`."""
+
     student_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -494,6 +494,8 @@ class ScholarshipSerializer(StudentNameMixin, serializers.ModelSerializer):
 
 
 class FineSerializer(StudentNameMixin, serializers.ModelSerializer):
+    """A penalty on a fine-category fee head; `status` moves only through `:waive`."""
+
     student_name = serializers.SerializerMethodField()
 
     class Meta:
