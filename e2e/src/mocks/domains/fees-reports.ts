@@ -22,6 +22,9 @@ import { REPORT_EXPORT_GLOB } from "./attendance-reports-import";
  * key it is a 403. A POST answers `202` + a job; the spec wires `jobsOptions()` into `jobsModule`
  * and the job succeeds with a file after one poll.
  *
+ * `GET /students/{id}/ledger` (`fees.invoice.view`) answers a seeded statement's lines with its
+ * `meta.closing_balance`, and a 404 for any student not seeded.
+ *
  * What it does not do: filter income, trial-balance and budget rows by date, or compute the
  * aging buckets. The rows a spec seeds are the rows returned. Whether the server really narrows
  * and sums as the screen assumes is the live lane's (`tests/live/api/fees-reports.spec.ts`).
@@ -106,6 +109,15 @@ export interface FinanceReportsOptions {
   rows?: Partial<Record<Exclude<FinanceReportKind, "collection">, ReportSeedRow[]>>;
   /** The inline ceiling: the server's 1000, or a small number so a spec need not seed that many. */
   rowLimit?: number;
+  /** Statements by student id: an id not listed is a 404, as another tenant's student is. */
+  statements?: Record<string, StatementSeed>;
+}
+
+/** One student's statement as `GET /students/{id}/ledger` sends it: its lines and the server's closing balance. */
+export interface StatementSeed {
+  lines: ApiSchemas["StudentStatementEntry"][];
+  /** The server's own figure; the stub sends it as given rather than reading the last line. */
+  closing_balance: string;
 }
 
 export interface ExportRequest {
@@ -290,6 +302,15 @@ export function feesReportsModule(state: FinanceReportsState): MockModule {
           date_from: query.date_from,
           date_to: query.date_to,
         },
+      });
+    });
+
+    api.get("/students/:studentId/ledger", (request) => {
+      if (!state.holds("fees.invoice.view")) return fail(403, MESSAGES.denied);
+      const statement = state.options.statements?.[request.params["studentId"] ?? ""];
+      if (!statement) return fail(404, "Not found.");
+      return ok(statement.lines, {
+        meta: { row_count: statement.lines.length, closing_balance: statement.closing_balance },
       });
     });
 

@@ -1,3 +1,4 @@
+import type { PermissionKey } from "@schoolhub/types";
 import { expect, test } from "@/fixtures";
 import {
   buildRole,
@@ -56,6 +57,14 @@ const principal = buildUser({
   id: uuid(),
   roles: [buildRole({ slug: "principal", name: "Principal" })],
   permissions: FEES_REPORTS_PRINCIPAL_PERMISSIONS,
+});
+
+/** The one key the statement page needs; without the student read its heading is generic. */
+const STATEMENT_PERMISSIONS: PermissionKey[] = ["fees.invoice.view"];
+const statementReader = buildUser({
+  id: uuid(),
+  roles: [buildRole({ slug: "accountant", name: "Accountant" })],
+  permissions: STATEMENT_PERMISSIONS,
 });
 
 function payment(overrides: Partial<CollectionSeed>): CollectionSeed {
@@ -304,5 +313,55 @@ test.describe("a principal reading the reports", () => {
     await expect(feeReportsPage.row("Collection", "1,000.00")).toBeVisible();
     await expect(feeReportsPage.exportButton("CSV")).toHaveCount(0);
     await expect(feeReportsPage.exportButton("XLSX")).toHaveCount(0);
+  });
+});
+
+test.describe("a viewer opening a student statement", () => {
+  test.use({ authUser: statementReader });
+
+  test("opens a student's statement page: the server's lines and closing balance, and a 404 for an unknown student", async ({
+    page,
+    mockApi,
+    feeReportsPage,
+    signedIn: _signedIn,
+  }) => {
+    stubReports(mockApi, {
+      permissions: STATEMENT_PERMISSIONS,
+      statements: {
+        [STUDENT]: {
+          lines: [
+            {
+              kind: "invoice",
+              date: "2026-08-01",
+              reference: "INV-0001",
+              description: "2026-09",
+              debit: "1000.00",
+              credit: "0.00",
+              balance: "1000.00",
+            },
+            {
+              kind: "payment",
+              date: "2026-10-01",
+              reference: "RCP-0007",
+              description: "Cash",
+              debit: "0.00",
+              credit: "400.00",
+              balance: "600.00",
+            },
+          ],
+          // Not the last line's balance: the page shows the server's figure.
+          closing_balance: "612.50",
+        },
+      },
+    });
+
+    await feeReportsPage.goto({ path: `/fees/students/${STUDENT}/ledger` });
+
+    await expect(page.getByRole("row", { name: /RCP-0007/ })).toContainText("600.00");
+    await expect(page.getByRole("row", { name: /INV-0001/ })).toContainText("1,000.00");
+    await expect(page.getByText("Closing balance").locator("..")).toContainText("612.50");
+
+    await feeReportsPage.goto({ path: `/fees/students/${uuid()}/ledger` });
+    await expect(page.getByText("Student not found")).toBeVisible();
   });
 });

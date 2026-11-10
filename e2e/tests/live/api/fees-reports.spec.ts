@@ -204,6 +204,26 @@ test.describe("finance reports (live API)", () => {
       ["date", "kind", "reference", "description", "debit", "credit", "balance"].sort(),
     );
     expect(statement.meta).toMatchObject({ row_count: 2, closing_balance: "1000.00" });
+    // The payment just taken is on the statement, as a credit of the amount paid.
+    expect(statement.data[1]).toMatchObject({ kind: "payment", credit: PAID_HERE, debit: "0.00" });
+  });
+
+  test("another tenant's student statement is a 404, never a 403 or an empty one", async ({
+    liveApiClient,
+    liveOtherTenantApiClient,
+  }) => {
+    test.setTimeout(LIVE_JOB_TIMEOUT_MS + SETUP_MARGIN_MS);
+    const counter = await financeStaffSession();
+    const { scope, invoice } = await billedInvoice(liveApiClient, counter);
+    await pay(counter, invoice, PAID_HERE);
+
+    // A real student with a real statement and a real second identity: a 403 or an empty 200
+    // would confirm the student exists elsewhere.
+    const refused = await refusal(
+      liveOtherTenantApiClient.get(`/students/${scope.studentId}/ledger`),
+    );
+
+    expect(refused.status).toBe(404);
   });
 
   test("an export is a job that completes with a file, and carries the filters", async ({
