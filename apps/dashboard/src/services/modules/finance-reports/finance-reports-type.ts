@@ -43,7 +43,7 @@ export interface FinanceReportQuery {
   classId?: string;
 }
 
-/** An inline report: `rows` are all of one `kind`; `rowCount` is the server's `meta.row_count`. */
+/** An inline report: `rows` are all of one `kind`, in the server's order. */
 export interface FinanceReportRun {
   kind: FinanceReportKind;
   rows: FinanceReportRow[];
