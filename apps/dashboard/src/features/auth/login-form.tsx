@@ -14,15 +14,15 @@ import {
   FormMessage,
   Input,
 } from "@schoolhub/ui";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { Paths } from "@/config/paths";
 import { env } from "@/lib/env";
+import { homePathFor } from "@/lib/home-path";
 import { parseTenantSlug } from "@/lib/host";
-import { getQueryClient, queryKeys } from "@/lib/query-client";
 import { ApiError, Services } from "@/services";
 import { loginSchema, type LoginValues } from "@/services/modules/auth/auth.schema";
 import { AuthPageHeader } from "./auth-page-header";
@@ -32,6 +32,7 @@ export function LoginForm() {
   const t = useTranslations("auth.login");
   const tErrors = useTranslations("errors");
   const router = useRouter();
+  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
 
   const form = useForm<LoginValues>({
@@ -42,9 +43,10 @@ export function LoginForm() {
 
   const mutation = useMutation({
     mutationFn: Services.auth.login,
-    onSuccess: () => {
-      // Fire-and-forget: the redirect below does not need the cache to have settled first.
-      void getQueryClient().invalidateQueries({ queryKey: queryKeys.session() });
+    onSuccess: (data) => {
+      // A new identity starts from an empty cache: nothing a previous user read (their
+      // `/auth/me`, a staff list, another family's portal) may be shown or routed on.
+      queryClient.clear();
       const next = searchParams.get("next");
       // The auth layout's own logo links to /dashboard (unconditionally, next= or not),
       // so Next's Router Cache may already hold that route resolving to the pre-login
@@ -53,7 +55,8 @@ export function LoginForm() {
       // forced to re-check the proxy for real instead of serving that stale cached
       // redirect straight from the client with no new request at all.
       router.refresh();
-      router.replace(next?.startsWith("/") ? next : Paths.DASHBOARD);
+      // A student or guardian lands on the portal; the staff shell would only bounce them there.
+      router.replace(next?.startsWith("/") ? next : homePathFor(data.user));
     },
     onError: (error: unknown) => {
       if (!(error instanceof ApiError)) return;

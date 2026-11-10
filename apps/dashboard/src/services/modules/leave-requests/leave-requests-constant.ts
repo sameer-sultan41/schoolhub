@@ -66,6 +66,7 @@ export const LEAVE_QUERY_FIELDS: ReadonlyArray<readonly [keyof LeavePageQuery, s
   ["ordering", "ordering"],
   ["status", "status"],
   ["leaveTypeId", "leave_type_id"],
+  ["studentId", "student_id"],
   ["dateFrom", "date__gte"],
   ["dateTo", "date__lte"],
 ];
@@ -86,3 +87,12 @@ export const LEAVE_STEP_PERMISSION_LABELS: Readonly<Record<string, string>> = {
 
 /** The decision dialog's one input: a server error on any other field is its own message. */
 export const LEAVE_DECISION_ERROR_FIELDS = ["note"] as const;
+
+/** The longest reason the server takes (`LeaveRequest.reason`). */
+export const LEAVE_REASON_MAX_LENGTH = 500;
+/** The day parts, in the order the new-request form offers them. */
+export const LEAVE_DAY_PARTS = [
+  "full",
+  "first_half",
+  "second_half",
+] as const satisfies readonly LeaveDayPart[];

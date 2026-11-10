@@ -187,6 +187,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admit-cards/{id}:download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description A short-lived signed link to the admit card's PDF. */
+        post: operations["admit_cards_:download_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admit-cards/{id}:revoke": {
         parameters: {
             query?: never;
@@ -1332,11 +1349,27 @@ export interface paths {
         /**
          * @description `GET /exams/{id}/marks-progress` — §6's missing-entries dashboard.
          *
-         *     A plain `GET` rather than a report `kind`, because it is operational
-         *     rather than analytical: an exam clerk chasing outstanding entries wants
-         *     it beside the exam, and §13 lists "marks-entry status" as its own row.
+         *     One row per exam-subject and section, limited to the sections the
+         *     caller may enter marks for unless their scope is `all`.
          */
-        get: operations["exams_marks_progress_retrieve"];
+        get: operations["exams_marks_progress_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exams/{id}/schedule-conflicts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The exam's schedule clashes, hard findings first. */
+        get: operations["exams_schedule_conflicts_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3059,6 +3092,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/marks/grid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET /marks/grid` — one section's entry grid for one exam-subject. */
+        get: operations["marks_grid_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/marks:bulk-entry": {
         parameters: {
             query?: never;
@@ -3069,7 +3119,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description `POST /marks:bulk-entry` — one exam-subject's grid (§16).
+         * @description `POST /marks:bulk-entry` — one section's grid for one exam-subject (§16).
          *
          *     Accepts `Idempotency-Key`: §16 calls this an idempotent grid submit, and
          *     a teacher on a school Wi-Fi genuinely does re-send. The service is an
@@ -3996,12 +4046,13 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description `POST /question-banks/{id}:assemble-paper` — 202 + a paper PDF (§16).
+         * @description `POST /question-banks/{id}:assemble-paper` — 202 + a job rendering a paper PDF (§16).
          *
-         *     The blueprint is checked for satisfiability **before** a job is created,
-         *     and every shortfall is reported at once: a teacher whose blueprint asks
-         *     for eight hard questions from a bank holding three needs to know that
-         *     about each section of the paper, not to fix one and resubmit.
+         *     The job's `result` is `{result_file_id, questions, total_marks}`: the
+         *     paper's file id, the number of questions used, and the total marks as a
+         *     decimal string. The blueprint is checked before a job is created, and a
+         *     blueprint the bank's approved questions cannot fill is a 422 listing
+         *     every short section in `error.meta.sections`.
          */
         post: operations["question_banks_:assemble_paper_create"];
         delete?: never;
@@ -4264,6 +4315,23 @@ export interface paths {
          *     cards — the same two-narrowings split `ResultViewSet` documents.
          */
         patch: operations["report_cards_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/report-cards/{id}:download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description A short-lived signed link to the report card's PDF. */
+        post: operations["report_cards_:download_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/reports/attendance-summary": {
@@ -6577,8 +6645,18 @@ export interface components {
             readonly id: string;
             /** Format: uuid */
             readonly exam_id: string;
+            readonly exam_name: string;
+            /** Format: date */
+            readonly exam_starts_on: string | null;
+            /** Format: date */
+            readonly exam_ends_on: string | null;
             /** Format: uuid */
             readonly student_id: string;
+            readonly student_name: string;
+            readonly admission_number: string;
+            /** Format: uuid */
+            readonly section_id: string | null;
+            readonly section_name: string | null;
             readonly admit_card_no: string;
             /** Format: uuid */
             readonly file_id: string | null;
@@ -6590,6 +6668,17 @@ export interface components {
             readonly created_at: string;
             /** Format: date-time */
             readonly updated_at: string;
+        };
+        /**
+         * @description `:issue-admit-cards`' 202: the render job, and the cards this run added
+         *     beside the ones that already existed.
+         */
+        AdmitCardIssueAccepted: {
+            /** Format: uuid */
+            job_id: string;
+            status: string;
+            added: number;
+            existing: number;
         };
         /**
          * @description The body of `POST /admit-cards/{id}:revoke`.
@@ -6998,11 +7087,19 @@ export interface components {
             check_out_time?: string | null;
             remarks?: string | null;
         };
-        /** @description The body of `POST /marks:bulk-entry` — one exam-subject's whole grid. */
+        /** @description The body of `POST /marks:bulk-entry` — one section's grid for one exam-subject. */
         BulkMarksEntry: {
             /** Format: uuid */
             exam_subject_id: string;
+            /** Format: uuid */
+            section_id: string;
             entries: components["schemas"]["MarksEntry"][];
+        };
+        /** @description `:bulk-entry`'s 200: rows created, rows updated, and rows written. */
+        BulkMarksEntryResult: {
+            entered: number;
+            updated: number;
+            rows: number;
         };
         Campus: {
             /** Format: uuid */
@@ -7028,6 +7125,10 @@ export interface components {
         };
         CancelInvoice: {
             reason: string;
+        };
+        /** @description A short-lived signed link to a card's PDF. */
+        CardDownload: {
+            download_url: string;
         };
         ChangePassword: {
             current_password: string;
@@ -7073,6 +7174,12 @@ export interface components {
          * @enum {string}
          */
         CommunicationAudienceTypeEnum: "all" | "staff" | "students" | "guardians" | "class" | "section" | "custom";
+        /**
+         * @description * `hard` - hard
+         *     * `soft` - soft
+         * @enum {string}
+         */
+        ConflictSeverityEnum: "hard" | "soft";
         /**
          * @description Body for `:approve` / `:reject` — an optional note, nothing else.
          *
@@ -7442,19 +7549,22 @@ export interface components {
          * @enum {string}
          */
         EnrollmentHistoryEventTypeEnum: "enrollment";
-        /** @description `exams` — an examination event (§5.1). */
+        /** @description An examination event within an academic session (§5.1). */
         Exam: {
             /** Format: uuid */
             readonly id: string;
             /** Format: uuid */
             academic_session_id: string;
+            readonly academic_session_name: string;
             /** Format: uuid */
             term_id?: string | null;
+            readonly term_name: string | null;
             /** @description e.g. "Term 1 Midterm". */
             name: string;
             exam_type: components["schemas"]["ExamTypeEnum"];
             /** Format: uuid */
             grading_scale_id?: string;
+            readonly grading_scale_name: string;
             /**
              * Format: decimal
              * @description Contribution to a consolidated term or session result.
@@ -7465,12 +7575,37 @@ export interface components {
             /** Format: date */
             ends_on?: string | null;
             readonly status: components["schemas"]["ExamStatusEnum"];
+            /** @description All of the exam's live subjects, not only those visible to the viewer. */
+            readonly subject_count: number;
             description?: string | null;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /**
+         * @description One clash in an exam's schedule (§5.2, §11).
+         *
+         *     `schedule_ids` names every sitting involved, so a client highlights each of
+         *     them. A hard finding blocks `:publish-schedule`; a soft one only warns.
+         */
+        ExamConflict: {
+            type: components["schemas"]["ExamConflictTypeEnum"];
+            severity: components["schemas"]["ConflictSeverityEnum"];
+            schedule_ids: string[];
+            message: string;
+        };
+        /**
+         * @description * `room_double_booked` - room_double_booked
+         *     * `invigilator_double_booked` - invigilator_double_booked
+         *     * `student_two_papers_at_once` - student_two_papers_at_once
+         *     * `outside_exam_window` - outside_exam_window
+         *     * `not_a_working_day` - not_a_working_day
+         *     * `room_over_capacity` - room_over_capacity
+         *     * `clashes_with_timetable` - clashes_with_timetable
+         * @enum {string}
+         */
+        ExamConflictTypeEnum: "room_double_booked" | "invigilator_double_booked" | "student_two_papers_at_once" | "outside_exam_window" | "not_a_working_day" | "room_over_capacity" | "clashes_with_timetable";
         /**
          * @description The query for `GET /reports/exam-summary`, and the body of its export.
          *
@@ -7495,6 +7630,7 @@ export interface components {
          * @enum {string}
          */
         ExamReportQueryKindEnum: "result-register" | "pass-fail-analysis" | "subject-performance" | "marks-entry-status" | "grade-distribution" | "question-bank-usage";
+        ExamReportRow: components["schemas"]["ResultRegisterReportRow"] | components["schemas"]["PassFailAnalysisReportRow"] | components["schemas"]["SubjectPerformanceReportRow"] | components["schemas"]["MarksEntryStatusReportRow"] | components["schemas"]["GradeDistributionReportRow"] | components["schemas"]["QuestionBankUsageReportRow"];
         /**
          * @description `exam_schedules` — one section's sitting of one paper (§5.2).
          *
@@ -7508,9 +7644,15 @@ export interface components {
             /** Format: uuid */
             readonly id: string;
             /** Format: uuid */
+            readonly exam_id: string;
+            readonly exam_name: string;
+            /** Format: uuid */
             exam_subject_id: string;
+            readonly subject_name: string;
+            readonly class_name: string;
             /** Format: uuid */
             section_id: string;
+            readonly section_name: string;
             /** Format: date */
             exam_date: string;
             /** Format: time */
@@ -7519,8 +7661,10 @@ export interface components {
             end_time: string;
             /** Format: uuid */
             room_id?: string | null;
+            readonly room_name: string | null;
             /** Format: uuid */
             invigilator_staff_id?: string | null;
+            readonly invigilator_name: string | null;
             status?: components["schemas"]["ExamScheduleStatusEnum"];
             /** @description Printed on admit cards (§5.3). */
             instructions?: string | null;
@@ -7528,6 +7672,14 @@ export interface components {
             readonly created_at: string;
             /** Format: date-time */
             readonly updated_at: string;
+        };
+        /**
+         * @description `:publish-schedule`'s answer: the exam's new status, and the soft clashes
+         *     published over.
+         */
+        ExamSchedulePublish: {
+            status: components["schemas"]["ExamStatusEnum"];
+            conflicts: components["schemas"]["ExamConflict"][];
         };
         /**
          * @description * `scheduled` - Scheduled
@@ -7554,10 +7706,13 @@ export interface components {
             readonly id: string;
             /** Format: uuid */
             exam_id: string;
+            readonly exam_name: string;
             /** Format: uuid */
             class_id: string;
+            readonly class_name: string;
             /** Format: uuid */
             subject_id: string;
+            readonly subject_name: string;
             /** Format: decimal */
             max_marks: string;
             /** Format: decimal */
@@ -8051,6 +8206,28 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /** @description `reports.grade_distribution`: one band's count; band fields are null when ungraded. */
+        GradeDistributionReportRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "grade-distribution";
+            /** Format: uuid */
+            readonly grade_band_id: string | null;
+            readonly grade: string | null;
+            /** Format: double */
+            readonly min_percent: number | null;
+            /** Format: double */
+            readonly max_percent: number | null;
+            readonly is_passing: boolean | null;
+            readonly students: number;
+        };
+        /**
+         * @description * `grade-distribution` - grade-distribution
+         * @enum {string}
+         */
+        GradeDistributionReportRowKindEnum: "grade-distribution";
         /**
          * @description `grading_scales` — a tenant's grading model (§5.5).
          *
@@ -8565,12 +8742,68 @@ export interface components {
          * @enum {string}
          */
         MarksEntryStatusEnum: "draft" | "submitted";
+        /** @description `reports.marks_entry_status`: one exam-subject's entered rows by status. */
+        MarksEntryStatusReportRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "marks-entry-status";
+            /** Format: uuid */
+            readonly exam_subject_id: string;
+            readonly subject_name: string;
+            readonly class_name: string;
+            /** Format: date-time */
+            readonly locked_at: string | null;
+            readonly entered: number;
+            readonly draft: number;
+            readonly submitted: number;
+            readonly locked: number;
+            readonly absent: number;
+            readonly exempt: number;
+        };
+        /**
+         * @description * `marks-entry-status` - marks-entry-status
+         * @enum {string}
+         */
+        MarksEntryStatusReportRowKindEnum: "marks-entry-status";
+        /** @description One student on a section's roll, in roll order, with their marks row if entered. */
+        MarksGridEntry: {
+            /** Format: uuid */
+            student_id: string;
+            student_name: string;
+            admission_number: string;
+            roll_number: string | null;
+            marks: components["schemas"]["Marks"] | null;
+        };
         /** @description The body of `POST /marks-imports` — a multipart CSV or .xlsx upload. */
         MarksImportRequest: {
             /** Format: uuid */
             exam_subject_id: string;
             /** Format: uri */
             file: string;
+        };
+        /** @description `:lock-marks`' 200. `already_locked` marks a retry. */
+        MarksLockResult: {
+            locked_rows: number;
+            already_locked: boolean;
+        };
+        /** @description One (exam-subject, section) row of `GET /exams/{id}/marks-progress`. */
+        MarksProgressRow: {
+            /** Format: uuid */
+            exam_subject_id: string;
+            subject_name: string;
+            class_name: string;
+            /** Format: uuid */
+            section_id: string;
+            section_name: string;
+            /** @description Students on the section's active roll. */
+            expected: number;
+            /** @description Of those, students with a marks row. */
+            entered: number;
+            /** @description Of those, rows submitted or locked. */
+            submitted: number;
+            is_locked: boolean;
         };
         /**
          * @description * `draft` - Draft
@@ -8579,6 +8812,11 @@ export interface components {
          * @enum {string}
          */
         MarksStatusEnum: "draft" | "submitted" | "locked";
+        /** @description `:unlock-marks`' 200. `already_unlocked` marks a retry. */
+        MarksUnlockResult: {
+            unlocked_rows: number;
+            already_unlocked: boolean;
+        };
         /** @description One message in a thread, as its participants read it. */
         Message: {
             /** Format: uuid */
@@ -8950,9 +9188,10 @@ export interface components {
             data?: components["schemas"]["Exam"][];
             meta?: {
                 pagination?: {
-                    next_cursor?: string | null;
-                    previous_cursor?: string | null;
+                    page?: number;
                     page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
                 };
             };
         };
@@ -9066,23 +9305,14 @@ export interface components {
                 };
             };
         };
-        PaginatedGradeBandList: {
-            data?: components["schemas"]["GradeBand"][];
-            meta?: {
-                pagination?: {
-                    next_cursor?: string | null;
-                    previous_cursor?: string | null;
-                    page_size?: number;
-                };
-            };
-        };
         PaginatedGradingScaleList: {
             data?: components["schemas"]["GradingScale"][];
             meta?: {
                 pagination?: {
-                    next_cursor?: string | null;
-                    previous_cursor?: string | null;
+                    page?: number;
                     page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
                 };
             };
         };
@@ -9243,9 +9473,10 @@ export interface components {
             data?: components["schemas"]["QuestionBank"][];
             meta?: {
                 pagination?: {
-                    next_cursor?: string | null;
-                    previous_cursor?: string | null;
+                    page?: number;
                     page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
                 };
             };
         };
@@ -9496,6 +9727,18 @@ export interface components {
                 };
             };
         };
+        /**
+         * @description `:assemble-paper`'s 202: the job that renders the paper.
+         *
+         *     The job's `result` is `{result_file_id, questions, total_marks}`: the paper
+         *     PDF's file id, how many questions it used, and its total marks as a decimal
+         *     string.
+         */
+        PaperAssemblyAccepted: {
+            /** Format: uuid */
+            job_id: string;
+            status: string;
+        };
         /** @description One section of §6's paper blueprint. */
         PaperSection: {
             title?: string;
@@ -9505,6 +9748,36 @@ export interface components {
             /** Format: decimal */
             marks_each?: string | null;
         };
+        /** @description `reports.pass_fail_analysis`: one section's counts; the rate is passed over sat. */
+        PassFailAnalysisReportRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "pass-fail-analysis";
+            /** Format: uuid */
+            readonly section_id: string;
+            readonly section_name: string;
+            readonly students: number;
+            readonly sat: number;
+            readonly passed: number;
+            readonly failed: number;
+            readonly absent: number;
+            readonly withheld: number;
+            /** Format: double */
+            readonly average_percentage: number | null;
+            /** Format: double */
+            readonly highest_percentage: number | null;
+            /** Format: double */
+            readonly lowest_percentage: number | null;
+            /** Format: double */
+            readonly pass_rate: number;
+        };
+        /**
+         * @description * `pass-fail-analysis` - pass-fail-analysis
+         * @enum {string}
+         */
+        PassFailAnalysisReportRowKindEnum: "pass-fail-analysis";
         PasswordResetConfirm: {
             /** @description Tenant slug, from the link's `school` fragment. */
             school: string;
@@ -9754,19 +10027,22 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
-        /** @description `exams` — an examination event (§5.1). */
+        /** @description An examination event within an academic session (§5.1). */
         PatchedExam: {
             /** Format: uuid */
             readonly id?: string;
             /** Format: uuid */
             academic_session_id?: string;
+            readonly academic_session_name?: string;
             /** Format: uuid */
             term_id?: string | null;
+            readonly term_name?: string | null;
             /** @description e.g. "Term 1 Midterm". */
             name?: string;
             exam_type?: components["schemas"]["ExamTypeEnum"];
             /** Format: uuid */
             grading_scale_id?: string;
+            readonly grading_scale_name?: string;
             /**
              * Format: decimal
              * @description Contribution to a consolidated term or session result.
@@ -9777,6 +10053,8 @@ export interface components {
             /** Format: date */
             ends_on?: string | null;
             readonly status?: components["schemas"]["ExamStatusEnum"];
+            /** @description All of the exam's live subjects, not only those visible to the viewer. */
+            readonly subject_count?: number;
             description?: string | null;
             /** Format: date-time */
             readonly created_at?: string;
@@ -9796,9 +10074,15 @@ export interface components {
             /** Format: uuid */
             readonly id?: string;
             /** Format: uuid */
+            readonly exam_id?: string;
+            readonly exam_name?: string;
+            /** Format: uuid */
             exam_subject_id?: string;
+            readonly subject_name?: string;
+            readonly class_name?: string;
             /** Format: uuid */
             section_id?: string;
+            readonly section_name?: string;
             /** Format: date */
             exam_date?: string;
             /** Format: time */
@@ -9807,8 +10091,10 @@ export interface components {
             end_time?: string;
             /** Format: uuid */
             room_id?: string | null;
+            readonly room_name?: string | null;
             /** Format: uuid */
             invigilator_staff_id?: string | null;
+            readonly invigilator_name?: string | null;
             status?: components["schemas"]["ExamScheduleStatusEnum"];
             /** @description Printed on admit cards (§5.3). */
             instructions?: string | null;
@@ -9823,10 +10109,13 @@ export interface components {
             readonly id?: string;
             /** Format: uuid */
             exam_id?: string;
+            readonly exam_name?: string;
             /** Format: uuid */
             class_id?: string;
+            readonly class_name?: string;
             /** Format: uuid */
             subject_id?: string;
+            readonly subject_name?: string;
             /** Format: decimal */
             max_marks?: string;
             /** Format: decimal */
@@ -10326,6 +10615,9 @@ export interface components {
          *     `usage_count` is read-only for the same shape of reason: it is the only
          *     record that a question reached a paper (§15 gives assembled papers no
          *     table), so nothing but assembly may write it.
+         *
+         *     `source` is create-only: an update that changes it is a 422 on `source`,
+         *     so a PATCH cannot remove an AI draft's label.
          */
         PatchedQuestion: {
             /** Format: uuid */
@@ -10345,6 +10637,9 @@ export interface components {
             source?: components["schemas"]["QuestionSourceEnum"];
             /** @description False on creation for ai_generated; flipped by :approve. */
             readonly is_approved?: boolean;
+            /** Format: uuid */
+            readonly approved_by?: string | null;
+            readonly approved_by_name?: string | null;
             readonly usage_count?: number;
             /** Format: date-time */
             readonly created_at?: string;
@@ -10357,8 +10652,10 @@ export interface components {
             readonly id?: string;
             /** Format: uuid */
             subject_id?: string;
+            readonly subject_name?: string;
             /** Format: uuid */
             class_id?: string | null;
+            readonly class_name?: string | null;
             name?: string;
             description?: string | null;
             status?: components["schemas"]["QuestionBankStatusEnum"];
@@ -10386,8 +10683,16 @@ export interface components {
             readonly term_id?: string;
             /** Format: uuid */
             readonly student_id?: string;
+            readonly student_name?: string;
+            readonly admission_number?: string;
             /** Format: uuid */
             readonly result_id?: string;
+            /** Format: uuid */
+            readonly section_id?: string | null;
+            readonly section_name?: string | null;
+            /** Format: decimal */
+            readonly percentage?: string | null;
+            readonly grade?: string | null;
             /** Format: uuid */
             readonly file_id?: string | null;
             class_teacher_remarks?: string | null;
@@ -10834,6 +11139,8 @@ export interface components {
             latest_result: components["schemas"]["LatestResultCard"] | null;
         };
         PortalDashboard: {
+            /** Format: date */
+            as_of: string;
             children: components["schemas"]["PortalChild"][];
             unread_notifications: number;
             unread_threads: number | null;
@@ -11054,6 +11361,9 @@ export interface components {
          *     `usage_count` is read-only for the same shape of reason: it is the only
          *     record that a question reached a paper (§15 gives assembled papers no
          *     table), so nothing but assembly may write it.
+         *
+         *     `source` is create-only: an update that changes it is a 422 on `source`,
+         *     so a PATCH cannot remove an AI draft's label.
          */
         Question: {
             /** Format: uuid */
@@ -11073,6 +11383,9 @@ export interface components {
             source?: components["schemas"]["QuestionSourceEnum"];
             /** @description False on creation for ai_generated; flipped by :approve. */
             readonly is_approved: boolean;
+            /** Format: uuid */
+            readonly approved_by: string | null;
+            readonly approved_by_name: string | null;
             readonly usage_count: number;
             /** Format: date-time */
             readonly created_at: string;
@@ -11085,8 +11398,10 @@ export interface components {
             readonly id: string;
             /** Format: uuid */
             subject_id: string;
+            readonly subject_name: string;
             /** Format: uuid */
             class_id?: string | null;
+            readonly class_name: string | null;
             name: string;
             description?: string | null;
             status?: components["schemas"]["QuestionBankStatusEnum"];
@@ -11103,6 +11418,30 @@ export interface components {
          * @enum {string}
          */
         QuestionBankStatusEnum: "active" | "archived";
+        /** @description `reports.question_bank_usage`: one bank's questions at one difficulty. */
+        QuestionBankUsageReportRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "question-bank-usage";
+            /** Format: uuid */
+            readonly question_bank_id: string;
+            readonly bank_name: string;
+            readonly subject_name: string;
+            readonly difficulty: components["schemas"]["QuestionDifficultyEnum"];
+            readonly questions: number;
+            readonly approved: number;
+            /** @description Questions used in at least one paper. */
+            readonly total_uses: number;
+            /** Format: double */
+            readonly average_uses: number | null;
+        };
+        /**
+         * @description * `question-bank-usage` - question-bank-usage
+         * @enum {string}
+         */
+        QuestionBankUsageReportRowKindEnum: "question-bank-usage";
         /**
          * @description * `easy` - Easy
          *     * `medium` - Medium
@@ -11235,8 +11574,16 @@ export interface components {
             readonly term_id: string;
             /** Format: uuid */
             readonly student_id: string;
+            readonly student_name: string;
+            readonly admission_number: string;
             /** Format: uuid */
             readonly result_id: string;
+            /** Format: uuid */
+            readonly section_id: string | null;
+            readonly section_name: string | null;
+            /** Format: decimal */
+            readonly percentage: string | null;
+            readonly grade: string | null;
             /** Format: uuid */
             readonly file_id: string | null;
             class_teacher_remarks?: string | null;
@@ -11259,6 +11606,11 @@ export interface components {
          * @enum {string}
          */
         ReportCardStatusEnum: "draft" | "generated" | "published";
+        /** @description `:publish-report-cards`' 200: the cards this call moved. */
+        ReportCardsPublished: {
+            published: number;
+            published_ids: string[];
+        };
         /** @description ⚿ `POST /refunds` — §7.3 step one. */
         RequestRefund: {
             /** Format: uuid */
@@ -11273,18 +11625,23 @@ export interface components {
          *     Every field here is computed or moved by a permissioned action: the
          *     aggregates by `:process-results`, `status`/`approved_*` by
          *     `:approve-results`, `published_at` by `:publish-results`, and `outcome` by
-         *     processing or `:withhold`. A client that could PATCH any of them could skip
-         *     §5.6's gate entirely, which is the whole point of having one.
+         *     processing or `:withhold`. `processed_by` is the latest run's processor,
+         *     who may not approve it.
          */
         Result: {
             /** Format: uuid */
             readonly id: string;
             /** Format: uuid */
             readonly exam_id: string;
+            readonly exam_name: string;
+            readonly term_name: string | null;
             /** Format: uuid */
             readonly student_id: string;
+            readonly student_name: string;
+            readonly admission_number: string;
             /** Format: uuid */
             readonly section_id: string;
+            readonly section_name: string;
             /** Format: decimal */
             readonly total_max_marks: string;
             /** Format: decimal */
@@ -11303,6 +11660,18 @@ export interface components {
              */
             readonly grace_marks: string;
             readonly status: components["schemas"]["ResultStatusEnum"];
+            /**
+             * Format: uuid
+             * @description users(id) of the latest processing run; re-stamped on every run.
+             */
+            readonly processed_by: string | null;
+            readonly processed_by_name: string | null;
+            /**
+             * Format: uuid
+             * @description Must differ from `processed_by` (§4).
+             */
+            readonly approved_by: string | null;
+            readonly approved_by_name: string | null;
             /** Format: date-time */
             readonly approved_at: string | null;
             /** Format: date-time */
@@ -11320,6 +11689,40 @@ export interface components {
          * @enum {string}
          */
         ResultOutcomeEnum: "pass" | "fail" | "absent" | "withheld";
+        /** @description `reports.result_register`: one student's result, in rank order (unranked last). */
+        ResultRegisterReportRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "result-register";
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly student_id: string;
+            readonly first_name: string;
+            readonly last_name: string;
+            readonly admission_number: string;
+            readonly section_name: string;
+            /** Format: double */
+            readonly percentage: number;
+            /** Format: double */
+            readonly total_obtained_marks: number;
+            /** Format: double */
+            readonly total_max_marks: number;
+            readonly grade: string | null;
+            /** Format: double */
+            readonly gpa: number | null;
+            readonly rank_in_section: number | null;
+            readonly rank_in_class: number | null;
+            readonly outcome: components["schemas"]["ResultOutcomeEnum"];
+            readonly status: components["schemas"]["ResultStatusEnum"];
+        };
+        /**
+         * @description * `result-register` - result-register
+         * @enum {string}
+         */
+        ResultRegisterReportRowKindEnum: "result-register";
         /**
          * @description * `processing` - Processing
          *     * `pending_approval` - Pending approval
@@ -11336,6 +11739,21 @@ export interface components {
          *     into the audit log — the same argument the admit-card revocation makes.
          */
         ResultWithhold: {
+            reason: string;
+        };
+        /** @description `:approve-results`' 200: the rows this approval moved. */
+        ResultsApproved: {
+            approved: number;
+        };
+        /** @description `:publish-results`' 200. `published_ids` are the rows this call moved. */
+        ResultsPublished: {
+            published: number;
+            withheld: number;
+            published_ids: string[];
+        };
+        /** @description `:send-results-back`' 200: the rows reopened, and the reason given. */
+        ResultsSentBack: {
+            reopened: number;
             reason: string;
         };
         /** @description `rooms` — physical rooms, labs and halls (§5.4). */
@@ -12063,6 +12481,37 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /** @description `reports.subject_performance`: one exam-subject's theory marks, absent/exempt left out. */
+        SubjectPerformanceReportRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "subject-performance";
+            /** Format: uuid */
+            readonly exam_subject_id: string;
+            readonly subject_name: string;
+            readonly class_name: string;
+            /** Format: double */
+            readonly max_marks: number;
+            /** Format: double */
+            readonly pass_marks: number;
+            readonly students: number;
+            /** Format: double */
+            readonly average_marks: number | null;
+            /** Format: double */
+            readonly highest_marks: number | null;
+            /** Format: double */
+            readonly lowest_marks: number | null;
+            readonly passed: number;
+            /** Format: double */
+            readonly pass_rate: number;
+        };
+        /**
+         * @description * `subject-performance` - subject-performance
+         * @enum {string}
+         */
+        SubjectPerformanceReportRowKindEnum: "subject-performance";
         /**
          * @description * `core` - Core
          *     * `elective` - Elective
@@ -12262,16 +12711,10 @@ export interface components {
              *     * `hard` - hard
              *     * `soft` - soft
              */
-            severity: components["schemas"]["TimetableConflictSeverityEnum"];
+            severity: components["schemas"]["ConflictSeverityEnum"];
             slot_ids: string[];
             message: string;
         };
-        /**
-         * @description * `hard` - hard
-         *     * `soft` - soft
-         * @enum {string}
-         */
-        TimetableConflictSeverityEnum: "hard" | "soft";
         /**
          * @description `:publish`'s answer: drafts made live, live cells they end-dated, and the soft
          *     conflicts accepted along the way.
@@ -12738,6 +13181,7 @@ export interface operations {
     admit_cards_list: {
         parameters: {
             query?: {
+                current?: boolean;
                 /** @description The pagination cursor value. */
                 cursor?: string;
                 exam_id?: string;
@@ -12747,6 +13191,7 @@ export interface operations {
                 page_size?: number;
                 /** @description A search term. */
                 search?: string;
+                section_id?: string;
                 /**
                  * @description * `generated` - Generated
                  *     * `issued` - Issued
@@ -12790,6 +13235,34 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AdmitCard"];
                 };
+            };
+        };
+    };
+    "admit_cards_:download_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CardDownload"];
+                };
+            };
+            /** @description Not this caller's card, not rendered yet, or revoked. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -14607,6 +15080,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description The sitting, plus `meta.conflicts`: the exam's whole clash list, each an `ExamConflict`, hard findings first. */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -14678,6 +15152,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description The sitting, plus `meta.conflicts`: the exam's whole clash list, each an `ExamConflict`, hard findings first. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14828,12 +15303,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MarksLockResult"];
+                };
             };
         };
     };
@@ -14848,12 +15324,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MarksUnlockResult"];
+                };
             };
         };
     };
@@ -14861,8 +15338,6 @@ export interface operations {
         parameters: {
             query?: {
                 academic_session_id?: string;
-                /** @description The pagination cursor value. */
-                cursor?: string;
                 ends_on?: string;
                 ends_on__gte?: string;
                 ends_on__lte?: string;
@@ -14877,6 +15352,8 @@ export interface operations {
                 grading_scale_id?: string;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
                 /** @description Number of results to return per page. */
                 page_size?: number;
                 /** @description A search term. */
@@ -15009,7 +15486,7 @@ export interface operations {
             };
         };
     };
-    exams_marks_progress_retrieve: {
+    exams_marks_progress_list: {
         parameters: {
             query?: never;
             header?: never;
@@ -15020,12 +15497,34 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MarksProgressRow"][];
+                };
+            };
+        };
+    };
+    exams_schedule_conflicts_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamConflict"][];
+                };
             };
         };
     };
@@ -15040,12 +15539,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ResultsApproved"];
+                };
             };
         };
     };
@@ -15080,12 +15580,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
             202: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AdmitCardIssueAccepted"];
+                };
             };
         };
     };
@@ -15120,12 +15621,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ReportCardsPublished"];
+                };
             };
         };
     };
@@ -15140,41 +15642,19 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ResultsPublished"];
+                };
             };
         };
     };
     "exams_:publish_schedule_create": {
         parameters: {
-            query?: {
-                /** @description The pagination cursor value. */
-                cursor?: string;
-                exam_date?: string;
-                exam_date__gte?: string;
-                exam_date__lte?: string;
-                exam_id?: string;
-                exam_subject_id?: string;
-                invigilator_staff_id?: string;
-                /** @description Which field to use when ordering the results. */
-                ordering?: string;
-                /** @description Number of results to return per page. */
-                page_size?: number;
-                room_id?: string;
-                /** @description A search term. */
-                search?: string;
-                section_id?: string;
-                /**
-                 * @description * `scheduled` - Scheduled
-                 *     * `completed` - Completed
-                 *     * `cancelled` - Cancelled
-                 */
-                status?: "cancelled" | "completed" | "scheduled";
-            };
+            query?: never;
             header?: never;
             path: {
                 id: string;
@@ -15188,8 +15668,22 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedExamScheduleList"];
+                    "application/json": components["schemas"]["ExamSchedulePublish"];
                 };
+            };
+            /** @description The exam is past `scheduled`. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A hard clash (the whole list in `error.meta.conflicts`, each an `ExamConflict`), or no sittings to publish. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -15210,12 +15704,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ResultsSentBack"];
+                };
             };
         };
     };
@@ -16232,6 +16727,13 @@ export interface operations {
                     "application/json": components["schemas"]["File"];
                 };
             };
+            /** @description A portal user asked for a staff-only purpose */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     files_retrieve: {
@@ -16455,11 +16957,11 @@ export interface operations {
     grading_scales_list: {
         parameters: {
             query?: {
-                /** @description The pagination cursor value. */
-                cursor?: string;
                 is_default?: boolean;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
                 /** @description Number of results to return per page. */
                 page_size?: number;
                 /**
@@ -16608,12 +17110,8 @@ export interface operations {
     grading_scales_grade_bands_list: {
         parameters: {
             query?: {
-                /** @description The pagination cursor value. */
-                cursor?: string;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
-                /** @description Number of results to return per page. */
-                page_size?: number;
                 /** @description A search term. */
                 search?: string;
             };
@@ -16630,7 +17128,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedGradeBandList"];
+                    "application/json": components["schemas"]["GradeBand"][];
                 };
             };
         };
@@ -17599,6 +18097,7 @@ export interface operations {
                 page_size?: number;
                 /** @description A search term. */
                 search?: string;
+                section_id?: string;
                 /**
                  * @description * `draft` - Draft
                  *     * `submitted` - Submitted
@@ -17667,6 +18166,29 @@ export interface operations {
             };
         };
     };
+    marks_grid_retrieve: {
+        parameters: {
+            query: {
+                exam_subject_id: string;
+                section_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The section's active roll in the exam's session, in roll order, each student with their `marks` row or null. `meta.exam_subject` carries `max_marks`, `pass_marks`, `has_practical` and `practical_max_marks`. `meta.writable` says whether `:bulk-entry` would accept this grid now; when false, `meta.unwritable_reason` is one of `no_permission`, `exam_status`, `locked`, `window_not_open` or `window_closed`, and `meta.unwritable_message` is the refusing gate's sentence. An exam-subject or section the caller may not read (`services.may_enter_marks`) is a 404. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarksGridEntry"][];
+                };
+            };
+        };
+    };
     "marks:bulk_entry_create": {
         parameters: {
             query?: never;
@@ -17682,12 +18204,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["BulkMarksEntryResult"];
+                };
             };
         };
     };
@@ -18796,10 +19319,10 @@ export interface operations {
         parameters: {
             query?: {
                 class_id?: string;
-                /** @description The pagination cursor value. */
-                cursor?: string;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
                 /** @description Number of results to return per page. */
                 page_size?: number;
                 /** @description A search term. */
@@ -19113,8 +19636,17 @@ export interface operations {
             };
         };
         responses: {
-            /** @description No response body */
+            /** @description A job resource; poll GET /jobs/{id}. Its `result` is `{result_file_id, questions, total_marks}`. */
             202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaperAssemblyAccepted"];
+                };
+            };
+            /** @description A shortfall: `error.meta.sections` lists each section it cannot fill as `{index, difficulty, topic, requested, available}`. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19367,6 +19899,7 @@ export interface operations {
                 page_size?: number;
                 /** @description A search term. */
                 search?: string;
+                section_id?: string;
                 /**
                  * @description * `draft` - Draft
                  *     * `generated` - Generated
@@ -19439,6 +19972,34 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ReportCard"];
                 };
+            };
+        };
+    };
+    "report_cards_:download_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CardDownload"];
+                };
+            };
+            /** @description Not this caller's card, not published to them, or not rendered. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -19535,12 +20096,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The report's rows. */
+            /** @description The report's rows, each carrying the report's `kind`. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ExamReportRow"][];
+                };
             };
             /** @description Too many rows to serve inline; a job resource. */
             202: {

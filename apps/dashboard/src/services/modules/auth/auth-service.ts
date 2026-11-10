@@ -9,6 +9,7 @@ import {
 import { endpoints } from "@/services/endpoints";
 import type {
   AuthenticatedUser,
+  ChangePasswordInput,
   InvitationAccept,
   InvitationLink,
   InvitationPreview,
@@ -26,6 +27,7 @@ import type {
 
 export type {
   AuthenticatedUser,
+  ChangePasswordInput,
   InvitationAccept,
   InvitationLink,
   InvitationPreview,
@@ -59,6 +61,12 @@ export async function logout(): Promise<void> {
     accessTokenStore.clear();
     clearSessionCookie();
   }
+}
+
+/** Changes the signed-in user's own password (204). A wrong current password or a weak new one
+ * is a 400 with the field named. */
+export async function changePassword(input: ChangePasswordInput): Promise<void> {
+  await apiClient.post(endpoints.auth.changePassword, input);
 }
 
 /** Current user + effective permissions. The single source for permission-aware UI. */

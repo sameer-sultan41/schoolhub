@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { Paths } from "@/config/paths";
+import { matchesPath } from "@/lib/active-path";
 import { Cookies } from "@/lib/cookies";
 
 /**
@@ -21,7 +22,7 @@ const LINK_PATHS = [Paths.ACCEPT_INVITE, Paths.RESET_PASSWORD];
 const PUBLIC_PATHS = [Paths.LOGIN, Paths.FORGOT_PASSWORD, ...LINK_PATHS];
 
 function matches(paths: readonly string[], pathname: string): boolean {
-  return paths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+  return paths.some((path) => matchesPath(path, pathname));
 }
 
 function isPublicPath(pathname: string): boolean {

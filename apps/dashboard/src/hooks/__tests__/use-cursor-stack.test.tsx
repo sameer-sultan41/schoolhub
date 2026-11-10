@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 
-import { useCursorStack } from "../use-cursor-stack";
+import { useCursorStack } from "@/hooks/use-cursor-stack";
 
 describe("useCursorStack", () => {
   it("starts on the first page, with nothing to go back to", () => {

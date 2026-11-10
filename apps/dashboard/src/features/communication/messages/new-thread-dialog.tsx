@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
 import { useForm } from "react-hook-form";
@@ -14,10 +14,15 @@ import {
   Textarea,
 } from "@schoolhub/ui";
 
+import { AttachmentUploader, type UploadedAttachment } from "@/components/attachment-uploader";
 import { FormDialogLayout } from "@/components/form-dialog-layout";
 import { FormSelectField } from "@/components/form-select-field";
 import { useFormDialogSubmit } from "@/hooks/use-form-dialog-submit";
 import { Services } from "@/services";
+import {
+  THREAD_ATTACHMENT_MAX_FILES,
+  THREAD_ATTACHMENT_PURPOSE,
+} from "@/services/modules/files/files-constant";
 import {
   MESSAGE_BODY_MAX_LENGTH,
   NEW_THREAD_TYPES,
@@ -31,7 +36,8 @@ import {
   type NewThreadFormValues,
 } from "./new-thread-form-schema";
 import { RecipientPicker } from "./recipient-picker";
-import { StudentPicker } from "./student-picker";
+import { ChildStudentSelect } from "./child-student-select";
+import { StudentPicker, type PickedStudent } from "./student-picker";
 import { useInvalidateThreads } from "./use-invalidate-threads";
 
 export interface NewThreadDialogProps {
@@ -39,15 +45,28 @@ export interface NewThreadDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Called with the new thread's id, so the screen can open it. */
   onCreated: (threadId: string) => void;
+  /** The parent portal: the guardian's own children are the only choice, and the thread is
+   * always a guardian-school one, so there is no type or recipient picker. */
+  students?: readonly PickedStudent[];
+  /** The parent portal: the first message can carry files. */
+  allowAttachments?: boolean;
 }
 
 /**
  * Starts a conversation with its first message. Mounted by the screen only while open, so each
  * open is a fresh form.
  */
-export function NewThreadDialog({ open, onOpenChange, onCreated }: NewThreadDialogProps) {
+export function NewThreadDialog({
+  open,
+  onOpenChange,
+  onCreated,
+  students,
+  allowAttachments = false,
+}: NewThreadDialogProps) {
   const t = useTranslations("communication.messages.newThread");
   const invalidate = useInvalidateThreads();
+  const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
 
   const schema = useMemo(
     () =>
@@ -70,7 +89,11 @@ export function NewThreadDialog({ open, onOpenChange, onCreated }: NewThreadDial
 
   const { handleSubmit, formError, isPending } = useFormDialogSubmit({
     form,
-    mutationFn: (values) => Services.messageThreads.createThread(buildNewThreadInput(values)),
+    mutationFn: (values) =>
+      Services.messageThreads.createThread({
+        ...buildNewThreadInput(values),
+        ...(attachments.length > 0 ? { attachments: attachments.map((item) => item.id) } : {}),
+      }),
     knownFields: ["subject", "body", "thread_type"],
     onSuccess: (thread) => {
       invalidate();
@@ -91,14 +114,17 @@ export function NewThreadDialog({ open, onOpenChange, onCreated }: NewThreadDial
       isPending={isPending}
       submittingLabel={t("submitting")}
       submitLabel={t("submit")}
+      submitDisabled={isUploading}
     >
-      <FormSelectField
-        form={form}
-        name="thread_type"
-        label={t("type")}
-        placeholder={t("type")}
-        options={NEW_THREAD_TYPES.map((type) => ({ id: type, name: t(`types.${type}`) }))}
-      />
+      {students === undefined && (
+        <FormSelectField
+          form={form}
+          name="thread_type"
+          label={t("type")}
+          placeholder={t("type")}
+          options={NEW_THREAD_TYPES.map((type) => ({ id: type, name: t(`types.${type}`) }))}
+        />
+      )}
       {threadType === "guardian_school" ? (
         <FormField
           control={form.control}
@@ -106,7 +132,15 @@ export function NewThreadDialog({ open, onOpenChange, onCreated }: NewThreadDial
           render={({ field }) => (
             <FormItem>
               <FormLabel>{t("student")}</FormLabel>
-              <StudentPicker value={field.value} onChange={field.onChange} />
+              {students === undefined ? (
+                <StudentPicker value={field.value} onChange={field.onChange} />
+              ) : (
+                <ChildStudentSelect
+                  students={students}
+                  value={field.value}
+                  onChange={field.onChange}
+                />
+              )}
               <FormMessage />
             </FormItem>
           )}
@@ -154,6 +188,17 @@ export function NewThreadDialog({ open, onOpenChange, onCreated }: NewThreadDial
           </FormItem>
         )}
       />
+      {allowAttachments && (
+        <AttachmentUploader
+          purpose={THREAD_ATTACHMENT_PURPOSE}
+          label={t("attachments")}
+          value={attachments}
+          onChange={setAttachments}
+          onUploadingChange={setIsUploading}
+          multiple
+          maxFiles={THREAD_ATTACHMENT_MAX_FILES}
+        />
+      )}
     </FormDialogLayout>
   );
 }

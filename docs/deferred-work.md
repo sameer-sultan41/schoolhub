@@ -87,6 +87,17 @@ either this file or `project-status.md`.
     then add a live journey that invites, reads the link from Mailpit's API, accepts and signs
     in. That is an env-config change, which needs the user's go-ahead (`.env` rule).
 
+- **`notify_results_pending_approval` picks recipients by "holds `exams.result.approve` anywhere".**
+  It predates ADR-0031 and is on `main` too (`apps/examinations/tasks.py`). It sends only an exam name and a
+  count, so nothing leaks beyond the exam's existence, but a campus-scoped approver of another campus is
+  notified about an exam they cannot open. Narrow it with `holds_key_for` per recipient when the approver
+  inbox lands.
+
+- **A result carried over by a re-process keeps its earlier figures and ranks.** A student
+  withdrawn between `:send-results-back` and the re-process is not recomputed (they are no
+  longer on the active roll), so their row returns to pending approval with the numbers and
+  `rank_in_*` of the earlier run, and its rank can equal a recomputed student's. Recomputing
+  withdrawn students needs a decision on which section they rank in.
 - **Record scope follow-ups left by per-role record scope** (PR A, `fix/per-role-record-scope`;
   [ADR-0031](decisions/0031-record-scope-per-role-assignment.md)). Each scope check now reads
   only the roles that grant its key. These were found on the way and left out:
@@ -231,11 +242,12 @@ either this file or `project-status.md`.
   nobody declared.
 - **The attendance dashboard's PR A (register, Records, Settings, the attendance mode;
   plan `docs/superpowers/plans/2026-10-24-attendance-dashboard.md`) left these out:**
-  - **Leave submission waits for parent-portal.** The dashboard's leave screens (PR B)
-    review and decide; they do not submit. §4 and §11 make the requester the student or a
-    linked guardian, so a staff member entering leave for a guardian who phoned in
-    would need a rule the module doc does not have. The user chose review-only leave in the
-    dashboard (2026-10-24); submission waits for parent-portal.
+  - **Staff-on-behalf leave submission stays out; the portal now submits.** The dashboard's
+    staff leave screens (PR B) review and decide; they do not submit. §4 and §11 make the
+    requester the student or a linked guardian, so a staff member entering leave for a guardian
+    who phoned in would need a rule the module doc does not have. The user chose review-only
+    leave in the dashboard (2026-10-24). A guardian now submits and withdraws a request for
+    their own child from `/portal/{studentId}/leave` (parent-portal PR B).
   - **Half-day leave mapped to periods.** A `first_half`/`second_half` leave writes a
     daily `on_leave` row, which refuses the student in *every* period register that
     day ([ADR-0028](decisions/0028-one-attendance-mode-per-tenant.md)). Mapping a half
@@ -277,12 +289,6 @@ either this file or `project-status.md`.
     "today only" through the default window; an explicit `attendance_lock_window_days=0`
     test would keep that boundary pinned if the default ever changes.
 - **The attendance dashboard's PR B (the corrections and leave queues) left these out:**
-  - **A guardian cannot attach a document to a leave request.** `platform.file.create`
-    (`core/files/permissions.py`) is granted to staff roles only, so a guardian or student
-    has no way to upload the `attendance.leave-attachment` file a leave type with
-    `requires_attachment` demands. Their submission arrives with parent-portal, which
-    must grant the upload (scoped to that purpose) or the people §4 says submit leave
-    cannot submit a request of such a type.
   - **A leave attachment downloads through the generic file endpoint, which has no record
     scope.** The Leave detail sheet downloads through `POST /files/{id}:download`, keyed
     `platform.file.view` (every staff role). `FileViewSet.get_queryset`
@@ -341,8 +347,137 @@ either this file or `project-status.md`.
     staff register marks (Present, Absent, Late, Half day), though the server accepts every
     staff status but `on_leave`. Neither the register nor a correction can record a staff day
     as a holiday from the dashboard; the school calendar's holidays refuse marking instead.
-- **Phase 2 Tier 2 is backend-complete, and its dashboards are academics (shipped),
-  timetable (in flight) and attendance (complete once its PR C merges).**
+- **A list's debounced URL write can undo a click made inside the debounce.** Typing in a
+  `useDataGridUrlState` search box and clicking a row link before the debounce fires navigates,
+  then the late `replaceState` writes the list's `?search=` URL and the router returns to the list
+  (seen in e2e-live run 41476591369's trace). The live results journey now waits for the filter
+  to land. The fix belongs in `useUrlParams`/`useDataGridUrlState`: drop a pending write once a
+  navigation starts, or flush it on the link's click.
+- **An `assigned` holder of `exams.result.approve` or `.publish` acts on the whole exam.** PR D
+  resolves `:approve-results`, `:send-results-back`, `:publish-results` and `:publish-report-cards`
+  through `scoped_exam`, which admits a caller who teaches *any* section of the exam; the action
+  then approves or publishes every section's rows. No default role grants a teacher those keys
+  (only `principal`, `vice_principal` and `school_admin` hold them by default), so this is latent. A
+  tenant that grants one to an `assigned` role needs a section-level gate first: approve and
+  publish only the caller's sections' rows, or refuse a caller without `all` scope.
+- **The examinations dashboard's PR C (marks) left these out:**
+  - **A student whose campus differs from their section's campus.** The marks write gate and the
+    grid's `writable` flag read the *section's* campus; the per-student filter in `_entry_students`
+    keeps `STUDENT_SCOPE`'s *student* campus. A campus-scoped marker therefore sees a grid as
+    writable and is refused that one student on submit, with the unknown-number wording. Resolving
+    it needs a ruling on which campus is authoritative for marks (the section's, as `Marks`' read
+    hook uses, or the student's); plan `2026-11-07-exams-dashboard-per-role-scope.md` §2.
+  - **`class.name` in the marks-entry reminder carries "Class Section".** The reminder goes per
+    section, so the variable is the class and section joined. A tenant override that words
+    `class.name` as a whole class reads oddly; a separate `section.name` variable is the fix.
+  - **`exams.marks.update` gates nothing.** It is registered for `teacher` and `exam_staff`, but
+    `:bulk-entry` writes a new row and an update alike under `exams.marks.create`, so no role is
+    ever refused for want of it (the audit's suggestion in
+    `07-quality/2026-09-module-audit-findings.md`, lesson L55). Either the update half of a
+    submission checks it, which needs a ruling on what a teacher holding `.create` alone may do to
+    a row they already saved, or the key is dropped from the registry, the seed and §4.
+  - **`attendance.import`'s CSV allowlist rejects Windows' `application/vnd.ms-excel` type.** A
+    browser on Windows with Excel installed commonly sends a `.csv` as `application/vnd.ms-excel`.
+    `exams.marks-import` (PR C, which began enforcing its list on the direct upload) and
+    `fees.settlement-file` accept it; `attendance.import` lists `text/csv` and `.xlsx` only, and
+    is enforced only through `POST /files`, its own multipart import still skipping the check (the
+    audit's attendance Minor). Widen it when that check is added.
+- **The examinations dashboard's PR A (grading scales, exams, their subjects) left these out:**
+  - **`Section`, `Class` and `AcademicSession` have no `assigned`-scope hooks.** An
+    `assigned` teacher can read the exams they teach, but the reference lists a picker reads
+    (`/classes`, `/sections`, `/academic-sessions`) define no `filter_assigned_to_user`, so for
+    such a viewer they come back empty: the exams list's session filter is absent (the list
+    then shows every exam they may see, unfiltered), and any future teacher-facing form with a
+    class or section picker would offer nothing. The exam author roles are `all`-scoped, so
+    PR A's writes are unaffected. The fix is a hook on each, resolving through the same
+    teaching the exam hooks read (`examinations.models._assigned_teaching`'s shape), in
+    school-organization rather than here.
+  - **No archive action, and nothing sets `ongoing`.** `ExamStatus` declares `ongoing` and
+    `archived`, but no endpoint moves an exam into either: `scheduled` is set by publishing
+    the schedule and `marks_entry` by the first mark. The stepper shows `ongoing` as skipped,
+    and the delete refusal no longer tells the user to archive (examinations.md §20). An
+    `:archive` colon-action (from `published`, audited, hiding the exam from the default list)
+    is the missing piece; `ongoing` needs a decision on whether it is set by date or not at all.
+  - **§6/§8's "clone an exam" is not built.** §6 lists cloning an exam from a previous term,
+    and §8's exam-staff journey starts by cloning last year's.
+    There is no endpoint (`:clone`, as `/class-subjects:clone` and `/academic-sessions:clone`
+    have) and no screen action; an author re-creates the exam and its subjects by hand.
+  - **Portal roles see a Reports tab that refuses them.** `student` and `guardian` hold
+    `exams.result.view` and `exams.report-card.view` (§4). PR D's Reports section
+    (`/exams/reports`) is keyed on `exams.result.view`, the key §4 gives it, so a portal user
+    signed in to the dashboard sees the tab and gets a 403 from `ExamReportView`, which is
+    staff-only. The attendance Leave tab is the precedent (above): the dashboard is a staff tool,
+    and hiding portal users from staff screens is parent-portal's decision. A staff-only view key
+    for the reports (or a staff gate on the section) is the fix if it should not wait for it.
+- **The examinations dashboard's PR D (results, report cards, reports) left these out:**
+  - **Most Reports viewers cannot run the per-exam reports.** `exams.result.view`, which opens the
+    Reports section, is granted to every staff role, but picking an exam reads `GET /exams`
+    (`exams.exam.view`, held only by the exam roles: `exam_staff`, `school_admin`, `principal`,
+    `vice_principal`, `teacher`, `class_teacher`). The screen therefore offers a viewer without
+    `exams.exam.view` question-bank usage alone, with a note, though `ExamReportView` would serve
+    them the other five (L55). An exam-name source readable with `exams.result.view` (a slim
+    `/exams` options read keyed on either key, or exam names in a results-side endpoint) would
+    open those reports to the `school_owner`, `accountant` and the other result-viewing roles.
+  - **The Reports section's exam picker lists the newest 100 exams.** It reads one page of
+    `/exams` at the API's maximum page size, ordered by `-starts_on`
+    (`features/exams/use-exam-options.ts`), as the exam form's grading-scale picker does. A school
+    with more than 100 exams cannot pick an older one there; a link naming its id still runs it.
+    A session filter on the picker, or a search-as-you-type picker, is the fix.
+  - **The live lane does not sign in as a student or guardian to read published results.**
+    `ResultViewSet` narrows a restricted principal to `published` rows, and the Django suite covers
+    it (`test_processing.py`'s `test_a_student_sees_their_own_result_once_published` and its two
+    neighbours); the e2e results specs stop at the staff side. Proving it live would enrol the one
+    seeded student into a run-unique section per test, and parallel workers would race on that
+    student's single active enrolment. A per-run student with its own login (one more login per
+    worker, `AuthEndpointThrottle`) would close it, once parent-portal gives that student a screen
+    to read results on.
+  - **The portal's result read carries the staff stamps.** `ResultSerializer` serves the
+    restricted principals too, so a student or guardian reading their published results receives
+    `processed_by`, `processed_by_name`, `approved_by` and `approved_by_name`: the staff ids and
+    names of whoever processed and approved them. The portal read should drop the four stamp fields
+    (a portal serializer, or the restricted-principal branch of `ResultViewSet` picking one), with
+    a test that a student's read carries none of them.
+- **The examinations dashboard's PR E (question banks, paper assembly) left these out:**
+  - **An assembled paper is not kept, and there is no past-papers list.** `:assemble-paper`
+    renders the PDF into a file and records the use on each question's `usage_count`, but §15
+    gives papers no table, so nothing lists a bank's earlier papers. The bank's page downloads
+    the file once its job succeeds (the job is held by the page, so closing the dialog mid-job
+    does not lose it; leaving the page does) and the dialog says to save it then; a lost
+    download means assembling again (deterministic, so the same blueprint over an unchanged bank
+    gives the same paper, with every question's `usage_count` raised a second time). A
+    `question_papers` table
+    (title, blueprint, file, who assembled it) with a list and its own `:download` is the fix.
+  - **The paper downloads through the generic job-file flow, so it carries audit C1.** The dialog
+    reads the job's `result_file_id` and fetches `POST /files/{id}:download` through
+    `useJobFileDownload`, keyed `platform.file.view` (every staff role) with no record scope
+    (`core/files` above; C1 in `07-quality/2026-09-module-audit-findings.md`): any staff member
+    who learns the id can fetch a paper before it is sat. The id reaches the dashboard only through
+    the assembling user's own job, which bounds it in the UI but not at the API. The examinations
+    plan's user ruling (2026-11-01) kept this flow for the paper, since papers have no row to hang
+    a `:download` on; the fix arrives with the table above (a `:download` on the paper, scoped by
+    its bank) or with C1's per-purpose check on `core/files`.
+  - **`:generate-questions` is not built; it waits on `core/ai`.** §16 lists
+    `POST /question-banks/{id}:generate-questions` (AI, job), but the AI gateway does not exist and
+    AGENTS.md hard rule 6 forbids a provider SDK in an app, so neither the endpoint nor a Generate
+    button exists. The rest of §7.2's gate is built and tested against drafts a client posts with
+    `source: "ai_generated"`: the draft is saved unapproved whatever the body says, carries the
+    "AI-generated" label (ai-governance.md §8) in the questions table before and after approval,
+    and Approve (`exams.question.approve`) is offered on an unapproved draft only, behind a
+    confirm showing the whole question, its choices, answer key, marks and topic, recording who
+    approved it. `source` is fixed at create (a PATCH changing it is a 422), so the label cannot
+    be removed.
+  - **A failed paper job's error is flattened by a local helper.** `assemble_paper_task` stores
+    an API error's own sentences (`_job_error` in `examinations/tasks.py`), the same idea as
+    `academics.promotions.services.failure_message`; the other tasks in the module, and in
+    `attendance`, `fees_finance`, `staff_management` and `student_management`, still store
+    `str(exc)`. Hoisting one helper into `core/jobs` and using it in every task is the fix.
+  - **A blueprint section cannot ask for a question type.** `PaperSectionSerializer` takes a
+    title, difficulty, topic, count and marks each, and `select_paper_questions` draws from every
+    type at that difficulty, so the dialog's sections offer no type either (a section of "two
+    multiple-choice questions" is not expressible). A `question_type` on the section, filtered in
+    both `assert_blueprint_is_satisfiable` and `select_paper_questions`, is the fix.
+- **Phase 2 Tier 2 is complete: academics, timetable and attendance are full-stack, their
+  dashboards shipped.**
 - **Two dangling UUID columns became real foreign keys**:
   `student_attendance.leave_request_id` and
   `timetable.TeacherSubstitution.leave_request_id`, the latter carrying a comment
@@ -402,13 +537,17 @@ either this file or `project-status.md`.
 - **No `node_modules` locally.** Nothing is installed, built, linted, or tested
   locally — CI is the source of truth.
 - **No module screens beyond the dashboard home + student-management +
-  staff-management + academics + timetable's setup screens (periods, rooms) + attendance.**
-  Fees, examinations,
-  communication, parent-portal, … are untouched — the gap against
+  staff-management + academics + timetable + attendance + communication (#146, merged
+  with #145), and examinations' five open PRs.**
+  Fees, parent-portal, … are untouched — the gap against
   [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.md) tier 2+.
   Attendance's screens followed its API as three dashboard PRs (register, Records and
   Settings; the corrections and leave queues; staff attendance, reports and the import),
-  once the dashboard shell had settled.
+  once the dashboard shell had settled. Examinations' are five PRs (plan
+  `superpowers/plans/2026-11-01-examinations-dashboard.md`), built as a stack, all open: PR A
+  #147 (grading scales, exams and their subjects), PR B #149 (the Schedule and Admit cards
+  tabs), PR C #152 (the Marks tab), PR D #154 (Results, Report cards and the Reports section)
+  and PR E #155 (question banks and paper assembly). Full-stack once they merge.
 - **Tier 2's three modules are all in.** `apps/api/apps/` now also has
   `academics`, `timetable` and `attendance`, attendance with all three of its
   halves: marking, leave, and staff attendance with reports (see above).
@@ -859,9 +998,10 @@ either this file or `project-status.md`.
   **no `raw()` helper** — a caller needing markup composes it from escaped
   parts, which puts the escaping in the diff rather than absent from it.
   `core.documents.render_pdf` is now the single WeasyPrint call site on the
-  platform, which matters because WeasyPrint's system libraries exist only in
-  `api.yml`'s `test` job: one place now has to remember that the import must
-  stay inside the function, instead of four. `core.exports.tabular` is
+  platform, which matters because WeasyPrint's system libraries were once
+  installed only in `api.yml`'s `test` job (the API image now carries them too,
+  via `WEASYPRINT_LIBS` in `apps/api/Dockerfile`): one place has to remember that
+  the import must stay inside the function, instead of four. `core.exports.tabular` is
   `apps/attendance/exports.py` moved unchanged — it was always generic over
   `list[dict]`, which is exactly what let it move.
 - **`core.idempotency` now exists** (PR 3): stores a colon-action's response
@@ -1055,22 +1195,19 @@ either this file or `project-status.md`.
   - **Campus-narrowed oversight.** `communication.thread.oversee` reads every thread in the
     tenant whatever the overseer's scope (ADR-0030); a campus-scoped principal sees every
     campus's threads.
-  - **Thread attachments are not checked against the uploader.** `post_message` requires a
-    ready `communication.thread-attachment` file of the tenant, but not one the sender uploaded,
-    so a participant could attach another user's upload if they had its id. The id is an
+  - **Staff thread attachments are not checked against the uploader.** `post_message` checks
+    that a guardian or student sends only a file they uploaded, but a staff sender needs only a
+    ready `communication.thread-attachment` file of the tenant, so a staff participant could
+    attach another user's upload if they had its id. The id is an
     unguessable UUID, and the purpose is module-gated, so `GET /files` does not list it to other
     staff; but every participant of a thread it was sent in sees the id, and could re-send it
     into another thread. `created_by == sender` is the full check.
-  - **Nobody can attach a file to a thread from the dashboard yet.** The API takes attachments
-    (ready `communication.thread-attachment` files, uploaded and confirmed through `/files`), but
-    the thread composer has no upload control, for staff or for guardians; attachments render
-    and download through the thread's own route and the oversight twin. A guardian or student
-    also cannot upload at the API: `platform.file.create` is staff-only
-    (`core/files/permissions.py`), so they can download what staff send them but not upload.
-    Parent-portal must grant the upload, scoped to the `communication.thread-attachment`
-    purpose, as it must for leave attachments. The staff composer's upload (the two-step
-    presigned flow, a chip per file, the same type and size limits) is a dashboard follow-up
-    that needs no backend change.
+  - **Staff cannot attach a file to a thread from the dashboard yet.** The API takes attachments
+    (ready `communication.thread-attachment` files, uploaded and confirmed through `/files`);
+    attachments render and download through the thread's own route and the oversight twin. The
+    portal composer and new-conversation form have the upload control since parent-portal PR B
+    (`allowAttachments`, the shared `AttachmentUploader`). The staff composer is the same
+    component with the prop on: a dashboard follow-up that needs no backend change.
   - **Messages carry `sender_id` only**, no sender name, so the dashboard's bubbles say "You" or
     "Participant". A name field on `MessageSerializer` (as `UserNamesModelSerializer` gives
     attendance) is what would let the thread show who wrote what.
@@ -1106,6 +1243,21 @@ either this file or `project-status.md`.
   - **A user's notification preferences** (`/notification-preferences`).
   - **The delivery logs and their summary report** (`/delivery-logs`, `:summary`).
 
+- **Parent portal PR B (guardian uploads, leave, vouchers, change password) left these out**
+  (`docs/03-modules/parent-portal.md` §20).
+  - **A guardian cannot withdraw an approved request.** The API allows `:cancel` on an approved
+    request before it starts (attendance.md §6); the portal offers Cancel on a pending one only,
+    as the brief asked. Offering it on an approved one before its start date is a portal-only
+    change.
+  - **A request cannot be edited.** `/leave-requests` has no `PATCH` (a decided date would move
+    under an approver): a guardian cancels and submits again.
+  - **The portal lists only `issued` vouchers.** A voided, expired or paid slip is no use to a
+    parent, so the list asks for `status=issued`; a parent who wants an older one asks the office.
+  - **Password change may leave other sessions signed in.** `ChangePasswordView`
+    (`core/rbac/views.py`) sets the password and records a security event; it calls nothing that
+    revokes the user's other refresh tokens. Whether a stolen session survives a change is worth
+    confirming, and revoking on change is a security-hardening follow-up, not a portal one.
+
 - **Parent portal PR 1 (backend) left these out** (`docs/03-modules/parent-portal.md` §20;
   plan `docs/superpowers/plans/2026-11-04-parent-portal.md`). The summary, the inbox, guardian
   notice browsing and the per-child timetable are built; the dashboard screens follow in PR 2.
@@ -1115,14 +1267,18 @@ either this file or `project-status.md`.
   - **`platform.notification.view` for custom tenant roles.** The key's default roles are
     `ALL_TENANT_ROLES`; a role a tenant defines later does not get it, so its holders get a 403
     on the inbox until someone grants it. Role management has to grant it by default.
-  - **Guardian uploads**: an attachment on a guardian's thread message, and a guardian's leave
-    attachment. `platform.file.create` is staff-only.
+  - **A guardian can upload a leave attachment but cannot download it again.**
+    `platform.file.view` is staff-only and there is no leave `:download` route, so the portal
+    cannot re-open the document it attached. A `:download` on `/leave-requests/{id}` gated by
+    the request's own scope is the fix. The portal's leave list only notes "Attachment
+    submitted" until then.
+  - **Portal users can create unlimited pending upload slots.** Only the per-user throttle
+    caps `POST /files` for a guardian or student; nothing expires or counts unconfirmed slots.
   - **Library and transport panels** (§5.8). Neither module is built.
   - **Announcement browse** for guardians and students. Announcements reach them only as inbox
     notifications.
   - **Notice attachments** in the portal shape (agent-lessons L29: no attachment field ships
     without its upload and download routes).
-  - **Admit-card download in the portal.**
   - **A results trend chart** (§5.4's term-over-term view).
   - **Attendance percentage for months other than the current one.** The summary computes the
     current month only.
@@ -1163,6 +1319,23 @@ either this file or `project-status.md`.
     `AuthenticatedUser` is hand-written, not generated (ADR-0005 wants the generated `User`),
     and the portal had to extend it with an optional `is_restricted_principal` because the
     dashboard's auth store is typed by it (ADR-0017). Replace it with the generated type.
+
+- **Parent portal PR 2 (dashboard) left these out** (`docs/03-modules/parent-portal.md` §20 "Built
+  (dashboard, PR 2)"). The portal screens are built; the live lane needs no new journey.
+  - **Portal report-card download button.** It waits on PR #154's
+    `POST /report-cards/{id}:download`; the portal lists no report cards until then.
+  - **Receipt `format` query param.** `GET /receipts/{id}/download` takes a `format`
+    (`pdf` or `thermal`) that is not in the OpenAPI contract, because the view declares no
+    `OpenApiParameter`. The dashboard hand-types `ReceiptFormat` until it does.
+  - **Urdu review.** The `portal` namespace in `apps/dashboard/messages/ur.json` was written
+    without a native speaker and needs their review.
+  - **Inbox mark-all-read scope.** On page 2 and later, Mark all read sends that page's newest
+    `created_at` as `before`. Derive `before` from page 1 instead, so it covers everything
+    that was on screen.
+  - **Attendance legend.** The legend badges carry the status name but no colour swatch.
+  - **Receipts lookup.** Receipts are fetched tenant-wide (up to 2000) and matched to invoices
+    by `invoice_no`; a partial payment's receipt is reachable only from the invoice detail, since
+    the fees list offers receipts on paid rows only. Filter by student once `/receipts` supports it.
 
 - **`eslint-plugin-playwright` for `e2e/`** (planned in the engineering-standards spec, PR 4) was
   deferred: adding a dependency means `pnpm install`, which runs PR 3's `prepare` script and

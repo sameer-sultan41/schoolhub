@@ -21,8 +21,6 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
 from django.db import IntegrityError, transaction
-from django.db.models import F
-from django.db.models.functions import Length
 from django.utils import timezone
 
 from apps.attendance import reports, uploads
@@ -48,12 +46,13 @@ from apps.school_organization import calendar
 from apps.school_organization.models import AcademicSession
 from apps.school_organization.services import assert_session_writable
 from apps.student_management.models import EnrollmentStatus, Student, StudentEnrollment
+from apps.student_management.services import enrollment_roll_order
 from apps.timetable.slots.services import effective_slots_for
 from core.api.exceptions import Conflict, DomainRuleViolation
 from core.files.services import assert_file_usable
 from core.imports.tabular import parse_rows
 from core.rbac.models import RecordScope
-from core.rbac.permissions import scopes_for
+from core.rbac.permissions import is_restricted_principal, scopes_for
 from core.tenancy.features import is_feature_enabled
 from core.tenancy.models import TenantSettings
 
@@ -414,12 +413,7 @@ def roster_enrollments(*, section: Section, session: AcademicSession) -> list[St
             student__deleted_at__isnull=True,
         )
         .select_related("student")
-        .order_by(
-            Length("roll_number").asc(nulls_last=True),
-            F("roll_number").asc(nulls_last=True),
-            "student__first_name",
-            "student__last_name",
-        )
+        .order_by(*enrollment_roll_order())
     )
 
 
@@ -1244,7 +1238,12 @@ def submit_leave_request(
             {"attachment_file_id": f"'{leave_type.name}' requires a supporting document."}
         )
     if attachment_file is not None:
-        assert_file_usable(file=attachment_file, purpose=uploads.LEAVE_ATTACHMENT.key)
+        assert_file_usable(
+            file=attachment_file,
+            purpose=uploads.LEAVE_ATTACHMENT.key,
+            uploaded_by=requesting_user.pk if is_restricted_principal(requesting_user) else None,
+            field="attachment_file_id",
+        )
 
     assert_no_overlapping_leave(student=student, start=start_date, end=end_date)
 

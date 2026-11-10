@@ -1,4 +1,5 @@
 import { z } from "zod";
+
 import { PASSWORD_MIN_LENGTH } from "./auth-constant";
 
 /**
@@ -45,3 +46,36 @@ export function createForgotPasswordSchema(messages: { invalidEmail: string }) {
 }
 
 export type ForgotPasswordValues = z.infer<ReturnType<typeof createForgotPasswordSchema>>;
+
+/**
+ * The change-password form. Mirrors the server's length rule so the user hears it at once; the
+ * server's own validators (common or numeric passwords) stay the authority and answer on
+ * `new_password`. The confirmation exists only here: it is never sent.
+ */
+export function createChangePasswordSchema(messages: {
+  currentRequired: string;
+  newTooShort: string;
+  confirmMismatch: string;
+  sameAsCurrent: string;
+}) {
+  return z
+    .object({
+      current_password: z.string().min(1, messages.currentRequired),
+      new_password: z.string().min(PASSWORD_MIN_LENGTH, messages.newTooShort),
+      confirm_password: z.string(),
+    })
+    .superRefine((values, ctx) => {
+      if (values.confirm_password !== values.new_password) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["confirm_password"],
+          message: messages.confirmMismatch,
+        });
+      }
+      if (values.current_password && values.new_password === values.current_password) {
+        ctx.addIssue({ code: "custom", path: ["new_password"], message: messages.sameAsCurrent });
+      }
+    });
+}
+
+export type ChangePasswordFormValues = z.infer<ReturnType<typeof createChangePasswordSchema>>;

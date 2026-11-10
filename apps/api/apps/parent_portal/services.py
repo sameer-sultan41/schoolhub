@@ -117,6 +117,7 @@ def build_dashboard(*, user, today: datetime.date | None = None) -> dict:
         unread_threads = unread_thread_count(user, restricted=is_restricted_principal(user))
 
     return {
+        "as_of": today,
         "children": [
             {
                 "student": _student_summary(child),

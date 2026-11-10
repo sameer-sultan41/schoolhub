@@ -11,7 +11,7 @@ from rest_framework import serializers
 from apps.school_organization.tests.factories import TenantFactory
 from core.files.models import FileStatus
 from core.files.serializers import SignedFileURLField
-from core.files.services import get_display_url
+from core.files.services import get_display_url, servable_file
 from core.files.tests.factories import FileFactory
 from core.tenancy.context import tenant_context
 
@@ -64,6 +64,20 @@ class DisplayUrlTests(TestCase):
         for case, file in cases.items():
             with self.subTest(case):
                 self.assertIsNone(get_display_url(file))
+
+    def test_only_a_present_ready_live_file_is_servable(self) -> None:
+        """The predicate the resource `:download` actions share with the display link."""
+        ready = self._file(status=FileStatus.READY)
+        self.assertEqual(servable_file(ready), ready)
+        cases = {
+            "missing": None,
+            "pending": self._file(status=FileStatus.PENDING),
+            "quarantined": self._file(status=FileStatus.QUARANTINED),
+            "deleted": self._file(status=FileStatus.READY, deleted_at=timezone.now()),
+        }
+        for case, file in cases.items():
+            with self.subTest(case):
+                self.assertIsNone(servable_file(file))
 
     def test_the_field_emits_the_link_or_null(self) -> None:
         file = self._file(status=FileStatus.READY)

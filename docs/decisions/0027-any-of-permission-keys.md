@@ -49,3 +49,36 @@ the body.
   (`preview`, `validate`, `download`); closing the gap needs an allowlist of them
   (`docs/deferred-work.md`).
 - The permission is not published in the OpenAPI schema, so the generated contract is unchanged.
+
+## Amendment (2026-11-02): one `PATCH`, a key per field
+
+`PATCH /report-cards/{id}` has two writers of two different fields: a class teacher writes
+`class_teacher_remarks` (`exams.report-card.create`) and a principal writes `principal_remarks`
+(`exams.report-card.publish`), per `examinations.md` §4. One key cannot express that, and mapping the
+action to either key alone refuses the other writer.
+
+**Rule.** The action declares `AnyOf` of every field's key, so the class lets in anyone who may write
+*some* field. The viewset then names the key each writable field needs (`REMARK_FIELD_KEYS` on
+`ReportCardViewSet`) and checks it in `check_object_permissions`: a body that includes a field whose key
+the caller lacks is a **403 naming that field** in `error.details`, and nothing is written, however many
+other fields in the body the caller may write.
+
+- The field check runs **after** the scoped lookup, so a card outside the caller's tenant or record scope
+  is still a 404 (invariant 2) rather than a 403 that confirms it exists; and **before** the serializer, so
+  a refused field never reaches validation or the database.
+- A whole-body refusal, not a silent drop of the refused field: a client that sent a field and got a 200
+  would believe it saved.
+- The declared `AnyOf` stays true: every member is a key that writes something on the route, and the
+  contract tests still see both.
+
+**Alternatives considered.**
+
+- **Two actions, one per field** — why not: the fields are one resource's attributes, and splitting them
+  into colon-actions would make a plain update look like a domain verb.
+- **Make the serializer drop fields the caller may not write** — why not: a silent drop is the 200
+  above, and the rule would live in a serializer nobody reads for permissions.
+- **Map the PATCH to the view key and check both keys in the body** — why not: the gap this ADR closed.
+
+**Consequence.** A future route whose fields have different writers copies this shape: `AnyOf` of the
+field keys on the action, a field-to-key map on the viewset, and the check in `check_object_permissions`,
+with a test per direction.

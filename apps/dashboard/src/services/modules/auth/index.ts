@@ -1,5 +1,6 @@
 import {
   acceptInvitation,
+  changePassword,
   confirmPasswordReset,
   fetchCurrentUser,
   login,
@@ -14,6 +15,7 @@ export const AuthService = {
   logout,
   fetchCurrentUser,
   restoreSession,
+  changePassword,
   previewInvitation,
   acceptInvitation,
   requestPasswordReset,
@@ -21,6 +23,7 @@ export const AuthService = {
 };
 export type {
   AuthenticatedUser,
+  ChangePasswordInput,
   InvitationPreview,
   LoginCredentials,
   LoginResponse,

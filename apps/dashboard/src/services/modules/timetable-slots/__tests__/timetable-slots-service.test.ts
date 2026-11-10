@@ -127,6 +127,15 @@ describe("timetable-slots-service", () => {
     });
   });
 
+  it("reads one child's week for a guardian with student_id", async () => {
+    const { fetchMyTimetable } = await import("../timetable-slots-service");
+    mockGet.mockResolvedValue({ data: [], meta: {} });
+
+    await fetchMyTimetable(undefined, "stu-1");
+
+    expect(mockGet).toHaveBeenCalledWith("/timetables/my", { query: { student_id: "stu-1" } });
+  });
+
   it("reads one teacher's live published classes on a weekday", async () => {
     const { fetchTeacherClassesOn } = await import("../timetable-slots-service");
     mockGet.mockResolvedValue({ data: [{ id: "s1" }], meta: {} });

@@ -74,6 +74,8 @@ class ChildrenTests(ParentPortalTestCase):
             },
         )
         self.assertEqual(set(first), {"student", "attendance", "fees", "latest_result"})
+        # The school's local date, not the server's UTC date.
+        self.assertEqual(data["as_of"], TODAY.isoformat())
         self.assertIsNotNone(first["attendance"])
         self.assertIsNotNone(first["fees"])
         # No published result yet: the card is on, it just has nothing to show.

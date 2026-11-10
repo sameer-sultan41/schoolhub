@@ -15,6 +15,7 @@ LEAVE_ATTACHMENT = registry.register(
     "A document supporting a leave request — typically a medical note (§6).",
     mime_types={"image/jpeg", "image/png", "application/pdf"},
     max_size_bytes=10 * MEGABYTE,
+    portal_uploadable=True,
 )
 
 # Server-generated, never client-uploaded — `create_ready_file` writes it with

@@ -5,10 +5,15 @@ import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { Alert, Button, Checkbox, Label, Textarea } from "@schoolhub/ui";
 
+import { AttachmentUploader, type UploadedAttachment } from "@/components/attachment-uploader";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { HTTP_STATUS_CONFLICT } from "@/lib/constants";
 import { foldUnknownFieldErrors, NON_FIELD, resolveErrorMessage } from "@/lib/error-message";
 import { ApiError, Services } from "@/services";
+import {
+  THREAD_ATTACHMENT_MAX_FILES,
+  THREAD_ATTACHMENT_PURPOSE,
+} from "@/services/modules/files/files-constant";
 import { MESSAGE_BODY_MAX_LENGTH } from "@/services/modules/message-threads/message-threads-constant";
 
 import { useInvalidateThreads } from "./use-invalidate-threads";
@@ -17,6 +22,8 @@ export interface ReplyComposerProps {
   threadId: string;
   /** A closed thread takes no reply: sending is disabled (the thread view offers Reopen). */
   isClosed: boolean;
+  /** The parent portal: a reply can carry files (a guardian may upload them). */
+  allowAttachments?: boolean;
 }
 
 /**
@@ -24,13 +31,19 @@ export interface ReplyComposerProps {
  * read from `/auth/me`'s `is_restricted_principal`; the server's `422` for a guardian's or
  * student's internal note stays the enforcement.
  */
-export function ReplyComposer({ threadId, isClosed }: ReplyComposerProps) {
+export function ReplyComposer({
+  threadId,
+  isClosed,
+  allowAttachments = false,
+}: ReplyComposerProps) {
   const t = useTranslations("communication.messages.composer");
   const tErrors = useTranslations("errors");
   const { data: user } = useCurrentUser();
   const invalidate = useInvalidateThreads();
   const [body, setBody] = useState("");
   const [isInternalNote, setIsInternalNote] = useState(false);
+  const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
   const canWriteInternalNote = user?.is_restricted_principal === false;
 
   const send = useMutation({
@@ -38,10 +51,12 @@ export function ReplyComposer({ threadId, isClosed }: ReplyComposerProps) {
       Services.messageThreads.postMessage(threadId, {
         body: body.trim(),
         is_internal_note: canWriteInternalNote && isInternalNote,
+        ...(attachments.length > 0 ? { attachments: attachments.map((item) => item.id) } : {}),
       }),
     onSuccess: () => {
       setBody("");
       setIsInternalNote(false);
+      setAttachments([]);
       invalidate();
     },
     onError: (error) => {
@@ -50,7 +65,7 @@ export function ReplyComposer({ threadId, isClosed }: ReplyComposerProps) {
     },
   });
 
-  const canSend = !isClosed && body.trim().length > 0 && !send.isPending;
+  const canSend = !isClosed && body.trim().length > 0 && !send.isPending && !isUploading;
 
   function handleSubmit(event: SyntheticEvent) {
     event.preventDefault();
@@ -75,6 +90,18 @@ export function ReplyComposer({ threadId, isClosed }: ReplyComposerProps) {
           setBody(event.target.value);
         }}
       />
+      {allowAttachments && (
+        <AttachmentUploader
+          purpose={THREAD_ATTACHMENT_PURPOSE}
+          label={t("attachments")}
+          value={attachments}
+          onChange={setAttachments}
+          onUploadingChange={setIsUploading}
+          multiple
+          maxFiles={THREAD_ATTACHMENT_MAX_FILES}
+          disabled={isClosed || send.isPending}
+        />
+      )}
       <div className="flex items-center gap-3">
         {canWriteInternalNote && (
           <div className="flex items-center gap-2">

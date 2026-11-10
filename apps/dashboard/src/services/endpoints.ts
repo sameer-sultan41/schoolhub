@@ -19,6 +19,7 @@ export const endpoints = {
     login: "/login",
     logout: "/logout",
     me: "/auth/me",
+    changePassword: "/auth/change-password",
     refresh: "/refresh",
     /** Unauthenticated, straight to the API (no refresh cookie involved): the emailed
      * invitation and reset links (ADR-0033). Colon-actions, not nested paths. */
@@ -92,6 +93,8 @@ export const endpoints = {
     sections: "/sections",
     subjects: "/subjects",
     academicSessions: "/academic-sessions",
+    /** Filtered by `academic_session_id`; governed by the academic-session permission keys. */
+    terms: "/terms",
   },
   /** Curriculum mapping (`class_subjects` in the database) is served at `/class-subjects`
    * (`apps/api/apps/academics/curriculum/urls.py`). */
@@ -147,6 +150,10 @@ export const endpoints = {
   attendanceReports: {
     summary: "/reports/attendance-summary",
   },
+  /** `ExamReportView`: `GET` runs a report inline (a `202` + job past 1000 rows), `POST` exports. */
+  examReports: {
+    summary: "/reports/exam-summary",
+  },
   /** `apps/api/apps/attendance/urls.py`: the register is routed before the router; check-out
    * is a colon-action on the row. */
   staffAttendance: {
@@ -162,11 +169,100 @@ export const endpoints = {
   /** `apps/api/apps/attendance/urls.py`: approve and reject are colon-actions on the row. */
   leaveRequests: {
     list: "/leave-requests",
+    /** `:cancel` is the requester's withdrawal, a colon-action like approve and reject. */
+    cancel: (id: string) => `/leave-requests/${id}:cancel`,
     action: (id: string, action: "approve" | "reject") => `/leave-requests/${id}:${action}`,
   },
   /** `GET /leave-types`: the read-only catalogue, keyed `attendance.leave-request.view`. */
   leaveTypes: {
     list: "/leave-types",
+  },
+  /** `apps/api/apps/examinations`: the scales, their bands and the colon-action. */
+  gradingScales: {
+    list: "/grading-scales",
+    detail: (id: string) => `/grading-scales/${id}`,
+    /** Colon-action, not a nested path: the registered route is `/grading-scales/{id}:set-default`. */
+    setDefault: (id: string) => `/grading-scales/${id}:set-default`,
+    bands: (scaleId: string) => `/grading-scales/${scaleId}/grade-bands`,
+    band: (scaleId: string, bandId: string) => `/grading-scales/${scaleId}/grade-bands/${bandId}`,
+  },
+  /** `/question-banks` (`exams.question-bank.*`), its nested questions and two colon-actions. */
+  questionBanks: {
+    list: "/question-banks",
+    detail: (id: string) => `/question-banks/${id}`,
+    /** Colon-action: `202` + a job rendering the paper PDF, keyed `exams.question-bank.update`. */
+    assemblePaper: (id: string) => `/question-banks/${id}:assemble-paper`,
+    questions: (bankId: string) => `/question-banks/${bankId}/questions`,
+    question: (bankId: string, id: string) => `/question-banks/${bankId}/questions/${id}`,
+    /** Colon-action keyed `exams.question.approve`: an AI draft into the bank's usable pool. */
+    approveQuestion: (bankId: string, id: string) =>
+      `/question-banks/${bankId}/questions/${id}:approve`,
+  },
+  /** `/exams`: the exam, keyed `exams.exam.*`. */
+  exams: {
+    list: "/exams",
+    detail: (id: string) => `/exams/${id}`,
+    /** The exam's clash list, keyed `exams.schedule.view`. */
+    scheduleConflicts: (id: string) => `/exams/${id}/schedule-conflicts`,
+    /** Colon-action, not a nested path: the registered route is `/exams/{id}:publish-schedule`. */
+    publishSchedule: (id: string) => `/exams/${id}:publish-schedule`,
+    /** Colon-action: `202` + a render job, keyed `exams.admit-card.issue`. */
+    issueAdmitCards: (id: string) => `/exams/${id}:issue-admit-cards`,
+    /** Per (exam-subject, section) entry counts, keyed `exams.marks.view`. */
+    marksProgress: (id: string) => `/exams/${id}/marks-progress`,
+    /** Colon-actions on the exam's results: processing is `202` + a job (`exams.result.create`);
+     * approve and send back take `exams.result.approve`, publish `exams.result.publish`. */
+    processResults: (id: string) => `/exams/${id}:process-results`,
+    approveResults: (id: string) => `/exams/${id}:approve-results`,
+    sendResultsBack: (id: string) => `/exams/${id}:send-results-back`,
+    publishResults: (id: string) => `/exams/${id}:publish-results`,
+    /** Colon-actions on the exam's report cards: generating is `202` + a job
+     * (`exams.report-card.create`), publishing takes `exams.report-card.publish`. */
+    generateReportCards: (id: string) => `/exams/${id}:generate-report-cards`,
+    publishReportCards: (id: string) => `/exams/${id}:publish-report-cards`,
+  },
+  /** `/results`: an exam's processed results, keyed `exams.result.*`. */
+  results: {
+    list: "/results",
+    /** Colon-action, keyed `exams.result.publish`; the body carries the reason. */
+    withhold: (id: string) => `/results/${id}:withhold`,
+  },
+  /** `/report-cards`: an exam's cards, keyed `exams.report-card.*`; the PATCH writes remarks only. */
+  reportCards: {
+    list: "/report-cards",
+    detail: (id: string) => `/report-cards/${id}`,
+    /** Colon-action, keyed `exams.report-card.view`: a signed link to the card's own PDF. */
+    download: (id: string) => `/report-cards/${id}:download`,
+  },
+  /** `/admit-cards`: an exam's issued cards, keyed `exams.admit-card.*`. */
+  admitCards: {
+    list: "/admit-cards",
+    /** Colon-action, keyed `exams.admit-card.issue`; the body carries the reason. */
+    revoke: (id: string) => `/admit-cards/${id}:revoke`,
+    /** Colon-action, keyed `exams.admit-card.view`: a signed link to the card's own PDF. */
+    download: (id: string) => `/admit-cards/${id}:download`,
+  },
+  /** `/marks`: one section's grid (`exams.marks.view`), its whole-grid save (`exams.marks.create`)
+   * and the sheet import (`exams.marks.import`, multipart, `202` + job). */
+  marks: {
+    /** The entered marks, filtered (`exam_id`, `student_id`): a student's subject marks. */
+    list: "/marks",
+    grid: "/marks/grid",
+    bulkEntry: "/marks:bulk-entry",
+    imports: "/marks-imports",
+  },
+  /** `/exam-schedules`: an exam's sittings, keyed `exams.schedule.*`. */
+  examSchedules: {
+    list: "/exam-schedules",
+    detail: (id: string) => `/exam-schedules/${id}`,
+  },
+  /** `/exam-subjects`: one exam's per-class marks structure; writes are keyed `exams.exam.update`. */
+  examSubjects: {
+    list: "/exam-subjects",
+    detail: (id: string) => `/exam-subjects/${id}`,
+    /** Colon-actions keyed `exams.marks.lock`; the unlock is audited. */
+    lockMarks: (id: string) => `/exam-subjects/${id}:lock-marks`,
+    unlockMarks: (id: string) => `/exam-subjects/${id}:unlock-marks`,
   },
   /** `apps/api/apps/timetable/rooms/urls.py`. */
   rooms: {
@@ -273,5 +369,43 @@ export const endpoints = {
     scope: "/broadcasts:scope",
     preview: "/broadcasts:preview",
     emergency: "/broadcasts:emergency",
+  },
+  /** `GET /parent-portal/dashboard`: the guardian's or student's home summary. */
+  parentPortal: {
+    dashboard: "/parent-portal/dashboard",
+  },
+  /** `/notifications`: the caller's own inbox; the actions are colon-actions
+   * (`apps/api/core/notifications/urls.py`). */
+  notifications: {
+    list: "/notifications",
+    markRead: (id: string) => `/notifications/${id}:mark-read`,
+    markAllRead: "/notifications:mark-all-read",
+    unreadCount: "/notifications:unread-count",
+  },
+  /** `/notification-preferences`: the caller's category x channel matrix (`GET`, `PATCH`). */
+  notificationPreferences: {
+    list: "/notification-preferences",
+  },
+  /** `/notices`: a guardian reads and acknowledges; staff manage (not called here). */
+  notices: {
+    list: "/notices",
+    detail: (id: string) => `/notices/${id}`,
+    acknowledge: (id: string) => `/notices/${id}:acknowledge`,
+  },
+  /** `/fee-invoices`: read-only for a guardian (published, non-draft rows only). */
+  feeInvoices: {
+    list: "/fee-invoices",
+    detail: (id: string) => `/fee-invoices/${id}`,
+  },
+  /** `/vouchers`: a guardian reads the slips of their own child's invoices; `download` streams
+   * a PDF (`?format=pdf|thermal`). */
+  vouchers: {
+    list: "/vouchers",
+    download: (id: string) => `/vouchers/${id}/download`,
+  },
+  /** `/receipts`; `download` streams a PDF (`?format=pdf|thermal`). */
+  receipts: {
+    list: "/receipts",
+    download: (id: string) => `/receipts/${id}/download`,
   },
 } as const;

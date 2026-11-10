@@ -48,10 +48,13 @@ from apps.examinations.tests.factories import (
     StudentFactory,
     SubjectFactory,
     TenantFactory,
+    authenticate,
     complete_scale,
     enable_feature,
     exam_week,
+    grant,
 )
+from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
 SCALES = "/api/v1/grading-scales"
@@ -104,6 +107,7 @@ class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
             foreign_section = SectionFactory(
                 tenant=self.other_tenant, school_class=school_class, campus=foreign_campus
             )
+            self.foreign_section = foreign_section
             foreign_room = RoomFactory(tenant=self.other_tenant, campus=foreign_campus)
             self.foreign_exam.starts_on = timezone.localdate()
             self.foreign_exam.ends_on = timezone.localdate() + datetime.timedelta(days=5)
@@ -232,6 +236,34 @@ class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
 
         ids = {row["id"] for row in response.json()["data"]}
         self.assertNotIn(str(self.foreign_exam.pk), ids)
+
+    def test_an_assigned_teacher_never_reaches_another_tenant_s_exams(self) -> None:
+        """The `assigned` hooks resolve teaching through tenant-scoped managers,
+        so a foreign exam is neither listed nor retrievable — 404, not 403."""
+        grant(
+            self.subject_teacher_user,
+            "exams.exam.view",
+            "exams.grading-scale.view",
+            scope=RecordScope.ASSIGNED,
+        )
+        authenticate(self.client, self.subject_teacher_user)
+
+        for url in (EXAMS, EXAM_SUBJECTS, SCALES):
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+                ids = {row["id"] for row in response.json()["data"]}
+                self.assertFalse(
+                    ids
+                    & {
+                        str(self.foreign_exam.pk),
+                        str(self.foreign_exam_subject.pk),
+                        str(self.foreign_scale.pk),
+                    }
+                )
+        self.assert404(self.client.get(f"{EXAMS}/{self.foreign_exam.pk}"))
+        self.assert404(self.client.get(f"{EXAM_SUBJECTS}/{self.foreign_exam_subject.pk}"))
+        self.assert404(self.client.get(f"{SCALES}/{self.foreign_scale.pk}"))
 
     def test_creating_an_exam_in_a_foreign_session_does_not_validate(self) -> None:
         """A 400, not a 404: the session id arrives in the body and fails the
@@ -364,6 +396,28 @@ class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
             )
         )
 
+    def test_reading_a_foreign_exam_s_clash_list_is_a_404(self) -> None:
+        self.assert404(self.client.get(f"{EXAMS}/{self.foreign_exam.pk}/schedule-conflicts"))
+
+    def test_downloading_a_foreign_admit_card_is_a_404(self) -> None:
+        """The foreign card has a rendered file, so the 404 can only come from
+        tenant scoping, not from the card having nothing to download."""
+        from apps.examinations import uploads
+        from core.files.services import create_ready_file
+
+        with tenant_context(self.other_tenant.id):
+            self.foreign_card.file = create_ready_file(
+                tenant_id=self.other_tenant.pk,
+                purpose=uploads.ADMIT_CARD.key,
+                original_name="admit-card.pdf",
+                mime_type="application/pdf",
+                data=b"%PDF-stub",
+                actor_id=self.user.pk,
+            )
+            self.foreign_card.save(update_fields=["file"])
+
+        self.assert404(self.client.post(f"{ADMIT_CARDS}/{self.foreign_card.pk}:download"))
+
     def test_scheduling_against_a_foreign_exam_subject_does_not_validate(self) -> None:
         """A 400, not a 404: the exam-subject id arrives in the body and fails
         the serializer's tenant-scoped queryset."""
@@ -438,6 +492,7 @@ class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
             BULK_ENTRY,
             {
                 "exam_subject_id": str(self.foreign_exam_subject.pk),
+                "section_id": str(self.section.pk),
                 "entries": [{"student_id": str(self.students[0].pk), "theory_marks": "50.00"}],
             },
             format="json",
@@ -454,6 +509,40 @@ class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
     def test_unlocking_a_foreign_exam_subject_is_a_404(self) -> None:
         self.assert404(
             self.client.post(f"/api/v1/exam-subjects/{self.foreign_exam_subject.pk}:unlock-marks")
+        )
+
+    def test_reading_a_foreign_exam_subject_s_grid_is_a_404(self) -> None:
+        self.assert404(
+            self.client.get(
+                f"{MARKS}/grid",
+                {
+                    "exam_subject_id": str(self.foreign_exam_subject.pk),
+                    "section_id": str(self.foreign_section.pk),
+                },
+            )
+        )
+
+    def test_reading_the_grid_of_a_foreign_section_is_a_404(self) -> None:
+        """Own exam-subject, another school's section."""
+        with tenant_context(self.tenant.id):
+            own_exam = ExamFactory(
+                tenant=self.tenant, academic_session=self.session, grading_scale=self.scale
+            )
+            own_subject = ExamSubjectFactory(
+                tenant=self.tenant,
+                exam=own_exam,
+                school_class=self.school_class,
+                subject=self.subject,
+            )
+
+        self.assert404(
+            self.client.get(
+                f"{MARKS}/grid",
+                {
+                    "exam_subject_id": str(own_subject.pk),
+                    "section_id": str(self.foreign_section.pk),
+                },
+            )
         )
 
     def test_reading_a_foreign_exam_s_marks_progress_is_a_404(self) -> None:
@@ -539,6 +628,27 @@ class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
     def test_publishing_a_foreign_exam_s_report_cards_is_a_404(self) -> None:
         self.assert404(self.client.post(f"{EXAMS}/{self.foreign_exam.pk}:publish-report-cards"))
 
+    def test_downloading_a_foreign_report_card_is_a_404(self) -> None:
+        """The foreign card is published with a rendered file, so the 404 can only
+        come from tenant scoping."""
+        from apps.examinations import uploads
+        from apps.examinations.models import ReportCardStatus
+        from core.files.services import create_ready_file
+
+        with tenant_context(self.other_tenant.id):
+            self.foreign_report_card.file = create_ready_file(
+                tenant_id=self.other_tenant.pk,
+                purpose=uploads.REPORT_CARD.key,
+                original_name="report-card.pdf",
+                mime_type="application/pdf",
+                data=b"%PDF-stub",
+                actor_id=self.user.pk,
+            )
+            self.foreign_report_card.status = ReportCardStatus.PUBLISHED
+            self.foreign_report_card.save(update_fields=["file", "status"])
+
+        self.assert404(self.client.post(f"{REPORT_CARDS}/{self.foreign_report_card.pk}:download"))
+
     # --- question banks ---------------------------------------------------
 
     def test_retrieving_a_foreign_bank_is_a_404(self) -> None:
@@ -552,6 +662,15 @@ class ExaminationsCrossTenantTests(ExaminationsAPITestCase):
 
     def test_listing_questions_under_a_foreign_bank_is_a_404(self) -> None:
         self.assert404(self.client.get(f"{BANKS}/{self.foreign_bank.pk}/questions"))
+
+    def test_adding_a_question_to_a_foreign_bank_is_a_404(self) -> None:
+        self.assert404(
+            self.client.post(
+                f"{BANKS}/{self.foreign_bank.pk}/questions",
+                {"question_text": "2 + 2?", "question_type": "short_answer"},
+                format="json",
+            )
+        )
 
     def test_a_foreign_question_addressed_under_our_own_bank_is_a_404(self) -> None:
         """A question id from another tenant, under a bank this caller does own

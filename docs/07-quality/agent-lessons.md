@@ -229,7 +229,8 @@
 ### L32. Never render a raw API enum value as user-visible text
 
 - **Mistake.** The broadcast preview listed channels by their API ids (`in_app`, `sms`), which reached the screen as written (fixed in `a7e49cb5`).
-- **Check.** Every enum a user can see (channel, status, type, role) goes through an i18n label map in both locale files, with a fallback for a value the map lacks, and a spec asserts the label, not the id.
+- **Mistake (again, parent portal PR 2).** `NOTIFICATION_CATEGORIES` was a hand-kept array that a new enum member did not break, and every portal label map (category, priority, channel, notice type, fee status, result outcome, attendance status) indexed the messages directly with no fallback, so a value the server adds first would render a raw message key. Fixed by deriving the list from a `Record` over the generated enum and routing every label through one helper (`features/portal/enum-label.ts`).
+- **Check.** Every enum a user can see (channel, status, type, role) goes through an i18n label map in both locale files, and both halves hold: (1) any runtime list of the values (columns, legend, filter options) is derived from a `Record<GeneratedEnum, …>`, never a hand-kept array or an `as` cast, so a new member fails to compile; (2) rendering falls back to the humanised value when the map or the messages lack it (`t.has(key) ? t(key) : humanizeSnakeCase(value)`), because the server can ship a value before the dashboard does. A spec asserts the label, not the id.
 
 ### L33. A "do it once" guard must be released when the call fails
 
@@ -343,6 +344,87 @@
 - **Check.** When a record owns a login, list every route that ends the record (`:exit`,
   `:withdraw`, `DELETE`, imports) and route each through one access-ending service. Test the
   `DELETE` as well as the colon-action.
+### L44. Granting a role an action key means checking the view's read key too
+
+- **Mistake.** Parent-portal PR B's backend gave guardians and students `platform.file.create` so they could upload, but `FileViewSet` declares `create` and `confirm` under that key while its read key `platform.file.view` stays staff-only. The tests hand-granted keys to a user, so every one passed; only CI's `DefaultRoleReadKeyTests` (ADR-0031 decision 3) caught it. The first fix exempted `confirm` alone because the CI log truncated the offender list (`[1393 chars]`), hiding `create`, so CI failed a second time.
+- **Check.** When a role gains an action key, read the viewset it reaches for its read key and `scope_read_exempt_actions`, and prove the path with the role's real keys (`keys_for_role`), not a hand-granted user. When a list assertion fails, read every element (the full `Diff` lines in the log) before fixing.
+
+### L45. A "matches X" claim must be checked against X's own predicate
+
+- **Mistake.** The examinations dashboard's scope ruling and `examinations.md` §20 said the class teacher's exam scope was "not session-limited, matching `Marks`", and that narrowing it "would change what `Marks` returns". `Marks` joins through the student's *active enrolment* in the homeroom section (`student__enrollments__section_id`); `Exam`/`ExamSubject` join through the exam-subject's *class* (`school_class_id`) with no session — different joins, so the claim was false and last session's exams leaked to the class teacher (PR A final review).
+- **Check.** Before writing "matches X" or "would change X" in a ruling, doc or docstring, open both predicates and name the join each uses; if they differ, say what each actually filters on and test the case where they diverge (here, the same class in another session).
+- **Recurred in PR B.** `examinations.md` §20 said a class teacher sees a section's sittings "only through a homeroom with active enrolments in the exam's session, so last session's homeroom opens nothing", and shipped with no test of another session's allocation or homeroom; the sibling `AdmitCard` scope was not session-bound at all (PR B final review). A scope claim in a doc ships with the test of the case it rules out.
+
+### L46. A page-number list's default ordering must be total
+
+- **Mistake.** `ExamViewSet.ordering` was `["-starts_on", "name"]`. Names are unique only per session and an undated draft has no `starts_on`, so two such rows tie and Postgres may return them in either order on each page query — a row repeats on page 2 or never appears (PR A final review). `StableOrderingFilter` appends `pk`, but the declared default did not say so.
+- **Check.** End every list's default `ordering` in a unique column (`id`), and pin it with a test of two rows that tie on every other key, paged with `page_size=1`, asserting the two pages give distinct ids. Mirror the same order in the e2e mock.
+
+### L47. An e2e-only seed command must refuse a non-e2e tenant
+
+- **Mistake.** `seed_e2e_examinations --tenant <slug>` would rewrite *any* tenant's default grading scale; nothing restricted it to the e2e tenants `seed_e2e_data` creates (PR A final review).
+- **Check.** A command that seeds e2e data checks `--tenant` against `E2E_TENANT_SLUG`/`E2E_OTHER_TENANT_SLUG` (`core/rbac/management/commands/seed_e2e_data.py`) before touching the database, raises `CommandError` otherwise, and has a test that a non-e2e tenant is refused and left untouched.
+
+### L48. An e2e file imports only types from `@schoolhub/types`
+
+- **Mistake.** `e2e/tests/live/api/exams-setup.spec.ts` imported the function `isOffsetPagination` from `@schoolhub/types`. Playwright loads that package as CommonJS, so the named import threw at load, every live spec went with it, and `e2e-live` reported zero tests (PR #147). The mocked lane never loads that spec, so the PR's CI stayed green.
+- **Check.** In `e2e/`, import from `@schoolhub/types` with `import type` only; check a runtime value inline (e.g. `toHaveProperty("total_pages")`). Dispatch `e2e-live` on the branch before calling a PR that touches `e2e/tests/live/` done.
+
+### L49. A background job's write must not overwrite state a user can change mid-job
+
+- **Mistake.** `render_admit_cards_task` read the cards, rendered each PDF, then `card.save()`d `status=issued`. A card revoked while its PDF rendered was written back to `issued` with a downloadable file, undoing the revocation (PR B final review).
+- **Check.** A job that writes a row a user can also change saves with a conditional `UPDATE` (`filter(...).exclude(<user-set state>).update(...)`, acting on 0 rows) or re-reads under `select_for_update`. Test it by changing the row between the job's read and its write (patch the slow step's side effect to make the change) and assert the user's change survives.
+
+### L50. "The student's enrolment in session X" does not filter `status=active`
+
+- **Mistake.** The admit-card section (serializer, viewset `Prefetch`, `section_id` filter) read the student's *active* enrolment in the exam's session. Promotion turns that row `promoted`/`retained`/`graduated`, so every card of a closed session lost its section (PR B final review).
+- **Check.** When the session is already pinned, match on session and `deleted_at IS NULL` only: `StudentEnrollment` is one row per (student, session). Keep `status=active` for "where is the student now". Test by promoting the student and asserting the historical read still resolves.
+
+### L51. An action that addresses a parent by id resolves it through the record scope
+
+- **Mistake.** `schedule-conflicts`, `:publish-schedule` and `:issue-admit-cards` looked the exam up with `get_object_or_404(Exam.objects.alive(), pk=pk)`: tenant-scoped, but not record-scoped, so an `assigned` teacher could read or act on any exam of the school by id (PR B final review).
+- **Check.** Grep for `get_object_or_404(<Model>.objects.alive()` in views you touch; resolve the parent through `scope_queryset(...)` with the parent viewset's own `own_field`/`campus_field` (out of scope is a 404), and test that an unassigned caller gets a 404 while an assigned one gets through.
+
+### L52. A check-then-write across rows locks the parent every writer shares, in the gate and in each writer
+
+- **Mistake.** `:publish-schedule` locked the exam and read the clash list, but sitting create, update and delete never took that lock, so a sitting saved mid-publish committed unseen and the exam went to `scheduled` over a hard clash. `issue_admit_cards` read the existing cards with no lock, so two runs both saw none missing and both reported `issued = N` (PR #149 review).
+- **Check.** When a gate reads child rows and decides on them, find every writer of those rows and lock the same parent (`lock_exam`, `select_for_update()` on the parent, several parents in pk order) before it writes, as well as in the gate. When the gate also reads rows of *other* parents (a clash check across exams), lock their common ancestor instead, here a per-tenant advisory lock (`core.tenancy.locks.advisory_xact_lock`), taken before any row lock on every path. A count of rows "this run added" is then just what it inserted. Test each path with `CaptureQueriesContext`: a `FOR UPDATE` on the parent's table before the first read or write of the children.
+- **Mistake (again).** `POST /marks-imports` checked the lock, entry window and exam status once at upload, and `import_marks_task` read the exam-subject once at job start, so a `:lock-marks`, a closed window or a results approval while the job was queued or running went unseen and its rows kept writing marks into a final subject (PR #152 review). A job is the long form of this race: the gate a view asserts is stale by the time the task writes.
+- **Check (job).** For every task that writes, grep the gates its view asserted and re-check them in the task's per-row transaction under the parents' locks (`lock_subject_for_entry`); the view's check stays only as a fail-fast. Lock every parent whose state a gate reads, not just the nearest: the exam's status was read through an unlocked join until review. Use the weakest mode that still conflicts with the invalidator (`FOR KEY SHARE` against `FOR UPDATE`, `no_key=True`), because a plain `FOR UPDATE` blocks foreign-key inserts and deadlocked against sitting writes. Test by changing the parent after the upload and before the callbacks run (`captureOnCommitCallbacks`), and mid-file by wrapping the row function.
+
+### L53. A clean merge of two stacks can still break a call whose signature one side changed
+
+- **Mistake.** Merging `feat/exams-schedule` into the portal stack (PR C) raised no conflict in `scoped_exam()`, but the other side had made `scope_queryset(permission=)` required (#148), so five exam actions would 500. Only the pre-push mypy caught it. The first fix also added `exams.exam.view` on top of the route key, which 404'd a schedule-keyed teacher (`ExamLookupScopeTests`).
+- **Check.** After merging two branches, list the shared helpers either side changed (`git diff <base>...<other> -- core/`) and grep every new caller from the other side. When fixing such a caller, keep the behaviour that side's tests pin (here, the route key's own scope).
+
+### L54. A query parameter named `format` belongs to DRF unless the override is off
+
+- **Mistake.** Receipt and voucher downloads took `?format=pdf|thermal` (fees-finance §16), but DRF's `URL_FORMAT_OVERRIDE` read `format` as a renderer choice and 404'd before the view ran. Backend tests never sent the parameter, and the dashboard's Jest mocks did, so only parent-portal PR B's live voucher download caught it. Fixed by setting `URL_FORMAT_OVERRIDE = None` (the API renders JSON only).
+- **Check.** A backend test for any endpoint the spec gives query parameters sends those exact parameters; a mocked client call is not evidence the server accepts them.
+
+### L55. Every registered key has a view that reads it, and every read has a key of its own
+
+- **Mistake.** The marks reads (`GET /marks`, progress) had no view key and fell back to `exams.marks.create`, so `principal`, `vice_principal` and `school_admin`, who review marks, could not open them; `exams.marks.view` was added in examinations dashboard PR C. Meanwhile `exams.marks.update` is registered for `teacher` and `exam_staff` but no view reads it (`bulk_entry` checks `.create` for updates too), while `examinations.md` §20 said every registered key "has an endpoint behind it" (audit suggestion, `2026-09-module-audit-findings.md`).
+- **Mistake (again, examinations dashboard PR D).** The Results tab (`exams.result.view`) opened a detail sheet that read `GET /marks` (`exams.marks.view`) for every viewer, so a Results viewer without the marks key got a 403 card with a Try again that could never succeed. The sheet now reads marks only for a holder of the key.
+- **Mistake (again, examinations dashboard PR D, Reports).** The Reports section (`exams.result.view`, which every staff role holds) filled its exam picker from `GET /exams` (`exams.exam.view`, which only the exam roles hold), so an accountant or school owner opened the tab, saw "The exams couldn't be loaded." and could run none of the five per-exam reports. The screen now offers the per-exam kinds only to a holder of `exams.exam.view`, makes no `/exams` read otherwise, and says why; a screen test signs in with `exams.result.view` alone.
+- **Mistake (again, examinations dashboard PR D final review).** The Results and Report cards tabs' section filter read `GET /exam-schedules` (`exams.schedule.view`) through `useExamSectionOptions` for every viewer of the tab's own key, and the seeded `e2e-principal` lacked the schedule key, so the live approver's filter read was a 403 nobody asserted; the mocked principal held keys the seed did not (`exams.result.export`). The hook now reads the sittings only for a holder of `exams.schedule.view` and the filter hides otherwise, the seed grants it, and the mocked principal holds exactly the seed's keys.
+- **Check.** For each key you register, grep `required_permission`, `required_permission_map` and `has_permission_key` for it; a key nothing reads is wired up or dropped, never documented as live. For each read action, confirm its key is a `.view` key the reading roles hold, not a write key it borrowed. On the client, a screen gated on one key that reads an endpoint behind another checks the second key before reading, and its tests sign in with the screen's key alone (a mock that serves every read whatever the keys hides the gap).
+
+### L56. A read scope and the write gate on the same rows are one predicate, with an agreement test
+
+- **Mistake.** `Marks.filter_assigned_to_user` (what a teacher reads) matched a homeroom with no session, and the campus read was the `scope_campus_field = "student__campus_id"` fallback (the student's own campus), while marks entry gated on the allocation in the exam's session and the section's campus. A teacher read last session's marks they could not write, and a campus reader saw a visiting student's mark by the wrong campus (examinations dashboard PR C, Task 8). The read hooks (`filter_by_campus`, `filter_assigned_to_user`) now mirror `may_enter_marks`' rule as joins rather than calling it, and `PredicateAgreementTests` pins their agreement.
+- **Check.** When a resource has a record-scope read and a separate write gate, build both from one helper, and add a test that asserts they agree on the cases where two joins could differ (another session, a student whose campus differs from their section's), as `PredicateAgreementTests` does. A progress list or grid narrowed "to what you may enter" calls the write predicate itself.
+
+### L57. A segregation-of-duties rule reads a stamp every run rewrites
+
+- **Mistake.** `assert_approver_is_not_the_processor` compared the approver with `results.created_by`, which only the *first* processing run writes (`processing.write` updates rows in place afterwards). After a send-back and a re-process by someone else, the original processor was refused and the new one could approve their own figures (examinations dashboard plan, Review Focus 2; fixed in PR D with `results.processed_by`).
+- **Mistake (again, examinations dashboard PR D).** `processing.write` re-stamped only the rows it recomputed, so a pending row of a student withdrawn since kept the earlier processor and the gate refused both the old and the new one. A run now stamps every pending row of the exam in one `UPDATE`.
+- **Check.** For each "the X may not also be the Y" rule, find every code path that can make someone the X again (re-process, regenerate, re-submit) and confirm the column the rule reads is written on each of them, not only on insert, and on every row the rule reads, not only the rows the run touched. Test the sequence: A acts, the row is sent back, B acts again; B is refused and A is allowed.
+
+### L58. A bulk status reset needs a re-advance that covers the same rows
+
+- **Mistake.** `send_results_back` moved every unpublished result of the exam to `processing`, but the next `processing.write` advanced only the rows it recomputed (the active roll) to `pending_approval`. A student withdrawn between the send-back and the re-process kept a `processing` row, and `approve_exam_results`, which approves only pending rows, moved the exam to `approved` around it: the row was never approved or published, silently (examinations PR #154). The run now moves every `processing` row of the exam to pending, and approval refuses while one is left.
+- **Check.** For every bulk status reset, name the step that re-advances those rows and confirm its filter covers the same row set, not a subset recomputed from today's data (an active roll, a current enrolment). Where it cannot, make the next gate refuse leftovers instead of acting on the rows it finds. Test it: reset, change the population, re-advance, then assert no row is left in the reset state.
 
 ## 4. Adding a lesson
 

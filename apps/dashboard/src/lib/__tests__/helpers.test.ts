@@ -4,6 +4,7 @@ import {
   formatDate,
   isIsoDate,
   isUuid,
+  saveBlob,
   stableSignedUrl,
   todayIsoDate,
   toOrdering,
@@ -217,5 +218,44 @@ describe("decimalFormat", () => {
     expect(decimalFormat("en", 1, { fixed: true }).format(40)).toBe("40.0");
     expect(decimalFormat("en", 1)).toBe(decimalFormat("en", 1));
     expect(decimalFormat("en", 1)).not.toBe(decimalFormat("en", 1, { fixed: true }));
+  });
+});
+
+describe("saveBlob", () => {
+  // jsdom has neither method, so restoring means putting back whatever descriptor (or none) was there.
+  const original = {
+    createObjectURL: Object.getOwnPropertyDescriptor(URL, "createObjectURL"),
+    revokeObjectURL: Object.getOwnPropertyDescriptor(URL, "revokeObjectURL"),
+  };
+
+  afterEach(() => {
+    for (const [name, descriptor] of Object.entries(original)) {
+      if (descriptor) Object.defineProperty(URL, name, descriptor);
+      else Reflect.deleteProperty(URL, name);
+    }
+    jest.restoreAllMocks();
+    jest.useRealTimers();
+  });
+
+  it("saves the blob under the given filename through a transient object URL", () => {
+    jest.useFakeTimers();
+    const createObjectURL = jest.fn().mockReturnValue("blob:receipt");
+    const revokeObjectURL = jest.fn();
+    Object.assign(URL, { createObjectURL, revokeObjectURL });
+    const click = jest.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {
+      // jsdom does not navigate on click; the assertions below read the call instead.
+    });
+    const blob = new Blob(["%PDF"], { type: "application/pdf" });
+
+    saveBlob(blob, "receipt-R-1.pdf");
+
+    expect(createObjectURL).toHaveBeenCalledWith(blob);
+    expect(click).toHaveBeenCalledTimes(1);
+    const anchor = click.mock.contexts[0] as HTMLAnchorElement;
+    expect(anchor.href).toBe("blob:receipt");
+    expect(anchor.download).toBe("receipt-R-1.pdf");
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+    jest.runAllTimers();
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:receipt");
   });
 });

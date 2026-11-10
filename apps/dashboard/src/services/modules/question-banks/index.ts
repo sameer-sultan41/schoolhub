@@ -1,0 +1,42 @@
+import {
+  approveQuestion,
+  assemblePaper,
+  createBank,
+  createQuestion,
+  deleteBank,
+  deleteQuestion,
+  fetchBank,
+  fetchBanksPage,
+  fetchQuestionsPage,
+  updateBank,
+  updateQuestion,
+} from "./question-banks-service";
+
+export const QuestionBanksService = {
+  fetchBanksPage,
+  fetchBank,
+  createBank,
+  updateBank,
+  deleteBank,
+  fetchQuestionsPage,
+  createQuestion,
+  updateQuestion,
+  deleteQuestion,
+  approveQuestion,
+  assemblePaper,
+};
+export type {
+  PaperBlueprint,
+  PaperResult,
+  PaperShortfall,
+  QuestionBankInput,
+  QuestionBankPageQuery,
+  QuestionBankRecord,
+  QuestionBankStatus,
+  QuestionDifficulty,
+  QuestionInput,
+  QuestionPageQuery,
+  QuestionRecord,
+  QuestionSource,
+  QuestionType,
+} from "./question-banks-type";
