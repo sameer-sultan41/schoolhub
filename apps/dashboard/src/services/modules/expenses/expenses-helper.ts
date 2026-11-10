@@ -120,7 +120,7 @@ export function buildExpenseInput(values: ExpenseFormValues): ExpenseInput {
     vendorName: values.vendor_name.trim() || null,
     description: values.description.trim(),
     amount: values.amount.trim(),
-    taxAmount: values.tax_amount.trim() || undefined,
+    taxAmount: values.tax_amount.trim() || "0.00",
     expenseDate: values.expense_date,
     paymentMethod: values.payment_method === "" ? null : values.payment_method,
   };

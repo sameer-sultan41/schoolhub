@@ -17,6 +17,11 @@ import {
   FEE_HEADS_QUERY_MODULE,
 } from "@/services/modules/fee-heads/fee-heads-constant";
 
+import {
+  EXPENSE_CATEGORIES_OPTIONS_RESOURCE,
+  EXPENSE_CATEGORIES_QUERY_MODULE,
+} from "@/services/modules/expense-categories/expense-categories-constant";
+
 /**
  * The lists a picker or a name lookup reads: every record, one cache entry per filter set. A write to the module invalidates them with its lists.
  */
@@ -61,6 +66,20 @@ export function useFeeStructureOptions({
       status,
     }),
     queryFn: () => Services.feeStructures.fetchFeeStructureOptions(status),
+    enabled,
+  });
+}
+
+/** Every expense category (only the active ones with `isActive: true`, for a picker): read with `fees.expense.view`. */
+export function useExpenseCategoryOptions({
+  isActive,
+  enabled = true,
+}: { isActive?: boolean; enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: queryKeys.list(EXPENSE_CATEGORIES_QUERY_MODULE, EXPENSE_CATEGORIES_OPTIONS_RESOURCE, {
+      isActive,
+    }),
+    queryFn: () => Services.expenseCategories.fetchExpenseCategoryOptions({ isActive }),
     enabled,
   });
 }

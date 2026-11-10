@@ -30,6 +30,7 @@ const INVOICE_VIEW: PermissionKey = "fees.invoice.view";
 const DISCOUNT_VIEW: PermissionKey = "fees.discount.view";
 const FINE_VIEW: PermissionKey = "fees.fine.view";
 const STRUCTURE_VIEW: PermissionKey = "fees.fee-structure.view";
+const EXPENSE_VIEW: PermissionKey = "fees.expense.view";
 const LEDGER_VIEW: PermissionKey = "fees.ledger.view";
 const PAYMENT_COLLECT: PermissionKey = "fees.payment.collect";
 const PAYMENT_VIEW: PermissionKey = "fees.payment.view";
@@ -39,26 +40,36 @@ describe("fees sections", () => {
     mockReplace.mockReset();
   });
 
-  it("lists Invoices, Counter, Payments, Grants, Structures then Ledger, each on its own view key (Grants on either of two)", () => {
+  it("lists Invoices, Counter, Payments, Grants, Structures, Expenses then Ledger, each on its own view key (Grants on either of two)", () => {
     expect(FEES_SECTIONS.map((section) => [section.href, section.permission])).toEqual([
       ["/fees/invoices", INVOICE_VIEW],
       ["/fees/counter", PAYMENT_COLLECT],
       ["/fees/payments", PAYMENT_VIEW],
       ["/fees/grants", [DISCOUNT_VIEW, FINE_VIEW]],
       ["/fees/structures", STRUCTURE_VIEW],
+      ["/fees/expenses", EXPENSE_VIEW],
       ["/fees/ledger", LEDGER_VIEW],
     ]);
   });
 
   it.each([
     [
-      [INVOICE_VIEW, PAYMENT_COLLECT, PAYMENT_VIEW, DISCOUNT_VIEW, STRUCTURE_VIEW, LEDGER_VIEW],
+      [
+        INVOICE_VIEW,
+        PAYMENT_COLLECT,
+        PAYMENT_VIEW,
+        DISCOUNT_VIEW,
+        STRUCTURE_VIEW,
+        EXPENSE_VIEW,
+        LEDGER_VIEW,
+      ],
       [
         "/fees/invoices",
         "/fees/counter",
         "/fees/payments",
         "/fees/grants",
         "/fees/structures",
+        "/fees/expenses",
         "/fees/ledger",
       ],
     ],
@@ -68,6 +79,7 @@ describe("fees sections", () => {
     [[DISCOUNT_VIEW], ["/fees/grants"]],
     [[FINE_VIEW], ["/fees/grants"]],
     [[STRUCTURE_VIEW], ["/fees/structures"]],
+    [[EXPENSE_VIEW], ["/fees/expenses"]],
     [[LEDGER_VIEW], ["/fees/ledger"]],
     [[], []],
   ] as const)("permits %j to open %j", (keys, hrefs) => {
@@ -83,6 +95,8 @@ describe("fees sections", () => {
     [[PAYMENT_VIEW, FINE_VIEW], "/fees/payments"],
     [[FINE_VIEW, STRUCTURE_VIEW], "/fees/grants"],
     [[STRUCTURE_VIEW, LEDGER_VIEW], "/fees/structures"],
+    [[EXPENSE_VIEW, LEDGER_VIEW], "/fees/expenses"],
+    [[EXPENSE_VIEW], "/fees/expenses"],
     [[STRUCTURE_VIEW], "/fees/structures"],
     [[LEDGER_VIEW], "/fees/ledger"],
   ] as const)("lands a holder of %j on %s", async (keys, href) => {
@@ -113,6 +127,7 @@ describe("fees sections", () => {
       "Payments",
       "Grants",
       "Structures",
+      "Expenses",
       "Ledger",
     ]);
 

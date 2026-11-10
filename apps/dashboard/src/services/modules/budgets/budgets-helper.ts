@@ -39,6 +39,13 @@ export function canEditBudget(budget: Pick<BudgetRecord, "status">): boolean {
   return budget.status === BUDGET_STATUS_DRAFT;
 }
 
+/** A budget set against a ledger account rather than an expense category (its form needs the ledger read to pick one). */
+export function budgetTargetsAccount(
+  budget: Pick<BudgetRecord, "ledger_account" | "expense_category">,
+): boolean {
+  return !budget.expense_category && !!budget.ledger_account;
+}
+
 export function defaultBudgetFormValues(): BudgetFormValues {
   return {
     name: "",
@@ -53,7 +60,7 @@ export function defaultBudgetFormValues(): BudgetFormValues {
 }
 
 export function recordToBudgetFormValues(record: BudgetRecord): BudgetFormValues {
-  const byAccount = !record.expense_category && !!record.ledger_account;
+  const byAccount = budgetTargetsAccount(record);
   return {
     name: record.name,
     target: byAccount ? "account" : "category",

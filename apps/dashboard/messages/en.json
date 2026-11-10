@@ -2971,6 +2971,7 @@
       "invoices": "Invoices",
       "counter": "Counter",
       "structures": "Structures",
+      "expenses": "Expenses",
       "ledger": "Ledger",
       "grants": "Grants",
       "payments": "Payments"
@@ -3924,6 +3925,228 @@
             "amount": "Amount",
             "reason": "Reason"
           }
+        }
+      }
+    },
+    "expenses": {
+      "title": "Expenses",
+      "summary": "What the school spends: expenses, their categories and budgets.",
+      "tabs": {
+        "label": "Expenses sections",
+        "expenses": "Expenses",
+        "categories": "Categories",
+        "budgets": "Budgets"
+      },
+      "expenses": {
+        "list": {
+          "caption": "Expenses",
+          "pagination": "Expenses pages",
+          "loadError": "The expenses could not be loaded.",
+          "emptyTitle": "No expenses yet",
+          "emptyDescription": "Record an expense to start the approval flow.",
+          "noMatches": "No expenses match",
+          "noMatchesDescription": "Try a different search or filter.",
+          "searchPlaceholder": "Search by number, vendor or description"
+        },
+        "columns": {
+          "number": "Number",
+          "date": "Date",
+          "description": "Description",
+          "category": "Category",
+          "amount": "Total",
+          "status": "Status"
+        },
+        "filters": {
+          "search": "Search expenses",
+          "clearSearch": "Clear search",
+          "awaiting": "Awaiting approval",
+          "status": "Status",
+          "category": "Category",
+          "campus": "Campus",
+          "from": "From date",
+          "to": "To date",
+          "all": "All"
+        },
+        "status": {
+          "draft": "Draft",
+          "submitted": "Submitted",
+          "approved": "Approved",
+          "paid": "Paid",
+          "rejected": "Rejected",
+          "reversed": "Reversed"
+        },
+        "method": {
+          "cash": "Cash",
+          "cheque": "Cheque",
+          "bank_transfer": "Bank transfer",
+          "card": "Card"
+        },
+        "actions": {
+          "create": "New expense",
+          "edit": "Edit",
+          "submit": "Submit",
+          "approve": "Approve",
+          "reject": "Reject",
+          "markPaid": "Mark paid",
+          "reverse": "Reverse",
+          "editRow": "Edit expense {number}",
+          "submitRow": "Submit expense {number}",
+          "approveRow": "Approve expense {number}",
+          "rejectRow": "Reject expense {number}",
+          "markPaidRow": "Mark expense {number} paid",
+          "reverseRow": "Reverse expense {number}"
+        },
+        "form": {
+          "createTitle": "New expense",
+          "editTitle": "Edit expense",
+          "intro": "An expense is saved as a draft until it is submitted for approval.",
+          "category": "Category",
+          "description": "Description",
+          "vendor": "Vendor (optional)",
+          "date": "Expense date",
+          "amount": "Amount (before tax)",
+          "tax": "Tax (optional)",
+          "method": "Paid by (optional)",
+          "noMethod": "Not decided",
+          "campus": "Campus",
+          "noCampus": "Not for one campus",
+          "invalidAmount": "Enter an amount such as 1250.00."
+        },
+        "saved": "Expense saved.",
+        "submit": {
+          "title": "Submit expense {number}?",
+          "description": "It goes to the approvers' queue and can no longer be edited.",
+          "done": "Expense {number} submitted."
+        },
+        "approve": {
+          "title": "Approve expense {number}?",
+          "description": "It is posted to the ledger. The person who submitted it cannot approve it.",
+          "done": "Expense {number} approved."
+        },
+        "reject": {
+          "title": "Reject expense {number}?",
+          "description": "Nothing is posted; the expense is closed as rejected.",
+          "done": "Expense {number} rejected."
+        },
+        "markPaid": {
+          "title": "Mark expense {number} paid?",
+          "description": "This records that the money has left; nothing more is posted.",
+          "done": "Expense {number} marked paid."
+        },
+        "reverse": {
+          "title": "Reverse expense {number}",
+          "description": "A new entry undoes its ledger posting; the original stays in the history. This cannot be undone.",
+          "reason": "Reason",
+          "done": "Expense {number} reversed."
+        }
+      },
+      "categories": {
+        "list": {
+          "caption": "Expense categories",
+          "pagination": "Expense categories pages",
+          "loadError": "The categories could not be loaded.",
+          "emptyTitle": "No categories yet",
+          "emptyDescription": "Add a category to file expenses against.",
+          "noMatches": "No categories match",
+          "noMatchesDescription": "Try a different search or filter.",
+          "searchPlaceholder": "Search by code or name"
+        },
+        "columns": {
+          "code": "Code",
+          "name": "Name",
+          "account": "Ledger account",
+          "status": "Status"
+        },
+        "filters": {
+          "search": "Search categories",
+          "clearSearch": "Clear search",
+          "active": "Status",
+          "all": "All"
+        },
+        "status": {
+          "active": "Active",
+          "inactive": "Archived"
+        },
+        "actions": {
+          "create": "New category",
+          "editRow": "Edit {name}",
+          "deleteRow": "Delete {name}",
+          "delete": "Delete"
+        },
+        "form": {
+          "createTitle": "New expense category",
+          "editTitle": "Edit expense category",
+          "intro": "Expenses in a category are booked to its expense account.",
+          "code": "Code",
+          "name": "Name",
+          "account": "Expense account",
+          "active": "Active",
+          "activeHint": "An archived category takes no new expenses."
+        },
+        "saved": "Category saved.",
+        "removed": "Category removed.",
+        "delete": {
+          "titleNamed": "Delete {name}?",
+          "description": "A category with expenses or a budget cannot be deleted; archive it instead."
+        }
+      },
+      "budgets": {
+        "list": {
+          "caption": "Budgets",
+          "pagination": "Budgets pages",
+          "loadError": "The budgets could not be loaded.",
+          "emptyTitle": "No budgets yet",
+          "emptyDescription": "Add a budget to plan spending against.",
+          "noMatches": "No budgets match",
+          "noMatchesDescription": "Try a different search or filter."
+        },
+        "columns": {
+          "name": "Name",
+          "target": "Against",
+          "period": "Period",
+          "amount": "Amount",
+          "status": "Status"
+        },
+        "period": "{start} to {end}",
+        "filters": {
+          "status": "Status",
+          "all": "All"
+        },
+        "status": {
+          "draft": "Draft",
+          "approved": "Approved",
+          "closed": "Closed"
+        },
+        "actions": {
+          "create": "New budget",
+          "edit": "Edit",
+          "editRow": "Edit {name}",
+          "approve": "Approve",
+          "approveRow": "Approve {name}"
+        },
+        "form": {
+          "createTitle": "New budget",
+          "editTitle": "Edit budget",
+          "intro": "A budget is a draft until the owner approves it; only an approved one is measured in reports.",
+          "name": "Name",
+          "targetKind": "Set against",
+          "kindCategory": "An expense category",
+          "kindAccount": "A ledger account",
+          "category": "Expense category",
+          "account": "Expense account",
+          "periodStart": "Period starts",
+          "periodEnd": "Period ends",
+          "periodOrder": "The period cannot end before it starts.",
+          "amount": "Amount",
+          "campus": "Campus",
+          "allCampuses": "All campuses",
+          "notes": "Notes (optional)"
+        },
+        "saved": "Budget saved.",
+        "approve": {
+          "title": "Approve {name}?",
+          "description": "Once approved it is the baseline reports measure spending against, and it can no longer be edited.",
+          "done": "{name} approved."
         }
       }
     }

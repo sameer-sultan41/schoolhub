@@ -3,7 +3,8 @@
 import { createContext, useContext } from "react";
 
 /** The kinds of record a table cell names by id. */
-export type NameKind = "accounts" | "sessions" | "classes" | "campuses" | "structures" | "heads";
+export type NameKind =
+  "accounts" | "sessions" | "classes" | "campuses" | "structures" | "heads" | "categories";
 
 export type NameLookups = Partial<Record<NameKind, ReadonlyMap<string, string>>>;
 

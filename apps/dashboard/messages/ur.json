@@ -2971,6 +2971,7 @@
       "invoices": "انوائسز",
       "counter": "کاؤنٹر",
       "structures": "فیس کے ڈھانچے",
+      "expenses": "اخراجات",
       "ledger": "کھاتہ",
       "grants": "گرانٹس",
       "payments": "ادائیگیاں"
@@ -3924,6 +3925,228 @@
             "amount": "رقم",
             "reason": "وجہ"
           }
+        }
+      }
+    },
+    "expenses": {
+      "title": "اخراجات",
+      "summary": "اسکول کے اخراجات: اخراجات، ان کی اقسام اور بجٹ۔",
+      "tabs": {
+        "label": "اخراجات کے حصے",
+        "expenses": "اخراجات",
+        "categories": "اقسام",
+        "budgets": "بجٹ"
+      },
+      "expenses": {
+        "list": {
+          "caption": "اخراجات",
+          "pagination": "اخراجات کے صفحات",
+          "loadError": "اخراجات لوڈ نہیں ہو سکے۔",
+          "emptyTitle": "ابھی کوئی خرچ نہیں",
+          "emptyDescription": "منظوری کا عمل شروع کرنے کے لیے خرچ درج کریں۔",
+          "noMatches": "کوئی خرچ نہیں ملا",
+          "noMatchesDescription": "کوئی اور تلاش یا فلٹر آزمائیں۔",
+          "searchPlaceholder": "نمبر، فروش یا تفصیل سے تلاش کریں"
+        },
+        "columns": {
+          "number": "نمبر",
+          "date": "تاریخ",
+          "description": "تفصیل",
+          "category": "قسم",
+          "amount": "کل رقم",
+          "status": "حالت"
+        },
+        "filters": {
+          "search": "اخراجات تلاش کریں",
+          "clearSearch": "تلاش صاف کریں",
+          "awaiting": "منظوری کے منتظر",
+          "status": "حالت",
+          "category": "قسم",
+          "campus": "کیمپس",
+          "from": "تاریخ سے",
+          "to": "تاریخ تک",
+          "all": "سب"
+        },
+        "status": {
+          "draft": "مسودہ",
+          "submitted": "جمع شدہ",
+          "approved": "منظور",
+          "paid": "ادا شدہ",
+          "rejected": "مسترد",
+          "reversed": "منسوخ شدہ"
+        },
+        "method": {
+          "cash": "نقد",
+          "cheque": "چیک",
+          "bank_transfer": "بینک ٹرانسفر",
+          "card": "کارڈ"
+        },
+        "actions": {
+          "create": "نیا خرچ",
+          "edit": "ترمیم",
+          "submit": "جمع کریں",
+          "approve": "منظور کریں",
+          "reject": "مسترد کریں",
+          "markPaid": "ادا شدہ لکھیں",
+          "reverse": "منسوخ کریں",
+          "editRow": "خرچ {number} میں ترمیم کریں",
+          "submitRow": "خرچ {number} جمع کریں",
+          "approveRow": "خرچ {number} منظور کریں",
+          "rejectRow": "خرچ {number} مسترد کریں",
+          "markPaidRow": "خرچ {number} ادا شدہ لکھیں",
+          "reverseRow": "خرچ {number} منسوخ کریں"
+        },
+        "form": {
+          "createTitle": "نیا خرچ",
+          "editTitle": "خرچ میں ترمیم",
+          "intro": "منظوری کے لیے جمع کرنے تک خرچ مسودہ رہتا ہے۔",
+          "category": "قسم",
+          "description": "تفصیل",
+          "vendor": "فروش (اختیاری)",
+          "date": "خرچ کی تاریخ",
+          "amount": "رقم (ٹیکس سے پہلے)",
+          "tax": "ٹیکس (اختیاری)",
+          "method": "ادائیگی کا طریقہ (اختیاری)",
+          "noMethod": "طے نہیں",
+          "campus": "کیمپس",
+          "noCampus": "کسی ایک کیمپس کا نہیں",
+          "invalidAmount": "رقم یوں لکھیں: 1250.00۔"
+        },
+        "saved": "خرچ محفوظ ہو گیا۔",
+        "submit": {
+          "title": "خرچ {number} جمع کریں؟",
+          "description": "یہ منظور کنندگان کی قطار میں جائے گا اور اس میں ترمیم نہیں ہو سکے گی۔",
+          "done": "خرچ {number} جمع ہو گیا۔"
+        },
+        "approve": {
+          "title": "خرچ {number} منظور کریں؟",
+          "description": "یہ کھاتے میں درج ہو جائے گا۔ جمع کرنے والا اسے منظور نہیں کر سکتا۔",
+          "done": "خرچ {number} منظور ہو گیا۔"
+        },
+        "reject": {
+          "title": "خرچ {number} مسترد کریں؟",
+          "description": "کچھ درج نہیں ہوگا؛ خرچ مسترد کر کے بند ہو جائے گا۔",
+          "done": "خرچ {number} مسترد ہو گیا۔"
+        },
+        "markPaid": {
+          "title": "خرچ {number} کو ادا شدہ لکھیں؟",
+          "description": "اس سے درج ہوتا ہے کہ رقم ادا ہو چکی؛ مزید کچھ درج نہیں ہوگا۔",
+          "done": "خرچ {number} ادا شدہ لکھ دیا گیا۔"
+        },
+        "reverse": {
+          "title": "خرچ {number} منسوخ کریں",
+          "description": "نیا اندراج اس کا کھاتے کا اندراج الٹ دیتا ہے؛ اصل تاریخ میں رہتا ہے۔ اسے واپس نہیں کیا جا سکتا۔",
+          "reason": "وجہ",
+          "done": "خرچ {number} منسوخ ہو گیا۔"
+        }
+      },
+      "categories": {
+        "list": {
+          "caption": "اخراجات کی اقسام",
+          "pagination": "اخراجات کی اقسام کے صفحات",
+          "loadError": "اقسام لوڈ نہیں ہو سکیں۔",
+          "emptyTitle": "ابھی کوئی قسم نہیں",
+          "emptyDescription": "خرچ درج کرنے کے لیے ایک قسم شامل کریں۔",
+          "noMatches": "کوئی قسم نہیں ملی",
+          "noMatchesDescription": "کوئی اور تلاش یا فلٹر آزمائیں۔",
+          "searchPlaceholder": "کوڈ یا نام سے تلاش کریں"
+        },
+        "columns": {
+          "code": "کوڈ",
+          "name": "نام",
+          "account": "کھاتہ",
+          "status": "حالت"
+        },
+        "filters": {
+          "search": "اقسام تلاش کریں",
+          "clearSearch": "تلاش صاف کریں",
+          "active": "حالت",
+          "all": "سب"
+        },
+        "status": {
+          "active": "فعال",
+          "inactive": "محفوظ شدہ"
+        },
+        "actions": {
+          "create": "نئی قسم",
+          "editRow": "{name} میں ترمیم کریں",
+          "deleteRow": "{name} حذف کریں",
+          "delete": "حذف کریں"
+        },
+        "form": {
+          "createTitle": "اخراجات کی نئی قسم",
+          "editTitle": "اخراجات کی قسم میں ترمیم",
+          "intro": "کسی قسم کے اخراجات اس کے اخراجاتی کھاتے میں درج ہوتے ہیں۔",
+          "code": "کوڈ",
+          "name": "نام",
+          "account": "اخراجاتی کھاتہ",
+          "active": "فعال",
+          "activeHint": "محفوظ شدہ قسم میں نئے اخراجات درج نہیں ہوتے۔"
+        },
+        "saved": "قسم محفوظ ہو گئی۔",
+        "removed": "قسم حذف ہو گئی۔",
+        "delete": {
+          "titleNamed": "{name} حذف کریں؟",
+          "description": "جس قسم میں اخراجات یا بجٹ ہوں اسے حذف نہیں کیا جا سکتا؛ اسے محفوظ کریں۔"
+        }
+      },
+      "budgets": {
+        "list": {
+          "caption": "بجٹ",
+          "pagination": "بجٹ کے صفحات",
+          "loadError": "بجٹ لوڈ نہیں ہو سکے۔",
+          "emptyTitle": "ابھی کوئی بجٹ نہیں",
+          "emptyDescription": "اخراجات کی منصوبہ بندی کے لیے بجٹ شامل کریں۔",
+          "noMatches": "کوئی بجٹ نہیں ملا",
+          "noMatchesDescription": "کوئی اور تلاش یا فلٹر آزمائیں۔"
+        },
+        "columns": {
+          "name": "نام",
+          "target": "کس کے مقابل",
+          "period": "مدت",
+          "amount": "رقم",
+          "status": "حالت"
+        },
+        "period": "{start} سے {end} تک",
+        "filters": {
+          "status": "حالت",
+          "all": "سب"
+        },
+        "status": {
+          "draft": "مسودہ",
+          "approved": "منظور",
+          "closed": "بند"
+        },
+        "actions": {
+          "create": "نیا بجٹ",
+          "edit": "ترمیم",
+          "editRow": "{name} میں ترمیم کریں",
+          "approve": "منظور کریں",
+          "approveRow": "{name} منظور کریں"
+        },
+        "form": {
+          "createTitle": "نیا بجٹ",
+          "editTitle": "بجٹ میں ترمیم",
+          "intro": "بجٹ مالک کی منظوری تک مسودہ رہتا ہے؛ رپورٹوں میں صرف منظور شدہ بجٹ ناپا جاتا ہے۔",
+          "name": "نام",
+          "targetKind": "مقابل رکھیں",
+          "kindCategory": "اخراجات کی قسم",
+          "kindAccount": "ایک کھاتہ",
+          "category": "اخراجات کی قسم",
+          "account": "اخراجاتی کھاتہ",
+          "periodStart": "مدت کا آغاز",
+          "periodEnd": "مدت کا اختتام",
+          "periodOrder": "مدت شروع ہونے سے پہلے ختم نہیں ہو سکتی۔",
+          "amount": "رقم",
+          "campus": "کیمپس",
+          "allCampuses": "تمام کیمپس",
+          "notes": "نوٹس (اختیاری)"
+        },
+        "saved": "بجٹ محفوظ ہو گیا۔",
+        "approve": {
+          "title": "{name} منظور کریں؟",
+          "description": "منظوری کے بعد رپورٹیں اخراجات اسی سے ناپتی ہیں اور اس میں ترمیم نہیں ہو سکتی۔",
+          "done": "{name} منظور ہو گیا۔"
         }
       }
     }
