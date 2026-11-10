@@ -3697,7 +3697,8 @@
         "failed": "رسید ڈاؤن لوڈ نہیں ہو سکی۔ براہ کرم دوبارہ کوشش کریں۔",
         "pending": "رسید ابھی جاری ہو رہی ہے۔",
         "openPayments": "ادائیگیوں کی فہرست کھولیں",
-        "done": "مکمل"
+        "done": "مکمل",
+        "issued": "رسید جاری ہو چکی ہے۔ اسے پرنٹ کرنے کے لیے ادائیگیاں دیکھ سکنے والے سے کہیں۔"
       }
     },
     "payments": {
@@ -3837,9 +3838,9 @@
           "approve": "منظور کریں",
           "reject": "مسترد کریں",
           "process": "ادا کریں",
-          "approveRow": "{amount} کی واپسی منظور کریں",
-          "rejectRow": "{amount} کی واپسی مسترد کریں",
-          "processRow": "{amount} کی واپسی ادا کریں"
+          "approveRow": "{student} کی انوائس {invoice} کی {amount} کی واپسی منظور کریں",
+          "rejectRow": "{student} کی انوائس {invoice} کی {amount} کی واپسی مسترد کریں",
+          "processRow": "{student} کی انوائس {invoice} کی {amount} کی واپسی ادا کریں"
         },
         "note": "نوٹ (اختیاری)",
         "noteRequired": "نوٹ",

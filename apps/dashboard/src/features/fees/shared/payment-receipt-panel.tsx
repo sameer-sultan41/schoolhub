@@ -11,13 +11,10 @@ import { useCurrentUser } from "@/hooks/use-current-user";
 import { formatMoney } from "@/lib/format-decimal";
 import { saveBlob } from "@/lib/helpers";
 import { hasPermission } from "@/lib/permissions";
-import { Services, type PaymentRecord, type ReceiptFormat } from "@/services";
+import { Services, type PaymentRecord } from "@/services";
+import { DOCUMENT_LAYOUTS, type DocumentLayout } from "./document-layouts";
 
-type PrintFormat = NonNullable<ReceiptFormat>;
-
-/** The receipt layouts the counter prints, keyed so a format the API gains must be placed (L32). */
-const PRINT_FORMATS_SET: Record<PrintFormat, true> = { pdf: true, thermal: true };
-const PRINT_FORMATS = Object.keys(PRINT_FORMATS_SET) as PrintFormat[];
+type PrintFormat = DocumentLayout;
 
 /**
  * What a recorded payment shows: the amount and receipt number, and Print PDF / Print thermal,
@@ -30,7 +27,10 @@ export function PaymentReceiptPanel({ payment }: { payment: PaymentRecord }) {
   const { data: user } = useCurrentUser();
   const [busy, setBusy] = useState<PrintFormat | null>(null);
   const [failed, setFailed] = useState(false);
-  const { receipt } = payment;
+  // The receipt streams from `GET /receipts/{id}/download`, behind `fees.payment.view`: the
+  // counter's collector may not hold it (L55), and then sees only that the receipt is issued.
+  const canPrint = hasPermission(user, "fees.payment.view");
+  const receipt = canPrint ? payment.receipt : null;
 
   async function print(format: PrintFormat) {
     if (!receipt) return;
@@ -56,7 +56,7 @@ export function PaymentReceiptPanel({ payment }: { payment: PaymentRecord }) {
       </Alert>
       {receipt ? (
         <div className="flex flex-wrap gap-2.5">
-          {PRINT_FORMATS.map((format) => (
+          {DOCUMENT_LAYOUTS.map((format) => (
             <Button
               key={format}
               type="button"
@@ -73,15 +73,15 @@ export function PaymentReceiptPanel({ payment }: { payment: PaymentRecord }) {
             </Button>
           ))}
         </div>
-      ) : (
+      ) : canPrint ? (
         <p className="text-sm text-muted-foreground">
           {t("counter.receipt.pending")}{" "}
-          {hasPermission(user, "fees.payment.view") && (
-            <Link href={Paths.FEES_PAYMENTS} className="text-primary hover:underline">
-              {t("counter.receipt.openPayments")}
-            </Link>
-          )}
+          <Link href={Paths.FEES_PAYMENTS} className="text-primary hover:underline">
+            {t("counter.receipt.openPayments")}
+          </Link>
         </p>
+      ) : (
+        <p className="text-sm text-muted-foreground">{t("counter.receipt.issued")}</p>
       )}
       {failed && <Alert variant="destructive">{t("counter.receipt.failed")}</Alert>}
     </div>

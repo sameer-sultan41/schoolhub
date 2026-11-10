@@ -274,7 +274,6 @@ describe("fee counter", () => {
   });
 
   it("says the receipt is still being issued when the payment carries none, and links the payments list", async () => {
-    asUser(...COUNTER_PERMISSIONS, "fees.payment.view");
     recordPayment.mockResolvedValue(paymentRecord({ receipt: null }));
     const { user, dialog } = await openDialog();
 
@@ -286,6 +285,19 @@ describe("fee counter", () => {
       "href",
       "/fees/payments",
     );
+  });
+
+  it("offers no print without fees.payment.view, the key the receipt streams behind", async () => {
+    asUser("fees.payment.collect", "fees.invoice.view", "students.student.view");
+    recordPayment.mockResolvedValue(paymentRecord());
+    const { user, dialog } = await openDialog();
+
+    await user.click(within(dialog).getByRole("button", SUBMIT));
+
+    expect(await within(dialog).findByText(/The receipt has been issued/)).toBeVisible();
+    expect(within(dialog).queryByRole("button", { name: "Print PDF" })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "Print thermal" })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("link")).not.toBeInTheDocument();
   });
 
   it("reloads the invoices after a payment, so the balance is the server's new one", async () => {

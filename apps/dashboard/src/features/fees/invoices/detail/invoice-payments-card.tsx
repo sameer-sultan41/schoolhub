@@ -31,6 +31,7 @@ import { queryKeys } from "@/lib/query-client";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { hasPermission } from "@/lib/permissions";
 import { Services, type PaymentRecord } from "@/services";
+import { canRequestRefund } from "@/services/modules/payments/payments-helper";
 import {
   PAYMENTS_BY_INVOICE_PAGE_SIZE,
   PAYMENTS_BY_INVOICE_RESOURCE,
@@ -121,7 +122,7 @@ export function InvoicePaymentsCard({ invoiceId }: { invoiceId: string }) {
                     </TableCell>
                     {canRefund && (
                       <TableCell className="text-end">
-                        {payment.status === "confirmed" && (
+                        {canRequestRefund(payment) && (
                           <Button
                             variant="outline"
                             size="sm"

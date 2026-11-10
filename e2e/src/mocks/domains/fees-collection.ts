@@ -155,12 +155,7 @@ export function feesCollectionModule(options: FeesCollectionOptions = {}): MockM
 
       const replay = key ? replays.get(key) : undefined;
       if (replay) {
-        return replay.body === serialized
-          ? replay.response
-          : ruleViolation(
-              "non_field_errors",
-              "This Idempotency-Key was already used with a different request. Use a new key for a new request.",
-            );
+        return replay.body === serialized ? replay.response : keyReused();
       }
 
       const amount = Number(body.amount).toFixed(2);
@@ -258,6 +253,15 @@ const IMPORT_UNKNOWN_PROVIDER = `Unknown provider. Expected one of: ${PROVIDERS.
 const KEY_REUSED =
   "This Idempotency-Key was already used with a different request. Use a new key for a new request.";
 
+/** `IdempotencyKeyReused`: code `idempotency_key_reused`, and a string detail flattens to the
+ * field `non_field` (`_flatten_details` in `core/api/exceptions.py`). */
+function keyReused(): MockResponse {
+  return fail(422, KEY_REUSED, {
+    code: "idempotency_key_reused",
+    details: [{ field: "non_field", issue: KEY_REUSED }],
+  });
+}
+
 /** One idempotent write: the same key and body replays the first answer, the same key with
  * another body is the server's 422, as `replay_or_execute` answers. */
 function idempotentWrite(
@@ -269,9 +273,7 @@ function idempotentWrite(
   const serialized = JSON.stringify(body);
   const replay = key ? replays.get(key) : undefined;
   if (replay) {
-    return replay.body === serialized
-      ? replay.response
-      : ruleViolation("non_field_errors", KEY_REUSED);
+    return replay.body === serialized ? replay.response : keyReused();
   }
   const response = execute();
   // The server stores only successes: a refusal leaves the key free for a corrected request.
@@ -296,8 +298,8 @@ function registerReads(api: MockApi, state: CollectionState) {
         (!params.get("received_by") || payment.received_by === params.get("received_by")) &&
         (!params.get("paid_at__gte") ||
           (payment.paid_at ?? "") >= new Date(params.get("paid_at__gte") ?? "").toISOString()) &&
-        (!params.get("paid_at__lte") ||
-          (payment.paid_at ?? "") <= new Date(params.get("paid_at__lte") ?? "").toISOString()),
+        (!params.get("paid_at__lt") ||
+          (payment.paid_at ?? "") < new Date(params.get("paid_at__lt") ?? "").toISOString()),
     );
     return cursorPageOf(matching, params);
   });

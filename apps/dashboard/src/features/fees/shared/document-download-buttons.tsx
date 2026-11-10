@@ -7,11 +7,7 @@ import { Button } from "@schoolhub/ui";
 import { Download } from "lucide-react";
 
 import { saveBlob } from "@/lib/helpers";
-
-/** The layouts a receipt or voucher streams in (`?format=`), keyed so a format the API gains must be placed (L32). */
-export type DocumentLayout = "pdf" | "thermal";
-const DOCUMENT_LAYOUTS_SET: Record<DocumentLayout, true> = { pdf: true, thermal: true };
-const DOCUMENT_LAYOUTS = Object.keys(DOCUMENT_LAYOUTS_SET) as DocumentLayout[];
+import { DOCUMENT_LAYOUTS, type DocumentLayout } from "./document-layouts";
 
 export interface DocumentDownloadButtonsProps {
   /** The document's number, for the buttons' names and the saved file's name. */

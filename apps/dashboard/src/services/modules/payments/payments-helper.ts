@@ -3,17 +3,17 @@ import { copyMappedFields } from "@/lib/helpers";
 import { FILTER_ALL } from "@/lib/constants";
 import {
   CASHIER_FILTER_ME,
-  DAY_END_TIME,
-  DAY_START_TIME,
   DEFAULT_COUNTER_METHOD,
   METHODS_NEEDING_REFERENCE,
   PAYMENT_METHODS,
+  PAYMENT_STATUS_REFUNDABLE,
   PAYMENT_STATUSES,
   PAYMENTS_QUERY_FIELDS,
 } from "./payments-constant";
 import type { RecordPaymentFormValues } from "./payments.schema";
 import type {
   CounterPaymentMethod,
+  PaymentRecord,
   PaymentMethod,
   PaymentsQuery,
   PaymentStatus,
@@ -75,14 +75,27 @@ export function paymentStatusFilter(value: string): PaymentStatus | undefined {
   return value === FILTER_ALL ? undefined : PAYMENT_STATUSES.find((status) => status === value);
 }
 
-/** A day-bounded `paid_at` filter: a `from` day starts at its first moment, a `to` day ends at its last. */
+/** The instant a `YYYY-MM-DD` day (plus `addDays`) starts at, as an offset-aware ISO string. */
+function localMidnight(day: string, addDays = 0): string {
+  const [year, month, date] = day.split("-").map(Number);
+  return new Date(Number(year), Number(month) - 1, Number(date) + addDays).toISOString();
+}
+
+/**
+ * A day-bounded `paid_at` filter: `from` is that day's first instant, `to` is the start of the
+ * day after it, sent as an exclusive bound (`paid_at__lt`). A naive `YYYY-MM-DDT00:00:00` would
+ * be read by the server as a UTC day, so the bounds are offset-aware instants. They are the
+ * viewer's local midnights (`new Date(y, m, d)`): the dashboard does not hold the tenant's
+ * timezone for a finance role (`/tenant` is not read here), so a viewer far from the school sees
+ * the school's days shifted by the difference.
+ */
 export function paidAtBounds(
   from: string,
   to: string,
-): Pick<PaymentsQuery, "paidAtGte" | "paidAtLte"> {
+): Pick<PaymentsQuery, "paidAtGte" | "paidAtLt"> {
   return {
-    paidAtGte: from ? `${from}${DAY_START_TIME}` : undefined,
-    paidAtLte: to ? `${to}${DAY_END_TIME}` : undefined,
+    paidAtGte: from ? localMidnight(from) : undefined,
+    paidAtLt: to ? localMidnight(to, 1) : undefined,
   };
 }
 
@@ -93,4 +106,9 @@ export function cashierFilterId(
 ): string | undefined {
   if (value === "") return undefined;
   return value === CASHIER_FILTER_ME ? currentUserId : value;
+}
+
+/** Whether Request refund is offered on this payment: only a confirmed one. The server decides regardless. */
+export function canRequestRefund(payment: Pick<PaymentRecord, "status">): boolean {
+  return payment.status === PAYMENT_STATUS_REFUNDABLE;
 }

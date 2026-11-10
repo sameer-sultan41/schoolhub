@@ -145,6 +145,8 @@ export function useRefundColumns({
                         size="sm"
                         aria-label={t("payments.refunds.actions.approveRow", {
                           amount: formatMoney(locale, row.original.amount),
+                          student: row.original.student_name,
+                          invoice: row.original.invoice_no,
                         })}
                         onClick={() => {
                           onApprove(row.original);
@@ -158,6 +160,8 @@ export function useRefundColumns({
                         size="sm"
                         aria-label={t("payments.refunds.actions.rejectRow", {
                           amount: formatMoney(locale, row.original.amount),
+                          student: row.original.student_name,
+                          invoice: row.original.invoice_no,
                         })}
                         onClick={() => {
                           onReject(row.original);
@@ -173,6 +177,8 @@ export function useRefundColumns({
                       size="sm"
                       aria-label={t("payments.refunds.actions.processRow", {
                         amount: formatMoney(locale, row.original.amount),
+                        student: row.original.student_name,
+                        invoice: row.original.invoice_no,
                       })}
                       onClick={() => {
                         onProcess(row.original);

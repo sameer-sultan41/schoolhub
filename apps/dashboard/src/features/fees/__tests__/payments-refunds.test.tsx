@@ -56,9 +56,15 @@ async function renderRefunds(
   return userEvent.setup();
 }
 
-const APPROVE_ROW = { name: "Approve the refund of 200.00" } as const;
-const REJECT_ROW = { name: "Reject the refund of 200.00" } as const;
-const PROCESS_ROW = { name: "Process the refund of 200.00" } as const;
+const APPROVE_ROW = {
+  name: "Approve the refund of 200.00 for Ayesha Khan, invoice INV-2026-0001",
+} as const;
+const REJECT_ROW = {
+  name: "Reject the refund of 200.00 for Ayesha Khan, invoice INV-2026-0001",
+} as const;
+const PROCESS_ROW = {
+  name: "Process the refund of 200.00 for Ayesha Khan, invoice INV-2026-0001",
+} as const;
 
 describe("payments page: refunds", () => {
   it("offers Approve and Reject on a request someone else made, and Process on an approved one", async () => {
