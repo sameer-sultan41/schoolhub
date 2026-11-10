@@ -50,7 +50,10 @@ function money(locale: string, value: string) {
  * report sends, and every amount is the server's string, formatted for display and never summed.
  * The collection's first column follows how it was grouped.
  */
-export function useStudentReportColumns(groupBy: FinanceReportGroupBy): StudentReportColumns {
+export function useStudentReportColumns(
+  groupBy: FinanceReportGroupBy,
+  filtered = false,
+): StudentReportColumns {
   const t = useTranslations("fees");
   const locale = useLocale();
 
@@ -120,8 +123,12 @@ export function useStudentReportColumns(groupBy: FinanceReportGroupBy): StudentR
         column<Ledger>("description", t("reports.columns.description"), (row) => row.description),
         column<Ledger>("debit", t("reports.columns.debit"), (row) => money(locale, row.debit)),
         column<Ledger>("credit", t("reports.columns.credit"), (row) => money(locale, row.credit)),
-        column<Ledger>("balance", t("reports.columns.balance"), (row) =>
-          money(locale, row.balance),
+        // The server's running balance is over the lines the filters kept, so a filtered
+        // statement says so rather than pass it off as what the student owes.
+        column<Ledger>(
+          "balance",
+          t(filtered ? "reports.columns.balanceFiltered" : "reports.columns.balance"),
+          (row) => money(locale, row.balance),
         ),
       ],
       "grant-register": [
@@ -155,5 +162,5 @@ export function useStudentReportColumns(groupBy: FinanceReportGroupBy): StudentR
         ),
       ],
     };
-  }, [t, locale, groupBy]);
+  }, [t, locale, groupBy, filtered]);
 }

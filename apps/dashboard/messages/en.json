@@ -4305,6 +4305,7 @@
         "debit": "Debit",
         "credit": "Credit",
         "balance": "Balance",
+        "balanceFiltered": "Balance (within filters)",
         "grant": "Grant",
         "name": "Name",
         "admissionNumber": "Admission no.",

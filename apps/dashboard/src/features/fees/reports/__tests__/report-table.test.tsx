@@ -23,11 +23,16 @@ import { ReportTable } from "../report-table";
 
 const FIRST_PAGE = { pageIndex: 0, pageSize: 10 };
 
-function renderReport(report: FinanceReportRun, groupBy: FinanceReportGroupBy = "day") {
+function renderReport(
+  report: FinanceReportRun,
+  groupBy: FinanceReportGroupBy = "day",
+  filtered = false,
+) {
   renderWithProviders(
     <ReportTable
       report={report}
       groupBy={groupBy}
+      filtered={filtered}
       pagination={FIRST_PAGE}
       onPaginationChange={jest.fn()}
     />,
@@ -119,6 +124,15 @@ describe("ReportTable", () => {
     expect(payment.getByText("Cash")).toBeInTheDocument();
     expect(payment.getByText("400.00")).toBeInTheDocument();
     expect(payment.getByText("600.00")).toBeInTheDocument();
+  });
+
+  it("labels a filtered statement's running balance as covering only the filtered lines", () => {
+    renderReport({ kind: "student-ledger", rows: [LEDGER_PAYMENT] }, "day", true);
+
+    expect(headers()).toContain("Balance (within filters)");
+    expect(headers()).not.toContain("Balance");
+    // The figure itself is still the server's.
+    expect(rowOf("RCP-0007").getByText("600.00")).toBeInTheDocument();
   });
 
   it("shows a grant and a waived fine each as its own type, with its source's status", () => {

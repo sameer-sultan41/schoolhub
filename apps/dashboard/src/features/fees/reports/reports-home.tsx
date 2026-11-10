@@ -105,6 +105,7 @@ export function ReportsHome() {
       <ReportTable
         report={report.data}
         groupBy={toFinanceReportGrouping(form.values.group)}
+        filtered={[query.campusId, query.academicSessionId, query.classId].some(Boolean)}
         pagination={form.pagination}
         onPaginationChange={form.onPaginationChange}
         actions={

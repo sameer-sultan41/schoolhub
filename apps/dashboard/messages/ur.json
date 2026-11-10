@@ -4305,6 +4305,7 @@
         "debit": "ڈیبٹ",
         "credit": "کریڈٹ",
         "balance": "بقایا",
+        "balanceFiltered": "بقایا (فلٹرز کے اندر)",
         "grant": "گرانٹ",
         "name": "نام",
         "admissionNumber": "داخلہ نمبر",

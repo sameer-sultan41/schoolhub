@@ -14,6 +14,8 @@ export interface ReportTableProps extends ReportGridPaging {
   report: FinanceReportRun;
   /** How the collection was grouped (its first column follows). */
   groupBy: FinanceReportGroupBy;
+  /** A campus, session or class filter is set: a statement's running balance then covers only the lines kept. */
+  filtered: boolean;
 }
 
 /**
@@ -21,9 +23,9 @@ export interface ReportTableProps extends ReportGridPaging {
  * `row.kind`, so each kind's columns read only the fields its rows carry. The grid itself is the
  * shared `ReportGrid`.
  */
-export function ReportTable({ report, groupBy, ...paging }: ReportTableProps) {
+export function ReportTable({ report, groupBy, filtered, ...paging }: ReportTableProps) {
   const t = useTranslations("fees");
-  const studentColumns = useStudentReportColumns(groupBy);
+  const studentColumns = useStudentReportColumns(groupBy, filtered);
   const ledgerColumns = useLedgerReportColumns();
   const { rows } = report;
   const grid = {
