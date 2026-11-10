@@ -6,12 +6,14 @@ import {
   DEFAULT_COUNTER_METHOD,
   METHODS_NEEDING_REFERENCE,
   PAYMENT_METHODS,
+  PAYMENT_STATUS_REFUNDABLE,
   PAYMENT_STATUSES,
   PAYMENTS_QUERY_FIELDS,
 } from "./payments-constant";
 import type { RecordPaymentFormValues } from "./payments.schema";
 import type {
   CounterPaymentMethod,
+  PaymentRecord,
   PaymentMethod,
   PaymentsQuery,
   PaymentStatus,
@@ -104,4 +106,9 @@ export function cashierFilterId(
 ): string | undefined {
   if (value === "") return undefined;
   return value === CASHIER_FILTER_ME ? currentUserId : value;
+}
+
+/** Whether Request refund is offered on this payment: only a confirmed one. The server decides regardless. */
+export function canRequestRefund(payment: Pick<PaymentRecord, "status">): boolean {
+  return payment.status === PAYMENT_STATUS_REFUNDABLE;
 }

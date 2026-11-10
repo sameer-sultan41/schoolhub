@@ -50,6 +50,9 @@ export const PAYMENTS_QUERY_FIELDS: ReadonlyArray<readonly [keyof PaymentsQuery,
   ["pageSize", "page_size"],
 ];
 
+/** The only status a payment can be refunded from (`request_refund`: "Only a confirmed payment"). */
+export const PAYMENT_STATUS_REFUNDABLE: PaymentStatus = "confirmed";
+
 /** Rows per page on the Payments tab: the cursor list has no page-size picker. */
 export const PAYMENTS_PAGE_SIZE = 25;
 

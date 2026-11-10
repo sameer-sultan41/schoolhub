@@ -1,6 +1,7 @@
 import { COUNTER_PAYMENT_METHODS } from "../payments-constant";
 import {
   buildRecordPaymentInput,
+  canRequestRefund,
   cashierFilterId,
   defaultRecordPaymentFormValues,
   needsReference,
@@ -109,5 +110,16 @@ describe("payments list filters", () => {
     expect(paymentMethodFilter("barter")).toBeUndefined();
     expect(paymentStatusFilter("reversed")).toBe("reversed");
     expect(paymentStatusFilter("all")).toBeUndefined();
+  });
+});
+
+describe("canRequestRefund", () => {
+  it.each([
+    ["confirmed", true],
+    ["pending", false],
+    ["failed", false],
+    ["reversed", false],
+  ] as const)("a %s payment: %s", (status, expected) => {
+    expect(canRequestRefund({ status })).toBe(expected);
   });
 });
