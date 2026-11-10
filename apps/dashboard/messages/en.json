@@ -3837,9 +3837,9 @@
           "approve": "Approve",
           "reject": "Reject",
           "process": "Process",
-          "approveRow": "Approve the refund of {amount}",
-          "rejectRow": "Reject the refund of {amount}",
-          "processRow": "Process the refund of {amount}"
+          "approveRow": "Approve the refund of {amount} for {student}, invoice {invoice}",
+          "rejectRow": "Reject the refund of {amount} for {student}, invoice {invoice}",
+          "processRow": "Process the refund of {amount} for {student}, invoice {invoice}"
         },
         "note": "Note (optional)",
         "noteRequired": "Note",

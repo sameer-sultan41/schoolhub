@@ -3837,9 +3837,9 @@
           "approve": "منظور کریں",
           "reject": "مسترد کریں",
           "process": "ادا کریں",
-          "approveRow": "{amount} کی واپسی منظور کریں",
-          "rejectRow": "{amount} کی واپسی مسترد کریں",
-          "processRow": "{amount} کی واپسی ادا کریں"
+          "approveRow": "{student} کی انوائس {invoice} کی {amount} کی واپسی منظور کریں",
+          "rejectRow": "{student} کی انوائس {invoice} کی {amount} کی واپسی مسترد کریں",
+          "processRow": "{student} کی انوائس {invoice} کی {amount} کی واپسی ادا کریں"
         },
         "note": "نوٹ (اختیاری)",
         "noteRequired": "نوٹ",
