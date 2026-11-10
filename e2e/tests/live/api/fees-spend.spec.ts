@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { ApiClient } from "@schoolhub/api-client";
 import { expect, test } from "@/fixtures";
 import { accountantApproverSession, accountantSession, refusal } from "@/lib/live-fees";
@@ -13,9 +14,12 @@ import { accountantApproverSession, accountantSession, refusal } from "@/lib/liv
  * segregation-of-duties 422 from the real actor comparison, the real ledger postings the approval
  * makes and the reversal undoes, the account-type rule on categories, and RLS.
  *
+ * The accountant also posts a hand-written journal entry: a balanced set posts once however many
+ * times the same `Idempotency-Key` is sent, and an unbalanced one is a 422 that names both totals.
+ *
  * Endpoints covered: `GET /ledger-accounts`, `POST|DELETE /expense-categories`, `POST|PATCH
- * /expenses`, `POST /expenses/{id}:submit|:approve|:reverse`, `GET /ledger-entries`, `POST /budgets`,
- * `POST /budgets/{id}:approve`.
+ * /expenses`, `POST /expenses/{id}:submit|:approve|:reverse`, `GET /ledger-entries`,
+ * `POST /ledger-entries:post-journal`, `POST /budgets`, `POST /budgets/{id}:approve`.
  */
 
 interface Account {
@@ -44,6 +48,9 @@ interface Budget {
 }
 
 interface Entry {
+  transaction_id: string;
+  reference_type: string;
+  memo: string | null;
   debit: string;
   credit: string;
   reversed_by_transaction_id: string | null;
@@ -145,6 +152,65 @@ test.describe("spend (live API)", () => {
       query: { reference_type: "expense", reference_id: draft.id },
     });
     expect(after.data.every((entry) => entry.reversed_by_transaction_id !== null)).toBe(true);
+  });
+
+  test("a balanced journal posts once per Idempotency-Key, and an unbalanced one is a 422", async () => {
+    const accountant = await accountantSession();
+    const cash = await accountOfType(accountant, "asset");
+    const income = await accountOfType(accountant, "income");
+    const memo = `E2E journal ${runCode()}`;
+    const lines = (credit: string) => [
+      { ledger_account: cash.id, debit: "25.00", credit: "0.00" },
+      { ledger_account: income.id, debit: "0.00", credit },
+    ];
+    const post = (credit: string, idempotencyKey: string) =>
+      accountant.post<Entry[]>(
+        "/ledger-entries:post-journal",
+        { entry_date: today(), memo, lines: lines(credit) },
+        { idempotencyKey },
+      );
+
+    // Unbalanced: refused in the server's words, naming both totals, and nothing is posted.
+    const unbalanced = await refusal(post("10.00", randomUUID()));
+    expect(unbalanced.status).toBe(422);
+    expect(unbalanced.message).toBe(
+      "This posting does not balance: debits total 25.00 and credits total 10.00, a difference of 15.00.",
+    );
+    const none = await accountant.get<Entry[]>("/ledger-entries", {
+      query: { reference_type: "manual", search: memo },
+    });
+    expect(none.data).toHaveLength(0);
+
+    // Balanced: one transaction of two lines; the same key again replays it rather than posting twice.
+    const key = randomUUID();
+    const first = (await post("25.00", key)).data;
+    expect(first).toHaveLength(2);
+    expect(new Set(first.map((line) => line.transaction_id)).size).toBe(1);
+    expect(first.every((line) => line.reference_type === "manual" && line.memo === memo)).toBe(
+      true,
+    );
+    const replay = (await post("25.00", key)).data;
+    expect(replay.map((line) => line.transaction_id)).toEqual(
+      first.map((line) => line.transaction_id),
+    );
+    const posted = await accountant.get<Entry[]>("/ledger-entries", {
+      query: { transaction_id: first[0]?.transaction_id },
+    });
+    expect(posted.data).toHaveLength(2);
+    const everywhere = await accountant.get<Entry[]>("/ledger-entries", {
+      query: { reference_type: "manual", search: memo },
+    });
+    expect(everywhere.data).toHaveLength(2);
+
+    // A journal needs a memo.
+    const noMemo = await refusal(
+      accountant.post(
+        "/ledger-entries:post-journal",
+        { entry_date: today(), memo: "", lines: lines("25.00") },
+        { idempotencyKey: randomUUID() },
+      ),
+    );
+    expect(fieldsOf(noMemo)).toContain("memo");
   });
 
   test("a category must map to an expense account, and one with an expense cannot be deleted", async () => {

@@ -2,6 +2,7 @@ import { expect, test } from "@/fixtures";
 import {
   buildRole,
   buildUser,
+  FEES_LEDGER_JOURNAL_PERMISSIONS,
   FEES_SPEND_ACCOUNTANT_PERMISSIONS,
   FEES_SPEND_VIEWER_PERMISSIONS,
   ORG_IDS,
@@ -12,21 +13,25 @@ import {
   buildFeeBudget,
   buildFeeExpense,
   buildFeeExpenseCategory,
+  buildFeeLedgerEntry,
   buildLedgerAccount,
   feesSetupModule,
   feesSpendModule,
   type FeeBudget,
   type FeeExpense,
   type FeeExpenseCategory,
+  type FeeLedgerEntry,
   type MockApi,
   schoolOrganizationModule,
 } from "@/mocks";
+import type { LedgerPage } from "@/pages";
 
 /**
  * Spend (PR D) against a stubbed API: the Expenses, Categories and Budgets tabs of
- * `/fees/expenses`. The stub (`feesSpendModule`) enforces the server's rules the screens surface
+ * `/fees/expenses`, and the Journal tab of `/fees/ledger`. The stub (`feesSpendModule`) enforces the server's rules the screens surface
  * (L5), in its words: a draft-only edit and submit, a submitted-only decision that the creator
- * cannot make, a reason to reverse, a category in use undeletable, a budget naming one target.
+ * cannot make, a reason to reverse, a category in use undeletable, a budget naming one target,
+ * a journal that must balance.
  * Whether the server really does is the live lane's (`tests/live/api/fees-spend.spec.ts`).
  */
 
@@ -289,5 +294,119 @@ test.describe("a viewer holding only the expense view key", () => {
     await expect(
       feeExpensesPage.button(/^(Approve|Reject|Submit|Edit|Reverse) expense/),
     ).toHaveCount(0);
+  });
+});
+
+const cashAccount = buildLedgerAccount({
+  code: "1001",
+  name: "Cash",
+  account_type: "asset",
+  is_system: true,
+});
+
+const journalist = buildUser({
+  id: uuid(),
+  roles: [buildRole({ slug: "accountant", name: "Accountant" })],
+  permissions: FEES_LEDGER_JOURNAL_PERMISSIONS,
+});
+const ledgerReader = buildUser({ id: uuid(), permissions: ["fees.ledger.view"] });
+
+function stubJournalApi(mockApi: MockApi, actorId: string, entries: FeeLedgerEntry[] = []) {
+  const accounts = [cashAccount, incomeAccount];
+  mockApi.use(feesSetupModule({ accounts }), feesSpendModule({ accounts, entries, actorId }));
+  return entries;
+}
+
+async function fillJournal(ledgerPage: LedgerPage, credit: string) {
+  const dialog = ledgerPage.journalDialog;
+  await dialog.getByLabel("Entry date").fill("2026-10-07");
+  await dialog.getByLabel("Memo").fill("Move tuition to cash");
+  await ledgerPage.journalLine(1).getByRole("combobox", { name: "Account" }).click();
+  await ledgerPage.option("1001 Cash").click();
+  await ledgerPage.journalLine(2).getByRole("combobox", { name: "Account" }).click();
+  await ledgerPage.option("4001 Tuition income").click();
+  await ledgerPage.journalLine(1).getByLabel("Debit").fill("100.00");
+  await ledgerPage.journalLine(2).getByLabel("Credit").fill(credit);
+}
+
+test.describe("an accountant posting a journal entry", () => {
+  test.use({ authUser: journalist });
+
+  test("posts a balanced entry, which then lists as two lines", async ({
+    mockApi,
+    ledgerPage,
+    signedIn: _signedIn,
+  }) => {
+    const entries = stubJournalApi(mockApi, journalist.id, [
+      buildFeeLedgerEntry({
+        ledger_account: incomeAccount.id,
+        credit: "500.00",
+        memo: "Opening balance",
+      }),
+    ]);
+    await ledgerPage.gotoJournal();
+
+    await expect(ledgerPage.journalRow("Opening balance")).toBeVisible();
+    await ledgerPage.postButton.click();
+    await fillJournal(ledgerPage, "100.00");
+    await expect(
+      ledgerPage.journalDialog.getByText("Debits 100.00, credits 100.00, difference 0.00"),
+    ).toBeVisible();
+    await ledgerPage.journalDialog.getByRole("button", { name: "Post entry", exact: true }).click();
+
+    await expect(ledgerPage.journalDialog).toHaveCount(0);
+    await expect(ledgerPage.journalRow("Move tuition to cash")).toHaveCount(2);
+    expect(entries.filter((entry) => entry.memo === "Move tuition to cash")).toMatchObject([
+      { debit: "100.00", credit: "0.00", reference_type: "manual" },
+      { debit: "0.00", credit: "100.00", reference_type: "manual" },
+    ]);
+  });
+
+  test("an unbalanced entry is refused in the server's words and posts nothing", async ({
+    mockApi,
+    ledgerPage,
+    signedIn: _signedIn,
+  }) => {
+    const entries = stubJournalApi(mockApi, journalist.id);
+    await ledgerPage.gotoJournal();
+
+    await ledgerPage.postButton.click();
+    await fillJournal(ledgerPage, "40.00");
+    // The hint warns but does not hold Post back: the server decides.
+    await expect(
+      ledgerPage.journalDialog.getByText("Debits 100.00, credits 40.00, difference 60.00"),
+    ).toBeVisible();
+    await ledgerPage.journalDialog.getByRole("button", { name: "Post entry", exact: true }).click();
+
+    await expect(
+      ledgerPage.journalDialog.getByText(
+        "This posting does not balance: debits total 100.00 and credits total 40.00, a difference of 60.00.",
+      ),
+    ).toBeVisible();
+    expect(entries).toHaveLength(0);
+
+    // Correcting the credit posts it.
+    await ledgerPage.journalLine(2).getByLabel("Credit").fill("100.00");
+    await ledgerPage.journalDialog.getByRole("button", { name: "Post entry", exact: true }).click();
+    await expect(ledgerPage.journalDialog).toHaveCount(0);
+    expect(entries).toHaveLength(2);
+  });
+});
+
+test.describe("a viewer holding only the ledger view key", () => {
+  test.use({ authUser: ledgerReader });
+
+  test("reads the journal and is offered no Post journal", async ({
+    mockApi,
+    ledgerPage,
+    signedIn: _signedIn,
+  }) => {
+    stubJournalApi(mockApi, ledgerReader.id, [
+      buildFeeLedgerEntry({ ledger_account: incomeAccount.id, credit: "500.00" }),
+    ]);
+    await ledgerPage.gotoJournal();
+
+    await expect(ledgerPage.journalRow("Opening balance")).toBeVisible();
+    await expect(ledgerPage.postButton).toHaveCount(0);
   });
 });

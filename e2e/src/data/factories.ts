@@ -383,6 +383,12 @@ export const FEES_SPEND_ACCOUNTANT_PERMISSIONS: PermissionKey[] = [
   "school.campus.view",
 ];
 
+/** The ledger keys the seeded `accountant` holds for the journal (`permissions.py`): the read and the posting. */
+export const FEES_LEDGER_JOURNAL_PERMISSIONS: PermissionKey[] = [
+  "fees.ledger.view",
+  "fees.ledger.create",
+];
+
 /** The read-only view of spend: the expense view key and nothing to write with. */
 export const FEES_SPEND_VIEWER_PERMISSIONS: PermissionKey[] = ["fees.expense.view"];
 

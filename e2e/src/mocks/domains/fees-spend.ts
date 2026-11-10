@@ -4,6 +4,7 @@ import { fail, noContent, ok, type MockResponse } from "../envelope";
 import { compareValues, cursorPageOf } from "../list";
 import type { MockApi, MockModule } from "../router";
 import type { LedgerAccount } from "./fees";
+import { registerJournal, type FeeLedgerEntry } from "./fees-journal";
 
 type Writable<T> = { -readonly [K in keyof T]: T[K] };
 export type FeeExpense = Writable<ApiSchemas["Expense"]>;
@@ -78,6 +79,8 @@ export interface FeesSpendOptions {
   budgets?: FeeBudget[];
   /** The chart the category rule reads: a category must map to an expense account. */
   accounts?: LedgerAccount[];
+  /** The general ledger `GET /ledger-entries` lists and `:post-journal` appends to (held by reference). */
+  entries?: FeeLedgerEntry[];
   /** The id of the signed-in user, whom the stub treats as the caller: a creator cannot approve
    * their own expense (the server compares `created_by` with the actor). */
   actorId?: string;
@@ -138,7 +141,9 @@ function ordered<T extends object>(rows: T[], params: URLSearchParams, keys: str
  *   `:reverse` needs an approved or paid one and a reason;
  * - `GET /expenses?awaiting_approval=true` lists only submitted expenses;
  * - a budget names exactly one of an account and a category (400, no field), and `:approve`
- *   moves only a draft.
+ *   moves only a draft;
+ * - `/ledger-entries` lists the general ledger and `:post-journal` posts a balanced set (see
+ *   `./fees-journal`).
  *
  * Whether the server really enforces any of this is the live lane's
  * (`tests/live/api/fees-spend.spec.ts`).
@@ -150,8 +155,10 @@ export function feesSpendModule(options: FeesSpendOptions = {}): MockModule {
       categories: options.categories ?? [],
       budgets: options.budgets ?? [],
       accounts: options.accounts ?? [],
+      entries: options.entries ?? [],
       actorId: options.actorId ?? "",
     };
+    registerJournal(api, state);
     registerCategories(api, state);
     registerExpenses(api, state);
     registerBudgets(api, state);
@@ -163,6 +170,7 @@ interface SpendState {
   categories: FeeExpenseCategory[];
   budgets: FeeBudget[];
   accounts: LedgerAccount[];
+  entries: FeeLedgerEntry[];
   actorId: string;
 }
 
