@@ -1529,8 +1529,8 @@ class ExpenseCategory(TenantOwnedModel):
 class Expense(TenantOwnedModel):
     """One outgoing payment, under an approval gate.
 
-    **The approver may not be the submitter**, which §15 states outright and the
-    CHECK below carries as far as a constraint can. The service holds the rest,
+    **The approver may be neither the creator nor the submitter** (§15). The CHECK
+    below carries the creator half as far as a constraint can. The service holds the rest,
     because a constraint cannot know who is asking — the same split refunds use.
 
     `status` is the gate: only an `approved` expense posts to the ledger, and
@@ -1567,6 +1567,11 @@ class Expense(TenantOwnedModel):
         max_length=15, choices=ExpenseStatus.choices, default=ExpenseStatus.DRAFT
     )
     approved_by = models.UUIDField(null=True, blank=True)
+    submitted_by = models.UUIDField(
+        null=True,
+        blank=True,
+        help_text="Who moved the draft into the approval queue; may differ from created_by.",
+    )
     receipt_file = models.ForeignKey(
         "files.File",
         on_delete=models.SET_NULL,

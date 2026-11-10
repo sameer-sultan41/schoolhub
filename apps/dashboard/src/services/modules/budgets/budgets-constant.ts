@@ -7,7 +7,7 @@ export const BUDGETS_QUERY_MODULE = "budgets";
 export const BUDGETS_LIST_RESOURCE = "list";
 export const BUDGETS_PAGE_SIZE = 25;
 
-export const BUDGET_NAME_MAX = 160;
+export const BUDGET_NAME_MAX = 120;
 
 /** Every status, keyed so the compiler checks the set against the generated enum (L32). */
 const BUDGET_STATUSES_SET: Record<BudgetStatus, true> = {
@@ -63,14 +63,17 @@ export const BUDGETS_URL_FILTERS = {
 };
 export const BUDGETS_URL_FILTER_KEYS = Object.keys(BUDGETS_URL_FILTERS);
 
+/** The form's one target input, and the API fields it stands in for. */
+export const BUDGET_TARGET_INPUT = "target_id";
+export const BUDGET_TARGET_ERROR_FIELDS: readonly string[] = ["ledger_account", "expense_category"];
+
 /**
  * The form's fields that have an input. The server's "name exactly one" refusal arrives with no
  * field, so it folds into the form's message.
  */
 export const BUDGET_ERROR_FIELDS = [
   "name",
-  "ledger_account",
-  "expense_category",
+  BUDGET_TARGET_INPUT,
   "campus",
   "period_start",
   "period_end",

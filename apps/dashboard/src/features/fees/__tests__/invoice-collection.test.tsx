@@ -108,7 +108,7 @@ describe("invoice page: collection actions", () => {
       );
     });
     expect(
-      await within(dialog).findByText("Payment of 1,350.00 recorded. Receipt RCT-2026-0001."),
+      await within(dialog).findByText("Payment of 1,350.00 recorded. Receipt RCP-2026-00001."),
     ).toBeInTheDocument();
   });
 
@@ -173,21 +173,21 @@ describe("invoice page: collection actions", () => {
 });
 
 describe("invoice page: request refund", () => {
-  const REQUEST_ROW = { name: "Request a refund for receipt RCT-2026-0001" } as const;
+  const REQUEST_ROW = { name: "Request a refund for receipt RCP-2026-00001" } as const;
 
   beforeEach(() => {
     stubFeesServices(`/fees/invoices/${INVOICE_ID}`);
     listPayments.mockResolvedValue(
       cursorPage([
         paymentRecord(),
-        paymentRecord({ id: "d2", receipt_no: "RCT-2026-0002", status: "reversed" }),
+        paymentRecord({ id: "d2", receipt_no: "RCP-2026-00002", status: "reversed" }),
       ]),
     );
   });
 
   it("offers Request refund on a confirmed payment only, and only with fees.payment.refund", async () => {
     await renderPage(REFUNDER);
-    await screen.findByText("RCT-2026-0002");
+    await screen.findByText("RCP-2026-00002");
 
     expect(screen.getAllByRole("button", { name: /Request a refund for receipt/ })).toHaveLength(1);
     expect(screen.getByRole("button", REQUEST_ROW)).toBeInTheDocument();
@@ -195,7 +195,7 @@ describe("invoice page: request refund", () => {
 
   it("offers none without the refund key", async () => {
     await renderPage(COLLECTOR);
-    await screen.findByText("RCT-2026-0001");
+    await screen.findByText("RCP-2026-00001");
 
     expect(screen.queryByRole("button", { name: /Request a refund/ })).not.toBeInTheDocument();
   });
@@ -205,7 +205,7 @@ describe("invoice page: request refund", () => {
     const user = await renderPage(REFUNDER);
 
     await user.click(await screen.findByRole("button", REQUEST_ROW));
-    const dialog = await screen.findByRole("dialog", { name: "Request refund: RCT-2026-0001" });
+    const dialog = await screen.findByRole("dialog", { name: "Request refund: RCP-2026-00001" });
     expect(within(dialog).getByLabelText("Amount to refund")).toHaveValue("500.00");
     await user.clear(within(dialog).getByLabelText("Amount to refund"));
     await user.type(within(dialog).getByLabelText("Amount to refund"), "200.00");
@@ -243,7 +243,7 @@ describe("invoice page: request refund", () => {
     const user = await renderPage(REFUNDER);
 
     await user.click(await screen.findByRole("button", REQUEST_ROW));
-    const dialog = await screen.findByRole("dialog", { name: "Request refund: RCT-2026-0001" });
+    const dialog = await screen.findByRole("dialog", { name: "Request refund: RCP-2026-00001" });
     await user.clear(within(dialog).getByLabelText("Amount to refund"));
     await user.type(within(dialog).getByLabelText("Amount to refund"), "600.00");
     await user.type(within(dialog).getByLabelText("Reason"), "Charged twice");
@@ -260,7 +260,7 @@ describe("invoice page: request refund", () => {
     ).toBeInTheDocument();
     expect(amount).toHaveAttribute("aria-invalid", "true");
     expect(
-      screen.getByRole("dialog", { name: "Request refund: RCT-2026-0001" }),
+      screen.getByRole("dialog", { name: "Request refund: RCP-2026-00001" }),
     ).toBeInTheDocument();
   });
 
@@ -270,7 +270,7 @@ describe("invoice page: request refund", () => {
     const user = await renderPage(REFUNDER);
 
     await user.click(await screen.findByRole("button", REQUEST_ROW));
-    const dialog = await screen.findByRole("dialog", { name: "Request refund: RCT-2026-0001" });
+    const dialog = await screen.findByRole("dialog", { name: "Request refund: RCP-2026-00001" });
     await user.type(within(dialog).getByLabelText("Reason"), "Charged twice");
     await user.click(within(dialog).getByRole("button", { name: "Request refund" }));
     expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
@@ -287,7 +287,7 @@ describe("invoice page: request refund", () => {
     const user = await renderPage(REFUNDER);
 
     await user.click(await screen.findByRole("button", REQUEST_ROW));
-    const dialog = await screen.findByRole("dialog", { name: "Request refund: RCT-2026-0001" });
+    const dialog = await screen.findByRole("dialog", { name: "Request refund: RCP-2026-00001" });
     await user.clear(within(dialog).getByLabelText("Amount to refund"));
     await user.type(within(dialog).getByLabelText("Amount to refund"), "0");
     await user.click(within(dialog).getByRole("button", { name: "Request refund" }));

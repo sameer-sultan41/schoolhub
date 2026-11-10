@@ -1,4 +1,5 @@
 import { FILTER_ALL } from "@/lib/constants";
+import { isUuid } from "@/lib/helpers";
 import type { LedgerEntriesQuery, LedgerReferenceType } from "./ledger-entries-type";
 
 /** The ledger-entries module's constants. */
@@ -52,9 +53,9 @@ const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const isDateOrBlank = (value: string) => value === "" || DATE_PATTERN.test(value);
 const REFERENCE_FILTER_VALUES: readonly string[] = [FILTER_ALL, ...LEDGER_REFERENCE_TYPES];
 
-/** The Journal tab's URL filters (`useDataGridUrlState`); `account` is an id, whose picker is the list the page reads anyway. */
+/** The Journal tab's URL filters (`useDataGridUrlState`); `account` is an id, kept only when it is a UUID (a bad one is ignored, not sent as a 400). */
 export const LEDGER_ENTRIES_URL_FILTERS = {
-  account: { default: "", isValid: () => true },
+  account: { default: "", isValid: (value: string) => value === "" || isUuid(value) },
   from: { default: "", isValid: isDateOrBlank },
   to: { default: "", isValid: isDateOrBlank },
   reference: {

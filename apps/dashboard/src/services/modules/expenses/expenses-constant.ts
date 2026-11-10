@@ -1,4 +1,5 @@
 import { FILTER_ALL } from "@/lib/constants";
+import { isUuid } from "@/lib/helpers";
 import type {
   ExpenseInput,
   ExpensePaymentMethod,
@@ -82,10 +83,13 @@ export const AWAITING_APPROVAL_ON = "true";
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const isDateOrBlank = (value: string) => value === "" || DATE_PATTERN.test(value);
 const STATUS_FILTER_VALUES: readonly string[] = [FILTER_ALL, ...EXPENSE_STATUSES];
-/** The Expenses tab's URL filters (`useDataGridUrlState`). `category` and `campus` are ids; the lists they come from are the pickers' own. */
+/** A category or campus id read from the URL: anything that is not a UUID is ignored, not sent to the API as a 400. */
+const isUuidOrBlank = (value: string) => value === "" || isUuid(value);
+
+/** The Expenses tab's URL filters (`useDataGridUrlState`). `category` and `campus` are ids, kept only when they are UUIDs. */
 export const EXPENSES_URL_FILTERS = {
-  category: { default: "", isValid: () => true },
-  campus: { default: "", isValid: () => true },
+  category: { default: "", isValid: isUuidOrBlank },
+  campus: { default: "", isValid: isUuidOrBlank },
   status: { default: FILTER_ALL, isValid: (value: string) => STATUS_FILTER_VALUES.includes(value) },
   from: { default: "", isValid: isDateOrBlank },
   to: { default: "", isValid: isDateOrBlank },

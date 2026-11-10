@@ -144,6 +144,42 @@ class ExpenseApprovalTests(SpendTestCase):
 
         self.assertIn("cannot approve", str(caught.exception.detail))
 
+    def test_whoever_submitted_another_persons_draft_cannot_approve_it(self) -> None:
+        """B edits and submits A's draft: B made it ready, so B may not decide it.
+        A third person still can."""
+        expense = self._expense(created_by=self.approver.pk)
+        submitter = self.user
+        third = UserFactory(tenant=self.tenant)
+
+        with tenant_context(self.tenant.id):
+            submitted = services.submit_expense(expense=expense, actor_id=submitter.pk)
+            self.assertEqual(submitted.submitted_by, submitter.pk)
+
+            with self.assertRaises(DomainRuleViolation) as caught:
+                services.decide_expense(expense=expense, approve=True, actor_id=submitter.pk)
+            self.assertIn("created or submitted", str(caught.exception.detail))
+            with self.assertRaises(DomainRuleViolation):
+                services.decide_expense(expense=expense, approve=False, actor_id=submitter.pk)
+            # The creator did not submit, but is still barred.
+            with self.assertRaises(DomainRuleViolation):
+                services.decide_expense(expense=expense, approve=True, actor_id=self.approver.pk)
+
+            decided = services.decide_expense(expense=expense, approve=True, actor_id=third.pk)
+        self.assertEqual(decided.approved_by, third.pk)
+
+    def test_a_submitter_who_is_not_the_creator_gets_422_through_the_api(self) -> None:
+        expense = self._expense(created_by=self.approver.pk)
+        self.assertEqual(self.client.post(f"/api/v1/expenses/{expense.pk}:submit").status_code, 200)
+
+        response = self.client.post(f"/api/v1/expenses/{expense.pk}:approve")
+
+        self.assertEqual(response.status_code, 422, response.content)
+        self.assertIn("approved_by", str(response.json()))
+        self.assertEqual(
+            self.client.get(f"/api/v1/expenses/{expense.pk}").json()["data"]["submitted_by"],
+            str(self.user.pk),
+        )
+
     def test_a_draft_expense_cannot_be_approved_without_being_submitted(self) -> None:
         expense = self._expense()
 

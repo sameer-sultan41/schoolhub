@@ -172,4 +172,18 @@ describe("budgets tab", () => {
 
     expect(await within(dialog).findByText(ONE_TARGET)).toBeInTheDocument();
   });
+
+  it("shows a 400 under expense_category beneath the target picker, the input it stands for", async () => {
+    updateBudget.mockRejectedValue(
+      ruleViolation("expense_category", "STA Stationery is inactive.", 400),
+    );
+    const user = await renderTab([VIEW, CREATE]);
+
+    await user.click(screen.getByRole("button", { name: EDIT }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit budget" });
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    const message = await within(dialog).findByText("STA Stationery is inactive.");
+    expect(message.id).toMatch(/form-item-message$/);
+  });
 });

@@ -7708,8 +7708,8 @@ export interface components {
             amount: string;
             /** Format: decimal */
             tax_amount?: string;
-            /** Format: double */
-            readonly gross_amount: number;
+            /** Format: decimal */
+            readonly gross_amount: string;
             /** Format: date */
             expense_date: string;
             payment_method?: components["schemas"]["PaymentMethodEnum"] | null;
@@ -7718,6 +7718,11 @@ export interface components {
             readonly approved_by: string | null;
             /** Format: uuid */
             readonly created_by: string | null;
+            /**
+             * Format: uuid
+             * @description Who moved the draft into the approval queue; may differ from created_by.
+             */
+            readonly submitted_by: string | null;
             /** Format: uuid */
             receipt_file?: string | null;
             /** Format: date-time */
@@ -10222,8 +10227,8 @@ export interface components {
             amount?: string;
             /** Format: decimal */
             tax_amount?: string;
-            /** Format: double */
-            readonly gross_amount?: number;
+            /** Format: decimal */
+            readonly gross_amount?: string;
             /** Format: date */
             expense_date?: string;
             payment_method?: components["schemas"]["PaymentMethodEnum"] | null;
@@ -10232,6 +10237,11 @@ export interface components {
             readonly approved_by?: string | null;
             /** Format: uuid */
             readonly created_by?: string | null;
+            /**
+             * Format: uuid
+             * @description Who moved the draft into the approval queue; may differ from created_by.
+             */
+            readonly submitted_by?: string | null;
             /** Format: uuid */
             receipt_file?: string | null;
             /** Format: date-time */

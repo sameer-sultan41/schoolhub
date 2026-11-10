@@ -31,16 +31,16 @@ export interface ExpenseRowActions {
   canUpdate: boolean;
   /** `fees.expense.approve`: Approve, Reject and Reverse. */
   canApprove: boolean;
-  /** The viewer's user id, to hide Approve and Reject on an expense they created. */
+  /** The viewer's user id, to hide Approve and Reject on an expense they created or submitted. */
   currentUserId: string | undefined;
   onAction: (action: ExpenseRowAction, expense: ExpenseRecord) => void;
 }
 
 /**
- * The expenses table's columns; `expense_date` and `amount` are the sortable ids. Each action
+ * The expenses table's columns; `expense_date` and `amount` (the net figure) are the sortable ids; the total beside it is not. Each action
  * shows only where the key and the status allow it: Edit on a draft (`.update`), Submit on a
- * draft (`.create`), Approve and Reject on a submitted expense (`.approve`, never to its
- * creator), Mark paid on an approved one (`.update`), Reverse on an approved or paid one
+ * draft (`.create`), Approve and Reject on a submitted expense (`.approve`, never to the person
+ * who created or submitted it), Mark paid on an approved one (`.update`), Reverse on an approved or paid one
  * (`.approve`). The server enforces every one of them again.
  */
 export function useExpenseColumns({
@@ -131,14 +131,25 @@ export function useExpenseColumns({
         header: ({ column }) => (
           <DataGridColumnHeader column={column} title={t("expenses.expenses.columns.amount")} />
         ),
-        // The total is `gross_amount`, a number on the wire: stringified, then formatted like every other money cell.
+        // The sortable figure is the net `amount`, which is what the server orders by.
         cell: ({ row }) => (
-          <span className="tabular-nums">
-            {formatMoney(locale, String(row.original.gross_amount))}
-          </span>
+          <span className="tabular-nums">{formatMoney(locale, row.original.amount)}</span>
         ),
         meta: {
           headerTitle: t("expenses.expenses.columns.amount"),
+          skeleton: <Skeleton className="h-4 w-20" />,
+        },
+      },
+      {
+        id: "total",
+        enableSorting: false,
+        header: () => t("expenses.expenses.columns.total"),
+        // `gross_amount` is a decimal string on the wire, like every other money field.
+        cell: ({ row }) => (
+          <span className="tabular-nums">{formatMoney(locale, row.original.gross_amount)}</span>
+        ),
+        meta: {
+          headerTitle: t("expenses.expenses.columns.total"),
           skeleton: <Skeleton className="h-4 w-20" />,
         },
       },

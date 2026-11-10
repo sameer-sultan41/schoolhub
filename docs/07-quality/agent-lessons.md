@@ -401,3 +401,8 @@
 3. Add it to the §2 checklist if it applies to every hand-back.
 4. If it overlaps an existing lesson, extend that one instead.
 5. If a lint rule, CI job or test now catches it, delete the lesson and link the check from [`tooling.md`](tooling.md) instead.
+
+### L62. Segregation of duties checks the person who made the record ready, not only its creator
+
+- **Mistake.** The expense approval rule compared the approver only with `created_by`, and `submit_expense` recorded nobody. An accountant could edit a colleague's draft, submit it, and approve it, as the creator never touched it (fees dashboard PR D review; `services.decide_expense`).
+- **Check.** For every maker-checker rule, list each actor who changes the record on its way to the gate (create, edit, submit) and make sure each one is stored and barred from deciding it. Test it: one person edits and submits another's draft, that person's approval is a 422, and a third person's approval succeeds.

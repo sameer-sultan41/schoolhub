@@ -159,12 +159,12 @@ describe("payments page: receipts", () => {
     listReceipts.mockResolvedValue(cursorPage([receiptRecord()]));
     const blob = new Blob(["%PDF"]);
     downloadReceipt.mockResolvedValue(blob);
-    const user = await renderTab("receipts", PAYMENTS_VIEW_PERMISSIONS, "RCT-2026-0001");
+    const user = await renderTab("receipts", PAYMENTS_VIEW_PERMISSIONS, "RCP-2026-00001");
 
-    await user.click(screen.getByRole("button", { name: "Download RCT-2026-0001 as PDF" }));
+    await user.click(screen.getByRole("button", { name: "Download RCP-2026-00001 as PDF" }));
 
     await waitFor(() => {
-      expect(saveBlob).toHaveBeenCalledWith(blob, "RCT-2026-0001-pdf.pdf");
+      expect(saveBlob).toHaveBeenCalledWith(blob, "RCP-2026-00001-pdf.pdf");
     });
     expect(downloadReceipt).toHaveBeenCalledWith("b1111111-1111-4111-8111-111111111111", "pdf");
     expect(screen.getByRole("textbox", { name: "Search receipts" })).toBeInTheDocument();
@@ -174,12 +174,12 @@ describe("payments page: receipts", () => {
     const { toast } = jest.requireMock<{ toast: { error: jest.Mock } }>("sonner");
     listReceipts.mockResolvedValue(cursorPage([receiptRecord()]));
     downloadReceipt.mockRejectedValue(new Error("down"));
-    const user = await renderTab("receipts", PAYMENTS_VIEW_PERMISSIONS, "RCT-2026-0001");
+    const user = await renderTab("receipts", PAYMENTS_VIEW_PERMISSIONS, "RCP-2026-00001");
 
-    await user.click(screen.getByRole("button", { name: "Download RCT-2026-0001 as PDF" }));
+    await user.click(screen.getByRole("button", { name: "Download RCP-2026-00001 as PDF" }));
 
     await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith("RCT-2026-0001 couldn't be downloaded.");
+      expect(toast.error).toHaveBeenCalledWith("RCP-2026-00001 couldn't be downloaded.");
     });
     expect(saveBlob).not.toHaveBeenCalled();
   });

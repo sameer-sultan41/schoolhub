@@ -253,6 +253,7 @@ export type {
   SubstitutionStatus,
   TeacherSubstitutionRecord,
 } from "./modules/teacher-substitutions";
+/** `UpdateGuardianLinkInput` is exported here because feature code imports only `@/services` (ADR-0011). */
 export type {
   GuardianLinkRecord,
   GuardianRecord,

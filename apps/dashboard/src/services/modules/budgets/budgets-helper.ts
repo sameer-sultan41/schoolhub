@@ -1,11 +1,15 @@
 import type { QueryParams } from "@schoolhub/api-client";
 import { FILTER_ALL } from "@/lib/constants";
+import { rekeyFieldErrors } from "@/lib/error-message";
 import { copyMappedFields } from "@/lib/helpers";
 import {
+  BUDGET_ERROR_FIELDS,
   BUDGET_STATUS_DRAFT,
   BUDGET_STATUSES,
   BUDGETS_BODY_FIELDS,
   BUDGETS_QUERY_FIELDS,
+  BUDGET_TARGET_ERROR_FIELDS,
+  BUDGET_TARGET_INPUT,
 } from "./budgets-constant";
 import type { BudgetFormValues } from "./budgets.schema";
 import type { BudgetInput, BudgetRecord, BudgetsQuery, BudgetStatus } from "./budgets-type";
@@ -86,4 +90,22 @@ export function buildBudgetInput(values: BudgetFormValues): BudgetInput {
     amount: values.amount.trim(),
     notes: values.notes.trim() || null,
   };
+}
+
+/**
+ * The inputs the form has now: the campus picker exists only for a viewer who may read campuses,
+ * so a `campus` error with no input to show under it folds into the form's message instead.
+ */
+export function budgetErrorFields(canReadCampuses: boolean): readonly string[] {
+  return canReadCampuses ? BUDGET_ERROR_FIELDS : BUDGET_ERROR_FIELDS.filter((f) => f !== "campus");
+}
+
+/**
+ * Re-keys the server's `ledger_account` / `expense_category` errors as `target_id`, the one input
+ * the form picks either from, so the message shows under it.
+ */
+export function mapBudgetTargetErrors(error: unknown): unknown {
+  return rekeyFieldErrors(error, (field) =>
+    BUDGET_TARGET_ERROR_FIELDS.includes(field) ? BUDGET_TARGET_INPUT : undefined,
+  );
 }

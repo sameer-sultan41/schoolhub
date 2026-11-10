@@ -359,7 +359,7 @@ export function paymentRecord(overrides: Partial<PaymentRecord> = {}): PaymentRe
     paid_at: "2026-10-05T09:00:00Z",
     received_by: null,
     receipt: "b1111111-1111-4111-8111-111111111111",
-    receipt_no: "RCT-2026-0001",
+    receipt_no: "RCP-2026-00001",
     created_at: STAMP,
     ...overrides,
   };
@@ -388,7 +388,7 @@ export function voucherRecord(overrides: Partial<VoucherRecord> = {}): VoucherRe
 export function receiptRecord(overrides: Partial<ReceiptRecord> = {}): ReceiptRecord {
   return {
     id: "b1111111-1111-4111-8111-111111111111",
-    receipt_no: "RCT-2026-0001",
+    receipt_no: "RCP-2026-00001",
     payment: PAYMENT_ID,
     invoice_no: "INV-2026-0001",
     student_name: "Ayesha Khan",
@@ -433,12 +433,13 @@ export function expenseRecord(overrides: Partial<ExpenseRecord> = {}): ExpenseRe
     description: "Printer paper",
     amount: "100.00",
     tax_amount: "15.00",
-    gross_amount: 115,
+    gross_amount: "115.00",
     expense_date: "2026-10-05",
     payment_method: "cash",
     status: "submitted",
     approved_by: null,
     created_by: OTHER_USER_ID,
+    submitted_by: OTHER_USER_ID,
     receipt_file: null,
     created_at: STAMP,
     updated_at: STAMP,

@@ -62,17 +62,19 @@ export function canSubmitExpense(expense: Pick<ExpenseRecord, "status">): boolea
 
 /**
  * Whether Approve and Reject are offered to this viewer: only on a submitted expense, and never to
- * the person who created it (the server refuses that with a 422, segregation of duties; a button
- * that always fails for that person is not offered). A row with no recorded creator is offered.
+ * the person who created it or the one who submitted it (the server refuses either with a 422,
+ * segregation of duties; a button that always fails for that person is not offered). A row with
+ * neither recorded is offered.
  */
 export function canDecideExpense(
-  expense: Pick<ExpenseRecord, "status" | "created_by">,
+  expense: Pick<ExpenseRecord, "status" | "created_by" | "submitted_by">,
   currentUserId: string | undefined,
 ): boolean {
   return (
     expense.status === EXPENSE_STATUS_DECIDABLE &&
     currentUserId !== undefined &&
-    expense.created_by !== currentUserId
+    expense.created_by !== currentUserId &&
+    expense.submitted_by !== currentUserId
   );
 }
 

@@ -11,6 +11,7 @@ import { FormDialogLayout } from "@/components/form-dialog-layout";
 import { FormSelectField } from "@/components/form-select-field";
 import { useFormDialogSubmit } from "@/hooks/use-form-dialog-submit";
 import { useInvalidateModule } from "@/hooks/use-invalidate-module";
+import { activeOrCurrent } from "@/features/fees/shared/option-helpers";
 import { Services, type ExpenseCategoryRecord } from "@/services";
 import {
   EXPENSE_CATEGORIES_QUERY_MODULE,
@@ -130,7 +131,12 @@ export function CategoryFormDialog({ open, onOpenChange, record }: CategoryFormD
           name="ledger_account"
           label={t("expenses.categories.form.account")}
           placeholder={t("expenses.categories.form.account")}
-          options={(accounts.data ?? []).map((a) => ({ id: a.id, name: `${a.code} ${a.name}` }))}
+          options={activeOrCurrent(accounts.data ?? [], form.getValues("ledger_account")).map(
+            (a) => ({
+              id: a.id,
+              name: `${a.code} ${a.name}`,
+            }),
+          )}
         />
       )}
       <FormSwitchField

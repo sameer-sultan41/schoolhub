@@ -70,13 +70,6 @@ export { ApiError } from "@schoolhub/api-client";
 /** Every module's public types live in `./types` (this file stays under the 400-line cap). */
 export * from "./types";
 
-/** One refused row of a whole-grid submission (attendance's `:bulk-mark`, marks' `:bulk-entry`). */
-
-/** `UpdateGuardianLinkInput` is re-exported here (not just from the guardians module
- * itself) because Task 7's `GuardianLinkFlagsDialog` imports it from `@/services`, not
- * from the guardians module directly (ADR-0011: feature code imports only `@/services`,
- * never a service module's own path). */
-
 /**
  * Every domain's API calls, aggregated behind one object. A component imports `Services`
  * and calls `Services.<domain>.<action>(...)` — never `apiClient` and never a service

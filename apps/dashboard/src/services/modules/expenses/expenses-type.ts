@@ -1,6 +1,6 @@
 import type { ApiSchemas } from "@schoolhub/api-client";
 
-/** The generated wire shape (ADR-0017). `created_by` is read-only: it hides Approve from the submitter. */
+/** The generated wire shape (ADR-0017). `created_by` and `submitted_by` are read-only: they hide Approve from both. */
 export type ExpenseRecord = ApiSchemas["Expense"];
 export type ExpenseStatus = ApiSchemas["ExpenseStatusEnum"];
 export type ExpensePaymentMethod = Exclude<

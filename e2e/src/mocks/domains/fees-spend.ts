@@ -40,12 +40,13 @@ export function buildFeeExpense(overrides: Partial<FeeExpense> = {}): FeeExpense
     description: "Printer paper",
     amount: "100.00",
     tax_amount: "15.00",
-    gross_amount: 115,
+    gross_amount: "115.00",
     expense_date: "2026-10-05",
     payment_method: "cash",
     status: "submitted",
     approved_by: null,
     created_by: null,
+    submitted_by: null,
     receipt_file: null,
     created_at: STAMP,
     updated_at: STAMP,
@@ -82,7 +83,7 @@ export interface FeesSpendOptions {
   /** The general ledger `GET /ledger-entries` lists and `:post-journal` appends to (held by reference). */
   entries?: FeeLedgerEntry[];
   /** The id of the signed-in user, whom the stub treats as the caller: a creator cannot approve
-   * their own expense (the server compares `created_by` with the actor). */
+   * their own expense, nor the one who submitted it (the server compares both with the actor). */
   actorId?: string;
 }
 
@@ -91,11 +92,13 @@ export interface FeesSpendOptions {
 const REQUIRED = "This field is required.";
 const EXPENSE_POSITIVE = "An expense must be for a positive amount.";
 const SELF_APPROVAL =
-  "The person who submitted an expense cannot approve it (§15, and auth-and-rbac §2.4).";
+  "The person who created or submitted an expense cannot approve it (§15, and auth-and-rbac §2.4).";
 const NOT_SUBMITTED = "Only a submitted expense can be approved or rejected.";
 const NOT_APPROVED = "Only an approved expense can be paid.";
 const NOT_REVERSIBLE = "Only an approved or paid expense can be reversed.";
-const REASON_REQUIRED = "Reversing an expense requires a reason.";
+// DRF's CharField words: a missing key, then a blank (or whitespace-only) value.
+const REASON_MISSING = "This field is required.";
+const REASON_BLANK = "This field may not be blank.";
 const ALREADY = (status: string) => `This expense is already ${status}.`;
 const FIGURES_FIXED = (status: string) =>
   `This expense is ${status} and its figures are fixed. Reject it and record a new one.`;
@@ -137,7 +140,7 @@ function ordered<T extends object>(rows: T[], params: URLSearchParams, keys: str
  *   expense or a budget filed against it cannot be deleted (422 under `id`);
  * - an expense is created as a draft by the caller; only a draft takes an edit or `:submit`
  *   (422 under `status`); `:approve` and `:reject` need a submitted expense, and the creator
- *   cannot approve their own (422 under `approved_by`); `:mark-paid` needs an approved one;
+ *   cannot approve one they created or submitted (422 under `approved_by`); `:mark-paid` needs an approved one;
  *   `:reverse` needs an approved or paid one and a reason;
  * - `GET /expenses?awaiting_approval=true` lists only submitted expenses;
  * - a budget names exactly one of an account and a category (400, no field), and `:approve`
@@ -243,8 +246,9 @@ interface ExpenseBody {
   [key: string]: unknown;
 }
 
-function gross(expense: Pick<FeeExpense, "amount" | "tax_amount">): number {
-  return Number(expense.amount) + Number(expense.tax_amount ?? 0);
+/** Net plus tax, as the server's decimal string. */
+function gross(expense: Pick<FeeExpense, "amount" | "tax_amount">): string {
+  return (Number(expense.amount) + Number(expense.tax_amount ?? 0)).toFixed(2);
 }
 
 function registerExpenses(api: MockApi, state: SpendState) {
@@ -311,11 +315,12 @@ function registerExpenses(api: MockApi, state: SpendState) {
       case "submit":
         if (expense.status !== "draft") return ruleViolation("status", ALREADY(expense.status));
         expense.status = "submitted";
+        expense.submitted_by = state.actorId;
         return ok(expense, { meta: { message: "Expense submitted." } });
       case "approve":
       case "reject":
         if (expense.status !== "submitted") return ruleViolation("status", NOT_SUBMITTED);
-        if (expense.created_by === state.actorId) {
+        if (expense.created_by === state.actorId || expense.submitted_by === state.actorId) {
           return ruleViolation("approved_by", SELF_APPROVAL);
         }
         expense.status = action === "approve" ? "approved" : "rejected";
@@ -326,8 +331,9 @@ function registerExpenses(api: MockApi, state: SpendState) {
         expense.status = "paid";
         return ok(expense, { meta: { message: "Expense marked paid." } });
       case "reverse": {
-        const reason = (request.json() as { reason?: string } | null)?.reason;
-        if (!reason?.trim()) return ruleViolation("reason", REASON_REQUIRED);
+        const reason = (request.json() as { reason?: string | null } | null)?.reason;
+        if (reason === undefined || reason === null) return invalid("reason", REASON_MISSING);
+        if (!reason.trim()) return invalid("reason", REASON_BLANK);
         if (expense.status !== "approved" && expense.status !== "paid") {
           return ruleViolation("status", NOT_REVERSIBLE);
         }

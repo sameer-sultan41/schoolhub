@@ -70,13 +70,13 @@ test.describe("fee counter (real API, finance staff)", () => {
     const dialog = feeCounterPage.dialog(invoice.invoice_no);
     await expect(feeCounterPage.amount(dialog)).toHaveValue(invoice.balance_due);
     await feeCounterPage.submit(dialog).click();
-    await expect(dialog.getByText(/Payment of .* recorded\. Receipt RCT-/)).toBeVisible();
+    await expect(dialog.getByText(/Payment of .* recorded\. Receipt RCP-/)).toBeVisible();
 
     // --- 4. Print the receipt: the browser saves a real PDF. ---
     const download = page.waitForEvent("download");
     await feeCounterPage.printButton(dialog, "PDF").click();
     const file = await download;
-    expect(file.suggestedFilename()).toMatch(/^RCT-.+-pdf\.pdf$/);
+    expect(file.suggestedFilename()).toMatch(/^RCP-.+-pdf\.pdf$/);
     const path = await file.path();
     expect((await readFile(path)).subarray(0, 5).toString()).toBe("%PDF-");
 

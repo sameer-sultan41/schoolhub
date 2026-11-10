@@ -9,6 +9,7 @@ import {
   EXPENSES_QUERY_MODULE,
 } from "@/services/modules/expenses/expenses-constant";
 import { ReasonDialog } from "@/features/fees/shared/reason-dialog";
+import { useInvalidatePostedSpend } from "./use-invalidate-posted-spend";
 
 export interface ReverseExpenseDialogProps {
   open: boolean;
@@ -24,6 +25,7 @@ export interface ReverseExpenseDialogProps {
  */
 export function ReverseExpenseDialog({ open, onOpenChange, expense }: ReverseExpenseDialogProps) {
   const t = useTranslations("fees");
+  const invalidatePostedSpend = useInvalidatePostedSpend();
   const values = { number: expense.expense_no };
 
   return (
@@ -38,6 +40,7 @@ export function ReverseExpenseDialog({ open, onOpenChange, expense }: ReverseExp
       doneMessage={t("expenses.expenses.reverse.done", values)}
       queryModule={EXPENSES_QUERY_MODULE}
       action={(reason) => Services.expenses.reverseExpense(expense.id, reason)}
+      onDone={invalidatePostedSpend}
       knownFields={EXPENSE_REASON_ERROR_FIELDS}
     />
   );

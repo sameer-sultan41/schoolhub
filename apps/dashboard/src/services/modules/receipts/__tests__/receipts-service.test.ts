@@ -52,12 +52,12 @@ describe("receipts-service", () => {
     const { listReceipts } = await import("../receipts-service");
     mockGet.mockResolvedValue(PAGE);
 
-    await listReceipts({ search: "RCT-9", ordering: "-issued_at" });
+    await listReceipts({ search: "RCP-9", ordering: "-issued_at" });
 
     expect(mockGet).toHaveBeenCalledWith(
       "/receipts",
       expect.objectContaining({
-        query: { search: "RCT-9", ordering: "-issued_at", page_size: 25 },
+        query: { search: "RCP-9", ordering: "-issued_at", page_size: 25 },
       }),
     );
   });
