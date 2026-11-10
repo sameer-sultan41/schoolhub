@@ -78,6 +78,27 @@ class ModuleDisabled(exceptions.APIException):
     default_code = "module_disabled"
 
 
+class TenantNotFound(exceptions.APIException):
+    """The caller's tenant is deleted. The code `TenantMiddleware` sends for the same case."""
+
+    status_code = status.HTTP_404_NOT_FOUND
+    default_detail = "Tenant is not available."
+    default_code = "tenant_not_found"
+
+
+class TenantSuspended(exceptions.APIException):
+    """The caller's tenant is suspended or deprovisioned (not `Tenant.is_operational`).
+
+    The code `TenantMiddleware` sends for the same case; raised by
+    `TenantScopedViewSetMixin`, which resolves the tenant after JWT authentication,
+    where the middleware cannot.
+    """
+
+    status_code = status.HTTP_403_FORBIDDEN
+    default_detail = "Tenant is not available."
+    default_code = "tenant_suspended"
+
+
 def _flatten_details(detail, prefix: str = "") -> list[dict[str, str]]:
     """Turn DRF's nested error structure into a flat, client-friendly list."""
     details: list[dict[str, str]] = []
@@ -119,7 +140,9 @@ def envelope_exception_handler(exc, context):
     # Our own domain exceptions carry a meaningful code; DRF's built-ins carry
     # generic ones ("invalid", "not_authenticated") that leak framework vocabulary
     # into the documented contract, so those resolve from the status instead.
-    if isinstance(exc, DomainRuleViolation | Conflict | ModuleDisabled):
+    if isinstance(
+        exc, DomainRuleViolation | Conflict | ModuleDisabled | TenantNotFound | TenantSuspended
+    ):
         code = exc.default_code
     else:
         code = _CODE_BY_STATUS.get(

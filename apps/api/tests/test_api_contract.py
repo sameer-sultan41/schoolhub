@@ -34,6 +34,8 @@ CLIENT_KNOWN_SERVER_CODES = {
     "domain_rule_violation",
     "rate_limited",
     "module_disabled",
+    "tenant_not_found",
+    "tenant_suspended",
     "marks_outstanding",
 }
 
@@ -139,12 +141,20 @@ class OffsetEnvelopeTests(APITestCase):
 class ErrorCodeContractTests(APITestCase):
     def test_the_client_knows_every_code_the_server_can_emit(self):
         from apps.examinations.processing import MarksOutstanding
-        from core.api.exceptions import Conflict, DomainRuleViolation, ModuleDisabled
+        from core.api.exceptions import (
+            Conflict,
+            DomainRuleViolation,
+            ModuleDisabled,
+            TenantNotFound,
+            TenantSuspended,
+        )
 
         emitted = set(_CODE_BY_STATUS.values()) | {
             DomainRuleViolation.default_code,
             Conflict.default_code,
             ModuleDisabled.default_code,
+            TenantNotFound.default_code,
+            TenantSuspended.default_code,
             # A `Conflict` subclass with a domain code of its own.
             MarksOutstanding.default_code,
         }

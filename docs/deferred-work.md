@@ -491,6 +491,14 @@ either this file or `project-status.md`.
   transaction, unlike `TenantMiddleware` — resolved it.
   `e2e/tests/live/api/school-settings.spec.ts` now asserts the working
   patch→read journey rather than pinning the bug.
+- **A suspended or deleted school is refused under a bearer token too.**
+  `TenantMiddleware` refuses such a tenant only when it can see the user, which under JWT
+  alone it never can, so a suspended school's staff with a valid access token were served by
+  every `TenantScopedViewSetMixin` view. `_resolve_tenant` now raises the same
+  `tenant_not_found` (404) and `tenant_suspended` (403) the middleware sends, pinned by the
+  token-only tests in `tests/test_tenant_binding.py`. Both codes are now in
+  `packages/types/src/api.ts` and the dashboard's `errors` messages; they were emitted before
+  but never listed.
 - **Live E2E specs that failed on CI.** The lane now brings the
   stack up and runs (ADR-0025, ADR-0026), and the timetable journeys pass. The first full runs
   also showed the rest of the lane had drifted while it could not run:

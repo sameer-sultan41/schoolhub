@@ -3090,6 +3090,8 @@
     "domain_rule_violation": "That action isn't allowed right now.",
     "rate_limited": "Too many requests. Wait a moment and try again.",
     "module_disabled": "This feature is not enabled for your school.",
+    "tenant_suspended": "Your school's account is suspended. Contact SchoolHub support.",
+    "tenant_not_found": "Your school's account is no longer available.",
     "network_error": "We could not reach the server. Check your connection.",
     "server_error": "Something went wrong on our side. The team has been notified.",
     "requestId": "Reference: {requestId}",
