@@ -45,6 +45,7 @@ from apps.fees_finance.tests.factories import (
     expense_account,
     fine_head,
 )
+from apps.student_management.models import StudentEnrollment
 from core.tenancy.context import tenant_context
 
 URL = "/api/v1/reports/finance-summary"
@@ -290,6 +291,16 @@ class GrantRegisterFilterTests(FilterMatrixMixin, ReportFilterTestCase):
             },
             values,
         )
+
+    def test_a_soft_deleted_enrollment_places_no_fine(self) -> None:
+        with tenant_context(self.tenant.id):
+            StudentEnrollment.objects.filter(pk=self.enrollment_b.pk).update(
+                deleted_at=datetime.datetime(2026, 5, 1, tzinfo=datetime.UTC)
+            )
+
+        rows = self.rows("grant-register", class_id=self.class_b.pk)
+
+        self.assertNotIn(Decimal("32.00"), {Decimal(row["value"]) for row in rows})
 
 
 class ExpenseRegisterFilterTests(ReportFilterTestCase):

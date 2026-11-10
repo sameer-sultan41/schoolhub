@@ -139,8 +139,9 @@ def _enrolled(
     fines). An `Exists` rather than a join: a student can hold enrollments in
     several sessions, and a join would repeat the row once per match.
     `session_ref` pins the enrollment to the row's own session column.
+    Soft-deleted enrollments never match (L50).
     """
-    enrollments = StudentEnrollment.objects.filter(student_id=OuterRef("student_id"))
+    enrollments = StudentEnrollment.objects.alive().filter(student_id=OuterRef("student_id"))
     if session_id is not None:
         enrollments = enrollments.filter(academic_session_id=session_id)
     if session_ref is not None:
