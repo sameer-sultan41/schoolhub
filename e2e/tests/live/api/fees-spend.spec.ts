@@ -38,7 +38,7 @@ interface Expense {
   status: string;
   created_by: string | null;
   approved_by: string | null;
-  gross_amount: number;
+  gross_amount: string;
 }
 
 interface Budget {
@@ -104,7 +104,7 @@ test.describe("spend (live API)", () => {
     const category = await newCategory(accountant);
 
     const draft = (await accountant.post<Expense>("/expenses", draftBody(category.id))).data;
-    expect(draft).toMatchObject({ status: "draft", gross_amount: 115 });
+    expect(draft).toMatchObject({ status: "draft", gross_amount: "115.00" });
     // The creator is on the wire, so the screen can hide Approve from them.
     expect(draft.created_by).toBeTruthy();
     const submitted = (await accountant.post<Expense>(`/expenses/${draft.id}:submit`)).data;
