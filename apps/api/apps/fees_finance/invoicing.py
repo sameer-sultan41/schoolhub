@@ -343,5 +343,8 @@ def build_draft(
     # The earliest due date across the period's charges. A single invoice with
     # lines falling due on different days is due on the first of them — anything
     # later would let part of it go quietly overdue outside the aging report.
-    draft.due_date = min(due_dates) if due_dates else period_end
+    # Never before the period starts: a monthly `due_day` earlier than a mid-month
+    # window's first day (a session starting on the 20th, due day 10) would land the
+    # due date before the issue date, which `fee_invoices_due_after_issue` refuses.
+    draft.due_date = max(min(due_dates), period_start) if due_dates else period_end
     return draft
