@@ -12441,6 +12441,23 @@ export interface components {
          * @enum {string}
          */
         StudentLateArrivalsReportRowKindEnum: "student-late-arrivals";
+        /**
+         * @description The documented wire envelope of `GET /students/{id}/ledger`.
+         *
+         *     Documentation only: the view builds the payload itself. It exists so `meta`
+         *     (and its `closing_balance`) is typed in the OpenAPI contract, the way a paginated
+         *     list's `meta.pagination` is, instead of living in a description.
+         */
+        StudentLedgerEnvelope: {
+            data: components["schemas"]["StudentStatementEntry"][];
+            meta: components["schemas"]["StudentLedgerMeta"];
+        };
+        /** @description `meta` of `GET /students/{id}/ledger`: the line count and the server's closing balance. */
+        StudentLedgerMeta: {
+            row_count: number;
+            /** Format: decimal */
+            closing_balance: string;
+        };
         /** @description `reports.student_ledger`: a statement line, the discriminator on `kind`. */
         StudentLedgerReportRow: {
             /**
@@ -22370,13 +22387,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The statement's lines in date order, each with its running `balance`. `meta` carries `row_count` and the server's `closing_balance` — the last line's balance, or zero for no lines. */
+            /** @description The statement's lines in `data`, in date order, each with its running `balance`. `meta.closing_balance` is the last line's balance, or zero for no lines. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StudentStatementEntry"][];
+                    "application/json": components["schemas"]["StudentLedgerEnvelope"];
                 };
             };
         };

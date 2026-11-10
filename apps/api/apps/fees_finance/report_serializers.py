@@ -222,3 +222,15 @@ class StudentLedgerMetaSerializer(serializers.Serializer):
 
     row_count = serializers.IntegerField()
     closing_balance = serializers.DecimalField(max_digits=12, decimal_places=2)
+
+
+class StudentLedgerEnvelopeSerializer(serializers.Serializer):
+    """The documented wire envelope of `GET /students/{id}/ledger`.
+
+    Documentation only: the view builds the payload itself. It exists so `meta`
+    (and its `closing_balance`) is typed in the OpenAPI contract, the way a paginated
+    list's `meta.pagination` is, instead of living in a description.
+    """
+
+    data = StudentStatementEntrySerializer(many=True)
+    meta = StudentLedgerMetaSerializer()

@@ -13023,12 +13023,10 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/StudentStatementEntry'
-          description: The statement's lines in date order, each with its running
-            `balance`. `meta` carries `row_count` and the server's `closing_balance`
-            — the last line's balance, or zero for no lines.
+                $ref: '#/components/schemas/StudentLedgerEnvelope'
+          description: The statement's lines in `data`, in date order, each with its
+            running `balance`. `meta.closing_balance` is the last line's balance,
+            or zero for no lines.
   /api/v1/students/{id}:change-section:
     post:
       operationId: students_:change_section_create
@@ -27335,6 +27333,38 @@ components:
       - student-late-arrivals
       type: string
       description: '* `student-late-arrivals` - student-late-arrivals'
+    StudentLedgerEnvelope:
+      type: object
+      description: |-
+        The documented wire envelope of `GET /students/{id}/ledger`.
+
+        Documentation only: the view builds the payload itself. It exists so `meta`
+        (and its `closing_balance`) is typed in the OpenAPI contract, the way a paginated
+        list's `meta.pagination` is, instead of living in a description.
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/StudentStatementEntry'
+        meta:
+          $ref: '#/components/schemas/StudentLedgerMeta'
+      required:
+      - data
+      - meta
+    StudentLedgerMeta:
+      type: object
+      description: '`meta` of `GET /students/{id}/ledger`: the line count and the
+        server''s closing balance.'
+      properties:
+        row_count:
+          type: integer
+        closing_balance:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+      required:
+      - closing_balance
+      - row_count
     StudentLedgerReportRow:
       type: object
       description: '`reports.student_ledger`: a statement line, the discriminator

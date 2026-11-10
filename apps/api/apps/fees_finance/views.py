@@ -100,6 +100,7 @@ from apps.fees_finance.models import (
 from apps.fees_finance.report_serializers import (
     REPORT_ROW_SERIALIZERS,
     ReportMetaSerializer,
+    StudentLedgerEnvelopeSerializer,
     StudentLedgerMetaSerializer,
     StudentStatementEntrySerializer,
     serialize_report_rows,
@@ -1589,11 +1590,11 @@ class StudentLedgerView(APIView):
     @extend_schema(
         responses={
             200: OpenApiResponse(
-                response=StudentStatementEntrySerializer(many=True),
+                response=StudentLedgerEnvelopeSerializer,
                 description=(
-                    "The statement's lines in date order, each with its running `balance`. "
-                    "`meta` carries `row_count` and the server's `closing_balance` — the "
-                    "last line's balance, or zero for no lines."
+                    "The statement's lines in `data`, in date order, each with its running "
+                    "`balance`. `meta.closing_balance` is the last line's balance, or zero "
+                    "for no lines."
                 ),
             )
         }

@@ -493,3 +493,13 @@ class TypedRowTests(ReportFilterTestCase):
             {"date", "kind", "reference", "description", "debit", "credit", "balance"},
         )
         self.assertEqual(body["meta"], {"row_count": 4, "closing_balance": "1500.00"})
+
+    def test_the_statement_envelope_serializer_documents_exactly_the_wire_keys(self) -> None:
+        from apps.fees_finance.report_serializers import StudentLedgerEnvelopeSerializer
+
+        body = self.client.get(f"/api/v1/students/{self.student_a.pk}/ledger").json()
+        documented = StudentLedgerEnvelopeSerializer().fields
+
+        self.assertEqual(set(body), set(documented))
+        self.assertEqual(set(body["meta"]), set(documented["meta"].fields))
+        self.assertIsInstance(body["meta"]["closing_balance"], str)
