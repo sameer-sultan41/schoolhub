@@ -52,6 +52,7 @@ describe("ledger-entries-service", () => {
           reference_type: "manual",
           date__gte: "2026-10-01",
           date__lte: "2026-10-31",
+          page_size: 25,
         },
       }),
     );

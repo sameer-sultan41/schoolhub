@@ -43,7 +43,7 @@ describe("expense-categories-service", () => {
     expect(mockGet).toHaveBeenCalledWith(
       "/expense-categories",
       expect.objectContaining({
-        query: { is_active: true, ledger_account_id: "a1", ordering: "code" },
+        query: { is_active: true, ledger_account_id: "a1", ordering: "code", page_size: 25 },
       }),
     );
   });

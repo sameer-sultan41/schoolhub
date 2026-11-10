@@ -46,10 +46,19 @@ describe("expenses-service", () => {
       1,
       "/expenses",
       expect.objectContaining({
-        query: { status: "submitted", awaiting_approval: true, expense_date__gte: "2026-01-01" },
+        query: {
+          status: "submitted",
+          awaiting_approval: true,
+          expense_date__gte: "2026-01-01",
+          page_size: 25,
+        },
       }),
     );
-    expect(mockGet).toHaveBeenNthCalledWith(2, "/expenses", expect.objectContaining({ query: {} }));
+    expect(mockGet).toHaveBeenNthCalledWith(
+      2,
+      "/expenses",
+      expect.objectContaining({ query: { page_size: 25 } }),
+    );
   });
 
   it("createExpense POSTs the snake_case body; updateExpense PATCHes only the fields given", async () => {

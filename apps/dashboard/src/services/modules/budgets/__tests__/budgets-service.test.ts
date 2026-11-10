@@ -41,7 +41,9 @@ describe("budgets-service", () => {
 
     expect(mockGet).toHaveBeenCalledWith(
       "/budgets",
-      expect.objectContaining({ query: { status: "draft", expense_category_id: "c1" } }),
+      expect.objectContaining({
+        query: { status: "draft", expense_category_id: "c1", page_size: 25 },
+      }),
     );
   });
 
