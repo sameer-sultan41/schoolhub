@@ -124,14 +124,14 @@ test.describe("finance staff at the counter", () => {
       method: "cash",
     });
     await expect(
-      dialog.getByText("Payment of 500.00 recorded. Receipt RCT-E2E-0001."),
+      dialog.getByText("Payment of 500.00 recorded. Receipt RCP-E2E-0001."),
     ).toBeVisible();
 
     // Print thermal streams the receipt in that layout and saves it.
     const download = page.waitForEvent("download");
     const fetched = page.waitForRequest((r) => isApiCall(r, "GET", RECEIPT_PATH));
     await feeCounterPage.printButton(dialog, "thermal").click();
-    expect((await download).suggestedFilename()).toBe("RCT-E2E-0001-thermal.pdf");
+    expect((await download).suggestedFilename()).toBe("RCP-E2E-0001-thermal.pdf");
     expect(new URL((await fetched).url()).searchParams.get("format")).toBe("thermal");
     expect(downloads.map((entry) => entry.format)).toContain("thermal");
 
@@ -307,14 +307,14 @@ test.describe("the payments page, as the accountant", () => {
         buildFeePayment({
           fee_invoice: invoice.id,
           student: ayesha.id,
-          receipt_no: "RCT-CASH",
+          receipt_no: "RCP-CASH",
           method: "cash",
           received_by: accountant.id,
         }),
         buildFeePayment({
           fee_invoice: invoice.id,
           student: ayesha.id,
-          receipt_no: "RCT-CHEQUE",
+          receipt_no: "RCP-CHEQUE",
           method: "cheque",
           received_by: someoneElse,
         }),
@@ -322,8 +322,8 @@ test.describe("the payments page, as the accountant", () => {
       actorId: accountant.id,
     });
     await feePaymentsPage.gotoTab("payments");
-    await expect(feePaymentsPage.row("payments", "RCT-CASH")).toBeVisible();
-    await expect(feePaymentsPage.row("payments", "RCT-CHEQUE")).toBeVisible();
+    await expect(feePaymentsPage.row("payments", "RCP-CASH")).toBeVisible();
+    await expect(feePaymentsPage.row("payments", "RCP-CHEQUE")).toBeVisible();
 
     const byMethod = page.waitForRequest(
       (r) => isApiCall(r, "GET", /\/payments$/) && r.url().includes("method=cheque"),
@@ -331,8 +331,8 @@ test.describe("the payments page, as the accountant", () => {
     await feePaymentsPage.select("Method").click();
     await feePaymentsPage.option("Cheque").click();
     await byMethod;
-    await expect(feePaymentsPage.row("payments", "RCT-CASH")).toHaveCount(0);
-    await expect(feePaymentsPage.row("payments", "RCT-CHEQUE")).toBeVisible();
+    await expect(feePaymentsPage.row("payments", "RCP-CASH")).toHaveCount(0);
+    await expect(feePaymentsPage.row("payments", "RCP-CHEQUE")).toBeVisible();
 
     // "My collections" is the signed-in cashier's own id, sent as `received_by`.
     await feePaymentsPage.select("Method").click();
@@ -345,8 +345,8 @@ test.describe("the payments page, as the accountant", () => {
     await feePaymentsPage.select("Cashier").click();
     await feePaymentsPage.option("My collections").click();
     await byCashier;
-    await expect(feePaymentsPage.row("payments", "RCT-CASH")).toBeVisible();
-    await expect(feePaymentsPage.row("payments", "RCT-CHEQUE")).toHaveCount(0);
+    await expect(feePaymentsPage.row("payments", "RCP-CASH")).toBeVisible();
+    await expect(feePaymentsPage.row("payments", "RCP-CHEQUE")).toHaveCount(0);
 
     // A day range bounds `paid_at` by the whole of each day.
     const ranged = page.waitForRequest((r) => {
@@ -476,14 +476,14 @@ test.describe("the payments page, as the accountant", () => {
       fee_invoice: invoice.id,
       student: ayesha.id,
       receipt: uuid(),
-      receipt_no: "RCT-DL",
+      receipt_no: "RCP-DL",
     });
     const voucher = buildFeeVoucher({ consumer_number: "4444444444" });
     stubPaymentsApi(mockApi, {
       invoices: [invoice],
       payments: [payment],
       // The receipt a payment names has to exist for its download to stream.
-      receipts: [{ id: payment.receipt ?? "", receiptNo: "RCT-DL", paymentId: payment.id }],
+      receipts: [{ id: payment.receipt ?? "", receiptNo: "RCP-DL", paymentId: payment.id }],
       vouchers: [voucher],
       actorId: accountant.id,
     });
@@ -494,8 +494,8 @@ test.describe("the payments page, as the accountant", () => {
 
     await feePaymentsPage.gotoTab("receipts");
     const receiptDownload = page.waitForEvent("download");
-    await feePaymentsPage.button("Download RCT-DL as PDF").click();
-    expect((await receiptDownload).suggestedFilename()).toBe("RCT-DL-pdf.pdf");
+    await feePaymentsPage.button("Download RCP-DL as PDF").click();
+    expect((await receiptDownload).suggestedFilename()).toBe("RCP-DL-pdf.pdf");
   });
 
   test("upload a settlement file and read its exceptions", async ({
@@ -571,7 +571,7 @@ test.describe("the invoice page, as the accountant", () => {
       fee_invoice: invoice.id,
       student: ayesha.id,
       amount: "500.00",
-      receipt_no: "RCT-REF",
+      receipt_no: "RCP-REF",
       receipt: uuid(),
     });
     const { refunds } = stubPaymentsApi(mockApi, {
@@ -584,8 +584,8 @@ test.describe("the invoice page, as the accountant", () => {
     });
     await feeInvoicesPage.gotoInvoice(invoice.id);
 
-    await page.getByRole("button", { name: "Request a refund for receipt RCT-REF" }).click();
-    const dialog = page.getByRole("dialog", { name: "Request refund: RCT-REF", exact: true });
+    await page.getByRole("button", { name: "Request a refund for receipt RCP-REF" }).click();
+    const dialog = page.getByRole("dialog", { name: "Request refund: RCP-REF", exact: true });
     // 200.00 of the 500.00 is already asked for, so 300.00 is what is left.
     await dialog.getByLabel("Amount to refund").fill("400.00");
     await dialog.getByLabel("Reason").fill("Charged twice");

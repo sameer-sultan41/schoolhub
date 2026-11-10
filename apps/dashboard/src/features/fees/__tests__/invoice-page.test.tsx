@@ -104,7 +104,7 @@ describe("invoice page", () => {
     await renderPage();
 
     const payments = await screen.findByRole("table", { name: "Payments against this invoice" });
-    expect(within(payments).getByText("RCT-2026-0001")).toBeInTheDocument();
+    expect(within(payments).getByText("RCP-2026-00001")).toBeInTheDocument();
     expect(within(payments).getByText("500.00")).toBeInTheDocument();
     expect(within(payments).getByText("Cash")).toBeInTheDocument();
     expect(listPayments).toHaveBeenCalledWith(expect.objectContaining({ invoiceId: INVOICE_ID }));

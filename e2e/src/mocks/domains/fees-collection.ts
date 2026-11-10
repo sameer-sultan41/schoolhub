@@ -170,7 +170,7 @@ export function feesCollectionModule(options: FeesCollectionOptions = {}): MockM
       }
 
       const receiptId = uuid();
-      const receiptNo = `RCT-E2E-${String(receipts.length + 1).padStart(4, "0")}`;
+      const receiptNo = `RCP-E2E-${String(receipts.length + 1).padStart(4, "0")}`;
       const payment = buildFeePayment({
         fee_invoice: invoice.id,
         invoice_no: invoice.invoice_no,
@@ -618,7 +618,7 @@ function reconcile(state: CollectionState, provider: string, csv: string) {
       method: "bank_transfer",
       reference_no: reference,
       paid_at: new Date().toISOString(),
-      receipt_no: `RCT-E2E-S${String(state.payments.length + 1).padStart(3, "0")}`,
+      receipt_no: `RCP-E2E-S${String(state.payments.length + 1).padStart(3, "0")}`,
     });
     state.payments.push(payment);
     voucher.status = "paid";
