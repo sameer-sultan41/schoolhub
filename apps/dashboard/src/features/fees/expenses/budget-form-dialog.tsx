@@ -22,15 +22,14 @@ import { useFormDialogSubmit } from "@/hooks/use-form-dialog-submit";
 import { useInvalidateModule } from "@/hooks/use-invalidate-module";
 import { useCampuses } from "@/hooks/use-reference-data";
 import { hasPermission } from "@/lib/permissions";
+import { activeOrCurrent } from "@/features/fees/shared/option-helpers";
 import { Services, type BudgetRecord } from "@/services";
+import { BUDGET_NAME_MAX, BUDGETS_QUERY_MODULE } from "@/services/modules/budgets/budgets-constant";
 import {
-  BUDGET_ERROR_FIELDS,
-  BUDGET_NAME_MAX,
-  BUDGETS_QUERY_MODULE,
-} from "@/services/modules/budgets/budgets-constant";
-import {
+  budgetErrorFields,
   buildBudgetInput,
   defaultBudgetFormValues,
+  mapBudgetTargetErrors,
   recordToBudgetFormValues,
 } from "@/services/modules/budgets/budgets-helper";
 import {
@@ -82,14 +81,21 @@ export function BudgetFormDialog({ open, onOpenChange, record }: BudgetFormDialo
     defaultValues: record ? recordToBudgetFormValues(record) : defaultBudgetFormValues(),
   });
   const target = useWatch({ control: form.control, name: "target" });
+  const currentTargetId = useWatch({ control: form.control, name: "target_id" });
 
   const { handleSubmit, formError, isPending } = useFormDialogSubmit({
     form,
-    mutationFn: (values: BudgetFormValues) =>
-      record
-        ? Services.budgets.updateBudget(record.id, buildBudgetInput(values))
-        : Services.budgets.createBudget(buildBudgetInput(values)),
-    knownFields: BUDGET_ERROR_FIELDS,
+    mutationFn: async (values: BudgetFormValues) => {
+      try {
+        return record
+          ? await Services.budgets.updateBudget(record.id, buildBudgetInput(values))
+          : await Services.budgets.createBudget(buildBudgetInput(values));
+      } catch (error) {
+        // The target's errors name the API field; the form's one input is `target_id`.
+        throw mapBudgetTargetErrors(error);
+      }
+    },
+    knownFields: () => budgetErrorFields(canReadCampuses),
     onSuccess: () => {
       invalidate();
       toast.success(t("expenses.budgets.saved"));
@@ -100,9 +106,12 @@ export function BudgetFormDialog({ open, onOpenChange, record }: BudgetFormDialo
 
   const targetOptions = (
     target === "category"
-      ? (categories.data ?? []).map((c) => ({ id: c.id, name: `${c.code} ${c.name}` }))
-      : (accounts.data ?? []).map((a) => ({ id: a.id, name: `${a.code} ${a.name}` }))
-  ) satisfies { id: string; name: string }[];
+      ? activeOrCurrent(categories.data ?? [], currentTargetId)
+      : activeOrCurrent(accounts.data ?? [], currentTargetId)
+  ).map((r) => ({ id: r.id, name: `${r.code} ${r.name}` })) satisfies {
+    id: string;
+    name: string;
+  }[];
   const targetListLoading = target === "category" ? categories.isLoading : accounts.isLoading;
 
   return (

@@ -1,8 +1,11 @@
+import { ApiError } from "@schoolhub/api-client";
 import {
+  budgetErrorFields,
   buildBudgetInput,
   canApproveBudget,
   canEditBudget,
   defaultBudgetFormValues,
+  mapBudgetTargetErrors,
 } from "../budgets-helper";
 
 describe("budget gates", () => {
@@ -26,5 +29,37 @@ describe("buildBudgetInput", () => {
       expenseCategoryId: null,
       ledgerAccountId: "t1",
     });
+  });
+});
+
+describe("budget error mapping", () => {
+  const refused = (field: string) =>
+    new ApiError({
+      status: 400,
+      code: "validation_error",
+      message: "x",
+      url: "/budgets",
+      details: [{ field, issue: "issue" }],
+    });
+
+  it("re-keys the target's API fields as the form's target_id", () => {
+    for (const field of ["ledger_account", "expense_category"]) {
+      const mapped = mapBudgetTargetErrors(refused(field)) as ApiError;
+      expect(mapped.fieldErrors()).toEqual({ target_id: "issue" });
+    }
+  });
+
+  it("leaves another field, or a non-API error, untouched", () => {
+    const other = refused("amount");
+    expect(mapBudgetTargetErrors(other)).toBe(other);
+    const plain = new Error("boom");
+    expect(mapBudgetTargetErrors(plain)).toBe(plain);
+  });
+
+  it("knows the campus input only when the picker is rendered", () => {
+    expect(budgetErrorFields(true)).toContain("campus");
+    expect(budgetErrorFields(false)).not.toContain("campus");
+    expect(budgetErrorFields(false)).toContain("target_id");
+    expect(budgetErrorFields(true)).not.toContain("ledger_account");
   });
 });

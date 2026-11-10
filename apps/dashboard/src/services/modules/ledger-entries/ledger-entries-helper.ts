@@ -1,5 +1,6 @@
-import { ApiError, type QueryParams } from "@schoolhub/api-client";
+import type { QueryParams } from "@schoolhub/api-client";
 import { FILTER_ALL } from "@/lib/constants";
+import { rekeyFieldErrors } from "@/lib/error-message";
 import { copyMappedFields } from "@/lib/helpers";
 import {
   JOURNAL_LINE_FIELDS,
@@ -104,23 +105,12 @@ const LINE_ERROR_ANCHOR = "debit";
  * shows under the line's Debit. Anything else comes back untouched.
  */
 export function mapJournalLineErrors(error: unknown): unknown {
-  if (!(error instanceof ApiError)) return error;
-  const details = error.details.map((detail) => {
-    const match = detail.field === undefined ? null : LINE_ERROR_FIELD.exec(detail.field);
+  return rekeyFieldErrors(error, (field) => {
+    const match = LINE_ERROR_FIELD.exec(field);
     const index = match?.[1];
     const name = match?.[2];
-    if (index === undefined || name === undefined) return detail;
-    const input = JOURNAL_LINE_FIELDS.find((field) => field === name) ?? LINE_ERROR_ANCHOR;
-    return { ...detail, field: `lines.${index}.${input}` };
-  });
-  if (details.every((detail, index) => detail === error.details[index])) return error;
-  return new ApiError({
-    code: error.code,
-    message: error.message,
-    status: error.status,
-    url: error.url,
-    details,
-    requestId: error.requestId,
-    meta: error.meta,
+    if (index === undefined || name === undefined) return undefined;
+    const input = JOURNAL_LINE_FIELDS.find((known) => known === name) ?? LINE_ERROR_ANCHOR;
+    return `lines.${index}.${input}`;
   });
 }
