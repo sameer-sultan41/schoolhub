@@ -12,6 +12,7 @@ export function feesServicesMock() {
       "updateLedgerAccount",
       "deleteLedgerAccount",
     ],
+    ledgerEntries: ["listLedgerEntries", "postJournal"],
     feeHeads: [
       "listFeeHeads",
       "fetchFeeHeadOptions",

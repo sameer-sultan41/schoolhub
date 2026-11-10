@@ -12,6 +12,7 @@ import type {
   FeeScheduleRecord,
   FeeStructureRecord,
   LedgerAccountRecord,
+  LedgerEntryRecord,
   PaymentRecord,
   ReceiptRecord,
   RefundRecord,
@@ -30,6 +31,8 @@ export const fetchLedgerAccountOptions = mocked(Services.ledgerAccounts.fetchLed
 export const createLedgerAccount = mocked(Services.ledgerAccounts.createLedgerAccount);
 export const updateLedgerAccount = mocked(Services.ledgerAccounts.updateLedgerAccount);
 export const deleteLedgerAccount = mocked(Services.ledgerAccounts.deleteLedgerAccount);
+export const listLedgerEntries = mocked(Services.ledgerEntries.listLedgerEntries);
+export const postJournal = mocked(Services.ledgerEntries.postJournal);
 export const listExpenseCategories = mocked(Services.expenseCategories.listExpenseCategories);
 export const fetchExpenseCategoryOptions = mocked(
   Services.expenseCategories.fetchExpenseCategoryOptions,
@@ -171,6 +174,26 @@ export function accountRecord(overrides: Partial<LedgerAccountRecord> = {}): Led
   };
 }
 
+/** One posted debit line of a manual journal, against the income account. */
+export function entryRecord(overrides: Partial<LedgerEntryRecord> = {}): LedgerEntryRecord {
+  return {
+    id: "f1111111-1111-4111-8111-111111111111",
+    transaction_id: "f2222222-2222-4222-8222-222222222222",
+    entry_date: "2026-10-05",
+    ledger_account: INCOME_ACCOUNT_ID,
+    account_code: "4001",
+    account_name: "Tuition income",
+    debit: "50.00",
+    credit: "0.00",
+    reference_type: "manual",
+    reference_id: null,
+    memo: "Correct the October posting",
+    reversed_by_transaction_id: null,
+    created_at: STAMP,
+    ...overrides,
+  };
+}
+
 export function headRecord(overrides: Partial<FeeHeadRecord> = {}): FeeHeadRecord {
   return {
     id: HEAD_ID,
@@ -242,6 +265,7 @@ export function stubFeesServices(url = "/fees/structures") {
   setUrl(url);
   asUser();
   listLedgerAccounts.mockResolvedValue(cursorPage([accountRecord()]));
+  listLedgerEntries.mockResolvedValue(cursorPage([]));
   listFeeHeads.mockResolvedValue(cursorPage([headRecord()]));
   fetchLedgerAccountOptions.mockResolvedValue([accountRecord()]);
   fetchFeeHeadOptions.mockResolvedValue([headRecord()]);
