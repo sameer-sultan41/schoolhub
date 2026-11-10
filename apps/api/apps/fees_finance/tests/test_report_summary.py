@@ -288,7 +288,8 @@ class SummaryContextTests(ReportSummaryTestCase):
                 name=INJECTION,
                 account_type=LedgerAccountType.INCOME,
             )
-            spend = expense_account(self.tenant)
+            # Its own code: the base fixture's system accounts already hold the default 5000.
+            spend = expense_account(self.tenant, code="5910")
             category = ExpenseCategoryFactory(tenant=self.tenant, ledger_account=spend)
             ExpenseFactory(
                 tenant=self.tenant,
