@@ -4,13 +4,15 @@ the refund requester, and the settlement upload's request shape.
 
 from __future__ import annotations
 
+import datetime
+
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework import status
 
-from apps.fees_finance.models import PaymentStatus, Receipt, Refund, VoucherProvider
+from apps.fees_finance.models import Payment, PaymentStatus, Receipt, Refund, VoucherProvider
 from apps.fees_finance.tests.base import FeesFinanceAPITestCase
 from apps.fees_finance.tests.factories import (
     CampusFactory,
@@ -75,6 +77,8 @@ class ReceiptStudentFilterTests(CollectionContractTestCase):
         self.assertEqual(response.json()["data"], [])
 
     def test_the_list_query_count_does_not_grow_with_rows(self) -> None:
+        # One throwaway read warms what a first request caches (permissions, tenant).
+        self.client.get("/api/v1/receipts", {"student": str(self.students[0].pk)})
         self.paid(self.students[0], "1")
         with CaptureQueriesContext(connection) as one:
             self.client.get("/api/v1/receipts", {"student": str(self.students[0].pk)})
@@ -110,6 +114,20 @@ class PaymentReceiptIdTests(CollectionContractTestCase):
             response = self.client.get("/api/v1/payments")
 
         self.assertGreaterEqual(len(response.json()["data"]), 4)
+
+
+class PaymentPaidAtFilterTests(CollectionContractTestCase):
+    def test_the_upper_bound_is_exclusive(self) -> None:
+        inside, _ = self.paid(self.students[0], "1")
+        on_the_bound, _ = self.paid(self.students[1], "2")
+        edge = timezone.now().replace(microsecond=0)
+        with tenant_context(self.tenant.id):
+            Payment.objects.filter(pk=inside.pk).update(paid_at=edge - datetime.timedelta(hours=1))
+            Payment.objects.filter(pk=on_the_bound.pk).update(paid_at=edge)
+
+        response = self.client.get("/api/v1/payments", {"paid_at__lt": edge.isoformat()})
+
+        self.assertEqual([row["id"] for row in response.json()["data"]], [str(inside.pk)])
 
 
 class PaymentNamesTests(CollectionContractTestCase):

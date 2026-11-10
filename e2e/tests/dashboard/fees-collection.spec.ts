@@ -348,8 +348,10 @@ test.describe("the payments page, as the accountant", () => {
       if (!isApiCall(r, "GET", /\/payments$/)) return false;
       const params = new URL(r.url()).searchParams;
       return (
-        params.get("paid_at__gte") === "2026-10-01T00:00:00" &&
-        params.get("paid_at__lte") === "2026-10-31T23:59:59"
+        // Offset-aware instants (the browser's local midnights), the upper one exclusive.
+        /^2026-(09-30|10-01)T.*Z$/.test(params.get("paid_at__gte") ?? "") &&
+        /^2026-(10-31|11-01)T.*Z$/.test(params.get("paid_at__lt") ?? "") &&
+        !params.has("paid_at__lte")
       );
     });
     await feePaymentsPage.dateFilter("Paid from").fill("2026-10-01");

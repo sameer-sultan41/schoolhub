@@ -296,8 +296,8 @@ function registerReads(api: MockApi, state: CollectionState) {
         (!params.get("received_by") || payment.received_by === params.get("received_by")) &&
         (!params.get("paid_at__gte") ||
           (payment.paid_at ?? "") >= new Date(params.get("paid_at__gte") ?? "").toISOString()) &&
-        (!params.get("paid_at__lte") ||
-          (payment.paid_at ?? "") <= new Date(params.get("paid_at__lte") ?? "").toISOString()),
+        (!params.get("paid_at__lt") ||
+          (payment.paid_at ?? "") < new Date(params.get("paid_at__lt") ?? "").toISOString()),
     );
     return cursorPageOf(matching, params);
   });

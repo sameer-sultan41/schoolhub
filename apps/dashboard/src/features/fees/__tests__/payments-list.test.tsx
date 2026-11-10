@@ -72,9 +72,9 @@ describe("payments page", () => {
         expect.objectContaining({
           method: "cash",
           status: "confirmed",
-          // A day's bounds: the first and the last moment, so the 31st is not cut off.
-          paidAtGte: "2026-10-01T00:00:00",
-          paidAtLte: "2026-10-31T23:59:59",
+          // Offset-aware local days, the upper bound exclusive (the start of 1 November).
+          paidAtGte: new Date(2026, 9, 1).toISOString(),
+          paidAtLt: new Date(2026, 10, 1).toISOString(),
           // "My collections" is the signed-in user's own id.
           receivedBy: "user-1",
         }),
@@ -93,7 +93,7 @@ describe("payments page", () => {
         method: undefined,
         status: undefined,
         paidAtGte: undefined,
-        paidAtLte: undefined,
+        paidAtLt: undefined,
         receivedBy: undefined,
       }),
     );

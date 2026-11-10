@@ -12,9 +12,9 @@ export interface PaymentsQuery {
   studentId?: string;
   method?: PaymentMethod;
   status?: PaymentStatus;
-  /** ISO date-times bounding `paid_at`. */
+  /** Offset-aware ISO instants bounding `paid_at`: from (inclusive) and before (exclusive). */
   paidAtGte?: string;
-  paidAtLte?: string;
+  paidAtLt?: string;
   /** The cashier (a user id). */
   receivedBy?: string;
   ordering?: string;

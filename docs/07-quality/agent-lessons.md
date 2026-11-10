@@ -385,7 +385,11 @@
 - **Mistake.** `school_admin` holds `fees.fee-structure.create|update` but not `fees.ledger.view`, so it could open New fee head and never save it: the required income-account picker reads `GET /ledger-accounts`, which needs the ledger key, and the list came back a 403 (fees dashboard PR A review). The form was gated on the write key alone.
 - **Check.** For every required picker in a form, the form's gating key set includes the picker's read key, so the control is hidden (or the form not offered) for a role that holds the write key but not the read key. Add a Jest case for that role: it holds the write key and lacks the read key, and sees no New or Edit button. A picker that is optional may hide itself instead (L55).
 
-## 4. Adding a lesson
+### L60. A date filter sent as a naive day is a UTC day on the server
+
+- **Mistake.** The Payments tab's paid-on range sent `2026-10-01T00:00:00` and `2026-10-31T23:59:59` to `paid_at__gte` and `__lte`. The server reads a naive date-time in UTC, so a school at UTC+5 lost its first five hours of 1 October to the previous day, and the inclusive upper bound dropped the last second. (`payments-helper.ts`, the fees dashboard PR C.)
+- **Check.** Every date-range filter on a datetime column sends offset-aware bounds (`new Date(y, m, d).toISOString()` or the tenant's zone) with an exclusive upper bound (the next day's start, `__lt`). Its helper test sets a non-UTC `process.env.TZ` and asserts the exact instants.
+
 
 1. Number it next (`L14`) and give it a short title that states the rule.
 2. Write **Mistake** (what happened, with the file, commit or PR) and **Check** (what to do, concrete enough to run). Two to four lines each.

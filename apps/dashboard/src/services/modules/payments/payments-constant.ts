@@ -43,7 +43,7 @@ export const PAYMENTS_QUERY_FIELDS: ReadonlyArray<readonly [keyof PaymentsQuery,
   ["method", "method"],
   ["status", "status"],
   ["paidAtGte", "paid_at__gte"],
-  ["paidAtLte", "paid_at__lte"],
+  ["paidAtLt", "paid_at__lt"],
   ["receivedBy", "received_by"],
   ["ordering", "ordering"],
   ["cursor", "cursor"],
@@ -100,7 +100,3 @@ export const PAYMENTS_URL_FILTERS = {
   to: { default: "", isValid: isDateOrBlank },
   cashier: { default: "", isValid: isCashier },
 };
-
-/** The first and last moment of a day, as the API's date-time filters take them. */
-export const DAY_START_TIME = "T00:00:00";
-export const DAY_END_TIME = "T23:59:59";
