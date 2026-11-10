@@ -1458,7 +1458,7 @@ class BudgetViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         return ActionResponse.ok(self.get_serializer(approved).data, message="Budget approved.")
 
 
-class FinanceReportView(APIView):
+class FinanceReportView(TenantScopedViewSetMixin, APIView):
     """`GET/POST /reports/finance-summary` — §13, `kind`-parameterised.
 
     `GET` serves inline; `POST` asks for an export and returns 202 + job. One
@@ -1468,6 +1468,9 @@ class FinanceReportView(APIView):
     **The cap is requested as `limit + 1`.** That is how the endpoint decides
     "inline or job?" without building a term-scale result twice, which is the
     fix attendance's review produced.
+
+    The mixin is here for its `initial`, which binds the tenant after JWT auth (a bare
+    `APIView` has none: `request.tenant` stays None and the module gate fails closed).
     """
 
     permission_classes = STAFF_PERMISSIONS
@@ -1574,7 +1577,7 @@ class FinanceReportView(APIView):
         return ActionResponse.accepted(str(job.pk), message="Report export queued.")
 
 
-class StudentLedgerView(APIView):
+class StudentLedgerView(TenantScopedViewSetMixin, APIView):
     """`GET /students/{id}/ledger` — §13.3's printable statement.
 
     Its own view rather than a `kind` on the report endpoint, because §16
