@@ -4,6 +4,9 @@ import type { Page } from "@schoolhub/types";
 
 import { Services } from "@/services";
 import type {
+  BudgetRecord,
+  ExpenseCategoryRecord,
+  ExpenseRecord,
   FeeHeadRecord,
   FeeInvoiceRecord,
   FeeScheduleRecord,
@@ -27,6 +30,25 @@ export const fetchLedgerAccountOptions = mocked(Services.ledgerAccounts.fetchLed
 export const createLedgerAccount = mocked(Services.ledgerAccounts.createLedgerAccount);
 export const updateLedgerAccount = mocked(Services.ledgerAccounts.updateLedgerAccount);
 export const deleteLedgerAccount = mocked(Services.ledgerAccounts.deleteLedgerAccount);
+export const listExpenseCategories = mocked(Services.expenseCategories.listExpenseCategories);
+export const fetchExpenseCategoryOptions = mocked(
+  Services.expenseCategories.fetchExpenseCategoryOptions,
+);
+export const createExpenseCategory = mocked(Services.expenseCategories.createExpenseCategory);
+export const updateExpenseCategory = mocked(Services.expenseCategories.updateExpenseCategory);
+export const deleteExpenseCategory = mocked(Services.expenseCategories.deleteExpenseCategory);
+export const listExpenses = mocked(Services.expenses.listExpenses);
+export const createExpense = mocked(Services.expenses.createExpense);
+export const updateExpense = mocked(Services.expenses.updateExpense);
+export const submitExpense = mocked(Services.expenses.submitExpense);
+export const approveExpense = mocked(Services.expenses.approveExpense);
+export const rejectExpense = mocked(Services.expenses.rejectExpense);
+export const markExpensePaid = mocked(Services.expenses.markExpensePaid);
+export const reverseExpense = mocked(Services.expenses.reverseExpense);
+export const listBudgets = mocked(Services.budgets.listBudgets);
+export const createBudget = mocked(Services.budgets.createBudget);
+export const updateBudget = mocked(Services.budgets.updateBudget);
+export const approveBudget = mocked(Services.budgets.approveBudget);
 export const listFeeHeads = mocked(Services.feeHeads.listFeeHeads);
 export const fetchFeeHeadOptions = mocked(Services.feeHeads.fetchFeeHeadOptions);
 export const createFeeHead = mocked(Services.feeHeads.createFeeHead);
@@ -123,6 +145,10 @@ export const CURRENT_USER_ID = "user-1";
 export const OTHER_USER_ID = "user-2";
 export const REFUND_ID = "a2222222-2222-4222-8222-222222222222";
 export const PAYMENT_ID = "d1111111-1111-4111-8111-111111111111";
+export const EXPENSE_ID = "e1111111-1111-4111-8111-111111111111";
+export const CATEGORY_ID = "e2222222-2222-4222-8222-222222222222";
+export const EXPENSE_ACCOUNT_ID = "e3333333-3333-4333-8333-333333333333";
+export const BUDGET_ID = "e4444444-4444-4444-8444-444444444444";
 export const IMPORT_ID = "a3333333-3333-4333-8333-333333333333";
 
 export function cursorPage<T>(items: T[], nextCursor: string | null = null): Page<T> {
@@ -236,6 +262,10 @@ export function stubFeesServices(url = "/fees/structures") {
   listReceipts.mockResolvedValue(cursorPage([]));
   listRefunds.mockResolvedValue(cursorPage([]));
   listSettlementImports.mockResolvedValue(cursorPage([]));
+  listExpenses.mockResolvedValue(cursorPage([]));
+  listExpenseCategories.mockResolvedValue(cursorPage([categoryRecord()]));
+  fetchExpenseCategoryOptions.mockResolvedValue([categoryRecord()]);
+  listBudgets.mockResolvedValue(cursorPage([]));
 }
 
 /** An issued, unpaid invoice with one fee line and one fine line. Every money field is the
@@ -362,6 +392,66 @@ export function refundRecord(overrides: Partial<RefundRecord> = {}): RefundRecor
     reference_no: null,
     processed_at: null,
     created_at: STAMP,
+    ...overrides,
+  };
+}
+
+/** A submitted expense created by someone else: net 100.00 plus 15.00 tax. */
+export function expenseRecord(overrides: Partial<ExpenseRecord> = {}): ExpenseRecord {
+  return {
+    id: EXPENSE_ID,
+    expense_no: "EXP-2026-0001",
+    expense_category: CATEGORY_ID,
+    category_name: "Stationery",
+    campus: null,
+    vendor_name: "Paper Co",
+    description: "Printer paper",
+    amount: "100.00",
+    tax_amount: "15.00",
+    gross_amount: 115,
+    expense_date: "2026-10-05",
+    payment_method: "cash",
+    status: "submitted",
+    approved_by: null,
+    created_by: OTHER_USER_ID,
+    receipt_file: null,
+    created_at: STAMP,
+    updated_at: STAMP,
+    ...overrides,
+  };
+}
+
+export function categoryRecord(
+  overrides: Partial<ExpenseCategoryRecord> = {},
+): ExpenseCategoryRecord {
+  return {
+    id: CATEGORY_ID,
+    name: "Stationery",
+    code: "STA",
+    ledger_account: EXPENSE_ACCOUNT_ID,
+    parent: null,
+    is_active: true,
+    created_at: STAMP,
+    updated_at: STAMP,
+    ...overrides,
+  };
+}
+
+export function budgetRecord(overrides: Partial<BudgetRecord> = {}): BudgetRecord {
+  return {
+    id: BUDGET_ID,
+    name: "Q4 stationery",
+    ledger_account: null,
+    expense_category: CATEGORY_ID,
+    campus: null,
+    period_start: "2026-10-01",
+    period_end: "2026-12-31",
+    amount: "5000.00",
+    status: "draft",
+    approved_by: null,
+    notes: null,
+    created_at: STAMP,
+    updated_at: STAMP,
     ...overrides,
   };
 }
