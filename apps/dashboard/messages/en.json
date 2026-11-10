@@ -3289,7 +3289,8 @@
       "summary": "The chart of accounts the school's money is booked to.",
       "tabs": {
         "label": "Ledger sections",
-        "accounts": "Accounts"
+        "accounts": "Accounts",
+        "journal": "Journal"
       },
       "accounts": {
         "list": {
@@ -3358,6 +3359,71 @@
           "titleNamed": "Delete {name}?",
           "description": "An account with postings cannot be deleted; archive it instead."
         }
+      },
+      "journal": {
+        "list": {
+          "caption": "Ledger journal",
+          "pagination": "Ledger journal pages",
+          "loadError": "The ledger journal could not be loaded.",
+          "emptyTitle": "No journal entries yet",
+          "emptyDescription": "Postings from payments, refunds and expenses appear here, and so do journal entries made by hand.",
+          "noMatches": "No entries match",
+          "noMatchesDescription": "Try a different search or filter.",
+          "searchPlaceholder": "Search by memo"
+        },
+        "columns": {
+          "date": "Date",
+          "account": "Account",
+          "memo": "Memo",
+          "debit": "Debit",
+          "credit": "Credit",
+          "reference": "Source",
+          "state": "Status"
+        },
+        "filters": {
+          "search": "Search the journal",
+          "clearSearch": "Clear search",
+          "all": "All",
+          "account": "Account",
+          "reference": "Source",
+          "from": "From date",
+          "to": "To date"
+        },
+        "reference": {
+          "payment": "Payment",
+          "refund": "Refund",
+          "expense": "Expense",
+          "payroll_run": "Payroll run",
+          "fine": "Fine",
+          "manual": "Manual journal",
+          "reversal": "Reversal"
+        },
+        "state": {
+          "posted": "Posted",
+          "reversed": "Reversed"
+        },
+        "actions": {
+          "post": "Post journal"
+        },
+        "form": {
+          "title": "Post journal entry",
+          "intro": "Enter the debit and credit lines of one entry. The ledger is never edited: a mistake is corrected by posting an offsetting entry.",
+          "date": "Entry date",
+          "memo": "Memo",
+          "line": "Line {number}",
+          "account": "Account",
+          "accountPlaceholder": "Choose an account",
+          "debit": "Debit",
+          "credit": "Credit",
+          "addLine": "Add line",
+          "removeLine": "Remove line {number}",
+          "totals": "Debits {debit}, credits {credit}, difference {difference}",
+          "totalsHint": "A guide only. The server checks that the entry balances when you post.",
+          "invalidAmount": "Write the amount like 1250.00.",
+          "submit": "Post entry",
+          "posting": "Posting"
+        },
+        "posted": "Journal entry posted."
       }
     },
     "heads": {
