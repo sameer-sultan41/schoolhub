@@ -249,7 +249,7 @@ describe("Reports screen", () => {
       expect(screen.getByRole("button", { name: "Export XLSX" })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Export PDF" })).toBeInTheDocument();
       expect(screen.queryByText("The report could not be run.")).not.toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
     });
 
     it("says to narrow the report for a viewer who cannot export, with no buttons", async () => {
@@ -330,7 +330,7 @@ describe("Reports screen", () => {
     const user = await renderReports();
 
     expect(await screen.findByText("This report cannot be filtered this way.")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Retry" }));
+    await user.click(screen.getByRole("button", { name: "Try again" }));
 
     expect(await screen.findByRole("table", { name: "Collection report" })).toBeInTheDocument();
   });

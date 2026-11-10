@@ -529,7 +529,9 @@ class TypedRowTests(ReportFilterTestCase):
             set(body["data"][0]),
             {"date", "kind", "reference", "description", "debit", "credit", "balance"},
         )
-        self.assertEqual(body["meta"], {"row_count": 4, "closing_balance": "1500.00"})
+        # The envelope renderer stamps `request_id` on every meta (core/api/renderers.py).
+        meta = {key: value for key, value in body["meta"].items() if key != "request_id"}
+        self.assertEqual(meta, {"row_count": 4, "closing_balance": "1500.00"})
 
     def test_the_statement_envelope_serializer_documents_exactly_the_wire_keys(self) -> None:
         from apps.fees_finance.report_serializers import StudentLedgerEnvelopeSerializer
@@ -538,5 +540,6 @@ class TypedRowTests(ReportFilterTestCase):
         documented = StudentLedgerEnvelopeSerializer().fields
 
         self.assertEqual(set(body), set(documented))
-        self.assertEqual(set(body["meta"]), set(documented["meta"].fields))
+        # `request_id` is added to every meta by the envelope renderer, not by this view.
+        self.assertEqual(set(body["meta"]) - {"request_id"}, set(documented["meta"].fields))
         self.assertIsInstance(body["meta"]["closing_balance"], str)

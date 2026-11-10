@@ -14,7 +14,7 @@ import { LEDGER_ACCOUNT_TYPE_LABEL_KEY } from "@/features/fees/shared/fee-setup-
 import { EMPTY_VALUE } from "@/lib/constants";
 import { enumLabel } from "@/lib/enum-label";
 import { formatDate } from "@/lib/helpers";
-import { formatDecimal, formatMoney } from "@/lib/format-decimal";
+import { formatMoney } from "@/lib/format-decimal";
 import type { FinanceReportRowOf } from "@/services";
 import { userId } from "./report-columns";
 
@@ -76,7 +76,7 @@ export function useLedgerReportColumns(): LedgerReportColumns {
         ),
         column<Budget>("utilisation", t("reports.columns.utilisation"), (row) => (
           <span className="tabular-nums">
-            {t("reports.percent", { value: formatDecimal(locale, row.utilisation_percent) })}
+            {t("reports.percent", { value: formatMoney(locale, row.utilisation_percent) })}
           </span>
         )),
       ],
