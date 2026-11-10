@@ -17,6 +17,7 @@ import {
   buildStudent,
   feesCollectionModule,
   feesInvoicingModule,
+  feesSetupModule,
   type FeeInvoice,
   type FeePayment,
   type FeeRefund,
@@ -229,6 +230,8 @@ test.describe("an invoice reader", () => {
     signedIn: _signedIn,
   }) => {
     stubCounterApi(mockApi, [owing()]);
+    // The invoice list names each row's structure, which this viewer's structure read allows.
+    mockApi.use(feesSetupModule());
     await feeCounterPage.goto({ path: "/fees/invoices" });
 
     // The section tabs, not the sidebar (which also links Invoices).
