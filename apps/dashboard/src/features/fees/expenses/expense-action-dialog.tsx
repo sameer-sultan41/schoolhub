@@ -8,6 +8,7 @@ import { useConfirmAction } from "@/hooks/use-confirm-action";
 import { useInvalidateModule } from "@/hooks/use-invalidate-module";
 import { Services, type ExpenseRecord } from "@/services";
 import { EXPENSES_QUERY_MODULE } from "@/services/modules/expenses/expenses-constant";
+import { useInvalidatePostedSpend } from "./use-invalidate-posted-spend";
 
 export type ExpenseConfirmAction = "submit" | "approve" | "reject" | "markPaid";
 
@@ -42,12 +43,15 @@ export function ExpenseActionDialog({
   const t = useTranslations("fees");
   const tCommon = useTranslations("common");
   const invalidate = useInvalidateModule(EXPENSES_QUERY_MODULE);
+  const invalidatePostedSpend = useInvalidatePostedSpend();
   const values = { number: expense.expense_no };
 
   const { error, isPending, confirm } = useConfirmAction({
     mutationFn: () => CALL[action](expense.id),
     onSuccess: () => {
       invalidate();
+      // Approval is what posts to the ledger.
+      if (action === "approve") invalidatePostedSpend();
       toast.success(t(`expenses.expenses.${action}.done`, values));
       onOpenChange(false);
     },

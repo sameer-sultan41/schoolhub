@@ -19,6 +19,7 @@ import { FormDialogLayout } from "@/components/form-dialog-layout";
 import { useFormDialogSubmit } from "@/hooks/use-form-dialog-submit";
 import { useIdempotencyKey } from "@/hooks/use-idempotency-key";
 import { useInvalidateModule } from "@/hooks/use-invalidate-module";
+import { resolveErrorMessage } from "@/lib/error-message";
 import { Services } from "@/services";
 import {
   JOURNAL_ERROR_FIELDS,
@@ -59,7 +60,12 @@ export function PostJournalDialog({ open, onOpenChange }: PostJournalDialogProps
   const t = useTranslations("fees");
   const tCommon = useTranslations("common");
   const invalidate = useInvalidateModule(LEDGER_ENTRIES_QUERY_MODULE);
+  const tErrors = useTranslations("errors");
   const accounts = useLedgerAccountOptions({ isActive: true });
+  // The lines cannot be filled without the accounts: say so, and hold Post back, instead of showing a form with no lines.
+  const accountsError = accounts.isError
+    ? resolveErrorMessage(accounts.error, tErrors, t("ledger.journal.form.accountsError"))
+    : null;
 
   const schema = useMemo(
     () =>
@@ -111,7 +117,8 @@ export function PostJournalDialog({ open, onOpenChange }: PostJournalDialogProps
       description={t("ledger.journal.form.intro")}
       form={form}
       onSubmit={handleSubmit}
-      formError={formError}
+      formError={formError ?? accountsError}
+      submitDisabled={accounts.isError}
       isPending={isPending}
       submittingLabel={t("ledger.journal.form.posting")}
       submitLabel={t("ledger.journal.form.submit")}

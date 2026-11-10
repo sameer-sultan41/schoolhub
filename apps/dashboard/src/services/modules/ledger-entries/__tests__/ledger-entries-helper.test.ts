@@ -10,6 +10,7 @@ import {
   mapJournalLineErrors,
   referenceTypeFilter,
 } from "../ledger-entries-helper";
+import { LEDGER_ENTRIES_URL_FILTERS } from "../ledger-entries-constant";
 
 describe("journalDifference", () => {
   it("sums in whole cents, so 0.1 + 0.2 against 0.30 balances", () => {
@@ -105,5 +106,14 @@ describe("mapJournalLineErrors", () => {
     expect(mapJournalLineErrors(error)).toBe(error);
     const other = new Error("x");
     expect(mapJournalLineErrors(other)).toBe(other);
+  });
+});
+
+describe("ledger entries URL filters", () => {
+  it("keeps the account only when it is a UUID (or blank)", () => {
+    const { account } = LEDGER_ENTRIES_URL_FILTERS;
+    expect(account.isValid("")).toBe(true);
+    expect(account.isValid("55555555-5555-4555-8555-555555555555")).toBe(true);
+    expect(account.isValid("abc")).toBe(false);
   });
 });

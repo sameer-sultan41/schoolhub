@@ -165,6 +165,21 @@ describe("ledger journal tab", () => {
       asUser("fees.ledger.view", "fees.ledger.create");
     });
 
+    it("says so, and holds Post back, when the accounts cannot be loaded", async () => {
+      fetchLedgerAccountOptions.mockImplementation((query) =>
+        query?.isActive
+          ? Promise.reject(new Error("offline"))
+          : Promise.resolve([accountRecord({ id: ASSET_ACCOUNT_ID, code: "1001", name: "Cash" })]),
+      );
+      const user = await renderTab();
+
+      await user.click(screen.getByRole("button", POST_BUTTON));
+      const dialog = await screen.findByRole("dialog", { name: "Post journal entry" });
+
+      expect(await within(dialog).findByText(/Accounts could not be loaded/)).toBeInTheDocument();
+      expect(within(dialog).getByRole("button", SUBMIT)).toBeDisabled();
+    });
+
     it("shows the running difference as a hint that follows the lines", async () => {
       const user = await renderTab();
       const { dialog, line1, line2 } = await openAndFill(user);

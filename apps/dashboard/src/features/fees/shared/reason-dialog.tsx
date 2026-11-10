@@ -30,6 +30,8 @@ export interface ReasonDialogProps {
   queryModule: string;
   /** The colon-action: Revoke discount, Waive fine, Void voucher. Resolves once the server accepted it. */
   action: (reason: string) => Promise<unknown>;
+  /** Called after the module's own refresh, for a write that also stales other modules' reads. */
+  onDone?: () => void;
   /** The fields with an input (`reason`): a server error on any other, like a refused `status`, shows as the form's message. */
   knownFields: readonly string[];
 }
@@ -52,6 +54,7 @@ export function ReasonDialog({
   doneMessage,
   queryModule,
   action,
+  onDone,
   knownFields,
 }: ReasonDialogProps) {
   const tCommon = useTranslations("common");
@@ -72,6 +75,7 @@ export function ReasonDialog({
     knownFields,
     onSuccess: () => {
       invalidate();
+      onDone?.();
       toast.success(doneMessage);
       onOpenChange(false);
     },
