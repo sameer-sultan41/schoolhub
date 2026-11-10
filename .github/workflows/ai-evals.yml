@@ -69,6 +69,8 @@ jobs:
       WRITE_BASELINE: ${{ inputs.write_baseline || contains(github.event.pull_request.labels.*.name, 'ai-evals:write-baseline') }}
     steps:
       - name: Require the eval key
+        # Runs before checkout, so not in the job default's apps/api (it doesn't exist yet).
+        working-directory: .
         run: |
           if [ -z "$ANTHROPIC_API_KEY" ]; then
             echo "::error title=ANTHROPIC_API_KEY is not set::The AI evals call the real provider. Add a spend-capped ANTHROPIC_API_KEY secret to the protected 'ai-evals' environment (Settings > Environments), then re-run."
