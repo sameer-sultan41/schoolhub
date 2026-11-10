@@ -231,8 +231,10 @@ test.describe("an invoice reader", () => {
     stubCounterApi(mockApi, [owing()]);
     await feeCounterPage.goto({ path: "/fees/invoices" });
 
-    await expect(page.getByRole("link", { name: "Invoices" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Counter" })).toHaveCount(0);
+    // The section tabs, not the sidebar (which also links Invoices).
+    const tabs = page.getByRole("navigation", { name: "Fees & Finance sections" });
+    await expect(tabs.getByRole("link", { name: "Invoices" })).toBeVisible();
+    await expect(tabs.getByRole("link", { name: "Counter" })).toHaveCount(0);
   });
 });
 
