@@ -53,6 +53,7 @@ describe("Services", () => {
       "feeSchedules",
       "feeStructures",
       "files",
+      "financeReports",
       "fines",
       "gradingScales",
       "guardians",
@@ -113,6 +114,8 @@ describe("Services", () => {
     expect(typeof Services.expenses.reverseExpense).toBe("function");
     expect(typeof Services.budgets.listBudgets).toBe("function");
     expect(typeof Services.budgets.approveBudget).toBe("function");
+    expect(typeof Services.financeReports.fetchReport).toBe("function");
+    expect(typeof Services.financeReports.exportReport).toBe("function");
     expect(typeof Services.refunds.listRefunds).toBe("function");
     expect(typeof Services.refunds.createRefund).toBe("function");
     expect(typeof Services.refunds.approveRefund).toBe("function");

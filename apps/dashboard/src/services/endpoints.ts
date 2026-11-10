@@ -142,6 +142,10 @@ export const endpoints = {
   attendanceReports: {
     summary: "/reports/attendance-summary",
   },
+  /** `FinanceReportView`: `GET` runs a report inline (`fees.report.view`; a 422 with `meta.row_limit` past 1000 rows), `POST` exports it as a job (`fees.report.export`). */
+  financeReports: {
+    summary: "/reports/finance-summary",
+  },
   /** `ExamReportView`: `GET` runs a report inline (a `202` + job past 1000 rows), `POST` exports. */
   examReports: {
     summary: "/reports/exam-summary",

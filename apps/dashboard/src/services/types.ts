@@ -312,3 +312,14 @@ export type {
   ExpenseStatus,
 } from "./modules/expenses";
 export type { BudgetInput, BudgetRecord, BudgetsQuery, BudgetStatus } from "./modules/budgets";
+export type {
+  FinanceReportDates,
+  FinanceReportFormValues,
+  FinanceReportGroupBy,
+  FinanceReportKind,
+  FinanceReportKindFields,
+  FinanceReportQuery,
+  FinanceReportRow,
+  FinanceReportRowOf,
+  FinanceReportRun,
+} from "./modules/finance-reports";
