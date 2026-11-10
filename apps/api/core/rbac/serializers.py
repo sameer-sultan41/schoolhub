@@ -10,6 +10,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from core.rbac.backends import AmbiguousPrincipal
 from core.rbac.models import User
 from core.rbac.permissions import effective_permission_keys, is_restricted_principal
+from core.tenancy.access import operational_tenant
 
 
 class LoginSerializer(TokenObtainPairSerializer):
@@ -34,6 +35,7 @@ class LoginSerializer(TokenObtainPairSerializer):
         "invalid_credentials": _("Incorrect credentials."),
         "inactive": _("This account is not active."),
         "school_required": _("Specify which school to sign in to."),
+        "tenant_suspended": _("Your school's account is suspended. Contact SchoolHub support."),
     }
 
     def validate(self, attrs):
@@ -57,6 +59,14 @@ class LoginSerializer(TokenObtainPairSerializer):
             self.fail("invalid_credentials")
         if not user.is_active or user.deleted_at is not None:
             self.fail("inactive")
+        if user.tenant_id is not None:
+            # The rule every entry point applies (core.tenancy.access); refresh applies it
+            # through simplejwt's USER_AUTHENTICATION_RULE.
+            _, refusal = operational_tenant(user.tenant_id)
+            if refusal == "tenant_suspended":
+                self.fail("tenant_suspended")
+            if refusal is not None:
+                self.fail("inactive")
 
         refresh = self.get_token(user)
         return {
