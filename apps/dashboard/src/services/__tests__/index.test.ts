@@ -59,6 +59,7 @@ describe("Services", () => {
       "jobs",
       "leaveRequests",
       "ledgerAccounts",
+      "ledgerEntries",
       "marks",
       "messageThreads",
       "notices",
@@ -102,6 +103,8 @@ describe("Services", () => {
     expect(typeof Services.vouchers.voidVoucher).toBe("function");
     expect(typeof Services.expenseCategories.listExpenseCategories).toBe("function");
     expect(typeof Services.expenseCategories.deleteExpenseCategory).toBe("function");
+    expect(typeof Services.ledgerEntries.listLedgerEntries).toBe("function");
+    expect(typeof Services.ledgerEntries.postJournal).toBe("function");
     expect(typeof Services.expenses.listExpenses).toBe("function");
     expect(typeof Services.expenses.submitExpense).toBe("function");
     expect(typeof Services.expenses.approveExpense).toBe("function");

@@ -9,6 +9,7 @@ import { FeeSchedulesService } from "./modules/fee-schedules";
 import { FeeStructuresService } from "./modules/fee-structures";
 import { FinesService } from "./modules/fines";
 import { LedgerAccountsService } from "./modules/ledger-accounts";
+import { LedgerEntriesService } from "./modules/ledger-entries";
 import { NoticesService } from "./modules/notices";
 import { NotificationPreferencesService } from "./modules/notification-preferences";
 import { NotificationsService } from "./modules/notifications";
@@ -131,6 +132,7 @@ export const Services = {
   scholarships: ScholarshipsService,
   fines: FinesService,
   ledgerAccounts: LedgerAccountsService,
+  ledgerEntries: LedgerEntriesService,
   feeHeads: FeeHeadsService,
   feeStructures: FeeStructuresService,
   feeSchedules: FeeSchedulesService,

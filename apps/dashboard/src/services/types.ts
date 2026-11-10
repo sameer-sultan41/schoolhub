@@ -33,6 +33,13 @@ export type {
   LedgerAccountsQuery,
   LedgerAccountType,
 } from "./modules/ledger-accounts";
+export type {
+  JournalInput,
+  JournalLineInput,
+  LedgerEntriesQuery,
+  LedgerEntryRecord,
+  LedgerReferenceType,
+} from "./modules/ledger-entries";
 export type { ExamInput, ExamPageQuery, ExamRecord, ExamStatus, ExamType } from "./modules/exams";
 export type {
   AdmitCardIssue,

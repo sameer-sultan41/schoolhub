@@ -448,6 +448,11 @@ export const endpoints = {
     list: "/ledger-accounts",
     detail: (id: string) => `/ledger-accounts/${id}`,
   },
+  /** `/ledger-entries`: the general ledger, read with `fees.ledger.view`. `:post-journal` needs `fees.ledger.create`. Entries are never edited or deleted. */
+  ledgerEntries: {
+    list: "/ledger-entries",
+    postJournal: "/ledger-entries:post-journal",
+  },
   /** `/expense-categories`: read with `fees.expense.view`, written with `fees.expense.create`. */
   expenseCategories: {
     list: "/expense-categories",
