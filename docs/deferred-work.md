@@ -2096,6 +2096,13 @@ or subject)."` in English, with no plural form, so a count of one is ungrammatic
 - **Vouchers are issued only from an invoice.** The Vouchers tab lists, downloads and voids; Issue
   needs its invoice (`POST /fee-invoices/{id}/vouchers`), so it lives on the invoice page. A bulk
   issue per class or defaulters list is not built.
+- **An expense's receipt attachment has no screen.** `Expense.receipt_file` is on the wire, but
+  the Expenses form takes no file: attaching one needs the generic `/files` upload wired into the
+  form (and a download link on the row), as the student documents do. Expenses are recorded
+  without a receipt until then.
+- **An approved budget is not editable from the dashboard.** The server allows it; the screen offers
+  Edit only on a draft (ruling in the module doc §20), so a change to an approved figure has no
+  path. A "revise" flow (a new draft that supersedes the approved one) would be the follow-up.
 - **Refunds are requested only from an invoice's payment row.** The Refunds tab lists and decides;
   a request needs its payment, which the invoice page lists. There is no payment detail page to
   request from.
