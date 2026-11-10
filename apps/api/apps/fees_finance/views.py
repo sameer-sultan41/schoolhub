@@ -37,7 +37,6 @@ from __future__ import annotations
 import base64
 import datetime
 import hashlib
-import uuid
 
 from django.db import models, transaction
 from django.http import HttpResponse
@@ -144,6 +143,8 @@ from apps.fees_finance.tasks import (
     render_receipt_task,
 )
 from apps.school_organization.models import Term
+from apps.student_management.models import Student
+from apps.student_management.services import STUDENT_SCOPE
 from core.api.exceptions import DomainRuleViolation
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
@@ -1468,11 +1469,10 @@ class FinanceReportView(TenantScopedViewSetMixin, APIView):
     **The cap is requested as `limit + 1`.** That is how the endpoint decides
     "inline or job?" without building a term-scale result twice, which is the
     fix attendance's review produced.
-
-    The mixin is here for its `initial`, which binds the tenant after JWT auth (a bare
-    `APIView` has none: `request.tenant` stays None and the module gate fails closed).
     """
 
+    # The mixin is here for its `initial`, which binds the tenant after JWT auth (a bare
+    # `APIView` has none: `request.tenant` stays None and the module gate fails closed).
     permission_classes = STAFF_PERMISSIONS
     required_feature = FEATURE
     required_permission = "fees.report.view"
@@ -1583,9 +1583,11 @@ class StudentLedgerView(TenantScopedViewSetMixin, APIView):
     Its own view rather than a `kind` on the report endpoint, because §16
     declares this path and because a family reads it: this is the one report a
     portal principal reaches, narrowed by record scope through the same
-    `build_report_rows` the staff endpoint uses.
+    `build_report_rows` the staff endpoint uses. A student outside this school
+    or the caller's reach is a 404, never an empty statement.
     """
 
+    # The mixin binds the tenant after JWT auth; see `FinanceReportView`.
     permission_classes = PORTAL_READABLE_PERMISSIONS
     required_feature = FEATURE
     required_permission = "fees.invoice.view"
@@ -1603,15 +1605,24 @@ class StudentLedgerView(TenantScopedViewSetMixin, APIView):
         }
     )
     def get(self, request: Request, pk: str | None = None) -> Response:
+        permission = route_permission(request, self)
+        # Resolve the student first (ADR-0004): under RLS a foreign or out-of-scope
+        # id has no rows, and an empty 200 would not say "not found".
+        student = get_object_or_404(
+            scope_queryset(
+                Student.objects.alive(), request.user, permission=permission, **STUDENT_SCOPE
+            ),
+            pk=pk,
+        )
         rows = services.build_report_rows(
             kind="student-ledger",
             user=request.user,
-            permission=route_permission(request, self),
+            permission=permission,
             # The whole history: a statement is not period-bounded, and a
             # parent asking what they owe means in total.
             date_from=datetime.date.min,
             date_to=datetime.date.max,
-            student_id=uuid.UUID(str(pk)),
+            student_id=student.pk,
         )
         closing = rows[-1]["balance"] if rows else ZERO
         meta = StudentLedgerMetaSerializer({"row_count": len(rows), "closing_balance": closing})

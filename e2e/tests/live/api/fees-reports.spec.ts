@@ -169,9 +169,11 @@ test.describe("finance reports (live API)", () => {
       kind: "student-ledger",
       student: scope.studentId,
     });
+    // Date order: the live session is far in the future, so the invoice is issued on its period's
+    // first day, after today's payment.
     expect(statement.map((row) => [row["entry_type"], row["kind"]])).toEqual([
-      ["invoice", "student-ledger"],
       ["payment", "student-ledger"],
+      ["invoice", "student-ledger"],
     ]);
 
     // An id no tenant row has (another tenant's would be the same) is an empty report.
@@ -204,13 +206,14 @@ test.describe("finance reports (live API)", () => {
       `/students/${scope.studentId}/ledger`,
     );
 
-    expect(statement.data.map((line) => line["kind"])).toEqual(["invoice", "payment"]);
+    // Date order: today's payment precedes the far-future session's invoice (see above).
+    expect(statement.data.map((line) => line["kind"])).toEqual(["payment", "invoice"]);
     expect(Object.keys(statement.data[0] ?? {}).sort()).toEqual(
       ["date", "kind", "reference", "description", "debit", "credit", "balance"].sort(),
     );
     expect(statement.meta).toMatchObject({ row_count: 2, closing_balance: "1000.00" });
     // The payment just taken is on the statement, as a credit of the amount paid.
-    expect(statement.data[1]).toMatchObject({ kind: "payment", credit: PAID_HERE, debit: "0.00" });
+    expect(statement.data[0]).toMatchObject({ kind: "payment", credit: PAID_HERE, debit: "0.00" });
   });
 
   test("another tenant's student statement is a 404, never a 403 or an empty one", async ({

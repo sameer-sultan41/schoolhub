@@ -13006,7 +13006,8 @@ paths:
         Its own view rather than a `kind` on the report endpoint, because §16
         declares this path and because a family reads it: this is the one report a
         portal principal reaches, narrowed by record scope through the same
-        `build_report_rows` the staff endpoint uses.
+        `build_report_rows` the staff endpoint uses. A student outside this school
+        or the caller's reach is a 404, never an empty statement.
       parameters:
       - in: path
         name: id

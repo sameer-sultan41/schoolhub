@@ -406,3 +406,8 @@
 
 - **Mistake.** The expense approval rule compared the approver only with `created_by`, and `submit_expense` recorded nobody. An accountant could edit a colleague's draft, submit it, and approve it, as the creator never touched it (fees dashboard PR D review; `services.decide_expense`).
 - **Check.** For every maker-checker rule, list each actor who changes the record on its way to the gate (create, edit, submit) and make sure each one is stored and barred from deciding it. Test it: one person edits and submits another's draft, that person's approval is a 422, and a third person's approval succeeds.
+
+### L63. A view tested only through force_login can hide a JWT-only failure
+
+- **Mistake.** `FinanceReportView` and `StudentLedgerView` were bare `APIView`s, so under a bearer token nothing bound `request.tenant` and the module gate refused every real client. Their Django tests passed because `authenticate()` also calls `force_login`, whose session lets `TenantMiddleware` bind the tenant first; only the live lane saw it (fees dashboard PR E, `9a4530c8`). Once the tenant bound, a foreign student's statement became an empty 200 instead of a 404.
+- **Check.** Every new `APIView` or `ViewSet` has at least one test that sends a bearer token and no session (`APIClient().credentials(HTTP_AUTHORIZATION=...)`, no `force_login`; see `fees_finance/tests/test_reports.py`'s `jwt_only_client`). A path id is resolved through the tenant- and record-scoped queryset before the view builds anything from it, and that test asserts a foreign id is a 404.
