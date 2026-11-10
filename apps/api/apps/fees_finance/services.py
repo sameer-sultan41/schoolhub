@@ -569,10 +569,7 @@ def generate_invoices(
             fee_structure=structure,
             period_label=label,
             issue_date=window_start,
-            # A charge never falls due before it is issued: a window that opens
-            # after the schedule's due day (a session starting mid-month) is due
-            # on issue rather than violating `fee_invoices_due_after_issue`.
-            due_date=max(draft.due_date or window_end, window_start),
+            due_date=draft.due_date or window_end,
             status=InvoiceStatus.ISSUED,
             subtotal=draft.subtotal,
             discount_total=draft.discount_total,
