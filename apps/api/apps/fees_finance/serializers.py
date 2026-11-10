@@ -14,7 +14,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from apps.fees_finance import services
+from apps.fees_finance import reports, services
 from apps.fees_finance.models import (
     Budget,
     Discount,
@@ -996,25 +996,36 @@ class BudgetSerializer(serializers.ModelSerializer):
 
 
 class FinanceReportQuerySerializer(serializers.Serializer):
-    """`GET/POST /reports/finance-summary` — §13's parameterised entry point."""
+    """`GET/POST /reports/finance-summary` — §13's parameterised entry point.
 
-    kind = serializers.CharField()
+    The campus, session and class filters are plain UUIDs rather than model
+    choice fields, so an id from another tenant is an empty report and not a
+    different status from an unknown one (AGENTS.md invariant 2).
+    """
+
+    kind = serializers.ChoiceField(choices=[(key, key) for key in reports.REPORT_KINDS])
     date_from = serializers.DateField()
     date_to = serializers.DateField()
     student = serializers.UUIDField(required=False, allow_null=True)
+    campus_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text="The student's campus (an expense's, for `expense-register`).",
+    )
+    academic_session_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text="The invoice's session (the grant's, or the student's enrollment, for grants).",
+    )
+    class_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text="The class the invoice was billed to (the student's enrollment, for grants).",
+    )
     group_by = serializers.ChoiceField(
         choices=["day", "method", "cashier"], required=False, default="day"
     )
     format = serializers.ChoiceField(choices=["csv", "xlsx", "pdf"], required=False, default="csv")
-
-    def validate_kind(self, value: str) -> str:
-        from apps.fees_finance import reports
-
-        if value not in reports.REPORT_KINDS:
-            raise serializers.ValidationError(
-                f"Unknown report. Expected one of: {', '.join(reports.REPORT_KINDS)}."
-            )
-        return value
 
     def validate(self, attrs: dict) -> dict:
         if attrs["date_to"] < attrs["date_from"]:
@@ -1025,4 +1036,21 @@ class FinanceReportQuerySerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"student": "A student ledger needs the student it is for."}
             )
+        allowed = reports.REPORT_FILTERS_BY_KIND[attrs["kind"]]
+        refused = {
+            name: "This report cannot be filtered this way."
+            for name in ("campus_id", "academic_session_id", "class_id")
+            if attrs.get(name) is not None and name not in allowed
+        }
+        if refused:
+            raise serializers.ValidationError(refused)
         return attrs
+
+    def report_filters(self) -> reports.ReportFilters:
+        """The validated campus/session/class filters, as the report engine takes them."""
+        data = self.validated_data
+        return reports.ReportFilters(
+            campus_id=data.get("campus_id"),
+            academic_session_id=data.get("academic_session_id"),
+            class_id=data.get("class_id"),
+        )

@@ -6917,6 +6917,34 @@ export interface components {
          * @enum {string}
          */
         BudgetStatusEnum: "draft" | "approved" | "closed";
+        /** @description `reports.budget_variance`: one approved budget against its actual spend. */
+        BudgetVarianceReportRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "budget-variance";
+            /** Format: uuid */
+            readonly budget_id: string;
+            readonly name: string;
+            /** Format: date */
+            readonly period_start: string;
+            /** Format: date */
+            readonly period_end: string;
+            /** Format: decimal */
+            readonly budgeted: string;
+            /** Format: decimal */
+            readonly actual: string;
+            /** Format: decimal */
+            readonly variance: string;
+            /** Format: decimal */
+            readonly utilisation_percent: string;
+        };
+        /**
+         * @description * `budget-variance` - budget-variance
+         * @enum {string}
+         */
+        BudgetVarianceReportRowKindEnum: "budget-variance";
         /**
          * @description `POST /student-attendance:bulk-mark` — one section, one date, one period.
          *
@@ -7030,6 +7058,32 @@ export interface components {
             created: number;
             skipped: number;
         };
+        /**
+         * @description `reports.collection_report`: confirmed money by day, method or cashier.
+         *
+         *     The row carries only the key it was grouped by; the other two are null.
+         *     They are not `read_only` so the schema does not list them as always present.
+         */
+        CollectionReportRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "collection";
+            /** Format: date */
+            day?: string | null;
+            method?: components["schemas"]["PaymentMethodEnum"] | null;
+            /** Format: uuid */
+            received_by?: string | null;
+            /** Format: decimal */
+            readonly total: string;
+            readonly count: number;
+        };
+        /**
+         * @description * `collection` - collection
+         * @enum {string}
+         */
+        CollectionReportRowKindEnum: "collection";
         /**
          * @description * `all` - All
          *     * `staff` - Staff
@@ -7686,6 +7740,36 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /** @description `reports.expense_register`: one expense, whatever its status. */
+        ExpenseRegisterReportRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "expense-register";
+            /** Format: uuid */
+            readonly id: string;
+            readonly expense_no: string;
+            /** Format: date */
+            readonly expense_date: string;
+            readonly vendor_name: string | null;
+            readonly description: string;
+            /** Format: decimal */
+            readonly amount: string;
+            /** Format: decimal */
+            readonly tax_amount: string;
+            readonly status: components["schemas"]["ExpenseStatusEnum"];
+            /** Format: uuid */
+            readonly approved_by: string | null;
+            readonly category_code: string;
+            readonly category_name: string;
+            readonly campus_name: string | null;
+        };
+        /**
+         * @description * `expense-register` - expense-register
+         * @enum {string}
+         */
+        ExpenseRegisterReportRowKindEnum: "expense-register";
         /**
          * @description * `draft` - Draft
          *     * `submitted` - Submitted
@@ -7860,6 +7944,13 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /**
+         * @description * `invoice` - invoice
+         *     * `payment` - payment
+         *     * `refund` - refund
+         * @enum {string}
+         */
+        FeeStatementEntryKindEnum: "invoice" | "payment" | "refund";
         FeeStructure: {
             /** Format: uuid */
             readonly id: string;
@@ -7953,20 +8044,54 @@ export interface components {
          * @enum {string}
          */
         FileStatusEnum: "pending" | "ready" | "quarantined";
-        /** @description `GET/POST /reports/finance-summary` — §13's parameterised entry point. */
+        /**
+         * @description `GET/POST /reports/finance-summary` — §13's parameterised entry point.
+         *
+         *     The campus, session and class filters are plain UUIDs rather than model
+         *     choice fields, so an id from another tenant is an empty report and not a
+         *     different status from an unknown one (AGENTS.md invariant 2).
+         */
         FinanceReportQuery: {
-            kind: string;
+            kind: components["schemas"]["FinanceReportQueryKindEnum"];
             /** Format: date */
             date_from: string;
             /** Format: date */
             date_to: string;
             /** Format: uuid */
             student?: string | null;
+            /**
+             * Format: uuid
+             * @description The student's campus (an expense's, for `expense-register`).
+             */
+            campus_id?: string | null;
+            /**
+             * Format: uuid
+             * @description The invoice's session (the grant's, or the student's enrollment, for grants).
+             */
+            academic_session_id?: string | null;
+            /**
+             * Format: uuid
+             * @description The class the invoice was billed to (the student's enrollment, for grants).
+             */
+            class_id?: string | null;
             /** @default day */
             group_by: components["schemas"]["GroupByEnum"];
             /** @default csv */
             format: components["schemas"]["FormatEnum"];
         };
+        /**
+         * @description * `collection` - collection
+         *     * `outstanding-aging` - outstanding-aging
+         *     * `student-ledger` - student-ledger
+         *     * `grant-register` - grant-register
+         *     * `income-vs-expense` - income-vs-expense
+         *     * `budget-variance` - budget-variance
+         *     * `expense-register` - expense-register
+         *     * `trial-balance` - trial-balance
+         * @enum {string}
+         */
+        FinanceReportQueryKindEnum: "collection" | "outstanding-aging" | "student-ledger" | "grant-register" | "income-vs-expense" | "budget-variance" | "expense-register" | "trial-balance";
+        FinanceReportRow: components["schemas"]["CollectionReportRow"] | components["schemas"]["OutstandingAgingReportRow"] | components["schemas"]["StudentLedgerReportRow"] | components["schemas"]["GrantRegisterReportRow"] | components["schemas"]["IncomeVsExpenseReportRow"] | components["schemas"]["BudgetVarianceReportRow"] | components["schemas"]["ExpenseRegisterReportRow"] | components["schemas"]["TrialBalanceReportRow"];
         /** @description A penalty on a fine-category fee head; `status` moves only through `:waive`. */
         Fine: {
             /** Format: uuid */
@@ -8142,6 +8267,44 @@ export interface components {
          */
         GradingScaleTypeEnum: "percentage" | "letter" | "gpa" | "hybrid";
         /**
+         * @description `reports.grant_and_waiver_register`: a reduction granted or a fine waived, and by whom.
+         *
+         *     `grant_type` is the source's own `kind` (a discount, a scholarship or a waived
+         *     fine); `status` is that source's status, so it is not one fixed set.
+         */
+        GrantRegisterReportRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "grant-register";
+            /** Format: uuid */
+            readonly id: string;
+            readonly grant_type: components["schemas"]["GrantTypeEnum"];
+            readonly name: string;
+            readonly value_type: components["schemas"]["FeeGrantValueTypeEnum"];
+            /** Format: decimal */
+            readonly value: string;
+            readonly status: string;
+            /** Format: uuid */
+            readonly approved_by: string | null;
+            readonly admission_number: string;
+            /** Format: date-time */
+            readonly granted_at: string;
+        };
+        /**
+         * @description * `grant-register` - grant-register
+         * @enum {string}
+         */
+        GrantRegisterReportRowKindEnum: "grant-register";
+        /**
+         * @description * `discount` - discount
+         *     * `scholarship` - scholarship
+         *     * `fine_waiver` - fine_waiver
+         * @enum {string}
+         */
+        GrantTypeEnum: "discount" | "scholarship" | "fine_waiver";
+        /**
          * @description * `day` - day
          *     * `method` - method
          *     * `cashier` - cashier
@@ -8235,6 +8398,30 @@ export interface components {
         IdCardGenerateRequest: {
             student_ids: string[];
         };
+        /** @description `reports.income_vs_expense`: an income or expense account's net over the period. */
+        IncomeVsExpenseReportRow: {
+            /** Format: uuid */
+            readonly ledger_account_id: string;
+            readonly account_type: components["schemas"]["LedgerAccountTypeEnum"];
+            /** Format: decimal */
+            readonly total_debit: string;
+            /** Format: decimal */
+            readonly total_credit: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "income-vs-expense";
+            readonly code: string;
+            readonly name: string;
+            /** Format: decimal */
+            readonly net: string;
+        };
+        /**
+         * @description * `income-vs-expense` - income-vs-expense
+         * @enum {string}
+         */
+        IncomeVsExpenseReportRowKindEnum: "income-vs-expense";
         /**
          * @description No email is sent (§17 gap — no notification infrastructure exists yet,
          *     see services/invite.py's ``invite_staff`` docstring); this only creates and
@@ -8901,6 +9088,37 @@ export interface components {
             subject: string | null;
             body: string;
         };
+        /** @description `reports.outstanding_and_aging`: one student's balance, bucketed by days past due. */
+        OutstandingAgingReportRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "outstanding-aging";
+            /** Format: uuid */
+            readonly student_id: string;
+            readonly admission_number: string;
+            readonly first_name: string;
+            readonly last_name: string;
+            /** Format: decimal */
+            readonly total_outstanding: string;
+            readonly invoice_count: number;
+            /** Format: decimal */
+            readonly not_yet_due: string;
+            /** Format: decimal */
+            readonly bucket_0_30: string;
+            /** Format: decimal */
+            readonly bucket_31_60: string;
+            /** Format: decimal */
+            readonly bucket_61_90: string;
+            /** Format: decimal */
+            readonly bucket_90_plus: string;
+        };
+        /**
+         * @description * `outstanding-aging` - outstanding-aging
+         * @enum {string}
+         */
+        OutstandingAgingReportRowKindEnum: "outstanding-aging";
         PaginatedAcademicSessionList: {
             data?: components["schemas"]["AcademicSession"][];
             meta?: {
@@ -12223,6 +12441,50 @@ export interface components {
          * @enum {string}
          */
         StudentLateArrivalsReportRowKindEnum: "student-late-arrivals";
+        /** @description `reports.student_ledger`: a statement line, the discriminator on `kind`. */
+        StudentLedgerReportRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "student-ledger";
+            readonly entry_type: components["schemas"]["FeeStatementEntryKindEnum"];
+            /** Format: date */
+            readonly date: string | null;
+            readonly reference: string;
+            readonly description: string;
+            /** Format: decimal */
+            readonly debit: string;
+            /** Format: decimal */
+            readonly credit: string;
+            /** Format: decimal */
+            readonly balance: string;
+        };
+        /**
+         * @description * `student-ledger` - student-ledger
+         * @enum {string}
+         */
+        StudentLedgerReportRowKindEnum: "student-ledger";
+        /**
+         * @description One line of a student's statement: a charge, a payment or a refund, with its running balance.
+         *
+         *     The wire shape of `GET /students/{id}/ledger`. `kind` here is the line's own
+         *     type, so the report row (which needs `kind` for the discriminator) carries it
+         *     as `entry_type` instead.
+         */
+        StudentStatementEntry: {
+            /** Format: date */
+            readonly date: string | null;
+            readonly kind: components["schemas"]["FeeStatementEntryKindEnum"];
+            readonly reference: string;
+            readonly description: string;
+            /** Format: decimal */
+            readonly debit: string;
+            /** Format: decimal */
+            readonly credit: string;
+            /** Format: decimal */
+            readonly balance: string;
+        };
         /**
          * @description * `active` - Active
          *     * `suspended` - Suspended
@@ -12694,6 +12956,30 @@ export interface components {
          * @enum {string}
          */
         TransferTypeEnum: "inter_campus" | "outgoing" | "incoming";
+        /** @description `ledger.trial_balance`: every account's debit and credit totals, and their difference. */
+        TrialBalanceReportRow: {
+            /** Format: uuid */
+            readonly ledger_account_id: string;
+            readonly account_type: components["schemas"]["LedgerAccountTypeEnum"];
+            /** Format: decimal */
+            readonly total_debit: string;
+            /** Format: decimal */
+            readonly total_credit: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "trial-balance";
+            readonly code: string;
+            readonly name: string;
+            /** Format: decimal */
+            readonly balance: string;
+        };
+        /**
+         * @description * `trial-balance` - trial-balance
+         * @enum {string}
+         */
+        TrialBalanceReportRowKindEnum: "trial-balance";
         UnreadCount: {
             unread: number;
         };
@@ -19858,6 +20144,12 @@ export interface operations {
     reports_finance_summary_retrieve: {
         parameters: {
             query: {
+                /** @description The invoice's session (the grant's, or the student's enrollment, for grants). */
+                academic_session_id?: string | null;
+                /** @description The student's campus (an expense's, for `expense-register`). */
+                campus_id?: string | null;
+                /** @description The class the invoice was billed to (the student's enrollment, for grants). */
+                class_id?: string | null;
                 date_from: string;
                 date_to: string;
                 /**
@@ -19872,7 +20164,17 @@ export interface operations {
                  *     * `cashier` - cashier
                  */
                 group_by?: "day" | "method" | "cashier";
-                kind: string;
+                /**
+                 * @description * `collection` - collection
+                 *     * `outstanding-aging` - outstanding-aging
+                 *     * `student-ledger` - student-ledger
+                 *     * `grant-register` - grant-register
+                 *     * `income-vs-expense` - income-vs-expense
+                 *     * `budget-variance` - budget-variance
+                 *     * `expense-register` - expense-register
+                 *     * `trial-balance` - trial-balance
+                 */
+                kind: "collection" | "outstanding-aging" | "student-ledger" | "grant-register" | "income-vs-expense" | "budget-variance" | "expense-register" | "trial-balance";
                 student?: string | null;
             };
             header?: never;
@@ -19881,12 +20183,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
+            /** @description The report's rows, each carrying the report's `kind`. `meta` carries `kind`, `row_count`, `date_from` and `date_to`. Over 1000 rows the response is a 422 carrying `meta.row_limit`; `POST` the same parameters for an export job. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["FinanceReportRow"][];
+                };
             };
         };
     };
@@ -19905,7 +20209,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description No response body */
+            /** @description A job resource; poll GET /jobs/{id}. */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -22066,12 +22370,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
+            /** @description The statement's lines in date order, each with its running `balance`. `meta` carries `row_count` and the server's `closing_balance` — the last line's balance, or zero for no lines. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["StudentStatementEntry"][];
+                };
             };
         };
     };

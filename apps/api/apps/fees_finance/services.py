@@ -1822,9 +1822,14 @@ def build_report_rows(
     date_to: datetime.date,
     student_id: uuid.UUID | None = None,
     group_by: str = "day",
+    filters: reports.ReportFilters | None = None,
     limit: int | None = None,
 ) -> list[dict]:
     """Run one §13 report with the caller's record scope for `permission` applied.
+
+    `filters` (campus, session, class) narrow the kinds that have a student or
+    invoice dimension, **after** the record scope, so a filter can only shrink
+    what the caller may already read.
 
     `permission` is the declaration the request was admitted on (the job carries it
     as `scope_permission`), so only the roles granting it count.
@@ -1859,7 +1864,7 @@ def build_report_rows(
 
     if kind == "collection":
         return reports.collection_report(
-            scoped(Payment.objects.alive()),
+            reports.filter_payments(scoped(Payment.objects.alive()), filters),
             date_from=date_from,
             date_to=date_to,
             group_by=group_by,
@@ -1867,7 +1872,7 @@ def build_report_rows(
         )
     if kind == "outstanding-aging":
         return reports.outstanding_and_aging(
-            scoped(FeeInvoice.objects.alive()),
+            reports.filter_invoices(scoped(FeeInvoice.objects.alive()), filters),
             as_of=date_to,
             limit=limit,
         )
@@ -1876,16 +1881,16 @@ def build_report_rows(
             raise DomainRuleViolation({"student": "A student ledger needs the student it is for."})
         return reports.student_ledger(
             student_id=student_id,
-            invoices=scoped(FeeInvoice.objects.alive()),
-            payments=scoped(Payment.objects.alive()),
-            refunds=scoped(Refund.objects.alive()),
+            invoices=reports.filter_invoices(scoped(FeeInvoice.objects.alive()), filters),
+            payments=reports.filter_payments(scoped(Payment.objects.alive()), filters),
+            refunds=reports.filter_refunds(scoped(Refund.objects.alive()), filters),
             limit=limit,
         )
     if kind == "grant-register":
         return reports.grant_and_waiver_register(
-            discounts=scoped(Discount.objects.alive()),
-            scholarships=scoped(Scholarship.objects.alive()),
-            fines=scoped(Fine.objects.alive()),
+            discounts=reports.filter_discounts(scoped(Discount.objects.alive()), filters),
+            scholarships=reports.filter_scholarships(scoped(Scholarship.objects.alive()), filters),
+            fines=reports.filter_fines(scoped(Fine.objects.alive()), filters),
             limit=limit,
         )
     if kind == "income-vs-expense":
@@ -1902,8 +1907,11 @@ def build_report_rows(
             limit=limit,
         )
     if kind == "expense-register":
+        expenses = scoped(Expense.objects.alive(), campus_field="campus_id")
+        if filters is not None and filters.campus_id is not None:
+            expenses = expenses.filter(campus_id=filters.campus_id)
         return reports.expense_register(
-            scoped(Expense.objects.alive(), campus_field="campus_id"),
+            expenses,
             date_from=date_from,
             date_to=date_to,
             limit=limit,

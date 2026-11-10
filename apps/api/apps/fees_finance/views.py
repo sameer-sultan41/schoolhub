@@ -42,7 +42,12 @@ import uuid
 from django.db import models, transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
-from drf_spectacular.utils import OpenApiParameter, extend_schema
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    OpenApiResponse,
+    PolymorphicProxySerializer,
+    extend_schema,
+)
 from rest_framework import mixins, viewsets
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated
@@ -91,6 +96,13 @@ from apps.fees_finance.models import (
     ScholarshipStatus,
     VoucherCollectionImport,
     VoucherProvider,
+)
+from apps.fees_finance.report_serializers import (
+    REPORT_ROW_SERIALIZERS,
+    ReportMetaSerializer,
+    StudentLedgerMetaSerializer,
+    StudentStatementEntrySerializer,
+    serialize_report_rows,
 )
 from apps.fees_finance.serializers import (
     BudgetSerializer,
@@ -1462,7 +1474,25 @@ class FinanceReportView(APIView):
     required_permission = "fees.report.view"
     required_permission_map = {"post": "fees.report.export"}
 
-    @extend_schema(parameters=[FinanceReportQuerySerializer], responses={200: None})
+    @extend_schema(
+        parameters=[FinanceReportQuerySerializer],
+        responses={
+            200: OpenApiResponse(
+                response=PolymorphicProxySerializer(
+                    component_name="FinanceReportRow",
+                    serializers=REPORT_ROW_SERIALIZERS,
+                    resource_type_field_name="kind",
+                    many=True,
+                ),
+                description=(
+                    "The report's rows, each carrying the report's `kind`. `meta` carries "
+                    "`kind`, `row_count`, `date_from` and `date_to`. Over "
+                    f"{services.SYNCHRONOUS_REPORT_ROW_LIMIT} rows the response is a 422 "
+                    "carrying `meta.row_limit`; `POST` the same parameters for an export job."
+                ),
+            )
+        },
+    )
     def get(self, request: Request) -> Response:
         serializer = FinanceReportQuerySerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
@@ -1476,6 +1506,7 @@ class FinanceReportView(APIView):
             date_to=payload["date_to"],
             student_id=payload.get("student"),
             group_by=payload.get("group_by", "day"),
+            filters=serializer.report_filters(),
             limit=services.SYNCHRONOUS_REPORT_ROW_LIMIT + 1,
         )
 
@@ -1490,19 +1521,21 @@ class FinanceReportView(APIView):
         # `EnvelopeJSONRenderer` passes a payload that already has both keys
         # through untouched, and wrapping it again would nest `meta` inside
         # `data`.
-        return Response(
+        # PolymorphicProxySerializer documents the rows; this dispatch serializes them (ADR-0022).
+        meta = ReportMetaSerializer(
             {
-                "data": rows,
-                "meta": {
-                    "kind": payload["kind"],
-                    "row_count": len(rows),
-                    "date_from": payload["date_from"].isoformat(),
-                    "date_to": payload["date_to"].isoformat(),
-                },
+                "kind": payload["kind"],
+                "row_count": len(rows),
+                "date_from": payload["date_from"],
+                "date_to": payload["date_to"],
             }
         )
+        return Response({"data": serialize_report_rows(payload["kind"], rows), "meta": meta.data})
 
-    @extend_schema(request=FinanceReportQuerySerializer, responses={202: None})
+    @extend_schema(
+        request=FinanceReportQuerySerializer,
+        responses={202: OpenApiResponse(description="A job resource; poll GET /jobs/{id}.")},
+    )
     def post(self, request: Request) -> Response:
         serializer = FinanceReportQuerySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -1517,6 +1550,15 @@ class FinanceReportView(APIView):
                 "date_to": payload["date_to"].isoformat(),
                 "student_id": str(payload["student"]) if payload.get("student") else None,
                 "group_by": payload.get("group_by", "day"),
+                **{
+                    name: str(value)
+                    for name, value in (
+                        ("campus_id", payload.get("campus_id")),
+                        ("academic_session_id", payload.get("academic_session_id")),
+                        ("class_id", payload.get("class_id")),
+                    )
+                    if value is not None
+                },
                 "format": payload.get("format", "csv"),
                 # Read back by the task to recompute the record scope, which is
                 # what stops an export widening what its requester could see...
@@ -1544,7 +1586,18 @@ class StudentLedgerView(APIView):
     required_feature = FEATURE
     required_permission = "fees.invoice.view"
 
-    @extend_schema(responses={200: None})
+    @extend_schema(
+        responses={
+            200: OpenApiResponse(
+                response=StudentStatementEntrySerializer(many=True),
+                description=(
+                    "The statement's lines in date order, each with its running `balance`. "
+                    "`meta` carries `row_count` and the server's `closing_balance` — the "
+                    "last line's balance, or zero for no lines."
+                ),
+            )
+        }
+    )
     def get(self, request: Request, pk: str | None = None) -> Response:
         rows = services.build_report_rows(
             kind="student-ledger",
@@ -1557,6 +1610,7 @@ class StudentLedgerView(APIView):
             student_id=uuid.UUID(str(pk)),
         )
         closing = rows[-1]["balance"] if rows else ZERO
+        meta = StudentLedgerMetaSerializer({"row_count": len(rows), "closing_balance": closing})
         return Response(
-            {"data": rows, "meta": {"row_count": len(rows), "closing_balance": str(closing)}}
+            {"data": StudentStatementEntrySerializer(rows, many=True).data, "meta": meta.data}
         )
