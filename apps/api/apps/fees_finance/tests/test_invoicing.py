@@ -524,6 +524,23 @@ class BuildDraftTests(SimpleTestCase):
 
         self.assertEqual(draft.due_date, datetime.date(2026, 9, 5))
 
+    def test_the_due_date_is_never_before_a_mid_month_period_starts(self) -> None:
+        """A window opening on the 20th with a due day of 10 would put the due
+        date before the issue date, which `fee_invoices_due_after_issue`
+        refuses; the invoice is due the day it opens instead."""
+        start = datetime.date(2026, 9, 20)
+        draft = invoicing.build_draft(
+            schedules=[StubSchedule(Decimal("1000.00"), due_day=10)],
+            fines=[],
+            discounts=[],
+            scholarships=[],
+            period_start=start,
+            period_end=SEP_END,
+            head_names={TUITION: "Tuition"},
+        )
+
+        self.assertEqual(draft.due_date, start)
+
 
 class PeriodLabelTests(SimpleTestCase):
     def test_a_monthly_label_is_the_year_and_month(self) -> None:
