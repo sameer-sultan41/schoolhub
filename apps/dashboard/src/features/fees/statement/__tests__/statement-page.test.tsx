@@ -112,6 +112,20 @@ describe("student statement page", () => {
     );
   });
 
+  it("shows the load-error state, with a retry, when the response carries no closing balance", async () => {
+    // The service throws on a contract break (no `closing_balance`); the query turns it into the
+    // page's error state rather than a crash or an invented zero.
+    fetchStatement.mockRejectedValue(
+      new Error("The student statement response carried no closing_balance."),
+    );
+    asUser("fees.invoice.view");
+    await renderStatement();
+
+    expect(await screen.findByText("The statement could not be loaded.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
+    expect(screen.queryByText("Closing balance")).not.toBeInTheDocument();
+  });
+
   it("does not fetch the statement without the invoice view key", async () => {
     asUser("students.student.view");
     await renderStatement();
