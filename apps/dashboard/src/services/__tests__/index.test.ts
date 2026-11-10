@@ -37,6 +37,7 @@ describe("Services", () => {
       "attendanceSettings",
       "auth",
       "broadcasts",
+      "budgets",
       "curriculum",
       "dashboard",
       "discounts",
@@ -45,6 +46,8 @@ describe("Services", () => {
       "examSchedules",
       "examSubjects",
       "exams",
+      "expenseCategories",
+      "expenses",
       "feeHeads",
       "feeInvoices",
       "feeSchedules",
@@ -97,6 +100,16 @@ describe("Services", () => {
     expect(typeof Services.vouchers.downloadVoucher).toBe("function");
     expect(typeof Services.vouchers.issueVoucher).toBe("function");
     expect(typeof Services.vouchers.voidVoucher).toBe("function");
+    expect(typeof Services.expenseCategories.listExpenseCategories).toBe("function");
+    expect(typeof Services.expenseCategories.deleteExpenseCategory).toBe("function");
+    expect(typeof Services.expenses.listExpenses).toBe("function");
+    expect(typeof Services.expenses.submitExpense).toBe("function");
+    expect(typeof Services.expenses.approveExpense).toBe("function");
+    expect(typeof Services.expenses.rejectExpense).toBe("function");
+    expect(typeof Services.expenses.markExpensePaid).toBe("function");
+    expect(typeof Services.expenses.reverseExpense).toBe("function");
+    expect(typeof Services.budgets.listBudgets).toBe("function");
+    expect(typeof Services.budgets.approveBudget).toBe("function");
     expect(typeof Services.refunds.listRefunds).toBe("function");
     expect(typeof Services.refunds.createRefund).toBe("function");
     expect(typeof Services.refunds.approveRefund).toBe("function");

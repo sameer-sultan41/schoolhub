@@ -125,7 +125,8 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
    - `<module>-service.ts` — the actual `apiClient` calls, importing its types from
      `./<module>-type`.
 
-   Register it in `src/services/index.ts` as `Services.<module>`. See
+   Register it in `src/services/index.ts` as `Services.<module>`, and re-export its public types
+   from `src/services/types.ts` (not `index.ts`, which stays under the 400-line cap). See
    `src/services/modules/students/` for a module with real content in every file,
    `src/services/modules/staff/` for the two-predicate `copyMappedFields` variant, or
    `src/services/modules/auth/` for a module that's deliberately thin in two of them.

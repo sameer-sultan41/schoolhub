@@ -448,6 +448,27 @@ export const endpoints = {
     list: "/ledger-accounts",
     detail: (id: string) => `/ledger-accounts/${id}`,
   },
+  /** `/expense-categories`: read with `fees.expense.view`, written with `fees.expense.create`. */
+  expenseCategories: {
+    list: "/expense-categories",
+    detail: (id: string) => `/expense-categories/${id}`,
+  },
+  /** `/expenses`: read with `fees.expense.view`. `:submit` needs `.create`, `:approve`, `:reject` and `:reverse` need `.approve`, `:mark-paid` needs `.update`. No delete. */
+  expenses: {
+    list: "/expenses",
+    detail: (id: string) => `/expenses/${id}`,
+    submit: (id: string) => `/expenses/${id}:submit`,
+    approve: (id: string) => `/expenses/${id}:approve`,
+    reject: (id: string) => `/expenses/${id}:reject`,
+    markPaid: (id: string) => `/expenses/${id}:mark-paid`,
+    reverse: (id: string) => `/expenses/${id}:reverse`,
+  },
+  /** `/budgets`: read with `fees.expense.view`, written with `fees.budget.create`; `:approve` needs `fees.budget.approve`. No delete. */
+  budgets: {
+    list: "/budgets",
+    detail: (id: string) => `/budgets/${id}`,
+    approve: (id: string) => `/budgets/${id}:approve`,
+  },
   /** `/fee-heads`: read with `fees.fee-structure.view`, written with `fees.fee-structure.create|update|delete`. */
   feeHeads: {
     list: "/fee-heads",
