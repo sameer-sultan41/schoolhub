@@ -38,12 +38,13 @@ class SignInTenantStatusTests(APITestCase):
         self.assertEqual(self.login().status_code, status.HTTP_200_OK)
 
     def test_a_suspended_school_cannot_sign_in(self):
+        """The same uniform 401 every refused sign-in gets (LoginView), and no cookie."""
         self.suspend()
 
         response = self.login()
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("suspended", response.json()["error"]["message"])
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.json()["error"]["code"], "invalid_credentials")
         self.assertNotIn(REFRESH_COOKIE_NAME, response.cookies)
 
     def test_a_deleted_school_cannot_sign_in(self):
@@ -51,7 +52,7 @@ class SignInTenantStatusTests(APITestCase):
 
         response = self.login()
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_refresh_stops_once_the_school_is_suspended_and_clears_the_cookie(self):
         """Signed in before the suspension, the refresh cookie must not keep minting tokens."""
@@ -73,7 +74,7 @@ class SignInTenantStatusTests(APITestCase):
 
 class UserAuthenticationRuleTests(APITestCase):
     def test_a_platform_user_with_no_tenant_is_judged_on_is_active_alone(self):
-        user = UserFactory(tenant=None)
+        user = UserFactory(tenant=None, is_platform=True)
 
         self.assertTrue(user_may_authenticate(user))
         user.is_active = False

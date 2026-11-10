@@ -35,7 +35,6 @@ class LoginSerializer(TokenObtainPairSerializer):
         "invalid_credentials": _("Incorrect credentials."),
         "inactive": _("This account is not active."),
         "school_required": _("Specify which school to sign in to."),
-        "tenant_suspended": _("Your school's account is suspended. Contact SchoolHub support."),
     }
 
     def validate(self, attrs):
@@ -61,10 +60,9 @@ class LoginSerializer(TokenObtainPairSerializer):
             self.fail("inactive")
         if user.tenant_id is not None:
             # The rule every entry point applies (core.tenancy.access); refresh applies it
-            # through simplejwt's USER_AUTHENTICATION_RULE.
+            # through simplejwt's USER_AUTHENTICATION_RULE. LoginView answers every refusal
+            # with the same 401, so a suspended school is not told apart from a bad password.
             _, refusal = operational_tenant(user.tenant_id)
-            if refusal == "tenant_suspended":
-                self.fail("tenant_suspended")
             if refusal is not None:
                 self.fail("inactive")
 
