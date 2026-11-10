@@ -953,6 +953,66 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/auth/invitations:accept:
+    post:
+      operationId: auth_invitations:accept_create
+      description: |-
+        Accept an invitation: set a password and activate the account.
+
+        Unauthenticated. A password the validators refuse is 400 `validation_error`; any
+        unusable link is 400 `invalid_link`.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationAccept'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/InvitationAccept'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/InvitationAccept'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/auth/invitations:preview:
+    post:
+      operationId: auth_invitations:preview_create
+      description: |-
+        Show who an invitation is for and which school sent it, before a password is set.
+
+        Unauthenticated. Any unusable link (unknown school, unknown, used, revoked or expired
+        token) is 400 `invalid_link`.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationLink'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/InvitationLink'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/InvitationLink'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationPreview'
+          description: ''
   /api/v1/auth/login:
     post:
       operationId: auth_login_create
@@ -1006,6 +1066,64 @@ paths:
               schema:
                 $ref: '#/components/schemas/User'
           description: ''
+  /api/v1/auth/password-reset:
+    post:
+      operationId: auth_password_reset_create
+      description: |-
+        Ask for a password-reset link by email.
+
+        Unauthenticated. Answers 204 to every well-formed body, whether or not the address
+        has an account, so the answer reveals nothing; a link goes only to an active member
+        of the named school.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/auth/password-reset:confirm:
+    post:
+      operationId: auth_password_reset:confirm_create
+      description: |-
+        Set a new password from a reset link, and sign out every device.
+
+        Unauthenticated. A password the validators refuse is 400 `validation_error`; an
+        unusable link (wrong school, used or expired token, inactive account) is 400
+        `invalid_link`.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirm'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirm'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirm'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
   /api/v1/auth/refresh:
     post:
       operationId: auth_refresh_create
@@ -5729,6 +5847,35 @@ paths:
               schema:
                 $ref: '#/components/schemas/Guardian'
           description: ''
+  /api/v1/guardians/{id}:invite:
+    post:
+      operationId: guardians_:invite_create
+      description: |-
+        Guardian persons (module doc §16). No destroy — a guardian with no
+
+        remaining student links simply stops appearing in any student's roster;
+        hard removal is a retention operation, not documented as an API action.
+      summary: Invite this guardian to the portal at their email on file, or resend
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - guardians
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalInviteResponse'
+          description: ''
+        '409':
+          description: portal_disabled, email_in_use, not_eligible or already_active
   /api/v1/holiday-calendar:
     get:
       operationId: holiday_calendar_retrieve
@@ -11245,7 +11392,7 @@ paths:
     post:
       operationId: staff_:invite_create
       description: Staff master records (module doc §5.1).
-      summary: Create a portal account for this staff member and assign roles
+      summary: Invite this staff member by email, creating their account if needed
       parameters:
       - in: path
         name: id
@@ -11276,7 +11423,7 @@ paths:
                 $ref: '#/components/schemas/Staff'
           description: ''
         '409':
-          description: Already linked
+          description: email_in_use, already_active, or the staff member has exited
   /api/v1/staff/{staff_pk}/documents:
     get:
       operationId: staff_documents_list
@@ -12920,6 +13067,43 @@ paths:
               schema:
                 $ref: '#/components/schemas/StudentEnrollment'
           description: ''
+  /api/v1/students/{id}:invite:
+    post:
+      operationId: students_:invite_create
+      description: Student master records (module doc §5.1-2).
+      summary: Invite this student to the portal by email, or resend their invitation
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - students
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentInviteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StudentInviteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StudentInviteRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalInviteResponse'
+          description: ''
+        '409':
+          description: portal_disabled, email_in_use, not_eligible or already_active
   /api/v1/students/{id}:withdraw:
     post:
       operationId: students_:withdraw_create
@@ -17929,8 +18113,13 @@ components:
         user_id:
           type: string
           format: uuid
+          readOnly: true
           nullable: true
-          description: users(id) — portal account, tenant-checked at write time.
+          description: users(id) — portal account; set only by :invite (ADR-0033).
+        portal_status:
+          allOf:
+          - $ref: '#/components/schemas/PortalStatusEnum'
+          readOnly: true
         first_name:
           type: string
           maxLength: 100
@@ -17992,7 +18181,9 @@ components:
       - last_name
       - phone
       - photo_url
+      - portal_status
       - updated_at
+      - user_id
     HolidayCalendar:
       type: object
       description: |-
@@ -18101,12 +18292,59 @@ components:
           minItems: 1
       required:
       - student_ids
+    InvitationAccept:
+      type: object
+      properties:
+        school:
+          type: string
+          description: Tenant slug, from the link's `school` fragment.
+          pattern: ^[-a-zA-Z0-9_]+$
+        token:
+          type: string
+          description: From the link's `token` fragment.
+          maxLength: 128
+        password:
+          type: string
+          writeOnly: true
+      required:
+      - password
+      - school
+      - token
+    InvitationLink:
+      type: object
+      properties:
+        school:
+          type: string
+          description: Tenant slug, from the link's `school` fragment.
+          pattern: ^[-a-zA-Z0-9_]+$
+        token:
+          type: string
+          description: From the link's `token` fragment.
+          maxLength: 128
+      required:
+      - school
+      - token
+    InvitationPreview:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        school_name:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+      required:
+      - email
+      - expires_at
+      - school_name
     InviteRequest:
       type: object
       description: |-
-        No email is sent (§17 gap — no notification infrastructure exists yet,
-        see services/invite.py's ``invite_staff`` docstring); this only creates and
-        links the account plus assigns the requested roles.
+        ``role_ids`` apply when the account is created or re-invited after an exit;
+
+        a resend to a pending invitee ignores them (services/invite.py's ``invite_staff``).
       properties:
         role_ids:
           type: array
@@ -20821,6 +21059,43 @@ components:
       required:
       - count
       - difficulty
+    PasswordResetConfirm:
+      type: object
+      properties:
+        school:
+          type: string
+          description: Tenant slug, from the link's `school` fragment.
+          pattern: ^[-a-zA-Z0-9_]+$
+        uid:
+          type: string
+          description: From the link's `uid` fragment.
+          maxLength: 64
+        token:
+          type: string
+          description: From the link's `token` fragment.
+          maxLength: 128
+        new_password:
+          type: string
+          writeOnly: true
+      required:
+      - new_password
+      - school
+      - token
+      - uid
+    PasswordResetRequest:
+      type: object
+      properties:
+        school:
+          type: string
+          description: 'Tenant slug. Required: one email can hold accounts at two
+            schools.'
+          pattern: ^[-a-zA-Z0-9_]+$
+        email:
+          type: string
+          format: email
+      required:
+      - email
+      - school
     PatchedAcademicSession:
       type: object
       properties:
@@ -21904,8 +22179,13 @@ components:
         user_id:
           type: string
           format: uuid
+          readOnly: true
           nullable: true
-          description: users(id) — portal account, tenant-checked at write time.
+          description: users(id) — portal account; set only by :invite (ADR-0033).
+        portal_status:
+          allOf:
+          - $ref: '#/components/schemas/PortalStatusEnum'
+          readOnly: true
         first_name:
           type: string
           maxLength: 100
@@ -22632,8 +22912,9 @@ components:
         user_id:
           type: string
           format: uuid
+          readOnly: true
           nullable: true
-          description: users(id) — portal account, tenant-checked at write time.
+          description: users(id) — portal account; set only by :invite (ADR-0033).
         first_name:
           type: string
           maxLength: 100
@@ -22804,8 +23085,13 @@ components:
         user_id:
           type: string
           format: uuid
+          readOnly: true
           nullable: true
-          description: users(id) — portal account, tenant-checked at write time.
+          description: users(id) — portal account; set only by :invite (ADR-0033).
+        portal_status:
+          allOf:
+          - $ref: '#/components/schemas/PortalStatusEnum'
+          readOnly: true
         first_name:
           type: string
           maxLength: 100
@@ -23352,6 +23638,15 @@ components:
       - modules
       - unread_notifications
       - unread_threads
+    PortalInviteResponse:
+      type: object
+      properties:
+        portal_status:
+          allOf:
+          - $ref: '#/components/schemas/PortalStatusEnum'
+          readOnly: true
+      required:
+      - portal_status
     PortalModules:
       type: object
       properties:
@@ -23422,6 +23717,22 @@ components:
       - published_at
       - requires_acknowledgment
       - title
+    PortalStatusEnum:
+      enum:
+      - none
+      - invited
+      - expired
+      - send_failed
+      - active
+      - inactive
+      type: string
+      description: |-
+        * `none` - No account
+        * `invited` - Invited
+        * `expired` - Invitation expired
+        * `send_failed` - Invitation not delivered
+        * `active` - Active
+        * `inactive` - Inactive
     PortalStudent:
       type: object
       properties:
@@ -24721,8 +25032,9 @@ components:
         user_id:
           type: string
           format: uuid
+          readOnly: true
           nullable: true
-          description: users(id) — portal account, tenant-checked at write time.
+          description: users(id) — portal account; set only by :invite (ADR-0033).
         first_name:
           type: string
           maxLength: 100
@@ -24837,6 +25149,7 @@ components:
       - photo_url
       - staff_type
       - updated_at
+      - user_id
     StaffAttendance:
       type: object
       description: |-
@@ -25234,8 +25547,13 @@ components:
         user_id:
           type: string
           format: uuid
+          readOnly: true
           nullable: true
-          description: users(id) — portal account, tenant-checked at write time.
+          description: users(id) — portal account; set only by :invite (ADR-0033).
+        portal_status:
+          allOf:
+          - $ref: '#/components/schemas/PortalStatusEnum'
+          readOnly: true
         first_name:
           type: string
           maxLength: 100
@@ -25326,8 +25644,10 @@ components:
       - id
       - last_name
       - photo_url
+      - portal_status
       - status
       - updated_at
+      - user_id
     StudentAttendance:
       type: object
       description: '`student_attendance` — read shape. Rows are written by `:bulk-mark`.'
@@ -25660,6 +25980,21 @@ components:
           format: uri
       required:
       - file
+    StudentInviteRequest:
+      type: object
+      description: |-
+        A student has no email on file, so the address comes with the invite.
+
+        It is stored only on the student's account. A resend to an account nobody has activated
+        goes to this address, which corrects a mistyped one; an account that was once active keeps
+        its own address.
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+      required:
+      - email
     StudentLateArrivalsReportRow:
       type: object
       description: '`reports.student_late_arrivals`: late days and their minutes,

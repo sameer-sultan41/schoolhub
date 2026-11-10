@@ -8,6 +8,7 @@ import {
   toUpdateGuardianBody,
   toUpdateGuardianLinkBody,
 } from "./guardians-helper";
+import type { PortalInviteResult } from "@/services/modules/students/students-type";
 import type {
   CreateGuardianInput,
   GuardianLinkRecord,
@@ -87,4 +88,20 @@ export async function fetchGuardianLinks(studentId: string): Promise<GuardianLin
     { query: { page_size: GUARDIAN_LINKS_PAGE_SIZE } },
   );
   return items;
+}
+
+/**
+ * `POST /guardians/{id}:invite` (ADR-0033): invites the guardian at the email on file, or
+ * resends a pending invitation. No body. `idempotencyKey`: one per intent.
+ */
+export async function inviteGuardian(
+  id: string,
+  idempotencyKey: string,
+): Promise<PortalInviteResult> {
+  const { data } = await apiClient.post<PortalInviteResult>(
+    endpoints.guardians.invite(id),
+    undefined,
+    { idempotencyKey },
+  );
+  return data;
 }

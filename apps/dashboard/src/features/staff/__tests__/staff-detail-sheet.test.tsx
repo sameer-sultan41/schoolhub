@@ -15,6 +15,11 @@ jest.mock("@/services", () => ({
   },
 }));
 
+// The invite button reads the signed-in user; this file's tests are about the sheet.
+jest.mock("@/hooks/use-current-user", () => ({
+  useCurrentUser: () => ({ data: undefined }),
+}));
+
 const mockFetchStaffById = Services.staff.fetchStaffById as jest.MockedFunction<
   typeof Services.staff.fetchStaffById
 >;
@@ -38,6 +43,7 @@ function staffDetail(
 ) {
   return {
     id: "st-1",
+    user_id: null,
     employee_number: "EMP-0231",
     first_name: "Ayesha",
     last_name: "Khan",

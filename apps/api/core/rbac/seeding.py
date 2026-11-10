@@ -103,18 +103,27 @@ def ensure_role_with_permissions(
         role.is_restricted_principal = is_restricted_principal
         role.save(update_fields=["is_restricted_principal"])
 
+    sync_role_permissions(role, permission_keys)
+    return role
+
+
+def sync_role_permissions(role: Role, permission_keys: list[str]) -> None:
+    """Make ``role`` hold exactly ``permission_keys``, and evict its holders' caches.
+
+    Grants what's missing *and* revokes what's no longer requested. Safe for a role
+    scoped to one tenant: a narrower re-seed (trimming a fixture role down for a
+    stricter CUJ) can only ever affect that tenant's own role. Also used for a portal
+    role created by the first invite (ADR-0033).
+    """
     permissions = list(Permission.objects.filter(key__in=permission_keys))
     found_keys = {permission.key for permission in permissions}
     missing_keys = set(permission_keys) - found_keys
     if missing_keys:
         raise ValueError(
-            f"ensure_role_with_permissions({slug!r}): no Permission row for "
+            f"sync_role_permissions({role.slug!r}): no Permission row for "
             f"{sorted(missing_keys)} — check for a renamed/removed permission key."
         )
 
-    # Grant what's missing *and* revoke what's no longer requested — safe here because
-    # this role is scoped to one e2e tenant, so a narrower re-seed (trimming a fixture
-    # role down for a stricter CUJ) can only ever affect that tenant's own fixture.
     RolePermission.objects.bulk_create(
         [RolePermission(role=role, permission=permission) for permission in permissions],
         batch_size=500,
@@ -122,7 +131,6 @@ def ensure_role_with_permissions(
     )
     RolePermission.objects.filter(role=role).exclude(permission__in=permissions).delete()
     _evict_holders(role)
-    return role
 
 
 def ensure_seed_user(

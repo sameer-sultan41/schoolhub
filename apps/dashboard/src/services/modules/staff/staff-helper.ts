@@ -4,6 +4,7 @@ import {
   STAFF_QUERY_FIELDS,
   STATUS_META,
   type StatusVariant,
+  STAFF_INVITE_CONFLICT_CODES,
 } from "./staff-constant";
 import type {
   CreateStaffInput,
@@ -86,4 +87,13 @@ export function toStaffQueryParams(query: StaffDirectoryQuery): Record<string, s
   const params: Record<string, unknown> = {};
   copyMappedFields(query, STAFF_QUERY_FIELDS, Boolean, params);
   return params as Record<string, string | number>;
+}
+
+export type StaffInviteConflictCode = (typeof STAFF_INVITE_CONFLICT_CODES)[number];
+
+/** The staff invite 409 code `code` is, if it is one of them. */
+export function staffInviteConflict(code: string): StaffInviteConflictCode | null {
+  return (STAFF_INVITE_CONFLICT_CODES as readonly string[]).includes(code)
+    ? (code as StaffInviteConflictCode)
+    : null;
 }

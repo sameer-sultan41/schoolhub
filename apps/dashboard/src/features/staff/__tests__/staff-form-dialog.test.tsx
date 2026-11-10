@@ -83,6 +83,7 @@ function mockReferenceData() {
 function detailRecord(overrides: Partial<StaffDetailRecord> = {}): StaffDetailRecord {
   return {
     id: "st-1",
+    user_id: null,
     employee_number: "EMP-001",
     first_name: "Ayesha",
     last_name: "Khan",

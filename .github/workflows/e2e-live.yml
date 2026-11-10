@@ -38,6 +38,9 @@ jobs:
       THROTTLE_RATE_ANON: "100000/min"
       THROTTLE_RATE_AUTH: "100000/min"
       THROTTLE_RATE_PUBLIC_FORM: "100000/min"
+      THROTTLE_RATE_PASSWORD_RESET_EMAIL: "100000/min"
+      THROTTLE_RATE_PASSWORD_RESET_IP: "100000/min"
+      THROTTLE_RATE_INVITATION_IP: "100000/min"
     steps:
       - uses: actions/checkout@v4
 

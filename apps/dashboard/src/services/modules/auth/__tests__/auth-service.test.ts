@@ -181,4 +181,67 @@ describe("AuthService", () => {
       expect(accessTokenStore.get()).toBe("at-8");
     });
   });
+
+  describe("emailed-link endpoints", () => {
+    it("previewInvitation posts the link and returns the preview, without a refresh retry", async () => {
+      const { previewInvitation } = await import("../auth-service");
+      const preview = {
+        email: "parent@example.com",
+        school_name: "City School",
+        expires_at: "2026-11-12T10:00:00Z",
+      };
+      mockPost.mockResolvedValueOnce({ data: preview });
+
+      await expect(previewInvitation({ school: "city", token: "tok-1" })).resolves.toEqual(preview);
+      expect(mockPost).toHaveBeenCalledWith(
+        "/auth/invitations:preview",
+        { school: "city", token: "tok-1" },
+        { skipAuthRefresh: true },
+      );
+    });
+
+    it("acceptInvitation posts the link and the password", async () => {
+      const { acceptInvitation } = await import("../auth-service");
+      mockPost.mockResolvedValueOnce({ data: undefined });
+
+      await acceptInvitation({ school: "city", token: "tok-1", password: "long-enough-pass" });
+
+      expect(mockPost).toHaveBeenCalledWith(
+        "/auth/invitations:accept",
+        { school: "city", token: "tok-1", password: "long-enough-pass" },
+        { skipAuthRefresh: true },
+      );
+    });
+
+    it("requestPasswordReset posts the school and email", async () => {
+      const { requestPasswordReset } = await import("../auth-service");
+      mockPost.mockResolvedValueOnce({ data: undefined });
+
+      await requestPasswordReset({ school: "city", email: "staff@example.com" });
+
+      expect(mockPost).toHaveBeenCalledWith(
+        "/auth/password-reset",
+        { school: "city", email: "staff@example.com" },
+        { skipAuthRefresh: true },
+      );
+    });
+
+    it("confirmPasswordReset posts the link and the new password", async () => {
+      const { confirmPasswordReset } = await import("../auth-service");
+      mockPost.mockResolvedValueOnce({ data: undefined });
+
+      await confirmPasswordReset({
+        school: "city",
+        uid: "dWlk",
+        token: "tok-2",
+        new_password: "long-enough-pass",
+      });
+
+      expect(mockPost).toHaveBeenCalledWith(
+        "/auth/password-reset:confirm",
+        { school: "city", uid: "dWlk", token: "tok-2", new_password: "long-enough-pass" },
+        { skipAuthRefresh: true },
+      );
+    });
+  });
 });

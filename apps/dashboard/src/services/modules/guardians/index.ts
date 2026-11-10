@@ -2,6 +2,7 @@ import {
   createGuardian,
   fetchGuardianById,
   fetchGuardianLinks,
+  inviteGuardian,
   linkGuardianToStudent,
   searchGuardians,
   updateGuardian,
@@ -16,6 +17,7 @@ export const GuardiansService = {
   linkGuardianToStudent,
   updateGuardianLink,
   fetchGuardianLinks,
+  inviteGuardian,
 };
 export type {
   CreateGuardianInput,
