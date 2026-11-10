@@ -491,6 +491,19 @@ either this file or `project-status.md`.
   transaction, unlike `TenantMiddleware` — resolved it.
   `e2e/tests/live/api/school-settings.spec.ts` now asserts the working
   patch→read journey rather than pinning the bug.
+- **The finance report and student ledger 403 is fixed**, the same bug a second time:
+  `FinanceReportView` (`/reports/finance-summary`, so all eight §13 reports and their
+  exports) and `StudentLedgerView` (`/students/{id}/ledger`) were plain `APIView`s, so
+  every bearer-token request got a 403. Both now mix in `TenantScopedViewSetMixin`, the
+  token-only `JWTOnlyFinanceReportTests` pin them, and
+  `test_module_gated_views_bind_the_tenant` (`tests/test_endpoint_contracts.py`) fails any
+  module-gated view that does not bind the tenant, so a third one cannot ship.
+- **A suspended tenant's staff are still served under a bearer token.**
+  `TenantScopedViewSetMixin._resolve_tenant` (`core/api/viewsets.py`) checks only
+  `deleted_at`, not `is_operational`. `TenantMiddleware` refuses a suspended tenant, but
+  only when it can see the user, which under JWT alone it never can. So a staff user of a
+  suspended school with a valid access token is served by every mixin view. The fix
+  belongs in the mixin, with a token-only test, in its own PR.
 - **Live E2E specs that failed on CI.** The lane now brings the
   stack up and runs (ADR-0025, ADR-0026), and the timetable journeys pass. The first full runs
   also showed the rest of the lane had drifted while it could not run:

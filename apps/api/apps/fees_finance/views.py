@@ -1434,10 +1434,9 @@ class FinanceReportView(TenantScopedViewSetMixin, APIView):
     fix attendance's review produced.
     """
 
+    # The mixin is here for `initial()`'s tenant binding after JWT authentication; record
+    # scope is applied in `build_report_rows`, not on a queryset.
     permission_classes = STAFF_PERMISSIONS
-    # The mixin binds the caller's tenant from the bearer token; record scope is applied
-    # in `build_report_rows`, so there is no queryset for it to narrow.
-    scope_campus_field = None
     required_feature = FEATURE
     required_permission = "fees.report.view"
     required_permission_map = {"post": "fees.report.export"}
@@ -1520,9 +1519,9 @@ class StudentLedgerView(TenantScopedViewSetMixin, APIView):
     `build_report_rows` the staff endpoint uses.
     """
 
+    # The mixin binds the tenant after JWT authentication; scope comes from
+    # `build_report_rows`.
     permission_classes = PORTAL_READABLE_PERMISSIONS
-    # Binds the tenant from the bearer token; scope comes from `build_report_rows`.
-    scope_campus_field = None
     required_feature = FEATURE
     required_permission = "fees.invoice.view"
 

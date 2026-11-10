@@ -20,6 +20,7 @@ from apps.school_organization.tests.factories import (
     UserFactory,
     grant,
 )
+from core.jobs.models import BackgroundJob
 from core.tenancy.context import tenant_context
 
 
@@ -90,6 +91,19 @@ class JWTOnlyFinanceReportTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+
+    def test_a_finance_report_export_is_queued_under_a_token(self):
+        grant(self.user, "fees.report.view", "fees.report.export")
+
+        response = self.client.post(
+            "/api/v1/reports/finance-summary",
+            {"kind": "collection", "date_from": "2026-01-01", "date_to": "2026-01-31"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.json())
+        with tenant_context(self.tenant.id):
+            self.assertTrue(BackgroundJob.objects.filter(tenant_id=self.tenant.id).exists())
 
     def test_a_student_ledger_is_served_under_a_token(self):
         grant(self.user, "fees.invoice.view")
