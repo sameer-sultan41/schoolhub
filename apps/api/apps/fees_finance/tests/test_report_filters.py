@@ -443,6 +443,13 @@ class TypedRowTests(ReportFilterTestCase):
                 approved_by=self.user.pk,
             )
 
+    def test_the_income_rows_carry_the_account_type_the_report_emits(self) -> None:
+        rows = self.rows("income-vs-expense")
+
+        self.assertTrue(rows, "income-vs-expense returned no rows to check")
+        for row in rows:
+            self.assertIn(row.get("account_type"), {"income", "expense"})
+
     def test_every_report_kind_has_a_row_serializer_and_a_filter_rule(self) -> None:
         self.assertEqual(set(REPORT_ROW_SERIALIZERS), set(reports.REPORT_KINDS))
         self.assertEqual(set(reports.REPORT_FILTERS_BY_KIND), set(reports.REPORT_KINDS))

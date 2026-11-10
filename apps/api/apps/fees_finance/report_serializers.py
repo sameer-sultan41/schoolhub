@@ -137,6 +137,11 @@ class IncomeVsExpenseReportRowSerializer(_AccountTotalsRowSerializer):
     """`reports.income_vs_expense`: an income or expense account's net over the period."""
 
     kind = _report_kind("income-vs-expense")
+    # The report's `.values()` keys the account's type by its join path, so the field reads it
+    # from there; with no `source` a read-only field is silently skipped.
+    account_type = serializers.ChoiceField(
+        choices=LedgerAccountType.choices, source="ledger_account__account_type", read_only=True
+    )
     code = serializers.CharField(source="ledger_account__code", read_only=True)
     name = serializers.CharField(source="ledger_account__name", read_only=True)
     net = _money()
