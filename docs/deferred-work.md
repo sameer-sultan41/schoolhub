@@ -2115,6 +2115,11 @@ or subject)."` in English, with no plural form, so a count of one is ungrammatic
   expense register's approver and the grant register's approver print the id prefix (the full id
   in a tooltip) because the fees screens have no read path that returns a staff member's name.
   A name on those rows, or a staff lookup the screens may call, is the follow-up.
+- **Collection's days are UTC days.** The collection report groups by `paid_at__date`
+  (`TruncDate`) and filters its range the same way, with no tenant time zone activated, and the
+  client's `todayIsoDate()` is UTC too. Near midnight at UTC+5 a payment therefore lands on the
+  previous day. The follow-up is tenant-zone date truncation on the server, with the screen's
+  "today" read in the tenant's zone.
 - **The generate dialog has its own job hook.** `use-generate-invoices.ts` exists because
   `features/exams/use-exam-job.ts` keeps one idempotency key across form edits; a generic `hooks/`
   job-start hook would serve both.
