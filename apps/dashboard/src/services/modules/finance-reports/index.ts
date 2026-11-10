@@ -1,8 +1,9 @@
-import { exportReport, fetchReport } from "./finance-reports-service";
+import { exportReport, fetchReport, fetchStudentStatement } from "./finance-reports-service";
 
 export const FinanceReportsService = {
   fetchReport,
   exportReport,
+  fetchStudentStatement,
 };
 
 export type {
@@ -16,4 +17,6 @@ export type {
   FinanceReportRowOf,
   FinanceReportRun,
   ReportFormat,
+  StudentStatement,
+  StudentStatementEntry,
 } from "./finance-reports-type";

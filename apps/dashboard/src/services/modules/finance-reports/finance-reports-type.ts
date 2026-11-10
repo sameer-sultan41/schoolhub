@@ -4,6 +4,18 @@ import type { ApiSchemas } from "@schoolhub/api-client";
 export type FinanceReportRow = ApiSchemas["FinanceReportRow"];
 export type FinanceReportKind = ApiSchemas["FinanceReportQueryKindEnum"];
 export type FinanceReportGroupBy = ApiSchemas["GroupByEnum"];
+/** One line of a student's statement (`GET /students/{id}/ledger`): `kind` is the line's own type. */
+export type StudentStatementEntry = ApiSchemas["StudentStatementEntry"];
+/** The statement's `meta`: the line count and the server's closing balance. */
+export type StudentStatementMeta = ApiSchemas["StudentLedgerMeta"];
+
+/** A student's statement: the lines in date order and the closing balance the server computed. */
+export interface StudentStatement {
+  entries: StudentStatementEntry[];
+  /** The last line's running balance as the server sent it; never summed on the client. */
+  closingBalance: string;
+}
+
 /** Shared with every report module (`services/shared/report-export.ts`). */
 export type { ReportFormat } from "@/services/shared/report-export";
 

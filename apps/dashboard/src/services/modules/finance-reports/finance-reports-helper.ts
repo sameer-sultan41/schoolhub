@@ -117,3 +117,16 @@ export function financeReportRowLimit(error: unknown): number | null {
 export function financeReportFilename(query: FinanceReportQuery, format: ReportFormat): string {
   return `${FINANCE_REPORT_FILENAME_PREFIX}-${query.kind}-${query.dateTo}.${format}`;
 }
+
+/**
+ * The statement's `meta.closing_balance`. The server always sends it (zero for no lines); a
+ * response without one is a contract break, not a balance of zero, so it throws rather than
+ * show a figure the client invented.
+ */
+export function readClosingBalance(meta: { [key: string]: unknown } | undefined): string {
+  const closing = meta?.closing_balance;
+  if (typeof closing !== "string") {
+    throw new Error("The student statement response carried no closing_balance.");
+  }
+  return closing;
+}

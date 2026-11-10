@@ -6,6 +6,7 @@ import {
   financeReportFilename,
   financeReportRowLimit,
   financeRowsOfKind,
+  readClosingBalance,
   toFinanceReportParams,
   toFinanceReportQuery,
 } from "../finance-reports-helper";
@@ -156,5 +157,17 @@ describe("financeReportFilename", () => {
     expect(query).not.toBeNull();
     if (!query) return;
     expect(financeReportFilename(query, "xlsx")).toBe("fees-report-collection-2026-10-15.xlsx");
+  });
+});
+
+describe("readClosingBalance", () => {
+  it("returns the server's string untouched, zero included", () => {
+    expect(readClosingBalance({ row_count: 0, closing_balance: "0.00" })).toBe("0.00");
+    expect(readClosingBalance({ closing_balance: "-250.00" })).toBe("-250.00");
+  });
+
+  it("throws rather than invent a balance when the server sent none", () => {
+    expect(() => readClosingBalance(undefined)).toThrow("closing_balance");
+    expect(() => readClosingBalance({ closing_balance: 600 })).toThrow("closing_balance");
   });
 });

@@ -1,7 +1,12 @@
 import type * as ApiClientModule from "@schoolhub/api-client";
 import type { ApiClientConfig } from "@schoolhub/api-client";
 
-import { COLLECTION_DAY, STUDENT_ID } from "./finance-reports-fixtures";
+import {
+  COLLECTION_DAY,
+  STATEMENT_INVOICE,
+  STATEMENT_PAYMENT,
+  STUDENT_ID,
+} from "./finance-reports-fixtures";
 
 const mockGet = jest.fn();
 const mockPost = jest.fn();
@@ -79,6 +84,31 @@ describe("finance-reports-service", () => {
         student: STUDENT_ID,
       },
     });
+  });
+
+  it("fetchStudentStatement reads the lines and the server's closing balance", async () => {
+    const { fetchStudentStatement } = await import("../finance-reports-service");
+    mockGet.mockResolvedValue({
+      data: [STATEMENT_INVOICE, STATEMENT_PAYMENT],
+      // Deliberately not the last line's balance: the client shows what it was sent.
+      meta: { row_count: 2, closing_balance: "612.50" },
+      status: 200,
+    });
+
+    const statement = await fetchStudentStatement(STUDENT_ID);
+
+    expect(mockGet).toHaveBeenCalledWith(`/students/${STUDENT_ID}/ledger`);
+    expect(statement).toEqual({
+      entries: [STATEMENT_INVOICE, STATEMENT_PAYMENT],
+      closingBalance: "612.50",
+    });
+  });
+
+  it("fetchStudentStatement refuses a response with no closing balance", async () => {
+    const { fetchStudentStatement } = await import("../finance-reports-service");
+    mockGet.mockResolvedValue({ data: [], meta: { row_count: 0 }, status: 200 });
+
+    await expect(fetchStudentStatement(STUDENT_ID)).rejects.toThrow("closing_balance");
   });
 
   it("exportReport POSTs the same parameters with a format and answers with the job", async () => {

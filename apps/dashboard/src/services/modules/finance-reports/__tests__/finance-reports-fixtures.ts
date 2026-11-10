@@ -1,4 +1,8 @@
-import type { FinanceReportRow, FinanceReportRowOf } from "../finance-reports-type";
+import type {
+  FinanceReportRow,
+  FinanceReportRowOf,
+  StudentStatementEntry,
+} from "../finance-reports-type";
 
 /**
  * One row per kind in the exact shape `GET /reports/finance-summary` sends (the typed row
@@ -65,6 +69,26 @@ export const LEDGER_INVOICE: FinanceReportRowOf<"student-ledger"> = {
 export const LEDGER_PAYMENT: FinanceReportRowOf<"student-ledger"> = {
   kind: "student-ledger",
   entry_type: "payment",
+  date: "2026-10-01",
+  reference: "RCP-0007",
+  description: "Cash",
+  debit: "0.00",
+  credit: "400.00",
+  balance: "600.00",
+};
+
+/** The statement endpoint's lines (`GET /students/{id}/ledger`): the line's own type is `kind`. */
+export const STATEMENT_INVOICE: StudentStatementEntry = {
+  kind: "invoice",
+  date: "2026-08-01",
+  reference: "INV-0001",
+  description: "2026-09",
+  debit: "1000.00",
+  credit: "0.00",
+  balance: "1000.00",
+};
+export const STATEMENT_PAYMENT: StudentStatementEntry = {
+  kind: "payment",
   date: "2026-10-01",
   reference: "RCP-0007",
   description: "Cash",

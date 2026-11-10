@@ -1,12 +1,18 @@
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
 import type { JobAccepted } from "@/services/modules/jobs/jobs-service";
-import { toFinanceReportParams, toFinanceReportQueryParams } from "./finance-reports-helper";
+import {
+  readClosingBalance,
+  toFinanceReportParams,
+  toFinanceReportQueryParams,
+} from "./finance-reports-helper";
 import type {
   FinanceReportQuery,
   FinanceReportRow,
   FinanceReportRun,
   ReportFormat,
+  StudentStatement,
+  StudentStatementEntry,
 } from "./finance-reports-type";
 
 /** The finance reports' API calls (`/reports/finance-summary`), reached through `Services.financeReports.*`. */
@@ -41,4 +47,16 @@ export async function exportReport(
           idempotencyKey,
         });
   return { jobId: data.job_id };
+}
+
+/**
+ * One student's whole statement (`GET /students/{id}/ledger`, `fees.invoice.view`): the lines in
+ * date order, each with the server's running balance, and `meta.closing_balance`. A student the
+ * viewer cannot see, or from another school, is a 404.
+ */
+export async function fetchStudentStatement(studentId: string): Promise<StudentStatement> {
+  const { data, meta } = await apiClient.get<StudentStatementEntry[]>(
+    endpoints.financeReports.studentLedger(studentId),
+  );
+  return { entries: data, closingBalance: readClosingBalance(meta) };
 }

@@ -116,6 +116,7 @@ describe("Services", () => {
     expect(typeof Services.budgets.approveBudget).toBe("function");
     expect(typeof Services.financeReports.fetchReport).toBe("function");
     expect(typeof Services.financeReports.exportReport).toBe("function");
+    expect(typeof Services.financeReports.fetchStudentStatement).toBe("function");
     expect(typeof Services.refunds.listRefunds).toBe("function");
     expect(typeof Services.refunds.createRefund).toBe("function");
     expect(typeof Services.refunds.approveRefund).toBe("function");

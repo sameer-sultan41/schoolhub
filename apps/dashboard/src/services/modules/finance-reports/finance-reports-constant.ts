@@ -11,6 +11,7 @@ import type {
 /** The query-key module a report run lives under, and the job watches its exports use. */
 export const FINANCE_REPORTS_QUERY_MODULE = "finance-reports";
 export const FINANCE_REPORT_RESOURCE = "report";
+export const STUDENT_STATEMENT_RESOURCE = "statement";
 
 /** Which inputs each kind takes, keyed so the compiler checks it against the generated enum (L32). */
 export const FINANCE_REPORT_KIND_FIELDS: Record<FinanceReportKind, FinanceReportKindFields> = {

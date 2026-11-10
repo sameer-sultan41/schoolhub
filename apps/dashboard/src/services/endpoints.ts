@@ -145,6 +145,8 @@ export const endpoints = {
   /** `FinanceReportView`: `GET` runs a report inline (`fees.report.view`; a 422 with `meta.row_limit` past 1000 rows), `POST` exports it as a job (`fees.report.export`). */
   financeReports: {
     summary: "/reports/finance-summary",
+    /** `GET` a student's whole statement (`fees.invoice.view`): rows in `data`, `meta.closing_balance`. */
+    studentLedger: (studentId: string) => `/students/${studentId}/ledger`,
   },
   /** `ExamReportView`: `GET` runs a report inline (a `202` + job past 1000 rows), `POST` exports. */
   examReports: {
