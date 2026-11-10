@@ -7,6 +7,7 @@ import {
   canSubmitExpense,
   defaultExpenseFormValues,
 } from "../expenses-helper";
+import { EXPENSES_URL_FILTERS } from "../expenses-constant";
 import type { ExpenseStatus } from "../expenses-type";
 
 const STATUSES: ExpenseStatus[] = [
@@ -35,11 +36,21 @@ describe("expense status gates", () => {
     expect(matching(canReverseExpense)).toEqual(["approved", "paid"]);
   });
 
-  it("offers approve and reject on a submitted expense, never to its creator", () => {
-    expect(canDecideExpense({ status: "submitted", created_by: "u1" }, "u2")).toBe(true);
-    expect(canDecideExpense({ status: "submitted", created_by: "u1" }, "u1")).toBe(false);
-    expect(canDecideExpense({ status: "draft", created_by: "u1" }, "u2")).toBe(false);
-    expect(canDecideExpense({ status: "submitted", created_by: "u1" }, undefined)).toBe(false);
+  it("offers approve and reject on a submitted expense, never to its creator or its submitter", () => {
+    const row = (created_by: string | null, submitted_by: string | null) => ({
+      status: "submitted" as const,
+      created_by,
+      submitted_by,
+    });
+    expect(canDecideExpense(row("u1", "u1"), "u2")).toBe(true);
+    expect(canDecideExpense(row("u1", "u1"), "u1")).toBe(false);
+    // B edited and submitted A's draft: both are barred, a third person is not.
+    expect(canDecideExpense(row("a", "b"), "a")).toBe(false);
+    expect(canDecideExpense(row("a", "b"), "b")).toBe(false);
+    expect(canDecideExpense(row("a", "b"), "c")).toBe(true);
+    expect(canDecideExpense(row(null, null), "c")).toBe(true);
+    expect(canDecideExpense({ ...row("u1", "u1"), status: "draft" }, "u2")).toBe(false);
+    expect(canDecideExpense(row("u1", "u1"), undefined)).toBe(false);
   });
 });
 
@@ -59,5 +70,16 @@ describe("buildExpenseInput", () => {
       vendorName: null,
       paymentMethod: null,
     });
+  });
+});
+
+describe("expenses URL filters", () => {
+  it("keeps a category or campus only when it is a UUID (or blank)", () => {
+    const id = "e2222222-2222-4222-8222-222222222222";
+    for (const filter of [EXPENSES_URL_FILTERS.category, EXPENSES_URL_FILTERS.campus]) {
+      expect(filter.isValid("")).toBe(true);
+      expect(filter.isValid(id)).toBe(true);
+      expect(filter.isValid("not-a-uuid")).toBe(false);
+    }
   });
 });

@@ -3406,6 +3406,7 @@
           "post": "Post journal"
         },
         "form": {
+          "accountsError": "Accounts could not be loaded, so the lines cannot be filled in. Close this dialog and try again.",
           "title": "Post journal entry",
           "intro": "Enter the debit and credit lines of one entry. The ledger is never edited: a mistake is corrected by posting an offsetting entry.",
           "date": "Entry date",
@@ -4020,7 +4021,8 @@
           "date": "Date",
           "description": "Description",
           "category": "Category",
-          "amount": "Total",
+          "amount": "Amount (net)",
+          "total": "Total",
           "status": "Status"
         },
         "filters": {

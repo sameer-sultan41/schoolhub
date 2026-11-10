@@ -17,6 +17,7 @@ import {
   expenseRecord,
   listExpenses,
   markExpensePaid,
+  OTHER_USER_ID,
   rejectExpense,
   reverseExpense,
   ruleViolation,
@@ -46,7 +47,7 @@ type Status = ReturnType<typeof expenseRecord>["status"];
 const NO = "EXP-2026-0001";
 // The server's sentences, verbatim (`services.decide_expense`, `ExpenseSerializer.validate`).
 const SELF_APPROVAL =
-  "The person who submitted an expense cannot approve it (§15, and auth-and-rbac §2.4).";
+  "The person who created or submitted an expense cannot approve it (§15, and auth-and-rbac §2.4).";
 const FIGURES_FIXED =
   "This expense is submitted and its figures are fixed. Reject it and record a new one.";
 const VIEW: PermissionKey = "fees.expense.view";
@@ -129,6 +130,25 @@ describe("expenses tab: row actions", () => {
     expect(shownActions()).toEqual([]);
   });
 
+  it("hides Approve and Reject on a draft the viewer submitted for someone else", async () => {
+    await renderTab(
+      [VIEW, APPROVE],
+      [
+        expenseRecord({
+          status: "submitted",
+          created_by: OTHER_USER_ID,
+          submitted_by: CURRENT_USER_ID,
+        }),
+      ],
+    );
+    expect(shownActions()).toEqual([]);
+  });
+
+  it("offers Approve and Reject when a third person created and submitted it", async () => {
+    await renderTab([VIEW, APPROVE], [expenseRecord({ status: "submitted" })]);
+    expect(shownActions()).toEqual(["approve", "reject"]);
+  });
+
   it("still offers Reverse on an approved expense the viewer created", async () => {
     await renderTab(
       [VIEW, APPROVE],
@@ -137,9 +157,10 @@ describe("expenses tab: row actions", () => {
     expect(shownActions()).toEqual(["reverse"]);
   });
 
-  it("shows the total (net plus tax) as a formatted amount", async () => {
+  it("shows the net amount (the sortable column) and the total beside it", async () => {
     await renderTab([VIEW]);
 
+    expect(screen.getByText("100.00")).toBeInTheDocument();
     expect(screen.getByText("115.00")).toBeInTheDocument();
     expect(screen.getByText("Stationery")).toBeInTheDocument();
     expect(screen.getByText("Submitted")).toBeInTheDocument();
