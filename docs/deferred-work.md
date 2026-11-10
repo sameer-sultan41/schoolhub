@@ -461,9 +461,8 @@ either this file or `project-status.md`.
   locally — CI is the source of truth.
 - **No module screens beyond the dashboard home + student-management +
   staff-management + academics + timetable + attendance + communication (#146, merged
-  with #145), and examinations' five open PRs.**
-  The fees setup screens (structures, fee heads, ledger accounts) are in the fees dashboard PR A;
-  its invoices, collection, grants, expenses and reports are B–E. Parent-portal, … are untouched — the gap against
+  with #145) + fees-finance (five stacked PRs, A–E), and examinations' five open PRs.**
+  Parent-portal, … are untouched — the gap against
   [`01-phases/phase-2-core-build.md`](01-phases/phase-2-core-build.md) tier 2+.
   Attendance's screens followed its API as three dashboard PRs (register, Records and
   Settings; the corrections and leave queues; staff attendance, reports and the import),
@@ -2106,6 +2105,16 @@ or subject)."` in English, with no plural form, so a count of one is ungrammatic
 - **Refunds are requested only from an invoice's payment row.** The Refunds tab lists and decides;
   a request needs its payment, which the invoice page lists. There is no payment detail page to
   request from.
+- **`finance-summary`'s `meta` is untyped in the contract.** `GET /reports/finance-summary`
+  returns `meta` (`kind`, `row_count`, `date_from`, `date_to`) from `ReportMetaSerializer`, but its
+  OpenAPI response is the polymorphic row list alone, which a serializer envelope cannot wrap, so
+  the client reads `meta` as untyped (a 422's `meta.row_limit` is read the same way). The student
+  statement's envelope is typed (`StudentLedgerEnvelope`). A custom response schema for the
+  polymorphic list plus `meta` would close it.
+- **Reports show a cashier or approver as an 8-character user id.** The collection by cashier, the
+  expense register's approver and the grant register's approver print the id prefix (the full id
+  in a tooltip) because the fees screens have no read path that returns a staff member's name.
+  A name on those rows, or a staff lookup the screens may call, is the follow-up.
 - **The generate dialog has its own job hook.** `use-generate-invoices.ts` exists because
   `features/exams/use-exam-job.ts` keeps one idempotency key across form edits; a generic `hooks/`
   job-start hook would serve both.
