@@ -55,7 +55,7 @@ class Migration(migrations.Migration):
                 ('user_id', models.UUIDField()),
                 ('value', models.SmallIntegerField(choices=[(-1, 'Thumbs down'), (1, 'Thumbs up')])),
                 ('comment', models.CharField(blank=True, default='', max_length=500)),
-                ('ai_request', models.OneToOneField(on_delete=django.db.models.deletion.PROTECT, related_name='feedback', to='ai.airequest')),
+                ('ai_request', models.OneToOneField(db_constraint=False, on_delete=django.db.models.deletion.PROTECT, related_name='feedback', to='ai.airequest')),
                 ('tenant', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='+', to='tenancy.tenant')),
             ],
             options={

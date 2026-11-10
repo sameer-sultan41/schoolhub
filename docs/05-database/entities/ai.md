@@ -38,7 +38,7 @@ second vote is `409`.
 
 | Column | Type | Null | Default | Notes |
 | ------ | ---- | ---- | ------- | ----- |
-| ai_request_id | uuid | no | — | FK → `ai_requests.id`, unique, `PROTECT` |
+| ai_request_id | uuid | no | — | → `ai_requests.id`, unique, `PROTECT`; no database FK constraint, checked by the view ([ADR-0035](../../decisions/0035-ai-gateway-shape.md) decision 7) |
 | user_id | uuid | no | — | Must be the request's own user |
 | created_by | uuid | yes | — | The base column; set to the same user as `user_id` |
 | value | smallint | no | — | `-1` or `1` (CHECK `ai_request_feedback_value_check`) |

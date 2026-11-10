@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-10
-- **Enforced by:** `apps/api/core/ai/tests/test_boundaries.py` (`test_anthropic_imported_only_in_adapter`: the SDK is imported in the adapter only); `core/ai/tests/test_service.py` and `test_audit_commit.py` (gate order, one committed row per call, the 429/503 codes); `core/ai/tests/test_anthropic_adapter.py` (`test_deadline_bounds_total_retry_time`); `apps/fees_finance/tests/test_report_summary.py` (the first feature end to end) and `test_report_summary_commit.py` (decision 4 under token-only auth and real transactions); `core/ai/tests/test_evals.py` and the `ai-evals` workflow (a missing baseline or secret fails). Putting a new feature's endpoint in its own module rather than in `core/ai` is review only
+- **Enforced by:** `apps/api/core/ai/tests/test_boundaries.py` (`test_anthropic_imported_only_in_adapter`: the SDK is imported in the adapter only); `core/ai/tests/test_service.py` and `test_audit_commit.py` (gate order, one committed row per call, the 429/503 codes); `core/ai/tests/test_anthropic_adapter.py` (`test_deadline_bounds_total_retry_time`); `apps/fees_finance/tests/test_report_summary.py` (the first feature end to end) and `test_report_summary_commit.py` (decision 4 under token-only auth and real transactions); `core/ai/tests/test_evals.py` and the `ai-evals` workflow (a missing baseline or secret fails). `core/ai/tests/test_endpoints.py` (`test_feedback_on_a_missing_request_is_404`, `test_second_feedback_is_409`: decision 7's application check and the unique index). Putting a new feature's endpoint in its own module rather than in `core/ai` is review only
 
 ## Context
 
@@ -51,6 +51,13 @@ showed three of those choices do not fit yet. Decided in plan
    `ANTHROPIC_API_KEY` secret, add the label `ai-evals:write-baseline` (that run writes the baseline
    and uploads it as an artifact instead of comparing), commit the artifact's `baseline.json`,
    remove the label and push; the comparison then passes.
+7. **Feedback references its request without a database foreign key.** `ai_request_feedback.ai_request_id`
+   is unique but `db_constraint=False`. PostgreSQL checks a foreign key with `SELECT … FOR KEY SHARE`
+   as the referenced table's owner, which needs `UPDATE` on it; `ai_requests` is append-only, and
+   where the app role owns it (CI, a single-role local database) its own `UPDATE` is revoked, so the
+   check fails. The application check stands in: the feedback view resolves the caller's own request
+   before inserting (404 otherwise), and a row cannot dangle because `ai_requests` has no `DELETE`
+   grant. One vote per request stays a database guarantee through the unique index.
 
 ## Alternatives considered
 

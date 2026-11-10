@@ -71,7 +71,11 @@ class AIRequestFeedback(AppendOnlyTenantModel):
     One per request. ``comment`` is stored for prompt review and never sent to a provider.
     """
 
-    ai_request = models.OneToOneField(AIRequest, on_delete=models.PROTECT, related_name="feedback")
+    # A unique FK with no database constraint (ADR-0035): the view resolves the caller's own
+    # request first, and `ai_requests` is append-only with no DELETE grant, so rows cannot dangle.
+    ai_request = models.OneToOneField(
+        AIRequest, on_delete=models.PROTECT, related_name="feedback", db_constraint=False
+    )
     user_id = models.UUIDField()
     value = models.SmallIntegerField(choices=FEEDBACK_VALUES)
     comment = models.CharField(max_length=500, blank=True, default="")

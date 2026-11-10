@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import uuid
+
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -93,6 +95,13 @@ class AIFeedbackTests(APITestCase):
         response = self.client.post(self.url(theirs.pk), {"value": -1}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_feedback_on_a_missing_request_is_404(self) -> None:
+        response = self.client.post(self.url(uuid.uuid4()), {"value": 1}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        with tenant_context(self.tenant.id):
+            self.assertFalse(AIRequestFeedback.objects.exists())
 
     def test_second_feedback_is_409(self) -> None:
         first = self.client.post(self.url(self.ai_request.pk), {"value": 1}, format="json")
