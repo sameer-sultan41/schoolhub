@@ -11731,7 +11731,7 @@ export interface components {
          *     provider keeps its 422 `DomainRuleViolation` shape.
          */
         SettlementImportRequest: {
-            /** Format: uri */
+            /** Format: binary */
             file: string;
             provider: components["schemas"]["VoucherProviderEnum"];
         };
@@ -18826,6 +18826,7 @@ export interface operations {
                 /** @description Number of results to return per page. */
                 page_size?: number;
                 paid_at__gte?: string;
+                paid_at__lt?: string;
                 paid_at__lte?: string;
                 received_by?: string;
                 /** @description A search term. */

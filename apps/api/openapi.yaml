@@ -8298,6 +8298,11 @@ paths:
           type: string
           format: date-time
       - in: query
+        name: paid_at__lt
+        schema:
+          type: string
+          format: date-time
+      - in: query
         name: paid_at__lte
         schema:
           type: string
@@ -25752,7 +25757,7 @@ components:
       properties:
         file:
           type: string
-          format: uri
+          format: binary
         provider:
           $ref: '#/components/schemas/VoucherProviderEnum'
       required:

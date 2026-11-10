@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.fees_finance import services
@@ -809,6 +811,14 @@ class IssueVoucherSerializer(serializers.Serializer):
     validity_days = serializers.IntegerField(required=False, min_value=1, max_value=365)
 
 
+@extend_schema_field(OpenApiTypes.BINARY)
+class _UploadedFileField(serializers.FileField):
+    """A multipart file, documented as `format: binary` (not the `uri` a response FileField is).
+
+    Narrower than `COMPONENT_SPLIT_REQUEST`, which would split every component in the schema.
+    """
+
+
 class SettlementImportRequestSerializer(serializers.Serializer):
     """`POST /voucher-collection-imports` — the multipart body, for the contract.
 
@@ -816,7 +826,7 @@ class SettlementImportRequestSerializer(serializers.Serializer):
     provider keeps its 422 `DomainRuleViolation` shape.
     """
 
-    file = serializers.FileField()
+    file = _UploadedFileField()
     provider = serializers.ChoiceField(choices=VoucherProvider.choices)
 
 
