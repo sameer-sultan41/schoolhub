@@ -324,7 +324,7 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md):
 
 ## 20. Implementation status
 
-Building as four stacked PRs. This section is updated by each.
+Built as four stacked backend PRs, then five stacked dashboard PRs (see "Built (staff dashboard, PRs A-E)"). This section was updated by each.
 
 **PR A — ledger and fee configuration.** The chart of accounts, the
 append-only double-entry ledger and its posting engine, fee heads, structures
@@ -336,7 +336,7 @@ waiver, cancellation, and §12's three invoicing notifications.
 postings in one transaction, §7.3's refund workflow with segregation of duties,
 bank/wallet vouchers in both print layouts, and the settlement import with its
 match key and exceptions queue.
-**PR D — spend and reports (this PR).** Expenses under an approval gate that
+**PR D — spend and reports.** Expenses under an approval gate that
 posts on approval, budgets whose variance comes from the ledger, and §13's
 reports with the 202 export lane. **The module is complete apart from payroll,
 which is deferred with hr-leave.**
@@ -615,6 +615,15 @@ tables, staff leave _policy_ and accrual do not exist yet.
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Vouchers in the portal | `GET /vouchers` and `GET /vouchers/{id}/download?format=pdf` were already portal-readable (`fees.payment.view`, `PORTAL_READABLE_ACTIONS`, record-scoped). The guardian's fees page asks for `student=` and `status=issued` and offers each outstanding invoice its slips as a PDF through `ApiClient.downloadBlob` (bearer header); an invoice with none says "Ask the school office for a voucher." A guardian never issues or voids a slip (`fees.payment.collect`, staff-only) |
 | Tests                  | Jest `features/portal/fees/__tests__/portal-fees.test.tsx`; mocked `e2e/tests/dashboard/portal-leave-vouchers.spec.ts`; live `e2e/tests/live/api/portal-leave.spec.ts` (the school issues a slip, the guardian lists and downloads it)                                                                                                                                                                                                                                             |
+
+### Built (staff dashboard, PRs A-E)
+
+The staff dashboard shipped as five stacked PRs on top of the backend (A setup, B invoices and
+grants, C collection, D spend and journal, E reports and the student statement), and the module
+is full-stack complete with PR E. The subsections below record each PR in order and share one
+vocabulary: every amount is the server's string through `formatMoney`, every action is shown by
+the key that gates it and decided by the server, and the L55 and L59 reference-read rules apply.
+The ends left open are in `docs/deferred-work.md`, under "Fees dashboard (staff screens)".
 
 ### Built (staff dashboard, PR A)
 
