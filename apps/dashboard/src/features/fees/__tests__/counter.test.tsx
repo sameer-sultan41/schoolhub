@@ -104,6 +104,16 @@ describe("fee counter", () => {
     );
   });
 
+  it("links the picked student to their statement", async () => {
+    const user = await renderCounter();
+    expect(screen.queryByRole("link", { name: "View statement" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Choose a student" }));
+
+    const link = await screen.findByRole("link", { name: "View statement" });
+    expect(link).toHaveAttribute("href", `/fees/students/${STUDENT_ID}/ledger`);
+  });
+
   it("records the whole balance in cash by default, with one Idempotency-Key", async () => {
     recordPayment.mockResolvedValue(paymentRecord({ amount: "1350.00" }));
     const { user, dialog } = await openDialog();

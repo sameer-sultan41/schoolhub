@@ -12,6 +12,7 @@ import {
   fetchFeeInvoice,
   INVOICE_ID,
   INVOICING_PERMISSIONS,
+  STUDENT_ID,
   invoiceRecord,
   listPayments,
   listVouchers,
@@ -85,6 +86,22 @@ describe("invoice page", () => {
       expect(row).not.toBeNull();
       expect(within(row as HTMLElement).getByText(value)).toBeInTheDocument();
     }
+  });
+
+  it("links to the student's statement for a holder of the invoice view key only", async () => {
+    asUser("fees.invoice.view");
+    await renderPage();
+
+    const link = await screen.findByRole("link", { name: "View statement" });
+    expect(link).toHaveAttribute("href", `/fees/students/${STUDENT_ID}/ledger`);
+  });
+
+  it("hides the statement link from a viewer without the invoice view key", async () => {
+    asUser("fees.invoice.update");
+    await renderPage();
+
+    await screen.findByText("Invoice INV-2026-0001");
+    expect(screen.queryByRole("link", { name: "View statement" })).not.toBeInTheDocument();
   });
 
   it("reads payments and vouchers only for a holder of the payment view key", async () => {

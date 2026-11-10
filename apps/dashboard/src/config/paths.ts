@@ -91,5 +91,9 @@ export const questionBankPath = (bankId: string) => `${Paths.EXAMS_QUESTION_BANK
 /** One invoice's page, under the invoices list. */
 export const feeInvoicePath = (invoiceId: string) => `${Paths.FEES_INVOICES}/${invoiceId}`;
 
+/** One student's fee statement (`GET /students/{id}/ledger`), under Fees & Finance. */
+export const studentStatementPath = (studentId: string) =>
+  `${Paths.FEES}/students/${studentId}/ledger`;
+
 /** One fee structure's page, under the structures list. */
 export const feeStructurePath = (structureId: string) => `${Paths.FEES_STRUCTURES}/${structureId}`;

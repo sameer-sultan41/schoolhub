@@ -18,6 +18,7 @@ import {
   isInvoiceCollectible,
 } from "@/services/modules/fee-invoices/fee-invoices-helper";
 import { InvoiceStatusBadge } from "@/features/fees/shared/invoice-status-badge";
+import { StatementLink } from "@/features/fees/statement/statement-link";
 import { RecordPaymentDialog } from "@/features/fees/shared/record-payment-dialog";
 import { useInvoiceReferences } from "@/features/fees/shared/use-invoice-references";
 import { CancelInvoiceDialog } from "./cancel-invoice-dialog";
@@ -73,6 +74,7 @@ export function InvoiceHeader({ invoice }: { invoice: FeeInvoiceRecord }) {
               {t("invoices.actions.backToList")}
             </Link>
           </Button>
+          <StatementLink studentId={invoice.student} />
           {canCollect && (
             <>
               <Button

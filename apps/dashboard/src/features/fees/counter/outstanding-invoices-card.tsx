@@ -8,6 +8,7 @@ import {
   CardContent,
   CardHeader,
   CardHeading,
+  CardToolbar,
   CardTitle,
   EmptyState,
   Skeleton,
@@ -32,6 +33,7 @@ import {
   FEE_INVOICES_COUNTER_RESOURCE,
   FEE_INVOICES_QUERY_MODULE,
 } from "@/services/modules/fee-invoices/fee-invoices-constant";
+import { StatementLink } from "@/features/fees/statement/statement-link";
 import { InvoiceStatusBadge } from "@/features/fees/shared/invoice-status-badge";
 
 export interface OutstandingInvoicesCardProps {
@@ -74,6 +76,9 @@ export function OutstandingInvoicesCard({
         <CardHeading>
           <CardTitle>{t("counter.invoices.title", { name: studentName })}</CardTitle>
         </CardHeading>
+        <CardToolbar>
+          <StatementLink studentId={studentId} />
+        </CardToolbar>
       </CardHeader>
       <CardContent className="p-0">
         {query.isError ? (

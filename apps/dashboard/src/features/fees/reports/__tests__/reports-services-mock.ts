@@ -4,7 +4,8 @@ import { servicesMock } from "@/test-fixtures/services-mock";
 export function reportsServicesMock() {
   return servicesMock({
     auth: ["fetchCurrentUser"],
-    financeReports: ["fetchReport", "exportReport"],
+    financeReports: ["fetchReport", "exportReport", "fetchStudentStatement"],
+    students: ["fetchStudentById"],
     jobs: ["fetchJob", "fetchFileDownloadUrl"],
     schoolOrganization: ["fetchAcademicSessions", "fetchClasses"],
     dashboard: ["fetchCampuses"],

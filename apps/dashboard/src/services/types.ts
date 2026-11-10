@@ -322,4 +322,6 @@ export type {
   FinanceReportRow,
   FinanceReportRowOf,
   FinanceReportRun,
+  StudentStatement,
+  StudentStatementEntry,
 } from "./modules/finance-reports";

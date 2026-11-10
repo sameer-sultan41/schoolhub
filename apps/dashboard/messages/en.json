@@ -4328,6 +4328,22 @@
         "amount": "Amount",
         "tax": "Tax"
       }
+    },
+    "statement": {
+      "title": "Statement for {name}",
+      "titleGeneric": "Student statement",
+      "summary": "Every invoice, payment and refund for this student, with the running balance after each line.",
+      "view": "View statement",
+      "closingBalance": "Closing balance",
+      "tableTitle": "Statement",
+      "emptyDescription": "This student has no invoices or payments yet.",
+      "loadError": "The statement could not be loaded.",
+      "notFoundTitle": "Student not found",
+      "notFoundDescription": "It may have been removed, or the student belongs to another school.",
+      "restricted": {
+        "title": "The statement isn't available to you",
+        "description": "Reading a statement needs permission to view invoices. Ask an administrator to grant it."
+      }
     }
   },
   "reports": {
