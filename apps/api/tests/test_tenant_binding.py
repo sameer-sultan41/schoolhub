@@ -12,6 +12,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import AccessToken
 
+from apps.fees_finance.tests.factories import StudentFactory, enable_feature
 from apps.school_organization.models import Campus
 from apps.school_organization.tests.factories import (
     CampusFactory,
@@ -67,3 +68,34 @@ class JWTOnlyTenantBindingTests(APITestCase):
 
         # 404 rather than 403: a 403 would confirm the record exists.
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class JWTOnlyFinanceReportTests(APITestCase):
+    """The finance report views are plain `APIView`s; under a bearer token alone they must
+    still bind the caller's tenant, or `RequiresModuleFeature` sees none and refuses."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.tenant = TenantFactory()
+        self.user = UserFactory(tenant=self.tenant)
+        enable_feature(self.tenant, "module.fees_finance")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(self.user)}")
+
+    def test_the_finance_summary_report_is_served_under_a_token(self):
+        grant(self.user, "fees.report.view")
+
+        response = self.client.get(
+            "/api/v1/reports/finance-summary",
+            {"kind": "collection", "date_from": "2026-01-01", "date_to": "2026-01-31"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+
+    def test_a_student_ledger_is_served_under_a_token(self):
+        grant(self.user, "fees.invoice.view")
+        with tenant_context(self.tenant.id):
+            student = StudentFactory(tenant=self.tenant, campus=CampusFactory(tenant=self.tenant))
+
+        response = self.client.get(f"/api/v1/students/{student.pk}/ledger")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())

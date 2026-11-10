@@ -1422,7 +1422,7 @@ class BudgetViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         return ActionResponse.ok(self.get_serializer(approved).data, message="Budget approved.")
 
 
-class FinanceReportView(APIView):
+class FinanceReportView(TenantScopedViewSetMixin, APIView):
     """`GET/POST /reports/finance-summary` — §13, `kind`-parameterised.
 
     `GET` serves inline; `POST` asks for an export and returns 202 + job. One
@@ -1435,6 +1435,9 @@ class FinanceReportView(APIView):
     """
 
     permission_classes = STAFF_PERMISSIONS
+    # The mixin binds the caller's tenant from the bearer token; record scope is applied
+    # in `build_report_rows`, so there is no queryset for it to narrow.
+    scope_campus_field = None
     required_feature = FEATURE
     required_permission = "fees.report.view"
     required_permission_map = {"post": "fees.report.export"}
@@ -1508,7 +1511,7 @@ class FinanceReportView(APIView):
         return ActionResponse.accepted(str(job.pk), message="Report export queued.")
 
 
-class StudentLedgerView(APIView):
+class StudentLedgerView(TenantScopedViewSetMixin, APIView):
     """`GET /students/{id}/ledger` — §13.3's printable statement.
 
     Its own view rather than a `kind` on the report endpoint, because §16
@@ -1518,6 +1521,8 @@ class StudentLedgerView(APIView):
     """
 
     permission_classes = PORTAL_READABLE_PERMISSIONS
+    # Binds the tenant from the bearer token; scope comes from `build_report_rows`.
+    scope_campus_field = None
     required_feature = FEATURE
     required_permission = "fees.invoice.view"
 
