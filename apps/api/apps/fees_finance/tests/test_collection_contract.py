@@ -33,6 +33,8 @@ class CollectionContractTestCase(FeesFinanceAPITestCase):
                 student=student,
                 academic_session=self.session,
                 invoice_no=f"INV-CC-{suffix}",
+                # One invoice per (student, structure, period): a student's several need their own.
+                period_label=f"CC-{suffix}",
             )
             payment = PaymentFactory(
                 tenant=self.tenant,
