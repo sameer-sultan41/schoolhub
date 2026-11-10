@@ -102,6 +102,23 @@ class GenerationTests(FeesFinanceAPITestCase):
         self.assertEqual(result["issued"], 1)
         self.assertEqual(result["skipped"], 3)
 
+    def test_a_window_starting_after_the_due_day_is_due_on_issue(self) -> None:
+        """A session that opens on the 15th bills its first month from the 15th,
+        but the schedule's due day is the 10th: the charge cannot fall due before
+        it is issued, so it is due on the issue date."""
+        mid_month = datetime.date(2026, 4, 15)
+        with tenant_context(self.tenant.id):
+            self.session.start_date = mid_month
+            self.session.save(update_fields=["start_date", "updated_at"])
+        structure, _, _ = self.active_structure()
+
+        result = self._generate(structure, period_start=datetime.date(2026, 4, 1))
+
+        self.assertEqual(result["issued"], 3)
+        with tenant_context(self.tenant.id):
+            dates = set(FeeInvoice.objects.values_list("issue_date", "due_date"))
+        self.assertEqual(dates, {(mid_month, mid_month)})
+
     def test_invoice_numbers_are_unique_and_sequential_across_a_run(self) -> None:
         """Gapless, through `core.tenancy.sequences.allocate_number` — the
         counter and the invoice move in one transaction."""
