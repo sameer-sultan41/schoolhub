@@ -39,7 +39,7 @@ describe("refunds-service", () => {
     expect(mockGet).toHaveBeenCalledWith(
       "/refunds",
       expect.objectContaining({
-        query: { status: "requested", payment: "p1", ordering: "-created_at" },
+        query: { status: "requested", payment: "p1", ordering: "-created_at", page_size: 25 },
       }),
     );
   });

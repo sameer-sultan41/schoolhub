@@ -388,7 +388,12 @@
 ### L60. A date filter sent as a naive day is a UTC day on the server
 
 - **Mistake.** The Payments tab's paid-on range sent `2026-10-01T00:00:00` and `2026-10-31T23:59:59` to `paid_at__gte` and `__lte`. The server reads a naive date-time in UTC, so a school at UTC+5 lost its first five hours of 1 October to the previous day, and the inclusive upper bound dropped the last second. (`payments-helper.ts`, the fees dashboard PR C.)
-- **Check.** Every date-range filter on a datetime column sends offset-aware bounds (`new Date(y, m, d).toISOString()` or the tenant's zone) with an exclusive upper bound (the next day's start, `__lt`). Its helper test sets a non-UTC `process.env.TZ` and asserts the exact instants.
+- **Check.** Every date-range filter on a datetime column sends offset-aware bounds (`new Date(y, m, d).toISOString()` or the tenant's zone) with an exclusive upper bound (the next day's start, `__lt`). Its helper test asserts the exact instants in the zone `jest.global-setup.ts` sets (America/New_York); assigning `process.env.TZ` inside a test does not move the zone.
+
+### L61. A test's own stub must not run after the helper that overwrites it
+
+- **Mistake.** Three things passed review and failed only in CI: the payments tests set `listPayments.mockResolvedValue(...)` and then called a render helper that ran `stubFeesServices()`, resetting the list to empty; the over-limit refund hint was a `FormDescription`, which hides itself while its field has an error (the only time the hint shows); and the live seed's session starts 30 days ago, so a monthly `due_day` of 10 gave an invoice a due date before its issue date on any day after the 10th. (PR C CI, `payments-list.test.tsx`, `request-refund-dialog.tsx`, `invoicing.build_draft`.)
+- **Check.** Reset shared mocks in `beforeEach`, never in a render helper a test calls after its own stubs. A message shown because a field failed is not a `FormDescription`. Run seeds and date maths against every day of the month, not today's date.
 
 
 1. Number it next (`L14`) and give it a short title that states the rule.

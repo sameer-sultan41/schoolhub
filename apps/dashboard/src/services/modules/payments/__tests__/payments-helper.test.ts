@@ -66,26 +66,18 @@ describe("payments-helper", () => {
 
 describe("payments list filters", () => {
   describe("paidAtBounds", () => {
-    const original = process.env.TZ;
-    afterEach(() => {
-      if (original === undefined) delete process.env.TZ;
-      else process.env.TZ = original;
-    });
-
+    // Jest runs in America/New_York (`jest.global-setup.ts`): setting `process.env.TZ` inside a
+    // test does not move the zone, so these read the viewer's local days from that one.
     it("sends offset-aware instants for the viewer's local days, the upper one exclusive", () => {
-      process.env.TZ = "Asia/Karachi";
-
-      // Karachi is UTC+5: its 1 October starts at 19:00 UTC on 30 September, and the day after
-      // 31 October starts at 19:00 UTC on 31 October.
+      // 1 October starts at 04:00 UTC (EDT, UTC-4); the day after 31 October is 1 November,
+      // which still starts in EDT (the clocks go back at 02:00 that day).
       expect(paidAtBounds("2026-10-01", "2026-10-31")).toEqual({
-        paidAtGte: "2026-09-30T19:00:00.000Z",
-        paidAtLt: "2026-10-31T19:00:00.000Z",
+        paidAtGte: "2026-10-01T04:00:00.000Z",
+        paidAtLt: "2026-11-01T04:00:00.000Z",
       });
     });
 
-    it("moves with the zone, so the same days are other instants elsewhere", () => {
-      process.env.TZ = "America/New_York";
-
+    it("makes a single day a half-open range of one local day", () => {
       expect(paidAtBounds("2026-10-01", "2026-10-01")).toEqual({
         paidAtGte: "2026-10-01T04:00:00.000Z",
         paidAtLt: "2026-10-02T04:00:00.000Z",

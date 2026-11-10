@@ -64,6 +64,7 @@ describe("payments-service", () => {
           status: "confirmed",
           paid_at__gte: "2026-10-01T00:00:00Z",
           received_by: "u1",
+          page_size: 25,
         },
       }),
     );
