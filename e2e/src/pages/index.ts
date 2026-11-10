@@ -30,6 +30,7 @@ export * from "./dashboard/fees/fee-expenses.page";
 export * from "./dashboard/fees/fee-grants.page";
 export * from "./dashboard/fees/fee-invoices.page";
 export * from "./dashboard/fees/fee-payments.page";
+export * from "./dashboard/fees/fee-reports.page";
 export * from "./dashboard/fees/fee-structures.page";
 export * from "./dashboard/fees/ledger.page";
 export * from "./dashboard/login.page";

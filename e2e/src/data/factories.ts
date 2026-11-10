@@ -389,6 +389,28 @@ export const FEES_LEDGER_JOURNAL_PERMISSIONS: PermissionKey[] = [
   "fees.ledger.create",
 ];
 
+/**
+ * The Reports page's keys the seeded `accountant` holds (`permissions.py`: `REPORT_VIEWERS` for
+ * `fees.report.view` and `.export`), plus the four reads its filters make: campuses, sessions and
+ * classes (`ALL_STAFF`) and the student a statement is for (L55, L59).
+ */
+export const FEES_REPORTS_ACCOUNTANT_PERMISSIONS: PermissionKey[] = [
+  "fees.report.view",
+  "fees.report.export",
+  "school.campus.view",
+  "school.academic-session.view",
+  "school.class.view",
+  "students.student.view",
+];
+
+/** The seeded `principal` reads the reports (`REPORT_VIEWERS`) and cannot export them. */
+export const FEES_REPORTS_PRINCIPAL_PERMISSIONS: PermissionKey[] = [
+  "fees.report.view",
+  "school.campus.view",
+  "school.academic-session.view",
+  "school.class.view",
+];
+
 /** The read-only view of spend: the expense view key and nothing to write with. */
 export const FEES_SPEND_VIEWER_PERMISSIONS: PermissionKey[] = ["fees.expense.view"];
 

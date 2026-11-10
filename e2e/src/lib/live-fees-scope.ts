@@ -41,6 +41,7 @@ export async function enrolledStudentScope(admin: ApiClient) {
     enrollment_date: sessionPayload.start_date,
   });
   return {
+    campusId: campus.id,
     sessionId: session.id,
     classId: schoolClass.id,
     studentId: student.id,

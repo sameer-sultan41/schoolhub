@@ -31,6 +31,7 @@ import {
   FeeInvoicesPage,
   FeeExpensesPage,
   FeePaymentsPage,
+  FeeReportsPage,
   FeeStructuresPage,
   GradingScalesPage,
   LedgerPage,
@@ -143,6 +144,7 @@ export interface E2EFixtures {
   feeInvoicesPage: FeeInvoicesPage;
   feeExpensesPage: FeeExpensesPage;
   feePaymentsPage: FeePaymentsPage;
+  feeReportsPage: FeeReportsPage;
   feeStructuresPage: FeeStructuresPage;
   ledgerPage: LedgerPage;
   questionBanksPage: QuestionBanksPage;
@@ -414,6 +416,10 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
 
   feePaymentsPage: async ({ page }, use) => {
     await use(new FeePaymentsPage(page));
+  },
+
+  feeReportsPage: async ({ page }, use) => {
+    await use(new FeeReportsPage(page));
   },
 
   feeStructuresPage: async ({ page }, use) => {

@@ -40,4 +40,5 @@ export * from "./domains/exams-question-banks";
 export * from "./domains/fees";
 export * from "./domains/fees-collection";
 export * from "./domains/fees-journal";
+export * from "./domains/fees-reports";
 export * from "./domains/fees-spend";
