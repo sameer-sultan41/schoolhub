@@ -120,7 +120,7 @@ export interface StatementSeed {
   closing_balance: string;
 }
 
-export interface ExportRequest {
+export interface FinanceReportExportRequest {
   kind: FinanceReportKind;
   format: ReportFormat;
   body: Record<string, unknown>;
@@ -255,7 +255,7 @@ function otherRows(seed: ReportSeedRow[], query: Query): FinanceReportRow[] {
  * `files` go to `jobsModule` through `jobsOptions()`.
  */
 export class FinanceReportsState {
-  readonly exports: ExportRequest[] = [];
+  readonly exports: FinanceReportExportRequest[] = [];
   readonly jobs: Record<string, JobStub[]> = {};
   readonly files: FileDownloadStub[] = [];
   /** Every GET's parsed parameters, in order. */
