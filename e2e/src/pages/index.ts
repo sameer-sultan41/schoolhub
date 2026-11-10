@@ -26,6 +26,7 @@ export * from "./dashboard/exams/report-cards.page";
 export * from "./dashboard/exams/reports.page";
 export * from "./dashboard/exams/question-banks.page";
 export * from "./dashboard/fees/fee-counter.page";
+export * from "./dashboard/fees/fee-expenses.page";
 export * from "./dashboard/fees/fee-grants.page";
 export * from "./dashboard/fees/fee-invoices.page";
 export * from "./dashboard/fees/fee-payments.page";

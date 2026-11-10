@@ -39,6 +39,10 @@ const VIEW: PermissionKey = "fees.expense.view";
 const CREATE: PermissionKey = "fees.budget.create";
 const APPROVE: PermissionKey = "fees.budget.approve";
 
+// The server's sentences, verbatim (`services.approve_budget`, `BudgetSerializer.validate`).
+const ALREADY = "This budget is already approved.";
+const ONE_TARGET =
+  "Name exactly one of `ledger_account` or `expense_category` — a budget against both is counted twice by the variance report.";
 const EDIT = "Edit Q4 stationery";
 const APPROVE_ROW = "Approve Q4 stationery";
 
@@ -120,18 +124,14 @@ describe("budgets tab", () => {
   });
 
   it("shows the server's refusal to approve inline", async () => {
-    approveBudget.mockRejectedValue(
-      ruleViolation("status", "Only a draft budget can be approved."),
-    );
+    approveBudget.mockRejectedValue(ruleViolation("status", ALREADY));
     const user = await renderTab([VIEW, APPROVE]);
 
     await user.click(screen.getByRole("button", { name: APPROVE_ROW }));
     const dialog = await screen.findByRole("alertdialog");
     await user.click(within(dialog).getByRole("button", { name: "Approve" }));
 
-    expect(
-      await within(dialog).findByText("Only a draft budget can be approved."),
-    ).toBeInTheDocument();
+    expect(await within(dialog).findByText(ALREADY)).toBeInTheDocument();
   });
 
   it("creates a draft budget against a category", async () => {
@@ -163,23 +163,13 @@ describe("budgets tab", () => {
   });
 
   it("shows the server's 'exactly one target' refusal as the form's message", async () => {
-    updateBudget.mockRejectedValue(
-      ruleViolation(
-        "non_field_errors",
-        "Name exactly one of `ledger_account` or `expense_category`.",
-        400,
-      ),
-    );
+    updateBudget.mockRejectedValue(ruleViolation("non_field_errors", ONE_TARGET, 400));
     const user = await renderTab([VIEW, CREATE]);
 
     await user.click(screen.getByRole("button", { name: EDIT }));
     const dialog = await screen.findByRole("dialog", { name: "Edit budget" });
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
 
-    expect(
-      await within(dialog).findByText(
-        "Name exactly one of `ledger_account` or `expense_category`.",
-      ),
-    ).toBeInTheDocument();
+    expect(await within(dialog).findByText(ONE_TARGET)).toBeInTheDocument();
   });
 });

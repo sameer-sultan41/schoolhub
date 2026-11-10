@@ -44,6 +44,11 @@ jest.mock("@/services", () =>
 type Status = ReturnType<typeof expenseRecord>["status"];
 
 const NO = "EXP-2026-0001";
+// The server's sentences, verbatim (`services.decide_expense`, `ExpenseSerializer.validate`).
+const SELF_APPROVAL =
+  "The person who submitted an expense cannot approve it (§15, and auth-and-rbac §2.4).";
+const FIGURES_FIXED =
+  "This expense is submitted and its figures are fixed. Reject it and record a new one.";
 const VIEW: PermissionKey = "fees.expense.view";
 const CREATE: PermissionKey = "fees.expense.create";
 const UPDATE: PermissionKey = "fees.expense.update";
@@ -231,18 +236,14 @@ describe("expenses tab: transitions", () => {
   });
 
   it("shows the server's self-approval refusal inline and keeps the dialog open", async () => {
-    approveExpense.mockRejectedValue(
-      ruleViolation("approved_by", "The person who submitted an expense cannot approve it"),
-    );
+    approveExpense.mockRejectedValue(ruleViolation("approved_by", SELF_APPROVAL));
     const user = await renderTab([VIEW, APPROVE]);
 
     await user.click(screen.getByRole("button", { name: ACTIONS.approve }));
     const dialog = await screen.findByRole("alertdialog");
     await user.click(within(dialog).getByRole("button", { name: "Approve" }));
 
-    expect(
-      await within(dialog).findByText("The person who submitted an expense cannot approve it"),
-    ).toBeInTheDocument();
+    expect(await within(dialog).findByText(SELF_APPROVAL)).toBeInTheDocument();
     expect(screen.getByRole("alertdialog")).toBeInTheDocument();
   });
 
@@ -315,16 +316,14 @@ describe("expenses tab: create and edit", () => {
   });
 
   it("shows the server's refusal to edit a non-draft as the form's message", async () => {
-    updateExpense.mockRejectedValue(ruleViolation("status", "Only a draft expense can be edited."));
+    updateExpense.mockRejectedValue(ruleViolation("status", FIGURES_FIXED));
     const user = await renderTab([VIEW, UPDATE], [expenseRecord({ status: "draft" })]);
 
     await user.click(screen.getByRole("button", { name: ACTIONS.edit }));
     const dialog = await screen.findByRole("dialog", { name: "Edit expense" });
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
 
-    expect(
-      await within(dialog).findByText("Only a draft expense can be edited."),
-    ).toBeInTheDocument();
+    expect(await within(dialog).findByText(FIGURES_FIXED)).toBeInTheDocument();
     expect(updateExpense).toHaveBeenCalledWith(
       EXPENSE_ID,
       expect.objectContaining({ amount: "100.00" }),

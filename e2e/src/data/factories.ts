@@ -368,6 +368,25 @@ export const FEES_PAYMENTS_STAFF_PERMISSIONS: PermissionKey[] = [
 ];
 
 /**
+ * The Expenses page's keys the seeded `accountant` holds (`permissions.py`: `STRUCTURE_VIEWERS` for
+ * the read, `FINANCE_STAFF` for create and update, `REFUND_APPROVERS` for approve, `ACCOUNTANTS`
+ * for a budget) plus the ledger read behind its account picker (L59) and the campus read. Not
+ * `fees.budget.approve`, which is the owner's alone (L55).
+ */
+export const FEES_SPEND_ACCOUNTANT_PERMISSIONS: PermissionKey[] = [
+  "fees.expense.view",
+  "fees.expense.create",
+  "fees.expense.update",
+  "fees.expense.approve",
+  "fees.budget.create",
+  "fees.ledger.view",
+  "school.campus.view",
+];
+
+/** The read-only view of spend: the expense view key and nothing to write with. */
+export const FEES_SPEND_VIEWER_PERMISSIONS: PermissionKey[] = ["fees.expense.view"];
+
+/**
  * The grants keys the seeded `accountant` holds (`permissions.py`: the discount, scholarship and
  * fine keys, view, create and waive), plus the reads the create forms' pickers make: students,
  * sessions and fee heads (L55, L59).

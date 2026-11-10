@@ -38,6 +38,11 @@ jest.mock("@/services", () =>
 const VIEW: PermissionKey = "fees.expense.view";
 const CREATE: PermissionKey = "fees.expense.create";
 const LEDGER_VIEW: PermissionKey = "fees.ledger.view";
+// The server's sentences, verbatim (`services.assert_expense_category_*`).
+const HAS_EXPENSES =
+  "STA Stationery has expenses filed against it and cannot be deleted. Set is_active=False instead — its code stays reserved and its history stays under it.";
+const NOT_EXPENSE =
+  "An expense category must map to an expense account. 4001 Tuition income is income.";
 
 async function renderTab(keys: PermissionKey[]) {
   stubFeesServices("/fees/expenses?tab=categories");
@@ -148,9 +153,7 @@ describe("expense categories tab", () => {
   });
 
   it("shows the server's refusal of a non-expense account under the account field", async () => {
-    createExpenseCategory.mockRejectedValue(
-      ruleViolation("ledger_account", "A category must point at an expense account.", 400),
-    );
+    createExpenseCategory.mockRejectedValue(ruleViolation("ledger_account", NOT_EXPENSE, 400));
     const user = await renderTab([VIEW, CREATE, LEDGER_VIEW]);
 
     await user.click(screen.getByRole("button", { name: "New category" }));
@@ -161,24 +164,18 @@ describe("expense categories tab", () => {
     await user.click(await screen.findByRole("option", { name: "5100 Office supplies" }));
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
 
-    expect(
-      await within(dialog).findByText("A category must point at an expense account."),
-    ).toBeInTheDocument();
+    expect(await within(dialog).findByText(NOT_EXPENSE)).toBeInTheDocument();
   });
 
   it("shows the server's refusal to delete a category in use, inline", async () => {
-    deleteExpenseCategory.mockRejectedValue(
-      ruleViolation("id", "Stationery has expenses or a budget filed against it."),
-    );
+    deleteExpenseCategory.mockRejectedValue(ruleViolation("id", HAS_EXPENSES));
     const user = await renderTab([VIEW, CREATE]);
 
     await user.click(screen.getByRole("button", { name: "Delete Stationery" }));
     const dialog = await screen.findByRole("alertdialog");
     await user.click(within(dialog).getByRole("button", { name: "Delete" }));
 
-    expect(
-      await within(dialog).findByText("Stationery has expenses or a budget filed against it."),
-    ).toBeInTheDocument();
+    expect(await within(dialog).findByText(HAS_EXPENSES)).toBeInTheDocument();
     expect(deleteExpenseCategory).toHaveBeenCalledWith(CATEGORY_ID);
     expect(screen.getByRole("alertdialog")).toBeInTheDocument();
   });
