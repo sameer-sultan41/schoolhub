@@ -1,4 +1,4 @@
-"""§13's five reports, as pure query functions.
+"""§13's six reports, as pure query functions.
 
 Separate from `services.py` for the reason `attendance.reports` and
 `timetable.conflicts` are separate from theirs: this is a self-contained query
@@ -26,6 +26,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from django.db.models import Avg, Count, F, Max, Min, Q, QuerySet
+from django.db.models.functions import Round
 
 from apps.examinations.models import (
     Marks,
@@ -52,6 +53,15 @@ REPORT_KINDS = (
 # from a pass rate rather than counted as a failure — the same reasoning
 # `processing` gives for not scoring them zero, applied to the denominator.
 SAT_OUTCOMES = frozenset({ResultOutcome.PASS, ResultOutcome.FAIL})
+
+# Decimal places an average of marks or percentages is reported to: the columns'
+# own scale. Rounded here, in SQL, so the inline report and every export carry
+# the same figure rather than each formatter rounding (or not) on its own.
+AVERAGE_DECIMAL_PLACES = 2
+
+
+def _average(field: str) -> Round:
+    return Round(Avg(field), AVERAGE_DECIMAL_PLACES)
 
 
 def _capped(rows, limit: int | None):
@@ -129,7 +139,7 @@ def pass_fail_analysis(
             failed=Count("id", filter=Q(outcome=ResultOutcome.FAIL)),
             absent=Count("id", filter=Q(outcome=ResultOutcome.ABSENT)),
             withheld=Count("id", filter=Q(outcome=ResultOutcome.WITHHELD)),
-            average_percentage=Avg("percentage"),
+            average_percentage=_average("percentage"),
             highest_percentage=Max("percentage"),
             lowest_percentage=Min("percentage"),
         )
@@ -162,7 +172,7 @@ def subject_performance(
         )
         .annotate(
             students=Count("id"),
-            average_marks=Avg("theory_marks"),
+            average_marks=_average("theory_marks"),
             highest_marks=Max("theory_marks"),
             lowest_marks=Min("theory_marks"),
             passed=Count("id", filter=Q(theory_marks__gte=F("exam_subject__pass_marks"))),

@@ -8,6 +8,8 @@ import { FileChartColumn } from "lucide-react";
 
 import { Toolbar, ToolbarHeading } from "@/app/(app)/shell/toolbar";
 import { LoadErrorCard } from "@/components/load-error-card";
+import { ReportExportButtons } from "@/components/reports/report-export-buttons";
+import { ReportJobPanel } from "@/components/reports/report-job-panel";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { foldUnknownFieldErrors, NON_FIELD, resolveErrorMessage } from "@/lib/error-message";
 import { hasPermission } from "@/lib/permissions";
@@ -16,17 +18,16 @@ import { Services, type AttendanceMode, type ReportQuery } from "@/services";
 import { DAILY_ATTENDANCE_MODE } from "@/services/modules/attendance-settings/attendance-settings-constant";
 import {
   ATTENDANCE_REPORTS_QUERY_MODULE,
-  QUEUED_REPORT_FORMAT,
   REPORT_RESOURCE,
 } from "@/services/modules/attendance-reports/attendance-reports-constant";
 import {
   isSameReport,
+  jobResultMode,
   reportFilename,
   toReportQueryParams,
 } from "@/services/modules/attendance-reports/attendance-reports-helper";
-import { ReportExportButtons } from "./report-export-buttons";
+import { QUEUED_REPORT_FORMAT } from "@/services/shared/report-export";
 import { ReportForm } from "./report-form";
-import { ReportJobPanel } from "./report-job-panel";
 import { ReportTable } from "./report-table";
 import { useReportForm } from "./use-report-form";
 
@@ -42,6 +43,7 @@ export function ReportsScreen() {
   const t = useTranslations("attendance");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
+  const tReports = useTranslations("reports");
   const { data: currentUser, isError: isUserError } = useCurrentUser();
   // The tenant's mode, as the last report response told it; `null` until one has.
   const [lastMode, setLastMode] = useState<AttendanceMode | null>(null);
@@ -62,7 +64,7 @@ export function ReportsScreen() {
     queryFn: applied ? () => Services.attendanceReports.runReport(applied) : skipToken,
   });
 
-  // An inline answer carries the mode; a job's result reports it through `onModeKnown`.
+  // An inline answer carries the mode; a job reports it in its result, through `onSucceeded`.
   const inlineMode =
     report.data !== undefined && !("jobId" in report.data) ? report.data.attendanceMode : null;
   if (inlineMode !== null && inlineMode !== lastMode) setLastMode(inlineMode);
@@ -82,7 +84,7 @@ export function ReportsScreen() {
     ? tCommon(isUserError ? "permissionsLoadFailed" : "permissionsLoading")
     : hasPermission(currentUser, "attendance.report.export")
       ? undefined
-      : t("reports.export.permissionTitle");
+      : tReports("export.permissionTitle");
 
   function results() {
     if (!applied) {
@@ -121,16 +123,25 @@ export function ReportsScreen() {
       );
     }
     const exportButtons = (
-      <ReportExportButtons query={applied} disabledReason={exportDisabledReason} />
+      <ReportExportButtons
+        module={ATTENDANCE_REPORTS_QUERY_MODULE}
+        start={(format) => Services.attendanceReports.exportReport(applied, format)}
+        filenameFor={(format) => reportFilename(applied, format)}
+        disabledReason={exportDisabledReason}
+      />
     );
     if ("jobId" in report.data) {
       return (
         <div className="space-y-4">
           <div className="flex justify-end">{exportButtons}</div>
           <ReportJobPanel
+            module={ATTENDANCE_REPORTS_QUERY_MODULE}
             jobId={report.data.jobId}
             filename={reportFilename(applied, QUEUED_REPORT_FORMAT)}
-            onModeKnown={setLastMode}
+            onSucceeded={(result) => {
+              const mode = jobResultMode(result);
+              if (mode !== null) setLastMode(mode);
+            }}
             onRestart={() => {
               void report.refetch();
             }}

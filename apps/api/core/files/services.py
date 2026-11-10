@@ -165,13 +165,21 @@ def get_download_url(file: File) -> str:
     )
 
 
-def get_display_url(file: File) -> str | None:
-    """A link for rendering the file inline (an avatar), or ``None`` if it must not show.
+def servable_file(file: File | None) -> File | None:
+    """``file`` if it may be handed out at all (present, ``ready``, not soft-deleted), else None.
 
-    Checks ``deleted_at`` itself: ``select_related`` joins a soft-deleted row regardless of
-    the default manager.
+    The one check every signed link makes first. It reads ``deleted_at`` itself, because
+    ``select_related`` joins a soft-deleted row regardless of the default manager. Returns the
+    file rather than a bool so a caller holding an optional relation gets a narrowed ``File``.
     """
-    if file.status != FileStatus.READY or file.deleted_at is not None:
+    if file is None or file.status != FileStatus.READY or file.deleted_at is not None:
+        return None
+    return file
+
+
+def get_display_url(file: File) -> str | None:
+    """A link for rendering the file inline (an avatar), or ``None`` if it must not show."""
+    if servable_file(file) is None:
         return None
     ttl = settings.FILE_DISPLAY_URL_TTL_SECONDS
     return get_presigner().presign_download(

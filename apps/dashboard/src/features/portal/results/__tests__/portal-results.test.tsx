@@ -16,6 +16,7 @@ jest.mock("@/services", () => ({
   Services: {
     parentPortal: { fetchPortalDashboard: jest.fn() },
     results: { listResults: jest.fn() },
+    admitCards: { fetchCurrentAdmitCardsPage: jest.fn(), fetchAdmitCardDownloadUrl: jest.fn() },
   },
 }));
 
@@ -27,9 +28,14 @@ const mockListResults = Services.results.listResults as jest.MockedFunction<
   typeof Services.results.listResults
 >;
 
+const mockFetchAdmitCards = Services.admitCards.fetchCurrentAdmitCardsPage as jest.MockedFunction<
+  typeof Services.admitCards.fetchCurrentAdmitCardsPage
+>;
+
 describe("PortalResults", () => {
   beforeEach(() => {
     mockListResults.mockReset();
+    mockFetchAdmitCards.mockResolvedValue({ items: [] });
     mockUseParams.mockReturnValue({ studentId: AYESHA_ID });
     mockFetchDashboard.mockResolvedValue(portalDashboard());
   });

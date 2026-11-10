@@ -5,6 +5,7 @@ import type {
   AcademicSessionSummary,
   SchoolOrganizationOption,
   SectionOption,
+  TermOption,
 } from "./school-organization-type";
 
 /**
@@ -84,4 +85,12 @@ export async function fetchAcademicSessions(): Promise<AcademicSessionSummary[]>
     apiClient,
     endpoints.schoolOrganization.academicSessions,
   );
+}
+
+/** `GET /terms` — one session's terms, in their order within it. */
+export async function fetchTerms(academicSessionId: string): Promise<TermOption[]> {
+  const terms = await collectPages<TermOption>(apiClient, endpoints.schoolOrganization.terms, {
+    query: { academic_session_id: academicSessionId, page_size: MAX_PAGE_SIZE },
+  });
+  return terms.sort((a, b) => a.sequence - b.sequence);
 }

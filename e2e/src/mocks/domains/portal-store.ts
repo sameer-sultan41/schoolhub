@@ -19,6 +19,7 @@ export type PortalAttendanceRow = ApiSchemas["StudentAttendance"];
 export type PortalInvoice = ApiSchemas["FeeInvoice"];
 export type PortalReceipt = ApiSchemas["Receipt"];
 export type PortalResult = ApiSchemas["Result"];
+export type PortalAdmitCard = ApiSchemas["AdmitCard"];
 export type PortalVoucher = ApiSchemas["FeeVoucher"];
 export type PortalLeaveType = ApiSchemas["LeaveType"];
 export type PortalLeaveRequest = Mutable<ApiSchemas["LeaveRequest"]>;
@@ -46,6 +47,9 @@ export const PORTAL_IDS = {
   midTerm: "00000000-0000-4000-b000-000000000041",
   annual: "00000000-0000-4000-b000-000000000042",
   bilalResult: "00000000-0000-4000-b000-000000000043",
+  finals: "00000000-0000-4000-b000-000000000044",
+  admitCard: "00000000-0000-4000-b000-000000000045",
+  bilalAdmitCard: "00000000-0000-4000-b000-000000000046",
   notice: "00000000-0000-4000-b000-000000000051",
   feesNotification: "00000000-0000-4000-b000-000000000061",
   attendanceNotification: "00000000-0000-4000-b000-000000000062",
@@ -190,14 +194,17 @@ export function buildReceipt(overrides: Partial<PortalReceipt> = {}): PortalRece
   };
 }
 
-export function buildResult(overrides: Partial<PortalResult> = {}): PortalResult {
+export function buildPortalResult(overrides: Partial<PortalResult> = {}): PortalResult {
   return {
     id: PORTAL_IDS.midTerm,
     exam_id: PORTAL_IDS.midTerm,
     exam_name: "Mid-term",
     term_name: "Term 1",
     student_id: PORTAL_IDS.ayesha,
+    student_name: "Ayesha Khan",
+    admission_number: "ADM-001",
     section_id: PORTAL_IDS.section,
+    section_name: "A",
     total_max_marks: "400.00",
     total_obtained_marks: "326.00",
     percentage: "81.50",
@@ -208,10 +215,38 @@ export function buildResult(overrides: Partial<PortalResult> = {}): PortalResult
     outcome: "pass",
     grace_marks: "0.00",
     status: "published",
+    processed_by: null,
+    processed_by_name: null,
+    approved_by: null,
+    approved_by_name: null,
     approved_at: "2026-10-19T09:00:00Z",
     published_at: "2026-10-20T09:00:00Z",
     created_at: "2026-10-19T08:00:00Z",
     updated_at: "2026-10-20T09:00:00Z",
+    ...overrides,
+  };
+}
+
+/** Ayesha's issued admit card for an exam not yet over. */
+export function buildPortalAdmitCard(overrides: Partial<PortalAdmitCard> = {}): PortalAdmitCard {
+  return {
+    id: PORTAL_IDS.admitCard,
+    exam_id: PORTAL_IDS.finals,
+    exam_name: "Finals",
+    exam_starts_on: "2026-12-01",
+    exam_ends_on: "2026-12-10",
+    student_id: PORTAL_IDS.ayesha,
+    student_name: "Ayesha Khan",
+    admission_number: "ADM-001",
+    section_id: PORTAL_IDS.section,
+    section_name: "A",
+    admit_card_no: "FIN-ADM-001",
+    file_id: PORTAL_IDS.admitCard,
+    status: "issued",
+    issued_at: "2026-11-10T09:00:00Z",
+    revoked_reason: null,
+    created_at: "2026-11-10T08:59:00Z",
+    updated_at: "2026-11-10T09:00:00Z",
     ...overrides,
   };
 }
@@ -353,6 +388,7 @@ export interface PortalOptions {
   leaveTypes?: PortalLeaveType[];
   leaveRequests?: PortalLeaveRequest[];
   results?: PortalResult[];
+  admitCards?: PortalAdmitCard[];
   notices?: PortalNotice[];
   notifications?: PortalNotification[];
 }
@@ -368,6 +404,7 @@ export class PortalStore {
   readonly leaveTypes: PortalLeaveType[];
   readonly leaveRequests: PortalLeaveRequest[];
   readonly results: PortalResult[];
+  readonly admitCards: PortalAdmitCard[];
   readonly notices: PortalNotice[];
   readonly notifications: PortalNotification[];
   readonly preferences: PreferenceRow[] = buildPreferenceMatrix();
@@ -396,6 +433,7 @@ export class PortalStore {
     this.leaveTypes = options.leaveTypes ?? buildPortalLeaveTypes();
     this.leaveRequests = options.leaveRequests ?? [];
     this.results = options.results ?? [];
+    this.admitCards = options.admitCards ?? [];
     this.notices = options.notices ?? [];
     this.notifications = options.notifications ?? [];
   }

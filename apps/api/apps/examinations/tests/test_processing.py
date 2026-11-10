@@ -35,12 +35,14 @@ from apps.examinations.tests.factories import (
     ExamFactory,
     ExamSubjectFactory,
     MarksFactory,
+    StaffFactory,
     SubjectFactory,
     UserFactory,
     authenticate,
     grant,
 )
 from core.api.exceptions import Conflict, DomainRuleViolation
+from core.jobs.models import BackgroundJob
 from core.jobs.tests.base import assert_sent_on_commit
 from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
@@ -125,6 +127,40 @@ class ReadinessTests(ProcessingTestCase):
 
         self.assertIn("still outstanding", str(caught.exception.detail))
         self.assertIn(self.subject.name, str(caught.exception.detail))
+
+    def test_the_outstanding_marks_refusal_carries_its_own_code(self) -> None:
+        """`marks_outstanding`, so a client can send the user to marks entry; the exam's
+        other 409s keep `conflict`."""
+        with tenant_context(self.tenant.id):
+            self.mark(self.students[0], theory_marks=Decimal("60.00"))
+
+        response = self.client.post(f"/api/v1/exams/{self.exam.pk}:process-results")
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        error = response.json()["error"]
+        self.assertEqual(error["code"], "marks_outstanding")
+        self.assertIn("still outstanding", error["message"])
+        self.assertIn(self.subject.name, error["message"])
+
+    def test_the_exam_s_other_refusals_keep_the_conflict_code(self) -> None:
+        with tenant_context(self.tenant.id):
+            empty = ExamFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                grading_scale=self.scale,
+                status=ExamStatus.MARKS_ENTRY,
+            )
+            approved = ExamFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                grading_scale=self.scale,
+                status=ExamStatus.APPROVED,
+            )
+
+        for exam in (empty, approved):
+            response = self.client.post(f"/api/v1/exams/{exam.pk}:process-results")
+            self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+            self.assertEqual(response.json()["error"]["code"], "conflict")
 
     def test_a_draft_row_does_not_count_as_entered(self) -> None:
         """A `draft` row was saved but never claimed as finished. Processing it
@@ -331,6 +367,22 @@ class ProcessEndpointTests(ProcessingTestCase):
             tenant_id=self.tenant.pk,
             actor_id=self.user.pk,
         )
+
+    def test_an_exam_outside_the_caller_s_scope_is_a_404(self) -> None:
+        """Resolved through `ExamViewSet`'s record scope, not a bare lookup."""
+        self.mark_all("60.00", "70.00", "80.00")
+        with tenant_context(self.tenant.id):
+            outsider = UserFactory(tenant=self.tenant)
+            StaffFactory(tenant=self.tenant, campus=self.campus, user_id=outsider.pk)
+        grant(outsider, "exams.result.create", scope=RecordScope.ASSIGNED)
+        client = APIClient()
+        authenticate(client, outsider)
+
+        response = client.post(f"/api/v1/exams/{self.exam.pk}:process-results")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        with tenant_context(self.tenant.id):
+            self.assertFalse(BackgroundJob.objects.exists())
 
 
 class RecomputeTests(ProcessingTestCase):
@@ -654,7 +706,7 @@ class ConcurrencyLockTests(ProcessingTestCase):
         import inspect
 
         source = inspect.getsource(services.withhold_result)
-        self.assertIn("select_for_update()", source)
+        self.assertIn("select_for_update(", source)
         self.assertNotIn("lock_exam", source)
 
     def test_publish_returns_the_ids_it_moved(self) -> None:

@@ -61,6 +61,10 @@ export const Paths = {
   PORTAL_NOTICE: (noticeId: string) => `/portal/notices/${noticeId}`,
   PORTAL_NOTIFICATIONS: "/portal/notifications",
   PORTAL_SETTINGS: "/portal/settings",
+  EXAMS: "/exams",
+  EXAMS_GRADING_SCALES: "/exams/grading-scales",
+  EXAMS_REPORTS: "/exams/reports",
+  EXAMS_QUESTION_BANKS: "/exams/question-banks",
   LOGIN: "/login",
   FORGOT_PASSWORD: "/forgot-password",
   RESET_PASSWORD: "/reset-password",
@@ -68,3 +72,9 @@ export const Paths = {
 
 /** One promotion batch's review page, under the promotions list. */
 export const promotionBatchPath = (batchId: string) => `${Paths.ACADEMICS_PROMOTIONS}/${batchId}`;
+
+/** One exam's page, under the exams list. */
+export const examPath = (examId: string) => `${Paths.EXAMS}/${examId}`;
+
+/** One question bank's page, under the banks list. */
+export const questionBankPath = (bankId: string) => `${Paths.EXAMS_QUESTION_BANKS}/${bankId}`;

@@ -16,7 +16,8 @@ from collections.abc import Callable, Mapping
 from datetime import date
 
 from django.db import DataError, IntegrityError, connection, transaction
-from django.db.models import Field
+from django.db.models import F, Field, OrderBy
+from django.db.models.functions import Length
 from django.utils import timezone
 
 from apps.school_organization.models import Campus, Section
@@ -66,6 +67,21 @@ _PATTERN_TOKEN = re.compile(r"\{(campus|year)\}|\{seq(?::0(\d+)d)?\}")
 _ANY_BRACE_TOKEN = re.compile(r"\{[^}]*\}")
 
 _DEFAULT_PATTERN = "{year}-{seq:04d}"
+
+
+def enrollment_roll_order() -> tuple[OrderBy | str, ...]:
+    """`order_by` arguments for a `StudentEnrollment` class list, in the order a teacher reads it.
+
+    Roll number first, shorter first because it is text ("2" before "10"), unnumbered
+    students last; then name; then the student id, so ties are total (L46).
+    """
+    return (
+        Length("roll_number").asc(nulls_last=True),
+        F("roll_number").asc(nulls_last=True),
+        "student__first_name",
+        "student__last_name",
+        "student_id",
+    )
 
 
 def resolve_tenant_user_id(*, user_id: uuid.UUID | None, tenant_id: uuid.UUID) -> uuid.UUID | None:

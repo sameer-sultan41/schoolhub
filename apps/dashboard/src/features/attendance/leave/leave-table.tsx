@@ -6,7 +6,7 @@ import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { EmptyState } from "@schoolhub/ui";
 import { CalendarOff } from "lucide-react";
 
-import { CursorDataGridCard } from "@/features/attendance/cursor-data-grid-card";
+import { CursorDataGridCard } from "@/components/cursor-data-grid-card";
 import { LeaveDecisionDialog } from "@/features/attendance/leave/leave-decision-dialog";
 import { LeaveDetailSheet } from "@/features/attendance/leave/leave-detail-sheet";
 import { useLeaveColumns } from "@/features/attendance/leave/leave-columns";

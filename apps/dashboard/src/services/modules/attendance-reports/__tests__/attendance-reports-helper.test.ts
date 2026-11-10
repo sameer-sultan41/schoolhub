@@ -1,7 +1,8 @@
+import { jobResultFileId } from "@/services/shared/report-export";
+
 import {
   formatOneDecimal,
   isReportKind,
-  jobResultFileId,
   jobResultMode,
   isSameReport,
   reportFilename,
