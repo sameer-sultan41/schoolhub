@@ -3696,7 +3696,8 @@
         "failed": "We couldn't download the receipt. Please try again.",
         "pending": "The receipt is still being issued.",
         "openPayments": "Open the payments list",
-        "done": "Done"
+        "done": "Done",
+        "issued": "The receipt has been issued. Ask someone who can view payments to print it."
       }
     },
     "payments": {

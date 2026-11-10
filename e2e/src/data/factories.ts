@@ -333,12 +333,12 @@ export const FEES_INVOICING_PERMISSIONS: PermissionKey[] = [
 
 /**
  * The counter's keys the seeded `finance_staff` holds (`permissions.py`: `FINANCE_STAFF` for
- * `fees.payment.collect`, `INVOICE_VIEWERS` for `fees.invoice.view`), plus the student read its
- * picker makes. `fees.payment.view` is left out on purpose: the receipt panel's payments link
- * is for its holders only (L55, L59).
+ * `fees.payment.collect`, `INVOICE_VIEWERS` for `fees.invoice.view` and `fees.payment.view`, the
+ * key the receipt streams behind), plus the student read its picker makes (L55, L59).
  */
 export const FEES_COUNTER_PERMISSIONS: PermissionKey[] = [
   "fees.payment.collect",
+  "fees.payment.view",
   "fees.invoice.view",
   "students.student.view",
 ];

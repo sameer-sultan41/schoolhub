@@ -104,9 +104,10 @@ export const INVOICING_PERMISSIONS: PermissionKey[] = [
 ];
 
 /** The keys the seeded `finance_staff` holds for the counter (`fees.payment.collect`, the invoice
- * read), plus the student read its picker makes. */
+ * and payment reads, the latter streaming the receipt), plus the student read its picker makes. */
 export const COUNTER_PERMISSIONS: PermissionKey[] = [
   "fees.payment.collect",
+  "fees.payment.view",
   "fees.invoice.view",
   "students.student.view",
 ];
