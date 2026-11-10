@@ -60,7 +60,7 @@ describe("payments page", () => {
     );
     await renderPayments();
 
-    const row = (await screen.findByText("RCT-2026-0001")).closest("tr") as HTMLElement;
+    const row = (await screen.findByText("RCP-2026-00001")).closest("tr") as HTMLElement;
     expect(within(row).getByText("1,250.50")).toBeInTheDocument();
     expect(within(row).getByText("Bank transfer")).toBeInTheDocument();
     expect(within(row).getByText("Confirmed")).toBeInTheDocument();
@@ -108,7 +108,7 @@ describe("payments page", () => {
     listPayments.mockResolvedValue(cursorPage([paymentRecord()]));
     await renderPayments("/fees/payments", ["fees.payment.view"]);
 
-    await screen.findByText("RCT-2026-0001");
+    await screen.findByText("RCP-2026-00001");
     expect(
       screen.queryByRole("link", { name: /Open the invoice for receipt/ }),
     ).not.toBeInTheDocument();
@@ -119,7 +119,7 @@ describe("payments page", () => {
     await renderPayments();
 
     const link = await screen.findByRole("link", {
-      name: "Open the invoice for receipt RCT-2026-0001",
+      name: "Open the invoice for receipt RCP-2026-00001",
     });
     expect(link).toHaveAttribute("href", "/fees/invoices/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
   });

@@ -119,7 +119,7 @@ describe("fee counter", () => {
       expect.stringMatching(/\S+/),
     );
     expect(
-      await within(dialog).findByText("Payment of 1,350.00 recorded. Receipt RCT-2026-0001."),
+      await within(dialog).findByText("Payment of 1,350.00 recorded. Receipt RCP-2026-00001."),
     ).toBeInTheDocument();
   });
 
@@ -254,7 +254,7 @@ describe("fee counter", () => {
     await user.click(await within(dialog).findByRole("button", { name }));
 
     await waitFor(() => {
-      expect(saveBlob).toHaveBeenCalledWith(blob, `RCT-2026-0001-${format}.pdf`);
+      expect(saveBlob).toHaveBeenCalledWith(blob, `RCP-2026-00001-${format}.pdf`);
     });
     expect(downloadReceipt).toHaveBeenCalledWith("b1111111-1111-4111-8111-111111111111", format);
   });
