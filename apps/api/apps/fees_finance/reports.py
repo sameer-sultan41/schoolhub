@@ -117,7 +117,8 @@ _STUDENT_FILTERS = frozenset({"campus_id", "academic_session_id", "class_id"})
 REPORT_FILTERS_BY_KIND: dict[str, frozenset[str]] = {
     "collection": _STUDENT_FILTERS,
     "outstanding-aging": _STUDENT_FILTERS,
-    "student-ledger": _STUDENT_FILTERS,
+    # One student's statement: their campus is not a dimension of it.
+    "student-ledger": _STUDENT_FILTERS - {"campus_id"},
     "grant-register": _STUDENT_FILTERS,
     "income-vs-expense": frozenset(),
     "budget-variance": frozenset(),

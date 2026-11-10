@@ -133,6 +133,8 @@ class FilterMatrixMixin:
             "class_b": ("class_id", lambda s: s.class_b.pk),
         }
         for case, (param, resolve) in ids.items():
+            if case not in expected:
+                continue
             with self.subTest(kind=kind, filter=case):  # type: ignore[attr-defined]
                 rows = self.rows(kind, **{param: resolve(self)}, **extra)  # type: ignore[attr-defined]
                 self.assertEqual(read(rows), expected[case])  # type: ignore[attr-defined]
@@ -214,8 +216,6 @@ class StudentLedgerFilterTests(FilterMatrixMixin, ReportFilterTestCase):
         self.assert_filters(
             "student-ledger",
             {
-                "campus_a": {Decimal("100.00"), Decimal("400.00")},
-                "campus_b": set(),
                 "session_a": {Decimal("100.00")},
                 "session_b": {Decimal("400.00")},
                 "class_a": {Decimal("100.00")},
@@ -224,6 +224,20 @@ class StudentLedgerFilterTests(FilterMatrixMixin, ReportFilterTestCase):
             credits,
             **student,
         )
+
+    def test_a_statement_is_not_filterable_by_campus(self) -> None:
+        response = self.client.get(
+            URL,
+            {
+                "kind": "student-ledger",
+                **WINDOW,
+                "student": str(self.student_a.pk),
+                "campus_id": str(self.campus.pk),
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("campus_id", json.dumps(response.json()))
 
     def test_a_filtered_statement_keeps_its_own_running_balance(self) -> None:
         rows = self.rows(
@@ -383,6 +397,8 @@ class CrossTenantFilterTests(ReportFilterTestCase):
 
         for kind in ("collection", "outstanding-aging", "student-ledger", "grant-register"):
             for param, value in foreign.items():
+                if param not in reports.REPORT_FILTERS_BY_KIND[kind]:
+                    continue
                 with self.subTest(kind=kind, param=param):
                     extra = student if kind == "student-ledger" else {}
                     self.assertEqual(self.rows(kind, **{param: value}, **extra), [])
