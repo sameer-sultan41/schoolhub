@@ -69,6 +69,7 @@ export const Paths = {
   FEES_STRUCTURES: "/fees/structures",
   FEES_EXPENSES: "/fees/expenses",
   FEES_LEDGER: "/fees/ledger",
+  FEES_REPORTS: "/fees/reports",
   EXAMS: "/exams",
   EXAMS_GRADING_SCALES: "/exams/grading-scales",
   EXAMS_REPORTS: "/exams/reports",

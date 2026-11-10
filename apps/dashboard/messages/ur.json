@@ -2974,7 +2974,8 @@
       "expenses": "اخراجات",
       "ledger": "کھاتہ",
       "grants": "گرانٹس",
-      "payments": "ادائیگیاں"
+      "payments": "ادائیگیاں",
+      "reports": "رپورٹس"
     },
     "invoices": {
       "title": "انوائسز",
@@ -4215,6 +4216,117 @@
           "description": "منظوری کے بعد رپورٹیں اخراجات اسی سے ناپتی ہیں اور اس میں ترمیم نہیں ہو سکتی۔",
           "done": "{name} منظور ہو گیا۔"
         }
+      }
+    },
+    "reports": {
+      "title": "رپورٹس",
+      "summary": "وصولی، واجب الادا رقوم، اسٹیٹمنٹ، گرانٹس اور کھاتے، جدول یا فائل کی صورت میں۔",
+      "loading": "رپورٹ چل رہی ہے…",
+      "loadError": "رپورٹ نہیں چلائی جا سکی۔",
+      "emptyDescription": "ان تاریخوں اور فلٹرز سے کوئی قطار میل نہیں کھاتی۔",
+      "fullName": "{first} {last}",
+      "period": "{start} سے {end}",
+      "percent": "{value}%",
+      "form": {
+        "label": "رپورٹ کے اختیارات",
+        "kind": "رپورٹ",
+        "from": "از",
+        "to": "تا",
+        "asOf": "بتاریخ",
+        "grouping": "گروپ بندی",
+        "campus": "کیمپس",
+        "session": "سیشن",
+        "class": "جماعت",
+        "allCampuses": "تمام کیمپس",
+        "allSessions": "تمام سیشن",
+        "allClasses": "تمام جماعتیں",
+        "studentSelected": "منتخب طالب علم",
+        "studentRestricted": "طالب علم کی اسٹیٹمنٹ کے لیے طلبہ دیکھنے کی اجازت بھی درکار ہے۔ منتظم سے اجازت دینے کا کہیں۔"
+      },
+      "kinds": {
+        "collection": "وصولی",
+        "outstanding-aging": "واجب الادا اور عمر کے مطابق",
+        "student-ledger": "طالب علم کی اسٹیٹمنٹ",
+        "grant-register": "گرانٹس اور معافیاں",
+        "income-vs-expense": "آمدنی بمقابلہ اخراجات",
+        "budget-variance": "بجٹ سے فرق",
+        "expense-register": "اخراجات کا رجسٹر",
+        "trial-balance": "ٹرائل بیلنس"
+      },
+      "grouping": {
+        "day": "دن",
+        "method": "ادائیگی کا طریقہ",
+        "cashier": "کیشیئر"
+      },
+      "entryType": {
+        "invoice": "انوائس",
+        "payment": "ادائیگی",
+        "refund": "واپسی"
+      },
+      "grantType": {
+        "discount": "رعایت",
+        "scholarship": "وظیفہ",
+        "fine_waiver": "جرمانے کی معافی"
+      },
+      "pickStudent": {
+        "title": "طالب علم منتخب کریں",
+        "description": "اسٹیٹمنٹ ایک طالب علم کی ہوتی ہے۔ اوپر سے ایک منتخب کریں۔"
+      },
+      "invalid": {
+        "title": "ان تاریخوں پر رپورٹ نہیں چل سکتی",
+        "description": "اختتامی تاریخ ابتدائی تاریخ سے پہلے ہے۔"
+      },
+      "tooLarge": {
+        "title": "دکھانے کے لیے بہت بڑی — برآمد کریں",
+        "description": "اس رپورٹ میں {limit} سے زیادہ قطاریں ہیں، جو یہاں دکھانے کے لیے بہت زیادہ ہیں۔ اسے فائل کی صورت میں برآمد کریں۔",
+        "noExport": "اس رپورٹ میں {limit} سے زیادہ قطاریں ہیں، جو یہاں دکھانے کے لیے بہت زیادہ ہیں۔ تاریخیں یا فلٹرز محدود کریں، یا برآمد کی اجازت مانگیں۔"
+      },
+      "columns": {
+        "day": "دن",
+        "method": "ادائیگی کا طریقہ",
+        "cashier": "کیشیئر",
+        "noCashier": "آن لائن یا نظام",
+        "total": "کل",
+        "payments": "ادائیگیاں",
+        "student": "طالب علم",
+        "totalOutstanding": "واجب الادا",
+        "invoices": "انوائسز",
+        "notYetDue": "ابھی واجب نہیں",
+        "bucket0to30": "0-30 دن",
+        "bucket31to60": "31-60 دن",
+        "bucket61to90": "61-90 دن",
+        "bucket90plus": "90 دن سے زیادہ",
+        "date": "تاریخ",
+        "type": "قسم",
+        "reference": "حوالہ",
+        "description": "تفصیل",
+        "debit": "ڈیبٹ",
+        "credit": "کریڈٹ",
+        "balance": "بقایا",
+        "grant": "گرانٹ",
+        "name": "نام",
+        "admissionNumber": "داخلہ نمبر",
+        "value": "مقدار",
+        "status": "حالت",
+        "approvedBy": "منظور کنندہ",
+        "grantedOn": "عطا کی تاریخ",
+        "code": "کوڈ",
+        "accountType": "کھاتے کی قسم",
+        "totalDebit": "کل ڈیبٹ",
+        "totalCredit": "کل کریڈٹ",
+        "net": "خالص",
+        "budget": "بجٹ",
+        "period": "مدت",
+        "budgeted": "بجٹ شدہ",
+        "actual": "اصل",
+        "variance": "فرق",
+        "utilisation": "استعمال",
+        "expenseNo": "خرچ نمبر",
+        "category": "زمرہ",
+        "vendor": "فروخت کنندہ",
+        "campus": "کیمپس",
+        "amount": "رقم",
+        "tax": "ٹیکس"
       }
     }
   },

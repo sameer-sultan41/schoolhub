@@ -32,6 +32,7 @@ const FINE_VIEW: PermissionKey = "fees.fine.view";
 const STRUCTURE_VIEW: PermissionKey = "fees.fee-structure.view";
 const EXPENSE_VIEW: PermissionKey = "fees.expense.view";
 const LEDGER_VIEW: PermissionKey = "fees.ledger.view";
+const REPORT_VIEW: PermissionKey = "fees.report.view";
 const PAYMENT_COLLECT: PermissionKey = "fees.payment.collect";
 const PAYMENT_VIEW: PermissionKey = "fees.payment.view";
 
@@ -40,7 +41,7 @@ describe("fees sections", () => {
     mockReplace.mockReset();
   });
 
-  it("lists Invoices, Counter, Payments, Grants, Structures, Expenses then Ledger, each on its own view key (Grants on either of two)", () => {
+  it("lists Invoices, Counter, Payments, Grants, Structures, Expenses, Ledger then Reports, each on its own view key (Grants on either of two)", () => {
     expect(FEES_SECTIONS.map((section) => [section.href, section.permission])).toEqual([
       ["/fees/invoices", INVOICE_VIEW],
       ["/fees/counter", PAYMENT_COLLECT],
@@ -49,6 +50,7 @@ describe("fees sections", () => {
       ["/fees/structures", STRUCTURE_VIEW],
       ["/fees/expenses", EXPENSE_VIEW],
       ["/fees/ledger", LEDGER_VIEW],
+      ["/fees/reports", REPORT_VIEW],
     ]);
   });
 
@@ -62,6 +64,7 @@ describe("fees sections", () => {
         STRUCTURE_VIEW,
         EXPENSE_VIEW,
         LEDGER_VIEW,
+        REPORT_VIEW,
       ],
       [
         "/fees/invoices",
@@ -71,6 +74,7 @@ describe("fees sections", () => {
         "/fees/structures",
         "/fees/expenses",
         "/fees/ledger",
+        "/fees/reports",
       ],
     ],
     [[INVOICE_VIEW], ["/fees/invoices"]],
@@ -81,6 +85,7 @@ describe("fees sections", () => {
     [[STRUCTURE_VIEW], ["/fees/structures"]],
     [[EXPENSE_VIEW], ["/fees/expenses"]],
     [[LEDGER_VIEW], ["/fees/ledger"]],
+    [[REPORT_VIEW], ["/fees/reports"]],
     [[], []],
   ] as const)("permits %j to open %j", (keys, hrefs) => {
     const permitted = permittedSections(FEES_SECTIONS, buildUser([...keys]));
@@ -99,6 +104,8 @@ describe("fees sections", () => {
     [[EXPENSE_VIEW], "/fees/expenses"],
     [[STRUCTURE_VIEW], "/fees/structures"],
     [[LEDGER_VIEW], "/fees/ledger"],
+    [[REPORT_VIEW], "/fees/reports"],
+    [[LEDGER_VIEW, REPORT_VIEW], "/fees/ledger"],
   ] as const)("lands a holder of %j on %s", async (keys, href) => {
     mockFetchCurrentUser.mockResolvedValue(buildUser([...keys]));
 
@@ -129,6 +136,7 @@ describe("fees sections", () => {
       "Structures",
       "Expenses",
       "Ledger",
+      "Reports",
     ]);
 
     const fees = filterMenuByAccess(MENU_SIDEBAR, buildUser([LEDGER_VIEW])).find(

@@ -2974,7 +2974,8 @@
       "expenses": "Expenses",
       "ledger": "Ledger",
       "grants": "Grants",
-      "payments": "Payments"
+      "payments": "Payments",
+      "reports": "Reports"
     },
     "invoices": {
       "title": "Invoices",
@@ -4215,6 +4216,117 @@
           "description": "Once approved it is the baseline reports measure spending against, and it can no longer be edited.",
           "done": "{name} approved."
         }
+      }
+    },
+    "reports": {
+      "title": "Reports",
+      "summary": "Collection, outstanding balances, statements, grants and the books, as a table or a file.",
+      "loading": "Running the report…",
+      "loadError": "The report could not be run.",
+      "emptyDescription": "No rows match these dates and filters.",
+      "fullName": "{first} {last}",
+      "period": "{start} to {end}",
+      "percent": "{value}%",
+      "form": {
+        "label": "Report options",
+        "kind": "Report",
+        "from": "From",
+        "to": "To",
+        "asOf": "As of",
+        "grouping": "Group by",
+        "campus": "Campus",
+        "session": "Session",
+        "class": "Class",
+        "allCampuses": "All campuses",
+        "allSessions": "All sessions",
+        "allClasses": "All classes",
+        "studentSelected": "Selected student",
+        "studentRestricted": "A student statement also needs permission to read students. Ask an administrator to grant it."
+      },
+      "kinds": {
+        "collection": "Collection",
+        "outstanding-aging": "Outstanding and aging",
+        "student-ledger": "Student statement",
+        "grant-register": "Grants and waivers",
+        "income-vs-expense": "Income vs expense",
+        "budget-variance": "Budget variance",
+        "expense-register": "Expense register",
+        "trial-balance": "Trial balance"
+      },
+      "grouping": {
+        "day": "Day",
+        "method": "Payment method",
+        "cashier": "Cashier"
+      },
+      "entryType": {
+        "invoice": "Invoice",
+        "payment": "Payment",
+        "refund": "Refund"
+      },
+      "grantType": {
+        "discount": "Discount",
+        "scholarship": "Scholarship",
+        "fine_waiver": "Fine waiver"
+      },
+      "pickStudent": {
+        "title": "Choose a student",
+        "description": "A statement is for one student. Pick one above."
+      },
+      "invalid": {
+        "title": "These dates can't run",
+        "description": "The end date comes before the start date."
+      },
+      "tooLarge": {
+        "title": "Too large to show — export instead",
+        "description": "This report has more than {limit} rows, too many to show here. Export it as a file.",
+        "noExport": "This report has more than {limit} rows, too many to show here. Narrow the dates or filters, or ask for permission to export it."
+      },
+      "columns": {
+        "day": "Day",
+        "method": "Payment method",
+        "cashier": "Cashier",
+        "noCashier": "Online or system",
+        "total": "Total",
+        "payments": "Payments",
+        "student": "Student",
+        "totalOutstanding": "Outstanding",
+        "invoices": "Invoices",
+        "notYetDue": "Not yet due",
+        "bucket0to30": "0-30 days",
+        "bucket31to60": "31-60 days",
+        "bucket61to90": "61-90 days",
+        "bucket90plus": "Over 90 days",
+        "date": "Date",
+        "type": "Type",
+        "reference": "Reference",
+        "description": "Description",
+        "debit": "Debit",
+        "credit": "Credit",
+        "balance": "Balance",
+        "grant": "Grant",
+        "name": "Name",
+        "admissionNumber": "Admission no.",
+        "value": "Value",
+        "status": "Status",
+        "approvedBy": "Approved by",
+        "grantedOn": "Granted on",
+        "code": "Code",
+        "accountType": "Account type",
+        "totalDebit": "Total debit",
+        "totalCredit": "Total credit",
+        "net": "Net",
+        "budget": "Budget",
+        "period": "Period",
+        "budgeted": "Budgeted",
+        "actual": "Actual",
+        "variance": "Variance",
+        "utilisation": "Used",
+        "expenseNo": "Expense no.",
+        "category": "Category",
+        "vendor": "Vendor",
+        "campus": "Campus",
+        "amount": "Amount",
+        "tax": "Tax"
       }
     }
   },
