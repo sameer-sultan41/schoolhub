@@ -869,7 +869,7 @@ class ExpenseCategorySerializer(serializers.ModelSerializer):
 
 
 class ExpenseSerializer(serializers.ModelSerializer):
-    gross_amount = serializers.SerializerMethodField()
+    gross_amount = serializers.DecimalField(max_digits=13, decimal_places=2, read_only=True)
     category_name = serializers.CharField(source="expense_category.name", read_only=True)
 
     class Meta:
@@ -890,27 +890,26 @@ class ExpenseSerializer(serializers.ModelSerializer):
             "status",
             "approved_by",
             "created_by",
+            "submitted_by",
             "receipt_file",
             "created_at",
             "updated_at",
         ]
         # `status` and `approved_by` move through the colon-actions, which run
         # the segregation-of-duties check and the ledger posting a PATCH would
-        # bypass. `expense_no` is allocated at creation. `created_by` is shown so
-        # a client can hide Approve from the submitter; the service still enforces it.
+        # bypass. `expense_no` is allocated at creation. `created_by` and `submitted_by` are shown
+        # so a client can hide Approve from both; the service still enforces it.
         read_only_fields = [
             "id",
             "expense_no",
             "status",
             "approved_by",
             "created_by",
+            "submitted_by",
             "gross_amount",
             "created_at",
             "updated_at",
         ]
-
-    def get_gross_amount(self, obj: Expense) -> Decimal:
-        return obj.gross_amount
 
     def validate_amount(self, value: Decimal) -> Decimal:
         if value <= 0:

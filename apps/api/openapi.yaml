@@ -17325,8 +17325,9 @@ components:
           format: decimal
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
         gross_amount:
-          type: number
-          format: double
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,11}(?:\.\d{0,2})?$
           readOnly: true
         expense_date:
           type: string
@@ -17349,6 +17350,13 @@ components:
           format: uuid
           readOnly: true
           nullable: true
+        submitted_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: Who moved the draft into the approval queue; may differ from
+            created_by.
         receipt_file:
           type: string
           format: uuid
@@ -17374,6 +17382,7 @@ components:
       - gross_amount
       - id
       - status
+      - submitted_by
       - updated_at
     ExpenseCategory:
       type: object
@@ -22183,8 +22192,9 @@ components:
           format: decimal
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
         gross_amount:
-          type: number
-          format: double
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,11}(?:\.\d{0,2})?$
           readOnly: true
         expense_date:
           type: string
@@ -22207,6 +22217,13 @@ components:
           format: uuid
           readOnly: true
           nullable: true
+        submitted_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: Who moved the draft into the approval queue; may differ from
+            created_by.
         receipt_file:
           type: string
           format: uuid

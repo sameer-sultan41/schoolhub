@@ -1619,8 +1619,9 @@ def submit_expense(*, expense: Expense, actor_id: uuid.UUID) -> Expense:
             {"status": f"This expense is already {locked.get_status_display().lower()}."}
         )
     locked.status = ExpenseStatus.SUBMITTED
+    locked.submitted_by = actor_id
     locked.updated_by = actor_id
-    locked.save(update_fields=["status", "updated_by", "updated_at"])
+    locked.save(update_fields=["status", "submitted_by", "updated_by", "updated_at"])
     return locked
 
 
@@ -1628,7 +1629,7 @@ def submit_expense(*, expense: Expense, actor_id: uuid.UUID) -> Expense:
 def decide_expense(*, expense: Expense, approve: bool, actor_id: uuid.UUID) -> Expense:
     """Approve or reject a submitted expense, posting the ledger on approval.
 
-    **The submitter may not approve their own expense.** §15 says so, and the
+    **Neither the creator nor the submitter may decide the expense.** §15 says so, and the
     check is here rather than in the viewset for the reason refunds' is: the
     rule is the module's and has to hold through any door. The CHECK constraint
     carries the half a constraint can.
@@ -1647,11 +1648,11 @@ def decide_expense(*, expense: Expense, approve: bool, actor_id: uuid.UUID) -> E
         raise DomainRuleViolation(
             {"status": "Only a submitted expense can be approved or rejected."}
         )
-    if locked.created_by == actor_id:
+    if actor_id in (locked.created_by, locked.submitted_by):
         raise DomainRuleViolation(
             {
                 "approved_by": (
-                    "The person who submitted an expense cannot approve it "
+                    "The person who created or submitted an expense cannot approve it "
                     "(§15, and auth-and-rbac §2.4)."
                 )
             }

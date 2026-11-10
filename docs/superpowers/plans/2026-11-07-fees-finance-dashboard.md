@@ -149,7 +149,7 @@ PR B also ships one backend change: scholarship status transitions enforced on t
 | Report filters | E1 adds §13's campus, session and class filters, since E1 already touches the endpoint, wherever the kind has a student or invoice dimension (collection, outstanding-aging, grant-register, student-ledger). The ledger-only kinds (trial balance, income vs expense, budget variance, expense register; campus on expenses where the model has it) are left as the model allows | Filtering on the client: wrong over a capped or paged result. Leaving it out: §13 says every report filters this way |
 | Scholarship lifecycle | PR B adds a server-side transition table (applied → approved → active → ended or revoked; terminal states final), with tests. `notes` is required for ended and revoked, as today | Gating only in the UI: a PATCH from `revoked` to `active` succeeds today, and hiding a control is not enforcement (Invariant 3) |
 | Report and statement responses | E1 adds one row serializer per kind, a `PolymorphicProxySerializer` (ADR-0022, the attendance precedent), `kind` as a `ChoiceField`, and a statement response serializer, with the contract regenerated | Hand-typing rows in the dashboard: violates ADR-0005/0017 |
-| Hiding self-approval | D1 exposes `created_by` read-only on expenses so Approve is hidden for the submitter; the server's 422 stays the enforcement | Showing the button and relying on the 422 alone: a button that always fails for the person most likely to see it |
+| Hiding self-approval | D1 exposes `created_by` read-only on expenses, and the review round adds `submitted_by` (stamped by `:submit`), so Approve is hidden for the creator and the submitter; the server's 422 stays the enforcement | Showing the button and relying on the 422 alone: a button that always fails for the person most likely to see it |
 | Refund cap | The request dialog says the cap after the server's 422 (`meta.refundable_remainder`), shown on `amount` | A new read-only field: one more contract change for a value the 422 already gives |
 | Ad-hoc invoice | Deferred (amended during B1): `POST /fee-invoices` takes only the header and lines are read-only, so a Create dialog could only make an empty draft | A dialog that creates a zero-total invoice nobody can price |
 | Expense attachment (`receipt_file`, §8) | Deferred: fees has no upload purpose, so the field has no upload or download route (L29) | Shipping the field without them: L29 |
@@ -307,7 +307,7 @@ PR B also ships one backend change: scholarship status transitions enforced on t
   - `budgets` (list, create, update, `approve`).
 - **Expenses sub-tab:**
   - an "Awaiting approval" filter (`awaiting_approval=true`) as the approver's queue;
-  - actions by status and key: Approve and Reject are hidden for the submitter; Reverse (reason) only on an approved or paid expense.
+  - actions by status and key: Approve and Reject are hidden for the creator and the submitter; Reverse (reason) only on an approved or paid expense.
 - **Categories:** the expense-account picker is filtered to `account_type=expense`.
 - **Budgets:** Approve only for `fees.budget.approve` and only on a draft budget.
 
@@ -370,7 +370,7 @@ PR B also ships one backend change: scholarship status transitions enforced on t
   1. **Report and statement schemas:** E1's backend commit adds per-kind row serializers, a `PolymorphicProxySerializer`, a `kind` `ChoiceField` and a statement serializer, with the contract regenerated.
   2. **Scholarship transitions:** enforced server-side in B2 (Invariant 3), with tests. Ending or revoking asks for the required `notes`.
   3. **Live seed:** Task A0 adds finance users, a second approver and fee data, extended in B, C and D. Mocked users hold exactly the seeded keys (L55).
-  4. **Expense submitter:** D1 exposes `created_by` read-only. C1 does the same for the refund requester if it's missing.
+  4. **Expense submitter:** D1 exposes `created_by` read-only (and `submitted_by`, added in the review round). C1 does the same for the refund requester if it's missing.
   5. **Refund cap:** taken from the server's 422 `meta.refundable_remainder` and shown on `amount`.
   6. **Counter receipt:** C1 adds a `receipt` id to the payment response.
   7. **Idempotency:** one key per dialog for payments, refund request, refund process, post journal, generate and the settlement import. Added to Review Focus 1 and the tests.
