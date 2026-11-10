@@ -66,7 +66,9 @@ describe("vouchers-service", () => {
 
     expect(mockGet).toHaveBeenCalledWith(
       "/vouchers",
-      expect.objectContaining({ query: { provider: "easypaisa", ordering: "-due_date" } }),
+      expect.objectContaining({
+        query: { provider: "easypaisa", ordering: "-due_date", page_size: 25 },
+      }),
     );
   });
 

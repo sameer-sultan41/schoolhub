@@ -9,7 +9,6 @@ import {
   Button,
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -105,11 +104,13 @@ export function RequestRefundDialog({ open, onOpenChange, payment }: RequestRefu
                           <Input type="text" inputMode="decimal" autoComplete="off" {...field} />
                         </FormControl>
                         {request.remainder !== null && (
-                          <FormDescription>
+                          // Not a FormDescription: that hides itself while the field has an error,
+                          // which is exactly when this hint (set by the refusal) is shown.
+                          <p className="-mt-0.5 text-xs text-muted-foreground">
                             {t("invoices.refundDialog.remainder", {
                               amount: formatMoney(locale, request.remainder),
                             })}
-                          </FormDescription>
+                          </p>
                         )}
                         <FormMessage />
                       </FormItem>

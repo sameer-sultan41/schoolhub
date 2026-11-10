@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 
 import { saveBlob } from "@/lib/helpers";
 import { USER_LOADED, UserLoaded } from "@/test-fixtures/user-loaded";
-import { renderWithProviders } from "@/test-utils";
+import { renderWithProviders, setUrl } from "@/test-utils";
 import type { PermissionKey } from "@schoolhub/types";
 
 import { PaymentsHome } from "@/features/fees/payments/payments-home";
@@ -45,7 +45,7 @@ jest.mock("@/services", () =>
 const COLLECTOR: PermissionKey[] = [...PAYMENTS_VIEW_PERMISSIONS, "fees.payment.collect"];
 
 async function renderTab(tab: "receipts" | "vouchers", keys: PermissionKey[], rowText: string) {
-  stubFeesServices(`/fees/payments?tab=${tab}`);
+  setUrl(`/fees/payments?tab=${tab}`);
   jest.mocked(saveBlob).mockReset();
   asUser(...keys);
   renderWithProviders(
@@ -58,6 +58,11 @@ async function renderTab(tab: "receipts" | "vouchers", keys: PermissionKey[], ro
   await screen.findByText(rowText);
   return userEvent.setup();
 }
+
+// Runs before every test's own list stub: one run by the render helper would overwrite it.
+beforeEach(() => {
+  stubFeesServices();
+});
 
 const VOID_ROW = { name: "Void voucher 1234567890" } as const;
 

@@ -38,7 +38,7 @@ describe("settlement-imports-service", () => {
 
     expect(mockGet).toHaveBeenCalledWith(
       "/voucher-collection-imports",
-      expect.objectContaining({ query: { status: "completed" } }),
+      expect.objectContaining({ query: { status: "completed", page_size: 25 } }),
     );
   });
 

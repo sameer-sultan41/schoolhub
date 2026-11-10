@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { USER_LOADED, UserLoaded } from "@/test-fixtures/user-loaded";
-import { renderWithProviders } from "@/test-utils";
+import { renderWithProviders, setUrl } from "@/test-utils";
 
 import { PaymentsHome } from "@/features/fees/payments/payments-home";
 import {
@@ -34,7 +34,7 @@ jest.mock("@/services", () =>
 );
 
 async function renderPayments(url = "/fees/payments", keys = PAYMENTS_VIEW_PERMISSIONS) {
-  stubFeesServices(url);
+  setUrl(url);
   asUser(...keys);
   renderWithProviders(
     <>
@@ -47,6 +47,11 @@ async function renderPayments(url = "/fees/payments", keys = PAYMENTS_VIEW_PERMI
 }
 
 describe("payments page", () => {
+  // Before the test body sets its own list: a stub run by the render helper would overwrite it.
+  beforeEach(() => {
+    stubFeesServices();
+  });
+
   it("lists payments with the server's amounts, method, status and receipt number", async () => {
     listPayments.mockResolvedValue(
       cursorPage([

@@ -56,7 +56,9 @@ describe("receipts-service", () => {
 
     expect(mockGet).toHaveBeenCalledWith(
       "/receipts",
-      expect.objectContaining({ query: { search: "RCT-9", ordering: "-issued_at" } }),
+      expect.objectContaining({
+        query: { search: "RCT-9", ordering: "-issued_at", page_size: 25 },
+      }),
     );
   });
 
@@ -68,7 +70,7 @@ describe("receipts-service", () => {
 
     expect(mockGet).toHaveBeenCalledWith(
       "/receipts",
-      expect.objectContaining({ query: { student: "s1" } }),
+      expect.objectContaining({ query: { student: "s1", page_size: 25 } }),
     );
   });
 
