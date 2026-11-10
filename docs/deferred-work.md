@@ -491,6 +491,27 @@ either this file or `project-status.md`.
   transaction, unlike `TenantMiddleware` — resolved it.
   `e2e/tests/live/api/school-settings.spec.ts` now asserts the working
   patch→read journey rather than pinning the bug.
+- **A suspended or deleted school is refused under a bearer token, at sign-in and at
+  refresh.** `TenantMiddleware` refused such a tenant only when it could see the user, which
+  under JWT alone it never can, so a suspended school's staff could sign in, refresh for the
+  refresh token's 30 days and be served by every `TenantScopedViewSetMixin` view. One rule,
+  `core.tenancy.access.operational_tenant`, now decides it everywhere:
+  - `TenantScopedViewSetMixin._resolve_tenant` raises `tenant_not_found` (404) and
+    `tenant_suspended` (403), the codes the middleware sends, and logs the refusal as it does
+    (`tests/test_tenant_binding.py`, token only);
+  - `LoginSerializer` refuses sign-in, and simplejwt's `USER_AUTHENTICATION_RULE`
+    (`user_may_authenticate`) refuses refresh, which now also clears the refresh cookie
+    (`core/rbac/tests/test_auth_tenant_status.py`).
+
+  Both codes are now in `packages/types/src/api.ts` and the dashboard's `errors` messages;
+  they were emitted before but never listed. Still open:
+  - `/auth/me` and `/auth/change-password` still answer an access token minted before the
+    suspension, for at most its 15-minute lifetime; neither exposes tenant data.
+  - The dashboard shows the new message only where a screen calls `resolveErrorMessage`
+    directly; screens that branch on `isPermissionDenied` / `isNotFound` first (the student
+    and staff directories, the exam and question-bank pages) show their generic text. Handle
+    both codes once at app level (the query client's `onError` or the shell): a blocking
+    screen with Sign out.
 - **Live E2E specs that failed on CI.** The lane now brings the
   stack up and runs (ADR-0025, ADR-0026), and the timetable journeys pass. The first full runs
   also showed the rest of the lane had drifted while it could not run:

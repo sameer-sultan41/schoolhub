@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-import logging
-
 from django.http import JsonResponse
 
+from core.tenancy.access import TenantRefusal, log_refusal, operational_tenant
 from core.tenancy.context import tenant_context
-from core.tenancy.models import Tenant
-
-logger = logging.getLogger(__name__)
 
 
 class TenantMiddleware:
@@ -33,15 +29,11 @@ class TenantMiddleware:
         user = getattr(request, "user", None)
 
         if user is not None and user.is_authenticated and getattr(user, "tenant_id", None):
-            tenant = (
-                Tenant.objects.filter(pk=user.tenant_id, deleted_at__isnull=True)
-                .only("id", "name", "slug", "status", "timezone", "locale", "currency")
-                .first()
-            )
-            if tenant is None:
+            tenant, refusal = operational_tenant(user.tenant_id)
+            if refusal == "tenant_suspended":
+                return self._deny(request, refusal, status=403)
+            if refusal is not None or tenant is None:
                 return self._deny(request, "tenant_not_found")
-            if not tenant.is_operational:
-                return self._deny(request, "tenant_suspended", status=403)
 
             request.tenant = tenant
             # ATOMIC_REQUESTS wraps the view in a transaction, so the SET LOCAL this
@@ -51,8 +43,8 @@ class TenantMiddleware:
 
         return self.get_response(request)
 
-    def _deny(self, request, code: str, status: int = 404) -> JsonResponse:
-        logger.warning("tenant resolution denied: %s", code, extra={"path": request.path})
+    def _deny(self, request, code: TenantRefusal, status: int = 404) -> JsonResponse:
+        log_refusal(code, path=request.path)
         return JsonResponse(
             {
                 "error": {

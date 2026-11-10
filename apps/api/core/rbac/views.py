@@ -37,6 +37,7 @@ from django.conf import settings
 from django.http import HttpResponse
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -143,7 +144,9 @@ class RefreshView(APIView):
         serializer = TokenRefreshSerializer(data={"refresh": raw_token})
         try:
             serializer.is_valid(raise_exception=True)
-        except InvalidToken, TokenError:
+        # AuthenticationFailed: the token is valid but `USER_AUTHENTICATION_RULE` refuses
+        # the user (inactive, or a suspended school); clear the cookie so the client stops.
+        except InvalidToken, TokenError, AuthenticationFailed:
             response = Response(status=status.HTTP_401_UNAUTHORIZED)
             _clear_auth_cookies(response)
             return response
