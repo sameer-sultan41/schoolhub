@@ -45,6 +45,10 @@ export class FeeExpensesPage extends BasePage {
     return this.page.getByRole("dialog", { name: title, exact: true });
   }
 
+  option(name: string): Locator {
+    return this.page.getByRole("option", { name, exact: true });
+  }
+
   /** A confirm dialog (Submit, Approve, Reject, Mark paid, Delete). */
   get confirmDialog(): Locator {
     return this.page.getByRole("alertdialog");

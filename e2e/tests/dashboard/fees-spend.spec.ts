@@ -182,7 +182,7 @@ test.describe("an accountant working the expense queue", () => {
     await feeExpensesPage.button("New expense").click();
     const dialog = feeExpensesPage.dialog("New expense");
     await dialog.getByRole("combobox", { name: "Category" }).click();
-    await feeExpensesPage.page.getByRole("option", { name: "STA Stationery" }).click();
+    await feeExpensesPage.option("STA Stationery").click();
     await dialog.getByLabel("Description").fill("Markers");
     await dialog.getByLabel("Amount (before tax)").fill("250.00");
     await dialog.getByLabel("Expense date").fill("2026-10-07");

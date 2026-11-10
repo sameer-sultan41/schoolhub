@@ -89,6 +89,7 @@ export function ExpensesTab() {
     if (!open) setTarget(null);
   };
   const expense = target?.expense;
+  const action = target?.action;
 
   return (
     <>
@@ -137,17 +138,17 @@ export function ExpensesTab() {
           />
         }
       />
-      {(target?.action === "create" || (target?.action === "edit" && expense)) && (
+      {(action === "create" || (action === "edit" && expense)) && (
         <ExpenseFormDialog open onOpenChange={close} record={expense} />
       )}
       {expense &&
-        (target.action === "submit" ||
-          target.action === "approve" ||
-          target.action === "reject" ||
-          target.action === "markPaid") && (
-          <ExpenseActionDialog open onOpenChange={close} expense={expense} action={target.action} />
+        (action === "submit" ||
+          action === "approve" ||
+          action === "reject" ||
+          action === "markPaid") && (
+          <ExpenseActionDialog open onOpenChange={close} expense={expense} action={action} />
         )}
-      {expense && target.action === "reverse" && (
+      {expense && action === "reverse" && (
         <ReverseExpenseDialog open onOpenChange={close} expense={expense} />
       )}
     </>
