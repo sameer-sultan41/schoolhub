@@ -132,16 +132,20 @@ def _enrolled(
     session_id: uuid.UUID | None = None,
     class_id: uuid.UUID | None = None,
     session_ref: str | None = None,
+    current_session: bool = False,
 ) -> QuerySet:
     """Keep rows whose student has an enrollment in the given session and class.
 
     For tables with no invoice to read the class from (discounts, scholarships,
     fines). An `Exists` rather than a join: a student can hold enrollments in
     several sessions, and a join would repeat the row once per match.
-    `session_ref` pins the enrollment to the row's own session column.
+    `session_ref` pins the enrollment to the row's own session column;
+    `current_session` pins it to the tenant's current session.
     Soft-deleted enrollments never match (L50).
     """
     enrollments = StudentEnrollment.objects.alive().filter(student_id=OuterRef("student_id"))
+    if current_session:
+        enrollments = enrollments.filter(academic_session__is_current=True)
     if session_id is not None:
         enrollments = enrollments.filter(academic_session_id=session_id)
     if session_ref is not None:
@@ -207,7 +211,13 @@ def filter_scholarships(queryset: QuerySet[Scholarship], filters: ReportFilters 
 
 
 def filter_fines(queryset: QuerySet[Fine], filters: ReportFilters | None):
-    """A fine has no session of its own: it is in a session or class if its student is."""
+    """A fine has no session of its own: it is where its student's enrollment is.
+
+    The rule is exclusive, so one fine counts under one class: with a session, the
+    student's enrollment in that session (and class, if given); with a class alone,
+    the enrollment in the current session. A student's older enrollments never
+    place a fine in a class.
+    """
     if filters is None:
         return queryset
     if filters.campus_id is not None:
@@ -217,6 +227,7 @@ def filter_fines(queryset: QuerySet[Fine], filters: ReportFilters | None):
             queryset,
             session_id=filters.academic_session_id,
             class_id=filters.class_id,
+            current_session=filters.academic_session_id is None,
         )
     return queryset
 

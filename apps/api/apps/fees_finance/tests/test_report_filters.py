@@ -278,7 +278,7 @@ class GrantRegisterFilterTests(FilterMatrixMixin, ReportFilterTestCase):
             dec("11", "12", "13", "21", "22", "31", "32"),
         )
         # Discounts and scholarships by their own session; a fine has none, so it is
-        # in a session or class when its student is enrolled there.
+        # in a session or class where its student is enrolled (a class alone: this session).
         self.assert_filters(
             "grant-register",
             {
@@ -287,7 +287,10 @@ class GrantRegisterFilterTests(FilterMatrixMixin, ReportFilterTestCase):
                 "session_a": dec("11", "13", "21", "22", "31", "32"),
                 "session_b": dec("12", "31"),
                 "class_a": dec("11", "21", "31"),
-                "class_b": dec("12", "13", "22", "31", "32"),
+                # Fine 31 is student A's, who was in class B only in the older session: with a
+                # class alone a fine is placed by the current session's enrollment, so it is
+                # under class A and not also under class B.
+                "class_b": dec("12", "13", "22", "32"),
             },
             values,
         )
