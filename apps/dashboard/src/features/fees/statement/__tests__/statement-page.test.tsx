@@ -65,11 +65,13 @@ describe("student statement page", () => {
     const rows = within(table).getAllByRole("row");
     // Header + the two lines, in the server's order.
     expect(rows).toHaveLength(3);
-    const invoice = within(rows[1]);
+    const [, invoiceRow, paymentRow] = rows;
+    if (!invoiceRow || !paymentRow) throw new Error("expected two statement lines");
+    const invoice = within(invoiceRow);
     for (const text of ["Invoice", "INV-0001", "2026-09", "1,000.00"]) {
       expect(invoice.getAllByText(text).length).toBeGreaterThan(0);
     }
-    const payment = within(rows[2]);
+    const payment = within(paymentRow);
     for (const text of ["Payment", "RCP-0007", "400.00", "600.00"]) {
       expect(payment.getAllByText(text).length).toBeGreaterThan(0);
     }
