@@ -160,6 +160,11 @@ test.describe("finance reports (live API)", () => {
       invoice_count: 1,
     });
 
+    // The ledger reports carry the account's type (the server reads it off the join).
+    const income = await run<Record<string, unknown>>(accountant, { kind: "income-vs-expense" });
+    expect(income.length).toBeGreaterThan(0);
+    for (const row of income) expect(["income", "expense"]).toContain(row["account_type"]);
+
     const statement = await run<Record<string, unknown>>(accountant, {
       kind: "student-ledger",
       student: scope.studentId,

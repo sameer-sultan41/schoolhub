@@ -72,7 +72,8 @@ const STUDENT_FILTERS: readonly Filter[] = FILTERS;
 const FILTERS_BY_KIND: Record<FinanceReportKind, readonly Filter[]> = {
   collection: STUDENT_FILTERS,
   "outstanding-aging": STUDENT_FILTERS,
-  "student-ledger": STUDENT_FILTERS,
+  // A statement is one student's: their campus is not one of its dimensions.
+  "student-ledger": ["academic_session_id", "class_id"],
   "grant-register": STUDENT_FILTERS,
   "income-vs-expense": [],
   "budget-variance": [],
