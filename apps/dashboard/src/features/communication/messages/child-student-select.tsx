@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from "@schoolhub/ui";
 
-import type { PickedStudent } from "./student-picker";
+import type { PickedStudent } from "@/components/student-picker";
 
 export interface ChildStudentSelectProps {
   /** The only students that can be picked (the guardian's own children). */

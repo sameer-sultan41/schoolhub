@@ -297,6 +297,141 @@ export const GUARDIAN_PERMISSIONS: PermissionKey[] = [
   "students.student.view",
 ];
 
+/**
+ * The setup keys the seeded `accountant` holds (`apps/api/apps/fees_finance/permissions.py`:
+ * `STRUCTURE_AUTHORS` and `LEDGER_VIEWERS` plus the ledger write), and the three `ALL_STAFF`
+ * school reads their session, class and campus pickers make. Not the role's whole key set: only
+ * what the fees setup screens read. A role with a wider set would hide a control that leaks to
+ * a narrower one (L55).
+ */
+export const FEES_SETUP_AUTHOR_PERMISSIONS: PermissionKey[] = [
+  "fees.fee-structure.view",
+  "fees.fee-structure.create",
+  "fees.fee-structure.update",
+  "fees.fee-structure.delete",
+  "fees.ledger.view",
+  "fees.ledger.create",
+  "school.academic-session.view",
+  "school.class.view",
+  "school.campus.view",
+];
+
+/**
+ * The invoicing keys the seeded `accountant` holds (`permissions.py`: `fees.invoice.view|create|update`
+ * and `fees.payment.view`), plus the structure view and session read the pickers make. A role with
+ * a wider set would hide a control that leaks to a narrower one (L55).
+ */
+export const FEES_INVOICING_PERMISSIONS: PermissionKey[] = [
+  "fees.invoice.view",
+  "fees.invoice.create",
+  "fees.invoice.update",
+  "fees.payment.view",
+  "fees.fee-structure.view",
+  "school.academic-session.view",
+  "students.student.view",
+];
+
+/**
+ * The counter's keys the seeded `finance_staff` holds (`permissions.py`: `FINANCE_STAFF` for
+ * `fees.payment.collect`, `INVOICE_VIEWERS` for `fees.invoice.view` and `fees.payment.view`, the
+ * key the receipt streams behind), plus the student read its picker makes (L55, L59).
+ */
+export const FEES_COUNTER_PERMISSIONS: PermissionKey[] = [
+  "fees.payment.collect",
+  "fees.payment.view",
+  "fees.invoice.view",
+  "students.student.view",
+];
+
+/**
+ * The Payments page's keys the seeded `accountant` holds (`permissions.py`: `FINANCE_STAFF` for
+ * `fees.payment.collect|refund`, `REFUND_APPROVERS` for `fees.refund.approve`, `INVOICE_VIEWERS`
+ * for the two reads). No `students.student.view`: the Payments page reads no student list.
+ */
+export const FEES_PAYMENTS_ACCOUNTANT_PERMISSIONS: PermissionKey[] = [
+  "fees.invoice.view",
+  "fees.payment.view",
+  "fees.payment.collect",
+  "fees.payment.refund",
+  "fees.refund.approve",
+];
+
+/**
+ * The Payments page's keys the seeded `finance_staff` holds: the same, without
+ * `fees.refund.approve` (§3: finance staff cannot approve refunds) (L55).
+ */
+export const FEES_PAYMENTS_STAFF_PERMISSIONS: PermissionKey[] = [
+  "fees.invoice.view",
+  "fees.payment.view",
+  "fees.payment.collect",
+  "fees.payment.refund",
+];
+
+/**
+ * The Expenses page's keys the seeded `accountant` holds (`permissions.py`: `STRUCTURE_VIEWERS` for
+ * the read, `FINANCE_STAFF` for create and update, `REFUND_APPROVERS` for approve, `ACCOUNTANTS`
+ * for a budget) plus the ledger read behind its account picker (L59) and the campus read. Not
+ * `fees.budget.approve`, which is the owner's alone (L55).
+ */
+export const FEES_SPEND_ACCOUNTANT_PERMISSIONS: PermissionKey[] = [
+  "fees.expense.view",
+  "fees.expense.create",
+  "fees.expense.update",
+  "fees.expense.approve",
+  "fees.budget.create",
+  "fees.ledger.view",
+  "school.campus.view",
+];
+
+/** The ledger keys the seeded `accountant` holds for the journal (`permissions.py`): the read and the posting. */
+export const FEES_LEDGER_JOURNAL_PERMISSIONS: PermissionKey[] = [
+  "fees.ledger.view",
+  "fees.ledger.create",
+];
+
+/**
+ * The Reports page's keys the seeded `accountant` holds (`permissions.py`: `REPORT_VIEWERS` for
+ * `fees.report.view` and `.export`), plus the four reads its filters make: campuses, sessions and
+ * classes (`ALL_STAFF`) and the student a statement is for (L55, L59).
+ */
+export const FEES_REPORTS_ACCOUNTANT_PERMISSIONS: PermissionKey[] = [
+  "fees.report.view",
+  "fees.report.export",
+  "school.campus.view",
+  "school.academic-session.view",
+  "school.class.view",
+  "students.student.view",
+];
+
+/** The seeded `principal` reads the reports (`REPORT_VIEWERS`) and cannot export them. */
+export const FEES_REPORTS_PRINCIPAL_PERMISSIONS: PermissionKey[] = [
+  "fees.report.view",
+  "school.campus.view",
+  "school.academic-session.view",
+  "school.class.view",
+];
+
+/** The read-only view of spend: the expense view key and nothing to write with. */
+export const FEES_SPEND_VIEWER_PERMISSIONS: PermissionKey[] = ["fees.expense.view"];
+
+/**
+ * The grants keys the seeded `accountant` holds (`permissions.py`: the discount, scholarship and
+ * fine keys, view, create and waive), plus the reads the create forms' pickers make: students,
+ * sessions and fee heads (L55, L59).
+ */
+export const FEES_GRANTS_PERMISSIONS: PermissionKey[] = [
+  "fees.discount.view",
+  "fees.discount.create",
+  "fees.discount.waive",
+  "fees.scholarship.create",
+  "fees.fine.view",
+  "fees.fine.create",
+  "fees.fine.waive",
+  "fees.fee-structure.view",
+  "school.academic-session.view",
+  "students.student.view",
+];
+
 /** A module this user must *not* see, for the negative half of a filtering assertion. */
 export const MODULE_WITHOUT_PERMISSION = "Fees & Finance";
 

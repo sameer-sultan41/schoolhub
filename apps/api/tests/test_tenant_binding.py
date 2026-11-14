@@ -8,6 +8,7 @@ resolves the tenant there sees no user and binds nothing. A test that logs in vi
 These tests deliberately authenticate with the token alone.
 """
 
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import AccessToken
@@ -22,6 +23,7 @@ from apps.school_organization.tests.factories import (
 )
 from core.jobs.models import BackgroundJob
 from core.tenancy.context import tenant_context
+from core.tenancy.models import Tenant, TenantStatus
 
 
 class JWTOnlyTenantBindingTests(APITestCase):
@@ -69,6 +71,36 @@ class JWTOnlyTenantBindingTests(APITestCase):
 
         # 404 rather than 403: a 403 would confirm the record exists.
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_a_suspended_schools_token_is_refused(self):
+        """`TenantMiddleware` refuses a suspended tenant only when it can see the user,
+        which under a bearer token it never can; the view must refuse it too."""
+        grant(self.user, "school.campus.view")
+        Tenant.objects.filter(pk=self.tenant.pk).update(status=TenantStatus.SUSPENDED)
+
+        response = self.client.get("/api/v1/campuses")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.json()["error"]["code"], "tenant_suspended")
+
+    def test_a_deleted_schools_token_is_refused(self):
+        grant(self.user, "school.campus.view")
+        Tenant.objects.filter(pk=self.tenant.pk).update(deleted_at=timezone.now())
+
+        response = self.client.get("/api/v1/campuses")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.json()["error"]["code"], "tenant_not_found")
+
+    def test_a_trial_or_past_due_school_is_still_served(self):
+        grant(self.user, "school.campus.view")
+        for operational in (TenantStatus.TRIAL, TenantStatus.PAST_DUE):
+            with self.subTest(operational):
+                Tenant.objects.filter(pk=self.tenant.pk).update(status=operational)
+
+                response = self.client.get("/api/v1/campuses")
+
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 
 class JWTOnlyFinanceReportTests(APITestCase):

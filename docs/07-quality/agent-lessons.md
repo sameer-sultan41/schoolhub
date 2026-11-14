@@ -380,10 +380,34 @@
 - **Mistake.** `send_results_back` moved every unpublished result of the exam to `processing`, but the next `processing.write` advanced only the rows it recomputed (the active roll) to `pending_approval`. A student withdrawn between the send-back and the re-process kept a `processing` row, and `approve_exam_results`, which approves only pending rows, moved the exam to `approved` around it: the row was never approved or published, silently (examinations PR #154). The run now moves every `processing` row of the exam to pending, and approval refuses while one is left.
 - **Check.** For every bulk status reset, name the step that re-advances those rows and confirm its filter covers the same row set, not a subset recomputed from today's data (an active roll, a current enrolment). Where it cannot, make the next gate refuse leftovers instead of acting on the rows it finds. Test it: reset, change the population, re-advance, then assert no row is left in the reset state.
 
-## 4. Adding a lesson
+### L59. A write whose required field is picked from a list the writer may not read
+
+- **Mistake.** `school_admin` holds `fees.fee-structure.create|update` but not `fees.ledger.view`, so it could open New fee head and never save it: the required income-account picker reads `GET /ledger-accounts`, which needs the ledger key, and the list came back a 403 (fees dashboard PR A review). The form was gated on the write key alone.
+- **Check.** For every required picker in a form, the form's gating key set includes the picker's read key, so the control is hidden (or the form not offered) for a role that holds the write key but not the read key. Add a Jest case for that role: it holds the write key and lacks the read key, and sees no New or Edit button. A picker that is optional may hide itself instead (L55).
+
+### L60. A date filter sent as a naive day is a UTC day on the server
+
+- **Mistake.** The Payments tab's paid-on range sent `2026-10-01T00:00:00` and `2026-10-31T23:59:59` to `paid_at__gte` and `__lte`. The server reads a naive date-time in UTC, so a school at UTC+5 lost its first five hours of 1 October to the previous day, and the inclusive upper bound dropped the last second. (`payments-helper.ts`, the fees dashboard PR C.)
+- **Check.** Every date-range filter on a datetime column sends offset-aware bounds (`new Date(y, m, d).toISOString()` or the tenant's zone) with an exclusive upper bound (the next day's start, `__lt`). Its helper test asserts the exact instants in the zone `jest.global-setup.ts` sets (America/New_York); assigning `process.env.TZ` inside a test does not move the zone.
+
+### L61. A test's own stub must not run after the helper that overwrites it
+
+- **Mistake.** Three things passed review and failed only in CI: the payments tests set `listPayments.mockResolvedValue(...)` and then called a render helper that ran `stubFeesServices()`, resetting the list to empty; the over-limit refund hint was a `FormDescription`, which hides itself while its field has an error (the only time the hint shows); and the live seed's session starts 30 days ago, so a monthly `due_day` of 10 gave an invoice a due date before its issue date on any day after the 10th. (PR C CI, `payments-list.test.tsx`, `request-refund-dialog.tsx`, `invoicing.build_draft`.)
+- **Check.** Reset shared mocks in `beforeEach`, never in a render helper a test calls after its own stubs. A message shown because a field failed is not a `FormDescription`. Run seeds and date maths against every day of the month, not today's date.
+
 
 1. Number it next (`L14`) and give it a short title that states the rule.
 2. Write **Mistake** (what happened, with the file, commit or PR) and **Check** (what to do, concrete enough to run). Two to four lines each.
 3. Add it to the §2 checklist if it applies to every hand-back.
 4. If it overlaps an existing lesson, extend that one instead.
 5. If a lint rule, CI job or test now catches it, delete the lesson and link the check from [`tooling.md`](tooling.md) instead.
+
+### L62. Segregation of duties checks the person who made the record ready, not only its creator
+
+- **Mistake.** The expense approval rule compared the approver only with `created_by`, and `submit_expense` recorded nobody. An accountant could edit a colleague's draft, submit it, and approve it, as the creator never touched it (fees dashboard PR D review; `services.decide_expense`).
+- **Check.** For every maker-checker rule, list each actor who changes the record on its way to the gate (create, edit, submit) and make sure each one is stored and barred from deciding it. Test it: one person edits and submits another's draft, that person's approval is a 422, and a third person's approval succeeds.
+
+### L63. A view tested only through force_login can hide a JWT-only failure
+
+- **Mistake.** `FinanceReportView` and `StudentLedgerView` were bare `APIView`s, so under a bearer token nothing bound `request.tenant` and the module gate refused every real client. Their Django tests passed because `authenticate()` also calls `force_login`, whose session lets `TenantMiddleware` bind the tenant first; only the live lane saw it (fees dashboard PR E, `9a4530c8`). Once the tenant bound, a foreign student's statement became an empty 200 instead of a 404.
+- **Check.** Every new `APIView` or `ViewSet` has at least one test that sends a bearer token and no session (`APIClient().credentials(HTTP_AUTHORIZATION=...)`, no `force_login`; see `fees_finance/tests/test_reports.py`'s `jwt_only_client`). A path id is resolved through the tenant- and record-scoped queryset before the view builds anything from it, and that test asserts a foreign id is a 404.

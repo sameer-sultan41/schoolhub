@@ -2965,6 +2965,1390 @@
       }
     }
   },
+  "fees": {
+    "nav": {
+      "label": "Fees & Finance sections",
+      "invoices": "Invoices",
+      "counter": "Counter",
+      "structures": "Structures",
+      "expenses": "Expenses",
+      "ledger": "Ledger",
+      "grants": "Grants",
+      "payments": "Payments",
+      "reports": "Reports"
+    },
+    "invoices": {
+      "title": "Invoices",
+      "summary": "Every fee invoice. Filter by status, session or structure, or switch on Defaulters to see who still owes.",
+      "adHoc": "Ad hoc",
+      "actions": {
+        "generate": "Generate invoices",
+        "cancel": "Cancel invoice",
+        "backToList": "Back to invoices",
+        "recordPayment": "Record payment",
+        "issueVoucher": "Issue voucher"
+      },
+      "filters": {
+        "search": "Search invoices",
+        "clearSearch": "Clear search",
+        "session": "Session",
+        "structure": "Structure",
+        "status": "Status",
+        "all": "All",
+        "defaulters": "Defaulters only",
+        "clearStudent": "Showing one student's invoices. Show all"
+      },
+      "list": {
+        "caption": "Fee invoices",
+        "pagination": "Fee invoices pages",
+        "loadError": "The invoices could not be loaded.",
+        "emptyTitle": "No invoices yet",
+        "emptyDescription": "Generate invoices from an active fee structure, or raise one for a single student.",
+        "noMatches": "No invoices match",
+        "noMatchesDescription": "Try a different search or filter.",
+        "searchPlaceholder": "Search by invoice number or student"
+      },
+      "columns": {
+        "number": "Invoice",
+        "student": "Student",
+        "structure": "Structure",
+        "period": "Period",
+        "issued": "Issued",
+        "due": "Due",
+        "balance": "Balance due",
+        "status": "Status"
+      },
+      "generate": {
+        "title": "Generate invoices",
+        "intro": "Bill every student an active fee structure covers, for one period. Students already billed for that period are skipped.",
+        "structure": "Fee structure",
+        "selectStructure": "Select an active structure",
+        "structureHint": "Only an active structure can bill.",
+        "by": "Bill by",
+        "by_month": "A month",
+        "by_term": "A term",
+        "month": "Month",
+        "term": "Term",
+        "selectTerm": "Select a term",
+        "termHint": "The terms of the structure's session.",
+        "submit": "Generate",
+        "starting": "Starting",
+        "running": "Generating invoices, {progress}% done",
+        "created": "{count, plural, one {# invoice created} other {# invoices created}}",
+        "skipped": "{count, plural, one {# student skipped (already billed for this period)} other {# students skipped (already billed for this period)}}",
+        "nothingNew": "Nothing new to bill: everyone was already billed for this period.",
+        "failed": "Invoice generation failed.",
+        "stalled": "This is taking longer than expected. The job may still be running on the server.",
+        "pollFailed": "We couldn't check the job's progress. Reload the invoices to see what was created.",
+        "resume": "Keep watching",
+        "another": "Generate another",
+        "done": "Done"
+      },
+      "detail": {
+        "title": "Invoice {number}",
+        "dates": "Issued {issued}, due {due}",
+        "canceledBecause": "Canceled: {reason}",
+        "loadError": "We couldn't load this invoice. Please try again.",
+        "notFoundTitle": "Invoice not found",
+        "notFoundDescription": "This invoice doesn't exist or isn't one you can open.",
+        "linesTitle": "Lines",
+        "linesCaption": "Invoice lines and totals",
+        "noLinesTitle": "No lines",
+        "noLinesDescription": "This invoice has no lines. An ad-hoc invoice starts empty.",
+        "description": "Description",
+        "amount": "Amount",
+        "discount": "Discount",
+        "net": "Net",
+        "subtotal": "Subtotal",
+        "discounts": "Discounts",
+        "fines": "Fines",
+        "paid": "Paid",
+        "balance": "Balance due",
+        "source": {
+          "label": "Source",
+          "schedule": "Fee schedule",
+          "fine": "Fine",
+          "adjustment": "Adjustment"
+        }
+      },
+      "cancel": {
+        "title": "Cancel invoice {number}",
+        "intro": "Cancelling voids the invoice and frees its period so it can be issued again. It isn't possible once any money has been paid against it.",
+        "reason": "Reason",
+        "submit": "Cancel invoice",
+        "done": "Invoice {number} canceled"
+      },
+      "payments": {
+        "title": "Payments",
+        "caption": "Payments against this invoice",
+        "loadError": "The payments could not be loaded.",
+        "emptyTitle": "No payments yet",
+        "emptyDescription": "Payments recorded against this invoice appear here with their receipt numbers.",
+        "columns": {
+          "receipt": "Receipt",
+          "paidAt": "Paid",
+          "method": "Method",
+          "status": "Status",
+          "amount": "Amount",
+          "actions": "Actions"
+        },
+        "method": {
+          "cash": "Cash",
+          "cheque": "Cheque",
+          "bank_transfer": "Bank transfer",
+          "card": "Card",
+          "online_gateway": "Online gateway"
+        },
+        "status": {
+          "pending": "Pending",
+          "confirmed": "Confirmed",
+          "failed": "Failed",
+          "reversed": "Reversed"
+        },
+        "requestRefund": "Request refund",
+        "requestRefundRow": "Request a refund for receipt {receipt}"
+      },
+      "vouchers": {
+        "title": "Vouchers",
+        "caption": "Vouchers issued for this invoice",
+        "loadError": "The vouchers could not be loaded.",
+        "emptyTitle": "No vouchers",
+        "emptyDescription": "Bank vouchers issued for this invoice appear here.",
+        "columns": {
+          "provider": "Provider",
+          "consumer": "Consumer number",
+          "due": "Due",
+          "status": "Status",
+          "amount": "Amount"
+        },
+        "status": {
+          "issued": "Issued",
+          "paid": "Paid",
+          "void": "Void",
+          "expired": "Expired"
+        }
+      },
+      "voucherDialog": {
+        "title": "Issue voucher: {number}",
+        "intro": "Print a bank slip for what this invoice still owes. The amount, consumer number and due date come from the invoice.",
+        "provider": "Provider",
+        "validity": "Valid for (days)",
+        "validityHint": "Leave blank to use the school's default.",
+        "validityInvalid": "Enter a whole number of days, from 1 to {max}.",
+        "submit": "Issue voucher",
+        "done": "Voucher {number} issued."
+      },
+      "refundDialog": {
+        "title": "Request refund: {receipt}",
+        "intro": "Ask for money back on this payment of {amount}. An approver other than you decides it.",
+        "amount": "Amount to refund",
+        "reason": "Reason",
+        "positive": "Enter a positive amount with at most two decimals.",
+        "remainder": "At most {amount} can still be refunded on this payment.",
+        "submit": "Request refund",
+        "requested": "Refund of {amount} requested. It now awaits an approver.",
+        "done": "Done"
+      }
+    },
+    "structures": {
+      "title": "Fee structures",
+      "summary": "What each class is charged, by session and campus.",
+      "tabs": {
+        "label": "Fee setup sections",
+        "structures": "Structures",
+        "heads": "Fee heads"
+      },
+      "list": {
+        "caption": "Fee structures",
+        "pagination": "Fee structures pages",
+        "loadError": "The fee structures could not be loaded.",
+        "emptyTitle": "No fee structures yet",
+        "emptyDescription": "Create a structure, add its fee schedules, then activate it.",
+        "noMatches": "No structures match",
+        "noMatchesDescription": "Try a different search or filter.",
+        "searchPlaceholder": "Search structures"
+      },
+      "columns": {
+        "name": "Name",
+        "session": "Session",
+        "class": "Class",
+        "campus": "Campus",
+        "status": "Status",
+        "schedules": "Schedules"
+      },
+      "filters": {
+        "search": "Search structures",
+        "clearSearch": "Clear search",
+        "all": "All",
+        "session": "Session",
+        "class": "Class",
+        "campus": "Campus",
+        "status": "Status"
+      },
+      "status": {
+        "draft": "Draft",
+        "active": "Active",
+        "archived": "Archived"
+      },
+      "everyClass": "Every class",
+      "everyCampus": "Every campus",
+      "actions": {
+        "create": "New fee structure",
+        "edit": "Edit",
+        "editRow": "Edit {name}",
+        "delete": "Delete",
+        "activate": "Activate",
+        "archive": "Archive",
+        "backToList": "Back to structures"
+      },
+      "form": {
+        "createTitle": "New fee structure",
+        "editTitle": "Edit fee structure",
+        "intro": "A structure is a named set of fees for one session, optionally for one class and one campus.",
+        "name": "Name",
+        "session": "Session",
+        "selectSession": "Select a session",
+        "class": "Class",
+        "campus": "Campus",
+        "scopeHint": "Leave class and campus on \"Every\" to cover the whole session."
+      },
+      "saved": "Fee structure saved.",
+      "removed": "Fee structure removed.",
+      "activated": "Fee structure activated.",
+      "archivedToast": "Fee structure archived.",
+      "delete": {
+        "titleNamed": "Delete {name}?",
+        "description": "The structure and its fee schedules are removed. This cannot be undone."
+      },
+      "lifecycle": {
+        "activateTitle": "Activate {name}?",
+        "activateDescription": "Invoices will be priced from this structure, and its schedules can no longer be changed.",
+        "archiveTitle": "Archive {name}?",
+        "archiveDescription": "It will no longer be used for new invoices. Invoices already issued are not changed."
+      },
+      "detail": {
+        "notFoundTitle": "Fee structure not found",
+        "notFoundDescription": "It may have been removed, or it belongs to another school.",
+        "loadError": "The fee structure could not be loaded.",
+        "fixed": "This structure is {status}, so its fees are fixed. Archive it and create a new one to change what is charged."
+      },
+      "schedules": {
+        "title": "Fee schedules",
+        "caption": "Fee schedules of this structure",
+        "emptyTitle": "No fee schedules yet",
+        "emptyDescription": "Add a fee head with its amount and due rule. A structure with no schedules cannot be activated.",
+        "loadHeadsError": "The fee heads could not be loaded.",
+        "columns": {
+          "head": "Fee head",
+          "amount": "Amount",
+          "frequency": "Frequency",
+          "dueRule": "Due"
+        },
+        "frequency": {
+          "one_time": "One time",
+          "monthly": "Monthly",
+          "per_term": "Per term",
+          "annual": "Annual"
+        },
+        "due": {
+          "day": "Day {day} of each month",
+          "term": "In {term}",
+          "date": "On {date}"
+        },
+        "actions": {
+          "create": "Add schedule",
+          "edit": "Edit",
+          "editRow": "Edit the schedule for {name}",
+          "deleteRow": "Remove the schedule for {name}"
+        },
+        "form": {
+          "createTitle": "Add a fee schedule",
+          "editTitle": "Edit fee schedule",
+          "intro": "One fee head's amount and when it falls due.",
+          "head": "Fee head",
+          "selectHead": "Select a fee head",
+          "amount": "Amount",
+          "frequency": "Frequency",
+          "term": "Term",
+          "selectTerm": "Select a term",
+          "dueDay": "Due day of the month",
+          "dueDate": "Due date",
+          "amountInvalid": "Enter an amount such as 1500 or 1500.50.",
+          "dueDayInvalid": "Enter a day from 1 to 31."
+        },
+        "saved": "Fee schedule saved.",
+        "removed": "Fee schedule removed.",
+        "delete": {
+          "titleNamed": "Remove the schedule for {name}?",
+          "description": "The fee head stays; only its line in this structure is removed.",
+          "confirm": "Remove"
+        }
+      }
+    },
+    "ledger": {
+      "title": "Ledger",
+      "summary": "The chart of accounts the school's money is booked to.",
+      "tabs": {
+        "label": "Ledger sections",
+        "accounts": "Accounts",
+        "journal": "Journal"
+      },
+      "accounts": {
+        "list": {
+          "caption": "Ledger accounts",
+          "pagination": "Ledger accounts pages",
+          "loadError": "The ledger accounts could not be loaded.",
+          "emptyTitle": "No ledger accounts yet",
+          "emptyDescription": "Add an account to the chart.",
+          "noMatches": "No accounts match",
+          "noMatchesDescription": "Try a different search or filter.",
+          "searchPlaceholder": "Search by code or name"
+        },
+        "columns": {
+          "code": "Code",
+          "name": "Name",
+          "type": "Type",
+          "parent": "Parent",
+          "status": "Status"
+        },
+        "filters": {
+          "search": "Search accounts",
+          "clearSearch": "Clear search",
+          "all": "All",
+          "type": "Type",
+          "active": "Status",
+          "system": "Kind"
+        },
+        "type": {
+          "asset": "Asset",
+          "liability": "Liability",
+          "equity": "Equity",
+          "income": "Income",
+          "expense": "Expense"
+        },
+        "status": {
+          "active": "Active",
+          "inactive": "Archived"
+        },
+        "kind": {
+          "system": "System",
+          "custom": "Custom"
+        },
+        "system": "System account",
+        "noParent": "None",
+        "actions": {
+          "create": "New account",
+          "editRow": "Edit {name}",
+          "deleteRow": "Delete {name}",
+          "delete": "Delete"
+        },
+        "form": {
+          "createTitle": "New ledger account",
+          "editTitle": "Edit ledger account",
+          "intro": "An account's code and type place it in the chart.",
+          "code": "Code",
+          "name": "Name",
+          "type": "Type",
+          "parent": "Parent account",
+          "noParent": "No parent (top level)",
+          "active": "Active",
+          "activeHint": "An archived account takes no new postings but keeps its history."
+        },
+        "saved": "Ledger account saved.",
+        "removed": "Ledger account removed.",
+        "delete": {
+          "titleNamed": "Delete {name}?",
+          "description": "An account with postings cannot be deleted; archive it instead."
+        }
+      },
+      "journal": {
+        "list": {
+          "caption": "Ledger journal",
+          "pagination": "Ledger journal pages",
+          "loadError": "The ledger journal could not be loaded.",
+          "emptyTitle": "No journal entries yet",
+          "emptyDescription": "Postings from payments, refunds and expenses appear here, and so do journal entries made by hand.",
+          "noMatches": "No entries match",
+          "noMatchesDescription": "Try a different search or filter.",
+          "searchPlaceholder": "Search by memo"
+        },
+        "columns": {
+          "date": "Date",
+          "account": "Account",
+          "memo": "Memo",
+          "debit": "Debit",
+          "credit": "Credit",
+          "reference": "Source",
+          "state": "Status"
+        },
+        "filters": {
+          "search": "Search the journal",
+          "clearSearch": "Clear search",
+          "all": "All",
+          "account": "Account",
+          "reference": "Source",
+          "from": "From date",
+          "to": "To date"
+        },
+        "reference": {
+          "payment": "Payment",
+          "refund": "Refund",
+          "expense": "Expense",
+          "payroll_run": "Payroll run",
+          "fine": "Fine",
+          "manual": "Manual journal",
+          "reversal": "Reversal"
+        },
+        "state": {
+          "posted": "Posted",
+          "reversed": "Reversed"
+        },
+        "actions": {
+          "post": "Post journal"
+        },
+        "form": {
+          "accountsError": "Accounts could not be loaded, so the lines cannot be filled in. Close this dialog and try again.",
+          "title": "Post journal entry",
+          "intro": "Enter the debit and credit lines of one entry. The ledger is never edited: a mistake is corrected by posting an offsetting entry.",
+          "date": "Entry date",
+          "memo": "Memo",
+          "line": "Line {number}",
+          "account": "Account",
+          "accountPlaceholder": "Choose an account",
+          "debit": "Debit",
+          "credit": "Credit",
+          "addLine": "Add line",
+          "removeLine": "Remove line {number}",
+          "totals": "Debits {debit}, credits {credit}, difference {difference}",
+          "totalsHint": "A guide only. The server checks that the entry balances when you post.",
+          "invalidAmount": "Write the amount like 1250.00.",
+          "submit": "Post entry",
+          "posting": "Posting"
+        },
+        "posted": "Journal entry posted."
+      }
+    },
+    "heads": {
+      "title": "Fee heads",
+      "list": {
+        "caption": "Fee heads",
+        "pagination": "Fee heads pages",
+        "loadError": "The fee heads could not be loaded.",
+        "emptyTitle": "No fee heads yet",
+        "emptyDescription": "A fee head is a kind of charge, such as tuition or a library fee, posting to one income account.",
+        "noMatches": "No fee heads match",
+        "noMatchesDescription": "Try a different search or filter.",
+        "searchPlaceholder": "Search fee heads"
+      },
+      "columns": {
+        "code": "Code",
+        "name": "Name",
+        "category": "Category",
+        "account": "Income account",
+        "refundable": "Refundable",
+        "status": "Status"
+      },
+      "filters": {
+        "search": "Search fee heads",
+        "clearSearch": "Clear search",
+        "all": "All",
+        "category": "Category",
+        "status": "Status"
+      },
+      "status": {
+        "active": "Active",
+        "inactive": "Inactive"
+      },
+      "refundable": {
+        "yes": "Yes",
+        "no": "No"
+      },
+      "category": {
+        "tuition": "Tuition",
+        "admission": "Admission",
+        "transport": "Transport",
+        "library": "Library",
+        "exam": "Exam",
+        "fine": "Fine",
+        "other": "Other"
+      },
+      "actions": {
+        "create": "New fee head",
+        "editRow": "Edit {name}",
+        "deleteRow": "Delete {name}",
+        "delete": "Delete"
+      },
+      "form": {
+        "createTitle": "New fee head",
+        "editTitle": "Edit fee head",
+        "intro": "A fee head is a kind of charge. It posts to one income account.",
+        "name": "Name",
+        "code": "Code",
+        "category": "Category",
+        "account": "Income account",
+        "selectAccount": "Select an income account",
+        "refundable": "Refundable",
+        "refundableHint": "A payment against this head can be refunded.",
+        "active": "Active",
+        "activeHint": "An inactive head cannot be added to new structures."
+      },
+      "saved": "Fee head saved.",
+      "removed": "Fee head removed.",
+      "delete": {
+        "titleNamed": "Delete {name}?",
+        "description": "A head that a schedule, fine or invoice uses cannot be deleted; deactivate it instead."
+      }
+    },
+    "grants": {
+      "title": "Grants and fines",
+      "summary": "Discounts, scholarships and fines raised against students.",
+      "tabs": {
+        "label": "Grants sections",
+        "discounts": "Discounts",
+        "scholarships": "Scholarships",
+        "fines": "Fines"
+      },
+      "filters": {
+        "status": "Status",
+        "all": "All",
+        "clearStudent": "Show every student",
+        "clearSearch": "Clear search"
+      },
+      "form": {
+        "student": "Student",
+        "session": "Session",
+        "selectSession": "Select a session",
+        "head": "Fee head",
+        "selectHead": "Select a fee head",
+        "allHeads": "Every fee head",
+        "value": "Value",
+        "percentHint": "A percent from 0 to 100.",
+        "fixedHint": "A fixed amount.",
+        "errors": {
+          "invalidValue": "Enter a positive value (a percent cannot exceed 100).",
+          "endBeforeStart": "The end date cannot be before the start date.",
+          "invalidAmount": "Enter a positive amount."
+        },
+        "readOnlyHint": "Needs access to students, sessions and fee heads."
+      },
+      "valueType": {
+        "percent": "Percent",
+        "fixed": "Fixed amount"
+      },
+      "discounts": {
+        "list": {
+          "caption": "Discounts",
+          "pagination": "Discounts pages",
+          "loadError": "The discounts could not be loaded.",
+          "emptyTitle": "No discounts yet",
+          "emptyDescription": "A discount reduces what a student is billed, as a percent or a fixed amount.",
+          "noMatches": "No discounts match",
+          "noMatchesDescription": "Try a different search or filter.",
+          "searchPlaceholder": "Search discounts or students",
+          "search": "Search discounts"
+        },
+        "columns": {
+          "student": "Student",
+          "name": "Discount",
+          "value": "Value",
+          "head": "Fee head",
+          "session": "Session",
+          "validity": "Valid",
+          "status": "Status",
+          "granted": "Granted"
+        },
+        "status": {
+          "active": "Active",
+          "expired": "Expired",
+          "revoked": "Revoked"
+        },
+        "allHeads": "Every head",
+        "validity": {
+          "from": "From {date}",
+          "to": "until {date}",
+          "always": "No end date"
+        },
+        "actions": {
+          "create": "Grant discount",
+          "revoke": "Revoke",
+          "revokeRow": "Revoke {name}"
+        },
+        "form": {
+          "createTitle": "Grant a discount",
+          "intro": "A discount applies to the student's future invoices. Invoices already issued keep their figures.",
+          "name": "Name",
+          "type": "Type",
+          "validFrom": "Valid from",
+          "validTo": "Valid until",
+          "reason": "Reason (optional)"
+        },
+        "saved": "Discount granted.",
+        "revoke": {
+          "title": "Revoke {name}",
+          "intro": "A revoked discount stops applying to new invoices. Invoices already priced with it are not changed.",
+          "reason": "Reason",
+          "submit": "Revoke discount",
+          "done": "Discount {name} revoked"
+        }
+      },
+      "scholarships": {
+        "list": {
+          "caption": "Scholarships",
+          "pagination": "Scholarships pages",
+          "loadError": "The scholarships could not be loaded.",
+          "emptyTitle": "No scholarships yet",
+          "emptyDescription": "A scholarship is an award that covers part of a student's fees for a session.",
+          "noMatches": "No scholarships match",
+          "noMatchesDescription": "Try a different search or filter.",
+          "searchPlaceholder": "Search scholarships, sponsors or students",
+          "search": "Search scholarships"
+        },
+        "columns": {
+          "student": "Student",
+          "name": "Scholarship",
+          "type": "Type",
+          "value": "Coverage",
+          "sponsor": "Sponsor",
+          "session": "Session",
+          "status": "Status",
+          "awarded": "Awarded"
+        },
+        "status": {
+          "applied": "Applied",
+          "approved": "Approved",
+          "active": "Active",
+          "ended": "Ended",
+          "revoked": "Revoked"
+        },
+        "type": {
+          "merit": "Merit",
+          "need": "Need",
+          "sports": "Sports",
+          "staff_ward": "Staff ward",
+          "other": "Other"
+        },
+        "actions": {
+          "create": "Add scholarship",
+          "statusRow": "{action}: {name}",
+          "to": {
+            "applied": "Mark applied",
+            "approved": "Approve",
+            "active": "Activate",
+            "ended": "End",
+            "revoked": "Revoke"
+          }
+        },
+        "form": {
+          "createTitle": "Add a scholarship",
+          "intro": "An award covers a share of what the student owes for the session, before any discount.",
+          "name": "Name",
+          "type": "Type",
+          "coverage": "Coverage",
+          "sponsor": "Sponsor (optional)",
+          "status": "Starts as",
+          "notes": "Notes (optional)"
+        },
+        "saved": "Scholarship added.",
+        "statusDialog": {
+          "title": "{action}: {name}",
+          "intro": "Move this award from {from} to {to}.",
+          "introFinal": "Move this award from {from} to {to}. This is final: it cannot be reopened.",
+          "notes": "Notes",
+          "notesRequired": "Notes (required)",
+          "submit": "Confirm",
+          "done": "{name} is now {to}"
+        }
+      },
+      "fines": {
+        "list": {
+          "caption": "Fines",
+          "pagination": "Fines pages",
+          "loadError": "The fines could not be loaded.",
+          "emptyTitle": "No fines yet",
+          "emptyDescription": "A fine is a penalty added to the student's next invoice.",
+          "noMatches": "No fines match",
+          "noMatchesDescription": "Try a different search or filter.",
+          "searchPlaceholder": "Search fines or students",
+          "search": "Search fines"
+        },
+        "columns": {
+          "student": "Student",
+          "type": "Type",
+          "head": "Fee head",
+          "amount": "Amount",
+          "reason": "Reason",
+          "status": "Status",
+          "raised": "Raised"
+        },
+        "status": {
+          "pending": "Pending",
+          "invoiced": "Invoiced",
+          "paid": "Paid",
+          "waived": "Waived"
+        },
+        "type": {
+          "late_fee": "Late fee",
+          "library": "Library",
+          "transport": "Transport",
+          "damage": "Damage",
+          "discipline": "Discipline",
+          "other": "Other"
+        },
+        "actions": {
+          "create": "Raise fine",
+          "waive": "Waive",
+          "waiveRow": "Waive fine for {name}"
+        },
+        "form": {
+          "createTitle": "Raise a fine",
+          "intro": "A pending fine is added to the student's next invoice. Its fee head must be in the fine category.",
+          "type": "Type",
+          "amount": "Amount",
+          "reason": "Reason",
+          "noHeads": "No fee head is in the fine category yet."
+        },
+        "saved": "Fine raised.",
+        "waive": {
+          "title": "Waive fine for {name}",
+          "intro": "Only a pending fine can be waived. Once it is on an invoice, adjust or cancel the invoice instead.",
+          "reason": "Reason",
+          "submit": "Waive fine",
+          "done": "Fine waived"
+        }
+      }
+    },
+    "counter": {
+      "title": "Fee counter",
+      "summary": "Take a payment at the counter: find the student, pick an invoice and record the money.",
+      "student": "Student",
+      "restricted": {
+        "title": "The counter isn't available to you",
+        "description": "Taking a payment also needs permission to read students and invoices. Ask an administrator to grant them."
+      },
+      "pick": {
+        "title": "Choose a student",
+        "description": "Their outstanding invoices appear here."
+      },
+      "invoices": {
+        "title": "Outstanding invoices for {name}",
+        "caption": "Outstanding invoices",
+        "loadError": "The invoices could not be loaded.",
+        "emptyTitle": "Nothing outstanding",
+        "emptyDescription": "{name} has no invoice with a balance due.",
+        "columns": {
+          "number": "Invoice",
+          "period": "Period",
+          "due": "Due",
+          "status": "Status",
+          "balance": "Balance due",
+          "actions": "Actions"
+        },
+        "record": "Record payment",
+        "recordFor": "Record payment for {number}"
+      },
+      "dialog": {
+        "title": "Record payment: {number}",
+        "balance": "{student} owes {amount} on this invoice.",
+        "amount": "Amount",
+        "method": "Method",
+        "reference": "Reference number (optional)",
+        "referenceRequired": "Reference number",
+        "positive": "Enter an amount above zero, with at most two decimals.",
+        "referenceMissing": "Enter the cheque or transfer reference.",
+        "submit": "Record payment"
+      },
+      "receipt": {
+        "recorded": "Payment of {amount} recorded. Receipt {number}.",
+        "print_pdf": "Print PDF",
+        "print_thermal": "Print thermal",
+        "preparing": "Preparing",
+        "failed": "We couldn't download the receipt. Please try again.",
+        "pending": "The receipt is still being issued.",
+        "openPayments": "Open the payments list",
+        "done": "Done",
+        "issued": "The receipt has been issued. Ask someone who can view payments to print it."
+      }
+    },
+    "payments": {
+      "title": "Payments",
+      "summary": "Payments taken, their receipts and vouchers, refund requests and the settlement files from banks.",
+      "tabs": {
+        "label": "Payments sections",
+        "payments": "Payments",
+        "receipts": "Receipts",
+        "vouchers": "Vouchers",
+        "refunds": "Refunds",
+        "imports": "Settlement imports"
+      },
+      "filters": {
+        "all": "All",
+        "noMatches": "Nothing matches",
+        "noMatchesDescription": "Try different filters.",
+        "clearSearch": "Clear search"
+      },
+      "download": {
+        "pdf": "PDF",
+        "thermal": "Thermal",
+        "pdfLabel": "Download {label} as PDF",
+        "thermalLabel": "Download {label} as thermal print",
+        "preparing": "Preparing",
+        "failed": "{label} couldn't be downloaded."
+      },
+      "payments": {
+        "list": {
+          "caption": "Payments",
+          "pagination": "Payments pages",
+          "loadError": "The payments could not be loaded.",
+          "emptyTitle": "No payments yet",
+          "emptyDescription": "Payments taken at the counter, by voucher or online appear here."
+        },
+        "columns": {
+          "receipt": "Receipt",
+          "paidAt": "Paid",
+          "method": "Method",
+          "reference": "Reference",
+          "status": "Status",
+          "amount": "Amount",
+          "student": "Student",
+          "invoice": "Invoice"
+        },
+        "filters": {
+          "method": "Method",
+          "status": "Status",
+          "cashier": "Cashier",
+          "cashierAll": "All cashiers",
+          "cashierMe": "My collections",
+          "cashierLinked": "Selected cashier",
+          "from": "Paid from",
+          "to": "Paid to"
+        },
+        "openInvoice": "Open invoice",
+        "openInvoiceRow": "Open the invoice for receipt {number}"
+      },
+      "receipts": {
+        "list": {
+          "caption": "Receipts",
+          "pagination": "Receipts pages",
+          "loadError": "The receipts could not be loaded.",
+          "emptyTitle": "No receipts yet",
+          "emptyDescription": "A receipt is issued with every payment.",
+          "search": "Search receipts",
+          "searchPlaceholder": "Search by receipt number"
+        },
+        "columns": {
+          "receipt": "Receipt",
+          "student": "Student",
+          "invoice": "Invoice",
+          "issued": "Issued",
+          "amount": "Amount"
+        }
+      },
+      "vouchers": {
+        "list": {
+          "caption": "Vouchers",
+          "pagination": "Vouchers pages",
+          "loadError": "The vouchers could not be loaded.",
+          "emptyTitle": "No vouchers yet",
+          "emptyDescription": "Issue a voucher from an invoice to give a family a bank slip."
+        },
+        "columns": {
+          "consumer": "Consumer number",
+          "student": "Student",
+          "invoice": "Invoice",
+          "provider": "Provider",
+          "due": "Due",
+          "status": "Status",
+          "amount": "Amount"
+        },
+        "filters": {
+          "status": "Status",
+          "provider": "Provider"
+        },
+        "actions": {
+          "void": "Void",
+          "voidRow": "Void voucher {number}"
+        },
+        "void": {
+          "title": "Void voucher {number}",
+          "intro": "A voided voucher can no longer be paid at the bank. Issue a new one if the family still needs a slip.",
+          "reason": "Reason",
+          "submit": "Void voucher",
+          "done": "Voucher {number} voided."
+        }
+      },
+      "refunds": {
+        "list": {
+          "caption": "Refunds",
+          "pagination": "Refunds pages",
+          "loadError": "The refunds could not be loaded.",
+          "emptyTitle": "No refund requests",
+          "emptyDescription": "Request a refund from a payment on its invoice."
+        },
+        "columns": {
+          "requested": "Requested",
+          "amount": "Amount",
+          "reason": "Reason",
+          "status": "Status",
+          "note": "Decision note",
+          "student": "Student",
+          "invoice": "Invoice"
+        },
+        "filters": {
+          "status": "Status"
+        },
+        "status": {
+          "requested": "Requested",
+          "approved": "Approved",
+          "rejected": "Rejected",
+          "processed": "Processed"
+        },
+        "actions": {
+          "approve": "Approve",
+          "reject": "Reject",
+          "process": "Process",
+          "approveRow": "Approve the refund of {amount} for {student}, invoice {invoice}",
+          "rejectRow": "Reject the refund of {amount} for {student}, invoice {invoice}",
+          "processRow": "Process the refund of {amount} for {student}, invoice {invoice}"
+        },
+        "note": "Note (optional)",
+        "noteRequired": "Note",
+        "approve": {
+          "title": "Approve refund of {amount}",
+          "intro": "Reason given: {reason}",
+          "submit": "Approve",
+          "done": "Refund of {amount} approved."
+        },
+        "reject": {
+          "title": "Reject refund of {amount}",
+          "intro": "Reason given: {reason}. Say why it is refused.",
+          "submit": "Reject",
+          "done": "Refund of {amount} rejected."
+        },
+        "process": {
+          "title": "Process refund of {amount}",
+          "intro": "Pay the refund out and reverse its posting in the ledger. This cannot be undone.",
+          "method": "Paid back by",
+          "reference": "Reference (optional)",
+          "submit": "Process refund",
+          "done": "Refund of {amount} processed."
+        }
+      },
+      "imports": {
+        "list": {
+          "caption": "Settlement imports",
+          "pagination": "Settlement imports pages",
+          "loadError": "The settlement imports could not be loaded.",
+          "emptyTitle": "No settlement files yet",
+          "emptyDescription": "Upload a bank's settlement file to post the vouchers it paid."
+        },
+        "columns": {
+          "uploaded": "Uploaded",
+          "provider": "Provider",
+          "status": "Status",
+          "rows": "Rows",
+          "matched": "Matched",
+          "exceptions": "Exceptions",
+          "completed": "Completed"
+        },
+        "filters": {
+          "status": "Status",
+          "provider": "Provider"
+        },
+        "status": {
+          "processing": "Processing",
+          "completed": "Completed",
+          "failed": "Failed"
+        },
+        "actions": {
+          "upload": "Upload settlement file",
+          "view": "View",
+          "viewRow": "View the import uploaded {date}"
+        },
+        "upload": {
+          "title": "Upload settlement file",
+          "intro": "Choose the provider and its settlement CSV. Each row that matches an open voucher is posted as a payment; the rest are listed as exceptions.",
+          "provider": "Provider",
+          "file": "Settlement file",
+          "fileHint": "A CSV file from the provider.",
+          "submit": "Upload",
+          "done": "Done",
+          "starting": "Starting the import…",
+          "running": "Reconciling the file… {progress}%",
+          "matched": "{matched} of {rows} rows matched and posted.",
+          "noExceptions": "Every row was matched.",
+          "exceptions": "{count, plural, one {# row didn't post. Open the import to see why.} other {# rows didn't post. Open the import to see why.}}",
+          "failed": "The import failed.",
+          "pollFailed": "The import's progress couldn't be checked.",
+          "stalled": "The import is taking longer than expected.",
+          "resume": "Check again"
+        },
+        "detail": {
+          "title": "Settlement import",
+          "loadError": "The import could not be loaded.",
+          "exceptionsTitle": "Rows that did not post",
+          "noExceptions": "Every row in the file was matched and posted.",
+          "caption": "Rows that did not post",
+          "columns": {
+            "row": "Row",
+            "reference": "Provider reference",
+            "amount": "Amount",
+            "reason": "Reason"
+          }
+        }
+      }
+    },
+    "expenses": {
+      "title": "Expenses",
+      "summary": "What the school spends: expenses, their categories and budgets.",
+      "tabs": {
+        "label": "Expenses sections",
+        "expenses": "Expenses",
+        "categories": "Categories",
+        "budgets": "Budgets"
+      },
+      "expenses": {
+        "list": {
+          "caption": "Expenses",
+          "pagination": "Expenses pages",
+          "loadError": "The expenses could not be loaded.",
+          "emptyTitle": "No expenses yet",
+          "emptyDescription": "Record an expense to start the approval flow.",
+          "noMatches": "No expenses match",
+          "noMatchesDescription": "Try a different search or filter.",
+          "searchPlaceholder": "Search by number, vendor or description"
+        },
+        "columns": {
+          "number": "Number",
+          "date": "Date",
+          "description": "Description",
+          "category": "Category",
+          "amount": "Amount (net)",
+          "total": "Total",
+          "status": "Status"
+        },
+        "filters": {
+          "search": "Search expenses",
+          "clearSearch": "Clear search",
+          "awaiting": "Awaiting approval",
+          "status": "Status",
+          "category": "Category",
+          "campus": "Campus",
+          "from": "From date",
+          "to": "To date",
+          "all": "All"
+        },
+        "status": {
+          "draft": "Draft",
+          "submitted": "Submitted",
+          "approved": "Approved",
+          "paid": "Paid",
+          "rejected": "Rejected",
+          "reversed": "Reversed"
+        },
+        "method": {
+          "cash": "Cash",
+          "cheque": "Cheque",
+          "bank_transfer": "Bank transfer",
+          "card": "Card"
+        },
+        "actions": {
+          "create": "New expense",
+          "edit": "Edit",
+          "submit": "Submit",
+          "approve": "Approve",
+          "reject": "Reject",
+          "markPaid": "Mark paid",
+          "reverse": "Reverse",
+          "editRow": "Edit expense {number}",
+          "submitRow": "Submit expense {number}",
+          "approveRow": "Approve expense {number}",
+          "rejectRow": "Reject expense {number}",
+          "markPaidRow": "Mark expense {number} paid",
+          "reverseRow": "Reverse expense {number}"
+        },
+        "form": {
+          "createTitle": "New expense",
+          "editTitle": "Edit expense",
+          "intro": "An expense is saved as a draft until it is submitted for approval.",
+          "category": "Category",
+          "description": "Description",
+          "vendor": "Vendor (optional)",
+          "date": "Expense date",
+          "amount": "Amount (before tax)",
+          "tax": "Tax (optional)",
+          "method": "Paid by (optional)",
+          "noMethod": "Not decided",
+          "campus": "Campus",
+          "noCampus": "Not for one campus",
+          "invalidAmount": "Enter an amount such as 1250.00."
+        },
+        "saved": "Expense saved.",
+        "submit": {
+          "title": "Submit expense {number}?",
+          "description": "It goes to the approvers' queue and can no longer be edited.",
+          "done": "Expense {number} submitted."
+        },
+        "approve": {
+          "title": "Approve expense {number}?",
+          "description": "It is posted to the ledger. The person who submitted it cannot approve it.",
+          "done": "Expense {number} approved."
+        },
+        "reject": {
+          "title": "Reject expense {number}?",
+          "description": "Nothing is posted; the expense is closed as rejected.",
+          "done": "Expense {number} rejected."
+        },
+        "markPaid": {
+          "title": "Mark expense {number} paid?",
+          "description": "This records that the money has left; nothing more is posted.",
+          "done": "Expense {number} marked paid."
+        },
+        "reverse": {
+          "title": "Reverse expense {number}",
+          "description": "A new entry undoes its ledger posting; the original stays in the history. This cannot be undone.",
+          "reason": "Reason",
+          "done": "Expense {number} reversed."
+        }
+      },
+      "categories": {
+        "list": {
+          "caption": "Expense categories",
+          "pagination": "Expense categories pages",
+          "loadError": "The categories could not be loaded.",
+          "emptyTitle": "No categories yet",
+          "emptyDescription": "Add a category to file expenses against.",
+          "noMatches": "No categories match",
+          "noMatchesDescription": "Try a different search or filter.",
+          "searchPlaceholder": "Search by code or name"
+        },
+        "columns": {
+          "code": "Code",
+          "name": "Name",
+          "account": "Ledger account",
+          "status": "Status"
+        },
+        "filters": {
+          "search": "Search categories",
+          "clearSearch": "Clear search",
+          "active": "Status",
+          "all": "All"
+        },
+        "status": {
+          "active": "Active",
+          "inactive": "Archived"
+        },
+        "actions": {
+          "create": "New category",
+          "editRow": "Edit {name}",
+          "deleteRow": "Delete {name}",
+          "delete": "Delete"
+        },
+        "form": {
+          "createTitle": "New expense category",
+          "editTitle": "Edit expense category",
+          "intro": "Expenses in a category are booked to its expense account.",
+          "code": "Code",
+          "name": "Name",
+          "account": "Expense account",
+          "active": "Active",
+          "activeHint": "An archived category takes no new expenses."
+        },
+        "saved": "Category saved.",
+        "removed": "Category removed.",
+        "delete": {
+          "titleNamed": "Delete {name}?",
+          "description": "A category with expenses or a budget cannot be deleted; archive it instead."
+        }
+      },
+      "budgets": {
+        "list": {
+          "caption": "Budgets",
+          "pagination": "Budgets pages",
+          "loadError": "The budgets could not be loaded.",
+          "emptyTitle": "No budgets yet",
+          "emptyDescription": "Add a budget to plan spending against.",
+          "noMatches": "No budgets match",
+          "noMatchesDescription": "Try a different search or filter."
+        },
+        "columns": {
+          "name": "Name",
+          "target": "Against",
+          "period": "Period",
+          "amount": "Amount",
+          "status": "Status"
+        },
+        "period": "{start} to {end}",
+        "filters": {
+          "status": "Status",
+          "all": "All"
+        },
+        "status": {
+          "draft": "Draft",
+          "approved": "Approved",
+          "closed": "Closed"
+        },
+        "actions": {
+          "create": "New budget",
+          "edit": "Edit",
+          "editRow": "Edit {name}",
+          "approve": "Approve",
+          "approveRow": "Approve {name}"
+        },
+        "form": {
+          "createTitle": "New budget",
+          "editTitle": "Edit budget",
+          "intro": "A budget is a draft until the owner approves it; only an approved one is measured in reports.",
+          "name": "Name",
+          "targetKind": "Set against",
+          "kindCategory": "An expense category",
+          "kindAccount": "A ledger account",
+          "category": "Expense category",
+          "account": "Expense account",
+          "periodStart": "Period starts",
+          "periodEnd": "Period ends",
+          "periodOrder": "The period cannot end before it starts.",
+          "amount": "Amount",
+          "campus": "Campus",
+          "allCampuses": "All campuses",
+          "notes": "Notes (optional)"
+        },
+        "saved": "Budget saved.",
+        "approve": {
+          "title": "Approve {name}?",
+          "description": "Once approved it is the baseline reports measure spending against, and it can no longer be edited.",
+          "done": "{name} approved."
+        }
+      }
+    },
+    "reports": {
+      "title": "Reports",
+      "summary": "Collection, outstanding balances, statements, grants and the books, as a table or a file.",
+      "loading": "Running the report…",
+      "loadError": "The report could not be run.",
+      "emptyDescription": "No rows match these dates and filters.",
+      "fullName": "{first} {last}",
+      "period": "{start} to {end}",
+      "percent": "{value}%",
+      "form": {
+        "label": "Report options",
+        "kind": "Report",
+        "from": "From",
+        "to": "To",
+        "asOf": "As of",
+        "grouping": "Group by",
+        "campus": "Campus",
+        "session": "Session",
+        "class": "Class",
+        "allCampuses": "All campuses",
+        "allSessions": "All sessions",
+        "allClasses": "All classes",
+        "studentSelected": "Selected student",
+        "studentRestricted": "A student statement also needs permission to read students. Ask an administrator to grant it."
+      },
+      "kinds": {
+        "collection": "Collection",
+        "outstanding-aging": "Outstanding and aging",
+        "student-ledger": "Student statement",
+        "grant-register": "Grants and waivers",
+        "income-vs-expense": "Income vs expense",
+        "budget-variance": "Budget variance",
+        "expense-register": "Expense register",
+        "trial-balance": "Trial balance"
+      },
+      "grouping": {
+        "day": "Day",
+        "method": "Payment method",
+        "cashier": "Cashier"
+      },
+      "entryType": {
+        "invoice": "Invoice",
+        "payment": "Payment",
+        "refund": "Refund"
+      },
+      "grantType": {
+        "discount": "Discount",
+        "scholarship": "Scholarship",
+        "fine_waiver": "Fine waiver"
+      },
+      "pickStudent": {
+        "title": "Choose a student",
+        "description": "A statement is for one student. Pick one above."
+      },
+      "invalid": {
+        "title": "These dates can't run",
+        "description": "The end date comes before the start date."
+      },
+      "tooLarge": {
+        "title": "Too large to show — export instead",
+        "description": "This report has more than {limit} rows, too many to show here. Export it as a file.",
+        "noExport": "This report has more than {limit} rows, too many to show here. Narrow the dates or filters, or ask for permission to export it."
+      },
+      "columns": {
+        "day": "Day",
+        "method": "Payment method",
+        "cashier": "Cashier",
+        "noCashier": "Online or system",
+        "total": "Total",
+        "payments": "Payments",
+        "student": "Student",
+        "totalOutstanding": "Outstanding",
+        "invoices": "Invoices",
+        "notYetDue": "Not yet due",
+        "bucket0to30": "0-30 days",
+        "bucket31to60": "31-60 days",
+        "bucket61to90": "61-90 days",
+        "bucket90plus": "Over 90 days",
+        "date": "Date",
+        "type": "Type",
+        "reference": "Reference",
+        "description": "Description",
+        "debit": "Debit",
+        "credit": "Credit",
+        "balance": "Balance",
+        "balanceFiltered": "Balance (within filters)",
+        "grant": "Grant",
+        "name": "Name",
+        "admissionNumber": "Admission no.",
+        "value": "Value",
+        "status": "Status",
+        "approvedBy": "Approved by",
+        "grantedOn": "Granted on",
+        "code": "Code",
+        "accountType": "Account type",
+        "totalDebit": "Total debit",
+        "totalCredit": "Total credit",
+        "net": "Net",
+        "budget": "Budget",
+        "period": "Period",
+        "budgeted": "Budgeted",
+        "actual": "Actual",
+        "variance": "Variance",
+        "utilisation": "Used",
+        "expenseNo": "Expense no.",
+        "category": "Category",
+        "vendor": "Vendor",
+        "campus": "Campus",
+        "amount": "Amount",
+        "tax": "Tax"
+      }
+    },
+    "statement": {
+      "title": "Statement for {name}",
+      "titleGeneric": "Student statement",
+      "summary": "Every invoice, payment and refund for this student, with the running balance after each line.",
+      "view": "View statement",
+      "closingBalance": "Closing balance",
+      "tableTitle": "Statement",
+      "emptyDescription": "This student has no invoices or payments yet.",
+      "loadError": "The statement could not be loaded.",
+      "notFoundTitle": "Student not found",
+      "notFoundDescription": "It may have been removed, or the student belongs to another school.",
+      "restricted": {
+        "title": "The statement isn't available to you",
+        "description": "Reading a statement needs permission to view invoices. Ask an administrator to grant it."
+      }
+    }
+  },
   "reports": {
     "caption": "{report} report",
     "rowCount": "{count, plural, one {# row} other {# rows}}",
@@ -3090,6 +4474,8 @@
     "domain_rule_violation": "That action isn't allowed right now.",
     "rate_limited": "Too many requests. Wait a moment and try again.",
     "module_disabled": "This feature is not enabled for your school.",
+    "tenant_suspended": "Your school's account is suspended. Contact SchoolHub support.",
+    "tenant_not_found": "Your school's account is no longer available.",
     "network_error": "We could not reach the server. Check your connection.",
     "server_error": "Something went wrong on our side. The team has been notified.",
     "requestId": "Reference: {requestId}",

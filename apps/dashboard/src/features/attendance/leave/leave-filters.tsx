@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import { FilterSelect } from "@/components/filter-select";
-import { DateRangeInputs } from "@/features/attendance/date-range-inputs";
+import { DateRangeInputs } from "@/components/date-range-inputs";
 import { FILTER_ALL } from "@/lib/constants";
 import { LEAVE_STATUSES } from "@/services/modules/leave-requests/leave-requests-constant";
 import { useLeaveTypes } from "./use-leave-types";
