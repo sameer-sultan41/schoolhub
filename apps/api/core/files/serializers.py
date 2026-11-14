@@ -65,3 +65,9 @@ class SignedFileURLField(serializers.Field):
         if self.expected_purpose is not None and value.purpose != self.expected_purpose:
             return None
         return get_display_url(value)
+
+
+class AttachmentDownloadSerializer(serializers.Serializer):
+    """A file's short-lived signed link: every `:download` action answers with one."""
+
+    download_url = serializers.CharField()

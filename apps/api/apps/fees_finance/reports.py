@@ -25,10 +25,24 @@ would return the right answer and time out on the school that most needs it.
 from __future__ import annotations
 
 import datetime
+import uuid
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
-from django.db.models import Case, Count, DecimalField, F, Q, QuerySet, Sum, Value, When
+from django.db.models import (
+    Case,
+    Count,
+    DecimalField,
+    Exists,
+    F,
+    OuterRef,
+    Q,
+    QuerySet,
+    Sum,
+    Value,
+    When,
+)
 from django.db.models.functions import Coalesce, TruncDate
 from django.utils import timezone
 
@@ -50,6 +64,7 @@ from apps.fees_finance.models import (
     RefundStatus,
     Scholarship,
 )
+from apps.student_management.models import StudentEnrollment
 from core.money import ZERO, quantize_money
 
 #: §13's aging buckets. Upper bounds in days past the due date; the last bucket
@@ -64,6 +79,159 @@ AGING_BUCKETS: tuple[tuple[str, int | None], ...] = (
 
 _MONEY = DecimalField(max_digits=12, decimal_places=2)
 _ZERO = Value(ZERO, output_field=_MONEY)
+
+
+@dataclass(frozen=True)
+class ReportFilters:
+    """§13's campus, session and class narrowing, shared by every kind that has a student.
+
+    Applied to the already record-scoped queryset, so a filter can only ever
+    narrow what the caller may read. An id from another tenant matches nothing
+    under RLS, which is the cross-tenant answer a filter should give (a report
+    is a list, so "nothing" is the 404-equivalent here).
+    """
+
+    campus_id: uuid.UUID | None = None
+    academic_session_id: uuid.UUID | None = None
+    class_id: uuid.UUID | None = None
+
+    @classmethod
+    def from_payload(cls, payload: dict) -> ReportFilters:
+        """The filters an export job carries as strings in its payload."""
+
+        def read(key: str) -> uuid.UUID | None:
+            value = payload.get(key)
+            return uuid.UUID(value) if value else None
+
+        return cls(
+            campus_id=read("campus_id"),
+            academic_session_id=read("academic_session_id"),
+            class_id=read("class_id"),
+        )
+
+
+#: Which of `ReportFilters`' fields each kind accepts, so the query serializer can
+#: refuse the rest with a field error instead of silently ignoring them. The
+#: student-less ledger kinds take none (their rows have no student or invoice
+#: dimension); `expense-register` takes campus alone (`Expense.campus`).
+_STUDENT_FILTERS = frozenset({"campus_id", "academic_session_id", "class_id"})
+REPORT_FILTERS_BY_KIND: dict[str, frozenset[str]] = {
+    "collection": _STUDENT_FILTERS,
+    "outstanding-aging": _STUDENT_FILTERS,
+    # One student's statement: their campus is not a dimension of it.
+    "student-ledger": _STUDENT_FILTERS - {"campus_id"},
+    "grant-register": _STUDENT_FILTERS,
+    "income-vs-expense": frozenset(),
+    "budget-variance": frozenset(),
+    "expense-register": frozenset({"campus_id"}),
+    "trial-balance": frozenset(),
+}
+
+
+def _enrolled(
+    queryset: QuerySet,
+    *,
+    session_id: uuid.UUID | None = None,
+    class_id: uuid.UUID | None = None,
+    session_ref: str | None = None,
+    current_session: bool = False,
+) -> QuerySet:
+    """Keep rows whose student has an enrollment in the given session and class.
+
+    For tables with no invoice to read the class from (discounts, scholarships,
+    fines). An `Exists` rather than a join: a student can hold enrollments in
+    several sessions, and a join would repeat the row once per match.
+    `session_ref` pins the enrollment to the row's own session column;
+    `current_session` pins it to the tenant's current session.
+    Soft-deleted enrollments never match (L50).
+    """
+    enrollments = StudentEnrollment.objects.alive().filter(student_id=OuterRef("student_id"))
+    if current_session:
+        enrollments = enrollments.filter(academic_session__is_current=True)
+    if session_id is not None:
+        enrollments = enrollments.filter(academic_session_id=session_id)
+    if session_ref is not None:
+        enrollments = enrollments.filter(academic_session_id=OuterRef(session_ref))
+    if class_id is not None:
+        enrollments = enrollments.filter(school_class_id=class_id)
+    return queryset.filter(Exists(enrollments))
+
+
+def _invoice_narrowed(
+    queryset: QuerySet, filters: ReportFilters | None, *, prefix: str = ""
+) -> QuerySet:
+    """Campus (the student's), session and class (the invoice's billing snapshot).
+
+    `prefix` is the path to the invoice from the queryset's model, so payments
+    (`fee_invoice__`) and refunds (`payment__fee_invoice__`) share this with
+    invoices themselves.
+    """
+    if filters is None:
+        return queryset
+    if filters.campus_id is not None:
+        queryset = queryset.filter(student__campus_id=filters.campus_id)
+    if filters.academic_session_id is not None:
+        queryset = queryset.filter(**{f"{prefix}academic_session_id": filters.academic_session_id})
+    if filters.class_id is not None:
+        queryset = queryset.filter(
+            **{f"{prefix}student_enrollment__school_class_id": filters.class_id}
+        )
+    return queryset
+
+
+def filter_invoices(queryset: QuerySet[FeeInvoice], filters: ReportFilters | None):
+    return _invoice_narrowed(queryset, filters)
+
+
+def filter_payments(queryset: QuerySet[Payment], filters: ReportFilters | None):
+    return _invoice_narrowed(queryset, filters, prefix="fee_invoice__")
+
+
+def filter_refunds(queryset: QuerySet[Refund], filters: ReportFilters | None):
+    return _invoice_narrowed(queryset, filters, prefix="payment__fee_invoice__")
+
+
+def _session_grant_narrowed(queryset: QuerySet, filters: ReportFilters | None) -> QuerySet:
+    """Discounts and scholarships name their session; the class is the student's in it."""
+    if filters is None:
+        return queryset
+    if filters.campus_id is not None:
+        queryset = queryset.filter(student__campus_id=filters.campus_id)
+    if filters.academic_session_id is not None:
+        queryset = queryset.filter(academic_session_id=filters.academic_session_id)
+    if filters.class_id is not None:
+        queryset = _enrolled(queryset, class_id=filters.class_id, session_ref="academic_session_id")
+    return queryset
+
+
+def filter_discounts(queryset: QuerySet[Discount], filters: ReportFilters | None):
+    return _session_grant_narrowed(queryset, filters)
+
+
+def filter_scholarships(queryset: QuerySet[Scholarship], filters: ReportFilters | None):
+    return _session_grant_narrowed(queryset, filters)
+
+
+def filter_fines(queryset: QuerySet[Fine], filters: ReportFilters | None):
+    """A fine has no session of its own: it is where its student's enrollment is.
+
+    The rule is exclusive, so one fine counts under one class: with a session, the
+    student's enrollment in that session (and class, if given); with a class alone,
+    the enrollment in the current session. A student's older enrollments never
+    place a fine in a class.
+    """
+    if filters is None:
+        return queryset
+    if filters.campus_id is not None:
+        queryset = queryset.filter(student__campus_id=filters.campus_id)
+    if filters.academic_session_id is not None or filters.class_id is not None:
+        queryset = _enrolled(
+            queryset,
+            session_id=filters.academic_session_id,
+            class_id=filters.class_id,
+            current_session=filters.academic_session_id is None,
+        )
+    return queryset
 
 
 def _capped(rows, limit: int | None):

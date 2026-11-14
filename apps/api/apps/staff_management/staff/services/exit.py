@@ -8,6 +8,7 @@ from datetime import date
 from django.db import transaction
 
 from apps.staff_management.models import EmploymentStatus, Staff
+from apps.staff_management.staff.services.access import end_staff_access
 from core.api.exceptions import Conflict, DomainRuleViolation
 
 
@@ -101,12 +102,5 @@ def exit_staff(
     staff.save(
         update_fields=["employment_status", "exit_date", "exit_reason", "updated_by", "updated_at"]
     )
-    if staff.user_id is not None:
-        # An exited employee must not keep portal access or role assignments —
-        # UserRole has no soft-delete field, so it's removed outright rather
-        # than deactivated.
-        from core.rbac.models import User, UserRole
-
-        User.objects.filter(pk=staff.user_id).update(is_active=False)
-        UserRole.objects.filter(user_id=staff.user_id, tenant_id=staff.tenant_id).delete()
+    end_staff_access(staff, actor_id=actor_id, reason="exit")
     return staff

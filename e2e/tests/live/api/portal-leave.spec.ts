@@ -26,7 +26,8 @@ import {
  * attachment, CASUAL does not).
  *
  * Endpoints covered: `POST /files`, `POST /files/{id}:confirm`, `GET/POST /leave-requests`,
- * `GET /leave-requests/{id}`, `POST /leave-requests/{id}:cancel`, `GET /leave-types`,
+ * `GET /leave-requests/{id}`, `POST /leave-requests/{id}:cancel`,
+ * `POST /leave-requests/{id}/attachment:download`, `GET /leave-types`,
  * `GET /vouchers`, `GET /vouchers/{id}/download`, read alongside `POST /fee-invoices/{id}/vouchers`.
  *
  * Logins: each guardian once per worker (`sessionFor`), per e2e/AGENTS.md's auth-throttle rule.
@@ -45,6 +46,7 @@ interface UploadSlot {
 }
 
 const LEAVE_ATTACHMENT = "attendance.leave-attachment";
+const NOTE_TEXT = "%PDF-1.4 e2e medical note";
 
 const logins = new Map<string, Promise<ApiClient>>();
 
@@ -84,7 +86,7 @@ async function leaveTypeId(client: ApiClient, code: string): Promise<string> {
 
 /** The portal's real upload: a slot, the bytes to storage, then the confirmation. */
 async function uploadNote(client: ApiClient, name: string): Promise<string> {
-  const bytes = new TextEncoder().encode("%PDF-1.4 e2e medical note");
+  const bytes = new TextEncoder().encode(NOTE_TEXT);
   const slot = (
     await client.post<UploadSlot>("/files", {
       original_name: name,
@@ -101,6 +103,16 @@ async function uploadNote(client: ApiClient, name: string): Promise<string> {
   expect(stored.ok).toBe(true);
   await client.post(`/files/${slot.id}:confirm`);
   return slot.id;
+}
+
+/** What the request's signed attachment URL actually serves, fetched as storage serves it. */
+async function attachmentText(client: ApiClient, requestId: string): Promise<string> {
+  const signed = await client.post<{ download_url: string }>(
+    `/leave-requests/${requestId}/attachment:download`,
+  );
+  const served = await fetch(signed.data.download_url);
+  expect(served.ok).toBe(true);
+  return served.text();
 }
 
 /** The field names a refusal points at. */
@@ -158,6 +170,14 @@ test.describe("portal leave, uploads and vouchers (live API)", () => {
     });
     expect(listed.data.map((row) => row.id)).toContain(created.id);
 
+    // The guardian re-opens the note they sent, and an approver reads the same bytes: the
+    // request's scope signs it, not a file key (`/files` never signs a leave attachment).
+    expect(await attachmentText(guardian, created.id)).toBe(NOTE_TEXT);
+    expect(await attachmentText(liveApiClient, created.id)).toBe(NOTE_TEXT);
+    await expect(liveApiClient.post(`/files/${fileId}:download`)).rejects.toMatchObject({
+      status: 404,
+    });
+
     const cancelled = await guardian.post<LeaveRequest>(`/leave-requests/${created.id}:cancel`, {});
     expect(cancelled.data.status).toBe("cancelled");
   });
@@ -171,6 +191,7 @@ test.describe("portal leave, uploads and vouchers (live API)", () => {
     const caller = await sessionFor(E2E_COMMS_GUARDIAN_EMAIL);
     const casual = await leaveTypeId(caller, "CASUAL");
     const start = nextMonday(7);
+    const ownersFile = await uploadNote(owner, "theirs.pdf");
     const ownersRequest = (
       await owner.post<LeaveRequest>("/leave-requests", {
         student_id: otherChild,
@@ -178,9 +199,9 @@ test.describe("portal leave, uploads and vouchers (live API)", () => {
         start_date: start,
         end_date: start,
         reason: "Wedding.",
+        attachment_file_id: ownersFile,
       })
     ).data;
-    const ownersFile = await uploadNote(owner, "theirs.pdf");
 
     // Their request is a 404, never a 403 that would confirm it exists (ADR-0004).
     await expect(caller.get(`/leave-requests/${ownersRequest.id}`)).rejects.toMatchObject({
@@ -188,6 +209,9 @@ test.describe("portal leave, uploads and vouchers (live API)", () => {
     });
     await expect(
       caller.post(`/leave-requests/${ownersRequest.id}:cancel`, {}),
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(
+      caller.post(`/leave-requests/${ownersRequest.id}/attachment:download`),
     ).rejects.toMatchObject({ status: 404 });
     // Their child is the field the refusal names; the list shows the caller nothing of it.
     const forOther = await refusal(

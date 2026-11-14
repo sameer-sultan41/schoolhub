@@ -23,6 +23,8 @@ import uuid
 from decimal import Decimal
 
 import factory
+from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import AccessToken
 
 from apps.fees_finance.models import (
     Budget,
@@ -110,10 +112,19 @@ __all__ = [
     "fine_head",
     "grant",
     "income_account",
+    "jwt_only_client",
     "posting",
     "expense_account",
     "settlement_csv",
 ]
+
+
+def jwt_only_client(user) -> APIClient:
+    """A client carrying the bearer token alone, as a real client does: no
+    `force_login` session for `TenantMiddleware` to bind the tenant from (agent-lessons L63)."""
+    client = APIClient()
+    client.credentials(HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(user)}")
+    return client
 
 
 class LedgerAccountFactory(factory.django.DjangoModelFactory):

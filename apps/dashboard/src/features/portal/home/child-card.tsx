@@ -8,8 +8,8 @@ import { Paths } from "@/config/paths";
 import { formatDate } from "@/lib/helpers";
 import type { PortalChild } from "@/services";
 import { ATTENDANCE_STATUS_LABEL_KEY } from "@/features/portal/attendance/attendance-status";
-import { formatDecimal } from "@/features/portal/format-decimal";
-import { enumLabel } from "@/features/portal/enum-label";
+import { formatDecimal } from "@/lib/format-decimal";
+import { enumLabel } from "@/lib/enum-label";
 
 /** One child's summary: the cards the server sent, and none it left `null` (a module that is
  * off or a key the viewer lacks leaves its card out, not blank). */

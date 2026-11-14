@@ -8,8 +8,10 @@ import {
   calendarDays,
   type LeaveRequestRecord,
 } from "./attendance-approvals-store";
-import { colonAction } from "./attendance-mock-utils";
+import { colonAction, leaveAttachmentDownload } from "./attendance-mock-utils";
 import { refusal } from "./attendance-register";
+
+export { leaveAttachmentUrl } from "./attendance-mock-utils";
 
 /** `core/rbac/permissions.py`'s refusal, which runs before any lookup. */
 export const PERMISSION_DENIED = "You do not have permission to perform this action.";
@@ -58,8 +60,8 @@ function autoMarkedDays(request: LeaveRequestRecord): number {
  *   school-wide scope (422).
  *
  * Lists are cursor paged (`cursorPageOf`): a cursor the stub did not issue is a 404 "Invalid
- * cursor". `POST /files/{id}:download` belongs to `jobsModule` (the router has no fallthrough
- * between modules), so a spec that downloads an attachment passes it the file there.
+ * cursor". A leave attachment downloads through `POST /leave-requests/{id}/attachment:download`
+ * (`leaveAttachmentDownload`), which answers with `leaveAttachmentUrl` for the spec to route.
  * `POST /attendance-corrections` (raising one) is `attendanceRegisterModule`'s.
  */
 export function attendanceApprovalsModule(store: AttendanceApprovalsStore): MockModule {
@@ -134,6 +136,16 @@ export function attendanceApprovalsModule(store: AttendanceApprovalsStore): Mock
           (!to || row.end_date <= to),
       );
       return cursorPageOf(ordered(rows, params.get("ordering")), params);
+    });
+
+    // `compile()` would read `:download` as a parameter, so the whole segment is captured and
+    // checked in `leaveAttachmentDownload`.
+    api.post("/leave-requests/:leaveId/:attachmentAction", (request) => {
+      if (!holds("attendance.leave-request.view")) return forbidden();
+      return leaveAttachmentDownload(
+        store.leaveRequest(request.params["leaveId"] ?? ""),
+        request.params["attachmentAction"],
+      );
     });
 
     api.post("/leave-requests/:leaveAction", (request) => {

@@ -39,6 +39,7 @@ import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
 import { formatDate, statusMeta } from "@/services/modules/staff/staff-helper";
 import type { StaffRow } from "@/services/modules/staff/staff-type";
+import { StaffInviteButton } from "./staff-invite-button";
 
 /** Row-click detail view: row summary fields render at once, the rest after fetchStaffById. */
 export interface StaffDetailSheetProps {
@@ -263,6 +264,8 @@ export function StaffDetailSheet({ row, onOpenChange, onEdit, onDelete }: StaffD
                   loading={isPending}
                 />
               </FieldSection>
+
+              {detail && <StaffInviteButton staff={detail} name={row.name} />}
 
               <FieldSection title={t("detail.employment")}>
                 <FieldRow

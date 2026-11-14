@@ -20,7 +20,7 @@ import {
 } from "./notification-labels";
 import { inboxListKey } from "./notification-query-keys";
 import { useMarkNotificationRead } from "./use-mark-notification-read";
-import { enumBadge, enumLabel } from "@/features/portal/enum-label";
+import { enumBadge, enumLabel } from "@/lib/enum-label";
 
 const INBOX_PAGE_SIZE = 20;
 type ReadFilter = "" | "unread" | "read";

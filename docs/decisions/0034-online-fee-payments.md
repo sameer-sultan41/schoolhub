@@ -132,7 +132,7 @@ tolerance, ordering, duplicates, fetch-to-verify, a fast 2xx).
   PR 2 of the plan, blocked on sandbox credentials and the portal stack.
 - Production needs `API_PUBLIC_URL` and `INTEGRATIONS_ENCRYPTION_KEYS` to boot, and every CI
   job that loads `config.settings.prod` has to supply both
-  ([agent-lessons L60](../07-quality/agent-lessons.md)).
+  ([agent-lessons L65](../07-quality/agent-lessons.md)).
 - In dev only, `PAYMENT_FAKE_SETTLES_ON_INITIATE` makes the fake provider record a checkout as
   paid when it starts, so the live E2E lane's signed callback can be re-fetched. Tests leave it
   off.

@@ -120,3 +120,47 @@ class PaymentCallbackFailureThrottle(SimpleRateThrottle):
         if not history:
             return 0.0
         return max((self.duration or 0) - (now - history[-1]), 0.0)
+
+
+class PasswordResetIPThrottle(SimpleRateThrottle):
+    """Per-IP bucket for password reset and its confirm.
+
+    Separate from `AuthEndpointThrottle` so a burst here cannot lock a school out of login.
+    """
+
+    scope = "password_reset_ip"
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
+
+
+class InvitationIPThrottle(SimpleRateThrottle):
+    """Per-IP bucket for invitation preview and accept, apart from the reset buckets.
+
+    Sized for a school onboarding many people behind one NAT (a campus network, a mobile
+    carrier), and separate so a burst of reset requests cannot block invite acceptance.
+    """
+
+    scope = "invitation_ip"
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
+
+
+class PasswordResetEmailThrottle(SimpleRateThrottle):
+    """Per-account bucket: caps reset emails to one address at one school, from any IP.
+
+    The key is a SHA-256 of the school slug and the normalised email, so the cache never
+    holds an address. Applied to the reset request only.
+    """
+
+    scope = "password_reset_email"
+
+    def get_cache_key(self, request, view):
+        data = request.data if hasattr(request.data, "get") else {}
+        school = str(data.get("school") or "").strip().lower()
+        email = str(data.get("email") or "").strip().lower()
+        if not school or not email:
+            return None
+        ident = hashlib.sha256(f"{school}:{email}".encode()).hexdigest()
+        return self.cache_format % {"scope": self.scope, "ident": ident}

@@ -69,7 +69,7 @@ class OnlinePaymentsTestCase(FeesFinanceAPITestCase):
         # The failure throttle counts in the cache; a previous test's bad
         # signatures must not throttle this one.
         cache.clear()
-        # `:initiate-payment` and the callback are `non_atomic_requests` (lesson L62).
+        # `:initiate-payment` and the callback are `non_atomic_requests` (lesson L67).
         rollback_as_in_production(self)
         self.adapter = fake_adapter()
         self.adapter.reset()

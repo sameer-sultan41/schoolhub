@@ -11,7 +11,11 @@ from core.audit.services import record_audit
 from core.files import services
 from core.files.models import File
 from core.files.purposes import registry as upload_purposes
-from core.files.serializers import FileCreateSerializer, FileSerializer
+from core.files.serializers import (
+    AttachmentDownloadSerializer,
+    FileCreateSerializer,
+    FileSerializer,
+)
 from core.rbac.permissions import is_restricted_principal
 
 # The uploader confirms their own upload through this viewset, module-gated or not;
@@ -127,7 +131,8 @@ class FileViewSet(
 
     @extend_schema(
         summary="Get a signed download URL",
-        responses={200: OpenApiResponse(description="{'download_url': str}")},
+        request=None,
+        responses={200: AttachmentDownloadSerializer},
     )
     def download(self, request, pk=None) -> Response:
         file = self.get_object()

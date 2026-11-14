@@ -5,7 +5,13 @@ import type { ReactNode } from "react";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
 
-import { useCampuses, useClasses, useSections, useSubjects } from "../use-reference-data";
+import {
+  useAcademicSessions,
+  useCampuses,
+  useClasses,
+  useSections,
+  useSubjects,
+} from "../use-reference-data";
 
 jest.mock("@/services", () => ({
   Services: {
@@ -14,6 +20,7 @@ jest.mock("@/services", () => ({
       fetchClasses: jest.fn(),
       fetchSubjects: jest.fn(),
       fetchSections: jest.fn(),
+      fetchAcademicSessions: jest.fn(),
     },
   },
 }));
@@ -29,6 +36,11 @@ const mockFetchSubjects = Services.schoolOrganization.fetchSubjects as jest.Mock
 >;
 const mockFetchSections = Services.schoolOrganization.fetchSections as jest.MockedFunction<
   typeof Services.schoolOrganization.fetchSections
+>;
+
+const mockFetchAcademicSessions = Services.schoolOrganization
+  .fetchAcademicSessions as jest.MockedFunction<
+  typeof Services.schoolOrganization.fetchAcademicSessions
 >;
 
 const CAMPUSES = [{ id: "campus-1", name: "Main Campus" }];
@@ -56,6 +68,26 @@ describe("use-reference-data", () => {
     mockFetchClasses.mockReset().mockResolvedValue(OPTIONS);
     mockFetchSubjects.mockReset().mockResolvedValue(OPTIONS);
     mockFetchSections.mockReset().mockResolvedValue(SECTION_OPTIONS);
+    mockFetchAcademicSessions.mockReset().mockResolvedValue([]);
+  });
+
+  it("useAcademicSessions reads the sessions under the key every other reader of that list uses", async () => {
+    const { queryClient, wrapper } = setup();
+
+    const { result } = renderHook(() => useAcademicSessions(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+    expect(cached(queryClient, "academic-sessions")).toEqual([]);
+  });
+
+  it("useAcademicSessions waits while disabled", () => {
+    const { wrapper } = setup();
+
+    renderHook(() => useAcademicSessions({ enabled: false }), { wrapper });
+
+    expect(mockFetchAcademicSessions).not.toHaveBeenCalled();
   });
 
   describe("useCampuses", () => {

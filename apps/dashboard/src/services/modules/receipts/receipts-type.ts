@@ -1,10 +1,17 @@
-import type { ApiSchemas } from "@schoolhub/api-client";
+import type { ApiSchemas, operations } from "@schoolhub/api-client";
 
 export type ReceiptRecord = ApiSchemas["Receipt"];
-export type ReceiptFormat = "pdf" | "thermal";
+/** The generated `?format=` enum (ADR-0017), not a hand-typed copy. */
+export type ReceiptFormat = NonNullable<
+  operations["receipts_download_retrieve"]["parameters"]["query"]
+>["format"];
 
 export interface ReceiptsQuery {
   payment?: string;
+  student?: string;
+  /** Matches the receipt number. */
+  search?: string;
+  ordering?: string;
   cursor?: string;
   pageSize?: number;
 }

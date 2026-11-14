@@ -140,8 +140,9 @@ def record_system_audit(
 def record_security_event(request, action: str, *, tenant=None, **context) -> None:
     """Auth-related events (login, MFA change, role change, export, impersonation).
 
-    ``tenant`` names the school for an unauthenticated request that has none bound,
-    e.g. a payment callback whose URL names it.
+    ``tenant`` names the school for an unauthenticated endpoint that has none bound: one
+    that resolved it from the body (ADR-0033), or a payment callback whose URL names it.
+    Otherwise the middleware's ``request.tenant`` is used.
     """
     try:
         user = getattr(request, "user", None)
@@ -149,7 +150,7 @@ def record_security_event(request, action: str, *, tenant=None, **context) -> No
         # write must not silently undo the password change that prompted it.
         with transaction.atomic():
             AuditLog.objects.create(
-                tenant=tenant or getattr(request, "tenant", None),
+                tenant=tenant if tenant is not None else getattr(request, "tenant", None),
                 actor=user if user and getattr(user, "is_authenticated", False) else None,
                 action=action,
                 resource_type="security.event",
@@ -157,6 +158,28 @@ def record_security_event(request, action: str, *, tenant=None, **context) -> No
                 request_id=getattr(request, "request_id", "") or "",
                 ip_address=_client_ip(request),
                 user_agent=request.META.get("HTTP_USER_AGENT", "")[:400],
+            )
+    except Exception:
+        logger.exception("failed to write security event", extra={"action": action})
+
+
+def record_task_security_event(
+    action: str, *, tenant_id, actor_id=None, resource_id=None, **context
+) -> None:
+    """A security event raised by background work, which has no request to read.
+
+    Same row shape and the same never-raise promise as :func:`record_security_event`;
+    the tenant and actor are passed in because a Celery task has no ``request``.
+    """
+    try:
+        with transaction.atomic():
+            AuditLog.objects.create(
+                tenant_id=tenant_id,
+                actor_id=actor_id,
+                action=action,
+                resource_type="security.event",
+                resource_id=resource_id,
+                after=_json_safe(_redact(context)) or None,
             )
     except Exception:
         logger.exception("failed to write security event", extra={"action": action})

@@ -19,25 +19,6 @@ from core.api.exceptions import DomainRuleViolation
 from core.files.services import assert_file_usable
 
 
-def resolve_tenant_user_id(*, user_id: uuid.UUID | None, tenant_id: uuid.UUID) -> uuid.UUID | None:
-    """Tenant-checked resolution of a portal-account link.
-
-    ``Staff.user_id`` is a plain UUID column rather than a ForeignKey — see the
-    model docstring — precisely so this check exists explicitly instead of
-    being implied by a queryset that would happily resolve another tenant's
-    user.
-    """
-    if user_id is None:
-        return None
-
-    from core.rbac.models import User
-
-    exists = User.objects.filter(pk=user_id, tenant_id=tenant_id).exists()
-    if not exists:
-        raise DomainRuleViolation({"user_id": "No user with this id exists for your school."})
-    return user_id
-
-
 def assert_employee_number_immutable(*, instance: Staff, new_value: str | None) -> None:
     if new_value is not None and new_value != instance.employee_number:
         raise DomainRuleViolation(
@@ -102,7 +83,6 @@ def create_staff(
     department=None,
     designation=None,
     reports_to=None,
-    user_id: uuid.UUID | None = None,
     photo_file=None,
     gender: str | None = None,
     date_of_birth=None,
@@ -117,9 +97,9 @@ def create_staff(
 ) -> Staff:
     """Create a staff record, allocating its employee number in the same
 
-    transaction. Order: department/designation/national-id checks -> user_id
-    tenant check -> number allocation -> insert, so a rejected create never
-    consumes a sequence value — mirrors create_student's ordering rule.
+    transaction. Order: department/designation/national-id checks -> number
+    allocation -> insert, so a rejected create never consumes a sequence value —
+    mirrors create_student's ordering rule.
     """
     if department is not None:
         assert_department_active(department=department, tenant_id=tenant_id)
@@ -129,7 +109,6 @@ def create_staff(
         assert_reports_to_acyclic(staff=None, reports_to=reports_to)
     if national_id:
         assert_national_id_available(tenant_id=tenant_id, national_id=national_id, instance=None)
-    checked_user_id = resolve_tenant_user_id(user_id=user_id, tenant_id=tenant_id)
     if photo_file is not None:
         assert_file_usable(file=photo_file, purpose=uploads.STAFF_PHOTO.key)
 
@@ -140,7 +119,6 @@ def create_staff(
     return Staff.objects.create(
         tenant_id=tenant_id,
         employee_number=employee_number,
-        user_id=checked_user_id,
         first_name=first_name,
         last_name=last_name,
         gender=gender or Gender.UNSPECIFIED,

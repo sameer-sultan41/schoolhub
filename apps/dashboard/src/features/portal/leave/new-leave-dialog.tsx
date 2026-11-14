@@ -20,7 +20,7 @@ import {
 import { AttachmentUploader, type UploadedAttachment } from "@/components/attachment-uploader";
 import { FormDialogLayout } from "@/components/form-dialog-layout";
 import { FormSelectField } from "@/components/form-select-field";
-import { enumLabel } from "@/features/portal/enum-label";
+import { enumLabel } from "@/lib/enum-label";
 import { useFormDialogSubmit } from "@/hooks/use-form-dialog-submit";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
