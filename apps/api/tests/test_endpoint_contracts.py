@@ -109,6 +109,27 @@ class EndpointContractTests(TestCase):
         ]
         self.assertEqual(offenders, [], f"Endpoints not enforcing HasPermissionKey: {offenders}")
 
+    def test_module_gated_views_bind_the_tenant(self):
+        """A view behind a module flag must bind the caller's tenant itself.
+
+        `TenantMiddleware` runs before DRF authenticates the bearer token, so under JWT
+        alone it sees an anonymous user and binds nothing; only
+        `TenantScopedViewSetMixin.initial()` binds the tenant after authentication.
+        Without it `RequiresModuleFeature` sees no tenant and refuses every production
+        request, while `force_login` tests pass. SchoolSettingsView and then the finance
+        report views shipped exactly that way.
+        """
+        offenders = [
+            f"{route} ({view.__name__})"
+            for route, view in _api_views()
+            if not _is_exempt(route)
+            and getattr(view, "required_feature", None)
+            and not issubclass(view, TenantScopedViewSetMixin)
+        ]
+        self.assertEqual(
+            offenders, [], f"Module-gated views that never bind the tenant: {offenders}"
+        )
+
 
 class WritePermissionContractTests(TestCase):
     """A write is never authorised by a read key.
