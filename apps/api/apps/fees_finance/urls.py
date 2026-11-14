@@ -9,6 +9,7 @@ the thing being created is a whole balanced posting rather than a change to one
 entry. `LedgerEntryViewSet` has no create route for the same reason.
 """
 
+from django.db import transaction
 from django.urls import path
 from rest_framework.routers import SimpleRouter
 
@@ -24,8 +25,11 @@ from apps.fees_finance.views import (
     FeeVoucherViewSet,
     FinanceReportView,
     FineViewSet,
+    GatewayReconciliationIssueViewSet,
     LedgerAccountViewSet,
     LedgerEntryViewSet,
+    PaymentCallbackView,
+    PaymentGatewayAccountViewSet,
     PaymentViewSet,
     ReceiptViewSet,
     RefundViewSet,
@@ -56,6 +60,11 @@ router.register(
 router.register("expense-categories", ExpenseCategoryViewSet, basename="expense-categories")
 router.register("expenses", ExpenseViewSet, basename="expenses")
 router.register("budgets", BudgetViewSet, basename="budgets")
+router.register(
+    "gateway-reconciliation-issues",
+    GatewayReconciliationIssueViewSet,
+    basename="gateway-reconciliation-issues",
+)
 
 urlpatterns = [
     path(
@@ -92,6 +101,28 @@ urlpatterns = [
         "fines/<uuid:pk>:waive",
         FineViewSet.as_view({"post": "waive"}),
         name="fines-waive",
+    ),
+    # Online payments (ADR-0034). The two `non_atomic_requests` routes call the
+    # provider, which must hold no transaction: each opens its own steps.
+    path(
+        "fee-invoices/<uuid:pk>:initiate-payment",
+        transaction.non_atomic_requests(FeeInvoiceViewSet.as_view({"post": "initiate_payment"})),
+        name="fee-invoices-initiate-payment",
+    ),
+    path(
+        "public/payment-callbacks/<slug:tenant_slug>/<str:callback_token>",
+        transaction.non_atomic_requests(PaymentCallbackView.as_view()),
+        name="payment-callbacks",
+    ),
+    path(
+        "payment-gateway-accounts/current",
+        PaymentGatewayAccountViewSet.as_view({"get": "current", "put": "save_current"}),
+        name="payment-gateway-accounts-current",
+    ),
+    path(
+        "gateway-reconciliation-issues/<uuid:pk>:resolve",
+        GatewayReconciliationIssueViewSet.as_view({"post": "resolve"}),
+        name="gateway-reconciliation-issues-resolve",
     ),
     path(
         "payments:record",

@@ -197,9 +197,15 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-api-env
+      # prod.py requires every variable it reads with no default (it fails closed at boot),
+      # so each one is supplied here: a throwaway Fernet key generated per run, never a
+      # committed one, and a placeholder public URL (agent-lessons L60).
       - name: Django deployment checks
-        run: uv run manage.py check --deploy --fail-level WARNING
+        run: |
+          INTEGRATIONS_ENCRYPTION_KEYS="$(uv run python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" \
+            uv run manage.py check --deploy --fail-level WARNING
         env:
           DJANGO_SETTINGS_MODULE: config.settings.prod
           DJANGO_SECRET_KEY: 7Qk2mVx9RbT4wYzA1sHf6JpLn0CdGeUiOa3ZtXrMvB8yNqEcWk5DgSjFhPuT2LiR
           DJANGO_ALLOWED_HOSTS: example.com
+          API_PUBLIC_URL: https://api.example.com

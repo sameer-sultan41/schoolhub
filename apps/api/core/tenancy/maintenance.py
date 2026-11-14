@@ -38,19 +38,29 @@ def active_tenant_ids() -> Iterator[uuid.UUID]:
     return iter(Tenant.objects.filter(deleted_at__isnull=True).values_list("pk", flat=True))
 
 
-def for_each_tenant(step: Callable[[uuid.UUID], int], *, job: str) -> dict[str, int]:
+def for_each_tenant(
+    step: Callable[[uuid.UUID], int], *, job: str, atomic: bool = True
+) -> dict[str, int]:
     """Run ``step`` once per tenant inside that tenant's own transaction.
 
     ``step`` returns the number of rows it acted on. One tenant raising does not
     abort the sweep — it is logged and the next tenant still runs, because a
     single tenant's bad data must not stop retention platform-wide.
+
+    ``atomic=False`` calls ``step`` with no transaction and no tenant bound, for a
+    step that must call out over the network (a payment provider) between its
+    units of work: it opens ``tenant_atomic(tenant_id)`` itself around each one,
+    so no lock or transaction is held across the call.
     """
     visited = affected = failed = 0
 
     for tenant_id in active_tenant_ids():
         visited += 1
         try:
-            with tenant_atomic(tenant_id):
+            if atomic:
+                with tenant_atomic(tenant_id):
+                    affected += step(tenant_id)
+            else:
                 affected += step(tenant_id)
         except Exception:
             failed += 1

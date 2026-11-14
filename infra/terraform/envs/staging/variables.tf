@@ -53,6 +53,11 @@ variable "django_secret_key_arn" {
   type        = string
 }
 
+variable "integrations_encryption_keys_arn" {
+  description = "Secrets Manager ARN holding INTEGRATIONS_ENCRYPTION_KEYS: comma-separated Fernet keys, newest first, that encrypt each school's payment-gateway credentials. See infra/runbooks/rotate-integration-credentials.md."
+  type        = string
+}
+
 variable "app_database_url_arn" {
   description = "Secrets Manager ARN holding the application DATABASE_URL — the schoolhub_app role, through PgBouncer. Never the master URL."
   type        = string

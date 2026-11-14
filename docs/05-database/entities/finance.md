@@ -1,7 +1,7 @@
 # Entities: Finance & Payroll
 
 > **Agent Context**
-> **Implementation note:** 18 of these 22 tables are built — `ledger_accounts`, `ledger_entries`, `fee_heads`, `fee_structures`, `fee_schedules` (PR A) and `fee_invoices`, `fee_invoice_lines`, `discounts`, `scholarships`, `fines` (PR B). PR C adds `payments`, `receipts`, `refunds`, `fee_vouchers` and `voucher_collection_imports`, plus **`voucher_settlement_rows`, which is not in this document's table list** — §11's "a settlement row posts at most once" needs somewhere to record that it did, and the match key is a unique index there. PR D adds `expense_categories`, `expenses` and `budgets`. Payroll's four (`salary_structures`, `salary_components`, `payroll_runs`, `payslips`) are the only ones left, deferred with hr-leave. See `../../03-modules/fees-finance.md` §20 for the register.
+> **Implementation note:** 18 of these 22 tables are built — `ledger_accounts`, `ledger_entries`, `fee_heads`, `fee_structures`, `fee_schedules` (PR A) and `fee_invoices`, `fee_invoice_lines`, `discounts`, `scholarships`, `fines` (PR B). PR C adds `payments`, `receipts`, `refunds`, `fee_vouchers` and `voucher_collection_imports`, plus **`voucher_settlement_rows`, which is not in this document's table list** — §11's "a settlement row posts at most once" needs somewhere to record that it did, and the match key is a unique index there. PR D adds `expense_categories`, `expenses` and `budgets`. Online payments ([ADR-0034](../../decisions/0034-online-fee-payments.md)) add **`payment_gateway_accounts` and `gateway_reconciliation_issues`, also not in the module's original list**, and `payments.provider_txn_id`. Payroll's four (`salary_structures`, `salary_components`, `payroll_runs`, `payslips`) are the only ones left, deferred with hr-leave. See `../../03-modules/fees-finance.md` §20 for the register.
 > **Summary:** Column-level specs for the 22 tables owned by the fees-finance module: fee configuration, invoicing, collections (incl. bank/wallet vouchers), refunds, general ledger, expenses, budgets, and payroll. Every table is tenant-owned and implicitly carries `id UUID PK`, `tenant_id FK`, `created_at`/`updated_at`, `created_by`/`updated_by`, `deleted_at` (soft delete) — exceptions are stated per table. All monetary columns are `numeric(12,2)` in the tenant's configured currency (no per-row currency column).
 > **Co-load with:** `../../03-modules/fees-finance.md` · `people.md` (students, staff) · `academics.md` (sessions, terms, classes, campuses) · `tenancy.md` (users, files)
 
@@ -169,16 +169,18 @@ Payments received against a single invoice (one invoice per payment; multi-invoi
 | student_id | uuid | no | — | FK → `students.id` (denormalized for ledger queries) |
 | amount | numeric(12,2) | no | — | > 0 and ≤ invoice balance at confirmation |
 | method | varchar(20) | no | — | Enum: `cash`, `cheque`, `bank_transfer`, `card`, `online_gateway` |
-| reference_no | varchar(80) | yes | null | Cheque/transaction reference |
+| reference_no | varchar(80) | yes | null | Cheque/transaction reference; for `online_gateway`, our order id `SH-{invoice_no}-{8 hex}` |
 | gateway_provider | varchar(40) | yes | null | Set for `online_gateway` |
 | gateway_payload | jsonb | yes | null | Sanitized gateway confirmation snapshot |
+| provider_txn_id | varchar(120) | yes | null | The provider's own transaction id, set from the verified event |
+| gateway_account_id | uuid | yes | null | FK → `payment_gateway_accounts.id`; the account an online checkout went through, set at initiation; reconciliation calls only accounts that own payments in its window |
 | status | varchar(15) | no | `'pending'` | Enum: `pending`, `confirmed`, `failed`, `reversed` |
 | paid_at | timestamptz | yes | null | Set on confirmation |
 | received_by | uuid | yes | null | FK → `users.id`; null for gateway self-service |
 | idempotency_key | varchar(80) | yes | null | Unique partial `(tenant_id, idempotency_key)` where not null |
 
-Indexes: `(tenant_id, fee_invoice_id)`; `(tenant_id, student_id, paid_at)`; `(tenant_id, status, method)`; unique partial on idempotency_key.
-Relationships: many→one `fee_invoices`, `students`, `users`; one→one `receipts`; one→many `refunds`.
+Indexes: `(tenant_id, fee_invoice_id)`; `(tenant_id, student_id, paid_at)`; `(tenant_id, status, method)`; unique partial on idempotency_key. For live `online_gateway` rows: unique `(tenant_id, gateway_provider, reference_no)` (`payments_gateway_order_id_unique`), unique `(tenant_id, gateway_provider, provider_txn_id)` (`payments_gateway_txn_id_unique`), and at most one `pending` per invoice (`payments_one_pending_online_per_invoice`).
+Relationships: many→one `fee_invoices`, `students`, `users`, optional `payment_gateway_accounts`; one→one `receipts`; one→many `refunds`.
 
 ### receipts
 
@@ -254,6 +256,43 @@ One imported bank/wallet settlement file and its match outcome (workflow in fees
 
 Indexes: `(tenant_id, provider, created_at)`; `(tenant_id, status)`.
 Relationships: many→one `files`, `users`; one→many `fee_vouchers` (via matched postings, not a direct FK).
+
+### payment_gateway_accounts
+
+The school's own merchant account with a payment aggregator ([ADR-0034](../../decisions/0034-online-fee-payments.md)).
+
+| Column | Type | Null | Default | Notes |
+| ------ | ---- | ---- | ------- | ----- |
+| provider | varchar(40) | no | — | A registered, enabled adapter (`core/integrations/payments`) |
+| is_active | boolean | no | `true` | At most one active per tenant |
+| merchant_id_masked | varchar(40) | no | — | Derived by the adapter; the only part of the credentials ever shown |
+| credentials_ciphertext | binary | no | — | Fernet token of the credentials JSON (`core/integrations/crypto.py`); write-only through the API |
+| callback_token | varchar(64) | no | — | `secrets.token_urlsafe(32)`; unique; the path segment of the school's callback URL |
+
+Indexes: unique `callback_token`; unique partial `(tenant_id)` where `is_active` and not deleted (`payment_gateway_accounts_one_active`).
+Relationships: none by FK. A payment names its provider in `payments.gateway_provider`. An inactive account keeps its token, so a late callback for a payment it took still applies.
+
+### gateway_reconciliation_issues
+
+An online-payment discrepancy for a person to book or dismiss, once.
+
+| Column | Type | Null | Default | Notes |
+| ------ | ---- | ---- | ------- | ----- |
+| kind | varchar(30) | no | — | Enum: `amount_mismatch`, `overpaid`, `unknown_reference`, `missing_at_gateway`, `paid_after_failed`, `duplicate_at_gateway`, `paid_on_canceled_invoice` |
+| payment_id | uuid | yes | null | FK → `payments.id`; null for an `unknown_reference` until it is booked |
+| gateway_provider | varchar(40) | yes | null | Needed to book an `unknown_reference` |
+| order_id | varchar(80) | yes | null | Our order id |
+| provider_txn_id | varchar(120) | yes | null | The provider transaction the issue is about |
+| expected_amount | numeric(12,2) | yes | null | What we expected |
+| gateway_amount | numeric(12,2) | yes | null | What the provider verified; what `book_at_gateway_amount` posts |
+| detected_at | timestamptz | no | — | |
+| resolution | varchar(15) | yes | null | Enum: `booked`, `dismissed`; set once |
+| resolved_at | timestamptz | yes | null | Set with `resolution` (CHECK) |
+| resolved_by | uuid | yes | null | FK → `users.id` |
+| note | text | yes | null | Required to dismiss (CHECK) |
+
+Indexes: unique partial `(tenant_id, payment_id, kind)` while open (`gateway_issues_one_open_per_payment_kind`); unique partial `(tenant_id, gateway_provider, order_id, kind)` while open with no payment (`gateway_issues_one_open_unmatched_per_order_kind`), so two callbacks racing on an unknown order raise one issue; `(tenant_id, resolution, detected_at)` for the issues list.
+Relationships: many→one optional `payments`, `users`.
 
 ### ledger_accounts
 

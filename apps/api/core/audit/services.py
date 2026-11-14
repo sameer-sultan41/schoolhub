@@ -114,15 +114,42 @@ def record_audit(
         return None
 
 
-def record_security_event(request, action: str, **context) -> None:
-    """Auth-related events (login, MFA change, role change, export, impersonation)."""
+def record_system_audit(
+    tenant_id, action: str, instance, *, context: dict | None = None
+) -> AuditLog | None:
+    """``record_audit`` for work no user performed: a gateway callback, a sweep, a reconcile.
+
+    No request, so no actor, IP or request id; ``context`` says what happened (e.g. the
+    provider reference) and is stored as ``after``. Never raises, for ``record_audit``'s reason.
+    """
+    try:
+        with transaction.atomic():
+            return AuditLog.objects.create(
+                tenant_id=tenant_id,
+                actor=None,
+                action=action,
+                resource_type=instance._meta.label_lower,
+                resource_id=getattr(instance, "pk", None),
+                after=_json_safe(_redact(context)) if context is not None else None,
+            )
+    except Exception:
+        logger.exception("failed to write system audit log", extra={"action": action})
+        return None
+
+
+def record_security_event(request, action: str, *, tenant=None, **context) -> None:
+    """Auth-related events (login, MFA change, role change, export, impersonation).
+
+    ``tenant`` names the school for an unauthenticated request that has none bound,
+    e.g. a payment callback whose URL names it.
+    """
     try:
         user = getattr(request, "user", None)
         # Savepointed for the same reason as record_audit: a failed security-event
         # write must not silently undo the password change that prompted it.
         with transaction.atomic():
             AuditLog.objects.create(
-                tenant=getattr(request, "tenant", None),
+                tenant=tenant or getattr(request, "tenant", None),
                 actor=user if user and getattr(user, "is_authenticated", False) else None,
                 action=action,
                 resource_type="security.event",

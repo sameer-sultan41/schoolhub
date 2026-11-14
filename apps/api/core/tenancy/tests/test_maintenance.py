@@ -9,6 +9,7 @@ obvious way would report success forever while pruning nothing.
 from __future__ import annotations
 
 import uuid
+from unittest import mock
 
 from django.test import TestCase
 
@@ -82,6 +83,29 @@ class ForEachTenantTests(TestCase):
         self.assertIn(self.second.pk, visited)
         self.assertEqual(summary["failed"], 1)
         self.assertEqual(summary["affected"], (summary["tenants"] - 1) * 2)
+
+    def test_a_non_atomic_step_runs_unbound_and_opens_its_own_transactions(self) -> None:
+        """`atomic=False` is for a step that calls a provider between units of work.
+
+        It must not be wrapped: the step binds each unit itself, so nothing is
+        held open across the network call.
+        """
+        seen: list[uuid.UUID] = []
+
+        def step(tenant_id: uuid.UUID) -> int:
+            from core.tenancy.context import get_current_tenant_id
+
+            assert get_current_tenant_id() is None
+            seen.append(tenant_id)
+            return 1
+
+        with mock.patch("core.tenancy.maintenance.tenant_atomic") as wrapped:
+            summary = for_each_tenant(step, job="test-sweep", atomic=False)
+
+        wrapped.assert_not_called()
+        self.assertIn(self.first.pk, seen)
+        self.assertIn(self.second.pk, seen)
+        self.assertEqual(summary["affected"], len(seen))
 
     def test_the_default_manager_sees_nothing_without_a_bound_tenant(self) -> None:
         """Layer 1 of why for_each_tenant binds per tenant rather than sweeping once.
