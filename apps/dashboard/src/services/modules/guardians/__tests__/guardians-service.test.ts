@@ -156,4 +156,15 @@ describe("guardians-service", () => {
     );
     expect(result).toEqual([{ id: "link-1", guardian_id: "g1" }]);
   });
+
+  it("inviteGuardian posts no body to the colon-action path with an Idempotency-Key", async () => {
+    const { inviteGuardian } = await import("../guardians-service");
+    mockPost.mockResolvedValue({ data: { portal_status: "invited" } });
+
+    await expect(inviteGuardian("g1", "key-g")).resolves.toEqual({ portal_status: "invited" });
+
+    expect(mockPost).toHaveBeenCalledWith("/guardians/g1:invite", undefined, {
+      idempotencyKey: "key-g",
+    });
+  });
 });

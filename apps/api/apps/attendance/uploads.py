@@ -15,6 +15,9 @@ LEAVE_ATTACHMENT = registry.register(
     "A document supporting a leave request — typically a medical note (§6).",
     mime_types={"image/jpeg", "image/png", "application/pdf"},
     max_size_bytes=10 * MEGABYTE,
+    # Often a medical note: signed only by `/leave-requests/{id}/attachment:download`, under
+    # the request's own scope, never by the generic `/files` (ADR-0021, lesson L29).
+    module_gated=True,
     portal_uploadable=True,
 )
 

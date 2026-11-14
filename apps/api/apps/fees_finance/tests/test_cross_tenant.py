@@ -515,11 +515,12 @@ class FinanceCrossTenantTests(FeesFinanceAPITestCase):
                 self.assertEqual(response.status_code, status.HTTP_200_OK)
                 self.assertEqual(response.json()["data"], [])
 
-    def test_a_foreign_student_s_ledger_is_empty_rather_than_theirs(self) -> None:
+    def test_a_foreign_student_s_ledger_is_a_404(self) -> None:
+        """A path id, unlike a list filter: an empty 200 would answer for a
+        student this school does not have (ADR-0004)."""
         response = self.client.get(f"/api/v1/students/{self.other_student.pk}/ledger")
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.json()["data"], [])
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
 class OnlinePaymentsCrossTenantTests(FeesFinanceAPITestCase):

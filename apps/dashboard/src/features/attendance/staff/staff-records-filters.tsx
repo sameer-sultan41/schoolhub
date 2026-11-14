@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@schoolhub/ui";
 
-import { DateRangeInputs } from "@/features/attendance/date-range-inputs";
+import { DateRangeInputs } from "@/components/date-range-inputs";
 import { FILTER_ALL } from "@/lib/constants";
 import { STAFF_ATTENDANCE_STATUSES } from "@/services/modules/staff-attendance/staff-attendance-constant";
 

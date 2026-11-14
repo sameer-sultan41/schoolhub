@@ -9,6 +9,7 @@ import {
   buildVoucher,
   filesModule,
   jobsModule,
+  leaveAttachmentUrl,
   portalLeaveModule,
   portalModule,
   type MockApi,
@@ -125,6 +126,38 @@ test.describe("a guardian's leave, vouchers and password", () => {
 
     await expect(row).toContainText("Cancelled");
     await expect(portalLeavePage.cancelButton(row)).toHaveCount(0);
+  });
+
+  test("a request's attached document opens again from its row", async ({
+    page,
+    mockApi,
+    portalPage,
+    portalLeavePage,
+    signedIn: _signedIn,
+  }) => {
+    const fileId = "00000000-0000-4000-b000-0000000009f1";
+    stubFamily(mockApi, {
+      leaveRequests: [buildPortalLeaveRequest({ attachment_file_id: fileId })],
+    });
+    // Storage signs the URL with `Content-Disposition: attachment`, which is what makes
+    // Chromium emit the `download` event for a cross-origin link.
+    await page.route(leaveAttachmentUrl(fileId), (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/pdf",
+        headers: { "content-disposition": 'attachment; filename="note.pdf"' },
+        body: "%PDF-1.4",
+      }),
+    );
+    await portalPage.goto();
+    await portalPage.tab("Leave").click();
+
+    const downloadPromise = page.waitForEvent("download");
+    await portalLeavePage.attachmentDownload(portalLeavePage.request("A cousin's wedding")).click();
+    const download = await downloadPromise;
+
+    expect(download.url()).toBe(leaveAttachmentUrl(fileId));
+    expect(mockApi.countCalls("POST", "/leave-requests/:id/:action")).toBe(1);
   });
 
   test("fees offers each open invoice its voucher as a PDF download", async ({

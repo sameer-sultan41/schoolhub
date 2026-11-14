@@ -355,5 +355,7 @@ fileobj
 dedup
 regen
 uncleareable
+autoretry
+blacklistedtoken
 harfbuzz
 Safepay

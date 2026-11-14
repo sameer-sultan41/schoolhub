@@ -13,6 +13,9 @@ from django.test import SimpleTestCase
 
 from core.api.throttling import (
     AuthEndpointThrottle,
+    InvitationIPThrottle,
+    PasswordResetEmailThrottle,
+    PasswordResetIPThrottle,
     PaymentCallbackFailureThrottle,
     PaymentCallbackThrottle,
     PublicFormThrottle,
@@ -28,6 +31,9 @@ DEFAULT_RATES = {
     "public_form": "5/min",
     "payment_callback": "600/min",
     "payment_callback_failure": "30/min",
+    "password_reset_email": "5/hour",
+    "password_reset_ip": "20/hour",
+    "invitation_ip": "60/hour",
 }
 
 
@@ -43,6 +49,9 @@ class ThrottleRateTests(SimpleTestCase):
             PublicFormThrottle,
             PaymentCallbackThrottle,
             PaymentCallbackFailureThrottle,
+            PasswordResetEmailThrottle,
+            PasswordResetIPThrottle,
+            InvitationIPThrottle,
         ):
             with self.subTest(throttle=throttle.__name__):
                 self.assertNotIn("rate", vars(throttle))

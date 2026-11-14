@@ -140,6 +140,11 @@ export const API_ERROR_CODES = [
   "domain_rule_violation",
   "rate_limited",
   "module_disabled",
+  "invalid_link",
+  // The caller's school is deleted (404) or suspended (403): `TenantMiddleware` and
+  // `TenantScopedViewSetMixin` (apps/api/core/api/viewsets.py), which also covers bearer tokens.
+  "tenant_not_found",
+  "tenant_suspended",
   // A 409 `Conflict` subclass with a domain code: results can't be processed while marks are
   // outstanding (apps/api/apps/examinations/processing.py `MarksOutstanding`).
   "marks_outstanding",

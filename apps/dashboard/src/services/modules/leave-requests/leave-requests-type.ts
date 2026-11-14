@@ -4,6 +4,7 @@ import type { ApiSchemas } from "@schoolhub/api-client";
 export type LeaveRequestRecord = ApiSchemas["LeaveRequest"];
 export type LeaveApprovalRecord = LeaveRequestRecord["approvals"][number];
 export type LeaveTypeRecord = ApiSchemas["LeaveType"];
+export type LeaveAttachmentDownload = ApiSchemas["AttachmentDownload"];
 
 export type LeaveStatus = LeaveRequestRecord["status"];
 export type LeaveApprovalDecision = LeaveApprovalRecord["decision"];

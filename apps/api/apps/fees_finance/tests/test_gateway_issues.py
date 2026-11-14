@@ -27,7 +27,7 @@ from apps.fees_finance.models import (
     VoucherCollectionImport,
     VoucherProvider,
 )
-from apps.fees_finance.tests.factories import settlement_csv
+from apps.fees_finance.tests.factories import jwt_only_client, settlement_csv
 from apps.fees_finance.tests.online_base import OnlinePaymentsTestCase
 from core.audit.models import AuditLog
 from core.files.services import create_ready_file
@@ -187,6 +187,12 @@ class ResolveTests(GatewayIssueTestCase):
         self.assertEqual(
             self.guardian_client.get("/api/v1/gateway-reconciliation-issues").status_code, 403
         )
+
+    def test_the_issue_list_works_under_a_bearer_token_alone(self) -> None:
+        """No session for `TenantMiddleware`: the viewset binds the tenant (agent-lessons L63)."""
+        response = jwt_only_client(self.user).get("/api/v1/gateway-reconciliation-issues")
+
+        self.assertEqual(response.status_code, 200, response.content)
 
 
 class IssueDedupeTests(GatewayIssueTestCase):

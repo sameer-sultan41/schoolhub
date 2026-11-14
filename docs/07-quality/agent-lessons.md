@@ -23,6 +23,7 @@
 8. Test inputs are the exact values the code branches on, and an unrelated edit still passes (L9, L18).
 9. A hook rejection was fixed at its cause, after reading its error, on the files it named (L10).
 10. Every brief to a subagent carries this repository's overrides (L11).
+11. A viewset you edited is the one `config/api_v1.py` routes to (L40), and every fixture of a type the regenerated contract changed was updated in the same commit (L41).
 
 ## 3. Lessons
 
@@ -88,7 +89,12 @@
   `unread_count` with a different field type (`[assignment]`), first silenced with a
   `type: ignore` and then fixed properly by a shared `ThreadBaseSerializer` (`523c453d`).
   Read the mypy error, then restructure; a suppressor is not the fix (AGENTS.md stop rule 2).
-- **Check.** Apply the fix the hook prints, on exactly the files it lists. Delete an unused `noqa` rather than re-adding it, reword a flagged word rather than growing `.cspell/project-words.txt`, and never use `--no-verify`. Keep the reason a removed `noqa` carried as a plain comment. When a hook prints no detail (the pre-push mypy check), run the command it names once and read the error before editing; two guessed fixes in a row failed before the real cause (a class variable overridden by an annotated attribute) was read.
+- **Mistake (again, account-invitations PR A, Task A2 fix round 3).** While clearing hook
+  rejections a subagent ran `ruff check`/`ruff format` by hand instead of letting the commit
+  hooks report and fixing the named files, which is the local lint run ADR-0007 forbids.
+- **Check.** Apply the fix the hook prints, on exactly the files it lists. The hooks run ruff,
+  eslint and prettier; never run them yourself. The pre-commit checks only report, so edit the
+  named files by hand, re-stage them and commit again. Delete an unused `noqa` rather than re-adding it, reword a flagged word rather than growing `.cspell/project-words.txt`, and never use `--no-verify`. Keep the reason a removed `noqa` carried as a plain comment. When a hook prints no detail (the pre-push mypy check), run the command it names once and read the error before editing; two guessed fixes in a row failed before the real cause (a class variable overridden by an annotated attribute) was read.
 
 ### L11. Briefs to subagents must carry this repository's overrides
 
@@ -298,6 +304,46 @@
   test changes for the same identity: assert each read on its own (`> 0`), or give the test its
   own identity. Pin exact equality in a backend unit test, where nothing runs alongside.
 
+### L40. Confirm a viewset is routed before editing it
+
+- **Mistake.** Account-invitations Task A2 first added `:invite` to
+  `apps/api/apps/student_management/guardians/viewset.py`, an ADR-0010 package copy that nothing
+  routes: `config/api_v1.py` reaches the flat `student_management/views.py` through
+  `student_management/urls.py`. The action would have shipped unreachable, with its tests
+  calling a class the API never serves.
+- **Check.** Before editing a viewset, follow the route from `config/api_v1.py` through the
+  app's `urls.py` to the class it registers, and edit that one. A test that drives the URL
+  (`self.client.post("/api/v1/...")`), not the class, would have failed. Unrouted copies are
+  listed in `deferred-work.md` until they are deleted or wired.
+
+### L41. A regenerated contract updates the fixtures that build its types, in the same commit
+
+- **Mistake.** Account-invitations A2's first commit regenerated `packages/api-client/src/schema.d.ts`
+  (`portal_status` on `Guardian` and `Student`) without updating the eight dashboard fixtures
+  typed as those records, so the pre-push `tsc` failed on each (Invariant 6: backend and client
+  change together, in one commit).
+- **Check.** After regenerating the contract, grep the dashboard and e2e for every changed type
+  (`ApiSchemas["Guardian"]`, `GuardianRecord`, `portal_status:`) and update each fixture and
+  mock in the same commit. A hand-written record type the change touches (for example
+  `StaffDetailRecord` gaining `user_id`) gets the same sweep.
+
+### L42. An action that assigns roles checks the actor may grant them
+
+- **Mistake.** Account-invitations PR A's staff `:invite` assigned any `role_ids` under
+  `staff.staff.update` alone. Once invitations could activate an account, `hr_staff` could mint
+  a `school_admin` login; the final review caught it.
+- **Check.** Wherever a request hands roles or keys to another account, refuse (403) a
+  restricted-principal role and any role holding a key outside
+  `effective_permission_keys(actor)`. Test it with a narrower real role (`grant_default_role`)
+  granting a wider one, plus a positive control.
+
+### L43. Every path that ends a record ends its login
+
+- **Mistake.** PR A ended a departing staff member's access in `:exit` only; `DELETE /staff/{id}`
+  soft-deleted the row and left the login active with its roles and tokens.
+- **Check.** When a record owns a login, list every route that ends the record (`:exit`,
+  `:withdraw`, `DELETE`, imports) and route each through one access-ending service. Test the
+  `DELETE` as well as the colon-action.
 ### L44. Granting a role an action key means checking the view's read key too
 
 - **Mistake.** Parent-portal PR B's backend gave guardians and students `platform.file.create` so they could upload, but `FileViewSet` declares `create` and `confirm` under that key while its read key `platform.file.view` stays staff-only. The tests hand-granted keys to a user, so every one passed; only CI's `DefaultRoleReadKeyTests` (ADR-0031 decision 3) caught it. The first fix exempted `confirm` alone because the CI log truncated the offender list (`[1393 chars]`), hiding `create`, so CI failed a second time.
@@ -380,7 +426,32 @@
 - **Mistake.** `send_results_back` moved every unpublished result of the exam to `processing`, but the next `processing.write` advanced only the rows it recomputed (the active roll) to `pending_approval`. A student withdrawn between the send-back and the re-process kept a `processing` row, and `approve_exam_results`, which approves only pending rows, moved the exam to `approved` around it: the row was never approved or published, silently (examinations PR #154). The run now moves every `processing` row of the exam to pending, and approval refuses while one is left.
 - **Check.** For every bulk status reset, name the step that re-advances those rows and confirm its filter covers the same row set, not a subset recomputed from today's data (an active roll, a current enrolment). Where it cannot, make the next gate refuse leftovers instead of acting on the rows it finds. Test it: reset, change the population, re-advance, then assert no row is left in the reset state.
 
-### L59. A fake whose state lives in process memory cannot be driven by the live lane
+### L59. A write whose required field is picked from a list the writer may not read
+
+- **Mistake.** `school_admin` holds `fees.fee-structure.create|update` but not `fees.ledger.view`, so it could open New fee head and never save it: the required income-account picker reads `GET /ledger-accounts`, which needs the ledger key, and the list came back a 403 (fees dashboard PR A review). The form was gated on the write key alone.
+- **Check.** For every required picker in a form, the form's gating key set includes the picker's read key, so the control is hidden (or the form not offered) for a role that holds the write key but not the read key. Add a Jest case for that role: it holds the write key and lacks the read key, and sees no New or Edit button. A picker that is optional may hide itself instead (L55).
+
+### L60. A date filter sent as a naive day is a UTC day on the server
+
+- **Mistake.** The Payments tab's paid-on range sent `2026-10-01T00:00:00` and `2026-10-31T23:59:59` to `paid_at__gte` and `__lte`. The server reads a naive date-time in UTC, so a school at UTC+5 lost its first five hours of 1 October to the previous day, and the inclusive upper bound dropped the last second. (`payments-helper.ts`, the fees dashboard PR C.)
+- **Check.** Every date-range filter on a datetime column sends offset-aware bounds (`new Date(y, m, d).toISOString()` or the tenant's zone) with an exclusive upper bound (the next day's start, `__lt`). Its helper test asserts the exact instants in the zone `jest.global-setup.ts` sets (America/New_York); assigning `process.env.TZ` inside a test does not move the zone.
+
+### L61. A test's own stub must not run after the helper that overwrites it
+
+- **Mistake.** Three things passed review and failed only in CI: the payments tests set `listPayments.mockResolvedValue(...)` and then called a render helper that ran `stubFeesServices()`, resetting the list to empty; the over-limit refund hint was a `FormDescription`, which hides itself while its field has an error (the only time the hint shows); and the live seed's session starts 30 days ago, so a monthly `due_day` of 10 gave an invoice a due date before its issue date on any day after the 10th. (PR C CI, `payments-list.test.tsx`, `request-refund-dialog.tsx`, `invoicing.build_draft`.)
+- **Check.** Reset shared mocks in `beforeEach`, never in a render helper a test calls after its own stubs. A message shown because a field failed is not a `FormDescription`. Run seeds and date maths against every day of the month, not today's date.
+
+### L62. Segregation of duties checks the person who made the record ready, not only its creator
+
+- **Mistake.** The expense approval rule compared the approver only with `created_by`, and `submit_expense` recorded nobody. An accountant could edit a colleague's draft, submit it, and approve it, as the creator never touched it (fees dashboard PR D review; `services.decide_expense`).
+- **Check.** For every maker-checker rule, list each actor who changes the record on its way to the gate (create, edit, submit) and make sure each one is stored and barred from deciding it. Test it: one person edits and submits another's draft, that person's approval is a 422, and a third person's approval succeeds.
+
+### L63. A view tested only through force_login can hide a JWT-only failure
+
+- **Mistake.** `FinanceReportView` and `StudentLedgerView` were bare `APIView`s, so under a bearer token nothing bound `request.tenant` and the module gate refused every real client. Their Django tests passed because `authenticate()` also calls `force_login`, whose session lets `TenantMiddleware` bind the tenant first; only the live lane saw it (fees dashboard PR E, `9a4530c8`). Once the tenant bound, a foreign student's statement became an empty 200 instead of a 404.
+- **Check.** Every new `APIView` or `ViewSet` has at least one test that sends a bearer token and no session (`APIClient().credentials(HTTP_AUTHORIZATION=...)`, no `force_login`; see `fees_finance/tests/test_reports.py`'s `jwt_only_client`). A path id is resolved through the tenant- and record-scoped queryset before the view builds anything from it, and that test asserts a foreign id is a 404.
+
+### L64. A fake whose state lives in process memory cannot be driven by the live lane
 
 - **Mistake.** The online-payments fake provider (`core/integrations/payments/fake.py`) kept its
   transactions in memory, filled by tests with `add_transaction`. The callback re-fetches from
@@ -390,7 +461,7 @@
   the state the assertion needs, across the process boundary. If it cannot, give the fake a
   dev-only behaviour behind a setting that tests leave off (`PAYMENT_FAKE_SETTLES_ON_INITIATE`).
 
-### L60. A new required production setting is supplied to every CI job that loads prod settings
+### L65. A new required production setting is supplied to every CI job that loads prod settings
 
 - **Mistake.** Online payments made `prod.py` read `INTEGRATIONS_ENCRYPTION_KEYS` with no default,
   so production fails closed at boot. The `security` job in `.github/workflows/api.yml` runs
@@ -401,7 +472,7 @@
   in each such step: a throwaway value generated at runtime for a secret (never a committed one),
   a placeholder for a non-secret. Keep production failing closed; never add a default to get green.
 
-### L61. A queryset on a tenant-scoped manager is built inside the tenant binding, not before it
+### L66. A queryset on a tenant-scoped manager is built inside the tenant binding, not before it
 
 - **Mistake.** `reconcile_gateway_day` runs with no tenant bound and built
   `Payment.objects.alive().filter(...)` once, before its `tenant_atomic` blocks. The tenant
@@ -412,7 +483,7 @@
   `Model.objects` queryset inside the block that runs it (a small function is fine); never hoist
   one above the binding. Test it by calling the function with no tenant bound, as the sweep does.
 
-### L62. An error response from a `non_atomic_requests` view breaks the `TestCase` transaction
+### L67. An error response from a `non_atomic_requests` view breaks the `TestCase` transaction
 
 - **Mistake.** `:initiate-payment` and the payment callback opt out of `ATOMIC_REQUESTS`. On a
   4xx/5xx, DRF's `set_rollback` marks the open atomic block for rollback; under `TestCase` that

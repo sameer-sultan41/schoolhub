@@ -169,6 +169,9 @@ class PaymentFilterSet(django_filters.FilterSet):
     # rather than something a client derives from a full page of payments.
     paid_at__gte = django_filters.DateTimeFilter(field_name="paid_at", lookup_expr="gte")
     paid_at__lte = django_filters.DateTimeFilter(field_name="paid_at", lookup_expr="lte")
+    # Exclusive upper bound: "up to the end of a day" is "before the next day's start", which no
+    # inclusive instant can say without dropping the last second.
+    paid_at__lt = django_filters.DateTimeFilter(field_name="paid_at", lookup_expr="lt")
     received_by = django_filters.UUIDFilter(field_name="received_by")
 
     class Meta:
@@ -178,6 +181,7 @@ class PaymentFilterSet(django_filters.FilterSet):
 
 class ReceiptFilterSet(django_filters.FilterSet):
     payment = django_filters.UUIDFilter(field_name="payment_id")
+    student = django_filters.UUIDFilter(field_name="payment__student_id")
     receipt_no = django_filters.CharFilter(field_name="receipt_no", lookup_expr="exact")
     issued_at__gte = django_filters.DateTimeFilter(field_name="issued_at", lookup_expr="gte")
     issued_at__lte = django_filters.DateTimeFilter(field_name="issued_at", lookup_expr="lte")

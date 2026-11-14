@@ -65,6 +65,19 @@ class Conflict(exceptions.APIException):
     default_code = "conflict"
 
 
+class InvalidLink(exceptions.APIException):
+    """An emailed account link (invitation or password reset) that cannot be used.
+
+    One code and one message for every reason (unknown school, unknown, used, revoked or
+    expired token, a person no longer eligible), so an unauthenticated caller learns
+    nothing about which accounts or invitations exist.
+    """
+
+    status_code = status.HTTP_400_BAD_REQUEST
+    default_detail = "This link is invalid or has expired."
+    default_code = "invalid_link"
+
+
 class ModuleDisabled(exceptions.APIException):
     """The requested module is not enabled for this tenant.
 
@@ -76,6 +89,27 @@ class ModuleDisabled(exceptions.APIException):
     status_code = status.HTTP_403_FORBIDDEN
     default_detail = "This module is not enabled for your school."
     default_code = "module_disabled"
+
+
+class TenantNotFound(exceptions.APIException):
+    """The caller's tenant is deleted. The code `TenantMiddleware` sends for the same case."""
+
+    status_code = status.HTTP_404_NOT_FOUND
+    default_detail = "Tenant is not available."
+    default_code = "tenant_not_found"
+
+
+class TenantSuspended(exceptions.APIException):
+    """The caller's tenant is suspended or deprovisioned (not `Tenant.is_operational`).
+
+    The code `TenantMiddleware` sends for the same case; raised by
+    `TenantScopedViewSetMixin`, which resolves the tenant after JWT authentication,
+    where the middleware cannot.
+    """
+
+    status_code = status.HTTP_403_FORBIDDEN
+    default_detail = "Tenant is not available."
+    default_code = "tenant_suspended"
 
 
 def _flatten_details(detail, prefix: str = "") -> list[dict[str, str]]:
@@ -119,7 +153,15 @@ def envelope_exception_handler(exc, context):
     # Our own domain exceptions carry a meaningful code; DRF's built-ins carry
     # generic ones ("invalid", "not_authenticated") that leak framework vocabulary
     # into the documented contract, so those resolve from the status instead.
-    if isinstance(exc, DomainRuleViolation | Conflict | ModuleDisabled):
+    if isinstance(
+        exc,
+        DomainRuleViolation
+        | Conflict
+        | InvalidLink
+        | ModuleDisabled
+        | TenantNotFound
+        | TenantSuspended,
+    ):
         code = exc.default_code
     else:
         code = _CODE_BY_STATUS.get(

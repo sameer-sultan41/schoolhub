@@ -452,6 +452,22 @@ def e2e_teacher_permissions() -> list[str]:
     return _exams_keys_for("teacher")
 
 
+# Fees & finance (apps/fees_finance/permissions.py). One login per default finance role, each
+# holding exactly that role's registry keys (`keys_for_role`), so a key the real role lacks
+# fails in the live lane rather than passing on the admin's wider set. Two accountants: the
+# second is the "other approver" a refund or expense needs, because the requester cannot
+# decide their own (§7.3). `module.fees_finance` is enabled by `_ensure_portal_modules_enabled`;
+# the head and draft structure are `seed_e2e_fees`'s. Mirrored in e2e/src/lib/seed-constants.ts.
+E2E_ACCOUNTANT_EMAIL = "e2e-accountant@schoolhub.test"
+E2E_ACCOUNTANT_APPROVER_EMAIL = "e2e-accountant-approver@schoolhub.test"
+E2E_FINANCE_STAFF_EMAIL = "e2e-finance-staff@schoolhub.test"
+E2E_FINANCE_OWNER_EMAIL = "e2e-finance-owner@schoolhub.test"
+
+
+def e2e_finance_permissions(role: str) -> list[str]:
+    return registry.keys_for_role(role)
+
+
 E2E_STUDENT_A_NAME = ("E2E", "Student A")
 E2E_STUDENT_B_NAME = ("E2E", "Student B")
 
@@ -626,6 +642,30 @@ class Command(BaseCommand):
             scope=RecordScope.ASSIGNED,
         )
 
+        # The finance logins. Each default role, built the way `exam_staff` is: a tenant-scoped
+        # role holding exactly the registry's keys for that slug.
+        for role_slug, role_name, emails in (
+            (
+                "accountant",
+                "Accountant",
+                ((E2E_ACCOUNTANT_EMAIL, "Accountant"), (E2E_ACCOUNTANT_APPROVER_EMAIL, "Approver")),
+            ),
+            ("finance_staff", "Finance Staff", ((E2E_FINANCE_STAFF_EMAIL, "Finance Staff"),)),
+            ("school_owner", "School Owner", ((E2E_FINANCE_OWNER_EMAIL, "School Owner"),)),
+        ):
+            finance_role = ensure_role_with_permissions(
+                tenant, role_slug, role_name, e2e_finance_permissions(role_slug)
+            )
+            for email, last_name in emails:
+                ensure_seed_user(
+                    tenant,
+                    finance_role,
+                    email=email,
+                    password=E2E_ADMIN_PASSWORD,
+                    first_name="E2E",
+                    last_name=last_name,
+                )
+
         with tenant_context(tenant.id):
             self._ensure_seven_day_week(tenant)
             campus = self._ensure_campus(tenant)
@@ -748,6 +788,10 @@ class Command(BaseCommand):
         # own command, which reaches those modules through their services: `core` imports
         # no app (ADR-0013, tests/test_import_boundaries.py). Same transaction as this one.
         call_command("seed_e2e_portal", stdout=self.stdout)
+
+        # The fees dashboard's fee head and draft structure; after the portal's, whose active
+        # structure shares the baseline class.
+        call_command("seed_e2e_fees", stdout=self.stdout)
 
         # TODO(website-cms): no public-content/CMS backend module exists yet
         # (apps/api/config/api_v1.py routes only core.rbac and

@@ -115,3 +115,10 @@ export const documentFormSchema = z.object({
 });
 
 export type DocumentFormValues = z.infer<typeof documentFormSchema>;
+
+/** A student's portal invite: the address the link goes to (a student has no email on file). */
+export function createStudentInviteSchema(messages: { invalidEmail: string }) {
+  return z.object({ email: z.email(messages.invalidEmail) });
+}
+
+export type StudentInviteValues = z.infer<ReturnType<typeof createStudentInviteSchema>>;

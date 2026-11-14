@@ -106,6 +106,8 @@ describe("PortalFees", () => {
     expect(mockListInvoices).toHaveBeenCalledWith(
       expect.objectContaining({ studentId: AYESHA_ID, status: "paid" }),
     );
+    // Receipts are fetched for the child, not tenant-wide.
+    expect(mockListReceipts).toHaveBeenCalledWith(expect.objectContaining({ student: AYESHA_ID }));
     // There is no way to pay from the portal.
     expect(screen.queryByRole("button", { name: /pay/i })).not.toBeInTheDocument();
 

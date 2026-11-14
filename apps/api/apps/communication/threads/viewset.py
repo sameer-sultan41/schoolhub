@@ -29,7 +29,6 @@ from apps.communication.permission_classes import (
 from apps.communication.threads.filters import MessageThreadFilterSet
 from apps.communication.threads.routing import search_recipients
 from apps.communication.threads.serializers import (
-    AttachmentDownloadSerializer,
     MarkReadResultSerializer,
     MessageCreateSerializer,
     MessageSerializer,
@@ -48,6 +47,7 @@ from apps.communication.threads.services.reopen import reopen_thread
 from core.api.pagination import CursorPagination
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
+from core.files.serializers import AttachmentDownloadSerializer
 from core.rbac.permissions import is_restricted_principal
 
 

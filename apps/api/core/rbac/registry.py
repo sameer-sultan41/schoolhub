@@ -55,6 +55,9 @@ EXTRA_ACTIONS = frozenset(
         # fees-finance §4: a family pays an invoice online; staff manage the school's gateway.
         "pay-online",
         "manage",
+        # `students.portal-account.invite`: emails a guardian or student their account link
+        # (ADR-0033).
+        "invite",
     }
 )
 

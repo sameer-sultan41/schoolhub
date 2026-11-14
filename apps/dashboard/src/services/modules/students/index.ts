@@ -11,6 +11,7 @@ import {
   fetchStudentsPage,
   generateIdCards,
   getDocumentDownloadUrl,
+  inviteStudent,
   triggerStudentExport,
   triggerStudentImport,
   updateStudent,
@@ -38,6 +39,7 @@ export const StudentsService = {
   triggerStudentImport,
   triggerStudentExport,
   generateIdCards,
+  inviteStudent,
 };
 export type {
   AddEmergencyContactInput,
@@ -48,6 +50,8 @@ export type {
   EnrollStudentInput,
   IdCardGenerateBody,
   IdCardJobResult,
+  PortalInviteResult,
+  PortalStatus,
   StudentDocumentRecord,
   StudentEnrollmentRecord,
   StudentHistoryEvent,
