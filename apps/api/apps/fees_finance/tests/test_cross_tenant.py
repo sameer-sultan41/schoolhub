@@ -29,6 +29,7 @@ all — and asserting the row still does not come back.
 
 from __future__ import annotations
 
+import datetime
 from decimal import Decimal
 
 from django.core.cache import cache
@@ -520,6 +521,39 @@ class FinanceCrossTenantTests(FeesFinanceAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.json()["data"], [])
+
+    def test_a_report_summary_never_reads_another_tenant_s_figures(self) -> None:
+        """AI-FEE-02 aggregates over the caller's scoped set: for every kind a summary
+        is offered for, the other school's figures count for nothing, so this
+        tenant's summary is the empty one and the provider is never asked."""
+        from apps.fees_finance import ai
+        from core.ai.providers.fake import fake_provider
+
+        enable_feature(self.tenant, ai.FEATURE_FLAG)
+        enable_feature(self.other_tenant, ai.FEATURE_FLAG)
+        # The ledger kinds (income-vs-expense, trial-balance) read entries, not documents.
+        posting(
+            self.other_tenant,
+            debit_account=self.other_cash,
+            credit_account=self.other_income,
+            entry_date=datetime.date(2026, 9, 1),
+        )
+        fake_provider.reset()
+        self.addCleanup(fake_provider.reset)
+        for kind in sorted(ai.CONTEXT_ALLOWLIST):
+            with self.subTest(kind=kind):
+                response = self.client.post(
+                    "/api/v1/reports/finance-summary:summarize",
+                    {"kind": kind, "date_from": "2026-01-01", "date_to": "2027-12-31"},
+                    format="json",
+                )
+                self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+                data = response.json()["data"]
+                self.assertEqual(data["summary"], "")
+                self.assertEqual(data["facts"]["row_count"], "0")
+                counts = {k: v for k, v in data["facts"].items() if k.endswith("_count")}
+                self.assertEqual(counts, dict.fromkeys(counts, "0"))
+        self.assertEqual(fake_provider.calls, [])
 
 
 class OnlinePaymentsCrossTenantTests(FeesFinanceAPITestCase):

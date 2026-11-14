@@ -67,5 +67,6 @@ REST_FRAMEWORK = {
         "anon": env.str("THROTTLE_RATE_ANON", default=THROTTLE_RATES["anon"]),
         "auth": env.str("THROTTLE_RATE_AUTH", default=THROTTLE_RATES["auth"]),
         "public_form": env.str("THROTTLE_RATE_PUBLIC_FORM", default=THROTTLE_RATES["public_form"]),
+        "ai": env.str("THROTTLE_RATE_AI", default=THROTTLE_RATES["ai"]),
     },
 }

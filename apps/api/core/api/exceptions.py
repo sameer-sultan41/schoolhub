@@ -34,6 +34,21 @@ _CODE_BY_STATUS = {
 }
 
 
+class CodedAPIException(exceptions.APIException):
+    """Marker base for an exception whose ``default_code`` is part of the contract.
+
+    The handler resolves a DRF built-in's code from its status, but keeps the
+    code of anything subclassing this, so a feature module can add a code of its
+    own (``ai_quota_exceeded``) without editing the handler. ``meta`` passes
+    through untouched, as on ``DomainRuleViolation``. A new code also goes in
+    ``packages/types/src/api.ts``; ``tests/test_api_contract.py`` checks the two.
+    """
+
+    def __init__(self, detail=None, code=None, *, meta: dict | None = None) -> None:
+        super().__init__(detail, code)
+        self.meta = meta
+
+
 class DomainRuleViolation(exceptions.APIException):
     """A request that is well-formed but violates a business rule.
 
@@ -119,7 +134,7 @@ def envelope_exception_handler(exc, context):
     # Our own domain exceptions carry a meaningful code; DRF's built-ins carry
     # generic ones ("invalid", "not_authenticated") that leak framework vocabulary
     # into the documented contract, so those resolve from the status instead.
-    if isinstance(exc, DomainRuleViolation | Conflict | ModuleDisabled):
+    if isinstance(exc, CodedAPIException | DomainRuleViolation | Conflict | ModuleDisabled):
         code = exc.default_code
     else:
         code = _CODE_BY_STATUS.get(

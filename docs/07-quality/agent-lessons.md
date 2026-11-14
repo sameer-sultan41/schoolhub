@@ -419,9 +419,19 @@
   is the test's own transaction, so every later query failed with `TransactionManagementError`
   (chained to a stale, unrelated `IntegrityError`). Production has no open block there.
 - **Check.** A test of a `non_atomic_requests` route that queries after an error response
-  inherits `OnlinePaymentsTestCase`'s `set_rollback` patch (it skips `TestCase`'s own blocks, as
-  `atomic(durable=True)` does), or uses `TransactionTestCase`. Read a
+  calls `rollback_as_in_production(self)` from `core/api/tests/rollback.py` in `setUp` (it skips
+  `TestCase`'s own blocks, as `atomic(durable=True)` does), or uses `TransactionTestCase`. Read a
   `TransactionManagementError`'s chained cause as possibly stale: `rollback_exc` is never reset.
+
+### L63. A `non_atomic_requests` route binds its tenant per transaction
+
+- **Mistake.** The AI gateway plan made `FinanceReportSummaryView` `non_atomic_requests` so the provider call holds no transaction, but the tenant binding is a `SET LOCAL`: with no transaction around `initial()`, the role and flag reads ran unbound (caught in Task 1's report, before Task 2 built the view). `TestCase` hid it: its test-wide transaction keeps the binding alive, and `force_login` gives the middleware a session production lacks.
+- **Check.** On a `non_atomic_requests` view, wrap `initial()` in `transaction.atomic()` and every database read in `tenant_atomic`, then call the long external step with nothing open (`FinanceReportSummaryView` is the pattern). Prove it with a `TransactionTestCase` that authenticates by token only (`test_report_summary_commit.py`). Its error-path `TestCase` tests need production's rollback: L62.
+
+### L64. Hand `scope_queryset` a QuerySet, never a Manager
+
+- **Mistake.** `_ledger_report_queryset` passed `LedgerEntry.objects` to `scope_queryset`, which returns its input unchanged for an `all` scope. The finance summary ANDs two of these, so every `all`-scoped caller of the `income-vs-expense` and `trial-balance` summaries got a `TypeError` (500): `&` is not defined on a Manager (PR #167 CI, the cross-tenant test).
+- **Check.** Pass `Model.objects.all()` (or a filtered queryset) to `scope_queryset`, and test every combinator (`&`, `|`, `.union`) applied to its result with an `all`-scoped caller, not only a narrowed one.
 
 ## 4. Adding a lesson
 
