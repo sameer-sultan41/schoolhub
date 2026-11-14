@@ -1,5 +1,5 @@
 import type { ApiErrorDetail, AuthenticatedUser } from "@schoolhub/types";
-import { fail, type MockResponse } from "../envelope";
+import { fail, ok, type MockResponse } from "../envelope";
 import type { MockRequest } from "../router";
 
 /**
@@ -49,6 +49,26 @@ export function colonAction(segment: string | undefined): {
 } {
   const [id = "", action] = (segment ?? "").split(":");
   return { id, action };
+}
+
+/** Where the stubbed storage serves a leave request's attachment. A spec routes this URL to a
+ * PDF with `Content-Disposition: attachment`, as real storage signs it. */
+export function leaveAttachmentUrl(fileId: string): string {
+  return `https://storage.e2e.test/objects/${fileId}-leave-attachment.bin`;
+}
+
+/**
+ * `POST /leave-requests/{id}/attachment:download`: a request with an attachment answers with
+ * `leaveAttachmentUrl`, one without is the view's 404. The record scope is the Django suite's.
+ */
+export function leaveAttachmentDownload(
+  request: { attachment_file_id?: string | null } | undefined,
+  action: string | undefined,
+): MockResponse {
+  if (action !== "attachment:download" || !request?.attachment_file_id) {
+    return fail(404, "Not found.");
+  }
+  return ok({ download_url: leaveAttachmentUrl(request.attachment_file_id) });
 }
 
 /**

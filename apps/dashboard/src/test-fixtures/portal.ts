@@ -1,4 +1,5 @@
 import type {
+  AdmitCardRecord,
   FeeInvoiceRecord,
   NotificationRecord,
   PortalNoticeRecord,
@@ -153,7 +154,10 @@ export function portalResult(overrides: Partial<ResultRecord> = {}): ResultRecor
     exam_name: "Mid-term",
     term_name: "Term 1",
     student_id: AYESHA_ID,
+    student_name: "Ayesha Khan",
+    admission_number: "ADM-001",
     section_id: "44444444-4444-4444-8444-444444444444",
+    section_name: "A",
     total_max_marks: "400.00",
     total_obtained_marks: "326.00",
     percentage: "81.50",
@@ -164,10 +168,38 @@ export function portalResult(overrides: Partial<ResultRecord> = {}): ResultRecor
     outcome: "pass",
     grace_marks: "0.00",
     status: "published",
+    processed_by: null,
+    processed_by_name: null,
+    approved_by: null,
+    approved_by_name: null,
     approved_at: "2026-10-19T09:00:00Z",
     published_at: "2026-10-20T09:00:00Z",
     created_at: "2026-10-19T08:00:00Z",
     updated_at: "2026-10-20T09:00:00Z",
+    ...overrides,
+  };
+}
+
+/** Ayesha's issued card for an exam not yet over. */
+export function portalAdmitCard(overrides: Partial<AdmitCardRecord> = {}): AdmitCardRecord {
+  return {
+    id: "77777777-7777-4777-8777-777777777777",
+    exam_id: "55555555-5555-4555-8555-000000000002",
+    exam_name: "Finals",
+    exam_starts_on: "2026-12-01",
+    exam_ends_on: "2026-12-10",
+    student_id: AYESHA_ID,
+    student_name: "Ayesha Khan",
+    admission_number: "ADM-001",
+    section_id: "44444444-4444-4444-8444-444444444444",
+    section_name: "A",
+    admit_card_no: "FIN-ADM-001",
+    file_id: "88888888-8888-4888-8888-888888888888",
+    status: "issued",
+    issued_at: "2026-11-20T09:00:00Z",
+    revoked_reason: null,
+    created_at: "2026-11-20T08:59:00Z",
+    updated_at: "2026-11-20T09:00:00Z",
     ...overrides,
   };
 }

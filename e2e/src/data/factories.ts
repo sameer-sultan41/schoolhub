@@ -349,3 +349,34 @@ export function buildGuardianUser(overrides: Partial<AuthenticatedUser> = {}): A
     ...overrides,
   });
 }
+
+/**
+ * An exam author (examinations.md §4: `exam_staff`, `school_admin`): the exam keys, reading the
+ * grading scales an exam picks from, and the class, subject, session and curriculum reads the
+ * exam and subject forms make.
+ */
+export const EXAMS_AUTHOR_PERMISSIONS: PermissionKey[] = [
+  "exams.exam.view",
+  "exams.exam.create",
+  "exams.exam.update",
+  "exams.exam.delete",
+  "exams.grading-scale.view",
+  "school.academic-session.view",
+  "school.class.view",
+  "school.subject.view",
+  "academics.curriculum.view",
+];
+
+/** A scale author (§4: `school_admin`, `principal`): the grading scales and their bands. A
+ * scale's removal is keyed `update` too; §4 registers no `delete` for scales. */
+export const GRADING_SCALE_AUTHOR_PERMISSIONS: PermissionKey[] = [
+  "exams.grading-scale.view",
+  "exams.grading-scale.create",
+  "exams.grading-scale.update",
+];
+
+/** A teacher (§4): reads the exams they teach and the scales, and writes neither. */
+export const EXAMS_TEACHER_PERMISSIONS: PermissionKey[] = [
+  "exams.exam.view",
+  "exams.grading-scale.view",
+];

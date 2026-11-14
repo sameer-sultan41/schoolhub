@@ -2,7 +2,7 @@ import type { Locator } from "@playwright/test";
 import { BasePage } from "../base.page";
 
 /**
- * One child's portal pages: attendance, fees and results. Each is `/portal/{studentId}/…` and is
+ * One child's portal pages: attendance, fees and results (with the current admit cards). Each is `/portal/{studentId}/…` and is
  * reached through the shell's tab for the selected child (`PortalPage.tab`), so `path` is only
  * the portal root. See `apps/dashboard/src/features/portal/{attendance,fees,results}/`.
  */
@@ -63,6 +63,19 @@ export class PortalChildPage extends BasePage {
 
   termHeading(term: string): Locator {
     return this.page.getByRole("heading", { level: 2, name: term, exact: true });
+  }
+
+  /** An admit card's download, named by its exam. */
+  admitCardDownload(examName: string): Locator {
+    return this.page.getByRole("button", {
+      name: `Download admit card for ${examName}`,
+      exact: true,
+    });
+  }
+
+  /** What the admit-card section says with no current card. */
+  get noAdmitCards(): Locator {
+    return this.page.getByText("No admit cards", { exact: true });
   }
 
   /** One result's card, found by the exam's name. */

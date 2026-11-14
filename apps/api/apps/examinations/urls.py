@@ -10,12 +10,12 @@ express a nested collection. Two `path()` entries — collection and detail — 
 the whole of what the nesting costs, and they are clearer than a router plugin
 for one resource. `scale_pk` is the kwarg `GradeBandViewSet.get_scale` reads.
 
-**Two colon-actions sit under `/exams` but belong to other viewsets.**
-`:publish-schedule` is `ExamScheduleViewSet.publish` and `:issue-admit-cards` is
-`AdmitCardViewSet.issue`, because in both cases the *exam* is what the caller
-addresses while the logic and the permission key belong to the resource being
-produced. §16 declares both paths this way, and routing them from the owning
-viewset keeps each action's `required_permission_map` beside the rest of its
+**Some actions sit under `/exams` but belong to other viewsets.**
+`:publish-schedule` and `/schedule-conflicts` are `ExamScheduleViewSet`'s, and
+`:issue-admit-cards` is `AdmitCardViewSet.issue`, because in each case the
+*exam* is what the caller addresses while the logic and the permission key
+belong to the resource being produced. Routing them from the owning viewset
+keeps each action's `required_permission_map` beside the rest of its
 resource's.
 """
 
@@ -113,6 +113,17 @@ urlpatterns = [
         name="exams-publish-report-cards",
     ),
     path(
+        "report-cards/<uuid:pk>:download",
+        ReportCardViewSet.as_view({"post": "download"}),
+        name="report-cards-download",
+    ),
+    path(
+        "marks/grid",
+        # Not a list: one section's whole roll, no page and no filters.
+        MarksViewSet.as_view({"get": "grid"}, pagination_class=None, filter_backends=[]),
+        name="marks-grid",
+    ),
+    path(
         "marks:bulk-entry",
         MarksViewSet.as_view({"post": "bulk_entry"}),
         name="marks-bulk-entry",
@@ -134,13 +145,21 @@ urlpatterns = [
     ),
     path(
         "exams/<uuid:pk>/marks-progress",
-        MarksViewSet.as_view({"get": "progress"}),
+        MarksViewSet.as_view({"get": "progress"}, pagination_class=None, filter_backends=[]),
         name="exams-marks-progress",
     ),
     path(
         "exams/<uuid:pk>:publish-schedule",
         ExamScheduleViewSet.as_view({"post": "publish"}),
         name="exams-publish-schedule",
+    ),
+    path(
+        "exams/<uuid:pk>/schedule-conflicts",
+        # Not a list: no page and no filters, so the contract shows neither.
+        ExamScheduleViewSet.as_view(
+            {"get": "schedule_conflicts"}, pagination_class=None, filter_backends=[]
+        ),
+        name="exams-schedule-conflicts",
     ),
     path(
         "exams/<uuid:pk>:issue-admit-cards",
@@ -151,6 +170,11 @@ urlpatterns = [
         "admit-cards/<uuid:pk>:revoke",
         AdmitCardViewSet.as_view({"post": "revoke"}),
         name="admit-cards-revoke",
+    ),
+    path(
+        "admit-cards/<uuid:pk>:download",
+        AdmitCardViewSet.as_view({"post": "download"}),
+        name="admit-cards-download",
     ),
     path(
         "grading-scales/<uuid:pk>:set-default",

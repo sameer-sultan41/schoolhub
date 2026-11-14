@@ -18,17 +18,19 @@ that could PATCH `status` could skip the approval gate entirely.
 
 from __future__ import annotations
 
+import uuid
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from rest_framework import serializers
 
-from apps.examinations import reports, services, uploads
+from apps.examinations import conflicts, reports, services, uploads
 from apps.examinations.models import (
     CHOICE_QUESTION_TYPES,
     AdmitCard,
     Exam,
     ExamSchedule,
+    ExamStatus,
     ExamSubject,
     GradeBand,
     GradingScale,
@@ -44,10 +46,24 @@ from apps.examinations.models import (
 from apps.examinations.services import ENTRY_SETTABLE_STATUSES
 from apps.school_organization.models import AcademicSession, Class, Section, Subject, Term
 from apps.staff_management.models import Staff
+from apps.student_management.models import StudentEnrollment
 from apps.timetable.models import Room
+from core.api.exceptions import DomainRuleViolation
+from core.api.serializers import UserNamesListSerializer, UserNamesModelSerializer
 from core.exports import tabular
 
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
 READ_ONLY_FIELDS = ("id", "created_at", "updated_at")
+
+# The `to_attr` of `AdmitCardViewSet`'s enrollment `Prefetch`, on each card's
+# student: their live enrollments in any status, of which the serializer picks
+# the exam's session. Named once because the viewset writes it and the serializer reads it.
+ADMIT_CARD_ENROLLMENTS = "exam_enrollments"
+
+# "Not looked up yet", distinct from a looked-up None (no enrollment).
+_UNSET = object()
 
 
 def _fk(model, **kwargs) -> serializers.PrimaryKeyRelatedField:
@@ -72,6 +88,15 @@ def _value(attrs: dict, instance, field: str) -> Any:
     if field in attrs:
         return attrs[field]
     return getattr(instance, field, None)
+
+
+def _validate_weightage(value: Decimal) -> Decimal:
+    """A weightage is a percentage contribution: above 0, at most 100 (the DB CHECKs' range)."""
+    if value <= 0 or value > 100:
+        raise serializers.ValidationError(
+            "Weightage is a percentage contribution, so it must be above 0 and at most 100."
+        )
+    return value
 
 
 class GradeBandSerializer(serializers.ModelSerializer):
@@ -160,37 +185,52 @@ class GradingScaleSerializer(serializers.ModelSerializer):
 
 
 class ExamSerializer(serializers.ModelSerializer):
-    """`exams` — an examination event (§5.1)."""
+    """An examination event within an academic session (§5.1)."""
 
+    # The `*_name` fields ride on the viewset's `select_related`, so a list row
+    # renders its session, term and scale without a lookup per id.
     academic_session_id = _fk(AcademicSession, source="academic_session")
+    academic_session_name = serializers.CharField(source="academic_session.name", read_only=True)
     term_id = _fk(Term, source="term", required=False, allow_null=True)
+    term_name = serializers.CharField(source="term.name", read_only=True, allow_null=True)
     grading_scale_id = _fk(GradingScale, source="grading_scale", required=False)
+    grading_scale_name = serializers.CharField(source="grading_scale.name", read_only=True)
+    subject_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Exam
         fields = (
             "id",
             "academic_session_id",
+            "academic_session_name",
             "term_id",
+            "term_name",
             "name",
             "exam_type",
             "grading_scale_id",
+            "grading_scale_name",
             "weightage_percent",
             "starts_on",
             "ends_on",
             "status",
+            "subject_count",
             "description",
             "created_at",
             "updated_at",
         )
         read_only_fields = (*READ_ONLY_FIELDS, "status")
 
+    def get_subject_count(self, exam: Exam) -> int:
+        """All of the exam's live subjects, not only those visible to the viewer."""
+        # The viewset's annotation, or one COUNT without it: a created exam never
+        # passed through the annotated queryset, so its 201 body counts instead.
+        annotated = getattr(exam, "subject_count", None)
+        if annotated is not None:
+            return annotated
+        return exam.exam_subjects.alive().count()
+
     def validate_weightage_percent(self, value: Decimal) -> Decimal:
-        if value <= 0 or value > 100:
-            raise serializers.ValidationError(
-                "Weightage is a percentage contribution, so it must be above 0 and at most 100."
-            )
-        return value
+        return _validate_weightage(value)
 
     def validate(self, attrs: dict) -> dict:
         session = _value(attrs, self.instance, "academic_session")
@@ -241,16 +281,22 @@ class ExamSubjectSerializer(serializers.ModelSerializer):
     """`exam_subjects` — per-class marks structure for one subject (§5.1)."""
 
     exam_id = _fk(Exam, source="exam")
+    exam_name = serializers.CharField(source="exam.name", read_only=True)
     class_id = _fk(Class, source="school_class")
+    class_name = serializers.CharField(source="school_class.name", read_only=True)
     subject_id = _fk(Subject, source="subject")
+    subject_name = serializers.CharField(source="subject.name", read_only=True)
 
     class Meta:
         model = ExamSubject
         fields = (
             "id",
             "exam_id",
+            "exam_name",
             "class_id",
+            "class_name",
             "subject_id",
+            "subject_name",
             "max_marks",
             "pass_marks",
             "has_practical",
@@ -267,6 +313,9 @@ class ExamSubjectSerializer(serializers.ModelSerializer):
         # (§5.4), which are permission-gated and audited. A client that could
         # PATCH it could reopen a locked register without leaving a trace.
         read_only_fields = (*READ_ONLY_FIELDS, "marks_locked_at")
+
+    def validate_subject_weightage_percent(self, value: Decimal) -> Decimal:
+        return _validate_weightage(value)
 
     def validate(self, attrs: dict) -> dict:
         exam = _value(attrs, self.instance, "exam")
@@ -285,6 +334,13 @@ class ExamSubjectSerializer(serializers.ModelSerializer):
         services.assert_exam_is_configurable(exam)
         services.assert_subject_in_class_curriculum(
             session=exam.academic_session, school_class=school_class, subject=subject
+        )
+
+        services.assert_exam_subject_is_unique(
+            exam=exam,
+            school_class=school_class,
+            subject=subject,
+            exclude_pk=self.instance.pk if self.instance else None,
         )
 
         services.assert_practical_marks(
@@ -313,22 +369,40 @@ class ExamScheduleSerializer(serializers.ModelSerializer):
     the one with an approval gate behind it.
     """
 
+    # The names ride on the viewset's `select_related`; a write's single row
+    # loads them lazily, which costs a handful of queries for one object.
     exam_subject_id = _fk(ExamSubject, source="exam_subject")
+    exam_id = serializers.UUIDField(source="exam_subject.exam_id", read_only=True)
+    exam_name = serializers.CharField(source="exam_subject.exam.name", read_only=True)
+    subject_name = serializers.CharField(source="exam_subject.subject.name", read_only=True)
+    class_name = serializers.CharField(source="exam_subject.school_class.name", read_only=True)
     section_id = _fk(Section, source="section")
+    section_name = serializers.CharField(source="section.name", read_only=True)
     room_id = _fk(Room, source="room", required=False, allow_null=True)
+    room_name = serializers.CharField(source="room.name", read_only=True, allow_null=True)
     invigilator_staff_id = _fk(Staff, source="invigilator_staff", required=False, allow_null=True)
+    invigilator_name = serializers.CharField(
+        source="invigilator_staff.full_name", read_only=True, allow_null=True
+    )
 
     class Meta:
         model = ExamSchedule
         fields = (
             "id",
+            "exam_id",
+            "exam_name",
             "exam_subject_id",
+            "subject_name",
+            "class_name",
             "section_id",
+            "section_name",
             "exam_date",
             "start_time",
             "end_time",
             "room_id",
+            "room_name",
             "invigilator_staff_id",
+            "invigilator_name",
             "status",
             "instructions",
             "created_at",
@@ -349,6 +423,30 @@ class ExamScheduleSerializer(serializers.ModelSerializer):
         return attrs
 
 
+class ExamConflictSerializer(serializers.Serializer):
+    """One clash in an exam's schedule (§5.2, §11).
+
+    `schedule_ids` names every sitting involved, so a client highlights each of
+    them. A hard finding blocks `:publish-schedule`; a soft one only warns.
+    """
+
+    # The shape of `conflicts.Conflict.as_dict()`, which is what every response
+    # carrying a clash list serializes: `GET /exams/{id}/schedule-conflicts`,
+    # `:publish-schedule`, and each sitting write's `meta.conflicts`.
+    type = serializers.ChoiceField(choices=conflicts.CONFLICT_TYPES)
+    severity = serializers.ChoiceField(choices=conflicts.SEVERITIES)
+    schedule_ids = serializers.ListField(child=serializers.UUIDField())
+    message = serializers.CharField()
+
+
+class ExamSchedulePublishSerializer(serializers.Serializer):
+    """`:publish-schedule`'s answer: the exam's new status, and the soft clashes
+    published over."""
+
+    status = serializers.ChoiceField(choices=ExamStatus.choices)
+    conflicts = ExamConflictSerializer(many=True)
+
+
 class AdmitCardSerializer(serializers.ModelSerializer):
     """`admit_cards` — read-only on the wire (§5.3).
 
@@ -360,7 +458,15 @@ class AdmitCardSerializer(serializers.ModelSerializer):
     """
 
     exam_id = serializers.UUIDField(read_only=True)
+    # The exam's name and dates, so a portal can label a card without the staff-only exam read.
+    exam_name = serializers.CharField(source="exam.name", read_only=True)
+    exam_starts_on = serializers.DateField(source="exam.starts_on", read_only=True, allow_null=True)
+    exam_ends_on = serializers.DateField(source="exam.ends_on", read_only=True, allow_null=True)
     student_id = serializers.UUIDField(read_only=True)
+    student_name = serializers.CharField(source="student.full_name", read_only=True)
+    admission_number = serializers.CharField(source="student.admission_number", read_only=True)
+    section_id = serializers.SerializerMethodField()
+    section_name = serializers.SerializerMethodField()
     file_id = serializers.UUIDField(read_only=True, allow_null=True)
 
     class Meta:
@@ -368,7 +474,14 @@ class AdmitCardSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "exam_id",
+            "exam_name",
+            "exam_starts_on",
+            "exam_ends_on",
             "student_id",
+            "student_name",
+            "admission_number",
+            "section_id",
+            "section_name",
             "admit_card_no",
             "file_id",
             "status",
@@ -378,6 +491,71 @@ class AdmitCardSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = fields
+
+    def _enrollment(self, card: AdmitCard) -> StudentEnrollment | None:
+        """The student's enrollment in the exam's session, or None.
+
+        Matched on session alone, in any status: promotion turns the row
+        `promoted`/`retained`/`graduated` once the session closes, and the card
+        still names the section the student sat in. One row per (student,
+        session), so there is never a choice to make.
+
+        Read from `ADMIT_CARD_ENROLLMENTS`, the viewset's one `Prefetch`, so a
+        page costs one query for every row's section. A card serialized outside
+        that queryset — a single object, e.g. `:revoke`'s answer — falls back to
+        one query of its own (lesson L24), cached on the instance so the two
+        section fields share it.
+        """
+        cached = card.__dict__.get("_exam_enrollment", _UNSET)
+        if cached is not _UNSET:
+            return cast("StudentEnrollment | None", cached)
+        session_id = card.exam.academic_session_id
+        prefetched = getattr(card.student, ADMIT_CARD_ENROLLMENTS, None)
+        if prefetched is None:
+            enrollment = (
+                StudentEnrollment.objects.alive()
+                .filter(
+                    student_id=card.student_id,
+                    academic_session_id=session_id,
+                )
+                .select_related("section")
+                .first()
+            )
+        else:
+            enrollment = next(
+                (row for row in prefetched if row.academic_session_id == session_id), None
+            )
+        card.__dict__["_exam_enrollment"] = enrollment
+        return enrollment
+
+    def get_section_id(self, card: AdmitCard) -> uuid.UUID | None:
+        enrollment = self._enrollment(card)
+        return enrollment.section_id if enrollment else None
+
+    def get_section_name(self, card: AdmitCard) -> str | None:
+        enrollment = self._enrollment(card)
+        return enrollment.section.name if enrollment else None
+
+
+class JobAcceptedSerializer(serializers.Serializer):
+    """The `data` of `ActionResponse.accepted`'s 202: the queued job to poll."""
+
+    job_id = serializers.UUIDField()
+    status = serializers.CharField()
+
+
+class AdmitCardIssueAcceptedSerializer(JobAcceptedSerializer):
+    """`:issue-admit-cards`' 202: the render job, and the cards this run added
+    beside the ones that already existed."""
+
+    added = serializers.IntegerField()
+    existing = serializers.IntegerField()
+
+
+class CardDownloadSerializer(serializers.Serializer):
+    """A short-lived signed link to a card's PDF."""
+
+    download_url = serializers.CharField()
 
 
 class AdmitCardRevokeSerializer(serializers.Serializer):
@@ -467,9 +645,10 @@ class MarksEntrySerializer(serializers.Serializer):
 
 
 class BulkMarksEntrySerializer(serializers.Serializer):
-    """The body of `POST /marks:bulk-entry` — one exam-subject's whole grid."""
+    """The body of `POST /marks:bulk-entry` — one section's grid for one exam-subject."""
 
     exam_subject_id = _fk(ExamSubject, source="exam_subject")
+    section_id = _fk(Section, source="section")
     entries = serializers.ListField(child=MarksEntrySerializer(), allow_empty=False)
 
     def validate_entries(self, value: list[dict]) -> list[dict]:
@@ -481,6 +660,63 @@ class BulkMarksEntrySerializer(serializers.Serializer):
                 )
             seen.add(entry["student_id"])
         return value
+
+
+class BulkMarksEntryResultSerializer(serializers.Serializer):
+    """`:bulk-entry`'s 200: rows created, rows updated, and rows written."""
+
+    entered = serializers.IntegerField()
+    updated = serializers.IntegerField()
+    rows = serializers.IntegerField()
+
+
+class MarksLockResultSerializer(serializers.Serializer):
+    """`:lock-marks`' 200. `already_locked` marks a retry."""
+
+    locked_rows = serializers.IntegerField()
+    already_locked = serializers.BooleanField()
+
+
+class MarksUnlockResultSerializer(serializers.Serializer):
+    """`:unlock-marks`' 200. `already_unlocked` marks a retry."""
+
+    unlocked_rows = serializers.IntegerField()
+    already_unlocked = serializers.BooleanField()
+
+
+class MarksGridQuerySerializer(serializers.Serializer):
+    """Query parameters of `GET /marks/grid`.
+
+    Plain UUIDs, not related fields, so an unknown, foreign or out-of-scope id is
+    the view's 404 rather than a 400 (AGENTS.md invariant 2).
+    """
+
+    exam_subject_id = serializers.UUIDField()
+    section_id = serializers.UUIDField()
+
+
+class MarksGridEntrySerializer(serializers.Serializer):
+    """One student on a section's roll, in roll order, with their marks row if entered."""
+
+    student_id = serializers.UUIDField()
+    student_name = serializers.CharField()
+    admission_number = serializers.CharField()
+    roll_number = serializers.CharField(allow_null=True)
+    marks = MarksSerializer(allow_null=True)
+
+
+class MarksProgressRowSerializer(serializers.Serializer):
+    """One (exam-subject, section) row of `GET /exams/{id}/marks-progress`."""
+
+    exam_subject_id = serializers.UUIDField()
+    subject_name = serializers.CharField()
+    class_name = serializers.CharField()
+    section_id = serializers.UUIDField()
+    section_name = serializers.CharField()
+    expected = serializers.IntegerField(help_text="Students on the section's active roll.")
+    entered = serializers.IntegerField(help_text="Of those, students with a marks row.")
+    submitted = serializers.IntegerField(help_text="Of those, rows submitted or locked.")
+    is_locked = serializers.BooleanField()
 
 
 class MarksImportRequestSerializer(serializers.Serializer):
@@ -497,38 +733,52 @@ class MarksImportRequestSerializer(serializers.Serializer):
             )
         if not value.name.lower().endswith((".csv", ".xlsx")):
             raise serializers.ValidationError("Upload a .csv or .xlsx marks sheet.")
+        # The purpose's declared MIME allowlist, which this direct upload used to skip.
+        if value.content_type not in spec.mime_types:
+            raise serializers.ValidationError(
+                f"'{value.content_type}' is not a CSV or .xlsx file type this import accepts."
+            )
         return value
 
 
-class ResultSerializer(serializers.ModelSerializer):
+class ResultSerializer(UserNamesModelSerializer):
     """`results` — read-only on the wire (§16 declares a `GET` and no writes).
 
     Every field here is computed or moved by a permissioned action: the
     aggregates by `:process-results`, `status`/`approved_*` by
     `:approve-results`, `published_at` by `:publish-results`, and `outcome` by
-    processing or `:withhold`. A client that could PATCH any of them could skip
-    §5.6's gate entirely, which is the whole point of having one.
+    processing or `:withhold`. `processed_by` is the latest run's processor,
+    who may not approve it.
     """
 
     exam_id = serializers.UUIDField(read_only=True)
     student_id = serializers.UUIDField(read_only=True)
+    student_name = serializers.CharField(source="student.full_name", read_only=True)
+    admission_number = serializers.CharField(source="student.admission_number", read_only=True)
     section_id = serializers.UUIDField(read_only=True)
+    section_name = serializers.CharField(source="section.name", read_only=True)
     # What a parent reads a result by; the viewset joins `exam` and its term, so no N+1.
     exam_name = serializers.CharField(source="exam.name", read_only=True)
     term_name = serializers.CharField(
         source="exam.term.name", read_only=True, allow_null=True, default=None
     )
     grade = serializers.CharField(source="grade_band.label", read_only=True, default=None)
+    processed_by_name = serializers.SerializerMethodField()
+    approved_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Result
+        list_serializer_class = UserNamesListSerializer
         fields = (
             "id",
             "exam_id",
             "exam_name",
             "term_name",
             "student_id",
+            "student_name",
+            "admission_number",
             "section_id",
+            "section_name",
             "total_max_marks",
             "total_obtained_marks",
             "percentage",
@@ -539,12 +789,25 @@ class ResultSerializer(serializers.ModelSerializer):
             "outcome",
             "grace_marks",
             "status",
+            "processed_by",
+            "processed_by_name",
+            "approved_by",
+            "approved_by_name",
             "approved_at",
             "published_at",
             "created_at",
             "updated_at",
         )
         read_only_fields = fields
+
+    def user_ids(self, instance: Result) -> Iterable[uuid.UUID | None]:
+        return (instance.processed_by, instance.approved_by)
+
+    def get_processed_by_name(self, instance: Result) -> str | None:
+        return self.user_name(instance.processed_by)
+
+    def get_approved_by_name(self, instance: Result) -> str | None:
+        return self.user_name(instance.approved_by)
 
 
 class ReportCardSerializer(serializers.ModelSerializer):
@@ -559,7 +822,28 @@ class ReportCardSerializer(serializers.ModelSerializer):
     exam_id = serializers.UUIDField(read_only=True)
     term_id = serializers.UUIDField(read_only=True)
     student_id = serializers.UUIDField(read_only=True)
+    student_name = serializers.CharField(source="student.full_name", read_only=True)
+    admission_number = serializers.CharField(source="student.admission_number", read_only=True)
     result_id = serializers.UUIDField(read_only=True)
+    # From the card's result: the section and figures recorded at processing
+    # time. Null on a term-consolidated card, which has no single result.
+    section_id = serializers.UUIDField(
+        source="result.section_id", read_only=True, allow_null=True, default=None
+    )
+    section_name = serializers.CharField(
+        source="result.section.name", read_only=True, allow_null=True, default=None
+    )
+    percentage = serializers.DecimalField(
+        source="result.percentage",
+        max_digits=5,
+        decimal_places=2,
+        read_only=True,
+        allow_null=True,
+        default=None,
+    )
+    grade = serializers.CharField(
+        source="result.grade_band.label", read_only=True, allow_null=True, default=None
+    )
     file_id = serializers.UUIDField(read_only=True, allow_null=True)
 
     class Meta:
@@ -569,7 +853,13 @@ class ReportCardSerializer(serializers.ModelSerializer):
             "exam_id",
             "term_id",
             "student_id",
+            "student_name",
+            "admission_number",
             "result_id",
+            "section_id",
+            "section_name",
+            "percentage",
+            "grade",
             "file_id",
             "class_teacher_remarks",
             "principal_remarks",
@@ -585,7 +875,13 @@ class ReportCardSerializer(serializers.ModelSerializer):
             "exam_id",
             "term_id",
             "student_id",
+            "student_name",
+            "admission_number",
             "result_id",
+            "section_id",
+            "section_name",
+            "percentage",
+            "grade",
             "file_id",
             "attendance_summary",
             "version",
@@ -620,11 +916,42 @@ class SendResultsBackSerializer(serializers.Serializer):
     reason = serializers.CharField(max_length=500)
 
 
+class ResultsApprovedSerializer(serializers.Serializer):
+    """`:approve-results`' 200: the rows this approval moved."""
+
+    approved = serializers.IntegerField()
+
+
+class ResultsSentBackSerializer(serializers.Serializer):
+    """`:send-results-back`' 200: the rows reopened, and the reason given."""
+
+    reopened = serializers.IntegerField()
+    reason = serializers.CharField()
+
+
+class ResultsPublishedSerializer(serializers.Serializer):
+    """`:publish-results`' 200. `published_ids` are the rows this call moved."""
+
+    published = serializers.IntegerField()
+    withheld = serializers.IntegerField()
+    published_ids = serializers.ListField(child=serializers.UUIDField())
+
+
+class ReportCardsPublishedSerializer(serializers.Serializer):
+    """`:publish-report-cards`' 200: the cards this call moved."""
+
+    published = serializers.IntegerField()
+    published_ids = serializers.ListField(child=serializers.UUIDField())
+
+
 class QuestionBankSerializer(serializers.ModelSerializer):
     """`question_banks` — §5.8."""
 
     subject_id = _fk(Subject, source="subject")
+    subject_name = serializers.CharField(source="subject.name", read_only=True)
     class_id = _fk(Class, source="school_class", required=False, allow_null=True)
+    # Null for a bank with no class, which covers every level.
+    class_name = serializers.CharField(source="school_class.name", read_only=True, allow_null=True)
     question_count = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
@@ -632,7 +959,9 @@ class QuestionBankSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "subject_id",
+            "subject_name",
             "class_id",
+            "class_name",
             "name",
             "description",
             "status",
@@ -643,7 +972,7 @@ class QuestionBankSerializer(serializers.ModelSerializer):
         read_only_fields = READ_ONLY_FIELDS
 
 
-class QuestionSerializer(serializers.ModelSerializer):
+class QuestionSerializer(UserNamesModelSerializer):
     """`questions` — §5.8, with §7.2's approval gate on the wire.
 
     `is_approved` and `approved_by` are **read-only**. §7.2 makes approval a
@@ -655,12 +984,17 @@ class QuestionSerializer(serializers.ModelSerializer):
     `usage_count` is read-only for the same shape of reason: it is the only
     record that a question reached a paper (§15 gives assembled papers no
     table), so nothing but assembly may write it.
+
+    `source` is create-only: an update that changes it is a 422 on `source`,
+    so a PATCH cannot remove an AI draft's label.
     """
 
     question_bank_id = serializers.UUIDField(read_only=True)
+    approved_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Question
+        list_serializer_class = UserNamesListSerializer
         fields = (
             "id",
             "question_bank_id",
@@ -673,13 +1007,28 @@ class QuestionSerializer(serializers.ModelSerializer):
             "topic",
             "source",
             "is_approved",
+            "approved_by",
+            "approved_by_name",
             "usage_count",
             "created_at",
             "updated_at",
         )
-        read_only_fields = (*READ_ONLY_FIELDS, "is_approved", "usage_count")
+        read_only_fields = (*READ_ONLY_FIELDS, "is_approved", "approved_by", "usage_count")
+
+    def user_ids(self, instance: Question) -> Iterable[uuid.UUID | None]:
+        return (instance.approved_by,)
+
+    def get_approved_by_name(self, instance: Question) -> str | None:
+        return self.user_name(instance.approved_by)
 
     def validate(self, attrs: dict) -> dict:
+        # `source` is set once, on create: a PATCH to `manual` would strip an AI draft's label
+        # (ai-governance.md §8) and, with it, the approval gate's reason to exist.
+        source = attrs.get("source")
+        if self.instance is not None and source is not None and source != self.instance.source:
+            raise DomainRuleViolation(
+                {"source": "A question's source is fixed when it is created and cannot change."}
+            )
         question_type = _value(attrs, self.instance, "question_type")
         options = _value(attrs, self.instance, "options")
 
@@ -729,6 +1078,15 @@ class AssemblePaperSerializer(serializers.Serializer):
 
     title = serializers.CharField(max_length=150)
     sections = serializers.ListField(child=PaperSectionSerializer(), allow_empty=False)
+
+
+class PaperAssemblyAcceptedSerializer(JobAcceptedSerializer):
+    """`:assemble-paper`'s 202: the job that renders the paper.
+
+    The job's `result` is `{result_file_id, questions, total_marks}`: the paper
+    PDF's file id, how many questions it used, and its total marks as a decimal
+    string.
+    """
 
 
 class ExamReportQuerySerializer(serializers.Serializer):

@@ -31,6 +31,7 @@ jest.mock("@schoolhub/api-client", () => {
 describe("Services", () => {
   it("aggregates every domain, each action a real function", () => {
     expect(Object.keys(Services).sort()).toEqual([
+      "admitCards",
       "attendanceCorrections",
       "attendanceReports",
       "attendanceSettings",
@@ -38,11 +39,18 @@ describe("Services", () => {
       "broadcasts",
       "curriculum",
       "dashboard",
+      "examReports",
+      "examResults",
+      "examSchedules",
+      "examSubjects",
+      "exams",
       "feeInvoices",
       "files",
+      "gradingScales",
       "guardians",
       "jobs",
       "leaveRequests",
+      "marks",
       "messageThreads",
       "notices",
       "notificationPreferences",
@@ -50,7 +58,9 @@ describe("Services", () => {
       "parentPortal",
       "periods",
       "promotions",
+      "questionBanks",
       "receipts",
+      "reportCards",
       "results",
       "rooms",
       "schoolOrganization",
@@ -83,6 +93,69 @@ describe("Services", () => {
     expect(typeof Services.dashboard.fetchDashboardOverview).toBe("function");
 
     expect(typeof Services.files.uploadFile).toBe("function");
+
+    expect(typeof Services.exams.fetchExamsPage).toBe("function");
+    expect(typeof Services.exams.fetchExam).toBe("function");
+    expect(typeof Services.exams.createExam).toBe("function");
+    expect(typeof Services.exams.updateExam).toBe("function");
+    expect(typeof Services.exams.deleteExam).toBe("function");
+    expect(typeof Services.examSubjects.fetchExamSubjects).toBe("function");
+    expect(typeof Services.examSubjects.createExamSubject).toBe("function");
+    expect(typeof Services.examSubjects.updateExamSubject).toBe("function");
+    expect(typeof Services.examSubjects.deleteExamSubject).toBe("function");
+    expect(typeof Services.examSchedules.fetchSittings).toBe("function");
+    expect(typeof Services.examSchedules.createSitting).toBe("function");
+    expect(typeof Services.examSchedules.updateSitting).toBe("function");
+    expect(typeof Services.examSchedules.cancelSitting).toBe("function");
+    expect(typeof Services.examSchedules.deleteSitting).toBe("function");
+    expect(typeof Services.examSchedules.fetchConflicts).toBe("function");
+    expect(typeof Services.examSchedules.publishSchedule).toBe("function");
+    expect(typeof Services.admitCards.fetchAdmitCardsPage).toBe("function");
+    expect(typeof Services.admitCards.issueAdmitCards).toBe("function");
+    expect(typeof Services.admitCards.revokeAdmitCard).toBe("function");
+    expect(typeof Services.admitCards.fetchAdmitCardDownloadUrl).toBe("function");
+    expect(typeof Services.marks.fetchGrid).toBe("function");
+    expect(typeof Services.marks.bulkEntry).toBe("function");
+    expect(typeof Services.marks.fetchProgress).toBe("function");
+    expect(typeof Services.marks.lockMarks).toBe("function");
+    expect(typeof Services.marks.unlockMarks).toBe("function");
+    expect(typeof Services.marks.importMarks).toBe("function");
+    expect(typeof Services.marks.fetchStudentMarks).toBe("function");
+    expect(typeof Services.examResults.fetchResultsPage).toBe("function");
+    expect(typeof Services.examResults.processResults).toBe("function");
+    expect(typeof Services.examResults.approveResults).toBe("function");
+    expect(typeof Services.examResults.sendResultsBack).toBe("function");
+    expect(typeof Services.examResults.publishResults).toBe("function");
+    expect(typeof Services.examResults.withholdResult).toBe("function");
+    expect(typeof Services.reportCards.fetchReportCardsPage).toBe("function");
+    expect(typeof Services.reportCards.generateReportCards).toBe("function");
+    expect(typeof Services.reportCards.publishReportCards).toBe("function");
+    expect(typeof Services.reportCards.updateRemarks).toBe("function");
+    expect(typeof Services.reportCards.fetchReportCardDownloadUrl).toBe("function");
+    expect(typeof Services.examReports.runReport).toBe("function");
+    expect(typeof Services.examReports.exportReport).toBe("function");
+    expect(typeof Services.schoolOrganization.fetchTerms).toBe("function");
+    expect(typeof Services.questionBanks.fetchBanksPage).toBe("function");
+    expect(typeof Services.questionBanks.fetchBank).toBe("function");
+    expect(typeof Services.questionBanks.createBank).toBe("function");
+    expect(typeof Services.questionBanks.updateBank).toBe("function");
+    expect(typeof Services.questionBanks.deleteBank).toBe("function");
+    expect(typeof Services.questionBanks.fetchQuestionsPage).toBe("function");
+    expect(typeof Services.questionBanks.createQuestion).toBe("function");
+    expect(typeof Services.questionBanks.updateQuestion).toBe("function");
+    expect(typeof Services.questionBanks.deleteQuestion).toBe("function");
+    expect(typeof Services.questionBanks.approveQuestion).toBe("function");
+    expect(typeof Services.questionBanks.assemblePaper).toBe("function");
+    expect(typeof Services.gradingScales.fetchScalesPage).toBe("function");
+    expect(typeof Services.gradingScales.fetchScale).toBe("function");
+    expect(typeof Services.gradingScales.createScale).toBe("function");
+    expect(typeof Services.gradingScales.updateScale).toBe("function");
+    expect(typeof Services.gradingScales.deleteScale).toBe("function");
+    expect(typeof Services.gradingScales.setDefault).toBe("function");
+    expect(typeof Services.gradingScales.fetchBands).toBe("function");
+    expect(typeof Services.gradingScales.createBand).toBe("function");
+    expect(typeof Services.gradingScales.updateBand).toBe("function");
+    expect(typeof Services.gradingScales.deleteBand).toBe("function");
 
     expect(typeof Services.jobs.fetchJob).toBe("function");
     expect(typeof Services.jobs.fetchFileDownloadUrl).toBe("function");

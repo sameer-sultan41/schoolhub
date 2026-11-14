@@ -48,10 +48,10 @@ moment `tests/live/` grows past a handful of specs, so don't do that either — 
 - So: **every live browser spec does its own real login**, guest context —
   `test.use({ storageState: { cookies: [], origins: [] } })` at the top of the file, then
   `loginPage.signIn(...)` — the same pattern `login.spec.ts`, `session.spec.ts`,
-  `dashboard-summary.spec.ts` and `tenant-isolation.spec.ts` all use. That's ~10 real
+  `dashboard-summary.spec.ts` and `tenant-isolation.spec.ts` all use. That's ~11 real
   logins per full run today (the two admission-journey tests and the two-identity
-  promotion journey each carry more than one; the timetable build-and-publish and
-  attendance register journeys carry exactly one each), plus a refresh per cold
+  promotion journey each carry more than one; the timetable build-and-publish, attendance
+  register and exam results journeys carry exactly one each), plus a refresh per cold
   navigation, which counts against the same 10/min budget. Re-check that math before
   adding another one — and prefer spending an existing session over opening a new one. Reaching a screen through a nav-link click
   rather than `page.goto` costs no refresh at all, which is the cheapest saving
@@ -74,6 +74,10 @@ moment `tests/live/` grows past a handful of specs, so don't do that either — 
   `createLiveSession(credentials)` itself — that's one login per test, so keep those to
   one test per file, or share one session per worker, as `attendance-marking.spec.ts`'s
   `markerSession` does, when several tests need the same identity.
+  `src/lib/live-exams.ts` holds three such per-worker identities for the examinations specs —
+  `examStaffSession()` (exam staff), `teacherSession()` (teacher) and `principalSession()`
+  (the results approver) — so a worker running them adds at most three logins to the budget
+  above.
 
 ## Mirrored values
 

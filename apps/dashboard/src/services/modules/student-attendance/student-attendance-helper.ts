@@ -25,7 +25,6 @@ import type {
   MarkableStatus,
   RegisterMeta,
   RegisterResult,
-  RowIssue,
   StudentAttendanceRecord,
   UnmarkableReason,
 } from "./student-attendance-type";
@@ -122,28 +121,6 @@ export function toBulkMarkMeta(meta: Record<string, unknown> | undefined): BulkM
     updated: count(raw.updated),
     alertsQueued: count(raw.alerts_queued),
   };
-}
-
-function isRowIssue(value: unknown): value is RowIssue {
-  if (typeof value !== "object" || value === null) return false;
-  const row = value as Record<string, unknown>;
-  return typeof row.student_id === "string" && typeof row.issue === "string";
-}
-
-/**
- * A refused `:bulk-mark`'s per-student issues (student id -> the server's sentence), from
- * `error.meta.rows` (never `details`, which the server flattens). Empty for any other error.
- * When a student is listed twice the first issue wins.
- */
-export function rowIssuesFromError(error: unknown): Map<string, string> {
-  const issues = new Map<string, string>();
-  if (!(error instanceof ApiError)) return issues;
-  const rows = error.meta.rows;
-  if (!Array.isArray(rows)) return issues;
-  for (const row of rows) {
-    if (isRowIssue(row) && !issues.has(row.student_id)) issues.set(row.student_id, row.issue);
-  }
-  return issues;
 }
 
 /**

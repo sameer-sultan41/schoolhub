@@ -14,6 +14,7 @@ import { PARENT_PORTAL_QUERY_MODULE } from "@/services/modules/parent-portal/par
 import { fetchAllPages } from "@/features/portal/fetch-all-pages";
 import { formatDecimal } from "@/features/portal/format-decimal";
 import { ChildGate } from "@/features/portal/shell/child-gate";
+import { PortalAdmitCards } from "./portal-admit-cards";
 import { RESULT_OUTCOME_BADGE, RESULT_OUTCOME_LABEL_KEY } from "./result-outcome";
 import { enumBadge, enumLabel } from "@/features/portal/enum-label";
 
@@ -38,7 +39,7 @@ function groupByTerm(results: readonly ResultRecord[]): TermGroup[] {
   return [...groups.values()];
 }
 
-/** One child's published results, newest first. What the API returns is what is shown: it
+/** One child's admit cards for exams not yet over, then their published results, newest first. What the API returns is what is shown: it
  * answers a guardian with published results only, so there is no client-side filter. */
 export function PortalResults() {
   return <ChildGate>{(child) => <ChildResults studentId={child.student.id} />}</ChildGate>;
@@ -135,6 +136,7 @@ function ChildResults({ studentId }: { studentId: string }) {
   return (
     <section className="space-y-4">
       <h1 className="font-heading text-xl font-semibold text-foreground">{t("title")}</h1>
+      <PortalAdmitCards studentId={studentId} />
       {body()}
     </section>
   );

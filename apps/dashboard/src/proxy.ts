@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { Paths } from "@/config/paths";
+import { matchesPath } from "@/lib/active-path";
 import { Cookies } from "@/lib/cookies";
 
 /**
@@ -14,7 +15,7 @@ import { Cookies } from "@/lib/cookies";
 const PUBLIC_PATHS = [Paths.LOGIN, Paths.FORGOT_PASSWORD, Paths.RESET_PASSWORD];
 
 function isPublicPath(pathname: string): boolean {
-  return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+  return PUBLIC_PATHS.some((path) => matchesPath(path, pathname));
 }
 
 export function proxy(request: NextRequest): NextResponse {

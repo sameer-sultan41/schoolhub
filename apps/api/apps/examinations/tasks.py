@@ -15,9 +15,11 @@ from __future__ import annotations
 
 import logging
 import uuid
+from decimal import Decimal
 
 from celery import shared_task
 from django.utils import timezone
+from rest_framework.exceptions import APIException
 
 from core.imports.tabular import ROW_NUMBER_KEY
 from core.jobs.models import BackgroundJob
@@ -30,6 +32,23 @@ logger = logging.getLogger(__name__)
 # How often to report progress back to the job row. A batch is hundreds of
 # renders and a caller is watching a bar; every row would be a write per PDF.
 PROGRESS_EVERY = 25
+
+
+def _detail_messages(detail) -> list[str]:
+    """Every sentence in a DRF error detail, however it nests (field dict, list, string)."""
+    if isinstance(detail, dict):
+        return [message for value in detail.values() for message in _detail_messages(value)]
+    if isinstance(detail, list):
+        return [message for value in detail for message in _detail_messages(value)]
+    return [str(detail)]
+
+
+def _job_error(exc: Exception) -> str:
+    """A failed job's `error`, which a person reads: an API error's own sentences, not the repr
+    of its field dict (`{'sections': ErrorDetail(...)}`)."""
+    if isinstance(exc, APIException):
+        return " ".join(_detail_messages(exc.detail))
+    return str(exc)
 
 
 @shared_task(base=TenantAwareTask, bind=True)
@@ -48,7 +67,8 @@ def render_admit_cards_task(self, *, tenant_id: str, job_id: str, actor_id: str)
     registrar prints a sheet of them at once, which is the opposite need.
 
     A **revoked** card is skipped. Rendering one would put a downloadable
-    document behind a card someone deliberately withdrew.
+    document behind a card someone deliberately withdrew — including one
+    revoked while the job was running, which the conditional save catches.
     """
     from apps.examinations import documents, uploads
     from apps.examinations.models import AdmitCard, AdmitCardStatus, Exam
@@ -83,6 +103,8 @@ def render_admit_cards_task(self, *, tenant_id: str, job_id: str, actor_id: str)
 
         total = len(cards) or 1
         for index, card in enumerate(cards, start=1):
+            # Counted only after the block commits, so it is bound before it.
+            saved = 0
             try:
                 with tenant_atomic(uuid.UUID(tenant_id)):
                     document = documents.admit_card_html(
@@ -100,22 +122,33 @@ def render_admit_cards_task(self, *, tenant_id: str, job_id: str, actor_id: str)
                         data=render_pdf(document),
                         actor_id=uuid.UUID(actor_id),
                     )
-                    card.file = file
-                    card.status = AdmitCardStatus.ISSUED
-                    card.issued_by = uuid.UUID(actor_id)
-                    card.issued_at = timezone.now()
-                    card.updated_by = uuid.UUID(actor_id)
-                    card.save(
-                        update_fields=[
-                            "file",
-                            "status",
-                            "issued_by",
-                            "issued_at",
-                            "updated_by",
-                            "updated_at",
-                        ]
+                    # Conditional, so a revoke made while this card rendered
+                    # wins: the job read the card before the revoke, and a
+                    # plain `save()` would write `issued` straight over it.
+                    now = timezone.now()
+                    saved = (
+                        AdmitCard.objects.alive()
+                        .filter(pk=card.pk)
+                        .exclude(status=AdmitCardStatus.REVOKED)
+                        .update(
+                            file=file,
+                            status=AdmitCardStatus.ISSUED,
+                            issued_by=uuid.UUID(actor_id),
+                            issued_at=now,
+                            updated_by=uuid.UUID(actor_id),
+                            updated_at=now,
+                        )
                     )
-                rendered += 1
+                    if not saved:
+                        # Revoked mid-render: retire the document nothing points
+                        # at, rather than leave a live orphan behind.
+                        file.deleted_at = now
+                        file.save(update_fields=["deleted_at", "updated_at"])
+                        logger.info(
+                            "admit card %s was revoked mid-render; skipped", card.admit_card_no
+                        )
+                if saved:
+                    rendered += 1
             except Exception as exc:
                 # One card failing must not cost the other three hundred theirs.
                 # The card keeps `generated` with no file, so a re-run picks it
@@ -319,9 +352,10 @@ def import_marks_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> No
     Progress is reported as it goes, because a school's whole marks sheet is
     long enough that a caller polling `GET /jobs/{id}` needs to see it moving.
 
-    **Rows are matched only against the students the requester's key reaches**,
-    read under the key the enqueuing request was admitted on (`scope_permission`,
-    core/exports/scope.py). A job without one fails closed, as an export does.
+    **Rows are matched only against the students the requester's key reaches**, in
+    the sections it lets them enter, read under the key the enqueuing request was
+    admitted on (`scope_permission`, core/exports/scope.py). A job without one fails
+    closed, as an export does.
     """
     import base64
 
@@ -349,12 +383,21 @@ def import_marks_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> No
             exam_subject = (
                 ExamSubject.objects.alive()
                 .select_related("exam")
-                .get(pk=payload["exam_subject_id"])
+                .filter(pk=payload["exam_subject_id"])
+                .first()
             )
+            if exam_subject is None:
+                # Removed while the job was queued. The job error is shown to the user, so it is
+                # written as a sentence rather than the ORM's "matching query does not exist".
+                mark_failed(
+                    job=job,
+                    error="This exam-subject was removed, so its marks sheet was not imported.",
+                )
+                return
             requester = User.objects.get(pk=payload["requested_by"])
             # Built once for the whole file. Looked up per row it would be one
             # query each, and a six-hundred-row sheet is a real size.
-            students = services.import_candidates_by_admission_number(
+            enrollments = services.import_candidates_by_admission_number(
                 exam_subject=exam_subject, user=requester, permission=permission
             )
 
@@ -368,7 +411,7 @@ def import_marks_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> No
                     row=row,
                     row_number=int(row[ROW_NUMBER_KEY]),
                     exam_subject=exam_subject,
-                    students_by_number=students,
+                    enrollments_by_number=enrollments,
                     actor_id=uuid.UUID(actor_id),
                 )
             if error:
@@ -380,7 +423,12 @@ def import_marks_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> No
 
         mark_succeeded(
             job=job,
-            result={"rows": len(rows), "succeeded": succeeded, "errors": errors},
+            result={
+                "total": len(rows),
+                "succeeded": succeeded,
+                "failed": len(errors),
+                "errors": errors,
+            },
         )
     except Exception as exc:  # noqa: BLE001
         # The job row is the only place a caller polling GET /jobs/{id} can
@@ -403,7 +451,8 @@ def remind_tenant_marks_entry(tenant_id: uuid.UUID) -> int:
     so a subject nobody has started counts and one that is merely unsubmitted
     does too.
 
-    **Recipients are the allocated subject teachers**, from
+    One reminder per outstanding *section*. **Recipients are that section's
+    allocated subject teachers in the exam's session**, from
     `academics.TeacherSubjectAllocation`, which is the same table
     `Marks.filter_assigned_to_user` resolves entry rights through. §12 says
     "teachers with pending entries", and a broadcast to all staff would be the
@@ -416,7 +465,7 @@ def remind_tenant_marks_entry(tenant_id: uuid.UUID) -> int:
     from apps.academics.models import TeacherSubjectAllocation
     from apps.examinations import notifications
     from apps.examinations.models import Exam, ExamStatus
-    from apps.examinations.services import marks_entry_progress
+    from apps.examinations.services import all_marks_entry_progress
     from core.notifications.services import Recipient, notify
     from core.tenancy.context import tenant_atomic
     from core.tenancy.models import Tenant
@@ -431,29 +480,37 @@ def remind_tenant_marks_entry(tenant_id: uuid.UUID) -> int:
                 status__in=[ExamStatus.SCHEDULED, ExamStatus.ONGOING, ExamStatus.MARKS_ENTRY]
             )
         )
+        now = timezone.now()
         for exam in exams:
-            for entry in marks_entry_progress(exam=exam):
-                if entry["is_locked"] or entry["closes_at"] is None:
-                    continue
-                if entry["closes_at"] > horizon or entry["closes_at"] < timezone.now():
-                    continue
-                if entry["submitted"] >= entry["expected"]:
-                    continue
-
-                # `marks_entry_progress` carries `subject_id`/`class_id` so
-                # this does not re-fetch the exam-subject per row — the N+1
-                # shape PR B's review caught twice.
-                teachers = list(
-                    TeacherSubjectAllocation.objects.alive()
-                    .filter(
-                        subject_id=entry["subject_id"],
-                        section__school_class_id=entry["class_id"],
-                        effective_to__isnull=True,
-                        staff__user_id__isnull=False,
-                    )
-                    .values_list("staff__user_id", flat=True)
+            due = [
+                entry
+                for entry in all_marks_entry_progress(exam=exam)
+                if not entry["is_locked"]
+                and entry["closes_at"] is not None
+                and now <= entry["closes_at"] <= horizon
+                and entry["submitted"] < entry["expected"]
+            ]
+            if not due:
+                continue
+            # One read per exam: each due row is one section, reminded to that
+            # section's current subject teachers in the exam's session only.
+            teachers: dict[tuple, list] = {}
+            for section_id, subject_id, user_id in (
+                TeacherSubjectAllocation.objects.alive()
+                .filter(
+                    section_id__in={entry["section_id"] for entry in due},
+                    subject_id__in={entry["subject_id"] for entry in due},
+                    academic_session_id=exam.academic_session_id,
+                    effective_to__isnull=True,
+                    staff__user_id__isnull=False,
                 )
-                recipients = [Recipient(user_id=user_id) for user_id in dict.fromkeys(teachers)]
+                .values_list("section_id", "subject_id", "staff__user_id")
+            ):
+                teachers.setdefault((section_id, subject_id), []).append(user_id)
+
+            for entry in due:
+                user_ids = teachers.get((entry["section_id"], entry["subject_id"]), [])
+                recipients = [Recipient(user_id=user_id) for user_id in dict.fromkeys(user_ids)]
                 if not recipients:
                     continue
                 try:
@@ -465,7 +522,7 @@ def remind_tenant_marks_entry(tenant_id: uuid.UUID) -> int:
                             "exam.name": exam.name,
                             "school.name": school_name,
                             "subject.name": entry["subject_name"],
-                            "class.name": entry["class_name"],
+                            "class.name": f"{entry['class_name']} {entry['section_name']}",
                             "outstanding": str(entry["expected"] - entry["submitted"]),
                             "closes_at": entry["closes_at"].isoformat(),
                         },
@@ -948,7 +1005,20 @@ def assemble_paper_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> 
                 .get(pk=payload["question_bank_id"])
             )
             school_name = Tenant.objects.get(pk=tenant_id).name
-            sections = services.select_paper_questions(bank=bank, sections=payload["sections"])
+            # The view stores `marks_each` as a string (a JSONB payload holds no
+            # Decimal), so it is a Decimal again before anything sums or prints it.
+            blueprint = [
+                {
+                    **section,
+                    "marks_each": (
+                        Decimal(section["marks_each"])
+                        if section.get("marks_each") is not None
+                        else None
+                    ),
+                }
+                for section in payload["sections"]
+            ]
+            sections = services.select_paper_questions(bank=bank, sections=blueprint)
             total_marks = sum(
                 (section.get("marks_each") or question.default_marks)
                 for section in sections
@@ -983,7 +1053,9 @@ def assemble_paper_task(self, *, tenant_id: str, job_id: str, actor_id: str) -> 
             },
         )
     except Exception as exc:  # noqa: BLE001
-        mark_failed(job=job, error=str(exc))
+        # A mid-job shortfall (`select_paper_questions`) is a `DomainRuleViolation` on
+        # `sections`; the teacher sees its sentence.
+        mark_failed(job=job, error=_job_error(exc))
 
 
 @shared_task(base=TenantAwareTask, bind=True)

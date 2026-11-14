@@ -31,6 +31,8 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from decimal import Decimal
 
+from django.utils import timezone
+
 from apps.examinations import grading
 from apps.examinations.models import (
     Exam,
@@ -45,6 +47,18 @@ from apps.examinations.models import (
 from core.api.exceptions import Conflict
 
 ZERO = Decimal("0.00")
+
+
+class MarksOutstanding(Conflict):
+    """§11's block on processing while marks are outstanding: a 409 with a code of its own.
+
+    A `Conflict` subclass, so the envelope reports `default_code` (`core.api.exceptions`'
+    handler) and a client can tell "finish entering marks" from the exam's other 409s (no
+    subjects configured, approved already) and point the user at marks entry.
+    """
+
+    default_code = "marks_outstanding"
+
 
 # Marks that count as a real, finished entry. A `draft` row was saved but never
 # claimed as finished, and processing it would grade a student on a
@@ -66,6 +80,7 @@ RESULT_COMPUTED_FIELDS = (
     "rank_in_class",
     "outcome",
     "status",
+    "processed_by",
     "updated_by",
 )
 
@@ -139,6 +154,8 @@ def collect(*, exam: Exam) -> Scope:
         by_class[class_id].add(student_id)
     for subject in exam_subjects:
         expected_by_subject[subject.pk] = by_class[subject.school_class_id]
+    # Only the active roll is computed: a student withdrawn since has no section to rank in.
+    marks = [row for row in marks if row["student_id"] in student_section]
 
     return Scope(
         exam=exam,
@@ -178,7 +195,7 @@ def assert_ready_to_process(scope: Scope) -> None:
             outstanding.append(f"{subject.subject.name} ({len(missing)} student(s))")
 
     if outstanding:
-        raise Conflict(
+        raise MarksOutstanding(
             "Marks are still outstanding, so results cannot be processed: "
             + "; ".join(sorted(outstanding))
             + "."
@@ -302,7 +319,8 @@ def _rank(computed: list[dict], *, key: str, into: str) -> None:
 
 
 def write(*, exam: Exam, computed: list[dict], actor_id: uuid.UUID) -> dict:
-    """Upsert every computed row. Two queries for the whole school.
+    """Upsert every computed row, then move every processing or pending row of the exam to
+    pending approval under this run's stamp. Four queries for the whole school.
 
     Upsert, because §6 makes recompute idempotent and re-runnable — a second run
     updates in place rather than colliding with
@@ -335,6 +353,8 @@ def write(*, exam: Exam, computed: list[dict], actor_id: uuid.UUID) -> dict:
             "rank_in_class": row["rank_in_class"],
             "outcome": ResultOutcome.WITHHELD if withheld else row["outcome"],
             "status": ResultStatus.PENDING_APPROVAL,
+            # Every run re-stamps it, so the approval gate names the latest processor.
+            "processed_by": actor_id,
             "updated_by": actor_id,
         }
         if current is None:
@@ -356,5 +376,18 @@ def write(*, exam: Exam, computed: list[dict], actor_id: uuid.UUID) -> dict:
         Result.objects.bulk_create(to_create)
     if to_update:
         Result.objects.bulk_update(to_update, RESULT_COMPUTED_FIELDS, batch_size=500)
+
+    # Every unpublished row of the exam joins this run's approval set, including one it did not
+    # recompute (a student withdrawn since keeps their earlier row): a row a send-back left in
+    # `processing` would otherwise never be approved, and a stale stamp would refuse the right
+    # approver (L57, L58).
+    Result.objects.alive().filter(
+        exam=exam, status__in=[ResultStatus.PROCESSING, ResultStatus.PENDING_APPROVAL]
+    ).update(
+        status=ResultStatus.PENDING_APPROVAL,
+        processed_by=actor_id,
+        updated_by=actor_id,
+        updated_at=timezone.now(),
+    )
 
     return {"created": len(to_create), "updated": len(to_update)}

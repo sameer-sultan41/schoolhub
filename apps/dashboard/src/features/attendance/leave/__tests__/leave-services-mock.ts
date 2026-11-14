@@ -4,7 +4,6 @@ import { servicesMock } from "@/test-fixtures/services-mock";
 export function leaveServicesMock() {
   return servicesMock({
     auth: ["fetchCurrentUser"],
-    leaveRequests: ["fetchLeavePage", "fetchLeaveTypes", "decideLeave"],
-    jobs: ["fetchFileDownloadUrl"],
+    leaveRequests: ["fetchLeavePage", "fetchLeaveTypes", "decideLeave", "fetchLeaveAttachmentUrl"],
   });
 }

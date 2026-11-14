@@ -331,15 +331,22 @@ class Command(BaseCommand):
             school_class=school_class,
             status=EnrollmentStatus.ACTIVE,
         )
-        exam_services.bulk_enter_marks(
-            exam_subject=exam_subject,
-            entries=[
-                {"student_id": student_id, "theory_marks": E2E_EXAM_THEORY_MARKS}
-                for student_id in roll.values_list("student_id", flat=True).distinct()
-            ],
-            user=marker,
-            actor_id=marker.id,
-        )
+        # Marks are entered one section's grid at a time.
+        for section in Section.objects.filter(
+            pk__in=roll.values_list("section_id", flat=True)
+        ).order_by("pk"):
+            exam_services.bulk_enter_marks(
+                exam_subject=exam_subject,
+                section=section,
+                entries=[
+                    {"student_id": student_id, "theory_marks": E2E_EXAM_THEORY_MARKS}
+                    for student_id in roll.filter(section=section)
+                    .values_list("student_id", flat=True)
+                    .distinct()
+                ],
+                user=marker,
+                actor_id=marker.id,
+            )
         exam_services.lock_marks(exam_subject=exam_subject, actor_id=marker.id)
         exam_services.process_exam_results(exam=exam, actor_id=marker.id)
         exam_services.approve_exam_results(exam=exam, approver_id=approver.id)

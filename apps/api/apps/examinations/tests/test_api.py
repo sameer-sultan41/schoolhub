@@ -166,6 +166,19 @@ class GradeBandEndpointTests(ExaminationsAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_a_band_bound_outside_zero_to_a_hundred_is_refused_under_its_field(self) -> None:
+        """The CHECK would answer a 409; the field validators answer first, by name."""
+        for field, value in (("max_percent", "150.00"), ("min_percent", "-5.00")):
+            with self.subTest(field=field):
+                payload = {"label": "X", "min_percent": "10.00", "max_percent": "90.00"}
+                payload[field] = value
+
+                response = self.client.post(self.bands_url, payload, format="json")
+
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.json())
+                fields = [detail["field"] for detail in response.json()["error"]["details"]]
+                self.assertEqual(fields, [field])
+
     def test_bands_list_only_their_own_scale(self) -> None:
         with tenant_context(self.tenant.id):
             GradeBandFactory(
@@ -332,7 +345,9 @@ class ExamEndpointTests(ExaminationsAPITestCase):
         response = self.client.delete(f"{EXAMS}/{exam.pk}")
 
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
-        self.assertIn("archive it instead", str(response.json()))
+        message = response.json()["error"]["message"]
+        self.assertEqual(message, "This exam is scheduled. Only a draft exam can be deleted.")
+        self.assertNotIn("archive", message)
 
     def test_a_draft_exam_is_soft_deleted(self) -> None:
         with tenant_context(self.tenant.id):
@@ -402,6 +417,64 @@ class ExamSubjectEndpointTests(ExaminationsAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
         self.assertIn("not in the curriculum", str(response.json()))
+
+    def test_a_duplicate_exam_class_and_subject_is_refused_under_subject_id(self) -> None:
+        """The unique index includes the tenant, so DRF derives no validator from it:
+        the service answers first, naming the input, instead of a bare 409."""
+        first = self.client.post(EXAM_SUBJECTS, self._payload(), format="json")
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED, first.json())
+
+        again = self.client.post(EXAM_SUBJECTS, self._payload(), format="json")
+
+        self.assertEqual(again.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY, again.json())
+        fields = [detail["field"] for detail in again.json()["error"]["details"]]
+        self.assertEqual(fields, ["subject_id"])
+        self.assertIn("already on this exam", str(again.json()))
+
+    def test_a_removed_subject_can_be_added_again(self) -> None:
+        first = self.client.post(EXAM_SUBJECTS, self._payload(), format="json")
+        self.client.delete(f"{EXAM_SUBJECTS}/{first.json()['data']['id']}")
+
+        again = self.client.post(EXAM_SUBJECTS, self._payload(), format="json")
+
+        self.assertEqual(again.status_code, status.HTTP_201_CREATED, again.json())
+
+    def test_editing_a_subject_into_another_rows_duplicate_is_refused(self) -> None:
+        with tenant_context(self.tenant.id):
+            other = SubjectFactory(tenant=self.tenant)
+            ClassSubjectFactory(
+                tenant=self.tenant,
+                academic_session=self.session,
+                school_class=self.school_class,
+                subject=other,
+            )
+        self.client.post(EXAM_SUBJECTS, self._payload(), format="json")
+        second = self.client.post(
+            EXAM_SUBJECTS, self._payload(subject_id=str(other.pk)), format="json"
+        )
+        second_id = second.json()["data"]["id"]
+
+        clash = self.client.patch(
+            f"{EXAM_SUBJECTS}/{second_id}", {"subject_id": str(self.subject.pk)}, format="json"
+        )
+        resave = self.client.patch(
+            f"{EXAM_SUBJECTS}/{second_id}", {"max_marks": "80.00"}, format="json"
+        )
+
+        self.assertEqual(clash.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY, clash.json())
+        self.assertIn("already on this exam", str(clash.json()))
+        self.assertEqual(resave.status_code, status.HTTP_200_OK, resave.json())
+
+    def test_a_subject_weightage_outside_zero_to_a_hundred_is_refused_under_its_field(self) -> None:
+        for value in ("0", "100.01"):
+            with self.subTest(value=value):
+                response = self.client.post(
+                    EXAM_SUBJECTS, self._payload(subject_weightage_percent=value), format="json"
+                )
+
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.json())
+                fields = [detail["field"] for detail in response.json()["error"]["details"]]
+                self.assertEqual(fields, ["subject_weightage_percent"])
 
     def test_pass_marks_above_the_maximum_are_refused(self) -> None:
         response = self.client.post(

@@ -204,7 +204,6 @@ describe("LeaveDetailSheet", () => {
 
     it("says so when there is none, and offers no download", async () => {
       fetchPage.mockResolvedValue(leavePage([amnaPending]));
-      asUser("platform.file.view");
       const user = await renderLeave();
 
       const sheet = await openDetail(user, "Amna Raza");
@@ -215,8 +214,7 @@ describe("LeaveDetailSheet", () => {
       ).not.toBeInTheDocument();
     });
 
-    it("downloads through a fresh signed URL for the attached file", async () => {
-      asUser("platform.file.view");
+    it("downloads through a fresh signed URL from the request's own route", async () => {
       fetchDownloadUrl.mockResolvedValue(SIGNED_URL);
       const user = await renderLeave();
       const sheet = await openDetail(user, "Amna Raza");
@@ -224,7 +222,7 @@ describe("LeaveDetailSheet", () => {
       await user.click(within(sheet).getByRole("button", { name: "Download attachment" }));
 
       await waitFor(() => {
-        expect(fetchDownloadUrl).toHaveBeenCalledWith(ATTACHMENT_FILE_ID);
+        expect(fetchDownloadUrl).toHaveBeenCalledWith(withFile.id);
       });
       await waitFor(() => {
         expect(mocked(downloadFile)).toHaveBeenCalledWith(SIGNED_URL);
@@ -232,13 +230,12 @@ describe("LeaveDetailSheet", () => {
     });
 
     it("toasts the server's reason when the download link cannot be made", async () => {
-      asUser("platform.file.view");
       fetchDownloadUrl.mockRejectedValue(
         new ApiError({
           code: "not_found",
           message: "Not found.",
           status: 404,
-          url: `/files/${ATTACHMENT_FILE_ID}:download`,
+          url: `/leave-requests/${withFile.id}/attachment:download`,
         }),
       );
       const user = await renderLeave();
@@ -252,15 +249,13 @@ describe("LeaveDetailSheet", () => {
       expect(mocked(downloadFile)).not.toHaveBeenCalled();
     });
 
-    it("shows the file as attached, with no download, without platform.file.view", async () => {
+    it("offers the download to a reader who holds no file key", async () => {
+      asUser("attendance.leave-request.view");
       const user = await renderLeave();
 
       const sheet = await openDetail(user, "Amna Raza");
 
-      expect(within(sheet).getByText("A file is attached.")).toBeInTheDocument();
-      expect(
-        within(sheet).queryByRole("button", { name: "Download attachment" }),
-      ).not.toBeInTheDocument();
+      expect(within(sheet).getByRole("button", { name: "Download attachment" })).toBeEnabled();
     });
   });
 });
