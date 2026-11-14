@@ -27,8 +27,16 @@ import {
   ExamResultsPage,
   ExamSchedulePage,
   ExamsPage,
+  FeeCounterPage,
+  FeeGrantsPage,
+  FeeInvoicesPage,
+  FeeExpensesPage,
+  FeePaymentsPage,
+  FeeReportsPage,
+  FeeStructuresPage,
   ForgotPasswordPage,
   GradingScalesPage,
+  LedgerPage,
   LoginPage,
   MessagesPage,
   OversightPage,
@@ -137,6 +145,14 @@ export interface E2EFixtures {
   examReportCardsPage: ExamReportCardsPage;
   examReportsPage: ExamReportsPage;
   gradingScalesPage: GradingScalesPage;
+  feeCounterPage: FeeCounterPage;
+  feeGrantsPage: FeeGrantsPage;
+  feeInvoicesPage: FeeInvoicesPage;
+  feeExpensesPage: FeeExpensesPage;
+  feePaymentsPage: FeePaymentsPage;
+  feeReportsPage: FeeReportsPage;
+  feeStructuresPage: FeeStructuresPage;
+  ledgerPage: LedgerPage;
   questionBanksPage: QuestionBanksPage;
   /**
    * Signs a **second** identity in, on its own browser context, and hands back that
@@ -398,6 +414,38 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
 
   questionBanksPage: async ({ page }, use) => {
     await use(new QuestionBanksPage(page));
+  },
+
+  feeGrantsPage: async ({ page }, use) => {
+    await use(new FeeGrantsPage(page));
+  },
+
+  feeCounterPage: async ({ page }, use) => {
+    await use(new FeeCounterPage(page));
+  },
+
+  feeInvoicesPage: async ({ page }, use) => {
+    await use(new FeeInvoicesPage(page));
+  },
+
+  feeExpensesPage: async ({ page }, use) => {
+    await use(new FeeExpensesPage(page));
+  },
+
+  feePaymentsPage: async ({ page }, use) => {
+    await use(new FeePaymentsPage(page));
+  },
+
+  feeReportsPage: async ({ page }, use) => {
+    await use(new FeeReportsPage(page));
+  },
+
+  feeStructuresPage: async ({ page }, use) => {
+    await use(new FeeStructuresPage(page));
+  },
+
+  ledgerPage: async ({ page }, use) => {
+    await use(new LedgerPage(page));
   },
 
   signInAsSecondIdentity: async ({ browser }, use) => {

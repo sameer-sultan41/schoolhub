@@ -61,6 +61,15 @@ export const Paths = {
   PORTAL_NOTICE: (noticeId: string) => `/portal/notices/${noticeId}`,
   PORTAL_NOTIFICATIONS: "/portal/notifications",
   PORTAL_SETTINGS: "/portal/settings",
+  FEES: "/fees",
+  FEES_INVOICES: "/fees/invoices",
+  FEES_COUNTER: "/fees/counter",
+  FEES_PAYMENTS: "/fees/payments",
+  FEES_GRANTS: "/fees/grants",
+  FEES_STRUCTURES: "/fees/structures",
+  FEES_EXPENSES: "/fees/expenses",
+  FEES_LEDGER: "/fees/ledger",
+  FEES_REPORTS: "/fees/reports",
   EXAMS: "/exams",
   EXAMS_GRADING_SCALES: "/exams/grading-scales",
   EXAMS_REPORTS: "/exams/reports",
@@ -79,3 +88,13 @@ export const examPath = (examId: string) => `${Paths.EXAMS}/${examId}`;
 
 /** One question bank's page, under the banks list. */
 export const questionBankPath = (bankId: string) => `${Paths.EXAMS_QUESTION_BANKS}/${bankId}`;
+
+/** One invoice's page, under the invoices list. */
+export const feeInvoicePath = (invoiceId: string) => `${Paths.FEES_INVOICES}/${invoiceId}`;
+
+/** One student's fee statement (`GET /students/{id}/ledger`), under Fees & Finance. */
+export const studentStatementPath = (studentId: string) =>
+  `${Paths.FEES}/students/${studentId}/ledger`;
+
+/** One fee structure's page, under the structures list. */
+export const feeStructurePath = (structureId: string) => `${Paths.FEES_STRUCTURES}/${structureId}`;

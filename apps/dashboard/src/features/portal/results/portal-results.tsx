@@ -12,11 +12,11 @@ import { queryKeys } from "@/lib/query-client";
 import { Services, type ResultRecord } from "@/services";
 import { PARENT_PORTAL_QUERY_MODULE } from "@/services/modules/parent-portal/parent-portal-constant";
 import { fetchAllPages } from "@/features/portal/fetch-all-pages";
-import { formatDecimal } from "@/features/portal/format-decimal";
+import { formatDecimal } from "@/lib/format-decimal";
 import { ChildGate } from "@/features/portal/shell/child-gate";
 import { PortalAdmitCards } from "./portal-admit-cards";
 import { RESULT_OUTCOME_BADGE, RESULT_OUTCOME_LABEL_KEY } from "./result-outcome";
-import { enumBadge, enumLabel } from "@/features/portal/enum-label";
+import { enumBadge, enumLabel } from "@/lib/enum-label";
 
 interface TermGroup {
   term: string | null;

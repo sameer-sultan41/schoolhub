@@ -9,7 +9,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { LoadErrorCard } from "@/components/load-error-card";
 import { formatDate } from "@/lib/helpers";
 import type { AttendanceStatus, PortalChild, StudentAttendanceRecord } from "@/services";
-import { formatDecimal } from "@/features/portal/format-decimal";
+import { formatDecimal } from "@/lib/format-decimal";
 import { usePortalSummary } from "@/features/portal/use-portal-summary";
 import { ChildGate } from "@/features/portal/shell/child-gate";
 import {
@@ -18,7 +18,7 @@ import {
   ATTENDANCE_STATUS_SEVERITY,
 } from "./attendance-status";
 import { useRangeAttendance } from "./use-range-attendance";
-import { enumLabel } from "@/features/portal/enum-label";
+import { enumLabel } from "@/lib/enum-label";
 
 function isStatus(key: string): key is AttendanceStatus {
   return key in ATTENDANCE_STATUS_LABEL_KEY;
