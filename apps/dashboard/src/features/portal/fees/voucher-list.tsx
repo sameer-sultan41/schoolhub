@@ -5,10 +5,10 @@ import { Button } from "@schoolhub/ui";
 import { Download } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 
-import { enumLabel } from "@/features/portal/enum-label";
+import { enumLabel } from "@/lib/enum-label";
 import { formatDate, saveBlob } from "@/lib/helpers";
 import { Services, type VoucherRecord } from "@/services";
-import { VOUCHER_PROVIDER_LABEL_KEY } from "./voucher-labels";
+import { VOUCHER_PROVIDER_LABEL_KEY } from "@/features/fees/shared/voucher-labels";
 
 /** One voucher's PDF. The download carries the bearer token (a bare link would not), so it is
  * fetched as a blob and saved; a failure is said in place and can be tried again. */

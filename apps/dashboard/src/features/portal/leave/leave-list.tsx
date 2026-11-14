@@ -7,7 +7,7 @@ import { Button, Card, CardContent, EmptyState, Skeleton } from "@schoolhub/ui";
 
 import { LoadErrorCard } from "@/components/load-error-card";
 import { RequestStatusBadge } from "@/features/attendance/request-status-badge";
-import { enumLabel } from "@/features/portal/enum-label";
+import { enumLabel } from "@/lib/enum-label";
 import { formatDate } from "@/lib/helpers";
 import type { LeaveRequestRecord } from "@/services";
 import { LEAVE_DEFAULT_DAY_PART } from "@/services/modules/leave-requests/leave-requests-constant";

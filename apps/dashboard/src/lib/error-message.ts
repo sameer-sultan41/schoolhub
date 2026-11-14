@@ -28,6 +28,32 @@ export function resolveErrorMessage(
 export const NON_FIELD = "non_field";
 
 /**
+ * Re-keys an `ApiError`'s field details through `rename` (return `undefined` to keep a field), so a
+ * server field the form has no input of that name for lands under the input that does. Anything
+ * that isn't an `ApiError`, or has nothing renamed, comes back as it was.
+ */
+export function rekeyFieldErrors(
+  error: unknown,
+  rename: (field: string) => string | undefined,
+): unknown {
+  if (!(error instanceof ApiError)) return error;
+  const details = error.details.map((detail) => {
+    const field = detail.field === undefined ? undefined : rename(detail.field);
+    return field === undefined ? detail : { ...detail, field };
+  });
+  if (details.every((detail, index) => detail === error.details[index])) return error;
+  return new ApiError({
+    code: error.code,
+    message: error.message,
+    status: error.status,
+    url: error.url,
+    details,
+    requestId: error.requestId,
+    meta: error.meta,
+  });
+}
+
+/**
  * Re-keys every field detail outside `knownFields` as `non_field`, so a dialog-level message
  * (`resolveErrorMessage(..., "non_field")`, or `applyServerFieldErrors`' fallback) shows the
  * server's own reason for a field the dialog has no input for, instead of the code's generic

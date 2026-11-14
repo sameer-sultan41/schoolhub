@@ -37,33 +37,48 @@ describe("Services", () => {
       "attendanceSettings",
       "auth",
       "broadcasts",
+      "budgets",
       "curriculum",
       "dashboard",
+      "discounts",
       "examReports",
       "examResults",
       "examSchedules",
       "examSubjects",
       "exams",
+      "expenseCategories",
+      "expenses",
+      "feeHeads",
       "feeInvoices",
+      "feeSchedules",
+      "feeStructures",
       "files",
+      "financeReports",
+      "fines",
       "gradingScales",
       "guardians",
       "jobs",
       "leaveRequests",
+      "ledgerAccounts",
+      "ledgerEntries",
       "marks",
       "messageThreads",
       "notices",
       "notificationPreferences",
       "notifications",
       "parentPortal",
+      "payments",
       "periods",
       "promotions",
       "questionBanks",
       "receipts",
+      "refunds",
       "reportCards",
       "results",
       "rooms",
+      "scholarships",
       "schoolOrganization",
+      "settlementImports",
       "staff",
       "staffAttendance",
       "studentAttendance",
@@ -85,6 +100,31 @@ describe("Services", () => {
 
     expect(typeof Services.vouchers.listVouchers).toBe("function");
     expect(typeof Services.vouchers.downloadVoucher).toBe("function");
+    expect(typeof Services.vouchers.issueVoucher).toBe("function");
+    expect(typeof Services.vouchers.voidVoucher).toBe("function");
+    expect(typeof Services.expenseCategories.listExpenseCategories).toBe("function");
+    expect(typeof Services.expenseCategories.deleteExpenseCategory).toBe("function");
+    expect(typeof Services.ledgerEntries.listLedgerEntries).toBe("function");
+    expect(typeof Services.ledgerEntries.postJournal).toBe("function");
+    expect(typeof Services.expenses.listExpenses).toBe("function");
+    expect(typeof Services.expenses.submitExpense).toBe("function");
+    expect(typeof Services.expenses.approveExpense).toBe("function");
+    expect(typeof Services.expenses.rejectExpense).toBe("function");
+    expect(typeof Services.expenses.markExpensePaid).toBe("function");
+    expect(typeof Services.expenses.reverseExpense).toBe("function");
+    expect(typeof Services.budgets.listBudgets).toBe("function");
+    expect(typeof Services.budgets.approveBudget).toBe("function");
+    expect(typeof Services.financeReports.fetchReport).toBe("function");
+    expect(typeof Services.financeReports.exportReport).toBe("function");
+    expect(typeof Services.financeReports.fetchStudentStatement).toBe("function");
+    expect(typeof Services.refunds.listRefunds).toBe("function");
+    expect(typeof Services.refunds.createRefund).toBe("function");
+    expect(typeof Services.refunds.approveRefund).toBe("function");
+    expect(typeof Services.refunds.rejectRefund).toBe("function");
+    expect(typeof Services.refunds.processRefund).toBe("function");
+    expect(typeof Services.settlementImports.listSettlementImports).toBe("function");
+    expect(typeof Services.settlementImports.fetchSettlementImport).toBe("function");
+    expect(typeof Services.settlementImports.uploadSettlementImport).toBe("function");
     expect(typeof Services.leaveRequests.createLeave).toBe("function");
     expect(typeof Services.leaveRequests.cancelLeave).toBe("function");
 
@@ -236,6 +276,43 @@ describe("Services", () => {
     expect(typeof Services.notices.listNotices).toBe("function");
     expect(typeof Services.notices.acknowledgeNotice).toBe("function");
     expect(typeof Services.feeInvoices.listFeeInvoices).toBe("function");
+    expect(typeof Services.feeInvoices.generateFeeInvoices).toBe("function");
+    expect(typeof Services.feeInvoices.cancelFeeInvoice).toBe("function");
+    expect(typeof Services.payments.listPayments).toBe("function");
+    expect(typeof Services.payments.recordPayment).toBe("function");
+    expect(typeof Services.ledgerAccounts.listLedgerAccounts).toBe("function");
+    expect(typeof Services.ledgerAccounts.fetchLedgerAccount).toBe("function");
+    expect(typeof Services.ledgerAccounts.createLedgerAccount).toBe("function");
+    expect(typeof Services.ledgerAccounts.updateLedgerAccount).toBe("function");
+    expect(typeof Services.ledgerAccounts.deleteLedgerAccount).toBe("function");
+    expect(typeof Services.feeHeads.listFeeHeads).toBe("function");
+    expect(typeof Services.feeHeads.fetchFeeHead).toBe("function");
+    expect(typeof Services.feeHeads.createFeeHead).toBe("function");
+    expect(typeof Services.feeHeads.updateFeeHead).toBe("function");
+    expect(typeof Services.feeHeads.deleteFeeHead).toBe("function");
+    expect(typeof Services.feeStructures.listFeeStructures).toBe("function");
+    expect(typeof Services.feeStructures.fetchFeeStructure).toBe("function");
+    expect(typeof Services.feeStructures.createFeeStructure).toBe("function");
+    expect(typeof Services.feeStructures.updateFeeStructure).toBe("function");
+    expect(typeof Services.feeStructures.deleteFeeStructure).toBe("function");
+    expect(typeof Services.feeStructures.activateFeeStructure).toBe("function");
+    expect(typeof Services.feeStructures.archiveFeeStructure).toBe("function");
+    expect(typeof Services.discounts.listDiscounts).toBe("function");
+    expect(typeof Services.discounts.createDiscount).toBe("function");
+    expect(typeof Services.discounts.updateDiscount).toBe("function");
+    expect(typeof Services.discounts.revokeDiscount).toBe("function");
+    expect(typeof Services.scholarships.listScholarships).toBe("function");
+    expect(typeof Services.scholarships.createScholarship).toBe("function");
+    expect(typeof Services.scholarships.updateScholarship).toBe("function");
+    expect(typeof Services.fines.listFines).toBe("function");
+    expect(typeof Services.fines.createFine).toBe("function");
+    expect(typeof Services.fines.updateFine).toBe("function");
+    expect(typeof Services.fines.waiveFine).toBe("function");
+    expect(typeof Services.feeSchedules.listFeeSchedules).toBe("function");
+    expect(typeof Services.feeSchedules.fetchFeeSchedule).toBe("function");
+    expect(typeof Services.feeSchedules.createFeeSchedule).toBe("function");
+    expect(typeof Services.feeSchedules.updateFeeSchedule).toBe("function");
+    expect(typeof Services.feeSchedules.deleteFeeSchedule).toBe("function");
     expect(typeof Services.receipts.listReceipts).toBe("function");
     expect(typeof Services.receipts.downloadReceipt).toBe("function");
     expect(typeof Services.results.listResults).toBe("function");

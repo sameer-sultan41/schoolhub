@@ -508,7 +508,7 @@ def export_finance_report_task(self, *, tenant_id: str, job_id: str, actor_id: s
     """
     import datetime as _datetime
 
-    from apps.fees_finance import services, uploads
+    from apps.fees_finance import reports, services, uploads
     from core.exports import tabular
     from core.exports.scope import MISSING_SCOPE_PERMISSION, job_scope_permission
     from core.files.services import create_ready_file
@@ -538,6 +538,7 @@ def export_finance_report_task(self, *, tenant_id: str, job_id: str, actor_id: s
                 date_to=_datetime.date.fromisoformat(payload["date_to"]),
                 student_id=payload.get("student_id"),
                 group_by=payload.get("group_by", "day"),
+                filters=reports.ReportFilters.from_payload(payload),
             )
 
             fmt = payload.get("format", "csv")

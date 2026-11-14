@@ -1,0 +1,508 @@
+import { ApiError } from "@schoolhub/api-client";
+import type { PermissionKey } from "@schoolhub/types";
+import type { Page } from "@schoolhub/types";
+
+import { Services } from "@/services";
+import type {
+  BudgetRecord,
+  ExpenseCategoryRecord,
+  ExpenseRecord,
+  FeeHeadRecord,
+  FeeInvoiceRecord,
+  FeeScheduleRecord,
+  FeeStructureRecord,
+  LedgerAccountRecord,
+  LedgerEntryRecord,
+  PaymentRecord,
+  ReceiptRecord,
+  RefundRecord,
+  SettlementImportRecord,
+  VoucherRecord,
+} from "@/services";
+import { mocked } from "@/test-fixtures/list-screen";
+import { buildUser, setUrl } from "@/test-utils";
+
+/** Shared setup for the fees-setup tests; each file keeps its own `jest.mock` calls. */
+
+export { mocked, rowOf, urlParam } from "@/test-fixtures/list-screen";
+
+export const listLedgerAccounts = mocked(Services.ledgerAccounts.listLedgerAccounts);
+export const fetchLedgerAccountOptions = mocked(Services.ledgerAccounts.fetchLedgerAccountOptions);
+export const createLedgerAccount = mocked(Services.ledgerAccounts.createLedgerAccount);
+export const updateLedgerAccount = mocked(Services.ledgerAccounts.updateLedgerAccount);
+export const deleteLedgerAccount = mocked(Services.ledgerAccounts.deleteLedgerAccount);
+export const listLedgerEntries = mocked(Services.ledgerEntries.listLedgerEntries);
+export const postJournal = mocked(Services.ledgerEntries.postJournal);
+export const listExpenseCategories = mocked(Services.expenseCategories.listExpenseCategories);
+export const fetchExpenseCategoryOptions = mocked(
+  Services.expenseCategories.fetchExpenseCategoryOptions,
+);
+export const createExpenseCategory = mocked(Services.expenseCategories.createExpenseCategory);
+export const updateExpenseCategory = mocked(Services.expenseCategories.updateExpenseCategory);
+export const deleteExpenseCategory = mocked(Services.expenseCategories.deleteExpenseCategory);
+export const listExpenses = mocked(Services.expenses.listExpenses);
+export const createExpense = mocked(Services.expenses.createExpense);
+export const updateExpense = mocked(Services.expenses.updateExpense);
+export const submitExpense = mocked(Services.expenses.submitExpense);
+export const approveExpense = mocked(Services.expenses.approveExpense);
+export const rejectExpense = mocked(Services.expenses.rejectExpense);
+export const markExpensePaid = mocked(Services.expenses.markExpensePaid);
+export const reverseExpense = mocked(Services.expenses.reverseExpense);
+export const listBudgets = mocked(Services.budgets.listBudgets);
+export const createBudget = mocked(Services.budgets.createBudget);
+export const updateBudget = mocked(Services.budgets.updateBudget);
+export const approveBudget = mocked(Services.budgets.approveBudget);
+export const listFeeHeads = mocked(Services.feeHeads.listFeeHeads);
+export const fetchFeeHeadOptions = mocked(Services.feeHeads.fetchFeeHeadOptions);
+export const createFeeHead = mocked(Services.feeHeads.createFeeHead);
+export const updateFeeHead = mocked(Services.feeHeads.updateFeeHead);
+export const deleteFeeHead = mocked(Services.feeHeads.deleteFeeHead);
+export const listFeeStructures = mocked(Services.feeStructures.listFeeStructures);
+export const fetchFeeStructure = mocked(Services.feeStructures.fetchFeeStructure);
+export const createFeeStructure = mocked(Services.feeStructures.createFeeStructure);
+export const fetchFeeStructureOptions = mocked(Services.feeStructures.fetchFeeStructureOptions);
+export const listFeeInvoices = mocked(Services.feeInvoices.listFeeInvoices);
+export const fetchFeeInvoice = mocked(Services.feeInvoices.fetchFeeInvoice);
+export const generateFeeInvoices = mocked(Services.feeInvoices.generateFeeInvoices);
+export const cancelFeeInvoice = mocked(Services.feeInvoices.cancelFeeInvoice);
+export const listPayments = mocked(Services.payments.listPayments);
+export const recordPayment = mocked(Services.payments.recordPayment);
+export const downloadReceipt = mocked(Services.receipts.downloadReceipt);
+export const listVouchers = mocked(Services.vouchers.listVouchers);
+export const downloadVoucher = mocked(Services.vouchers.downloadVoucher);
+export const issueVoucher = mocked(Services.vouchers.issueVoucher);
+export const voidVoucher = mocked(Services.vouchers.voidVoucher);
+export const listReceipts = mocked(Services.receipts.listReceipts);
+export const listRefunds = mocked(Services.refunds.listRefunds);
+export const createRefund = mocked(Services.refunds.createRefund);
+export const approveRefund = mocked(Services.refunds.approveRefund);
+export const rejectRefund = mocked(Services.refunds.rejectRefund);
+export const processRefund = mocked(Services.refunds.processRefund);
+export const listSettlementImports = mocked(Services.settlementImports.listSettlementImports);
+export const fetchSettlementImport = mocked(Services.settlementImports.fetchSettlementImport);
+export const uploadSettlementImport = mocked(Services.settlementImports.uploadSettlementImport);
+export const fetchJob = mocked(Services.jobs.fetchJob);
+export const activateFeeStructure = mocked(Services.feeStructures.activateFeeStructure);
+export const archiveFeeStructure = mocked(Services.feeStructures.archiveFeeStructure);
+export const createFeeSchedule = mocked(Services.feeSchedules.createFeeSchedule);
+export const deleteFeeSchedule = mocked(Services.feeSchedules.deleteFeeSchedule);
+export const fetchAcademicSessions = mocked(Services.schoolOrganization.fetchAcademicSessions);
+export const fetchClasses = mocked(Services.schoolOrganization.fetchClasses);
+export const fetchTerms = mocked(Services.schoolOrganization.fetchTerms);
+export const fetchCampuses = mocked(Services.dashboard.fetchCampuses);
+
+export const SESSION_ID = "11111111-1111-4111-8111-111111111111";
+export const CLASS_ID = "22222222-2222-4222-8222-222222222222";
+export const CAMPUS_ID = "33333333-3333-4333-8333-333333333333";
+export const TERM_ID = "44444444-4444-4444-8444-444444444444";
+export const INCOME_ACCOUNT_ID = "55555555-5555-4555-8555-555555555555";
+export const ASSET_ACCOUNT_ID = "66666666-6666-4666-8666-666666666666";
+export const HEAD_ID = "77777777-7777-4777-8777-777777777777";
+export const STRUCTURE_ID = "88888888-8888-4888-8888-888888888888";
+export const INVOICE_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+export const STUDENT_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+export const SCHEDULE_ID = "99999999-9999-4999-8999-999999999999";
+const STAMP = "2026-10-01T00:00:00Z";
+
+/** The setup keys the seeded `accountant` holds (permissions.py: structure authors, the ledger
+ * viewer and writer), plus the reference reads the pickers make. Not the role's whole set. */
+export const FEES_SETUP_AUTHOR_PERMISSIONS: PermissionKey[] = [
+  "fees.fee-structure.view",
+  "fees.fee-structure.create",
+  "fees.fee-structure.update",
+  "fees.fee-structure.delete",
+  "fees.ledger.view",
+  "fees.ledger.create",
+  "school.academic-session.view",
+  "school.class.view",
+  "school.campus.view",
+];
+
+/** The keys the seeded `accountant` holds for invoicing, plus the reference reads its pickers make. */
+export const INVOICING_PERMISSIONS: PermissionKey[] = [
+  "fees.invoice.view",
+  "fees.invoice.create",
+  "fees.invoice.update",
+  "fees.payment.view",
+  "fees.fee-structure.view",
+  "school.academic-session.view",
+];
+
+/** The keys the seeded `finance_staff` holds for the counter (`fees.payment.collect`, the invoice
+ * and payment reads, the latter streaming the receipt), plus the student read its picker makes. */
+export const COUNTER_PERMISSIONS: PermissionKey[] = [
+  "fees.payment.collect",
+  "fees.payment.view",
+  "fees.invoice.view",
+  "students.student.view",
+];
+
+/** The keys the seeded `accountant` holds on the Payments page: the five reads behind
+ * `fees.payment.view`, and the collect, refund and approve keys behind its write controls. */
+export const PAYMENTS_VIEW_PERMISSIONS: PermissionKey[] = [
+  "fees.payment.view",
+  "fees.invoice.view",
+];
+
+/** The requester's id in `asUser` is `buildUser`'s own: "user-1". */
+export const CURRENT_USER_ID = "user-1";
+export const OTHER_USER_ID = "user-2";
+export const REFUND_ID = "a2222222-2222-4222-8222-222222222222";
+export const PAYMENT_ID = "d1111111-1111-4111-8111-111111111111";
+export const EXPENSE_ID = "e1111111-1111-4111-8111-111111111111";
+export const CATEGORY_ID = "e2222222-2222-4222-8222-222222222222";
+export const EXPENSE_ACCOUNT_ID = "e3333333-3333-4333-8333-333333333333";
+export const BUDGET_ID = "e4444444-4444-4444-8444-444444444444";
+export const IMPORT_ID = "a3333333-3333-4333-8333-333333333333";
+
+export function cursorPage<T>(items: T[], nextCursor: string | null = null): Page<T> {
+  return { items, pagination: { page_size: 25, next_cursor: nextCursor, previous_cursor: null } };
+}
+
+export function accountRecord(overrides: Partial<LedgerAccountRecord> = {}): LedgerAccountRecord {
+  return {
+    id: INCOME_ACCOUNT_ID,
+    code: "4001",
+    name: "Tuition income",
+    account_type: "income",
+    parent: null,
+    is_active: true,
+    is_system: false,
+    created_at: STAMP,
+    updated_at: STAMP,
+    ...overrides,
+  };
+}
+
+/** One posted debit line of a manual journal, against the income account. */
+export function entryRecord(overrides: Partial<LedgerEntryRecord> = {}): LedgerEntryRecord {
+  return {
+    id: "f1111111-1111-4111-8111-111111111111",
+    transaction_id: "f2222222-2222-4222-8222-222222222222",
+    entry_date: "2026-10-05",
+    ledger_account: INCOME_ACCOUNT_ID,
+    account_code: "4001",
+    account_name: "Tuition income",
+    debit: "50.00",
+    credit: "0.00",
+    reference_type: "manual",
+    reference_id: null,
+    memo: "Correct the October posting",
+    reversed_by_transaction_id: null,
+    created_at: STAMP,
+    ...overrides,
+  };
+}
+
+export function headRecord(overrides: Partial<FeeHeadRecord> = {}): FeeHeadRecord {
+  return {
+    id: HEAD_ID,
+    name: "Library fee",
+    code: "LIB",
+    category: "library",
+    ledger_account: INCOME_ACCOUNT_ID,
+    is_refundable: false,
+    is_active: true,
+    created_at: STAMP,
+    updated_at: STAMP,
+    ...overrides,
+  };
+}
+
+export function scheduleRecord(overrides: Partial<FeeScheduleRecord> = {}): FeeScheduleRecord {
+  return {
+    id: SCHEDULE_ID,
+    fee_structure: STRUCTURE_ID,
+    fee_head: HEAD_ID,
+    amount: "1500.00",
+    frequency: "monthly",
+    term: null,
+    due_day: 10,
+    due_date: null,
+    late_fee_policy: null,
+    created_at: STAMP,
+    updated_at: STAMP,
+    ...overrides,
+  };
+}
+
+export function structureRecord(overrides: Partial<FeeStructureRecord> = {}): FeeStructureRecord {
+  return {
+    id: STRUCTURE_ID,
+    name: "Grade 1 fees",
+    academic_session: SESSION_ID,
+    school_class: CLASS_ID,
+    campus: null,
+    status: "draft",
+    schedules: [],
+    created_at: STAMP,
+    updated_at: STAMP,
+    ...overrides,
+  };
+}
+
+/** The server's refusal naming `field`: a 422 `domain_rule_violation` (`DomainRuleViolation`), or
+ * with `status` 400 a serializer's `validation_error`. `message` is the issue text, as the
+ * envelope handler sets it for a single detail (core/api/exceptions.py). */
+export function ruleViolation(field: string, issue: string, status = 422) {
+  return new ApiError({
+    status,
+    code: status === 422 ? "domain_rule_violation" : "validation_error",
+    message: issue,
+    url: "/fees",
+    details: [{ field, issue }],
+  });
+}
+
+/** Signs in with exactly `keys`. */
+export function asUser(...keys: PermissionKey[]) {
+  mocked(Services.auth.fetchCurrentUser).mockResolvedValue(buildUser(keys));
+}
+
+/** The `beforeEach` of every fees-setup test: no keys, one of each record, and the reference lists. */
+export function stubFeesServices(url = "/fees/structures") {
+  jest.clearAllMocks();
+  setUrl(url);
+  asUser();
+  listLedgerAccounts.mockResolvedValue(cursorPage([accountRecord()]));
+  listLedgerEntries.mockResolvedValue(cursorPage([]));
+  listFeeHeads.mockResolvedValue(cursorPage([headRecord()]));
+  fetchLedgerAccountOptions.mockResolvedValue([accountRecord()]);
+  fetchFeeHeadOptions.mockResolvedValue([headRecord()]);
+  listFeeStructures.mockResolvedValue(cursorPage([structureRecord()]));
+  fetchFeeStructure.mockResolvedValue(structureRecord());
+  fetchAcademicSessions.mockResolvedValue([
+    { id: SESSION_ID, name: "2026-27", is_current: true, status: "active" },
+  ] as Awaited<ReturnType<typeof fetchAcademicSessions>>);
+  fetchClasses.mockResolvedValue([{ id: CLASS_ID, name: "Grade 1" }]);
+  fetchCampuses.mockResolvedValue([{ id: CAMPUS_ID, name: "North campus" }] as Awaited<
+    ReturnType<typeof fetchCampuses>
+  >);
+  fetchTerms.mockResolvedValue([{ id: TERM_ID, name: "Term 1", sequence: 1 }]);
+  fetchFeeStructureOptions.mockResolvedValue([structureRecord({ status: "active" })]);
+  listFeeInvoices.mockResolvedValue(cursorPage([invoiceRecord()]));
+  fetchFeeInvoice.mockResolvedValue(invoiceRecord());
+  listPayments.mockResolvedValue(cursorPage([]));
+  listVouchers.mockResolvedValue(cursorPage([]));
+  listReceipts.mockResolvedValue(cursorPage([]));
+  listRefunds.mockResolvedValue(cursorPage([]));
+  listSettlementImports.mockResolvedValue(cursorPage([]));
+  listExpenses.mockResolvedValue(cursorPage([]));
+  listExpenseCategories.mockResolvedValue(cursorPage([categoryRecord()]));
+  fetchExpenseCategoryOptions.mockResolvedValue([categoryRecord()]);
+  listBudgets.mockResolvedValue(cursorPage([]));
+}
+
+/** An issued, unpaid invoice with one fee line and one fine line. Every money field is the
+ * server's own string, so a test asserts what the screen renders against these. */
+export function invoiceRecord(overrides: Partial<FeeInvoiceRecord> = {}): FeeInvoiceRecord {
+  return {
+    id: INVOICE_ID,
+    invoice_no: "INV-2026-0001",
+    student: STUDENT_ID,
+    student_name: "Ayesha Khan",
+    student_enrollment: null,
+    academic_session: SESSION_ID,
+    fee_structure: STRUCTURE_ID,
+    period_label: "2026-10",
+    issue_date: "2026-10-01",
+    due_date: "2026-10-10",
+    status: "issued",
+    subtotal: "1500.00",
+    discount_total: "200.00",
+    fine_total: "50.00",
+    paid_total: "0.00",
+    balance_due: "1350.00",
+    canceled_reason: null,
+    lines: [
+      {
+        id: "l1111111-1111-4111-8111-111111111111",
+        fee_head: HEAD_ID,
+        fee_head_code: "TUI",
+        description: "Tuition fee",
+        amount: "1500.00",
+        discount_amount: "200.00",
+        net_amount: 1300,
+        source_type: "schedule",
+        source_id: SCHEDULE_ID,
+      },
+      {
+        id: "l2222222-2222-4222-8222-222222222222",
+        fee_head: HEAD_ID,
+        fee_head_code: "LIB",
+        description: "Library fine",
+        amount: "50.00",
+        discount_amount: "0.00",
+        net_amount: 50,
+        source_type: "fine",
+        source_id: null,
+      },
+    ],
+    created_at: STAMP,
+    updated_at: STAMP,
+    ...overrides,
+  };
+}
+
+export function paymentRecord(overrides: Partial<PaymentRecord> = {}): PaymentRecord {
+  return {
+    id: "d1111111-1111-4111-8111-111111111111",
+    fee_invoice: INVOICE_ID,
+    invoice_no: "INV-2026-0001",
+    student: STUDENT_ID,
+    student_name: "Ayesha Khan",
+    amount: "500.00",
+    method: "cash",
+    reference_no: null,
+    gateway_provider: null,
+    status: "confirmed",
+    paid_at: "2026-10-05T09:00:00Z",
+    received_by: null,
+    receipt: "b1111111-1111-4111-8111-111111111111",
+    receipt_no: "RCP-2026-00001",
+    created_at: STAMP,
+    ...overrides,
+  };
+}
+
+export function voucherRecord(overrides: Partial<VoucherRecord> = {}): VoucherRecord {
+  return {
+    id: "e1111111-1111-4111-8111-111111111111",
+    fee_invoice: INVOICE_ID,
+    invoice_no: "INV-2026-0001",
+    student: STUDENT_ID,
+    student_name: "Ayesha Khan",
+    provider: "bank_branch",
+    consumer_number: "1234567890",
+    amount: "1350.00",
+    due_date: "2026-10-10",
+    status: "issued",
+    payment: null,
+    voided_reason: null,
+    issued_by: "f1111111-1111-4111-8111-111111111111",
+    created_at: STAMP,
+    ...overrides,
+  };
+}
+
+export function receiptRecord(overrides: Partial<ReceiptRecord> = {}): ReceiptRecord {
+  return {
+    id: "b1111111-1111-4111-8111-111111111111",
+    receipt_no: "RCP-2026-00001",
+    payment: PAYMENT_ID,
+    invoice_no: "INV-2026-0001",
+    student_name: "Ayesha Khan",
+    amount: "500.00",
+    issued_at: "2026-10-05T09:00:00Z",
+    pdf_file: null,
+    ...overrides,
+  };
+}
+
+/** A refund a user other than the signed-in one requested, so Approve is offered by default. */
+export function refundRecord(overrides: Partial<RefundRecord> = {}): RefundRecord {
+  return {
+    id: REFUND_ID,
+    payment: PAYMENT_ID,
+    invoice_no: "INV-2026-0001",
+    student: STUDENT_ID,
+    student_name: "Ayesha Khan",
+    amount: "200.00",
+    reason: "Charged twice",
+    status: "requested",
+    requested_by: OTHER_USER_ID,
+    approved_by: null,
+    decision_note: null,
+    method: null,
+    reference_no: null,
+    processed_at: null,
+    created_at: STAMP,
+    ...overrides,
+  };
+}
+
+/** A submitted expense created by someone else: net 100.00 plus 15.00 tax. */
+export function expenseRecord(overrides: Partial<ExpenseRecord> = {}): ExpenseRecord {
+  return {
+    id: EXPENSE_ID,
+    expense_no: "EXP-2026-0001",
+    expense_category: CATEGORY_ID,
+    category_name: "Stationery",
+    campus: null,
+    vendor_name: "Paper Co",
+    description: "Printer paper",
+    amount: "100.00",
+    tax_amount: "15.00",
+    gross_amount: "115.00",
+    expense_date: "2026-10-05",
+    payment_method: "cash",
+    status: "submitted",
+    approved_by: null,
+    created_by: OTHER_USER_ID,
+    submitted_by: OTHER_USER_ID,
+    receipt_file: null,
+    created_at: STAMP,
+    updated_at: STAMP,
+    ...overrides,
+  };
+}
+
+export function categoryRecord(
+  overrides: Partial<ExpenseCategoryRecord> = {},
+): ExpenseCategoryRecord {
+  return {
+    id: CATEGORY_ID,
+    name: "Stationery",
+    code: "STA",
+    ledger_account: EXPENSE_ACCOUNT_ID,
+    parent: null,
+    is_active: true,
+    created_at: STAMP,
+    updated_at: STAMP,
+    ...overrides,
+  };
+}
+
+export function budgetRecord(overrides: Partial<BudgetRecord> = {}): BudgetRecord {
+  return {
+    id: BUDGET_ID,
+    name: "Q4 stationery",
+    ledger_account: null,
+    expense_category: CATEGORY_ID,
+    campus: null,
+    period_start: "2026-10-01",
+    period_end: "2026-12-31",
+    amount: "5000.00",
+    status: "draft",
+    approved_by: null,
+    notes: null,
+    created_at: STAMP,
+    updated_at: STAMP,
+    ...overrides,
+  };
+}
+
+export function importRecord(
+  overrides: Partial<SettlementImportRecord> = {},
+): SettlementImportRecord {
+  return {
+    id: IMPORT_ID,
+    provider: "easypaisa",
+    file: "a4444444-4444-4444-8444-444444444444",
+    imported_by: OTHER_USER_ID,
+    status: "completed",
+    row_count: 4,
+    matched_count: 3,
+    exceptions: [
+      {
+        row: 3,
+        provider_reference: "TXN-77",
+        amount: "900.00",
+        reason: "No open voucher with consumer number '999' for easypaisa.",
+      },
+    ],
+    completed_at: "2026-10-06T10:00:00Z",
+    created_at: STAMP,
+    ...overrides,
+  };
+}

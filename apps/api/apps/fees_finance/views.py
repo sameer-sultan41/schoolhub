@@ -37,12 +37,16 @@ from __future__ import annotations
 import base64
 import datetime
 import hashlib
-import uuid
 
 from django.db import models, transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    OpenApiResponse,
+    PolymorphicProxySerializer,
+    extend_schema,
+)
 from rest_framework import mixins, viewsets
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated
@@ -92,6 +96,14 @@ from apps.fees_finance.models import (
     VoucherCollectionImport,
     VoucherProvider,
 )
+from apps.fees_finance.report_serializers import (
+    REPORT_ROW_SERIALIZERS,
+    ReportMetaSerializer,
+    StudentLedgerEnvelopeSerializer,
+    StudentLedgerMetaSerializer,
+    StudentStatementEntrySerializer,
+    serialize_report_rows,
+)
 from apps.fees_finance.serializers import (
     BudgetSerializer,
     CancelInvoiceSerializer,
@@ -118,6 +130,7 @@ from apps.fees_finance.serializers import (
     RefundSerializer,
     RequestRefundSerializer,
     ScholarshipSerializer,
+    SettlementImportRequestSerializer,
     VoucherCollectionImportSerializer,
     WaiveSerializer,
 )
@@ -130,6 +143,8 @@ from apps.fees_finance.tasks import (
     render_receipt_task,
 )
 from apps.school_organization.models import Term
+from apps.student_management.models import Student
+from apps.student_management.services import STUDENT_SCOPE
 from core.api.exceptions import DomainRuleViolation
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
@@ -148,6 +163,14 @@ from core.rbac.permissions import (
 )
 
 FEATURE = "module.fees_finance"
+
+# `?format=` on the receipt and voucher downloads; declared once so the contract
+# carries the enum and the dashboard stops hand-typing it.
+DOCUMENT_FORMAT_PARAMETER = OpenApiParameter(
+    "format",
+    enum=["pdf", "thermal"],
+    description="Layout: A4 `pdf` (default) or `thermal` roll.",
+)
 
 # A chart of accounts and a fee structure have no per-family reading, so the
 # PR A viewsets are staff-only outright.
@@ -708,13 +731,24 @@ class ScholarshipViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         record_audit(self.request, "create", instance)
 
     def perform_update(self, serializer):
-        """Deciding an applied award stamps the approver at that moment."""
-        status = serializer.validated_data.get("status", serializer.instance.status)
-        approver = serializer.instance.approved_by
-        if status != ScholarshipStatus.APPLIED and approver is None:
-            approver = self.request.user.pk
-        instance = serializer.save(updated_by=self.request.user.pk, approved_by=approver)
-        record_audit(self.request, "update", instance)
+        """Deciding an applied award stamps the approver at that moment.
+
+        The row is re-read under a lock and the move re-checked against its stored status,
+        so two racing PATCHes cannot both pass validation on a stale read and re-activate a
+        revoked award.
+        """
+        with transaction.atomic():
+            locked = services.lock_scholarship_for_transition(
+                scholarship=serializer.instance,
+                new_status=serializer.validated_data.get("status"),
+            )
+            serializer.instance = locked
+            status = serializer.validated_data.get("status", locked.status)
+            approver = locked.approved_by
+            if status != ScholarshipStatus.APPLIED and approver is None:
+                approver = self.request.user.pk
+            instance = serializer.save(updated_by=self.request.user.pk, approved_by=approver)
+            record_audit(self.request, "update", instance)
 
 
 class FineViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
@@ -894,7 +928,7 @@ class ReceiptViewSet(
             .select_related("payment__student", "payment__fee_invoice", "pdf_file")
         )
 
-    @extend_schema(responses={200: None})
+    @extend_schema(parameters=[DOCUMENT_FORMAT_PARAMETER], responses={200: None})
     def download(self, request: Request, pk: str | None = None) -> Response:
         """`GET /receipts/{id}/download?format=pdf|thermal`.
 
@@ -957,7 +991,7 @@ class RefundViewSet(
         return [permission() for permission in STAFF_PERMISSIONS]
 
     def get_queryset(self):
-        return super().get_queryset().select_related("student", "payment")
+        return super().get_queryset().select_related("student", "payment__fee_invoice")
 
     @extend_schema(request=RequestRefundSerializer, responses={201: RefundSerializer})
     def request_refund(self, request: Request) -> Response:
@@ -1121,7 +1155,7 @@ class FeeVoucherViewSet(
         record_audit(request, "update", voided, after={"status": voided.status})
         return ActionResponse.ok(self.get_serializer(voided).data, message="Voucher voided.")
 
-    @extend_schema(responses={200: None})
+    @extend_schema(parameters=[DOCUMENT_FORMAT_PARAMETER], responses={200: None})
     def download(self, request: Request, pk: str | None = None) -> Response:
         """`GET /vouchers/{id}/download?format=pdf|thermal`."""
         voucher = self.get_object()
@@ -1166,7 +1200,10 @@ class VoucherCollectionImportViewSet(
     parser_classes = [MultiPartParser]
     http_method_names = ["get", "post", "head", "options"]
 
-    @extend_schema(request=None, responses={202: None})
+    @extend_schema(
+        request={"multipart/form-data": SettlementImportRequestSerializer},
+        responses={202: None},
+    )
     def create(self, request: Request, *args, **kwargs) -> Response:
         """⚿ `POST /voucher-collection-imports` — 202 + job.
 
@@ -1422,7 +1459,7 @@ class BudgetViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         return ActionResponse.ok(self.get_serializer(approved).data, message="Budget approved.")
 
 
-class FinanceReportView(APIView):
+class FinanceReportView(TenantScopedViewSetMixin, APIView):
     """`GET/POST /reports/finance-summary` — §13, `kind`-parameterised.
 
     `GET` serves inline; `POST` asks for an export and returns 202 + job. One
@@ -1434,12 +1471,32 @@ class FinanceReportView(APIView):
     fix attendance's review produced.
     """
 
+    # The mixin is here for its `initial`, which binds the tenant after JWT auth (a bare
+    # `APIView` has none: `request.tenant` stays None and the module gate fails closed).
     permission_classes = STAFF_PERMISSIONS
     required_feature = FEATURE
     required_permission = "fees.report.view"
     required_permission_map = {"post": "fees.report.export"}
 
-    @extend_schema(parameters=[FinanceReportQuerySerializer], responses={200: None})
+    @extend_schema(
+        parameters=[FinanceReportQuerySerializer],
+        responses={
+            200: OpenApiResponse(
+                response=PolymorphicProxySerializer(
+                    component_name="FinanceReportRow",
+                    serializers=REPORT_ROW_SERIALIZERS,
+                    resource_type_field_name="kind",
+                    many=True,
+                ),
+                description=(
+                    "The report's rows, each carrying the report's `kind`. `meta` carries "
+                    "`kind`, `row_count`, `date_from` and `date_to`. Over "
+                    f"{services.SYNCHRONOUS_REPORT_ROW_LIMIT} rows the response is a 422 "
+                    "carrying `meta.row_limit`; `POST` the same parameters for an export job."
+                ),
+            )
+        },
+    )
     def get(self, request: Request) -> Response:
         serializer = FinanceReportQuerySerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
@@ -1453,6 +1510,7 @@ class FinanceReportView(APIView):
             date_to=payload["date_to"],
             student_id=payload.get("student"),
             group_by=payload.get("group_by", "day"),
+            filters=serializer.report_filters(),
             limit=services.SYNCHRONOUS_REPORT_ROW_LIMIT + 1,
         )
 
@@ -1467,19 +1525,21 @@ class FinanceReportView(APIView):
         # `EnvelopeJSONRenderer` passes a payload that already has both keys
         # through untouched, and wrapping it again would nest `meta` inside
         # `data`.
-        return Response(
+        # PolymorphicProxySerializer documents the rows; this dispatch serializes them (ADR-0022).
+        meta = ReportMetaSerializer(
             {
-                "data": rows,
-                "meta": {
-                    "kind": payload["kind"],
-                    "row_count": len(rows),
-                    "date_from": payload["date_from"].isoformat(),
-                    "date_to": payload["date_to"].isoformat(),
-                },
+                "kind": payload["kind"],
+                "row_count": len(rows),
+                "date_from": payload["date_from"],
+                "date_to": payload["date_to"],
             }
         )
+        return Response({"data": serialize_report_rows(payload["kind"], rows), "meta": meta.data})
 
-    @extend_schema(request=FinanceReportQuerySerializer, responses={202: None})
+    @extend_schema(
+        request=FinanceReportQuerySerializer,
+        responses={202: OpenApiResponse(description="A job resource; poll GET /jobs/{id}.")},
+    )
     def post(self, request: Request) -> Response:
         serializer = FinanceReportQuerySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -1494,6 +1554,15 @@ class FinanceReportView(APIView):
                 "date_to": payload["date_to"].isoformat(),
                 "student_id": str(payload["student"]) if payload.get("student") else None,
                 "group_by": payload.get("group_by", "day"),
+                **{
+                    name: str(value)
+                    for name, value in (
+                        ("campus_id", payload.get("campus_id")),
+                        ("academic_session_id", payload.get("academic_session_id")),
+                        ("class_id", payload.get("class_id")),
+                    )
+                    if value is not None
+                },
                 "format": payload.get("format", "csv"),
                 # Read back by the task to recompute the record scope, which is
                 # what stops an export widening what its requester could see...
@@ -1508,32 +1577,55 @@ class FinanceReportView(APIView):
         return ActionResponse.accepted(str(job.pk), message="Report export queued.")
 
 
-class StudentLedgerView(APIView):
+class StudentLedgerView(TenantScopedViewSetMixin, APIView):
     """`GET /students/{id}/ledger` — §13.3's printable statement.
 
     Its own view rather than a `kind` on the report endpoint, because §16
     declares this path and because a family reads it: this is the one report a
     portal principal reaches, narrowed by record scope through the same
-    `build_report_rows` the staff endpoint uses.
+    `build_report_rows` the staff endpoint uses. A student outside this school
+    or the caller's reach is a 404, never an empty statement.
     """
 
+    # The mixin binds the tenant after JWT auth; see `FinanceReportView`.
     permission_classes = PORTAL_READABLE_PERMISSIONS
     required_feature = FEATURE
     required_permission = "fees.invoice.view"
 
-    @extend_schema(responses={200: None})
+    @extend_schema(
+        responses={
+            200: OpenApiResponse(
+                response=StudentLedgerEnvelopeSerializer,
+                description=(
+                    "The statement's lines in `data`, in date order, each with its running "
+                    "`balance`. `meta.closing_balance` is the last line's balance, or zero "
+                    "for no lines."
+                ),
+            )
+        }
+    )
     def get(self, request: Request, pk: str | None = None) -> Response:
+        permission = route_permission(request, self)
+        # Resolve the student first (ADR-0004): under RLS a foreign or out-of-scope
+        # id has no rows, and an empty 200 would not say "not found".
+        student = get_object_or_404(
+            scope_queryset(
+                Student.objects.alive(), request.user, permission=permission, **STUDENT_SCOPE
+            ),
+            pk=pk,
+        )
         rows = services.build_report_rows(
             kind="student-ledger",
             user=request.user,
-            permission=route_permission(request, self),
+            permission=permission,
             # The whole history: a statement is not period-bounded, and a
             # parent asking what they owe means in total.
             date_from=datetime.date.min,
             date_to=datetime.date.max,
-            student_id=uuid.UUID(str(pk)),
+            student_id=student.pk,
         )
         closing = rows[-1]["balance"] if rows else ZERO
+        meta = StudentLedgerMetaSerializer({"row_count": len(rows), "closing_balance": closing})
         return Response(
-            {"data": rows, "meta": {"row_count": len(rows), "closing_balance": str(closing)}}
+            {"data": StudentStatementEntrySerializer(rows, many=True).data, "meta": meta.data}
         )

@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { Button, cn, Input, Label } from "@schoolhub/ui";
 
 import { FilterSelect } from "@/components/filter-select";
-import { DateRangeInputs } from "@/features/attendance/date-range-inputs";
+import { DateRangeInputs } from "@/components/date-range-inputs";
 import { useClasses } from "@/hooks/use-reference-data";
 import {
   REPORT_KIND_FIELDS,

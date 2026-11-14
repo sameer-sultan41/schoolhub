@@ -8298,6 +8298,11 @@ paths:
           type: string
           format: date-time
       - in: query
+        name: paid_at__lt
+        schema:
+          type: string
+          format: date-time
+      - in: query
         name: paid_at__lte
         schema:
           type: string
@@ -9122,6 +9127,11 @@ paths:
         description: A search term.
         schema:
           type: string
+      - in: query
+        name: student
+        schema:
+          type: string
+          format: uuid
       tags:
       - receipts
       security:
@@ -9173,6 +9183,14 @@ paths:
         The A4 one is still stored — that is what `render_receipt_task` does —
         so an audit has a fixed artefact.
       parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+          enum:
+          - pdf
+          - thermal
+        description: 'Layout: A4 `pdf` (default) or `thermal` roll.'
       - in: path
         name: id
         schema:
@@ -9822,6 +9840,29 @@ paths:
         fix attendance's review produced.
       parameters:
       - in: query
+        name: academic_session_id
+        schema:
+          type: string
+          format: uuid
+          nullable: true
+        description: The invoice's session (the grant's, or the student's enrollment,
+          for grants).
+      - in: query
+        name: campus_id
+        schema:
+          type: string
+          format: uuid
+          nullable: true
+        description: The student's campus (an expense's, for `expense-register`).
+      - in: query
+        name: class_id
+        schema:
+          type: string
+          format: uuid
+          nullable: true
+        description: The class the invoice was billed to (the student's enrollment,
+          for grants).
+      - in: query
         name: date_from
         schema:
           type: string
@@ -9864,8 +9905,26 @@ paths:
       - in: query
         name: kind
         schema:
+          enum:
+          - collection
+          - outstanding-aging
+          - student-ledger
+          - grant-register
+          - income-vs-expense
+          - budget-variance
+          - expense-register
+          - trial-balance
           type: string
           minLength: 1
+        description: |-
+          * `collection` - collection
+          * `outstanding-aging` - outstanding-aging
+          * `student-ledger` - student-ledger
+          * `grant-register` - grant-register
+          * `income-vs-expense` - income-vs-expense
+          * `budget-variance` - budget-variance
+          * `expense-register` - expense-register
+          * `trial-balance` - trial-balance
         required: true
       - in: query
         name: student
@@ -9879,7 +9938,16 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FinanceReportRow'
+          description: The report's rows, each carrying the report's `kind`. `meta`
+            carries `kind`, `row_count`, `date_from` and `date_to`. Over 1000 rows
+            the response is a 422 carrying `meta.row_limit`; `POST` the same parameters
+            for an export job.
     post:
       operationId: reports_finance_summary_create
       description: |-
@@ -9910,7 +9978,7 @@ paths:
       - jwtAuth: []
       responses:
         '202':
-          description: No response body
+          description: A job resource; poll GET /jobs/{id}.
   /api/v1/results:
     get:
       operationId: results_list
@@ -12938,7 +13006,8 @@ paths:
         Its own view rather than a `kind` on the report endpoint, because §16
         declares this path and because a family reads it: this is the one report a
         portal principal reaches, narrowed by record scope through the same
-        `build_report_rows` the staff endpoint uses.
+        `build_report_rows` the staff endpoint uses. A student outside this school
+        or the caller's reach is a 404, never an empty statement.
       parameters:
       - in: path
         name: id
@@ -12952,7 +13021,13 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentLedgerEnvelope'
+          description: The statement's lines in `data`, in date order, each with its
+            running `balance`. `meta.closing_balance` is the last line's balance,
+            or zero for no lines.
   /api/v1/students/{id}:change-section:
     post:
       operationId: students_:change_section_create
@@ -14601,6 +14676,12 @@ paths:
         import shape.
       tags:
       - voucher-collection-imports
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SettlementImportRequest'
+        required: true
       security:
       - jwtAuth: []
       responses:
@@ -14738,6 +14819,14 @@ paths:
       operationId: vouchers_download_retrieve
       description: '`GET /vouchers/{id}/download?format=pdf|thermal`.'
       parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+          enum:
+          - pdf
+          - thermal
+        description: 'Layout: A4 `pdf` (default) or `thermal` roll.'
       - in: path
         name: id
         schema:
@@ -15723,6 +15812,65 @@ components:
         * `draft` - Draft
         * `approved` - Approved
         * `closed` - Closed
+    BudgetVarianceReportRow:
+      type: object
+      description: '`reports.budget_variance`: one approved budget against its actual
+        spend.'
+      properties:
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/BudgetVarianceReportRowKindEnum'
+          readOnly: true
+        budget_id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        period_start:
+          type: string
+          format: date
+          readOnly: true
+        period_end:
+          type: string
+          format: date
+          readOnly: true
+        budgeted:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        actual:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        variance:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        utilisation_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+      required:
+      - actual
+      - budget_id
+      - budgeted
+      - kind
+      - name
+      - period_end
+      - period_start
+      - utilisation_percent
+      - variance
+    BudgetVarianceReportRowKindEnum:
+      enum:
+      - budget-variance
+      type: string
+      description: '* `budget-variance` - budget-variance'
     BulkMark:
       type: object
       description: |-
@@ -15973,6 +16121,47 @@ components:
       required:
       - created
       - skipped
+    CollectionReportRow:
+      type: object
+      description: |-
+        `reports.collection_report`: confirmed money by day, method or cashier.
+
+        The row carries only the key it was grouped by; the other two are null.
+        They are not `read_only` so the schema does not list them as always present.
+      properties:
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/CollectionReportRowKindEnum'
+          readOnly: true
+        day:
+          type: string
+          format: date
+          nullable: true
+        method:
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
+          nullable: true
+        received_by:
+          type: string
+          format: uuid
+          nullable: true
+        total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        count:
+          type: integer
+          readOnly: true
+      required:
+      - count
+      - kind
+      - total
+    CollectionReportRowKindEnum:
+      enum:
+      - collection
+      type: string
+      description: '* `collection` - collection'
     CommunicationAudienceTypeEnum:
       enum:
       - all
@@ -16473,6 +16662,7 @@ components:
       - updated_at
     Discount:
       type: object
+      description: A student-level reduction; `status` moves only through `:revoke`.
       properties:
         id:
           type: string
@@ -16481,6 +16671,9 @@ components:
         student:
           type: string
           format: uuid
+        student_name:
+          type: string
+          readOnly: true
         academic_session:
           type: string
           format: uuid
@@ -16536,6 +16729,7 @@ components:
       - name
       - status
       - student
+      - student_name
       - updated_at
       - value
     DocumentVerificationDecisionEnum:
@@ -17288,8 +17482,9 @@ components:
           format: decimal
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
         gross_amount:
-          type: number
-          format: double
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,11}(?:\.\d{0,2})?$
           readOnly: true
         expense_date:
           type: string
@@ -17307,6 +17502,18 @@ components:
           format: uuid
           readOnly: true
           nullable: true
+        created_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        submitted_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: Who moved the draft into the approval queue; may differ from
+            created_by.
         receipt_file:
           type: string
           format: uuid
@@ -17324,6 +17531,7 @@ components:
       - approved_by
       - category_name
       - created_at
+      - created_by
       - description
       - expense_category
       - expense_date
@@ -17331,6 +17539,7 @@ components:
       - gross_amount
       - id
       - status
+      - submitted_by
       - updated_at
     ExpenseCategory:
       type: object
@@ -17369,6 +17578,80 @@ components:
       - ledger_account
       - name
       - updated_at
+    ExpenseRegisterReportRow:
+      type: object
+      description: '`reports.expense_register`: one expense, whatever its status.'
+      properties:
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/ExpenseRegisterReportRowKindEnum'
+          readOnly: true
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        expense_no:
+          type: string
+          readOnly: true
+        expense_date:
+          type: string
+          format: date
+          readOnly: true
+        vendor_name:
+          type: string
+          readOnly: true
+          nullable: true
+        description:
+          type: string
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        tax_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ExpenseStatusEnum'
+          readOnly: true
+        approved_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        category_code:
+          type: string
+          readOnly: true
+        category_name:
+          type: string
+          readOnly: true
+        campus_name:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - amount
+      - approved_by
+      - campus_name
+      - category_code
+      - category_name
+      - description
+      - expense_date
+      - expense_no
+      - id
+      - kind
+      - status
+      - tax_amount
+      - vendor_name
+    ExpenseRegisterReportRowKindEnum:
+      enum:
+      - expense-register
+      type: string
+      description: '* `expense-register` - expense-register'
     ExpenseStatusEnum:
       enum:
       - draft
@@ -17713,6 +17996,16 @@ components:
       - fee_structure
       - id
       - updated_at
+    FeeStatementEntryKindEnum:
+      enum:
+      - invoice
+      - payment
+      - refund
+      type: string
+      description: |-
+        * `invoice` - invoice
+        * `payment` - payment
+        * `refund` - refund
     FeeStructure:
       type: object
       properties:
@@ -17941,11 +18234,15 @@ components:
         * `quarantined` - Quarantined
     FinanceReportQuery:
       type: object
-      description: '`GET/POST /reports/finance-summary` — §13''s parameterised entry
-        point.'
+      description: |-
+        `GET/POST /reports/finance-summary` — §13's parameterised entry point.
+
+        The campus, session and class filters are plain UUIDs rather than model
+        choice fields, so an id from another tenant is an empty report and not a
+        different status from an unknown one (AGENTS.md invariant 2).
       properties:
         kind:
-          type: string
+          $ref: '#/components/schemas/FinanceReportQueryKindEnum'
         date_from:
           type: string
           format: date
@@ -17956,6 +18253,23 @@ components:
           type: string
           format: uuid
           nullable: true
+        campus_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The student's campus (an expense's, for `expense-register`).
+        academic_session_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The invoice's session (the grant's, or the student's enrollment,
+            for grants).
+        class_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The class the invoice was billed to (the student's enrollment,
+            for grants).
         group_by:
           allOf:
           - $ref: '#/components/schemas/GroupByEnum'
@@ -17968,8 +18282,51 @@ components:
       - date_from
       - date_to
       - kind
+    FinanceReportQueryKindEnum:
+      enum:
+      - collection
+      - outstanding-aging
+      - student-ledger
+      - grant-register
+      - income-vs-expense
+      - budget-variance
+      - expense-register
+      - trial-balance
+      type: string
+      description: |-
+        * `collection` - collection
+        * `outstanding-aging` - outstanding-aging
+        * `student-ledger` - student-ledger
+        * `grant-register` - grant-register
+        * `income-vs-expense` - income-vs-expense
+        * `budget-variance` - budget-variance
+        * `expense-register` - expense-register
+        * `trial-balance` - trial-balance
+    FinanceReportRow:
+      oneOf:
+      - $ref: '#/components/schemas/CollectionReportRow'
+      - $ref: '#/components/schemas/OutstandingAgingReportRow'
+      - $ref: '#/components/schemas/StudentLedgerReportRow'
+      - $ref: '#/components/schemas/GrantRegisterReportRow'
+      - $ref: '#/components/schemas/IncomeVsExpenseReportRow'
+      - $ref: '#/components/schemas/BudgetVarianceReportRow'
+      - $ref: '#/components/schemas/ExpenseRegisterReportRow'
+      - $ref: '#/components/schemas/TrialBalanceReportRow'
+      discriminator:
+        propertyName: kind
+        mapping:
+          collection: '#/components/schemas/CollectionReportRow'
+          outstanding-aging: '#/components/schemas/OutstandingAgingReportRow'
+          student-ledger: '#/components/schemas/StudentLedgerReportRow'
+          grant-register: '#/components/schemas/GrantRegisterReportRow'
+          income-vs-expense: '#/components/schemas/IncomeVsExpenseReportRow'
+          budget-variance: '#/components/schemas/BudgetVarianceReportRow'
+          expense-register: '#/components/schemas/ExpenseRegisterReportRow'
+          trial-balance: '#/components/schemas/TrialBalanceReportRow'
     Fine:
       type: object
+      description: A penalty on a fine-category fee head; `status` moves only through
+        `:waive`.
       properties:
         id:
           type: string
@@ -17978,6 +18335,9 @@ components:
         student:
           type: string
           format: uuid
+        student_name:
+          type: string
+          readOnly: true
         fee_head:
           type: string
           format: uuid
@@ -18028,6 +18388,7 @@ components:
       - reason
       - status
       - student
+      - student_name
       - updated_at
       - waived_by
       - waived_reason
@@ -18293,6 +18654,79 @@ components:
         * `letter` - Letter grades
         * `gpa` - GPA
         * `hybrid` - Hybrid (letter and GPA)
+    GrantRegisterReportRow:
+      type: object
+      description: |-
+        `reports.grant_and_waiver_register`: a reduction granted or a fine waived, and by whom.
+
+        `grant_type` is the source's own `kind` (a discount, a scholarship or a waived
+        fine); `status` is that source's status, so it is not one fixed set.
+      properties:
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/GrantRegisterReportRowKindEnum'
+          readOnly: true
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        grant_type:
+          allOf:
+          - $ref: '#/components/schemas/GrantTypeEnum'
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        value_type:
+          allOf:
+          - $ref: '#/components/schemas/FeeGrantValueTypeEnum'
+          readOnly: true
+        value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        status:
+          type: string
+          readOnly: true
+        approved_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        admission_number:
+          type: string
+          readOnly: true
+        granted_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - admission_number
+      - approved_by
+      - grant_type
+      - granted_at
+      - id
+      - kind
+      - name
+      - status
+      - value
+      - value_type
+    GrantRegisterReportRowKindEnum:
+      enum:
+      - grant-register
+      type: string
+      description: '* `grant-register` - grant-register'
+    GrantTypeEnum:
+      enum:
+      - discount
+      - scholarship
+      - fine_waiver
+      type: string
+      description: |-
+        * `discount` - discount
+        * `scholarship` - scholarship
+        * `fine_waiver` - fine_waiver
     GroupByEnum:
       enum:
       - day
@@ -18485,6 +18919,58 @@ components:
           minItems: 1
       required:
       - student_ids
+    IncomeVsExpenseReportRow:
+      type: object
+      description: '`reports.income_vs_expense`: an income or expense account''s net
+        over the period.'
+      properties:
+        ledger_account_id:
+          type: string
+          format: uuid
+          readOnly: true
+        account_type:
+          allOf:
+          - $ref: '#/components/schemas/LedgerAccountTypeEnum'
+          readOnly: true
+        total_debit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        total_credit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/IncomeVsExpenseReportRowKindEnum'
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        net:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+      required:
+      - account_type
+      - code
+      - kind
+      - ledger_account_id
+      - name
+      - net
+      - total_credit
+      - total_debit
+    IncomeVsExpenseReportRowKindEnum:
+      enum:
+      - income-vs-expense
+      type: string
+      description: '* `income-vs-expense` - income-vs-expense'
     InviteRequest:
       type: object
       description: |-
@@ -19916,6 +20402,79 @@ components:
       required:
       - body
       - subject
+    OutstandingAgingReportRow:
+      type: object
+      description: '`reports.outstanding_and_aging`: one student''s balance, bucketed
+        by days past due.'
+      properties:
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/OutstandingAgingReportRowKindEnum'
+          readOnly: true
+        student_id:
+          type: string
+          format: uuid
+          readOnly: true
+        admission_number:
+          type: string
+          readOnly: true
+        first_name:
+          type: string
+          readOnly: true
+        last_name:
+          type: string
+          readOnly: true
+        total_outstanding:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        invoice_count:
+          type: integer
+          readOnly: true
+        not_yet_due:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        bucket_0_30:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        bucket_31_60:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        bucket_61_90:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        bucket_90_plus:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+      required:
+      - admission_number
+      - bucket_0_30
+      - bucket_31_60
+      - bucket_61_90
+      - bucket_90_plus
+      - first_name
+      - invoice_count
+      - kind
+      - last_name
+      - not_yet_due
+      - student_id
+      - total_outstanding
+    OutstandingAgingReportRowKindEnum:
+      enum:
+      - outstanding-aging
+      type: string
+      description: '* `outstanding-aging` - outstanding-aging'
     PaginatedAcademicSessionList:
       type: object
       properties:
@@ -21821,6 +22380,7 @@ components:
           readOnly: true
     PatchedDiscount:
       type: object
+      description: A student-level reduction; `status` moves only through `:revoke`.
       properties:
         id:
           type: string
@@ -21829,6 +22389,9 @@ components:
         student:
           type: string
           format: uuid
+        student_name:
+          type: string
+          readOnly: true
         academic_session:
           type: string
           format: uuid
@@ -22130,8 +22693,9 @@ components:
           format: decimal
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
         gross_amount:
-          type: number
-          format: double
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,11}(?:\.\d{0,2})?$
           readOnly: true
         expense_date:
           type: string
@@ -22149,6 +22713,18 @@ components:
           format: uuid
           readOnly: true
           nullable: true
+        created_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        submitted_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: Who moved the draft into the approval queue; may differ from
+            created_by.
         receipt_file:
           type: string
           format: uuid
@@ -22397,6 +22973,8 @@ components:
           readOnly: true
     PatchedFine:
       type: object
+      description: A penalty on a fine-category fee head; `status` moves only through
+        `:waive`.
       properties:
         id:
           type: string
@@ -22405,6 +22983,9 @@ components:
         student:
           type: string
           format: uuid
+        student_name:
+          type: string
+          readOnly: true
         fee_head:
           type: string
           format: uuid
@@ -23213,6 +23794,7 @@ components:
           readOnly: true
     PatchedScholarship:
       type: object
+      description: An award whose `status` follows `SCHOLARSHIP_TRANSITIONS`.
       properties:
         id:
           type: string
@@ -23221,6 +23803,9 @@ components:
         student:
           type: string
           format: uuid
+        student_name:
+          type: string
+          readOnly: true
         academic_session:
           type: string
           format: uuid
@@ -23870,12 +24455,18 @@ components:
         fee_invoice:
           type: string
           format: uuid
+        invoice_no:
+          type: string
+          readOnly: true
         student:
           type: string
           format: uuid
           readOnly: true
           description: Denormalized from the invoice so the student ledger is one
             query.
+        student_name:
+          type: string
+          readOnly: true
         amount:
           type: string
           format: decimal
@@ -23905,6 +24496,11 @@ components:
           readOnly: true
           nullable: true
           description: Null for a gateway or voucher self-service payment.
+        receipt:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
         receipt_no:
           type: string
           readOnly: true
@@ -23917,12 +24513,15 @@ components:
       - created_at
       - fee_invoice
       - id
+      - invoice_no
       - method
       - paid_at
+      - receipt
       - receipt_no
       - received_by
       - status
       - student
+      - student_name
     PaymentMethodEnum:
       enum:
       - cash
@@ -24785,9 +25384,15 @@ components:
         payment:
           type: string
           format: uuid
+        invoice_no:
+          type: string
+          readOnly: true
         student:
           type: string
           format: uuid
+          readOnly: true
+        student_name:
+          type: string
           readOnly: true
         amount:
           type: string
@@ -24835,6 +25440,7 @@ components:
       - created_at
       - decision_note
       - id
+      - invoice_no
       - method
       - payment
       - processed_at
@@ -24843,6 +25449,7 @@ components:
       - requested_by
       - status
       - student
+      - student_name
     RefundDecision:
       type: object
       description: '`:approve` / `:reject` — the note is optional on approval, not
@@ -25476,6 +26083,7 @@ components:
         * `other` - Other
     Scholarship:
       type: object
+      description: An award whose `status` follows `SCHOLARSHIP_TRANSITIONS`.
       properties:
         id:
           type: string
@@ -25484,6 +26092,9 @@ components:
         student:
           type: string
           format: uuid
+        student_name:
+          type: string
+          readOnly: true
         academic_session:
           type: string
           format: uuid
@@ -25529,6 +26140,7 @@ components:
       - id
       - name
       - student
+      - student_name
       - updated_at
       - value
     ScholarshipStatusEnum:
@@ -25664,6 +26276,22 @@ components:
       - end_date
       - name
       - start_date
+    SettlementImportRequest:
+      type: object
+      description: |-
+        `POST /voucher-collection-imports` — the multipart body, for the contract.
+
+        Documentation only: the view validates by hand so a missing file or unknown
+        provider keeps its 422 `DomainRuleViolation` shape.
+      properties:
+        file:
+          type: string
+          format: binary
+        provider:
+          $ref: '#/components/schemas/VoucherProviderEnum'
+      required:
+      - file
+      - provider
     SettlementImportStatusEnum:
       enum:
       - processing
@@ -26723,6 +27351,138 @@ components:
       - student-late-arrivals
       type: string
       description: '* `student-late-arrivals` - student-late-arrivals'
+    StudentLedgerEnvelope:
+      type: object
+      description: |-
+        The documented wire envelope of `GET /students/{id}/ledger`.
+
+        Documentation only: the view builds the payload itself. It exists so `meta`
+        (and its `closing_balance`) is typed in the OpenAPI contract, the way a paginated
+        list's `meta.pagination` is, instead of living in a description.
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/StudentStatementEntry'
+        meta:
+          $ref: '#/components/schemas/StudentLedgerMeta'
+      required:
+      - data
+      - meta
+    StudentLedgerMeta:
+      type: object
+      description: '`meta` of `GET /students/{id}/ledger`: the line count and the
+        server''s closing balance.'
+      properties:
+        row_count:
+          type: integer
+        closing_balance:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+      required:
+      - closing_balance
+      - row_count
+    StudentLedgerReportRow:
+      type: object
+      description: '`reports.student_ledger`: a statement line, the discriminator
+        on `kind`.'
+      properties:
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/StudentLedgerReportRowKindEnum'
+          readOnly: true
+        entry_type:
+          allOf:
+          - $ref: '#/components/schemas/FeeStatementEntryKindEnum'
+          readOnly: true
+        date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        reference:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        debit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        credit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        balance:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+      required:
+      - balance
+      - credit
+      - date
+      - debit
+      - description
+      - entry_type
+      - kind
+      - reference
+    StudentLedgerReportRowKindEnum:
+      enum:
+      - student-ledger
+      type: string
+      description: '* `student-ledger` - student-ledger'
+    StudentStatementEntry:
+      type: object
+      description: |-
+        One line of a student's statement: a charge, a payment or a refund, with its running balance.
+
+        The wire shape of `GET /students/{id}/ledger`. `kind` here is the line's own
+        type, so the report row (which needs `kind` for the discriminator) carries it
+        as `entry_type` instead.
+      properties:
+        date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/FeeStatementEntryKindEnum'
+          readOnly: true
+        reference:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        debit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        credit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        balance:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+      required:
+      - balance
+      - credit
+      - date
+      - debit
+      - description
+      - kind
+      - reference
     StudentStatusEnum:
       enum:
       - active
@@ -27709,6 +28469,58 @@ components:
         * `inter_campus` - Inter-campus
         * `outgoing` - Outgoing
         * `incoming` - Incoming
+    TrialBalanceReportRow:
+      type: object
+      description: '`ledger.trial_balance`: every account''s debit and credit totals,
+        and their difference.'
+      properties:
+        ledger_account_id:
+          type: string
+          format: uuid
+          readOnly: true
+        account_type:
+          allOf:
+          - $ref: '#/components/schemas/LedgerAccountTypeEnum'
+          readOnly: true
+        total_debit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        total_credit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/TrialBalanceReportRowKindEnum'
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        balance:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+      required:
+      - account_type
+      - balance
+      - code
+      - kind
+      - ledger_account_id
+      - name
+      - total_credit
+      - total_debit
+    TrialBalanceReportRowKindEnum:
+      enum:
+      - trial-balance
+      type: string
+      description: '* `trial-balance` - trial-balance'
     UnreadCount:
       type: object
       properties:

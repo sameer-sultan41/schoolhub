@@ -1,7 +1,16 @@
-import { downloadVoucher, listVouchers } from "./vouchers-service";
+import { downloadVoucher, issueVoucher, listVouchers, voidVoucher } from "./vouchers-service";
 
 export const VouchersService = {
   listVouchers,
   downloadVoucher,
+  issueVoucher,
+  voidVoucher,
 };
-export type { VoucherFormat, VoucherRecord, VoucherStatus, VouchersQuery } from "./vouchers-type";
+export type {
+  IssueVoucherInput,
+  VoucherFormat,
+  VoucherProvider,
+  VoucherRecord,
+  VoucherStatus,
+  VouchersQuery,
+} from "./vouchers-type";
