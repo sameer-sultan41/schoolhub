@@ -21,7 +21,7 @@ import {
 } from "@/services/modules/notification-preferences/notification-preferences-constant";
 import { NOTIFICATION_CATEGORY_LABEL_KEY } from "@/features/portal/notifications/notification-labels";
 import { NOTIFICATION_CHANNEL_LABEL_KEY } from "./preference-labels";
-import { enumLabel } from "@/features/portal/enum-label";
+import { enumLabel } from "@/lib/enum-label";
 
 const cellKey = (category: string, channel: string) => `${category}:${channel}`;
 

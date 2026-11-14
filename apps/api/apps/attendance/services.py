@@ -21,6 +21,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
 from django.db import IntegrityError, transaction
+from django.http import Http404
 from django.utils import timezone
 
 from apps.attendance import reports, uploads
@@ -49,7 +50,8 @@ from apps.student_management.models import EnrollmentStatus, Student, StudentEnr
 from apps.student_management.services import enrollment_roll_order
 from apps.timetable.slots.services import effective_slots_for
 from core.api.exceptions import Conflict, DomainRuleViolation
-from core.files.services import assert_file_usable
+from core.files.models import File, FileStatus
+from core.files.services import assert_file_usable, get_download_url
 from core.imports.tabular import parse_rows
 from core.rbac.models import RecordScope
 from core.rbac.permissions import is_restricted_principal, scopes_for
@@ -1446,6 +1448,27 @@ def cancel_leave_request(*, request: LeaveRequest, actor_id: uuid.UUID) -> Leave
     request.updated_by = actor_id
     request.save(update_fields=["status", "decided_at", "updated_by", "updated_at"])
     return request
+
+
+def leave_attachment_download_url(leave_request: LeaveRequest) -> str:
+    """A signed link to the request's attachment; 404 when there is none to give.
+
+    The caller has already found ``leave_request`` through its own record scope, so who
+    may read is settled. This only refuses a file that is missing, not yet confirmed,
+    deleted, or of another purpose: the same 404 as no attachment at all.
+    """
+    file = (
+        File.objects.alive()
+        .filter(
+            pk=leave_request.attachment_file_id,
+            purpose=uploads.LEAVE_ATTACHMENT.key,
+            status=FileStatus.READY,
+        )
+        .first()
+    )
+    if file is None:
+        raise Http404("No such attachment.")
+    return get_download_url(file)
 
 
 def apply_approved_leave(*, request: LeaveRequest, actor_id: uuid.UUID) -> int:

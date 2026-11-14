@@ -72,12 +72,26 @@ export type ErrorStatus = keyof typeof CODE_BY_STATUS;
 export function fail(
   status: ErrorStatus,
   message: string,
-  options: { code?: ApiErrorCode; details?: ApiErrorDetail[]; requestId?: string } = {},
+  options: {
+    code?: ApiErrorCode;
+    details?: ApiErrorDetail[];
+    requestId?: string;
+    /** `error.meta`: structured context a client acts on (`refundable_remainder`, `row_limit`). */
+    meta?: Record<string, unknown>;
+  } = {},
 ): MockResponse<ApiErrorEnvelope> {
-  const { code = CODE_BY_STATUS[status], details, requestId = "e2e-request-id" } = options;
+  const { code = CODE_BY_STATUS[status], details, requestId = "e2e-request-id", meta } = options;
   return {
     status,
-    body: { error: { code, message, ...(details ? { details } : {}), request_id: requestId } },
+    body: {
+      error: {
+        code,
+        message,
+        ...(details ? { details } : {}),
+        request_id: requestId,
+        ...(meta ? { meta } : {}),
+      },
+    },
   };
 }
 

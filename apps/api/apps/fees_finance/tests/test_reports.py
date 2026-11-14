@@ -30,6 +30,7 @@ from apps.fees_finance.models import (
 from apps.fees_finance.tasks import export_finance_report_task
 from apps.fees_finance.tests.base import FeesFinanceAPITestCase
 from apps.fees_finance.tests.factories import (
+    CampusFactory,
     DiscountFactory,
     FeeHeadFactory,
     FeeInvoiceFactory,
@@ -37,8 +38,10 @@ from apps.fees_finance.tests.factories import (
     FineFactory,
     StudentEnrollmentFactory,
     StudentFactory,
+    TenantFactory,
     UserFactory,
     fine_head,
+    jwt_only_client,
 )
 from core.api.exceptions import DomainRuleViolation
 from core.jobs.tests.base import assert_sent_on_commit
@@ -46,6 +49,8 @@ from core.money import ZERO
 from core.tenancy.context import tenant_context
 
 TODAY = datetime.date(2026, 9, 30)
+
+
 # The key `GET /reports/finance-summary` declares, which `build_report_rows` scopes by.
 REPORT_VIEW = "fees.report.view"
 
@@ -656,9 +661,10 @@ class StudentLedgerEndpointTests(ReportTestCase):
         self.assertEqual(response.json()["meta"]["closing_balance"], "600.00")
 
     def test_a_guardian_cannot_read_another_family_s_statement(self) -> None:
-        """Record scope through the same `build_report_rows` the staff endpoint
-        uses — an empty statement rather than another family's figures."""
-        from apps.fees_finance.tests.factories import authenticate, grant
+        """The student is resolved through the caller's record scope first, so
+        another family's child is a 404 rather than an empty statement (ADR-0004).
+        Bearer only, as a portal client sends it."""
+        from apps.fees_finance.tests.factories import grant
 
         self._invoice(student=self.students[1], due=datetime.date(2026, 9, 10), label="theirs")
         grant(
@@ -667,9 +673,66 @@ class StudentLedgerEndpointTests(ReportTestCase):
             scope="own",
             is_restricted_principal=True,
         )
-        authenticate(self.client, self.guardian_user)
 
-        response = self.client.get(f"/api/v1/students/{self.students[1].pk}/ledger")
+        response = jwt_only_client(self.guardian_user).get(
+            f"/api/v1/students/{self.students[1].pk}/ledger"
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_another_tenant_s_student_is_a_404_under_a_bearer_token(self) -> None:
+        """Under JWT the tenant is bound and RLS hides the foreign student, so
+        building the statement would answer an empty 200 that confirms nothing
+        and says nothing; the view resolves the student first and 404s."""
+        other = TenantFactory()
+        with tenant_context(other.id):
+            theirs = StudentFactory(tenant=other, campus=CampusFactory(tenant=other))
+
+        response = jwt_only_client(self.user).get(f"/api/v1/students/{theirs.pk}/ledger")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_a_foreign_student_filter_on_the_summary_is_an_empty_report(self) -> None:
+        """A list filter, unlike a path id, narrows to nothing: an id from another
+        tenant matches no row, as the module doc's filters section says."""
+        other = TenantFactory()
+        with tenant_context(other.id):
+            theirs = StudentFactory(tenant=other, campus=CampusFactory(tenant=other))
+
+        response = jwt_only_client(self.user).get(
+            "/api/v1/reports/finance-summary"
+            f"?kind=student-ledger&student={theirs.pk}&date_from=2026-01-01&date_to=2027-01-01"
+        )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["data"], [])
+
+
+class JWTOnlyTenantBindingTests(ReportTestCase):
+    """Both report views answer a bearer token with no session (L63).
+
+    `authenticate` also calls `force_login`, whose session lets `TenantMiddleware`
+    bind the tenant before DRF runs. That hid a bare `APIView` that never bound
+    it under JWT: the module gate failed closed for every real client.
+    """
+
+    def test_the_summary_endpoint_binds_the_tenant(self) -> None:
+        invoice = self._invoice(due=datetime.date(2026, 9, 10))
+        self._pay(invoice, Decimal("500.00"))
+
+        response = jwt_only_client(self.user).get(
+            "/api/v1/reports/finance-summary"
+            "?kind=collection&date_from=2026-01-01&date_to=2027-01-01"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["meta"]["row_count"], 1)
+
+    def test_the_statement_endpoint_binds_the_tenant(self) -> None:
+        invoice = self._invoice(due=datetime.date(2026, 9, 10))
+        self._pay(invoice, Decimal("400.00"))
+
+        response = jwt_only_client(self.user).get(f"/api/v1/students/{self.student.pk}/ledger")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["meta"]["closing_balance"], "600.00")

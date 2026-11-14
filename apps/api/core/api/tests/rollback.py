@@ -8,7 +8,7 @@ This patch skips the blocks `TestCase` opened, the way Django itself does for
 `atomic(durable=True)` (`Atomic._from_testcase`).
 
 `OnlinePaymentsTestCase` (`apps/fees_finance/tests/online_base.py`) and the AI
-report-summary tests both use it (lesson L62).
+report-summary tests both use it (lesson L67).
 """
 
 from __future__ import annotations

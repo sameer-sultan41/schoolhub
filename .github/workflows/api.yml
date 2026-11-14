@@ -199,7 +199,7 @@ jobs:
       - uses: ./.github/actions/setup-api-env
       # prod.py requires every variable it reads with no default (it fails closed at boot),
       # so each one is supplied here: a throwaway Fernet key generated per run, never a
-      # committed one, and a placeholder public URL (agent-lessons L60).
+      # committed one, and a placeholder public URL (agent-lessons L65).
       - name: Django deployment checks
         run: |
           INTEGRATIONS_ENCRYPTION_KEYS="$(uv run python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" \

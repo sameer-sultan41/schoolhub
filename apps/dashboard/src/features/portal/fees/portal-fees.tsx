@@ -9,13 +9,13 @@ import { LoadErrorCard } from "@/components/load-error-card";
 import { Paths } from "@/config/paths";
 import { formatDate } from "@/lib/helpers";
 import type { FeeInvoiceRecord, ReceiptRecord, VoucherRecord } from "@/services";
-import { formatDecimal } from "@/features/portal/format-decimal";
+import { formatDecimal } from "@/lib/format-decimal";
 import { ChildGate } from "@/features/portal/shell/child-gate";
-import { FEE_STATUS_BADGE, FEE_STATUS_LABEL_KEY } from "./fee-status";
+import { FEE_STATUS_BADGE, FEE_STATUS_LABEL_KEY } from "@/features/fees/shared/fee-status";
 import { ReceiptDownloadButton } from "./receipt-download-button";
 import { useChildInvoices, useChildVouchers, useReceiptsByInvoice } from "./use-fees-data";
 import { VoucherList } from "./voucher-list";
-import { enumBadge, enumLabel } from "@/features/portal/enum-label";
+import { enumBadge, enumLabel } from "@/lib/enum-label";
 
 interface InvoiceListProps {
   kind: "outstanding" | "paid";
@@ -119,7 +119,7 @@ export function PortalFees() {
 
 function ChildFees({ studentId }: { studentId: string }) {
   const t = useTranslations("portal.fees");
-  const receipts = useReceiptsByInvoice();
+  const receipts = useReceiptsByInvoice(studentId);
   const vouchers = useChildVouchers(studentId);
 
   return (

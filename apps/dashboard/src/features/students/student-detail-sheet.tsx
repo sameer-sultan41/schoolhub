@@ -33,6 +33,8 @@ import type { StudentRow } from "@/services/modules/students/students-type";
 import { statusVariant } from "./student-columns";
 import { StudentDetailFooter } from "./student-detail-footer";
 import { StudentDetailTabs } from "./student-detail-tabs";
+import { PortalInviteButton } from "./portal-invite-button";
+import { PortalStatusBadge } from "./portal-status-badge";
 import type { StepKey } from "./student-create-stepper";
 
 export interface StudentDetailSheetProps {
@@ -224,6 +226,18 @@ export function StudentDetailSheet({
           ))}
         </FieldSection>
       ))}
+      {data && row && (
+        <section className="flex flex-col gap-3">
+          <h3 className="text-sm font-semibold text-foreground">{t("portal.title")}</h3>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <PortalStatusBadge status={data.portal_status} />
+            <PortalInviteButton
+              target={{ kind: "student", id: data.id, name: row.name }}
+              portalStatus={data.portal_status}
+            />
+          </div>
+        </section>
+      )}
       {data ? (
         <span className="text-xs text-muted-foreground">
           {t("detail.lastUpdated", { when: formatLastUpdated(data.updated_at) })}

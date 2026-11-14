@@ -404,4 +404,19 @@ describe("students-service — bulk import, export and ID cards", () => {
     expect(mockPost).toHaveBeenCalledWith("/id-cards:generate", { student_ids: ["a", "b"] });
     expect(result).toEqual({ jobId: "job-1" });
   });
+
+  it("inviteStudent posts the email to the colon-action path with an Idempotency-Key", async () => {
+    const { inviteStudent } = await import("../students-service");
+    mockPost.mockResolvedValue({ data: { portal_status: "invited" } });
+
+    await expect(inviteStudent("s1", "kid@example.com", "key-inv")).resolves.toEqual({
+      portal_status: "invited",
+    });
+
+    expect(mockPost).toHaveBeenCalledWith(
+      "/students/s1:invite",
+      { email: "kid@example.com" },
+      { idempotencyKey: "key-inv" },
+    );
+  });
 });

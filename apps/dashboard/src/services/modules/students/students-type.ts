@@ -84,6 +84,14 @@ export type StudentDocumentRecord = ApiSchemas["StudentDocument"];
  * `"verified" | "rejected"`) — aliased, not hand-written, per ADR-0017. */
 export type DocumentVerificationDecision = ApiSchemas["DocumentVerificationDecisionEnum"];
 
+/** A student's or guardian's portal account state (ADR-0033): `none` (no account),
+ * `invited`/`expired`/`send_failed` (an invitation not yet accepted), `active`, or
+ * `inactive` (access ended). */
+export type PortalStatus = ApiSchemas["PortalStatusEnum"];
+
+/** `POST /students/{id}:invite`'s and `POST /guardians/{id}:invite`'s response. */
+export type PortalInviteResult = ApiSchemas["PortalInviteResponse"];
+
 /** `POST /id-cards:generate`'s request body. */
 export type IdCardGenerateBody = ApiSchemas["IdCardGenerateRequest"];
 

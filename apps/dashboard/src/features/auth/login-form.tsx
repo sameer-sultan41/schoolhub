@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Alert,
@@ -16,7 +15,6 @@ import {
   Input,
 } from "@schoolhub/ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Eye, EyeOff } from "lucide-react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -27,6 +25,8 @@ import { homePathFor } from "@/lib/home-path";
 import { parseTenantSlug } from "@/lib/host";
 import { ApiError, Services } from "@/services";
 import { loginSchema, type LoginValues } from "@/services/modules/auth/auth.schema";
+import { AuthPageHeader } from "./auth-page-header";
+import { PasswordField } from "./password-field";
 
 export function LoginForm() {
   const t = useTranslations("auth.login");
@@ -34,7 +34,6 @@ export function LoginForm() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
-  const [passwordVisible, setPasswordVisible] = useState(false);
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
@@ -81,10 +80,7 @@ export function LoginForm() {
 
   return (
     <div className="space-y-5">
-      <div className="space-y-1">
-        <h1 className="font-heading text-lg font-semibold text-foreground">{t("title")}</h1>
-        <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
-      </div>
+      <AuthPageHeader title={t("title")} subtitle={t("subtitle")} />
 
       {formError ? (
         <Alert variant="destructive">
@@ -133,55 +129,19 @@ export function LoginForm() {
             )}
           />
 
-          <FormField
+          <PasswordField
             control={form.control}
             name="password"
-            render={({ field }) => (
-              <FormItem>
-                <div className="flex items-baseline justify-between gap-2">
-                  <FormLabel required>{t("password")}</FormLabel>
-                  <Link
-                    href={Paths.FORGOT_PASSWORD}
-                    className="text-xs text-primary underline-offset-4 hover:underline"
-                  >
-                    {t("forgotPassword")}
-                  </Link>
-                </div>
-                {/* The toggle Button sits outside FormControl, as a sibling of it inside
-                      this relative wrapper — not nested inside FormControl alongside Input.
-                      FormControl clones its aria-describedby/aria-invalid/id props onto its
-                      one child via Slot; wrapping both elements in a div would land those
-                      props on the div instead of the actual <input>, breaking the a11y
-                      wiring FormMessage depends on. */}
-                <div className="relative">
-                  <FormControl required>
-                    <Input
-                      {...field}
-                      type={passwordVisible ? "text" : "password"}
-                      autoComplete="current-password"
-                    />
-                  </FormControl>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    mode="icon"
-                    size="sm"
-                    onClick={() => {
-                      setPasswordVisible(!passwordVisible);
-                    }}
-                    className="absolute end-1 top-1/2 size-7 -translate-y-1/2 bg-transparent!"
-                    aria-label={passwordVisible ? "Hide password" : "Show password"}
-                  >
-                    {passwordVisible ? (
-                      <EyeOff className="text-muted-foreground" />
-                    ) : (
-                      <Eye className="text-muted-foreground" />
-                    )}
-                  </Button>
-                </div>
-                <FormMessage />
-              </FormItem>
-            )}
+            label={t("password")}
+            autoComplete="current-password"
+            labelAside={
+              <Link
+                href={Paths.FORGOT_PASSWORD}
+                className="text-xs text-primary underline-offset-4 hover:underline"
+              >
+                {t("forgotPassword")}
+              </Link>
+            }
           />
 
           <Button type="submit" block isLoading={mutation.isPending} loadingLabel={t("submitting")}>

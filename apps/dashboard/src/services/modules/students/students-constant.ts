@@ -1,7 +1,7 @@
 import { STUDENT_STATUS_VALUES } from "@schoolhub/types";
 import { FILTER_ALL } from "@/lib/constants";
 import { isUuid } from "@/lib/helpers";
-import type { StudentsPageQuery, UpdateStudentInput } from "./students-type";
+import type { PortalStatus, StudentsPageQuery, UpdateStudentInput } from "./students-type";
 
 /** The students module's constants — collected here so every feature file under
  * `src/features/students/` shares one definition instead of repeating the literal. */
@@ -134,3 +134,48 @@ export const ID_CARDS_FILENAME = "id-cards.pdf";
  * `EmergencyContactLinkViewSet`/`StudentDocumentLinkViewSet` precedent: both are
  * nested-under-one-student lists with no independent pagination UI. */
 export const RELATION_PAGE_SIZE = 50;
+
+/** The key a student's or guardian's portal invite needs (`students.portal-account.invite`,
+ * `apps/api/apps/student_management/permissions.py`; school_admin and principal). */
+export const PORTAL_INVITE_PERMISSION = "students.portal-account.invite";
+
+/** Every `portal_status`, for the label map and its tests. */
+export const PORTAL_STATUSES = [
+  "none",
+  "invited",
+  "expired",
+  "send_failed",
+  "active",
+  "inactive",
+] as const satisfies readonly PortalStatus[];
+
+/** Statuses with an unaccepted invitation: the button resends it. */
+export const PORTAL_RESEND_STATUSES: readonly PortalStatus[] = [
+  "invited",
+  "expired",
+  "send_failed",
+];
+
+/** Statuses with no usable account: the button sends a first (or fresh) invitation. */
+export const PORTAL_INVITE_STATUSES: readonly PortalStatus[] = ["none", "inactive"];
+
+type PortalBadgeVariant = "secondary" | "info" | "warning" | "destructive" | "success";
+
+/** `portal_status` -> badge variant. */
+export const PORTAL_STATUS_VARIANT = {
+  none: "secondary",
+  invited: "info",
+  expired: "warning",
+  send_failed: "destructive",
+  active: "success",
+  inactive: "secondary",
+} as const satisfies Record<PortalStatus, PortalBadgeVariant>;
+
+/** The 409 codes an invite can refuse with (`core/rbac/invitations/exceptions.py`). Not in
+ * `API_ERROR_CODES` (the `audience_changed` precedent), so the button maps them by string. */
+export const PORTAL_INVITE_CONFLICT_CODES = [
+  "email_in_use",
+  "already_active",
+  "portal_disabled",
+  "not_eligible",
+] as const;

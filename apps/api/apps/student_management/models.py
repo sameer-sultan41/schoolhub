@@ -14,8 +14,9 @@ plan and to be raised in the module doc: ``user_id`` (on both ``Student`` and
 ``User`` manager is deliberately unfiltered (authentication has to find a user
 *before* any tenant context exists), so a ``PrimaryKeyRelatedField`` bound to it
 would happily resolve another tenant's user id — a cross-tenant identity leak,
-not just a modelling choice. ``services.resolve_tenant_user_id`` does the
-tenant-checked resolution an FK cannot express here.
+not just a modelling choice. Neither column is client-writable: only
+``portal_accounts.services.invite_to_portal`` sets it, to an account it created or
+already owned at this school (ADR-0033).
 
 ``Student.photo_file_id`` and ``StudentDocument.file_id`` ARE real FKs to
 ``core.files.File`` — that table now exists (PR2) — while
@@ -77,7 +78,9 @@ class Student(TenantOwnedModel):
         "after creation (§11) — see services.assert_admission_number_immutable.",
     )
     user_id = models.UUIDField(
-        null=True, blank=True, help_text="users(id) — portal account, tenant-checked at write time."
+        null=True,
+        blank=True,
+        help_text="users(id) — portal account; set only by :invite (ADR-0033).",
     )
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
@@ -253,7 +256,9 @@ class Guardian(TenantOwnedModel):
     """A guardian person, linked to students N:M via ``StudentGuardian``."""
 
     user_id = models.UUIDField(
-        null=True, blank=True, help_text="users(id) — portal account, tenant-checked at write time."
+        null=True,
+        blank=True,
+        help_text="users(id) — portal account; set only by :invite (ADR-0033).",
     )
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)

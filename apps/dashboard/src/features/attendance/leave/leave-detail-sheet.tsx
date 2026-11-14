@@ -86,7 +86,10 @@ export function LeaveDetailSheet({ request, onOpenChange }: LeaveDetailSheetProp
               <p className="text-sm whitespace-pre-wrap text-foreground">{request.reason}</p>
             </section>
             <LeaveChain approvals={request.approvals} requestStatus={request.status} />
-            <LeaveAttachment fileId={request.attachment_file_id} />
+            <LeaveAttachment
+              requestId={request.id}
+              hasAttachment={Boolean(request.attachment_file_id)}
+            />
           </ResponsiveSheetBody>
         )}
       </ResponsiveSheetContent>

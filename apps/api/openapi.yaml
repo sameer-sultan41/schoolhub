@@ -464,67 +464,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/AdmitCard'
           description: ''
-  /api/v1/ai/requests/{id}:feedback:
-    post:
-      operationId: ai_requests_:feedback_create
-      description: |-
-        Thumbs up or down on one AI output, once, by the user it was shown to.
-
-        Another user's request is a 404, as is another school's (RLS hides it): the
-        caller learns nothing about a request that is not theirs. A second vote is a
-        409; a racing second vote hits the unique constraint, which the error handler
-        turns into the same `conflict`.
-      summary: Rate an AI output
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - ai
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AIFeedbackRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/AIFeedbackRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/AIFeedbackRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AIFeedback'
-          description: ''
-  /api/v1/ai/usage:
-    get:
-      operationId: ai_usage_retrieve
-      description: |-
-        This month's token use against the budget, by feature (ai-governance.md §9).
-
-        The mixin is here for its tenant binding only (as on `SchoolSettingsView`); RLS
-        keeps the sums to the caller's school.
-      summary: AI token usage this month
-      tags:
-      - ai
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AIUsage'
-          description: ''
   /api/v1/announcements:
     get:
       operationId: announcements_list
@@ -1047,6 +986,66 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/auth/invitations:accept:
+    post:
+      operationId: auth_invitations:accept_create
+      description: |-
+        Accept an invitation: set a password and activate the account.
+
+        Unauthenticated. A password the validators refuse is 400 `validation_error`; any
+        unusable link is 400 `invalid_link`.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationAccept'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/InvitationAccept'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/InvitationAccept'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/auth/invitations:preview:
+    post:
+      operationId: auth_invitations:preview_create
+      description: |-
+        Show who an invitation is for and which school sent it, before a password is set.
+
+        Unauthenticated. Any unusable link (unknown school, unknown, used, revoked or expired
+        token) is 400 `invalid_link`.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationLink'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/InvitationLink'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/InvitationLink'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationPreview'
+          description: ''
   /api/v1/auth/login:
     post:
       operationId: auth_login_create
@@ -1100,6 +1099,64 @@ paths:
               schema:
                 $ref: '#/components/schemas/User'
           description: ''
+  /api/v1/auth/password-reset:
+    post:
+      operationId: auth_password_reset_create
+      description: |-
+        Ask for a password-reset link by email.
+
+        Unauthenticated. Answers 204 to every well-formed body, whether or not the address
+        has an account, so the answer reveals nothing; a link goes only to an active member
+        of the named school.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/auth/password-reset:confirm:
+    post:
+      operationId: auth_password_reset:confirm_create
+      description: |-
+        Set a new password from a reset link, and sign out every device.
+
+        Unauthenticated. A password the validators refuse is 400 `validation_error`; an
+        unusable link (wrong school, used or expired token, inactive account) is 400
+        `invalid_link`.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirm'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirm'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirm'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
   /api/v1/auth/refresh:
     post:
       operationId: auth_refresh_create
@@ -5094,22 +5151,15 @@ paths:
         required: true
       tags:
       - files
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/File'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/File'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/File'
       security:
       - jwtAuth: []
       responses:
         '200':
-          description: '{''download_url'': str}'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttachmentDownload'
+          description: ''
   /api/v1/fines:
     get:
       operationId: fines_list
@@ -5984,6 +6034,35 @@ paths:
               schema:
                 $ref: '#/components/schemas/Guardian'
           description: ''
+  /api/v1/guardians/{id}:invite:
+    post:
+      operationId: guardians_:invite_create
+      description: |-
+        Guardian persons (module doc §16). No destroy — a guardian with no
+
+        remaining student links simply stops appearing in any student's roster;
+        hard removal is a retention operation, not documented as an API action.
+      summary: Invite this guardian to the portal at their email on file, or resend
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - guardians
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalInviteResponse'
+          description: ''
+        '409':
+          description: portal_disabled, email_in_use, not_eligible or already_active
   /api/v1/holiday-calendar:
     get:
       operationId: holiday_calendar_retrieve
@@ -6493,6 +6572,37 @@ paths:
               schema:
                 $ref: '#/components/schemas/LeaveRequest'
           description: ''
+  /api/v1/leave-requests/{id}/attachment:download:
+    post:
+      operationId: leave_requests_attachment:download_create
+      description: |-
+        `POST /leave-requests/{id}/attachment:download`.
+
+        The only way to fetch a leave attachment: the purpose is module-gated, so
+        `/files` never signs one. Found through `get_queryset`, so a guardian reaches only
+        their own child's request and staff only their scope's. Not audited, as no
+        download is.
+      summary: Get a signed download URL for a leave request's attachment
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - leave-requests
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttachmentDownload'
+          description: ''
+        '404':
+          description: Not a request the caller may read, or it has no ready attachment.
   /api/v1/leave-requests/{id}:approve:
     post:
       operationId: leave_requests_:approve_create
@@ -8583,6 +8693,11 @@ paths:
           type: string
           format: date-time
       - in: query
+        name: paid_at__lt
+        schema:
+          type: string
+          format: date-time
+      - in: query
         name: paid_at__lte
         schema:
           type: string
@@ -9451,6 +9566,11 @@ paths:
         description: A search term.
         schema:
           type: string
+      - in: query
+        name: student
+        schema:
+          type: string
+          format: uuid
       tags:
       - receipts
       security:
@@ -9502,6 +9622,14 @@ paths:
         The A4 one is still stored — that is what `render_receipt_task` does —
         so an audit has a fixed artefact.
       parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+          enum:
+          - pdf
+          - thermal
+        description: 'Layout: A4 `pdf` (default) or `thermal` roll.'
       - in: path
         name: id
         schema:
@@ -10151,6 +10279,29 @@ paths:
         fix attendance's review produced.
       parameters:
       - in: query
+        name: academic_session_id
+        schema:
+          type: string
+          format: uuid
+          nullable: true
+        description: The invoice's session (the grant's, or the student's enrollment,
+          for grants).
+      - in: query
+        name: campus_id
+        schema:
+          type: string
+          format: uuid
+          nullable: true
+        description: The student's campus (an expense's, for `expense-register`).
+      - in: query
+        name: class_id
+        schema:
+          type: string
+          format: uuid
+          nullable: true
+        description: The class the invoice was billed to (the student's enrollment,
+          for grants).
+      - in: query
         name: date_from
         schema:
           type: string
@@ -10193,8 +10344,26 @@ paths:
       - in: query
         name: kind
         schema:
+          enum:
+          - collection
+          - outstanding-aging
+          - student-ledger
+          - grant-register
+          - income-vs-expense
+          - budget-variance
+          - expense-register
+          - trial-balance
           type: string
           minLength: 1
+        description: |-
+          * `collection` - collection
+          * `outstanding-aging` - outstanding-aging
+          * `student-ledger` - student-ledger
+          * `grant-register` - grant-register
+          * `income-vs-expense` - income-vs-expense
+          * `budget-variance` - budget-variance
+          * `expense-register` - expense-register
+          * `trial-balance` - trial-balance
         required: true
       - in: query
         name: student
@@ -10208,7 +10377,16 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FinanceReportRow'
+          description: The report's rows, each carrying the report's `kind`. `meta`
+            carries `kind`, `row_count`, `date_from` and `date_to`. Over 1000 rows
+            the response is a 422 carrying `meta.row_limit`; `POST` the same parameters
+            for an export job.
     post:
       operationId: reports_finance_summary_create
       description: |-
@@ -10239,51 +10417,7 @@ paths:
       - jwtAuth: []
       responses:
         '202':
-          description: No response body
-  /api/v1/reports/finance-summary:summarize:
-    post:
-      operationId: reports_finance_summary:summarize_create
-      description: |-
-        `POST /reports/finance-summary:summarize`: AI-FEE-02, a plain-language summary.
-
-        **Not wrapped in `ATOMIC_REQUESTS`** (urls.py): the gateway calls the provider
-        with no transaction open and commits its audit row in its own, so a refusal
-        still leaves its row (`core.ai.service`). That moves every database read here
-        into an explicit tenant transaction, because the tenant binding is a `SET
-        LOCAL` and lasts only as long as the transaction around it:
-
-        1. `initial` (authentication, the flag, the permission key, the throttles) runs
-           in one short transaction, so the role and flag reads see the tenant.
-        2. The report's facts are read in a `tenant_atomic`, under the route's key.
-        3. `services.summarize_report` then runs with no transaction open.
-
-        Read-only advisory output, labelled `ai_generated` (ai-governance.md §2, §8).
-        The `ai` throttle sits on top of the defaults: it bounds how far concurrent
-        calls can overshoot the token budget (ADR-0035).
-      summary: AI summary of a finance report
-      tags:
-      - reports
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/FinanceReportSummaryRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/FinanceReportSummaryRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/FinanceReportSummaryRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FinanceReportSummaryResponse'
-          description: ''
+          description: A job resource; poll GET /jobs/{id}.
   /api/v1/results:
     get:
       operationId: results_list
@@ -11721,7 +11855,7 @@ paths:
     post:
       operationId: staff_:invite_create
       description: Staff master records (module doc §5.1).
-      summary: Create a portal account for this staff member and assign roles
+      summary: Invite this staff member by email, creating their account if needed
       parameters:
       - in: path
         name: id
@@ -11752,7 +11886,7 @@ paths:
                 $ref: '#/components/schemas/Staff'
           description: ''
         '409':
-          description: Already linked
+          description: email_in_use, already_active, or the staff member has exited
   /api/v1/staff/{staff_pk}/documents:
     get:
       operationId: staff_documents_list
@@ -12288,7 +12422,11 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: '{''download_url'': str}'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttachmentDownload'
+          description: ''
   /api/v1/student-documents/{id}:verify:
     post:
       operationId: student_documents_:verify_create
@@ -13311,7 +13449,8 @@ paths:
         Its own view rather than a `kind` on the report endpoint, because §16
         declares this path and because a family reads it: this is the one report a
         portal principal reaches, narrowed by record scope through the same
-        `build_report_rows` the staff endpoint uses.
+        `build_report_rows` the staff endpoint uses. A student outside this school
+        or the caller's reach is a 404, never an empty statement.
       parameters:
       - in: path
         name: id
@@ -13325,7 +13464,13 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentLedgerEnvelope'
+          description: The statement's lines in `data`, in date order, each with its
+            running `balance`. `meta.closing_balance` is the last line's balance,
+            or zero for no lines.
   /api/v1/students/{id}:change-section:
     post:
       operationId: students_:change_section_create
@@ -13396,6 +13541,43 @@ paths:
               schema:
                 $ref: '#/components/schemas/StudentEnrollment'
           description: ''
+  /api/v1/students/{id}:invite:
+    post:
+      operationId: students_:invite_create
+      description: Student master records (module doc §5.1-2).
+      summary: Invite this student to the portal by email, or resend their invitation
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - students
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentInviteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StudentInviteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StudentInviteRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalInviteResponse'
+          description: ''
+        '409':
+          description: portal_disabled, email_in_use, not_eligible or already_active
   /api/v1/students/{id}:withdraw:
     post:
       operationId: students_:withdraw_create
@@ -14974,6 +15156,12 @@ paths:
         import shape.
       tags:
       - voucher-collection-imports
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SettlementImportRequest'
+        required: true
       security:
       - jwtAuth: []
       responses:
@@ -15111,6 +15299,14 @@ paths:
       operationId: vouchers_download_retrieve
       description: '`GET /vouchers/{id}/download?format=pdf|thermal`.'
       parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+          enum:
+          - pdf
+          - thermal
+        description: 'Layout: A4 `pdf` (default) or `thermal` roll.'
       - in: path
         name: id
         schema:
@@ -15161,82 +15357,6 @@ paths:
           description: ''
 components:
   schemas:
-    AIFeatureUsage:
-      type: object
-      properties:
-        feature_key:
-          type: string
-        tokens:
-          type: integer
-        requests:
-          type: integer
-      required:
-      - feature_key
-      - requests
-      - tokens
-    AIFeedback:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-          readOnly: true
-        ai_request_id:
-          type: string
-          format: uuid
-          readOnly: true
-        value:
-          allOf:
-          - $ref: '#/components/schemas/AIFeedbackValueEnum'
-          readOnly: true
-        comment:
-          type: string
-          readOnly: true
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-      required:
-      - ai_request_id
-      - comment
-      - created_at
-      - id
-      - value
-    AIFeedbackRequest:
-      type: object
-      properties:
-        value:
-          $ref: '#/components/schemas/AIFeedbackValueEnum'
-        comment:
-          type: string
-          default: ''
-          maxLength: 500
-      required:
-      - value
-    AIFeedbackValueEnum:
-      enum:
-      - -1
-      - 1
-      type: integer
-      description: |-
-        * `-1` - Thumbs down
-        * `1` - Thumbs up
-    AIUsage:
-      type: object
-      properties:
-        month_tokens:
-          type: integer
-          description: Tokens used this month, tenant timezone.
-        monthly_limit:
-          type: integer
-        by_feature:
-          type: array
-          items:
-            $ref: '#/components/schemas/AIFeatureUsage'
-      required:
-      - by_feature
-      - month_tokens
-      - monthly_limit
     AcademicSession:
       type: object
       properties:
@@ -15542,8 +15662,8 @@ components:
       - title
     AttachmentDownload:
       type: object
-      description: An attachment's short-lived signed link, as `POST /files/{id}:download`
-        returns one.
+      description: 'A file''s short-lived signed link: every `:download` action answers
+        with one.'
       properties:
         download_url:
           type: string
@@ -16172,6 +16292,65 @@ components:
         * `draft` - Draft
         * `approved` - Approved
         * `closed` - Closed
+    BudgetVarianceReportRow:
+      type: object
+      description: '`reports.budget_variance`: one approved budget against its actual
+        spend.'
+      properties:
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/BudgetVarianceReportRowKindEnum'
+          readOnly: true
+        budget_id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        period_start:
+          type: string
+          format: date
+          readOnly: true
+        period_end:
+          type: string
+          format: date
+          readOnly: true
+        budgeted:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        actual:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        variance:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        utilisation_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+      required:
+      - actual
+      - budget_id
+      - budgeted
+      - kind
+      - name
+      - period_end
+      - period_start
+      - utilisation_percent
+      - variance
+    BudgetVarianceReportRowKindEnum:
+      enum:
+      - budget-variance
+      type: string
+      description: '* `budget-variance` - budget-variance'
     BulkMark:
       type: object
       description: |-
@@ -16422,6 +16601,47 @@ components:
       required:
       - created
       - skipped
+    CollectionReportRow:
+      type: object
+      description: |-
+        `reports.collection_report`: confirmed money by day, method or cashier.
+
+        The row carries only the key it was grouped by; the other two are null.
+        They are not `read_only` so the schema does not list them as always present.
+      properties:
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/CollectionReportRowKindEnum'
+          readOnly: true
+        day:
+          type: string
+          format: date
+          nullable: true
+        method:
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
+          nullable: true
+        received_by:
+          type: string
+          format: uuid
+          nullable: true
+        total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        count:
+          type: integer
+          readOnly: true
+      required:
+      - count
+      - kind
+      - total
+    CollectionReportRowKindEnum:
+      enum:
+      - collection
+      type: string
+      description: '* `collection` - collection'
     CommunicationAudienceTypeEnum:
       enum:
       - all
@@ -16922,6 +17142,7 @@ components:
       - updated_at
     Discount:
       type: object
+      description: A student-level reduction; `status` moves only through `:revoke`.
       properties:
         id:
           type: string
@@ -16930,6 +17151,9 @@ components:
         student:
           type: string
           format: uuid
+        student_name:
+          type: string
+          readOnly: true
         academic_session:
           type: string
           format: uuid
@@ -16985,6 +17209,7 @@ components:
       - name
       - status
       - student
+      - student_name
       - updated_at
       - value
     DocumentVerificationDecisionEnum:
@@ -17737,8 +17962,9 @@ components:
           format: decimal
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
         gross_amount:
-          type: number
-          format: double
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,11}(?:\.\d{0,2})?$
           readOnly: true
         expense_date:
           type: string
@@ -17756,6 +17982,18 @@ components:
           format: uuid
           readOnly: true
           nullable: true
+        created_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        submitted_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: Who moved the draft into the approval queue; may differ from
+            created_by.
         receipt_file:
           type: string
           format: uuid
@@ -17773,6 +18011,7 @@ components:
       - approved_by
       - category_name
       - created_at
+      - created_by
       - description
       - expense_category
       - expense_date
@@ -17780,6 +18019,7 @@ components:
       - gross_amount
       - id
       - status
+      - submitted_by
       - updated_at
     ExpenseCategory:
       type: object
@@ -17818,6 +18058,80 @@ components:
       - ledger_account
       - name
       - updated_at
+    ExpenseRegisterReportRow:
+      type: object
+      description: '`reports.expense_register`: one expense, whatever its status.'
+      properties:
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/ExpenseRegisterReportRowKindEnum'
+          readOnly: true
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        expense_no:
+          type: string
+          readOnly: true
+        expense_date:
+          type: string
+          format: date
+          readOnly: true
+        vendor_name:
+          type: string
+          readOnly: true
+          nullable: true
+        description:
+          type: string
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        tax_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ExpenseStatusEnum'
+          readOnly: true
+        approved_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        category_code:
+          type: string
+          readOnly: true
+        category_name:
+          type: string
+          readOnly: true
+        campus_name:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - amount
+      - approved_by
+      - campus_name
+      - category_code
+      - category_name
+      - description
+      - expense_date
+      - expense_no
+      - id
+      - kind
+      - status
+      - tax_amount
+      - vendor_name
+    ExpenseRegisterReportRowKindEnum:
+      enum:
+      - expense-register
+      type: string
+      description: '* `expense-register` - expense-register'
     ExpenseStatusEnum:
       enum:
       - draft
@@ -18162,6 +18476,16 @@ components:
       - fee_structure
       - id
       - updated_at
+    FeeStatementEntryKindEnum:
+      enum:
+      - invoice
+      - payment
+      - refund
+      type: string
+      description: |-
+        * `invoice` - invoice
+        * `payment` - payment
+        * `refund` - refund
     FeeStructure:
       type: object
       properties:
@@ -18390,11 +18714,15 @@ components:
         * `quarantined` - Quarantined
     FinanceReportQuery:
       type: object
-      description: '`GET/POST /reports/finance-summary` — §13''s parameterised entry
-        point.'
+      description: |-
+        `GET/POST /reports/finance-summary` — §13's parameterised entry point.
+
+        The campus, session and class filters are plain UUIDs rather than model
+        choice fields, so an id from another tenant is an empty report and not a
+        different status from an unknown one (AGENTS.md invariant 2).
       properties:
         kind:
-          type: string
+          $ref: '#/components/schemas/FinanceReportQueryKindEnum'
         date_from:
           type: string
           format: date
@@ -18405,6 +18733,23 @@ components:
           type: string
           format: uuid
           nullable: true
+        campus_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The student's campus (an expense's, for `expense-register`).
+        academic_session_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The invoice's session (the grant's, or the student's enrollment,
+            for grants).
+        class_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The class the invoice was billed to (the student's enrollment,
+            for grants).
         group_by:
           allOf:
           - $ref: '#/components/schemas/GroupByEnum'
@@ -18417,78 +18762,51 @@ components:
       - date_from
       - date_to
       - kind
-    FinanceReportSummary:
-      type: object
+    FinanceReportQueryKindEnum:
+      enum:
+      - collection
+      - outstanding-aging
+      - student-ledger
+      - grant-register
+      - income-vs-expense
+      - budget-variance
+      - expense-register
+      - trial-balance
+      type: string
       description: |-
-        An AI-generated summary (AI-FEE-02). `ai_generated` is always true: the client
-        labels the text "AI-generated" wherever it shows it (ai-governance.md §8).
-      properties:
-        summary:
-          type: string
-        facts:
-          type: object
-          additionalProperties:
-            type: string
-        model:
-          type: string
-        prompt_version:
-          type: string
-        ai_request_id:
-          type: string
-          format: uuid
-        ai_generated:
-          type: boolean
-      required:
-      - ai_generated
-      - ai_request_id
-      - facts
-      - model
-      - prompt_version
-      - summary
-    FinanceReportSummaryMeta:
-      type: object
-      properties:
-        budget_warning:
-          type: boolean
-      required:
-      - budget_warning
-    FinanceReportSummaryRequest:
-      type: object
-      description: |-
-        `POST /reports/finance-summary:summarize`: which report, over which period.
-
-        The report's own parameters minus `student` and `format`: a student ledger is
-        never summarised (`services.report_summary_facts` answers 422 on `kind`), and a
-        summary is not an export.
-      properties:
-        kind:
-          type: string
-        date_from:
-          type: string
-          format: date
-        date_to:
-          type: string
-          format: date
-        group_by:
-          allOf:
-          - $ref: '#/components/schemas/GroupByEnum'
-          default: day
-      required:
-      - date_from
-      - date_to
-      - kind
-    FinanceReportSummaryResponse:
-      type: object
-      properties:
-        data:
-          $ref: '#/components/schemas/FinanceReportSummary'
-        meta:
-          $ref: '#/components/schemas/FinanceReportSummaryMeta'
-      required:
-      - data
-      - meta
+        * `collection` - collection
+        * `outstanding-aging` - outstanding-aging
+        * `student-ledger` - student-ledger
+        * `grant-register` - grant-register
+        * `income-vs-expense` - income-vs-expense
+        * `budget-variance` - budget-variance
+        * `expense-register` - expense-register
+        * `trial-balance` - trial-balance
+    FinanceReportRow:
+      oneOf:
+      - $ref: '#/components/schemas/CollectionReportRow'
+      - $ref: '#/components/schemas/OutstandingAgingReportRow'
+      - $ref: '#/components/schemas/StudentLedgerReportRow'
+      - $ref: '#/components/schemas/GrantRegisterReportRow'
+      - $ref: '#/components/schemas/IncomeVsExpenseReportRow'
+      - $ref: '#/components/schemas/BudgetVarianceReportRow'
+      - $ref: '#/components/schemas/ExpenseRegisterReportRow'
+      - $ref: '#/components/schemas/TrialBalanceReportRow'
+      discriminator:
+        propertyName: kind
+        mapping:
+          collection: '#/components/schemas/CollectionReportRow'
+          outstanding-aging: '#/components/schemas/OutstandingAgingReportRow'
+          student-ledger: '#/components/schemas/StudentLedgerReportRow'
+          grant-register: '#/components/schemas/GrantRegisterReportRow'
+          income-vs-expense: '#/components/schemas/IncomeVsExpenseReportRow'
+          budget-variance: '#/components/schemas/BudgetVarianceReportRow'
+          expense-register: '#/components/schemas/ExpenseRegisterReportRow'
+          trial-balance: '#/components/schemas/TrialBalanceReportRow'
     Fine:
       type: object
+      description: A penalty on a fine-category fee head; `status` moves only through
+        `:waive`.
       properties:
         id:
           type: string
@@ -18497,6 +18815,9 @@ components:
         student:
           type: string
           format: uuid
+        student_name:
+          type: string
+          readOnly: true
         fee_head:
           type: string
           format: uuid
@@ -18547,6 +18868,7 @@ components:
       - reason
       - status
       - student
+      - student_name
       - updated_at
       - waived_by
       - waived_reason
@@ -18924,6 +19246,79 @@ components:
         * `letter` - Letter grades
         * `gpa` - GPA
         * `hybrid` - Hybrid (letter and GPA)
+    GrantRegisterReportRow:
+      type: object
+      description: |-
+        `reports.grant_and_waiver_register`: a reduction granted or a fine waived, and by whom.
+
+        `grant_type` is the source's own `kind` (a discount, a scholarship or a waived
+        fine); `status` is that source's status, so it is not one fixed set.
+      properties:
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/GrantRegisterReportRowKindEnum'
+          readOnly: true
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        grant_type:
+          allOf:
+          - $ref: '#/components/schemas/GrantTypeEnum'
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        value_type:
+          allOf:
+          - $ref: '#/components/schemas/FeeGrantValueTypeEnum'
+          readOnly: true
+        value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        status:
+          type: string
+          readOnly: true
+        approved_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        admission_number:
+          type: string
+          readOnly: true
+        granted_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - admission_number
+      - approved_by
+      - grant_type
+      - granted_at
+      - id
+      - kind
+      - name
+      - status
+      - value
+      - value_type
+    GrantRegisterReportRowKindEnum:
+      enum:
+      - grant-register
+      type: string
+      description: '* `grant-register` - grant-register'
+    GrantTypeEnum:
+      enum:
+      - discount
+      - scholarship
+      - fine_waiver
+      type: string
+      description: |-
+        * `discount` - discount
+        * `scholarship` - scholarship
+        * `fine_waiver` - fine_waiver
     GroupByEnum:
       enum:
       - day
@@ -18944,8 +19339,13 @@ components:
         user_id:
           type: string
           format: uuid
+          readOnly: true
           nullable: true
-          description: users(id) — portal account, tenant-checked at write time.
+          description: users(id) — portal account; set only by :invite (ADR-0033).
+        portal_status:
+          allOf:
+          - $ref: '#/components/schemas/PortalStatusEnum'
+          readOnly: true
         first_name:
           type: string
           maxLength: 100
@@ -19007,7 +19407,9 @@ components:
       - last_name
       - phone
       - photo_url
+      - portal_status
       - updated_at
+      - user_id
     HolidayCalendar:
       type: object
       description: |-
@@ -19116,6 +19518,58 @@ components:
           minItems: 1
       required:
       - student_ids
+    IncomeVsExpenseReportRow:
+      type: object
+      description: '`reports.income_vs_expense`: an income or expense account''s net
+        over the period.'
+      properties:
+        ledger_account_id:
+          type: string
+          format: uuid
+          readOnly: true
+        account_type:
+          allOf:
+          - $ref: '#/components/schemas/LedgerAccountTypeEnum'
+          readOnly: true
+        total_debit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        total_credit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/IncomeVsExpenseReportRowKindEnum'
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        net:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+      required:
+      - account_type
+      - code
+      - kind
+      - ledger_account_id
+      - name
+      - net
+      - total_credit
+      - total_debit
+    IncomeVsExpenseReportRowKindEnum:
+      enum:
+      - income-vs-expense
+      type: string
+      description: '* `income-vs-expense` - income-vs-expense'
     InitiatePayment:
       type: object
       description: '`POST /fee-invoices/{id}:initiate-payment`. The amount is the
@@ -19138,12 +19592,59 @@ components:
       required:
       - payment_id
       - redirect_url
+    InvitationAccept:
+      type: object
+      properties:
+        school:
+          type: string
+          description: Tenant slug, from the link's `school` fragment.
+          pattern: ^[-a-zA-Z0-9_]+$
+        token:
+          type: string
+          description: From the link's `token` fragment.
+          maxLength: 128
+        password:
+          type: string
+          writeOnly: true
+      required:
+      - password
+      - school
+      - token
+    InvitationLink:
+      type: object
+      properties:
+        school:
+          type: string
+          description: Tenant slug, from the link's `school` fragment.
+          pattern: ^[-a-zA-Z0-9_]+$
+        token:
+          type: string
+          description: From the link's `token` fragment.
+          maxLength: 128
+      required:
+      - school
+      - token
+    InvitationPreview:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        school_name:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+      required:
+      - email
+      - expires_at
+      - school_name
     InviteRequest:
       type: object
       description: |-
-        No email is sent (§17 gap — no notification infrastructure exists yet,
-        see services/invite.py's ``invite_staff`` docstring); this only creates and
-        links the account plus assigns the requested roles.
+        ``role_ids`` apply when the account is created or re-invited after an exit;
+
+        a resend to a pending invitee ignores them (services/invite.py's ``invite_staff``).
       properties:
         role_ids:
           type: array
@@ -20569,6 +21070,79 @@ components:
       required:
       - body
       - subject
+    OutstandingAgingReportRow:
+      type: object
+      description: '`reports.outstanding_and_aging`: one student''s balance, bucketed
+        by days past due.'
+      properties:
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/OutstandingAgingReportRowKindEnum'
+          readOnly: true
+        student_id:
+          type: string
+          format: uuid
+          readOnly: true
+        admission_number:
+          type: string
+          readOnly: true
+        first_name:
+          type: string
+          readOnly: true
+        last_name:
+          type: string
+          readOnly: true
+        total_outstanding:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        invoice_count:
+          type: integer
+          readOnly: true
+        not_yet_due:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        bucket_0_30:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        bucket_31_60:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        bucket_61_90:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        bucket_90_plus:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+      required:
+      - admission_number
+      - bucket_0_30
+      - bucket_31_60
+      - bucket_61_90
+      - bucket_90_plus
+      - first_name
+      - invoice_count
+      - kind
+      - last_name
+      - not_yet_due
+      - student_id
+      - total_outstanding
+    OutstandingAgingReportRowKindEnum:
+      enum:
+      - outstanding-aging
+      type: string
+      description: '* `outstanding-aging` - outstanding-aging'
     PaginatedAcademicSessionList:
       type: object
       properties:
@@ -22106,6 +22680,43 @@ components:
       - pass-fail-analysis
       type: string
       description: '* `pass-fail-analysis` - pass-fail-analysis'
+    PasswordResetConfirm:
+      type: object
+      properties:
+        school:
+          type: string
+          description: Tenant slug, from the link's `school` fragment.
+          pattern: ^[-a-zA-Z0-9_]+$
+        uid:
+          type: string
+          description: From the link's `uid` fragment.
+          maxLength: 64
+        token:
+          type: string
+          description: From the link's `token` fragment.
+          maxLength: 128
+        new_password:
+          type: string
+          writeOnly: true
+      required:
+      - new_password
+      - school
+      - token
+      - uid
+    PasswordResetRequest:
+      type: object
+      properties:
+        school:
+          type: string
+          description: 'Tenant slug. Required: one email can hold accounts at two
+            schools.'
+          pattern: ^[-a-zA-Z0-9_]+$
+        email:
+          type: string
+          format: email
+      required:
+      - email
+      - school
     PatchedAcademicSession:
       type: object
       properties:
@@ -22495,6 +23106,7 @@ components:
           readOnly: true
     PatchedDiscount:
       type: object
+      description: A student-level reduction; `status` moves only through `:revoke`.
       properties:
         id:
           type: string
@@ -22503,6 +23115,9 @@ components:
         student:
           type: string
           format: uuid
+        student_name:
+          type: string
+          readOnly: true
         academic_session:
           type: string
           format: uuid
@@ -22804,8 +23419,9 @@ components:
           format: decimal
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
         gross_amount:
-          type: number
-          format: double
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,11}(?:\.\d{0,2})?$
           readOnly: true
         expense_date:
           type: string
@@ -22823,6 +23439,18 @@ components:
           format: uuid
           readOnly: true
           nullable: true
+        created_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        submitted_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: Who moved the draft into the approval queue; may differ from
+            created_by.
         receipt_file:
           type: string
           format: uuid
@@ -23071,6 +23699,8 @@ components:
           readOnly: true
     PatchedFine:
       type: object
+      description: A penalty on a fine-category fee head; `status` moves only through
+        `:waive`.
       properties:
         id:
           type: string
@@ -23079,6 +23709,9 @@ components:
         student:
           type: string
           format: uuid
+        student_name:
+          type: string
+          readOnly: true
         fee_head:
           type: string
           format: uuid
@@ -23237,8 +23870,13 @@ components:
         user_id:
           type: string
           format: uuid
+          readOnly: true
           nullable: true
-          description: users(id) — portal account, tenant-checked at write time.
+          description: users(id) — portal account; set only by :invite (ADR-0033).
+        portal_status:
+          allOf:
+          - $ref: '#/components/schemas/PortalStatusEnum'
+          readOnly: true
         first_name:
           type: string
           maxLength: 100
@@ -23887,6 +24525,7 @@ components:
           readOnly: true
     PatchedScholarship:
       type: object
+      description: An award whose `status` follows `SCHOLARSHIP_TRANSITIONS`.
       properties:
         id:
           type: string
@@ -23895,6 +24534,9 @@ components:
         student:
           type: string
           format: uuid
+        student_name:
+          type: string
+          readOnly: true
         academic_session:
           type: string
           format: uuid
@@ -24009,8 +24651,9 @@ components:
         user_id:
           type: string
           format: uuid
+          readOnly: true
           nullable: true
-          description: users(id) — portal account, tenant-checked at write time.
+          description: users(id) — portal account; set only by :invite (ADR-0033).
         first_name:
           type: string
           maxLength: 100
@@ -24181,8 +24824,13 @@ components:
         user_id:
           type: string
           format: uuid
+          readOnly: true
           nullable: true
-          description: users(id) — portal account, tenant-checked at write time.
+          description: users(id) — portal account; set only by :invite (ADR-0033).
+        portal_status:
+          allOf:
+          - $ref: '#/components/schemas/PortalStatusEnum'
+          readOnly: true
         first_name:
           type: string
           maxLength: 100
@@ -24544,12 +25192,18 @@ components:
         fee_invoice:
           type: string
           format: uuid
+        invoice_no:
+          type: string
+          readOnly: true
         student:
           type: string
           format: uuid
           readOnly: true
           description: Denormalized from the invoice so the student ledger is one
             query.
+        student_name:
+          type: string
+          readOnly: true
         amount:
           type: string
           format: decimal
@@ -24579,6 +25233,11 @@ components:
           readOnly: true
           nullable: true
           description: Null for a gateway or voucher self-service payment.
+        receipt:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
         receipt_no:
           type: string
           readOnly: true
@@ -24591,12 +25250,15 @@ components:
       - created_at
       - fee_invoice
       - id
+      - invoice_no
       - method
       - paid_at
+      - receipt
       - receipt_no
       - received_by
       - status
       - student
+      - student_name
     PaymentGatewayAccount:
       type: object
       description: |-
@@ -24768,6 +25430,15 @@ components:
       - modules
       - unread_notifications
       - unread_threads
+    PortalInviteResponse:
+      type: object
+      properties:
+        portal_status:
+          allOf:
+          - $ref: '#/components/schemas/PortalStatusEnum'
+          readOnly: true
+      required:
+      - portal_status
     PortalModules:
       type: object
       properties:
@@ -24838,6 +25509,22 @@ components:
       - published_at
       - requires_acknowledgment
       - title
+    PortalStatusEnum:
+      enum:
+      - none
+      - invited
+      - expired
+      - send_failed
+      - active
+      - inactive
+      type: string
+      description: |-
+        * `none` - No account
+        * `invited` - Invited
+        * `expired` - Invitation expired
+        * `send_failed` - Invitation not delivered
+        * `active` - Active
+        * `inactive` - Inactive
     PortalStudent:
       type: object
       properties:
@@ -25494,9 +26181,15 @@ components:
         payment:
           type: string
           format: uuid
+        invoice_no:
+          type: string
+          readOnly: true
         student:
           type: string
           format: uuid
+          readOnly: true
+        student_name:
+          type: string
           readOnly: true
         amount:
           type: string
@@ -25544,6 +26237,7 @@ components:
       - created_at
       - decision_note
       - id
+      - invoice_no
       - method
       - payment
       - processed_at
@@ -25552,6 +26246,7 @@ components:
       - requested_by
       - status
       - student
+      - student_name
     RefundDecision:
       type: object
       description: '`:approve` / `:reject` — the note is optional on approval, not
@@ -26217,6 +26912,7 @@ components:
       - provider
     Scholarship:
       type: object
+      description: An award whose `status` follows `SCHOLARSHIP_TRANSITIONS`.
       properties:
         id:
           type: string
@@ -26225,6 +26921,9 @@ components:
         student:
           type: string
           format: uuid
+        student_name:
+          type: string
+          readOnly: true
         academic_session:
           type: string
           format: uuid
@@ -26270,6 +26969,7 @@ components:
       - id
       - name
       - student
+      - student_name
       - updated_at
       - value
     ScholarshipStatusEnum:
@@ -26405,6 +27105,22 @@ components:
       - end_date
       - name
       - start_date
+    SettlementImportRequest:
+      type: object
+      description: |-
+        `POST /voucher-collection-imports` — the multipart body, for the contract.
+
+        Documentation only: the view validates by hand so a missing file or unknown
+        provider keeps its 422 `DomainRuleViolation` shape.
+      properties:
+        file:
+          type: string
+          format: binary
+        provider:
+          $ref: '#/components/schemas/VoucherProviderEnum'
+      required:
+      - file
+      - provider
     SettlementImportStatusEnum:
       enum:
       - processing
@@ -26477,8 +27193,9 @@ components:
         user_id:
           type: string
           format: uuid
+          readOnly: true
           nullable: true
-          description: users(id) — portal account, tenant-checked at write time.
+          description: users(id) — portal account; set only by :invite (ADR-0033).
         first_name:
           type: string
           maxLength: 100
@@ -26593,6 +27310,7 @@ components:
       - photo_url
       - staff_type
       - updated_at
+      - user_id
     StaffAttendance:
       type: object
       description: |-
@@ -26990,8 +27708,13 @@ components:
         user_id:
           type: string
           format: uuid
+          readOnly: true
           nullable: true
-          description: users(id) — portal account, tenant-checked at write time.
+          description: users(id) — portal account; set only by :invite (ADR-0033).
+        portal_status:
+          allOf:
+          - $ref: '#/components/schemas/PortalStatusEnum'
+          readOnly: true
         first_name:
           type: string
           maxLength: 100
@@ -27082,8 +27805,10 @@ components:
       - id
       - last_name
       - photo_url
+      - portal_status
       - status
       - updated_at
+      - user_id
     StudentAttendance:
       type: object
       description: '`student_attendance` — read shape. Rows are written by `:bulk-mark`.'
@@ -27416,6 +28141,21 @@ components:
           format: uri
       required:
       - file
+    StudentInviteRequest:
+      type: object
+      description: |-
+        A student has no email on file, so the address comes with the invite.
+
+        It is stored only on the student's account. A resend to an account nobody has activated
+        goes to this address, which corrects a mistyped one; an account that was once active keeps
+        its own address.
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+      required:
+      - email
     StudentLateArrivalsReportRow:
       type: object
       description: '`reports.student_late_arrivals`: late days and their minutes,
@@ -27464,6 +28204,138 @@ components:
       - student-late-arrivals
       type: string
       description: '* `student-late-arrivals` - student-late-arrivals'
+    StudentLedgerEnvelope:
+      type: object
+      description: |-
+        The documented wire envelope of `GET /students/{id}/ledger`.
+
+        Documentation only: the view builds the payload itself. It exists so `meta`
+        (and its `closing_balance`) is typed in the OpenAPI contract, the way a paginated
+        list's `meta.pagination` is, instead of living in a description.
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/StudentStatementEntry'
+        meta:
+          $ref: '#/components/schemas/StudentLedgerMeta'
+      required:
+      - data
+      - meta
+    StudentLedgerMeta:
+      type: object
+      description: '`meta` of `GET /students/{id}/ledger`: the line count and the
+        server''s closing balance.'
+      properties:
+        row_count:
+          type: integer
+        closing_balance:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+      required:
+      - closing_balance
+      - row_count
+    StudentLedgerReportRow:
+      type: object
+      description: '`reports.student_ledger`: a statement line, the discriminator
+        on `kind`.'
+      properties:
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/StudentLedgerReportRowKindEnum'
+          readOnly: true
+        entry_type:
+          allOf:
+          - $ref: '#/components/schemas/FeeStatementEntryKindEnum'
+          readOnly: true
+        date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        reference:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        debit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        credit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        balance:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+      required:
+      - balance
+      - credit
+      - date
+      - debit
+      - description
+      - entry_type
+      - kind
+      - reference
+    StudentLedgerReportRowKindEnum:
+      enum:
+      - student-ledger
+      type: string
+      description: '* `student-ledger` - student-ledger'
+    StudentStatementEntry:
+      type: object
+      description: |-
+        One line of a student's statement: a charge, a payment or a refund, with its running balance.
+
+        The wire shape of `GET /students/{id}/ledger`. `kind` here is the line's own
+        type, so the report row (which needs `kind` for the discriminator) carries it
+        as `entry_type` instead.
+      properties:
+        date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/FeeStatementEntryKindEnum'
+          readOnly: true
+        reference:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        debit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        credit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        balance:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+      required:
+      - balance
+      - credit
+      - date
+      - debit
+      - description
+      - kind
+      - reference
     StudentStatusEnum:
       enum:
       - active
@@ -28450,6 +29322,58 @@ components:
         * `inter_campus` - Inter-campus
         * `outgoing` - Outgoing
         * `incoming` - Incoming
+    TrialBalanceReportRow:
+      type: object
+      description: '`ledger.trial_balance`: every account''s debit and credit totals,
+        and their difference.'
+      properties:
+        ledger_account_id:
+          type: string
+          format: uuid
+          readOnly: true
+        account_type:
+          allOf:
+          - $ref: '#/components/schemas/LedgerAccountTypeEnum'
+          readOnly: true
+        total_debit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        total_credit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/TrialBalanceReportRowKindEnum'
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        balance:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+      required:
+      - account_type
+      - balance
+      - code
+      - kind
+      - ledger_account_id
+      - name
+      - total_credit
+      - total_debit
+    TrialBalanceReportRowKindEnum:
+      enum:
+      - trial-balance
+      type: string
+      description: '* `trial-balance` - trial-balance'
     UnreadCount:
       type: object
       properties:

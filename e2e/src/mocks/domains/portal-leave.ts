@@ -1,7 +1,7 @@
 import { fail, ok, type MockResponse } from "../envelope";
 import { cursorPageOf } from "../list";
 import type { MockModule } from "../router";
-import { colonAction } from "./attendance-mock-utils";
+import { colonAction, leaveAttachmentDownload } from "./attendance-mock-utils";
 import { buildPortalLeaveRequest, type PortalStore } from "./portal-store";
 
 /** `NotFound`'s sentence, as the envelope handler sends it. */
@@ -30,7 +30,8 @@ function refused(field: string, issue: string): MockResponse {
 
 /**
  * A guardian's leave: `GET /leave-types`, `GET /leave-requests` (narrowed by `student_id`),
- * `POST /leave-requests` and `POST /leave-requests/{id}:cancel`, for the family in `store`.
+ * `POST /leave-requests`, `POST /leave-requests/{id}:cancel` and
+ * `POST /leave-requests/{id}/attachment:download`, for the family in `store`.
  *
  * The submission applies the two rules the dashboard leans on the server for: the student must
  * be one of the caller's children (422 on `student_id`) and a type that `requires_attachment`
@@ -88,5 +89,14 @@ export function portalLeaveModule(store: PortalStore): MockModule {
       row.status = "cancelled";
       return ok(row);
     });
+
+    // `compile()` would read `:download` as a parameter, so the whole segment is captured and
+    // checked in `leaveAttachmentDownload`.
+    api.post("/leave-requests/:requestId/:attachmentAction", (request) =>
+      leaveAttachmentDownload(
+        store.leaveRequests.find((candidate) => candidate.id === request.params["requestId"]),
+        request.params["attachmentAction"],
+      ),
+    );
   };
 }

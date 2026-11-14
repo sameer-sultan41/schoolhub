@@ -11,7 +11,7 @@ from django.core.cache import cache
 
 from apps.fees_finance.models import PaymentGatewayAccount
 from apps.fees_finance.tests.base import FeesFinanceAPITestCase
-from apps.fees_finance.tests.factories import UserFactory, authenticate, grant
+from apps.fees_finance.tests.factories import UserFactory, authenticate, grant, jwt_only_client
 from core.audit.models import AuditLog
 from core.integrations import crypto
 from core.tenancy.context import tenant_context
@@ -78,6 +78,15 @@ class GatewayAccountTests(FeesFinanceAPITestCase):
         with tenant_context(self.tenant.id):
             account = PaymentGatewayAccount.objects.get()
         self.assertEqual(crypto.decrypt(bytes(account.credentials_ciphertext)), CREDENTIALS)
+
+    def test_the_account_reads_under_a_bearer_token_alone(self) -> None:
+        """No session for `TenantMiddleware`: the viewset binds the tenant (agent-lessons L63)."""
+        self._save()
+
+        response = jwt_only_client(self.user).get(URL)
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["data"]["merchant_id_masked"], "****7654")
 
     def test_a_new_account_needs_credentials(self) -> None:
         response = self.client.put(URL, {"provider": "fake", "is_active": True}, format="json")

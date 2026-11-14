@@ -10,9 +10,11 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from apps.fees_finance import services
+from apps.fees_finance import reports, services
 from apps.fees_finance.models import (
     Budget,
     Discount,
@@ -396,12 +398,26 @@ class CancelInvoiceSerializer(serializers.Serializer):
     reason = serializers.CharField(max_length=2000)
 
 
-class DiscountSerializer(serializers.ModelSerializer):
+# `student_name` for a serializer over a model with a `student` FK. Read-only, so a register
+# can name who a grant or fine concerns without the client fetching every student (or needing
+# a student-read key). The viewsets `select_related("student")`, so it costs no extra query.
+class StudentNameMixin:
+    def get_student_name(self, obj) -> str:
+        student = obj.student
+        return f"{student.first_name} {student.last_name}".strip()
+
+
+class DiscountSerializer(StudentNameMixin, serializers.ModelSerializer):
+    """A student-level reduction; `status` moves only through `:revoke`."""
+
+    student_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Discount
         fields = [
             "id",
             "student",
+            "student_name",
             "academic_session",
             "name",
             "discount_type",
@@ -428,12 +444,17 @@ class DiscountSerializer(serializers.ModelSerializer):
         )
 
 
-class ScholarshipSerializer(serializers.ModelSerializer):
+class ScholarshipSerializer(StudentNameMixin, serializers.ModelSerializer):
+    """An award whose `status` follows `SCHOLARSHIP_TRANSITIONS`."""
+
+    student_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Scholarship
         fields = [
             "id",
             "student",
+            "student_name",
             "academic_session",
             "name",
             "scholarship_type",
@@ -454,6 +475,9 @@ class ScholarshipSerializer(serializers.ModelSerializer):
             instance=self.instance,
             type_field="coverage_type",
         )
+        new_status = attrs.get("status")
+        if self.instance is not None and new_status is not None:
+            services.assert_scholarship_transition(scholarship=self.instance, new_status=new_status)
         # Ending or revoking an award is a decision with no colon-action of its
         # own — §5.3's lifecycle moves through a plain PATCH — but it must not
         # move through one with no explanation. `notes` is optional everywhere
@@ -461,7 +485,6 @@ class ScholarshipSerializer(serializers.ModelSerializer):
         # is heading to a terminal state, which is the same requirement
         # Discount.revoke and Fine.waive both enforce on their own colon-action.
         terminal = {ScholarshipStatus.ENDED, ScholarshipStatus.REVOKED}
-        new_status = attrs.get("status")
         if new_status in terminal and not (attrs.get("notes") or "").strip():
             raise serializers.ValidationError(
                 {
@@ -474,12 +497,17 @@ class ScholarshipSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class FineSerializer(serializers.ModelSerializer):
+class FineSerializer(StudentNameMixin, serializers.ModelSerializer):
+    """A penalty on a fine-category fee head; `status` moves only through `:waive`."""
+
+    student_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Fine
         fields = [
             "id",
             "student",
+            "student_name",
             "fee_head",
             "fine_type",
             "amount",
@@ -565,15 +593,21 @@ def _validate_grant_value(attrs: dict, *, instance, type_field: str) -> dict:
     return attrs
 
 
-class PaymentSerializer(serializers.ModelSerializer):
+class PaymentSerializer(StudentNameMixin, serializers.ModelSerializer):
+    student_name = serializers.SerializerMethodField()
+    invoice_no = serializers.CharField(source="fee_invoice.invoice_no", read_only=True)
     receipt_no = serializers.CharField(source="receipt.receipt_no", read_only=True)
+    # The receipt's id, so a counter downloads it without a second lookup.
+    receipt = serializers.UUIDField(source="receipt.id", read_only=True, allow_null=True)
 
     class Meta:
         model = Payment
         fields = [
             "id",
             "fee_invoice",
+            "invoice_no",
             "student",
+            "student_name",
             "amount",
             "method",
             "reference_no",
@@ -581,6 +615,7 @@ class PaymentSerializer(serializers.ModelSerializer):
             "status",
             "paid_at",
             "received_by",
+            "receipt",
             "receipt_no",
             "created_at",
         ]
@@ -593,6 +628,7 @@ class PaymentSerializer(serializers.ModelSerializer):
             "status",
             "paid_at",
             "received_by",
+            "receipt",
             "receipt_no",
             "created_at",
         ]
@@ -754,7 +790,9 @@ class ReceiptSerializer(serializers.ModelSerializer):
         return f"{student.first_name} {student.last_name}".strip()
 
 
-class RefundSerializer(serializers.ModelSerializer):
+class RefundSerializer(StudentNameMixin, serializers.ModelSerializer):
+    student_name = serializers.SerializerMethodField()
+    invoice_no = serializers.CharField(source="payment.fee_invoice.invoice_no", read_only=True)
     # Read-only and declared explicitly: `method` is set by `:process`, so a
     # requested refund has none and a client never supplies one. (The schema
     # shape of nullable enums is handled globally by
@@ -767,7 +805,9 @@ class RefundSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "payment",
+            "invoice_no",
             "student",
+            "student_name",
             "amount",
             "reason",
             "status",
@@ -859,6 +899,25 @@ class IssueVoucherSerializer(serializers.Serializer):
     validity_days = serializers.IntegerField(required=False, min_value=1, max_value=365)
 
 
+@extend_schema_field(OpenApiTypes.BINARY)
+class _UploadedFileField(serializers.FileField):
+    """A multipart file, documented as `format: binary` (not the `uri` a response FileField is).
+
+    Narrower than `COMPONENT_SPLIT_REQUEST`, which would split every component in the schema.
+    """
+
+
+class SettlementImportRequestSerializer(serializers.Serializer):
+    """`POST /voucher-collection-imports` — the multipart body, for the contract.
+
+    Documentation only: the view validates by hand so a missing file or unknown
+    provider keeps its 422 `DomainRuleViolation` shape.
+    """
+
+    file = _UploadedFileField()
+    provider = serializers.ChoiceField(choices=VoucherProvider.choices)
+
+
 class VoucherCollectionImportSerializer(serializers.ModelSerializer):
     class Meta:
         model = VoucherCollectionImport
@@ -898,7 +957,7 @@ class ExpenseCategorySerializer(serializers.ModelSerializer):
 
 
 class ExpenseSerializer(serializers.ModelSerializer):
-    gross_amount = serializers.SerializerMethodField()
+    gross_amount = serializers.DecimalField(max_digits=13, decimal_places=2, read_only=True)
     category_name = serializers.CharField(source="expense_category.name", read_only=True)
 
     class Meta:
@@ -918,25 +977,27 @@ class ExpenseSerializer(serializers.ModelSerializer):
             "payment_method",
             "status",
             "approved_by",
+            "created_by",
+            "submitted_by",
             "receipt_file",
             "created_at",
             "updated_at",
         ]
         # `status` and `approved_by` move through the colon-actions, which run
         # the segregation-of-duties check and the ledger posting a PATCH would
-        # bypass. `expense_no` is allocated at creation.
+        # bypass. `expense_no` is allocated at creation. `created_by` and `submitted_by` are shown
+        # so a client can hide Approve from both; the service still enforces it.
         read_only_fields = [
             "id",
             "expense_no",
             "status",
             "approved_by",
+            "created_by",
+            "submitted_by",
             "gross_amount",
             "created_at",
             "updated_at",
         ]
-
-    def get_gross_amount(self, obj: Expense) -> Decimal:
-        return obj.gross_amount
 
     def validate_amount(self, value: Decimal) -> Decimal:
         if value <= 0:
@@ -1022,29 +1083,40 @@ class BudgetSerializer(serializers.ModelSerializer):
 
 
 class FinanceReportQuerySerializer(serializers.Serializer):
-    """`GET/POST /reports/finance-summary` — §13's parameterised entry point."""
+    """`GET/POST /reports/finance-summary` — §13's parameterised entry point.
 
-    kind = serializers.CharField()
+    The campus, session and class filters are plain UUIDs rather than model
+    choice fields, so an id from another tenant is an empty report and not a
+    different status from an unknown one (AGENTS.md invariant 2).
+    """
+
+    kind = serializers.ChoiceField(choices=[(key, key) for key in reports.REPORT_KINDS])
     date_from = serializers.DateField()
     date_to = serializers.DateField()
     student = serializers.UUIDField(required=False, allow_null=True)
+    campus_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text="The student's campus (an expense's, for `expense-register`).",
+    )
+    academic_session_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text="The invoice's session (the grant's, or the student's enrollment, for grants).",
+    )
+    class_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text="The class the invoice was billed to (the student's enrollment, for grants).",
+    )
     group_by = serializers.ChoiceField(
         choices=["day", "method", "cashier"], required=False, default="day"
     )
     format = serializers.ChoiceField(choices=["csv", "xlsx", "pdf"], required=False, default="csv")
 
-    def validate_kind(self, value: str) -> str:
-        from apps.fees_finance import reports
-
-        if value not in reports.REPORT_KINDS:
-            raise serializers.ValidationError(
-                f"Unknown report. Expected one of: {', '.join(reports.REPORT_KINDS)}."
-            )
-        return value
-
     @staticmethod
     def check_period_order(attrs: dict) -> None:
-        """Shared with the summary request, which keeps this rule and drops `student`'s."""
+        """Shared with the summary request, which keeps this rule and drops the rest."""
         if attrs["date_to"] < attrs["date_from"]:
             raise serializers.ValidationError(
                 {"date_to": "The end of the period cannot precede its start."}
@@ -1056,19 +1128,41 @@ class FinanceReportQuerySerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"student": "A student ledger needs the student it is for."}
             )
+        allowed = reports.REPORT_FILTERS_BY_KIND[attrs["kind"]]
+        refused = {
+            name: "This report cannot be filtered this way."
+            for name in ("campus_id", "academic_session_id", "class_id")
+            if attrs.get(name) is not None and name not in allowed
+        }
+        if refused:
+            raise serializers.ValidationError(refused)
         return attrs
+
+    def report_filters(self) -> reports.ReportFilters:
+        """The validated campus/session/class filters, as the report engine takes them."""
+        data = self.validated_data
+        return reports.ReportFilters(
+            campus_id=data.get("campus_id"),
+            academic_session_id=data.get("academic_session_id"),
+            class_id=data.get("class_id"),
+        )
 
 
 class FinanceReportSummaryRequestSerializer(FinanceReportQuerySerializer):
     """`POST /reports/finance-summary:summarize`: which report, over which period.
 
-    The report's own parameters minus `student` and `format`: a student ledger is
-    never summarised (`services.report_summary_facts` answers 422 on `kind`), and a
-    summary is not an export.
+    The report's own parameters minus `student`, `format` and the campus, session
+    and class filters: a student ledger is never summarised
+    (`services.report_summary_facts` answers 422 on `kind`), a summary is not an
+    export, and the summary's facts cover the whole school's period, so a filter it
+    would silently ignore is not accepted.
     """
 
     student = None
     format = None
+    campus_id = None
+    academic_session_id = None
+    class_id = None
 
     def validate(self, attrs: dict) -> dict:
         self.check_period_order(attrs)

@@ -22,6 +22,7 @@ from apps.fees_finance.tests.factories import (
     UserFactory,
     authenticate,
     disable_feature,
+    jwt_only_client,
 )
 from apps.fees_finance.tests.online_base import ONLINE_FEATURE, OnlinePaymentsTestCase
 from apps.school_organization.tests.factories import grant_default_role
@@ -76,6 +77,13 @@ class InitiateTests(OnlinePaymentsTestCase):
         initiate.assert_not_called()
         with tenant_context(self.tenant.id):
             self.assertEqual(Payment.objects.count(), 1)
+
+    def test_initiate_works_under_a_bearer_token_alone(self) -> None:
+        """No session for `TenantMiddleware`: the action reads `request.tenant`, which the
+        viewset binds after JWT authentication (agent-lessons L63)."""
+        response = self.initiate(client=jwt_only_client(self.guardian_user))
+
+        self.assertEqual(response.status_code, 201, response.content)
 
     def test_the_same_idempotency_key_returns_the_same_checkout(self) -> None:
         first = self.initiate(key="same").json()["data"]

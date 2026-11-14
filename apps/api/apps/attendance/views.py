@@ -102,6 +102,7 @@ from core.api.exceptions import DomainRuleViolation
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
+from core.files.serializers import AttachmentDownloadSerializer
 from core.idempotency.services import replay_or_execute
 from core.rbac.models import RecordScope
 from core.rbac.permissions import (
@@ -731,6 +732,8 @@ class LeaveRequestViewSet(
         # §6 puts cancellation with the requester, not the approver: "cancellation
         # allowed until start date" is the guardian withdrawing their own ask.
         "cancel": "attendance.leave-request.create",
+        # A read: every viewer of the request may open its document (ADR-0021).
+        "download_attachment": "attendance.leave-request.view",
     }
     http_method_names = ["get", "post", "head", "options"]
 
@@ -810,6 +813,28 @@ class LeaveRequestViewSet(
         after = self.get_serializer(self._reread(cancelled)).data
         record_audit(request, "update", cancelled, before=before, after=after)
         return ActionResponse.ok(after, message="Leave request cancelled.")
+
+    @extend_schema(
+        summary="Get a signed download URL for a leave request's attachment",
+        request=None,
+        responses={
+            200: AttachmentDownloadSerializer,
+            404: OpenApiResponse(
+                description="Not a request the caller may read, or it has no ready attachment."
+            ),
+        },
+    )
+    def download_attachment(self, request: Request, pk) -> Response:
+        """`POST /leave-requests/{id}/attachment:download`.
+
+        The only way to fetch a leave attachment: the purpose is module-gated, so
+        `/files` never signs one. Found through `get_queryset`, so a guardian reaches only
+        their own child's request and staff only their scope's. Not audited, as no
+        download is.
+        """
+        leave_request = get_object_or_404(self.get_queryset(), pk=pk)
+        url = services.leave_attachment_download_url(leave_request)
+        return ActionResponse.ok({"download_url": url})
 
     def _decide(self, request: Request, pk, *, approve: bool) -> Response:
         """Both decisions are one service call — §7.2 draws no asymmetry.

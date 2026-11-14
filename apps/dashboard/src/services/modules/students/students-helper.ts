@@ -1,6 +1,13 @@
 import { copyMappedFields, formatLastUpdated, stableSignedUrl } from "@/lib/helpers";
-import { STUDENT_BODY_FIELDS, STUDENTS_QUERY_FIELDS } from "./students-constant";
+import {
+  PORTAL_INVITE_CONFLICT_CODES,
+  PORTAL_INVITE_STATUSES,
+  PORTAL_RESEND_STATUSES,
+  STUDENT_BODY_FIELDS,
+  STUDENTS_QUERY_FIELDS,
+} from "./students-constant";
 import type {
+  PortalStatus,
   StudentRecord,
   StudentRow,
   StudentsPageQuery,
@@ -55,4 +62,21 @@ export function toStudentsQueryParams(query: StudentsPageQuery): Record<string, 
   const params: Record<string, unknown> = { page: query.page, page_size: query.pageSize };
   copyMappedFields(query, STUDENTS_QUERY_FIELDS, Boolean, params);
   return params as Record<string, string | number>;
+}
+
+/** What a portal invite button does for a status: send a first invitation, resend the
+ * pending one, or nothing (the account is active). */
+export function portalInviteAction(status: PortalStatus): "invite" | "resend" | null {
+  if (PORTAL_RESEND_STATUSES.includes(status)) return "resend";
+  if (PORTAL_INVITE_STATUSES.includes(status)) return "invite";
+  return null;
+}
+
+export type PortalInviteConflictCode = (typeof PORTAL_INVITE_CONFLICT_CODES)[number];
+
+/** The invite 409 code `code` is, if it is one of them. */
+export function portalInviteConflict(code: string): PortalInviteConflictCode | null {
+  return (PORTAL_INVITE_CONFLICT_CODES as readonly string[]).includes(code)
+    ? (code as PortalInviteConflictCode)
+    : null;
 }
