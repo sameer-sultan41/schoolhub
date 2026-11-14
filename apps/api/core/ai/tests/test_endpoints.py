@@ -6,6 +6,7 @@ import uuid
 
 from rest_framework import status
 from rest_framework.test import APITestCase
+from rest_framework_simplejwt.tokens import AccessToken
 
 from apps.school_organization.tests.factories import TenantFactory, UserFactory, authenticate, grant
 from core.ai.models import AIRequestFeedback
@@ -119,3 +120,36 @@ class AIFeedbackTests(APITestCase):
         response = self.client.post(self.url(theirs.pk), {"value": 1}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class AIEndpointsUnderTokenAuthTests(APITestCase):
+    """Both endpoints bind their tenant from the bearer token alone, as production calls them.
+
+    `authenticate()` also calls `force_login`, whose session would resolve the tenant in
+    middleware and hide a missing binding (`tests/test_tenant_binding.py`).
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.tenant = TenantFactory()
+        self.user = UserFactory(tenant=self.tenant)
+        grant(self.user, "ai.usage.view", "ai.feedback.create")
+        # Token only: no `force_login`, so there is no session to resolve the tenant from.
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(self.user)}")
+
+    def test_usage_reads_the_callers_school(self) -> None:
+        spend(self.tenant, self.user.pk, 40, feature_key="fees.report-summary")
+
+        response = self.client.get("/api/v1/ai/usage")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        self.assertEqual(response.json()["data"]["month_tokens"], 40)
+
+    def test_feedback_is_recorded(self) -> None:
+        ai_request = spend(self.tenant, self.user.pk, 10)
+
+        response = self.client.post(
+            f"/api/v1/ai/requests/{ai_request.pk}:feedback", {"value": 1}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)

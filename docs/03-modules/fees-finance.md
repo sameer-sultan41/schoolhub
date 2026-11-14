@@ -3,7 +3,7 @@
 > **Agent Context** — Load this block first.
 > **Summary:** Complete money module for a tenant school: fee configuration (heads, structures, schedules), invoice generation, collection with receipts, discounts/scholarships/fines, refunds with approval, outstanding/aging and student ledger, double-entry general ledger, expenses/income, budgeting, financial reporting, and payroll (salary structures, allowances/deductions, tax-configurable processing, payslips). Used daily by `accountant`/`finance_staff`, monthly by `hr_staff` (payroll inputs), and by `guardian`/`student` for fee visibility and payment. Business value: predictable cash flow and auditable school finances in one place.
 > **Co-load with:** `../02-architecture/auth-and-rbac.md` · `../05-database/entities/finance.md` · `../02-architecture/api-architecture.md` · `student-management.md` · `hr-leave.md`
-> **Owns entities:** `fee_heads`, `fee_structures`, `fee_schedules`, `fee_invoices`, `fee_invoice_lines`, `discounts`, `scholarships`, `fines`, `payments`, `receipts`, `refunds`, `fee_vouchers`, `voucher_collection_imports`, `ledger_accounts`, `ledger_entries`, `expenses`, `expense_categories`, `budgets`, `salary_structures`, `salary_components`, `payroll_runs`, `payslips`
+> **Owns entities:** `fee_heads`, `fee_structures`, `fee_schedules`, `fee_invoices`, `fee_invoice_lines`, `discounts`, `scholarships`, `fines`, `payments`, `receipts`, `refunds`, `fee_vouchers`, `voucher_collection_imports`, `payment_gateway_accounts`, `gateway_reconciliation_issues`, `ledger_accounts`, `ledger_entries`, `expenses`, `expense_categories`, `budgets`, `salary_structures`, `salary_components`, `payroll_runs`, `payslips`
 > **Depends on modules:** student-management, academics, staff-management, hr-leave, admissions, parent-portal, communication, library, transport, platform-admin (plans/flags)
 
 ## 1. Purpose
@@ -34,7 +34,7 @@ All monetary amounts are stored as `numeric(12,2)` in the tenant's configured cu
 
 ## 4. Permissions
 
-Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/auth-and-rbac.md). Permission keys use `<module>.<resource>.<action>`. This module declares two namespaces — `fees.*` and `payroll.*` — and the module-specific verbs `collect`, `refund`, `waive` and `summarize`. Financial mutations require record-level scope ≠ `own` and are always audited with before/after amounts.
+Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/auth-and-rbac.md). Permission keys use `<module>.<resource>.<action>`. This module declares two namespaces — `fees.*` and `payroll.*` — and the module-specific verbs `collect`, `refund`, `waive`, `summarize`, `pay-online` and `manage`. Financial mutations require record-level scope ≠ `own` and are always audited with before/after amounts. The one exception is `fees.payment.pay-online`: a guardian or student pays their own child's invoice online, at scope `own`, because it moves money *in* and only for the caller's own child.
 
 | Permission key | Description | Default roles |
 | -------------- | ----------- | ------------- |
@@ -45,6 +45,8 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 | `fees.payment.collect` | Record payments and issue receipts | `accountant`, `finance_staff` |
 | `fees.payment.refund` | Request a refund | `accountant`, `finance_staff` |
 | `fees.refund.approve` | Approve/reject refund requests | `accountant`, `school_owner` |
+| `fees.payment.pay-online` | Pay one's own invoice online through the school's payment gateway | `guardian`, `student` (scoped `own`) |
+| `fees.gateway.manage` | Configure the school's payment gateway account; resolve gateway reconciliation issues | `school_owner`, `accountant` |
 | `fees.discount.create` / `fees.scholarship.create` | Grant discounts/scholarships | `accountant`, `school_admin` |
 | `fees.discount.waive` / `fees.fine.waive` | Waive fines or invoice lines | `accountant`, `school_owner` |
 | `fees.fee-structure.view` † | View fee heads, structures and schedules | `school_admin`, `accountant`, `finance_staff`, `principal`, `school_owner` |
@@ -121,7 +123,7 @@ flowchart TD
     E --> G[Invoices issued - guardians notified]
     F --> G
     G --> H{Payment before due date?}
-    H -- gateway --> I[Guardian pays online - webhook confirms]
+    H -- gateway --> I[Guardian pays online - signed callback, re-fetched from the provider, confirms]
     H -- counter --> J[finance_staff records payment]
     H -- no --> K[Reminder sequence - late fee fine per policy]
     I --> L[Receipt issued + ledger entries posted]
@@ -133,6 +135,14 @@ flowchart TD
 ```
 
 Steps: (1) generation runs as a background job (`202 Accepted` + job resource); (2) each invoice is atomic — lines, discount application, totals; (3) every confirmed payment posts balanced debit/credit `ledger_entries`; (4) overdue invoices feed the reminder schedule and aging report.
+
+**Online payment** ([ADR-0034](../decisions/0034-online-fee-payments.md)). The school is the merchant of record, through its own account with the aggregator, saved by an owner or accountant at `PUT /payment-gateway-accounts/current` (credentials write-only and encrypted). With `fees.online-payments` on:
+
+1. A guardian or student (`fees.payment.pay-online`, own children only) calls `:initiate-payment` with an `Idempotency-Key`. Under the invoice lock a `pending` `online_gateway` payment is created for the **available balance** (balance due less any checkout still pending) and committed; then the provider is called, and the guardian is redirected to its checkout. If the provider is down the payment is failed, its key is released (the same key starts a new attempt) and the call answers `503`. While another request is still starting the invoice's checkout, a second call answers `409 checkout_in_progress` without calling the provider. The callback URL the provider is given comes from the `API_PUBLIC_URL` setting, never the request's Host header.
+2. The provider posts a signed callback to the school's own callback URL. The signature and its timestamp are checked with the school's secret, the transaction is **re-fetched from the provider**, and what the provider says is applied: `paid` at the expected amount confirms the payment (receipt, ledger, notification, as at the counter); any other amount confirms nothing and opens an `amount_mismatch` issue; `failed` fails a payment only while it is pending; `paid` on a canceled invoice confirms nothing and opens `paid_on_canceled_invoice`. Replays and out-of-order events change nothing. A callback the provider cannot confirm yet answers `503 transaction_not_found`, so the provider retries it. While a checkout is pending, `:cancel` is refused with `409 pending_online_payment` naming the payment.
+3. A checkout left pending past `PAYMENT_PENDING_TTL_MINUTES` is failed by a 15-minute sweep, so it stops holding the balance. Money that arrives later still posts (`paid_after_failed`, and `overpaid` if the invoice was settled meanwhile).
+4. **Nightly reconciliation** (05:40 UTC) compares each account's transactions for the previous day with ours. A missed callback confirms here; our confirmed payment the provider has no record of is `missing_at_gateway`; two provider transactions for one order are `duplicate_at_gateway`. Each account is checked only when it owns payments in the window (`payments.gateway_account`), and one account failing does not stop the others. An issue is raised once, open or resolved: re-running a day, or a replayed callback, never reopens a dismissed one.
+5. Staff with `fees.gateway.manage` work the issues list and `:resolve` each issue once: `book_at_gateway_amount` posts the money the provider verified (with receipt and ledger), or `dismiss` with a note saying what was done instead.
 
 ### 7.2 Voucher collection & reconciliation *(recommendation)*
 
@@ -149,6 +159,8 @@ flowchart TD
 ```
 
 Vouchers are never edited once issued: a correction voids the voucher and issues a new one (mirrors BR-03's append-only money rule). A settlement-file row can never post twice — the match key is `(provider, consumer_number, transaction_reference)`.
+
+A matched row is money already received, so it always posts, even while an online checkout is pending on the same invoice or when it takes the invoice past what is due. That case raises an `overpaid` gateway issue for staff rather than landing in the exceptions queue ([ADR-0034](../decisions/0034-online-fee-payments.md)). A row for a canceled invoice still goes to the exceptions queue.
 
 ### 7.3 Refund approval
 
@@ -201,7 +213,7 @@ flowchart TD
 ## 11. Validations
 
 - No duplicate invoice for the same student + fee schedule + period; invoice totals must equal the sum of lines minus discounts plus fines.
-- Payment amount ≤ invoice balance (unless advance-payment feature enabled); refund amount ≤ refundable paid amount of the referenced payment.
+- A payment *taken* (at the counter, or a new online checkout) ≤ the invoice's **available balance**, i.e. the balance due less any online checkout still pending (unless advance-payment feature enabled); money already received (a gateway confirmation, a settled voucher, a booked gateway issue) posts and raises an `overpaid` issue when it overpays ([ADR-0034](../decisions/0034-online-fee-payments.md)). Refund amount ≤ refundable paid amount of the referenced payment.
 - A settlement-file row can post at most once, keyed on `(provider, consumer_number, transaction_reference)`; a voucher past its due date is void and must be re-issued, never edited (mirrors BR-03's append-only money rule).
 - Discounts/scholarships cannot reduce a line below zero; percent values 0–100.
 - Ledger postings must balance (Σ debit = Σ credit per transaction); posting to archived accounts rejected; entries are append-only.
@@ -268,6 +280,8 @@ All tables tenant-scoped with the implicit audit/soft-delete columns; full colum
 | `refunds` | Refund requests and approval state |
 | `fee_vouchers` | Printable bank/wallet collection vouchers per invoice: consumer/reference number, provider, due date, status (`issued`/`paid`/`void`/`expired`) |
 | `voucher_collection_imports` | Imported provider settlement files: provider, imported by, row/match counts, exceptions |
+| `payment_gateway_accounts` | The school's own payment-gateway merchant account: provider, encrypted credentials, masked merchant id, callback token |
+| `gateway_reconciliation_issues` | Online-payment discrepancies for staff to book or dismiss |
 | `ledger_accounts` | Tenant chart of accounts |
 | `ledger_entries` | Immutable double-entry journal lines |
 | `expenses` | Expense records with approval state |
@@ -293,11 +307,11 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md):
 - `GET/POST /api/v1/expenses` · `POST /api/v1/expenses/{id}:approve` · `GET/POST /api/v1/expense-categories` · `GET/POST /api/v1/budgets` · `POST /api/v1/budgets/{id}:approve`
 - `GET/POST /api/v1/salary-structures` · `GET/POST /api/v1/salary-components`
 - `POST /api/v1/payroll-runs` · `POST /api/v1/payroll-runs/{id}:process` (202 + job) · `POST /api/v1/payroll-runs/{id}:approve` · `GET /api/v1/payslips?run=&staff=` · `POST /api/v1/payroll-runs/{id}:publish-payslips`
-- Gateway webhooks land on the integrations layer and are verified (HMAC) before confirming payments — see api-architecture §2.6.
+- Online payments ([ADR-0034](../decisions/0034-online-fee-payments.md)): `GET/PUT /api/v1/payment-gateway-accounts/current` (`fees.gateway.manage`; credentials write-only, the response carries `merchant_id_masked` and `callback_url`) · ⚿ `POST /api/v1/fee-invoices/{id}:initiate-payment {return_path}` (`fees.payment.pay-online`, flag `fees.online-payments`; returns `{payment_id, redirect_url}`) · `POST /api/v1/public/payment-callbacks/{tenant_slug}/{callback_token}` (unauthenticated, signature-verified, then re-fetched from the provider — see api-architecture §2.6) · `GET /api/v1/gateway-reconciliation-issues` · `GET /api/v1/gateway-reconciliation-issues/{id}` · `POST /api/v1/gateway-reconciliation-issues/{id}:resolve {action, note}` (`fees.gateway.manage`)
 
 ## 17. Integration Requirements
 
-- **Payment gateways** — via the platform integrations layer (provider-agnostic adapter; tenant selects/configures provider). Checkout initiation from the parent portal; asynchronous confirmation via signed webhooks; reconciliation report for gateway settlements. No gateway credentials in tenant-visible config beyond masked identifiers.
+- **Payment gateways** — via `core/integrations/payments` (provider-agnostic `PaymentAdapter`: initiate, verify a callback, fetch one transaction, list a day's). The school is the merchant of record and saves its own account; credentials are encrypted (`core/integrations/crypto.py`) and write-only, and only a server-derived masked merchant id is shown. Checkout initiation from the parent portal; confirmation by a signed callback re-fetched from the provider; a nightly reconciliation against the provider's list. Pakistan first, with one aggregator (PayFast or Safepay); until it ships only the fake provider is enabled, in dev and test. See [ADR-0034](../decisions/0034-online-fee-payments.md).
 - **Bank/wallet voucher collection** *(recommendation)* — a batch file-import adapter, not a live callback: each provider (bank branch network, Easypaisa, JazzCash) delivers a daily settlement file in its own format; a per-provider adapter normalizes rows before matching (§7.2). Distinct from the gateway-adapter's initiate/callback pattern in `08-future/extensibility.md` §3, though it follows the same adapter-interface principle — a new provider is a new adapter, never a fees-module change.
 - **Notifications** — reminders, receipts, payslip delivery via [`notifications.md`](../02-architecture/notifications.md) (email/SMS/push/in-app; delivery per webhook conventions in api-architecture).
 - **Object storage** — receipt/payslip/expense-attachment PDFs via presigned uploads and signed download URLs.
@@ -344,6 +358,11 @@ match key and exceptions queue.
 posts on approval, budgets whose variance comes from the ledger, and §13's
 reports with the 202 export lane. **The module is complete apart from payroll,
 which is deferred with hr-leave.**
+**Online payments, PR 1 ([ADR-0034](../decisions/0034-online-fee-payments.md)).** The school's gateway account,
+:initiate-payment, the signed and re-fetched callback, the available-balance
+rule, booked reconciliation issues and the nightly reconciliation, end to end
+against the fake provider. **PR 2** adds the real aggregator's adapter, the
+portal Pay button and the staff gateway and issues screens.
 
 ### Built (PRs A-D)
 
@@ -370,6 +389,9 @@ which is deferred with hr-leave.**
 | Budgets | Per account or category (exactly one, by CHECK), approved by the owner alone, with variance computed from posted ledger entries |
 | Reports | §13's eight kinds behind one `kind`-parameterised endpoint — collection, outstanding/aging, student ledger, grant register, income vs expense, budget variance, expense register, trial balance — serving inline under 1000 rows and 202 + job past it |
 | Permissions | **§4's table is now fully registered**, plus the six gap keys added across the four PRs |
+| Entities (online payments) | `payment_gateway_accounts`, `gateway_reconciliation_issues`, and `payments.provider_txn_id` with unique order-id and provider-id indexes and one pending online payment per invoice |
+| Online payments | `:initiate-payment`, the public callback (signature, timestamp tolerance, re-fetch, two throttles), the 15-minute pending sweep, `:resolve` with booked resolutions, and the nightly `reconcile-gateway-payments` (05:40 UTC), all behind `fees.online-payments`; credentials encrypted with rotation (`manage.py rotate_integration_credentials`) |
+| Keys (online payments) | `fees.payment.pay-online` (guardian, student, own) and `fees.gateway.manage` (school_owner, accountant) |
 
 ### Decisions worth carrying forward
 
@@ -561,17 +583,16 @@ accrual do not exist yet. §19 also calls per-country statutory templates a
 recommendation with no confirmed shape. Building a tax engine against an
 unconfirmed spec is how a money module acquires rules nobody can justify later.
 
-**Payment gateways are out of scope.** §17 routes them through "the platform
-integrations layer", and there is no `core/integrations` — the same situation
-`core/ai` is in, and AGENTS.md hard rule 6's reasoning applies. The schema is
-ready for one: `payments.method = online_gateway`, `gateway_provider` and
-`gateway_payload` all ship, and `services.confirm_payment` is deliberately split
-from `record_payment` precisely so a webhook has something to call — a gateway
-payment is created `pending` and confirmed later, which is the same work
-arriving through a different door. `RecordPaymentSerializer` refuses
-`online_gateway` outright rather than accepting a payment nothing can confirm.
-What is missing is only the HMAC verifier and the provider adapter, and both
-belong in `core/integrations` when it exists.
+**Online payments ship without a real provider yet.** `core/integrations`
+now exists, with the adapter interface, encrypted credentials and a fake
+provider, and PR 1 runs the whole flow against the fake ([ADR-0034](../decisions/0034-online-fee-payments.md)).
+`RecordPaymentSerializer` still refuses `online_gateway`: an online payment is
+only ever created by `:initiate-payment` and confirmed by the gateway. Still
+deferred ([`deferred-work.md`](../deferred-work.md)): the real aggregator's
+adapter, the portal Pay button and the staff screens (PR 2), partial online
+payments, provider refunds (refunds stay on §7.3's manual flow), an API
+public-URL setting for the callback URL (built from the request host today),
+and splitting the online-payment services out of `services.py`.
 
 **§14's four AI capabilities (AI-FEE-01 to 04) are out of scope.** `core/ai`
 does not exist. All four are advisory by §14's own framing, and invariant 5
@@ -588,8 +609,8 @@ without a migration.
 **§19's open recommendations are all left open**, each because it is
 unconfirmed rather than difficult: advance payments/wallet per student (default
 stays payment ≤ balance, and `record_payment` refuses an overpayment outright),
-accounting-period locking and the fiscal-year close procedure, gateway
-settlement reconciliation granularity, the per-provider voucher settlement-file
+accounting-period locking and the fiscal-year close procedure (gateway
+reconciliation is now daily, per [ADR-0034](../decisions/0034-online-fee-payments.md)), the per-provider voucher settlement-file
 layouts, and multi-currency per tenant.
 
 **No scheduled report delivery.** §13's closing line offers it; there is no

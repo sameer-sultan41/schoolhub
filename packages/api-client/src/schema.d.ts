@@ -1894,6 +1894,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/fee-invoices/{id}:initiate-payment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ⚿ `POST /fee-invoices/{id}:initiate-payment` — pay the available balance online.
+         *
+         *     Not wrapped in ATOMIC_REQUESTS (urls.py): the service commits the pending
+         *     payment, calls the provider with no lock or transaction held, then
+         *     stores the redirect, so each database step here opens its own
+         *     `tenant_atomic`. `Idempotency-Key` is required and recorded on the
+         *     payment: a retry with the same key returns the same checkout.
+         */
+        post: operations["fee_invoices_:initiate_payment_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/fee-invoices:generate": {
         parameters: {
             query?: never;
@@ -2188,6 +2213,67 @@ export interface paths {
         put?: never;
         /** @description `POST /fines/{id}:waive` — §4's `fees.fine.waive`. */
         post: operations["fines_:waive_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gateway-reconciliation-issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/gateway-reconciliation-issues` — online-payment discrepancies to decide on.
+         *
+         *     `:resolve` books the money at the amount the provider verified (with its
+         *     receipt and ledger posting) or dismisses the issue with a note.
+         */
+        get: operations["gateway_reconciliation_issues_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gateway-reconciliation-issues/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `/gateway-reconciliation-issues` — online-payment discrepancies to decide on.
+         *
+         *     `:resolve` books the money at the amount the provider verified (with its
+         *     receipt and ledger posting) or dismisses the issue with a note.
+         */
+        get: operations["gateway_reconciliation_issues_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gateway-reconciliation-issues/{id}:resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description ⚿ `POST /gateway-reconciliation-issues/{id}:resolve {action, note}`. */
+        post: operations["gateway_reconciliation_issues_:resolve_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3688,6 +3774,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/payment-gateway-accounts/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET` — the active account (or the last one), `data: null` when none is set. */
+        get: operations["payment_gateway_accounts_current_retrieve"];
+        /** @description `PUT` — set the provider, credentials and whether online payment is on. */
+        put: operations["payment_gateway_accounts_current_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/payments": {
         parameters: {
             query?: never;
@@ -3802,6 +3906,48 @@ export interface paths {
         head?: never;
         /** @description `periods` — the bell schedule (§5.1). */
         patch: operations["periods_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/public/payment-callbacks/{tenant_slug}/{callback_token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /public/payment-callbacks/{tenant_slug}/{callback_token}` — the provider calls this.
+         *
+         *     Unauthenticated; trust comes from the signature, then from re-fetching the
+         *     transaction from the provider. The slug finds the school (`tenants` has no
+         *     RLS), the token finds its account (active or not, so a late callback for an
+         *     old account still applies), and that account's secret verifies the body.
+         *     Nothing in the body chooses the tenant.
+         *
+         *     Not wrapped in ATOMIC_REQUESTS (urls.py): verifying and re-fetching are
+         *     provider calls and hold no transaction; the event is applied in
+         *     `tenant_atomic`. A suspended school's callback is still recorded: the money
+         *     has moved either way.
+         *
+         *     | Case | Response |
+         *     | --- | --- |
+         *     | Unknown slug or token | 404 |
+         *     | Bad signature or stale timestamp | 400 `invalid_signature`, and a security event |
+         *     | Valid, including replays and out-of-order events | 200 `{"received": true}` |
+         *     | Valid, but the provider has no such transaction yet | 503 `transaction_not_found` |
+         *     | Provider unreachable for the re-fetch | 503 `gateway_unavailable` |
+         *
+         *     Failed attempts (bad signature, unknown slug or token) count against a
+         *     per-IP budget, so guessing tokens or signatures is slowed without slowing a
+         *     genuine provider.
+         */
+        post: operations["public_payment_callbacks_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/question-banks": {
@@ -8166,6 +8312,54 @@ export interface components {
          */
         FormatEnum: "csv" | "xlsx" | "pdf";
         /**
+         * @description * `book_at_gateway_amount` - book_at_gateway_amount
+         *     * `dismiss` - dismiss
+         * @enum {string}
+         */
+        GatewayIssueActionEnum: "book_at_gateway_amount" | "dismiss";
+        /**
+         * @description * `amount_mismatch` - Amount mismatch
+         *     * `overpaid` - Overpaid
+         *     * `unknown_reference` - Unknown reference
+         *     * `missing_at_gateway` - Missing at gateway
+         *     * `paid_after_failed` - Paid after failed
+         *     * `duplicate_at_gateway` - Duplicate at gateway
+         *     * `paid_on_canceled_invoice` - Paid on canceled invoice
+         * @enum {string}
+         */
+        GatewayIssueKindEnum: "amount_mismatch" | "overpaid" | "unknown_reference" | "missing_at_gateway" | "paid_after_failed" | "duplicate_at_gateway" | "paid_on_canceled_invoice";
+        /**
+         * @description * `booked` - Booked
+         *     * `dismissed` - Dismissed
+         * @enum {string}
+         */
+        GatewayIssueResolutionEnum: "booked" | "dismissed";
+        GatewayReconciliationIssue: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly kind: components["schemas"]["GatewayIssueKindEnum"];
+            /**
+             * Format: uuid
+             * @description Null for an unknown reference until it is booked.
+             */
+            readonly payment: string | null;
+            readonly gateway_provider: string | null;
+            readonly order_id: string | null;
+            readonly provider_txn_id: string | null;
+            /** Format: decimal */
+            readonly expected_amount: string | null;
+            /** Format: decimal */
+            readonly gateway_amount: string | null;
+            /** Format: date-time */
+            readonly detected_at: string;
+            readonly resolution: components["schemas"]["GatewayIssueResolutionEnum"] | null;
+            /** Format: date-time */
+            readonly resolved_at: string | null;
+            /** Format: uuid */
+            readonly resolved_by: string | null;
+            readonly note: string | null;
+        };
+        /**
          * @description * `male` - Male
          *     * `female` - Female
          *     * `other` - Other
@@ -8381,6 +8575,16 @@ export interface components {
         };
         IdCardGenerateRequest: {
             student_ids: string[];
+        };
+        /** @description `POST /fee-invoices/{id}:initiate-payment`. The amount is the available balance. */
+        InitiatePayment: {
+            return_path: string;
+        };
+        InitiatePaymentResult: {
+            /** Format: uuid */
+            payment_id: string;
+            /** Format: uri */
+            redirect_url: string;
         };
         /**
          * @description No email is sent (§17 gap — no notification infrastructure exists yet,
@@ -9296,6 +9500,16 @@ export interface components {
         };
         PaginatedFineList: {
             data?: components["schemas"]["Fine"][];
+            meta?: {
+                pagination?: {
+                    next_cursor?: string | null;
+                    previous_cursor?: string | null;
+                    page_size?: number;
+                };
+            };
+        };
+        PaginatedGatewayReconciliationIssueList: {
+            data?: components["schemas"]["GatewayReconciliationIssue"][];
             meta?: {
                 pagination?: {
                     next_cursor?: string | null;
@@ -11065,6 +11279,22 @@ export interface components {
             readonly created_at: string;
         };
         /**
+         * @description The school's gateway account as staff see it: never the credentials.
+         *
+         *     `callback_url` is what the school pastes into its provider dashboard; it is
+         *     built by the view from the account's callback token.
+         */
+        PaymentGatewayAccount: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly provider: string;
+            readonly is_active: boolean;
+            readonly merchant_id_masked: string;
+            readonly callback_url: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
          * @description * `cash` - Cash
          *     * `cheque` - Cheque
          *     * `bank_transfer` - Bank transfer
@@ -11588,6 +11818,10 @@ export interface components {
             amount: string;
             reason: string;
         };
+        ResolveGatewayIssue: {
+            action: components["schemas"]["GatewayIssueActionEnum"];
+            note?: string | null;
+        };
         /**
          * @description `results` — read-only on the wire (§16 declares a `GET` and no writes).
          *
@@ -11755,6 +11989,20 @@ export interface components {
          * @enum {string}
          */
         RoomTypeEnum: "classroom" | "lab" | "library" | "auditorium" | "sports" | "office" | "other";
+        /**
+         * @description `PUT /payment-gateway-accounts/current`. Credentials are write-only.
+         *
+         *     Omit `credentials` to change only `is_active` on the same provider; a new
+         *     provider needs them.
+         */
+        SavePaymentGatewayAccount: {
+            provider: string;
+            credentials?: {
+                [key: string]: string;
+            };
+            /** @default true */
+            is_active: boolean;
+        };
         Scholarship: {
             /** Format: uuid */
             readonly id: string;
@@ -16260,6 +16508,33 @@ export interface operations {
             };
         };
     };
+    "fee_invoices_:initiate_payment_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InitiatePayment"];
+                "application/x-www-form-urlencoded": components["schemas"]["InitiatePayment"];
+                "multipart/form-data": components["schemas"]["InitiatePayment"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InitiatePaymentResult"];
+                };
+            };
+        };
+    };
     "fee_invoices:generate_create": {
         parameters: {
             query?: never;
@@ -16856,6 +17131,99 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Fine"];
+                };
+            };
+        };
+    };
+    gateway_reconciliation_issues_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /**
+                 * @description * `amount_mismatch` - Amount mismatch
+                 *     * `overpaid` - Overpaid
+                 *     * `unknown_reference` - Unknown reference
+                 *     * `missing_at_gateway` - Missing at gateway
+                 *     * `paid_after_failed` - Paid after failed
+                 *     * `duplicate_at_gateway` - Duplicate at gateway
+                 *     * `paid_on_canceled_invoice` - Paid on canceled invoice
+                 */
+                kind?: "amount_mismatch" | "duplicate_at_gateway" | "missing_at_gateway" | "overpaid" | "paid_after_failed" | "paid_on_canceled_invoice" | "unknown_reference";
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /**
+                 * @description * `booked` - Booked
+                 *     * `dismissed` - Dismissed
+                 */
+                resolution?: "booked" | "dismissed" | null;
+                resolution__isnull?: boolean;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedGatewayReconciliationIssueList"];
+                };
+            };
+        };
+    };
+    gateway_reconciliation_issues_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this gateway reconciliation issue. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GatewayReconciliationIssue"];
+                };
+            };
+        };
+    };
+    "gateway_reconciliation_issues_:resolve_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveGatewayIssue"];
+                "application/x-www-form-urlencoded": components["schemas"]["ResolveGatewayIssue"];
+                "multipart/form-data": components["schemas"]["ResolveGatewayIssue"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GatewayReconciliationIssue"];
                 };
             };
         };
@@ -18984,6 +19352,50 @@ export interface operations {
             };
         };
     };
+    payment_gateway_accounts_current_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentGatewayAccount"];
+                };
+            };
+        };
+    };
+    payment_gateway_accounts_current_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavePaymentGatewayAccount"];
+                "application/x-www-form-urlencoded": components["schemas"]["SavePaymentGatewayAccount"];
+                "multipart/form-data": components["schemas"]["SavePaymentGatewayAccount"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentGatewayAccount"];
+                };
+            };
+        };
+    };
     payments_list: {
         parameters: {
             query?: {
@@ -19190,6 +19602,27 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Period"];
                 };
+            };
+        };
+    };
+    public_payment_callbacks_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                callback_token: string;
+                tenant_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

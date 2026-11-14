@@ -691,6 +691,9 @@ class Command(BaseCommand):
 
             # Communication: the thread-routing chain (see E2E_COMMS_GUARDIAN_EMAIL).
             self._ensure_communication_enabled(tenant)
+
+            # Fees, with online payments on: `online-payments.spec.ts`.
+            self._ensure_fees_enabled(tenant)
             comms_class_teacher = self._ensure_teaching_staff(
                 tenant,
                 campus,
@@ -922,6 +925,18 @@ class Command(BaseCommand):
         403-before-404 reason `_ensure_timetable_enabled` is.
         """
         self._ensure_feature_enabled(tenant, "module.communication")
+
+    def _ensure_fees_enabled(self, tenant: Tenant) -> None:
+        """`module.fees_finance` and `fees.online-payments` both default off.
+
+        The system ledger accounts come from `seed_finance_accounts` by name rather than
+        an import: core imports no app (ADR-0013). Fee income (4000) is what a spec's
+        fee head posts to. The gateway account is not seeded: the spec saves it through
+        `PUT /payment-gateway-accounts/current`, which is what it proves.
+        """
+        for key in ("module.fees_finance", "fees.online-payments"):
+            self._ensure_feature_enabled(tenant, key)
+        call_command("seed_finance_accounts", tenant_slug=tenant.slug, stdout=self.stdout)
 
     def _ensure_comms_student(
         self,

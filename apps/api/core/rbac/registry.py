@@ -54,6 +54,9 @@ EXTRA_ACTIONS = frozenset(
         "oversee",
         # Ask the AI gateway for a summary (fees.report.summarize, AI-FEE-02).
         "summarize",
+        # fees-finance §4: a family pays an invoice online; staff manage the school's gateway.
+        "pay-online",
+        "manage",
     }
 )
 

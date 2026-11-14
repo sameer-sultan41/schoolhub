@@ -7,9 +7,8 @@ nothing. Under `TestCase` it finds the test's own wrapping transaction and marks
 This patch skips the blocks `TestCase` opened, the way Django itself does for
 `atomic(durable=True)` (`Atomic._from_testcase`).
 
-`feat/fee-online-payments` carries the same patch in `OnlinePaymentsTestCase`
-(lesson L62); whichever branch merges second consolidates on this one
-(`docs/deferred-work.md`).
+`OnlinePaymentsTestCase` (`apps/fees_finance/tests/online_base.py`) and the AI
+report-summary tests both use it (lesson L62).
 """
 
 from __future__ import annotations

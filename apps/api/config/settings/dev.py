@@ -6,6 +6,17 @@ from config.settings.base import *
 from config.settings.base import PLATFORM_DOMAIN, THROTTLE_RATES, env
 
 DEBUG = True
+
+# A fixed, public, dev-only Fernet key so the api and celery-worker (separate processes)
+# agree without configuration, used when the variable is unset or empty. It protects nothing;
+# never use it outside local development.
+INTEGRATIONS_ENCRYPTION_KEYS = env.list("INTEGRATIONS_ENCRYPTION_KEYS", default=[]) or [
+    "ZGV2LW9ubHktaW50ZWdyYXRpb25zLWtleS0wMDAwMDA="
+]
+PAYMENT_PROVIDERS_ENABLED = ["fake"]
+# The live E2E lane signs a callback for a checkout it started; the fake provider has
+# to "know" that payment for the callback's re-fetch to confirm it.
+PAYMENT_FAKE_SETTLES_ON_INITIATE = True
 ALLOWED_HOSTS = ["*"]
 
 INSTALLED_APPS += ["drf_spectacular_sidecar"]
@@ -16,6 +27,12 @@ SPECTACULAR_SETTINGS |= {
     "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
     "REDOC_DIST": "SIDECAR",
 }
+
+# The dashboard's dev server (`next dev --port 3000`), for links the API hands out.
+DASHBOARD_URL_SCHEME = "http"
+DASHBOARD_URL_PORT = "3000"
+# The compose API (`api.localhost:8000`, as NEXT_PUBLIC_API_BASE_URL in infra/compose).
+API_PUBLIC_URL = env("API_PUBLIC_URL", default="http://api.localhost:8000")
 
 # Console email in development so nothing is sent to real guardians by accident.
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
@@ -43,6 +60,8 @@ CORS_ALLOW_CREDENTIALS = True
 REST_FRAMEWORK = {
     **REST_FRAMEWORK,
     "DEFAULT_THROTTLE_RATES": {
+        # Every scope keeps its base rate unless an override below lifts it.
+        **THROTTLE_RATES,
         "tenant": env.str("THROTTLE_RATE_TENANT", default=THROTTLE_RATES["tenant"]),
         "user": env.str("THROTTLE_RATE_USER", default=THROTTLE_RATES["user"]),
         "anon": env.str("THROTTLE_RATE_ANON", default=THROTTLE_RATES["anon"]),

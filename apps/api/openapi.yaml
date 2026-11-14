@@ -4493,6 +4493,47 @@ paths:
               schema:
                 $ref: '#/components/schemas/FeeInvoice'
           description: ''
+  /api/v1/fee-invoices/{id}:initiate-payment:
+    post:
+      operationId: fee_invoices_:initiate_payment_create
+      description: |-
+        ⚿ `POST /fee-invoices/{id}:initiate-payment` — pay the available balance online.
+
+        Not wrapped in ATOMIC_REQUESTS (urls.py): the service commits the pending
+        payment, calls the provider with no lock or transaction held, then
+        stores the redirect, so each database step here opens its own
+        `tenant_atomic`. `Idempotency-Key` is required and recorded on the
+        payment: a retry with the same key returns the same checkout.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - fee-invoices
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InitiatePayment'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/InitiatePayment'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/InitiatePayment'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InitiatePaymentResult'
+          description: ''
   /api/v1/fee-invoices:generate:
     post:
       operationId: fee_invoices:generate_create
@@ -5246,6 +5287,146 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Fine'
+          description: ''
+  /api/v1/gateway-reconciliation-issues:
+    get:
+      operationId: gateway_reconciliation_issues_list
+      description: |-
+        `/gateway-reconciliation-issues` — online-payment discrepancies to decide on.
+
+        `:resolve` books the money at the amount the provider verified (with its
+        receipt and ledger posting) or dismisses the issue with a note.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: kind
+        schema:
+          type: string
+          enum:
+          - amount_mismatch
+          - duplicate_at_gateway
+          - missing_at_gateway
+          - overpaid
+          - paid_after_failed
+          - paid_on_canceled_invoice
+          - unknown_reference
+        description: |-
+          * `amount_mismatch` - Amount mismatch
+          * `overpaid` - Overpaid
+          * `unknown_reference` - Unknown reference
+          * `missing_at_gateway` - Missing at gateway
+          * `paid_after_failed` - Paid after failed
+          * `duplicate_at_gateway` - Duplicate at gateway
+          * `paid_on_canceled_invoice` - Paid on canceled invoice
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: resolution
+        schema:
+          type: string
+          nullable: true
+          enum:
+          - booked
+          - dismissed
+        description: |-
+          * `booked` - Booked
+          * `dismissed` - Dismissed
+      - in: query
+        name: resolution__isnull
+        schema:
+          type: boolean
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - gateway-reconciliation-issues
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedGatewayReconciliationIssueList'
+          description: ''
+  /api/v1/gateway-reconciliation-issues/{id}:
+    get:
+      operationId: gateway_reconciliation_issues_retrieve
+      description: |-
+        `/gateway-reconciliation-issues` — online-payment discrepancies to decide on.
+
+        `:resolve` books the money at the amount the provider verified (with its
+        receipt and ledger posting) or dismisses the issue with a note.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this gateway reconciliation issue.
+        required: true
+      tags:
+      - gateway-reconciliation-issues
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GatewayReconciliationIssue'
+          description: ''
+  /api/v1/gateway-reconciliation-issues/{id}:resolve:
+    post:
+      operationId: gateway_reconciliation_issues_:resolve_create
+      description: ⚿ `POST /gateway-reconciliation-issues/{id}:resolve {action, note}`.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - gateway-reconciliation-issues
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveGatewayIssue'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ResolveGatewayIssue'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ResolveGatewayIssue'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GatewayReconciliationIssue'
           description: ''
   /api/v1/grading-scales:
     get:
@@ -8312,6 +8493,49 @@ paths:
               schema:
                 $ref: '#/components/schemas/PortalDashboard'
           description: ''
+  /api/v1/payment-gateway-accounts/current:
+    get:
+      operationId: payment_gateway_accounts_current_retrieve
+      description: '`GET` — the active account (or the last one), `data: null` when
+        none is set.'
+      tags:
+      - payment-gateway-accounts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentGatewayAccount'
+          description: ''
+    put:
+      operationId: payment_gateway_accounts_current_update
+      description: '`PUT` — set the provider, credentials and whether online payment
+        is on.'
+      tags:
+      - payment-gateway-accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavePaymentGatewayAccount'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SavePaymentGatewayAccount'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SavePaymentGatewayAccount'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentGatewayAccount'
+          description: ''
   /api/v1/payments:
     get:
       operationId: payments_list
@@ -8613,6 +8837,50 @@ paths:
       - jwtAuth: []
       responses:
         '204':
+          description: No response body
+  /api/v1/public/payment-callbacks/{tenant_slug}/{callback_token}:
+    post:
+      operationId: public_payment_callbacks_create
+      description: |-
+        `POST /public/payment-callbacks/{tenant_slug}/{callback_token}` — the provider calls this.
+
+        Unauthenticated; trust comes from the signature, then from re-fetching the
+        transaction from the provider. The slug finds the school (`tenants` has no
+        RLS), the token finds its account (active or not, so a late callback for an
+        old account still applies), and that account's secret verifies the body.
+        Nothing in the body chooses the tenant.
+
+        Not wrapped in ATOMIC_REQUESTS (urls.py): verifying and re-fetching are
+        provider calls and hold no transaction; the event is applied in
+        `tenant_atomic`. A suspended school's callback is still recorded: the money
+        has moved either way.
+
+        | Case | Response |
+        | --- | --- |
+        | Unknown slug or token | 404 |
+        | Bad signature or stale timestamp | 400 `invalid_signature`, and a security event |
+        | Valid, including replays and out-of-order events | 200 `{"received": true}` |
+        | Valid, but the provider has no such transaction yet | 503 `transaction_not_found` |
+        | Provider unreachable for the re-fetch | 503 `gateway_unavailable` |
+
+        Failed attempts (bad signature, unknown slug or token) count against a
+        per-IP budget, so guessing tokens or signatures is slowed without slowing a
+        genuine provider.
+      parameters:
+      - in: path
+        name: callback_token
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: tenant_slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - public
+      responses:
+        '200':
           description: No response body
   /api/v1/question-banks:
     get:
@@ -18320,6 +18588,118 @@ components:
         * `csv` - csv
         * `xlsx` - xlsx
         * `pdf` - pdf
+    GatewayIssueActionEnum:
+      enum:
+      - book_at_gateway_amount
+      - dismiss
+      type: string
+      description: |-
+        * `book_at_gateway_amount` - book_at_gateway_amount
+        * `dismiss` - dismiss
+    GatewayIssueKindEnum:
+      enum:
+      - amount_mismatch
+      - overpaid
+      - unknown_reference
+      - missing_at_gateway
+      - paid_after_failed
+      - duplicate_at_gateway
+      - paid_on_canceled_invoice
+      type: string
+      description: |-
+        * `amount_mismatch` - Amount mismatch
+        * `overpaid` - Overpaid
+        * `unknown_reference` - Unknown reference
+        * `missing_at_gateway` - Missing at gateway
+        * `paid_after_failed` - Paid after failed
+        * `duplicate_at_gateway` - Duplicate at gateway
+        * `paid_on_canceled_invoice` - Paid on canceled invoice
+    GatewayIssueResolutionEnum:
+      enum:
+      - booked
+      - dismissed
+      type: string
+      description: |-
+        * `booked` - Booked
+        * `dismissed` - Dismissed
+    GatewayReconciliationIssue:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/GatewayIssueKindEnum'
+          readOnly: true
+        payment:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+          description: Null for an unknown reference until it is booked.
+        gateway_provider:
+          type: string
+          readOnly: true
+          nullable: true
+        order_id:
+          type: string
+          readOnly: true
+          nullable: true
+        provider_txn_id:
+          type: string
+          readOnly: true
+          nullable: true
+        expected_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+        gateway_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+        detected_at:
+          type: string
+          format: date-time
+          readOnly: true
+        resolution:
+          allOf:
+          - $ref: '#/components/schemas/GatewayIssueResolutionEnum'
+          readOnly: true
+          nullable: true
+        resolved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        resolved_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        note:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - detected_at
+      - expected_amount
+      - gateway_amount
+      - gateway_provider
+      - id
+      - kind
+      - note
+      - order_id
+      - payment
+      - provider_txn_id
+      - resolution
+      - resolved_at
+      - resolved_by
     GenderEnum:
       enum:
       - male
@@ -18736,6 +19116,28 @@ components:
           minItems: 1
       required:
       - student_ids
+    InitiatePayment:
+      type: object
+      description: '`POST /fee-invoices/{id}:initiate-payment`. The amount is the
+        available balance.'
+      properties:
+        return_path:
+          type: string
+          maxLength: 500
+      required:
+      - return_path
+    InitiatePaymentResult:
+      type: object
+      properties:
+        payment_id:
+          type: string
+          format: uuid
+        redirect_url:
+          type: string
+          format: uri
+      required:
+      - payment_id
+      - redirect_url
     InviteRequest:
       type: object
       description: |-
@@ -20678,6 +21080,27 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Fine'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                next_cursor:
+                  type: string
+                  nullable: true
+                previous_cursor:
+                  type: string
+                  nullable: true
+                page_size:
+                  type: integer
+    PaginatedGatewayReconciliationIssueList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/GatewayReconciliationIssue'
         meta:
           type: object
           properties:
@@ -24174,6 +24597,41 @@ components:
       - received_by
       - status
       - student
+    PaymentGatewayAccount:
+      type: object
+      description: |-
+        The school's gateway account as staff see it: never the credentials.
+
+        `callback_url` is what the school pastes into its provider dashboard; it is
+        built by the view from the account's callback token.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        provider:
+          type: string
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+        merchant_id_masked:
+          type: string
+          readOnly: true
+        callback_url:
+          type: string
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - callback_url
+      - id
+      - is_active
+      - merchant_id_masked
+      - provider
+      - updated_at
     PaymentMethodEnum:
       enum:
       - cash
@@ -25318,6 +25776,16 @@ components:
       - amount
       - payment
       - reason
+    ResolveGatewayIssue:
+      type: object
+      properties:
+        action:
+          $ref: '#/components/schemas/GatewayIssueActionEnum'
+        note:
+          type: string
+          nullable: true
+      required:
+      - action
     Result:
       type: object
       description: |-
@@ -25725,6 +26193,28 @@ components:
         * `sports` - Sports
         * `office` - Office
         * `other` - Other
+    SavePaymentGatewayAccount:
+      type: object
+      description: |-
+        `PUT /payment-gateway-accounts/current`. Credentials are write-only.
+
+        Omit `credentials` to change only `is_active` on the same provider; a new
+        provider needs them.
+      properties:
+        provider:
+          type: string
+          maxLength: 40
+        credentials:
+          type: object
+          additionalProperties:
+            type: string
+            maxLength: 500
+          writeOnly: true
+        is_active:
+          type: boolean
+          default: true
+      required:
+      - provider
     Scholarship:
       type: object
       properties:
