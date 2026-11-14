@@ -383,6 +383,8 @@ SPECTACULAR_SETTINGS = {
         # One name for a statement line's type, on the statement endpoint's `kind` and
         # the `student-ledger` report row's `entry_type`.
         "FeeStatementEntryKindEnum": "apps.fees_finance.report_serializers.STATEMENT_ENTRY_KINDS",
+        # The finance report's `kind`, shared by the report query and the AI summary request.
+        "FinanceReportQueryKindEnum": "apps.fees_finance.reports.REPORT_KINDS",
         # core.notifications' enums are first exposed through the API here —
         # communication's PR A ships the first endpoints (notification-templates,
         # delivery-logs) that serialize them. Named for the same reason as every
