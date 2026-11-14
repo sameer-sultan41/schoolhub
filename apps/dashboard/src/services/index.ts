@@ -1,10 +1,24 @@
 import { AdmitCardsService } from "./modules/admit-cards";
+import { BudgetsService } from "./modules/budgets";
+import { ExpenseCategoriesService } from "./modules/expense-categories";
+import { ExpensesService } from "./modules/expenses";
+import { DiscountsService } from "./modules/discounts";
+import { FeeHeadsService } from "./modules/fee-heads";
 import { FeeInvoicesService } from "./modules/fee-invoices";
+import { FeeSchedulesService } from "./modules/fee-schedules";
+import { FeeStructuresService } from "./modules/fee-structures";
+import { FinesService } from "./modules/fines";
+import { LedgerAccountsService } from "./modules/ledger-accounts";
+import { FinanceReportsService } from "./modules/finance-reports";
+import { LedgerEntriesService } from "./modules/ledger-entries";
 import { NoticesService } from "./modules/notices";
 import { NotificationPreferencesService } from "./modules/notification-preferences";
 import { NotificationsService } from "./modules/notifications";
 import { ParentPortalService } from "./modules/parent-portal";
+import { PaymentsService } from "./modules/payments";
 import { ReceiptsService } from "./modules/receipts";
+import { RefundsService } from "./modules/refunds";
+import { SettlementImportsService } from "./modules/settlement-imports";
 import { VouchersService } from "./modules/vouchers";
 import { ResultsService } from "./modules/results";
 import { AttendanceCorrectionsService } from "./modules/attendance-corrections";
@@ -30,6 +44,7 @@ import { PromotionsService } from "./modules/promotions";
 import { QuestionBanksService } from "./modules/question-banks";
 import { ReportCardsService } from "./modules/report-cards";
 import { RoomsService } from "./modules/rooms";
+import { ScholarshipsService } from "./modules/scholarships";
 import { SchoolOrganizationService } from "./modules/school-organization";
 import { StaffService } from "./modules/staff";
 import { MessageThreadsService } from "./modules/message-threads";
@@ -52,286 +67,8 @@ import { TimetableSlotsService } from "./modules/timetable-slots";
  */
 export { ApiError } from "@schoolhub/api-client";
 
-export type {
-  DocumentVerificationDecision,
-  EmergencyContactRecord,
-  StudentDocumentRecord,
-  StudentRecord,
-} from "./modules/students";
-
-export type { ExamInput, ExamPageQuery, ExamRecord, ExamStatus, ExamType } from "./modules/exams";
-
-export type {
-  AdmitCardIssue,
-  AdmitCardPageQuery,
-  AdmitCardRecord,
-  AdmitCardStatus,
-} from "./modules/admit-cards";
-
-export type {
-  BulkMarksEntryInput,
-  BulkMarksEntryResult,
-  MarksEntryInput,
-  MarksEntryStatus,
-  MarksGrid,
-  MarksGridEntry,
-  MarksGridMeta,
-  MarksGridQuery,
-  MarksLockResult,
-  MarksProgressRow,
-  MarksRecord,
-  MarksUnlockResult,
-  MarksUnwritableReason,
-} from "./modules/marks";
-
-export type {
-  ResultOutcome,
-  ResultPageQuery,
-  ResultRecord,
-  ResultsApproved,
-  ResultsPublished,
-  ResultsSentBack,
-  ResultStatus,
-} from "./modules/exam-results";
-
-export type {
-  ReportCardPageQuery,
-  ReportCardRecord,
-  ReportCardRemarkField,
-  ReportCardRemarksInput,
-  ReportCardsPublished,
-  ReportCardStatus,
-} from "./modules/report-cards";
-
-export type {
-  ConflictSeverity as ExamConflictSeverity,
-  ExamConflict,
-  ExamConflictType,
-  SchedulePublishResult,
-  SittingDay,
-  SittingInput,
-  SittingRecord,
-  SittingStatus,
-  SittingWriteResult,
-} from "./modules/exam-schedules";
-
-export type {
-  ExamSubjectGroup,
-  ExamSubjectInput,
-  ExamSubjectRecord,
-} from "./modules/exam-subjects";
-
-export type {
-  CloneCurriculumResult,
-  CurriculumInput,
-  CurriculumPageQuery,
-  CurriculumRecord,
-} from "./modules/curriculum";
-
-export type {
-  CreatePromotionBatchInput,
-  PromotionAction,
-  PromotionBatchCreated,
-  PromotionBatchDetail,
-  PromotionBatchesQuery,
-  PromotionBatchRecord,
-  PromotionDecisionRecord,
-  PromotionDecisionValue,
-  PromotionExecutionReport,
-  PromotionProposal,
-  PromotionStatus,
-  PromotionTransition,
-  PromotionTransitionResult,
-  UpdateDecisionInput,
-} from "./modules/promotions";
-
-export type {
-  AttendanceMode,
-  AttendanceSettings,
-  AttendanceSettingsInput,
-} from "./modules/attendance-settings";
-
-export type {
-  AttendanceCorrectionRecord,
-  CorrectionAction,
-  CorrectionChange,
-  CorrectionNewValues,
-  CorrectionPageQuery,
-  CorrectionStatus,
-  CorrectionSubjectType,
-  RequestCorrectionInput,
-} from "./modules/attendance-corrections";
-
-export type {
-  ExamInlineReport,
-  ExamQueuedReport,
-  ExamReportFormValues,
-  ExamReportKind,
-  ExamReportQuery,
-  ExamReportRow,
-  ExamReportRowOf,
-  ExamReportRun,
-} from "./modules/exam-reports";
-
-export type {
-  AttendanceReportRow,
-  InlineReport,
-  QueuedReport,
-  ReportFormat,
-  ReportFormValues,
-  ReportKind,
-  ReportKindFields,
-  ReportQuery,
-  ReportRowOf,
-  ReportRun,
-} from "./modules/attendance-reports";
-
-export type {
-  LeaveAction,
-  LeaveApprovalDecision,
-  LeaveApprovalRecord,
-  LeaveCreateInput,
-  LeaveDayPart,
-  LeaveDecisionResult,
-  LeavePageQuery,
-  LeaveRequestRecord,
-  LeaveStatus,
-  LeaveTypeOption,
-  LeaveTypeRecord,
-} from "./modules/leave-requests";
-
-export type {
-  AttendancePageQuery,
-  AttendanceStatus,
-  BulkMarkEntryInput,
-  BulkMarkInput,
-  BulkMarkMeta,
-  BulkMarkResult,
-  MarkableStatus,
-  MyRegister,
-  MyRegistersResult,
-  RegisterEntry,
-  RegisterMeta,
-  RegisterQuery,
-  RegisterResult,
-  StudentAttendanceRecord,
-  UnmarkableReason,
-} from "./modules/student-attendance";
-
-/** One refused row of a whole-grid submission (attendance's `:bulk-mark`, marks' `:bulk-entry`). */
-export type { RowIssue } from "./shared/row-issues";
-
-export type {
-  MarkableStaffStatus,
-  MarkStaffAttendanceInput,
-  StaffAttendancePageQuery,
-  StaffAttendanceRecord,
-  StaffAttendanceStatus,
-  StaffRegisterEntry,
-  StaffRegisterQuery,
-  StaffRowDraft,
-} from "./modules/staff-attendance";
-
-export type {
-  CoverageIssue,
-  GradeBandInput,
-  GradeBandRecord,
-  GradingScaleInput,
-  GradingScalePageQuery,
-  GradingScaleRecord,
-  GradingScaleType,
-} from "./modules/grading-scales";
-
-export type {
-  PaperBlueprint,
-  PaperResult,
-  PaperShortfall,
-  QuestionBankInput,
-  QuestionBankPageQuery,
-  QuestionBankRecord,
-  QuestionBankStatus,
-  QuestionDifficulty,
-  QuestionInput,
-  QuestionPageQuery,
-  QuestionRecord,
-  QuestionSource,
-  QuestionType,
-} from "./modules/question-banks";
-
-export type { PeriodInput, PeriodPageQuery, PeriodRecord } from "./modules/periods";
-
-export type { RoomInput, RoomPageQuery, RoomRecord, RoomType } from "./modules/rooms";
-
-export type {
-  ConflictSeverity,
-  EffectiveSlotRecord,
-  SlotInput,
-  SlotWriteResult,
-  TimetableConflict,
-  TimetablePublishResult,
-  TimetableSlotRecord,
-  TimetableValidation,
-} from "./modules/timetable-slots";
-
-export type {
-  AcademicSessionSummary,
-  SchoolOrganizationOption,
-  SectionOption,
-} from "./modules/school-organization";
-
-export type {
-  AllocateTeacherInput,
-  AllocationSaveResult,
-  TeacherAllocationPageQuery,
-  TeacherAllocationRecord,
-  TeacherLoadRow,
-  TeacherLoadWarning,
-  UpdateAllocationInput,
-} from "./modules/teacher-allocations";
-
-export type {
-  ProposeSubstitutionInput,
-  SubstituteCandidate,
-  SubstitutionAction,
-  SubstitutionPageQuery,
-  SubstitutionStatus,
-  TeacherSubstitutionRecord,
-} from "./modules/teacher-substitutions";
-
-/** `UpdateGuardianLinkInput` is re-exported here (not just from the guardians module
- * itself) because Task 7's `GuardianLinkFlagsDialog` imports it from `@/services`, not
- * from the guardians module directly (ADR-0011: feature code imports only `@/services`,
- * never a service module's own path). */
-export type {
-  GuardianLinkRecord,
-  GuardianRecord,
-  GuardianRelationship,
-  UpdateGuardianLinkInput,
-} from "./modules/guardians";
-
-export type {
-  PortalChild,
-  PortalDashboard,
-  PortalModuleKey,
-  PortalModules,
-  PortalStudent,
-} from "./modules/parent-portal";
-
-export type {
-  NotificationCategory,
-  NotificationPriority,
-  NotificationRecord,
-  NotificationsQuery,
-} from "./modules/notifications";
-
-export type { NoticeRead, NoticeType, PortalNoticeRecord } from "./modules/notices";
-export type {
-  NotificationChannel,
-  NotificationPreferenceRow,
-} from "./modules/notification-preferences";
-export type { FeeInvoiceRecord } from "./modules/fee-invoices";
-export type { ReceiptFormat, ReceiptRecord } from "./modules/receipts";
-export type { VoucherFormat, VoucherRecord, VoucherStatus } from "./modules/vouchers";
+/** Every module's public types live in `./types` (this file stays under the 400-line cap). */
+export * from "./types";
 
 /**
  * Every domain's API calls, aggregated behind one object. A component imports `Services`
@@ -385,7 +122,22 @@ export const Services = {
   notificationPreferences: NotificationPreferencesService,
   notices: NoticesService,
   feeInvoices: FeeInvoicesService,
+  discounts: DiscountsService,
+  scholarships: ScholarshipsService,
+  fines: FinesService,
+  ledgerAccounts: LedgerAccountsService,
+  ledgerEntries: LedgerEntriesService,
+  feeHeads: FeeHeadsService,
+  feeStructures: FeeStructuresService,
+  feeSchedules: FeeSchedulesService,
+  payments: PaymentsService,
   receipts: ReceiptsService,
+  refunds: RefundsService,
+  expenseCategories: ExpenseCategoriesService,
+  expenses: ExpensesService,
+  budgets: BudgetsService,
+  financeReports: FinanceReportsService,
+  settlementImports: SettlementImportsService,
   vouchers: VouchersService,
   results: ResultsService,
 } as const;

@@ -5,6 +5,7 @@ import type { MockModule } from "../router";
 export interface Guardian {
   id: string;
   user_id: string | null;
+  portal_status: "none" | "invited" | "expired" | "send_failed" | "active" | "inactive";
   first_name: string;
   last_name: string;
   phone: string;
@@ -42,6 +43,7 @@ export function buildGuardian(overrides: Partial<Guardian> = {}): Guardian {
   return {
     id: id("guardian"),
     user_id: null,
+    portal_status: "none",
     first_name: "Ayesha",
     last_name: "Raza",
     phone: "0300-0000000",
@@ -118,6 +120,23 @@ export function guardiansModule(options: GuardiansOptions = {}): MockModule {
       if (!match) return fail(404, "Not found.");
       Object.assign(match, (request.json() as Partial<Guardian> | null) ?? {});
       return ok(match);
+    });
+
+    // `POST /guardians/{id}:invite` (ADR-0033): no body; the email on file, or a 400 on
+    // `email` when there is none. The colon action rides in the captured segment.
+    api.post("/guardians/:guardianAction", (request) => {
+      const [guardianId, action] = (request.params["guardianAction"] ?? "").split(":");
+      const match = guardians.find((g) => g.id === guardianId);
+      if (!match || action !== "invite") return fail(404, "Not found.");
+      if (!match.email) {
+        return fail(400, "Invalid input.", {
+          details: [
+            { field: "email", issue: "An email address is required to invite this person." },
+          ],
+        });
+      }
+      match.portal_status = "invited";
+      return ok({ portal_status: match.portal_status });
     });
 
     api.get("/students/:studentId/guardians", (request) => {

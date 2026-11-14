@@ -6,6 +6,8 @@ TenantMiddleware.EXEMPT_PREFIXES because they must work before a tenant is resol
 
 from django.urls import path
 
+from core.rbac.invitations.views import InvitationAcceptView, InvitationPreviewView
+from core.rbac.password_reset.views import PasswordResetConfirmView, PasswordResetView
 from core.rbac.views import (
     ChangePasswordView,
     LoginView,
@@ -22,4 +24,13 @@ urlpatterns = [
     path("auth/logout", LogoutView.as_view(), name="logout"),
     path("auth/me", MeView.as_view(), name="me"),
     path("auth/change-password", ChangePasswordView.as_view(), name="change-password"),
+    # Reached from an emailed link, unauthenticated; the body names the school (ADR-0033).
+    path("auth/invitations:preview", InvitationPreviewView.as_view(), name="invitation-preview"),
+    path("auth/invitations:accept", InvitationAcceptView.as_view(), name="invitation-accept"),
+    path("auth/password-reset", PasswordResetView.as_view(), name="password-reset"),
+    path(
+        "auth/password-reset:confirm",
+        PasswordResetConfirmView.as_view(),
+        name="password-reset-confirm",
+    ),
 ]

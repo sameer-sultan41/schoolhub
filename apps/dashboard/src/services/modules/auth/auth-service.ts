@@ -10,8 +10,13 @@ import { endpoints } from "@/services/endpoints";
 import type {
   AuthenticatedUser,
   ChangePasswordInput,
+  InvitationAccept,
+  InvitationLink,
+  InvitationPreview,
   LoginCredentials,
   LoginResponse,
+  PasswordResetConfirm,
+  PasswordResetRequest,
 } from "./auth-type";
 
 /**
@@ -23,8 +28,13 @@ import type {
 export type {
   AuthenticatedUser,
   ChangePasswordInput,
+  InvitationAccept,
+  InvitationLink,
+  InvitationPreview,
   LoginCredentials,
   LoginResponse,
+  PasswordResetConfirm,
+  PasswordResetRequest,
 } from "./auth-type";
 
 export async function login(credentials: LoginCredentials): Promise<LoginResponse> {
@@ -100,4 +110,37 @@ export async function restoreSession(): Promise<AuthenticatedUser | null> {
     clearSessionCookie();
     return null;
   }
+}
+
+/**
+ * The emailed-link endpoints (ADR-0033). All four are unauthenticated and set no cookie, so
+ * they call the API directly rather than through the `/api/auth` proxy, and never try a
+ * refresh: a 401 here would not mean an expired session. Every unusable link is a 400
+ * `invalid_link`.
+ */
+const LINK_REQUEST = { skipAuthRefresh: true } as const;
+
+/** Who an invitation is for and which school sent it, before a password is set. */
+export async function previewInvitation(link: InvitationLink): Promise<InvitationPreview> {
+  const { data } = await apiClient.post<InvitationPreview>(
+    endpoints.auth.invitationPreview,
+    link,
+    LINK_REQUEST,
+  );
+  return data;
+}
+
+/** Sets the password and activates the account; `204`. */
+export async function acceptInvitation(body: InvitationAccept): Promise<void> {
+  await apiClient.post(endpoints.auth.invitationAccept, body, LINK_REQUEST);
+}
+
+/** `204` whether or not the email has an account here, so it reveals nothing. */
+export async function requestPasswordReset(body: PasswordResetRequest): Promise<void> {
+  await apiClient.post(endpoints.auth.passwordReset, body, LINK_REQUEST);
+}
+
+/** Sets the new password from a reset link and signs out every device; `204`. */
+export async function confirmPasswordReset(body: PasswordResetConfirm): Promise<void> {
+  await apiClient.post(endpoints.auth.passwordResetConfirm, body, LINK_REQUEST);
 }

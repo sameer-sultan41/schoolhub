@@ -23,6 +23,7 @@ from django.utils import timezone
 from apps.fees_finance import invoicing, numbering, reports
 from apps.fees_finance.ledger import LedgerLine, post_transaction, reverse_transaction
 from apps.fees_finance.models import (
+    SCHOLARSHIP_TRANSITIONS,
     Budget,
     BudgetStatus,
     Discount,
@@ -53,6 +54,7 @@ from apps.fees_finance.models import (
     Refund,
     RefundStatus,
     Scholarship,
+    ScholarshipStatus,
     SettlementRow,
     VoucherCollectionImport,
     VoucherStatus,
@@ -212,6 +214,53 @@ def assert_structure_is_editable(*, structure: FeeStructure) -> None:
                 )
             }
         )
+
+
+def assert_scholarship_transition(*, scholarship: Scholarship, new_status: str) -> None:
+    """A scholarship moves only along `SCHOLARSHIP_TRANSITIONS`.
+
+    A PATCH that names the status it already has is not a move and passes, so a
+    rename or a sponsor edit on a revoked award is not refused for the wrong
+    reason. The refusal is a 422 under `status`: the body is well formed, the
+    lifecycle rule is what it breaks.
+    """
+    current = scholarship.status
+    if new_status == current:
+        return
+    allowed = SCHOLARSHIP_TRANSITIONS.get(current, frozenset())
+    if new_status not in allowed:
+        legal = ", ".join(sorted(allowed)) or "none, it is final"
+        raise DomainRuleViolation(
+            {
+                "status": (
+                    f"{_with_article(ScholarshipStatus(current).label)} award cannot become "
+                    f"{ScholarshipStatus(new_status).label.lower()}. Allowed next: {legal}."
+                )
+            }
+        )
+
+
+def _with_article(label: str) -> str:
+    """ "An approved", "A revoked": the indefinite article for a lower-cased status label."""
+    word = label.lower()
+    return f"{'An' if word.startswith(('a', 'e', 'i', 'o', 'u')) else 'A'} {word}"
+
+
+def lock_scholarship_for_transition(
+    *, scholarship: Scholarship, new_status: str | None
+) -> Scholarship:
+    """Re-read the award under a row lock and check the move against what is stored now.
+
+    The serializer validated against the instance `get_object` loaded, which another
+    request may have moved since (a revoke landing between the read and the save). Only
+    the locked row's status is authoritative, so the transition is checked here too, and
+    the caller saves the locked row. `new_status=None` is a PATCH that names no status: no
+    move, only the lock. Call inside `transaction.atomic`.
+    """
+    locked = Scholarship.objects.select_for_update().get(pk=scholarship.pk)
+    if new_status is not None:
+        assert_scholarship_transition(scholarship=locked, new_status=new_status)
+    return locked
 
 
 def assert_session_is_writable(*, academic_session) -> None:
@@ -1570,8 +1619,9 @@ def submit_expense(*, expense: Expense, actor_id: uuid.UUID) -> Expense:
             {"status": f"This expense is already {locked.get_status_display().lower()}."}
         )
     locked.status = ExpenseStatus.SUBMITTED
+    locked.submitted_by = actor_id
     locked.updated_by = actor_id
-    locked.save(update_fields=["status", "updated_by", "updated_at"])
+    locked.save(update_fields=["status", "submitted_by", "updated_by", "updated_at"])
     return locked
 
 
@@ -1579,7 +1629,7 @@ def submit_expense(*, expense: Expense, actor_id: uuid.UUID) -> Expense:
 def decide_expense(*, expense: Expense, approve: bool, actor_id: uuid.UUID) -> Expense:
     """Approve or reject a submitted expense, posting the ledger on approval.
 
-    **The submitter may not approve their own expense.** §15 says so, and the
+    **Neither the creator nor the submitter may decide the expense.** §15 says so, and the
     check is here rather than in the viewset for the reason refunds' is: the
     rule is the module's and has to hold through any door. The CHECK constraint
     carries the half a constraint can.
@@ -1598,11 +1648,11 @@ def decide_expense(*, expense: Expense, approve: bool, actor_id: uuid.UUID) -> E
         raise DomainRuleViolation(
             {"status": "Only a submitted expense can be approved or rejected."}
         )
-    if locked.created_by == actor_id:
+    if actor_id in (locked.created_by, locked.submitted_by):
         raise DomainRuleViolation(
             {
                 "approved_by": (
-                    "The person who submitted an expense cannot approve it "
+                    "The person who created or submitted an expense cannot approve it "
                     "(§15, and auth-and-rbac §2.4)."
                 )
             }
@@ -1773,9 +1823,14 @@ def build_report_rows(
     date_to: datetime.date,
     student_id: uuid.UUID | None = None,
     group_by: str = "day",
+    filters: reports.ReportFilters | None = None,
     limit: int | None = None,
 ) -> list[dict]:
     """Run one §13 report with the caller's record scope for `permission` applied.
+
+    `filters` (campus, session, class) narrow the kinds that have a student or
+    invoice dimension, **after** the record scope, so a filter can only shrink
+    what the caller may already read.
 
     `permission` is the declaration the request was admitted on (the job carries it
     as `scope_permission`), so only the roles granting it count.
@@ -1810,7 +1865,7 @@ def build_report_rows(
 
     if kind == "collection":
         return reports.collection_report(
-            scoped(Payment.objects.alive()),
+            reports.filter_payments(scoped(Payment.objects.alive()), filters),
             date_from=date_from,
             date_to=date_to,
             group_by=group_by,
@@ -1818,7 +1873,7 @@ def build_report_rows(
         )
     if kind == "outstanding-aging":
         return reports.outstanding_and_aging(
-            scoped(FeeInvoice.objects.alive()),
+            reports.filter_invoices(scoped(FeeInvoice.objects.alive()), filters),
             as_of=date_to,
             limit=limit,
         )
@@ -1827,16 +1882,16 @@ def build_report_rows(
             raise DomainRuleViolation({"student": "A student ledger needs the student it is for."})
         return reports.student_ledger(
             student_id=student_id,
-            invoices=scoped(FeeInvoice.objects.alive()),
-            payments=scoped(Payment.objects.alive()),
-            refunds=scoped(Refund.objects.alive()),
+            invoices=reports.filter_invoices(scoped(FeeInvoice.objects.alive()), filters),
+            payments=reports.filter_payments(scoped(Payment.objects.alive()), filters),
+            refunds=reports.filter_refunds(scoped(Refund.objects.alive()), filters),
             limit=limit,
         )
     if kind == "grant-register":
         return reports.grant_and_waiver_register(
-            discounts=scoped(Discount.objects.alive()),
-            scholarships=scoped(Scholarship.objects.alive()),
-            fines=scoped(Fine.objects.alive()),
+            discounts=reports.filter_discounts(scoped(Discount.objects.alive()), filters),
+            scholarships=reports.filter_scholarships(scoped(Scholarship.objects.alive()), filters),
+            fines=reports.filter_fines(scoped(Fine.objects.alive()), filters),
             limit=limit,
         )
     if kind == "income-vs-expense":
@@ -1853,8 +1908,11 @@ def build_report_rows(
             limit=limit,
         )
     if kind == "expense-register":
+        expenses = scoped(Expense.objects.alive(), campus_field="campus_id")
+        if filters is not None and filters.campus_id is not None:
+            expenses = expenses.filter(campus_id=filters.campus_id)
         return reports.expense_register(
-            scoped(Expense.objects.alive(), campus_field="campus_id"),
+            expenses,
             date_from=date_from,
             date_to=date_to,
             limit=limit,

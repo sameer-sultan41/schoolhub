@@ -13,6 +13,7 @@ from rest_framework import mixins, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from core.api.exceptions import TenantNotFound, TenantSuspended
 from core.api.permissions import RequiresModuleFeature
 from core.audit.services import record_audit
 from core.rbac.permissions import (
@@ -25,8 +26,8 @@ from core.rbac.permissions import (
     required_declaration,
     scope_queryset,
 )
+from core.tenancy.access import log_refusal, operational_tenant
 from core.tenancy.context import bind_tenant, unbind_tenant
-from core.tenancy.models import Tenant
 
 
 class TenantScopedViewSetMixin:
@@ -121,16 +122,21 @@ class TenantScopedViewSetMixin:
             self._tenant_token = None
         return super().finalize_response(request, response, *args, **kwargs)
 
-    @staticmethod
-    def _resolve_tenant(user):
+    def _resolve_tenant(self, user):
+        """The caller's tenant, refused exactly as `TenantMiddleware` refuses it.
+
+        Under a bearer token the middleware never sees the user, so for a mixin view
+        this is where a deleted or suspended tenant is turned away; sign-in and refresh
+        apply the same rule (`core.tenancy.access`).
+        """
         tenant_id = getattr(user, "tenant_id", None)
         if tenant_id is None:
             return None
-        return (
-            Tenant.objects.filter(pk=tenant_id, deleted_at__isnull=True)
-            .only("id", "name", "slug", "status", "timezone", "locale", "currency")
-            .first()
-        )
+        tenant, refusal = operational_tenant(tenant_id)
+        if refusal is not None:
+            log_refusal(refusal, path=getattr(self.request, "path", None))
+            raise TenantSuspended() if refusal == "tenant_suspended" else TenantNotFound()
+        return tenant
 
     def get_queryset(self):
         # The model's default manager is already tenant-scoped, and RLS enforces it

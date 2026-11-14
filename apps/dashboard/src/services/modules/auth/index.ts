@@ -1,4 +1,14 @@
-import { changePassword, fetchCurrentUser, login, logout, restoreSession } from "./auth-service";
+import {
+  acceptInvitation,
+  changePassword,
+  confirmPasswordReset,
+  fetchCurrentUser,
+  login,
+  logout,
+  previewInvitation,
+  requestPasswordReset,
+  restoreSession,
+} from "./auth-service";
 
 export const AuthService = {
   login,
@@ -6,10 +16,15 @@ export const AuthService = {
   fetchCurrentUser,
   restoreSession,
   changePassword,
+  previewInvitation,
+  acceptInvitation,
+  requestPasswordReset,
+  confirmPasswordReset,
 };
 export type {
   AuthenticatedUser,
   ChangePasswordInput,
+  InvitationPreview,
   LoginCredentials,
   LoginResponse,
 } from "./auth-service";

@@ -2,7 +2,7 @@
 
 ``trailing_slash=False`` matches the API contract elsewhere — see
 school_organization/urls.py. Colon-actions (`:enroll`, `:change-section`,
-`:withdraw`, transfer routes) are declared before ``*router.urls``, same
+`:withdraw`, `:invite`, transfer routes) are declared before ``*router.urls``, same
 convention.
 
 Nested routes (``students/<student_pk>/...``) are declared as explicit
@@ -75,6 +75,16 @@ urlpatterns = [
         "students/<uuid:pk>:withdraw",
         StudentViewSet.as_view({"post": "withdraw"}),
         name="students-withdraw",
+    ),
+    path(
+        "students/<uuid:pk>:invite",
+        StudentViewSet.as_view({"post": "invite"}),
+        name="students-invite",
+    ),
+    path(
+        "guardians/<uuid:pk>:invite",
+        GuardianViewSet.as_view({"post": "invite"}),
+        name="guardians-invite",
     ),
     path(
         "student-documents/<uuid:pk>:verify",

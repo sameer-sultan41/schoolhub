@@ -39,6 +39,15 @@ export function useCampuses({ enabled = true }: ReferenceDataOptions = {}) {
   });
 }
 
+/** Every academic session, newest first as the API orders them. */
+export function useAcademicSessions({ enabled = true }: ReferenceDataOptions = {}) {
+  return useQuery({
+    queryKey: queryKeys.list("school-organization", "academic-sessions"),
+    queryFn: () => Services.schoolOrganization.fetchAcademicSessions(),
+    enabled,
+  });
+}
+
 /** Classes: all of them, or only the active ones with `isActive: true`. */
 export function useClasses({ isActive, enabled = true }: ActivityReferenceDataOptions = {}) {
   const params = isActive === undefined ? undefined : { isActive };

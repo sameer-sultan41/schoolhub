@@ -42,6 +42,8 @@ function studentRecord(overrides: Partial<StudentRecord> = {}): StudentRecord {
   return {
     id: "stu-1",
     admission_number: "2026-0050",
+    user_id: null,
+    portal_status: "none",
     first_name: "Aisha",
     last_name: "Khan",
     preferred_name: "Ash",

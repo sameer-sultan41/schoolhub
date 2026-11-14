@@ -474,6 +474,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/invitations:accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Accept an invitation: set a password and activate the account.
+         *
+         *     Unauthenticated. A password the validators refuse is 400 `validation_error`; any
+         *     unusable link is 400 `invalid_link`.
+         */
+        post: operations["auth_invitations:accept_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/invitations:preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Show who an invitation is for and which school sent it, before a password is set.
+         *
+         *     Unauthenticated. Any unusable link (unknown school, unknown, used, revoked or expired
+         *     token) is 400 `invalid_link`.
+         */
+        post: operations["auth_invitations:preview_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -517,6 +561,52 @@ export interface paths {
         get: operations["auth_me_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Ask for a password-reset link by email.
+         *
+         *     Unauthenticated. Answers 204 to every well-formed body, whether or not the address
+         *     has an account, so the answer reveals nothing; a link goes only to an active member
+         *     of the named school.
+         */
+        post: operations["auth_password_reset_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password-reset:confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Set a new password from a reset link, and sign out every device.
+         *
+         *     Unauthenticated. A password the validators refuse is 400 `validation_error`; an
+         *     unusable link (wrong school, used or expired token, inactive account) is 400
+         *     `invalid_link`.
+         */
+        post: operations["auth_password_reset:confirm_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2345,6 +2435,29 @@ export interface paths {
          *     hard removal is a retention operation, not documented as an API action.
          */
         patch: operations["guardians_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/guardians/{id}:invite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Invite this guardian to the portal at their email on file, or resend
+         * @description Guardian persons (module doc §16). No destroy — a guardian with no
+         *
+         *     remaining student links simply stops appearing in any student's roster;
+         *     hard removal is a retention operation, not documented as an API action.
+         */
+        post: operations["guardians_:invite_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/holiday-calendar": {
@@ -4915,7 +5028,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create a portal account for this staff member and assign roles
+         * Invite this staff member by email, creating their account if needed
          * @description Staff master records (module doc §5.1).
          */
         post: operations["staff_:invite_create"];
@@ -5754,7 +5867,8 @@ export interface paths {
          *     Its own view rather than a `kind` on the report endpoint, because §16
          *     declares this path and because a family reads it: this is the one report a
          *     portal principal reaches, narrowed by record scope through the same
-         *     `build_report_rows` the staff endpoint uses.
+         *     `build_report_rows` the staff endpoint uses. A student outside this school
+         *     or the caller's reach is a 404, never an empty statement.
          */
         get: operations["students_ledger_retrieve"];
         put?: never;
@@ -5799,6 +5913,26 @@ export interface paths {
          * @description Student master records (module doc §5.1-2).
          */
         post: operations["students_:enroll_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/students/{id}:invite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Invite this student to the portal by email, or resend their invitation
+         * @description Student master records (module doc §5.1-2).
+         */
+        post: operations["students_:invite_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6942,6 +7076,34 @@ export interface components {
          * @enum {string}
          */
         BudgetStatusEnum: "draft" | "approved" | "closed";
+        /** @description `reports.budget_variance`: one approved budget against its actual spend. */
+        BudgetVarianceReportRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "budget-variance";
+            /** Format: uuid */
+            readonly budget_id: string;
+            readonly name: string;
+            /** Format: date */
+            readonly period_start: string;
+            /** Format: date */
+            readonly period_end: string;
+            /** Format: decimal */
+            readonly budgeted: string;
+            /** Format: decimal */
+            readonly actual: string;
+            /** Format: decimal */
+            readonly variance: string;
+            /** Format: decimal */
+            readonly utilisation_percent: string;
+        };
+        /**
+         * @description * `budget-variance` - budget-variance
+         * @enum {string}
+         */
+        BudgetVarianceReportRowKindEnum: "budget-variance";
         /**
          * @description `POST /student-attendance:bulk-mark` — one section, one date, one period.
          *
@@ -7055,6 +7217,32 @@ export interface components {
             created: number;
             skipped: number;
         };
+        /**
+         * @description `reports.collection_report`: confirmed money by day, method or cashier.
+         *
+         *     The row carries only the key it was grouped by; the other two are null.
+         *     They are not `read_only` so the schema does not list them as always present.
+         */
+        CollectionReportRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "collection";
+            /** Format: date */
+            day?: string | null;
+            method?: components["schemas"]["PaymentMethodEnum"] | null;
+            /** Format: uuid */
+            received_by?: string | null;
+            /** Format: decimal */
+            readonly total: string;
+            readonly count: number;
+        };
+        /**
+         * @description * `collection` - collection
+         * @enum {string}
+         */
+        CollectionReportRowKindEnum: "collection";
         /**
          * @description * `all` - All
          *     * `staff` - Staff
@@ -7280,11 +7468,13 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /** @description A student-level reduction; `status` moves only through `:revoke`. */
         Discount: {
             /** Format: uuid */
             readonly id: string;
             /** Format: uuid */
             student: string;
+            readonly student_name: string;
             /** Format: uuid */
             academic_session: string;
             name: string;
@@ -7677,14 +7867,21 @@ export interface components {
             amount: string;
             /** Format: decimal */
             tax_amount?: string;
-            /** Format: double */
-            readonly gross_amount: number;
+            /** Format: decimal */
+            readonly gross_amount: string;
             /** Format: date */
             expense_date: string;
             payment_method?: components["schemas"]["PaymentMethodEnum"] | null;
             readonly status: components["schemas"]["ExpenseStatusEnum"];
             /** Format: uuid */
             readonly approved_by: string | null;
+            /** Format: uuid */
+            readonly created_by: string | null;
+            /**
+             * Format: uuid
+             * @description Who moved the draft into the approval queue; may differ from created_by.
+             */
+            readonly submitted_by: string | null;
             /** Format: uuid */
             receipt_file?: string | null;
             /** Format: date-time */
@@ -7707,6 +7904,36 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /** @description `reports.expense_register`: one expense, whatever its status. */
+        ExpenseRegisterReportRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "expense-register";
+            /** Format: uuid */
+            readonly id: string;
+            readonly expense_no: string;
+            /** Format: date */
+            readonly expense_date: string;
+            readonly vendor_name: string | null;
+            readonly description: string;
+            /** Format: decimal */
+            readonly amount: string;
+            /** Format: decimal */
+            readonly tax_amount: string;
+            readonly status: components["schemas"]["ExpenseStatusEnum"];
+            /** Format: uuid */
+            readonly approved_by: string | null;
+            readonly category_code: string;
+            readonly category_name: string;
+            readonly campus_name: string | null;
+        };
+        /**
+         * @description * `expense-register` - expense-register
+         * @enum {string}
+         */
+        ExpenseRegisterReportRowKindEnum: "expense-register";
         /**
          * @description * `draft` - Draft
          *     * `submitted` - Submitted
@@ -7881,6 +8108,13 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /**
+         * @description * `invoice` - invoice
+         *     * `payment` - payment
+         *     * `refund` - refund
+         * @enum {string}
+         */
+        FeeStatementEntryKindEnum: "invoice" | "payment" | "refund";
         FeeStructure: {
             /** Format: uuid */
             readonly id: string;
@@ -7974,25 +8208,61 @@ export interface components {
          * @enum {string}
          */
         FileStatusEnum: "pending" | "ready" | "quarantined";
-        /** @description `GET/POST /reports/finance-summary` — §13's parameterised entry point. */
+        /**
+         * @description `GET/POST /reports/finance-summary` — §13's parameterised entry point.
+         *
+         *     The campus, session and class filters are plain UUIDs rather than model
+         *     choice fields, so an id from another tenant is an empty report and not a
+         *     different status from an unknown one (AGENTS.md invariant 2).
+         */
         FinanceReportQuery: {
-            kind: string;
+            kind: components["schemas"]["FinanceReportQueryKindEnum"];
             /** Format: date */
             date_from: string;
             /** Format: date */
             date_to: string;
             /** Format: uuid */
             student?: string | null;
+            /**
+             * Format: uuid
+             * @description The student's campus (an expense's, for `expense-register`).
+             */
+            campus_id?: string | null;
+            /**
+             * Format: uuid
+             * @description The invoice's session (the grant's, or the student's enrollment, for grants).
+             */
+            academic_session_id?: string | null;
+            /**
+             * Format: uuid
+             * @description The class the invoice was billed to (the student's enrollment, for grants).
+             */
+            class_id?: string | null;
             /** @default day */
             group_by: components["schemas"]["GroupByEnum"];
             /** @default csv */
             format: components["schemas"]["FormatEnum"];
         };
+        /**
+         * @description * `collection` - collection
+         *     * `outstanding-aging` - outstanding-aging
+         *     * `student-ledger` - student-ledger
+         *     * `grant-register` - grant-register
+         *     * `income-vs-expense` - income-vs-expense
+         *     * `budget-variance` - budget-variance
+         *     * `expense-register` - expense-register
+         *     * `trial-balance` - trial-balance
+         * @enum {string}
+         */
+        FinanceReportQueryKindEnum: "collection" | "outstanding-aging" | "student-ledger" | "grant-register" | "income-vs-expense" | "budget-variance" | "expense-register" | "trial-balance";
+        FinanceReportRow: components["schemas"]["CollectionReportRow"] | components["schemas"]["OutstandingAgingReportRow"] | components["schemas"]["StudentLedgerReportRow"] | components["schemas"]["GrantRegisterReportRow"] | components["schemas"]["IncomeVsExpenseReportRow"] | components["schemas"]["BudgetVarianceReportRow"] | components["schemas"]["ExpenseRegisterReportRow"] | components["schemas"]["TrialBalanceReportRow"];
+        /** @description A penalty on a fine-category fee head; `status` moves only through `:waive`. */
         Fine: {
             /** Format: uuid */
             readonly id: string;
             /** Format: uuid */
             student: string;
+            readonly student_name: string;
             /** Format: uuid */
             fee_head: string;
             fine_type?: components["schemas"]["FineTypeEnum"];
@@ -8161,6 +8431,44 @@ export interface components {
          */
         GradingScaleTypeEnum: "percentage" | "letter" | "gpa" | "hybrid";
         /**
+         * @description `reports.grant_and_waiver_register`: a reduction granted or a fine waived, and by whom.
+         *
+         *     `grant_type` is the source's own `kind` (a discount, a scholarship or a waived
+         *     fine); `status` is that source's status, so it is not one fixed set.
+         */
+        GrantRegisterReportRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "grant-register";
+            /** Format: uuid */
+            readonly id: string;
+            readonly grant_type: components["schemas"]["GrantTypeEnum"];
+            readonly name: string;
+            readonly value_type: components["schemas"]["FeeGrantValueTypeEnum"];
+            /** Format: decimal */
+            readonly value: string;
+            readonly status: string;
+            /** Format: uuid */
+            readonly approved_by: string | null;
+            readonly admission_number: string;
+            /** Format: date-time */
+            readonly granted_at: string;
+        };
+        /**
+         * @description * `grant-register` - grant-register
+         * @enum {string}
+         */
+        GrantRegisterReportRowKindEnum: "grant-register";
+        /**
+         * @description * `discount` - discount
+         *     * `scholarship` - scholarship
+         *     * `fine_waiver` - fine_waiver
+         * @enum {string}
+         */
+        GrantTypeEnum: "discount" | "scholarship" | "fine_waiver";
+        /**
          * @description * `day` - day
          *     * `method` - method
          *     * `cashier` - cashier
@@ -8172,9 +8480,10 @@ export interface components {
             readonly id: string;
             /**
              * Format: uuid
-             * @description users(id) — portal account, tenant-checked at write time.
+             * @description users(id) — portal account; set only by :invite (ADR-0033).
              */
-            user_id?: string | null;
+            readonly user_id: string | null;
+            readonly portal_status: components["schemas"]["PortalStatusEnum"];
             first_name: string;
             last_name: string;
             /** @description Primary contact; indexed for duplicate matching. */
@@ -8254,10 +8563,54 @@ export interface components {
         IdCardGenerateRequest: {
             student_ids: string[];
         };
+        /** @description `reports.income_vs_expense`: an income or expense account's net over the period. */
+        IncomeVsExpenseReportRow: {
+            /** Format: uuid */
+            readonly ledger_account_id: string;
+            readonly account_type: components["schemas"]["LedgerAccountTypeEnum"];
+            /** Format: decimal */
+            readonly total_debit: string;
+            /** Format: decimal */
+            readonly total_credit: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "income-vs-expense";
+            readonly code: string;
+            readonly name: string;
+            /** Format: decimal */
+            readonly net: string;
+        };
         /**
-         * @description No email is sent (§17 gap — no notification infrastructure exists yet,
-         *     see services/invite.py's ``invite_staff`` docstring); this only creates and
-         *     links the account plus assigns the requested roles.
+         * @description * `income-vs-expense` - income-vs-expense
+         * @enum {string}
+         */
+        IncomeVsExpenseReportRowKindEnum: "income-vs-expense";
+        InvitationAccept: {
+            /** @description Tenant slug, from the link's `school` fragment. */
+            school: string;
+            /** @description From the link's `token` fragment. */
+            token: string;
+            password: string;
+        };
+        InvitationLink: {
+            /** @description Tenant slug, from the link's `school` fragment. */
+            school: string;
+            /** @description From the link's `token` fragment. */
+            token: string;
+        };
+        InvitationPreview: {
+            /** Format: email */
+            email: string;
+            school_name: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        /**
+         * @description ``role_ids`` apply when the account is created or re-invited after an exit;
+         *
+         *     a resend to a pending invitee ignores them (services/invite.py's ``invite_staff``).
          */
         InviteRequest: {
             role_ids?: string[];
@@ -8920,6 +9273,37 @@ export interface components {
             subject: string | null;
             body: string;
         };
+        /** @description `reports.outstanding_and_aging`: one student's balance, bucketed by days past due. */
+        OutstandingAgingReportRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "outstanding-aging";
+            /** Format: uuid */
+            readonly student_id: string;
+            readonly admission_number: string;
+            readonly first_name: string;
+            readonly last_name: string;
+            /** Format: decimal */
+            readonly total_outstanding: string;
+            readonly invoice_count: number;
+            /** Format: decimal */
+            readonly not_yet_due: string;
+            /** Format: decimal */
+            readonly bucket_0_30: string;
+            /** Format: decimal */
+            readonly bucket_31_60: string;
+            /** Format: decimal */
+            readonly bucket_61_90: string;
+            /** Format: decimal */
+            readonly bucket_90_plus: string;
+        };
+        /**
+         * @description * `outstanding-aging` - outstanding-aging
+         * @enum {string}
+         */
+        OutstandingAgingReportRowKindEnum: "outstanding-aging";
         PaginatedAcademicSessionList: {
             data?: components["schemas"]["AcademicSession"][];
             meta?: {
@@ -9649,6 +10033,21 @@ export interface components {
          * @enum {string}
          */
         PassFailAnalysisReportRowKindEnum: "pass-fail-analysis";
+        PasswordResetConfirm: {
+            /** @description Tenant slug, from the link's `school` fragment. */
+            school: string;
+            /** @description From the link's `uid` fragment. */
+            uid: string;
+            /** @description From the link's `token` fragment. */
+            token: string;
+            new_password: string;
+        };
+        PasswordResetRequest: {
+            /** @description Tenant slug. Required: one email can hold accounts at two schools. */
+            school: string;
+            /** Format: email */
+            email: string;
+        };
         PatchedAcademicSession: {
             /** Format: uuid */
             readonly id?: string;
@@ -9851,11 +10250,13 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        /** @description A student-level reduction; `status` moves only through `:revoke`. */
         PatchedDiscount: {
             /** Format: uuid */
             readonly id?: string;
             /** Format: uuid */
             student?: string;
+            readonly student_name?: string;
             /** Format: uuid */
             academic_session?: string;
             name?: string;
@@ -10021,14 +10422,21 @@ export interface components {
             amount?: string;
             /** Format: decimal */
             tax_amount?: string;
-            /** Format: double */
-            readonly gross_amount?: number;
+            /** Format: decimal */
+            readonly gross_amount?: string;
             /** Format: date */
             expense_date?: string;
             payment_method?: components["schemas"]["PaymentMethodEnum"] | null;
             readonly status?: components["schemas"]["ExpenseStatusEnum"];
             /** Format: uuid */
             readonly approved_by?: string | null;
+            /** Format: uuid */
+            readonly created_by?: string | null;
+            /**
+             * Format: uuid
+             * @description Who moved the draft into the approval queue; may differ from created_by.
+             */
+            readonly submitted_by?: string | null;
             /** Format: uuid */
             receipt_file?: string | null;
             /** Format: date-time */
@@ -10162,11 +10570,13 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        /** @description A penalty on a fine-category fee head; `status` moves only through `:waive`. */
         PatchedFine: {
             /** Format: uuid */
             readonly id?: string;
             /** Format: uuid */
             student?: string;
+            readonly student_name?: string;
             /** Format: uuid */
             fee_head?: string;
             fine_type?: components["schemas"]["FineTypeEnum"];
@@ -10260,9 +10670,10 @@ export interface components {
             readonly id?: string;
             /**
              * Format: uuid
-             * @description users(id) — portal account, tenant-checked at write time.
+             * @description users(id) — portal account; set only by :invite (ADR-0033).
              */
-            user_id?: string | null;
+            readonly user_id?: string | null;
+            readonly portal_status?: components["schemas"]["PortalStatusEnum"];
             first_name?: string;
             last_name?: string;
             /** @description Primary contact; indexed for duplicate matching. */
@@ -10582,11 +10993,13 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        /** @description An award whose `status` follows `SCHOLARSHIP_TRANSITIONS`. */
         PatchedScholarship: {
             /** Format: uuid */
             readonly id?: string;
             /** Format: uuid */
             student?: string;
+            readonly student_name?: string;
             /** Format: uuid */
             academic_session?: string;
             name?: string;
@@ -10654,9 +11067,9 @@ export interface components {
             employee_number?: string;
             /**
              * Format: uuid
-             * @description users(id) — portal account, tenant-checked at write time.
+             * @description users(id) — portal account; set only by :invite (ADR-0033).
              */
-            user_id?: string | null;
+            readonly user_id?: string | null;
             first_name?: string;
             last_name?: string;
             gender?: components["schemas"]["GenderEnum"];
@@ -10729,9 +11142,10 @@ export interface components {
             admission_number?: string;
             /**
              * Format: uuid
-             * @description users(id) — portal account, tenant-checked at write time.
+             * @description users(id) — portal account; set only by :invite (ADR-0033).
              */
-            user_id?: string | null;
+            readonly user_id?: string | null;
+            readonly portal_status?: components["schemas"]["PortalStatusEnum"];
             first_name?: string;
             last_name?: string;
             preferred_name?: string | null;
@@ -10914,11 +11328,13 @@ export interface components {
             readonly id: string;
             /** Format: uuid */
             fee_invoice: string;
+            readonly invoice_no: string;
             /**
              * Format: uuid
              * @description Denormalized from the invoice so the student ledger is one query.
              */
             readonly student: string;
+            readonly student_name: string;
             /** Format: decimal */
             amount: string;
             method: components["schemas"]["PaymentMethodEnum"];
@@ -10932,6 +11348,8 @@ export interface components {
              * @description Null for a gateway or voucher self-service payment.
              */
             readonly received_by: string | null;
+            /** Format: uuid */
+            readonly receipt: string | null;
             readonly receipt_no: string;
             /** Format: date-time */
             readonly created_at: string;
@@ -11000,6 +11418,9 @@ export interface components {
             unread_threads: number | null;
             modules: components["schemas"]["PortalModules"];
         };
+        PortalInviteResponse: {
+            readonly portal_status: components["schemas"]["PortalStatusEnum"];
+        };
         PortalModules: {
             attendance: boolean;
             fees: boolean;
@@ -11029,6 +11450,16 @@ export interface components {
             /** Format: date-time */
             readonly acknowledged_at: string | null;
         };
+        /**
+         * @description * `none` - No account
+         *     * `invited` - Invited
+         *     * `expired` - Invitation expired
+         *     * `send_failed` - Invitation not delivered
+         *     * `active` - Active
+         *     * `inactive` - Inactive
+         * @enum {string}
+         */
+        PortalStatusEnum: "none" | "invited" | "expired" | "send_failed" | "active" | "inactive";
         PortalStudent: {
             /** Format: uuid */
             id: string;
@@ -11347,8 +11778,10 @@ export interface components {
             readonly id: string;
             /** Format: uuid */
             payment: string;
+            readonly invoice_no: string;
             /** Format: uuid */
             readonly student: string;
+            readonly student_name: string;
             /** Format: decimal */
             amount: string;
             reason: string;
@@ -11627,11 +12060,13 @@ export interface components {
          * @enum {string}
          */
         RoomTypeEnum: "classroom" | "lab" | "library" | "auditorium" | "sports" | "office" | "other";
+        /** @description An award whose `status` follows `SCHOLARSHIP_TRANSITIONS`. */
         Scholarship: {
             /** Format: uuid */
             readonly id: string;
             /** Format: uuid */
             student: string;
+            readonly student_name: string;
             /** Format: uuid */
             academic_session: string;
             name: string;
@@ -11732,6 +12167,17 @@ export interface components {
             end_date: string;
         };
         /**
+         * @description `POST /voucher-collection-imports` — the multipart body, for the contract.
+         *
+         *     Documentation only: the view validates by hand so a missing file or unknown
+         *     provider keeps its 422 `DomainRuleViolation` shape.
+         */
+        SettlementImportRequest: {
+            /** Format: binary */
+            file: string;
+            provider: components["schemas"]["VoucherProviderEnum"];
+        };
+        /**
          * @description * `processing` - Processing
          *     * `completed` - Completed
          *     * `failed` - Failed
@@ -11765,9 +12211,9 @@ export interface components {
             employee_number?: string;
             /**
              * Format: uuid
-             * @description users(id) — portal account, tenant-checked at write time.
+             * @description users(id) — portal account; set only by :invite (ADR-0033).
              */
-            user_id?: string | null;
+            readonly user_id: string | null;
             first_name: string;
             last_name: string;
             gender?: components["schemas"]["GenderEnum"];
@@ -11993,9 +12439,10 @@ export interface components {
             admission_number?: string;
             /**
              * Format: uuid
-             * @description users(id) — portal account, tenant-checked at write time.
+             * @description users(id) — portal account; set only by :invite (ADR-0033).
              */
-            user_id?: string | null;
+            readonly user_id: string | null;
+            readonly portal_status: components["schemas"]["PortalStatusEnum"];
             first_name: string;
             last_name: string;
             preferred_name?: string | null;
@@ -12193,6 +12640,17 @@ export interface components {
             /** Format: uri */
             file: string;
         };
+        /**
+         * @description A student has no email on file, so the address comes with the invite.
+         *
+         *     It is stored only on the student's account. A resend to an account nobody has activated
+         *     goes to this address, which corrects a mistyped one; an account that was once active keeps
+         *     its own address.
+         */
+        StudentInviteRequest: {
+            /** Format: email */
+            email: string;
+        };
         /** @description `reports.student_late_arrivals`: late days and their minutes, most late days first. */
         StudentLateArrivalsReportRow: {
             /** Format: uuid */
@@ -12215,6 +12673,67 @@ export interface components {
          * @enum {string}
          */
         StudentLateArrivalsReportRowKindEnum: "student-late-arrivals";
+        /**
+         * @description The documented wire envelope of `GET /students/{id}/ledger`.
+         *
+         *     Documentation only: the view builds the payload itself. It exists so `meta`
+         *     (and its `closing_balance`) is typed in the OpenAPI contract, the way a paginated
+         *     list's `meta.pagination` is, instead of living in a description.
+         */
+        StudentLedgerEnvelope: {
+            data: components["schemas"]["StudentStatementEntry"][];
+            meta: components["schemas"]["StudentLedgerMeta"];
+        };
+        /** @description `meta` of `GET /students/{id}/ledger`: the line count and the server's closing balance. */
+        StudentLedgerMeta: {
+            row_count: number;
+            /** Format: decimal */
+            closing_balance: string;
+        };
+        /** @description `reports.student_ledger`: a statement line, the discriminator on `kind`. */
+        StudentLedgerReportRow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "student-ledger";
+            readonly entry_type: components["schemas"]["FeeStatementEntryKindEnum"];
+            /** Format: date */
+            readonly date: string | null;
+            readonly reference: string;
+            readonly description: string;
+            /** Format: decimal */
+            readonly debit: string;
+            /** Format: decimal */
+            readonly credit: string;
+            /** Format: decimal */
+            readonly balance: string;
+        };
+        /**
+         * @description * `student-ledger` - student-ledger
+         * @enum {string}
+         */
+        StudentLedgerReportRowKindEnum: "student-ledger";
+        /**
+         * @description One line of a student's statement: a charge, a payment or a refund, with its running balance.
+         *
+         *     The wire shape of `GET /students/{id}/ledger`. `kind` here is the line's own
+         *     type, so the report row (which needs `kind` for the discriminator) carries it
+         *     as `entry_type` instead.
+         */
+        StudentStatementEntry: {
+            /** Format: date */
+            readonly date: string | null;
+            readonly kind: components["schemas"]["FeeStatementEntryKindEnum"];
+            readonly reference: string;
+            readonly description: string;
+            /** Format: decimal */
+            readonly debit: string;
+            /** Format: decimal */
+            readonly credit: string;
+            /** Format: decimal */
+            readonly balance: string;
+        };
         /**
          * @description * `active` - Active
          *     * `suspended` - Suspended
@@ -12686,6 +13205,30 @@ export interface components {
          * @enum {string}
          */
         TransferTypeEnum: "inter_campus" | "outgoing" | "incoming";
+        /** @description `ledger.trial_balance`: every account's debit and credit totals, and their difference. */
+        TrialBalanceReportRow: {
+            /** Format: uuid */
+            readonly ledger_account_id: string;
+            readonly account_type: components["schemas"]["LedgerAccountTypeEnum"];
+            /** Format: decimal */
+            readonly total_debit: string;
+            /** Format: decimal */
+            readonly total_credit: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "trial-balance";
+            readonly code: string;
+            readonly name: string;
+            /** Format: decimal */
+            readonly balance: string;
+        };
+        /**
+         * @description * `trial-balance` - trial-balance
+         * @enum {string}
+         */
+        TrialBalanceReportRowKindEnum: "trial-balance";
         UnreadCount: {
             unread: number;
         };
@@ -13484,6 +14027,55 @@ export interface operations {
             };
         };
     };
+    "auth_invitations:accept_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvitationAccept"];
+                "application/x-www-form-urlencoded": components["schemas"]["InvitationAccept"];
+                "multipart/form-data": components["schemas"]["InvitationAccept"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "auth_invitations:preview_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvitationLink"];
+                "application/x-www-form-urlencoded": components["schemas"]["InvitationLink"];
+                "multipart/form-data": components["schemas"]["InvitationLink"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationPreview"];
+                };
+            };
+        };
+    };
     auth_login_create: {
         parameters: {
             query?: never;
@@ -13543,6 +14135,54 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["User"];
                 };
+            };
+        };
+    };
+    auth_password_reset_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PasswordResetRequest"];
+                "multipart/form-data": components["schemas"]["PasswordResetRequest"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "auth_password_reset:confirm_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetConfirm"];
+                "application/x-www-form-urlencoded": components["schemas"]["PasswordResetConfirm"];
+                "multipart/form-data": components["schemas"]["PasswordResetConfirm"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -17089,6 +17729,34 @@ export interface operations {
             };
         };
     };
+    "guardians_:invite_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalInviteResponse"];
+                };
+            };
+            /** @description portal_disabled, email_in_use, not_eligible or already_active */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     holiday_calendar_retrieve: {
         parameters: {
             query?: never;
@@ -18845,6 +19513,7 @@ export interface operations {
                 /** @description Number of results to return per page. */
                 page_size?: number;
                 paid_at__gte?: string;
+                paid_at__lt?: string;
                 paid_at__lte?: string;
                 received_by?: string;
                 /** @description A search term. */
@@ -19396,6 +20065,7 @@ export interface operations {
                 receipt_no?: string;
                 /** @description A search term. */
                 search?: string;
+                student?: string;
             };
             header?: never;
             path?: never;
@@ -19437,7 +20107,10 @@ export interface operations {
     };
     receipts_download_retrieve: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Layout: A4 `pdf` (default) or `thermal` roll. */
+                format?: "pdf" | "thermal";
+            };
             header?: never;
             path: {
                 id: string;
@@ -19868,6 +20541,12 @@ export interface operations {
     reports_finance_summary_retrieve: {
         parameters: {
             query: {
+                /** @description The invoice's session (the grant's, or the student's enrollment, for grants). */
+                academic_session_id?: string | null;
+                /** @description The student's campus (an expense's, for `expense-register`). */
+                campus_id?: string | null;
+                /** @description The class the invoice was billed to (the student's enrollment, for grants). */
+                class_id?: string | null;
                 date_from: string;
                 date_to: string;
                 /**
@@ -19882,7 +20561,17 @@ export interface operations {
                  *     * `cashier` - cashier
                  */
                 group_by?: "day" | "method" | "cashier";
-                kind: string;
+                /**
+                 * @description * `collection` - collection
+                 *     * `outstanding-aging` - outstanding-aging
+                 *     * `student-ledger` - student-ledger
+                 *     * `grant-register` - grant-register
+                 *     * `income-vs-expense` - income-vs-expense
+                 *     * `budget-variance` - budget-variance
+                 *     * `expense-register` - expense-register
+                 *     * `trial-balance` - trial-balance
+                 */
+                kind: "collection" | "outstanding-aging" | "student-ledger" | "grant-register" | "income-vs-expense" | "budget-variance" | "expense-register" | "trial-balance";
                 student?: string | null;
             };
             header?: never;
@@ -19891,12 +20580,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
+            /** @description The report's rows, each carrying the report's `kind`. `meta` carries `kind`, `row_count`, `date_from` and `date_to`. Over 1000 rows the response is a 422 carrying `meta.row_limit`; `POST` the same parameters for an export job. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["FinanceReportRow"][];
+                };
             };
         };
     };
@@ -19915,7 +20606,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description No response body */
+            /** @description A job resource; poll GET /jobs/{id}. */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -21014,7 +21705,7 @@ export interface operations {
                     "application/json": components["schemas"]["Staff"];
                 };
             };
-            /** @description Already linked */
+            /** @description email_in_use, already_active, or the staff member has exited */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -22077,12 +22768,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
+            /** @description The statement's lines in `data`, in date order, each with its running `balance`. `meta.closing_balance` is the last line's balance, or zero for no lines. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["StudentLedgerEnvelope"];
+                };
             };
         };
     };
@@ -22137,6 +22830,40 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["StudentEnrollment"];
                 };
+            };
+        };
+    };
+    "students_:invite_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StudentInviteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["StudentInviteRequest"];
+                "multipart/form-data": components["schemas"]["StudentInviteRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalInviteResponse"];
+                };
+            };
+            /** @description portal_disabled, email_in_use, not_eligible or already_active */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -23261,7 +23988,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["SettlementImportRequest"];
+            };
+        };
         responses: {
             /** @description No response body */
             202: {
@@ -23352,7 +24083,10 @@ export interface operations {
     };
     vouchers_download_retrieve: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Layout: A4 `pdf` (default) or `thermal` roll. */
+                format?: "pdf" | "thermal";
+            };
             header?: never;
             path: {
                 id: string;

@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@schoolhub/ui";
 
 import { FilterSelect } from "@/components/filter-select";
-import { DateRangeInputs } from "@/features/attendance/date-range-inputs";
+import { DateRangeInputs } from "@/components/date-range-inputs";
 import { useClasses } from "@/hooks/use-reference-data";
 import { FILTER_ALL } from "@/lib/constants";
 import {

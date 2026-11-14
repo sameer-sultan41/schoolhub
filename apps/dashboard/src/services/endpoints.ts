@@ -21,6 +21,12 @@ export const endpoints = {
     me: "/auth/me",
     changePassword: "/auth/change-password",
     refresh: "/refresh",
+    /** Unauthenticated, straight to the API (no refresh cookie involved): the emailed
+     * invitation and reset links (ADR-0033). Colon-actions, not nested paths. */
+    invitationPreview: "/auth/invitations:preview",
+    invitationAccept: "/auth/invitations:accept",
+    passwordReset: "/auth/password-reset",
+    passwordResetConfirm: "/auth/password-reset:confirm",
   },
   tenant: {
     /** The authenticated user's own tenant — name, branding, locale, contact. */
@@ -37,6 +43,8 @@ export const endpoints = {
      */
     staffDetail: (id: string) => `/staff/${id}`,
     staffExit: (id: string) => `/staff/${id}:exit`,
+    /** `POST /staff/{id}:invite`: creates the account and emails an invitation, or resends one. */
+    staffInvite: (id: string) => `/staff/${id}:invite`,
     /** `POST /staff-exports`/`POST /staff-imports` -> `202` + job
      * (`apps/api/apps/staff_management/staff/urls.py`) — each queues a `core.jobs`
      * background job; poll it via `jobs.detail` below. */
@@ -141,6 +149,12 @@ export const endpoints = {
   /** `GET` runs a report (rows inline, or `202` + job when large); `POST` exports it as a job. */
   attendanceReports: {
     summary: "/reports/attendance-summary",
+  },
+  /** `FinanceReportView`: `GET` runs a report inline (`fees.report.view`; a 422 with `meta.row_limit` past 1000 rows), `POST` exports it as a job (`fees.report.export`). */
+  financeReports: {
+    summary: "/reports/finance-summary",
+    /** `GET` a student's whole statement (`fees.invoice.view`): rows in `data`, `meta.closing_balance`. */
+    studentLedger: (studentId: string) => `/students/${studentId}/ledger`,
   },
   /** `ExamReportView`: `GET` runs a report inline (a `202` + job past 1000 rows), `POST` exports. */
   examReports: {
@@ -272,6 +286,8 @@ export const endpoints = {
      * `/students/{id}:enroll`/`/students/{id}:change-section`. */
     enroll: (id: string) => `/students/${id}:enroll`,
     changeSection: (id: string) => `/students/${id}:change-section`,
+    /** `POST /students/{id}:invite` (ADR-0033): portal invitation, or a resend. */
+    invite: (id: string) => `/students/${id}:invite`,
     history: (id: string) => `/students/${id}/history`,
     emergencyContacts: (studentId: string) => `/students/${studentId}/emergency-contacts`,
     documents: (studentId: string) => `/students/${studentId}/documents`,
@@ -300,6 +316,8 @@ export const endpoints = {
     /** Nested under one student — `GET` lists that student's links, `POST` creates one.
      * The guardian itself is not created here (see `guardians.list` above). */
     studentLinks: (studentId: string) => `/students/${studentId}/guardians`,
+    /** `POST /guardians/{id}:invite` (ADR-0033): portal invitation to the email on file. */
+    invite: (id: string) => `/guardians/${id}:invite`,
   },
   /** Top-level access to a single link — `PATCH` only (module doc §16: "link flags
    * updatable via PATCH /api/v1/student-guardians/{id}"). */
@@ -381,20 +399,116 @@ export const endpoints = {
     detail: (id: string) => `/notices/${id}`,
     acknowledge: (id: string) => `/notices/${id}:acknowledge`,
   },
-  /** `/fee-invoices`: read-only for a guardian (published, non-draft rows only). */
+  /** `/fee-invoices`: read-only for a guardian (published, non-draft rows only); staff write with `fees.invoice.create|update`. */
   feeInvoices: {
     list: "/fee-invoices",
     detail: (id: string) => `/fee-invoices/${id}`,
+    /** Colon-actions, not nested paths: the registered routes are `/fee-invoices:generate` and `/fee-invoices/{id}:cancel`. */
+    generate: "/fee-invoices:generate",
+    cancel: (id: string) => `/fee-invoices/${id}:cancel`,
+  },
+  /** `/discounts`: read with `fees.discount.view`, written with `fees.discount.create`; `:revoke` needs `fees.discount.waive`. No DELETE route exists. */
+  discounts: {
+    list: "/discounts",
+    detail: (id: string) => `/discounts/${id}`,
+    /** Colon-action, not a nested path: the registered route is `/discounts/{id}:revoke`. */
+    revoke: (id: string) => `/discounts/${id}:revoke`,
+  },
+  /** `/scholarships`: read with `fees.discount.view`, written with `fees.scholarship.create`; the lifecycle moves through PATCH `status`. No DELETE route exists. */
+  scholarships: {
+    list: "/scholarships",
+    detail: (id: string) => `/scholarships/${id}`,
+  },
+  /** `/fines`: read with `fees.fine.view`, written with `fees.fine.create`; `:waive` needs `fees.fine.waive`. No DELETE route exists. */
+  fines: {
+    list: "/fines",
+    detail: (id: string) => `/fines/${id}`,
+    waive: (id: string) => `/fines/${id}:waive`,
+  },
+  /** `/payments`: read with `fees.payment.view` (also the key for receipts and vouchers). */
+  payments: {
+    list: "/payments",
+    /** Colon-action, not a nested path: the registered route is `/payments:record` (`fees.payment.collect`). */
+    record: "/payments:record",
   },
   /** `/vouchers`: a guardian reads the slips of their own child's invoices; `download` streams
    * a PDF (`?format=pdf|thermal`). */
   vouchers: {
     list: "/vouchers",
     download: (id: string) => `/vouchers/${id}/download`,
+    /** Nested under the invoice (`fees.payment.collect`): the registered route is `/fee-invoices/{id}/vouchers`. */
+    issue: (invoiceId: string) => `/fee-invoices/${invoiceId}/vouchers`,
+    /** Colon-action, not a nested path: the registered route is `/vouchers/{id}:void` (`fees.payment.collect`). */
+    void: (id: string) => `/vouchers/${id}:void`,
+  },
+  /** `/refunds`: read with `fees.payment.view`. Every transition is a colon-action: `:create` needs
+   * `fees.payment.refund` (a collection action, not a plain POST), `:approve`, `:reject` and
+   * `:process` need `fees.refund.approve`. */
+  refunds: {
+    list: "/refunds",
+    create: "/refunds:create",
+    approve: (id: string) => `/refunds/${id}:approve`,
+    reject: (id: string) => `/refunds/${id}:reject`,
+    process: (id: string) => `/refunds/${id}:process`,
+  },
+  /** `/voucher-collection-imports`: read with `fees.payment.view`; the multipart POST (202 + job)
+   * needs `fees.payment.collect`. Staff-only. */
+  settlementImports: {
+    list: "/voucher-collection-imports",
+    detail: (id: string) => `/voucher-collection-imports/${id}`,
   },
   /** `/receipts`; `download` streams a PDF (`?format=pdf|thermal`). */
   receipts: {
     list: "/receipts",
     download: (id: string) => `/receipts/${id}/download`,
+  },
+  /** `/ledger-accounts`: the chart of accounts. Read with `fees.ledger.view`, written with `fees.ledger.create`. */
+  ledgerAccounts: {
+    list: "/ledger-accounts",
+    detail: (id: string) => `/ledger-accounts/${id}`,
+  },
+  /** `/ledger-entries`: the general ledger, read with `fees.ledger.view`. `:post-journal` needs `fees.ledger.create`. Entries are never edited or deleted. */
+  ledgerEntries: {
+    list: "/ledger-entries",
+    postJournal: "/ledger-entries:post-journal",
+  },
+  /** `/expense-categories`: read with `fees.expense.view`, written with `fees.expense.create`. */
+  expenseCategories: {
+    list: "/expense-categories",
+    detail: (id: string) => `/expense-categories/${id}`,
+  },
+  /** `/expenses`: read with `fees.expense.view`. `:submit` needs `.create`, `:approve`, `:reject` and `:reverse` need `.approve`, `:mark-paid` needs `.update`. No delete. */
+  expenses: {
+    list: "/expenses",
+    detail: (id: string) => `/expenses/${id}`,
+    submit: (id: string) => `/expenses/${id}:submit`,
+    approve: (id: string) => `/expenses/${id}:approve`,
+    reject: (id: string) => `/expenses/${id}:reject`,
+    markPaid: (id: string) => `/expenses/${id}:mark-paid`,
+    reverse: (id: string) => `/expenses/${id}:reverse`,
+  },
+  /** `/budgets`: read with `fees.expense.view`, written with `fees.budget.create`; `:approve` needs `fees.budget.approve`. No delete. */
+  budgets: {
+    list: "/budgets",
+    detail: (id: string) => `/budgets/${id}`,
+    approve: (id: string) => `/budgets/${id}:approve`,
+  },
+  /** `/fee-heads`: read with `fees.fee-structure.view`, written with `fees.fee-structure.create|update|delete`. */
+  feeHeads: {
+    list: "/fee-heads",
+    detail: (id: string) => `/fee-heads/${id}`,
+  },
+  /** `/fee-structures` (`fees.fee-structure.view|create|update|delete`) and its lifecycle colon-actions, which need `.update`. */
+  feeStructures: {
+    list: "/fee-structures",
+    detail: (id: string) => `/fee-structures/${id}`,
+    /** Colon-action, not a nested path: the registered route is `/fee-structures/{id}:activate`. */
+    activate: (id: string) => `/fee-structures/${id}:activate`,
+    archive: (id: string) => `/fee-structures/${id}:archive`,
+  },
+  /** `/fee-schedules` (`fees.fee-structure.*`, the same keys as the structure): a structure's lines. */
+  feeSchedules: {
+    list: "/fee-schedules",
+    detail: (id: string) => `/fee-schedules/${id}`,
   },
 } as const;

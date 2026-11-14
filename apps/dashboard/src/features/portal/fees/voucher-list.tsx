@@ -2,11 +2,11 @@
 
 import { useLocale, useTranslations } from "next-intl";
 
-import { enumLabel } from "@/features/portal/enum-label";
+import { enumLabel } from "@/lib/enum-label";
 import { PortalDownloadButton } from "@/features/portal/portal-download-button";
 import { formatDate, saveBlob } from "@/lib/helpers";
 import { Services, type VoucherRecord } from "@/services";
-import { VOUCHER_PROVIDER_LABEL_KEY } from "./voucher-labels";
+import { VOUCHER_PROVIDER_LABEL_KEY } from "@/features/fees/shared/voucher-labels";
 
 /** One voucher's PDF. The download carries the bearer token (a bare link would not), so it is
  * fetched as a blob and saved. */

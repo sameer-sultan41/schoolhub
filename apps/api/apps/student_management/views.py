@@ -34,6 +34,15 @@ from apps.student_management.models import (
     StudentGuardian,
     StudentTransfer,
 )
+from apps.student_management.portal_accounts.serializers import (
+    PortalInviteResponseSerializer,
+    StudentInviteRequestSerializer,
+)
+from apps.student_management.portal_accounts.services import (
+    invite_to_portal,
+    portal_status_of,
+    with_portal_status,
+)
 from apps.student_management.serializers import (
     STUDENT_UPDATE,
     STUDENT_VIEW,
@@ -67,6 +76,8 @@ from apps.student_management.services import (
     link_guardian,
     reject_transfer,
     request_transfer,
+    sync_student_portal_accounts,
+    update_guardian_link,
     verify_document,
     withdraw_student,
 )
@@ -88,6 +99,11 @@ from core.rbac.permissions import holds_key_for, route_permission, scope_queryse
 
 # The key that lets a withdrawal waive outstanding clearance (`withdraw`).
 WITHDRAWAL_APPROVE = "students.withdrawal.approve"
+# `:invite` on a guardian or a student (ADR-0033).
+PORTAL_INVITE = "students.portal-account.invite"
+_INVITE_CONFLICTS = OpenApiResponse(
+    description="portal_disabled, email_in_use, not_eligible or already_active"
+)
 
 # PolymorphicProxySerializer is annotation-only (no real to_representation) —
 # the actual runtime dispatch for `history` below is this plain dict lookup. Explicitly
@@ -154,6 +170,7 @@ class StudentViewSet(TenantModelViewSet):
         "enroll": "students.enrollment.enroll",
         "change_section": "students.enrollment.update",
         "withdraw": "students.student.withdraw",
+        "invite": PORTAL_INVITE,
     }
     # §16 declares no PUT — additive edits are PATCH; a full replace is not part
     # of the documented contract.
@@ -173,7 +190,7 @@ class StudentViewSet(TenantModelViewSet):
         ``select_related`` is what keeps this to the three joins the serializer already
         needed (campus, house, photo_file) rather than one query per row.
         """
-        return (
+        return with_portal_status(
             super()
             .get_queryset()
             .select_related("campus", "house", "photo_file")
@@ -212,7 +229,6 @@ class StudentViewSet(TenantModelViewSet):
             last_name=data["last_name"],
             preferred_name=data.get("preferred_name"),
             gender=data["gender"],
-            user_id=data.get("user_id"),
             photo_file=data.get("photo_file"),
             blood_group=data.get("blood_group"),
             nationality=data.get("nationality"),
@@ -343,6 +359,8 @@ class StudentViewSet(TenantModelViewSet):
                 and self.holds_key_for_row(request.user, WITHDRAWAL_APPROVE, student),
                 actor_id=request.user.pk,
             )
+            # Re-read: the row's `portal_status` annotation predates the deactivation.
+            withdrawn = self.get_queryset().get(pk=withdrawn.pk)
             after = self.get_serializer(withdrawn).data
             record_audit(
                 request,
@@ -360,6 +378,35 @@ class StudentViewSet(TenantModelViewSet):
             request_data=request.data,
             execute=execute,
         )
+
+    @extend_schema(
+        summary="Invite this student to the portal by email, or resend their invitation",
+        request=StudentInviteRequestSerializer,
+        responses={200: PortalInviteResponseSerializer, 409: _INVITE_CONFLICTS},
+    )
+    def invite(self, request, pk=None) -> Response:
+        student = self.get_object()
+        payload = StudentInviteRequestSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+
+        def execute() -> Response:
+            invite_to_portal(
+                person=student, actor_id=request.user.pk, email=payload.validated_data["email"]
+            )
+            return _invite_response(request, student)
+
+        return replay_or_execute(
+            tenant_id=request.tenant.pk,
+            key=request.headers.get("Idempotency-Key"),
+            endpoint="students:invite",
+            request_data=request.data,
+            execute=execute,
+        )
+
+    def perform_destroy(self, instance: Student) -> None:
+        """Soft-delete, then end the portal accounts that hung on this student (ADR-0033)."""
+        super().perform_destroy(instance)
+        sync_student_portal_accounts(student_id=instance.pk, actor_id=self.request.user.pk)
 
     @extend_schema(
         summary="Assemble a student's chronological history",
@@ -401,13 +448,46 @@ class GuardianViewSet(
         "create": "students.guardian.create",
         "update": "students.guardian.update",
         "partial_update": "students.guardian.update",
+        "invite": PORTAL_INVITE,
     }
+    # `:invite` finds the guardian under its own key's scope alone, so a role holding the
+    # invite key without `students.guardian.view` can still invite.
+    scope_read_exempt_actions = frozenset({"invite"})
     # A guardian has no campus of its own; scope through the students they are
     # linked to. distinct() because that traversal is one-to-many.
     scope_campus_field = "student_links__student__campus_id"
 
     def get_queryset(self):
-        return super().get_queryset().select_related("photo_file").distinct()
+        return with_portal_status(super().get_queryset().select_related("photo_file").distinct())
+
+    @extend_schema(
+        summary="Invite this guardian to the portal at their email on file, or resend",
+        request=None,
+        responses={200: PortalInviteResponseSerializer, 409: _INVITE_CONFLICTS},
+    )
+    def invite(self, request, pk=None) -> Response:
+        guardian = self.get_object()
+
+        def execute() -> Response:
+            invite_to_portal(person=guardian, actor_id=request.user.pk)
+            return _invite_response(request, guardian)
+
+        return replay_or_execute(
+            tenant_id=request.tenant.pk,
+            key=request.headers.get("Idempotency-Key"),
+            endpoint="guardians:invite",
+            request_data=request.data,
+            execute=execute,
+        )
+
+
+def _invite_response(request: Request, person: Guardian | Student) -> Response:
+    """`{data: {portal_status}}`, read after the invite, and the audit row."""
+    from core.audit.services import record_audit
+
+    portal_status = portal_status_of(person)
+    record_audit(request, "invite", person, after={"portal_status": portal_status})
+    return ActionResponse.ok({"portal_status": portal_status}, message="Invitation sent.")
 
 
 class StudentGuardianViewSet(
@@ -434,35 +514,23 @@ class StudentGuardianViewSet(
     scope_campus_field = "student__campus_id"
 
     def perform_update(self, serializer) -> None:
-        """Route a primary-flag change through the service, not a bare save.
+        """Route every link change through `update_guardian_link`, never a bare save.
 
-        Promoting a link to primary must demote the incumbent first — the
-        partial unique index only allows one — so this cannot be a plain
-        ``serializer.save()`` the moment ``is_primary`` is part of the payload.
+        Promoting to primary must demote the incumbent first (the partial unique index
+        allows one), and revoking `has_portal_access` may end the guardian's portal
+        account (ADR-0033); the service does both.
         """
-        if serializer.validated_data.get("is_primary"):
-            from apps.student_management.services import set_primary_guardian
+        from core.audit.services import record_audit
 
-            before = self.get_serializer(serializer.instance).data
-            instance = set_primary_guardian(
-                student=serializer.instance.student,
-                link=serializer.instance,
-                actor_id=self.request.user.pk,
-            )
-            # Apply any other changed fields (relationship, can_pick_up, …) on
-            # top of the now-primary link, in the same request.
-            remaining = {k: v for k, v in serializer.validated_data.items() if k != "is_primary"}
-            for field, value in remaining.items():
-                setattr(instance, field, value)
-            if remaining:
-                instance.updated_by = self.request.user.pk
-                instance.save(update_fields=[*remaining.keys(), "updated_by", "updated_at"])
-            serializer.instance = instance
-            from core.audit.services import record_audit
-
-            record_audit(self.request, "update", instance, before=before, after=serializer.data)
-        else:
-            super().perform_update(serializer)
+        before = self.get_serializer(serializer.instance).data
+        serializer.instance = update_guardian_link(
+            link=serializer.instance,
+            changes=serializer.validated_data,
+            actor_id=self.request.user.pk,
+        )
+        record_audit(
+            self.request, "update", serializer.instance, before=before, after=serializer.data
+        )
 
 
 class _NestedUnderStudentMixin:

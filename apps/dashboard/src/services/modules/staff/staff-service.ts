@@ -131,6 +131,21 @@ export async function exitStaff(id: string, input: ExitStaffInput): Promise<Staf
   return data;
 }
 
+/**
+ * `POST /staff/{id}:invite` (ADR-0033): creates the staff member's account and emails an
+ * invitation, or resends one while the account is pending. No `role_ids`: roles are
+ * assigned through role management, and a resend ignores them anyway. A 409
+ * `already_active` or `email_in_use` comes back as an `ApiError`.
+ */
+export async function inviteStaff(id: string, idempotencyKey: string): Promise<StaffDetailRecord> {
+  const { data } = await apiClient.post<StaffDetailRecord>(
+    endpoints.dashboard.staffInvite(id),
+    undefined,
+    { idempotencyKey },
+  );
+  return data;
+}
+
 /** `GET /staff/{id}` — the one full staff record, for the edit form's pre-fill. */
 export async function fetchStaffById(id: string): Promise<StaffDetailRecord> {
   const { data } = await apiClient.get<StaffDetailRecord>(endpoints.dashboard.staffDetail(id));

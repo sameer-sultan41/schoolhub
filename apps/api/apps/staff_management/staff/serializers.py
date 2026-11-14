@@ -11,7 +11,6 @@ docs/05-database/entities/people.md and the filter names in the module doc §16.
 
 from __future__ import annotations
 
-import uuid
 from typing import Any
 
 from rest_framework import serializers
@@ -26,7 +25,6 @@ from apps.staff_management.staff.services.create import (
     assert_employee_number_immutable,
     assert_national_id_available,
     assert_reports_to_acyclic,
-    resolve_tenant_user_id,
 )
 from core.files.models import File
 from core.files.serializers import SignedFileURLField
@@ -95,7 +93,15 @@ class StaffSerializer(serializers.ModelSerializer):
         )
         # employment_status/exit_date/exit_reason move only through the :exit
         # colon-action (§4/§7 exit workflow), never a plain PATCH.
-        read_only_fields = (*READ_ONLY_FIELDS, "employment_status", "exit_date", "exit_reason")
+        # user_id: set only by `:invite` (ADR-0033). A writable link let a caller point a
+        # staff row at someone else's login, which `:exit` would then deactivate.
+        read_only_fields = (
+            *READ_ONLY_FIELDS,
+            "employment_status",
+            "exit_date",
+            "exit_reason",
+            "user_id",
+        )
 
     def validate_photo_file_id(self, value: File | None) -> File | None:
         # `_fk()` only proves the file exists in this tenant. Without this, a PATCH could
@@ -109,15 +115,6 @@ class StaffSerializer(serializers.ModelSerializer):
         if self.instance is not None:
             assert_employee_number_immutable(instance=self.instance, new_value=value)
         return value
-
-    def validate_user_id(self, value: uuid.UUID | None) -> uuid.UUID | None:
-        """Re-run on every write, not just create — see StudentSerializer's
-
-        identical hook for why: ``perform_update`` saves a PATCH straight
-        through with no tenant-ownership recheck of its own.
-        """
-        tenant = self.context["request"].tenant
-        return resolve_tenant_user_id(user_id=value, tenant_id=tenant.pk)
 
     def validate_national_id(self, value: str | None) -> str | None:
         if value:
@@ -142,9 +139,9 @@ class StaffSerializer(serializers.ModelSerializer):
 
 
 class InviteRequestSerializer(serializers.Serializer):
-    """No email is sent (§17 gap — no notification infrastructure exists yet,
-    see services/invite.py's ``invite_staff`` docstring); this only creates and
-    links the account plus assigns the requested roles.
+    """``role_ids`` apply when the account is created or re-invited after an exit;
+
+    a resend to a pending invitee ignores them (services/invite.py's ``invite_staff``).
     """
 
     role_ids = serializers.ListField(

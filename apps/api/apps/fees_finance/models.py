@@ -150,6 +150,19 @@ class ScholarshipStatus(models.TextChoices):
     REVOKED = "revoked", "Revoked"
 
 
+#: The scholarship lifecycle, one table: status -> the statuses it may move to.
+#: `ended` and `revoked` are terminal (an empty set), so a revoked award cannot be
+#: quietly re-activated by a PATCH. Applied -> revoked is allowed because an
+#: application can be turned down before it is ever approved.
+SCHOLARSHIP_TRANSITIONS: dict[str, frozenset[str]] = {
+    ScholarshipStatus.APPLIED: frozenset({ScholarshipStatus.APPROVED, ScholarshipStatus.REVOKED}),
+    ScholarshipStatus.APPROVED: frozenset({ScholarshipStatus.ACTIVE, ScholarshipStatus.REVOKED}),
+    ScholarshipStatus.ACTIVE: frozenset({ScholarshipStatus.ENDED, ScholarshipStatus.REVOKED}),
+    ScholarshipStatus.ENDED: frozenset(),
+    ScholarshipStatus.REVOKED: frozenset(),
+}
+
+
 class FineType(models.TextChoices):
     LATE_FEE = "late_fee", "Late fee"
     LIBRARY = "library", "Library"
@@ -1516,8 +1529,8 @@ class ExpenseCategory(TenantOwnedModel):
 class Expense(TenantOwnedModel):
     """One outgoing payment, under an approval gate.
 
-    **The approver may not be the submitter**, which §15 states outright and the
-    CHECK below carries as far as a constraint can. The service holds the rest,
+    **The approver may be neither the creator nor the submitter** (§15). The CHECK
+    below carries the creator half as far as a constraint can. The service holds the rest,
     because a constraint cannot know who is asking — the same split refunds use.
 
     `status` is the gate: only an `approved` expense posts to the ledger, and
@@ -1554,6 +1567,11 @@ class Expense(TenantOwnedModel):
         max_length=15, choices=ExpenseStatus.choices, default=ExpenseStatus.DRAFT
     )
     approved_by = models.UUIDField(null=True, blank=True)
+    submitted_by = models.UUIDField(
+        null=True,
+        blank=True,
+        help_text="Who moved the draft into the approval queue; may differ from created_by.",
+    )
     receipt_file = models.ForeignKey(
         "files.File",
         on_delete=models.SET_NULL,

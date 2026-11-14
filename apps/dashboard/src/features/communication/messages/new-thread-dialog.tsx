@@ -37,7 +37,7 @@ import {
 } from "./new-thread-form-schema";
 import { RecipientPicker } from "./recipient-picker";
 import { ChildStudentSelect } from "./child-student-select";
-import { StudentPicker, type PickedStudent } from "./student-picker";
+import { StudentPicker, type PickedStudent } from "@/components/student-picker";
 import { useInvalidateThreads } from "./use-invalidate-threads";
 
 export interface NewThreadDialogProps {

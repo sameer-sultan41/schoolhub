@@ -10,8 +10,9 @@ documented deviation: ``user_id`` is a plain UUID column, not a ForeignKey to
 to find a user *before* any tenant context exists), so a
 ``PrimaryKeyRelatedField`` bound to it would happily resolve another tenant's
 user id — a cross-tenant identity leak, not just a modelling choice.
-``services.resolve_tenant_staff_id``/``resolve_tenant_user_id`` do the
-tenant-checked resolution an FK cannot express here. The same reasoning
+``services.resolve_tenant_staff_id`` does the tenant-checked resolution an FK
+cannot express here; ``user_id`` is not client-writable at all, and only
+``staff.services.invite.invite_staff`` sets it (ADR-0033). The same reasoning
 applies to every ``verified_by`` column below: always set server-side from
 ``request.user.pk``, never client-supplied, so it stays a plain UUID column
 purely for consistency with student_management's established audit-reference
@@ -105,7 +106,9 @@ class Staff(TenantOwnedModel):
         "after creation (§11) — see services.assert_employee_number_immutable.",
     )
     user_id = models.UUIDField(
-        null=True, blank=True, help_text="users(id) — portal account, tenant-checked at write time."
+        null=True,
+        blank=True,
+        help_text="users(id) — portal account; set only by :invite (ADR-0033).",
     )
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
