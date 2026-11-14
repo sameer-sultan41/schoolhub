@@ -30,10 +30,12 @@ from apps.fees_finance.models import (
     FeeStructure,
     FeeVoucher,
     Fine,
+    GatewayReconciliationIssue,
     GrantValueType,
     LedgerAccount,
     LedgerEntry,
     Payment,
+    PaymentGatewayAccount,
     PaymentMethod,
     Receipt,
     Refund,
@@ -675,6 +677,92 @@ class RecordPaymentSerializer(serializers.Serializer):
                         "§20."
                     )
                 }
+            )
+        return attrs
+
+
+# --- Online payments -------------------------------------------------------- #
+
+
+class PaymentGatewayAccountSerializer(serializers.ModelSerializer):
+    """The school's gateway account as staff see it: never the credentials.
+
+    `callback_url` is what the school pastes into its provider dashboard; it is
+    built by the view from the account's callback token.
+    """
+
+    callback_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PaymentGatewayAccount
+        fields = ["id", "provider", "is_active", "merchant_id_masked", "callback_url", "updated_at"]
+        read_only_fields = fields
+
+    def get_callback_url(self, obj: PaymentGatewayAccount) -> str:
+        build = self.context["callback_url"]
+        return build(obj)
+
+
+class SavePaymentGatewayAccountSerializer(serializers.Serializer):
+    """`PUT /payment-gateway-accounts/current`. Credentials are write-only.
+
+    Omit `credentials` to change only `is_active` on the same provider; a new
+    provider needs them.
+    """
+
+    provider = serializers.CharField(max_length=40)
+    credentials = serializers.DictField(
+        child=serializers.CharField(max_length=500), required=False, write_only=True
+    )
+    is_active = serializers.BooleanField(default=True)
+
+
+class InitiatePaymentSerializer(serializers.Serializer):
+    """`POST /fee-invoices/{id}:initiate-payment`. The amount is the available balance."""
+
+    return_path = serializers.CharField(max_length=500)
+
+    def validate_return_path(self, value: str) -> str:
+        # A path in the portal only: an absolute URL or `//host` would be an open redirect.
+        if not value.startswith("/portal/") or "//" in value or "\\" in value:
+            raise serializers.ValidationError("Must be a path starting with /portal/.")
+        return value
+
+
+class InitiatePaymentResultSerializer(serializers.Serializer):
+    payment_id = serializers.UUIDField()
+    redirect_url = serializers.URLField()
+
+
+class GatewayReconciliationIssueSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GatewayReconciliationIssue
+        fields = [
+            "id",
+            "kind",
+            "payment",
+            "gateway_provider",
+            "order_id",
+            "provider_txn_id",
+            "expected_amount",
+            "gateway_amount",
+            "detected_at",
+            "resolution",
+            "resolved_at",
+            "resolved_by",
+            "note",
+        ]
+        read_only_fields = fields
+
+
+class ResolveGatewayIssueSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=["book_at_gateway_amount", "dismiss"])
+    note = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+    def validate(self, attrs: dict) -> dict:
+        if attrs["action"] == "dismiss" and not (attrs.get("note") or "").strip():
+            raise serializers.ValidationError(
+                {"note": "Say what was done instead, e.g. 'refunded at provider'."}
             )
         return attrs
 

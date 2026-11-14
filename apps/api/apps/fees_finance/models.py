@@ -194,6 +194,23 @@ class PaymentStatus(models.TextChoices):
     REVERSED = "reversed", "Reversed"
 
 
+class GatewayIssueKind(models.TextChoices):
+    """What an online-payment discrepancy is. Each needs a different human decision."""
+
+    AMOUNT_MISMATCH = "amount_mismatch", "Amount mismatch"
+    OVERPAID = "overpaid", "Overpaid"
+    UNKNOWN_REFERENCE = "unknown_reference", "Unknown reference"
+    MISSING_AT_GATEWAY = "missing_at_gateway", "Missing at gateway"
+    PAID_AFTER_FAILED = "paid_after_failed", "Paid after failed"
+    DUPLICATE_AT_GATEWAY = "duplicate_at_gateway", "Duplicate at gateway"
+    PAID_ON_CANCELED_INVOICE = "paid_on_canceled_invoice", "Paid on canceled invoice"
+
+
+class GatewayIssueResolution(models.TextChoices):
+    BOOKED = "booked", "Booked"
+    DISMISSED = "dismissed", "Dismissed"
+
+
 class RefundStatus(models.TextChoices):
     REQUESTED = "requested", "Requested"
     APPROVED = "approved", "Approved"
@@ -1116,6 +1133,20 @@ class Payment(TenantOwnedModel):
         null=True, blank=True, help_text="Null for a gateway or voucher self-service payment."
     )
     idempotency_key = models.CharField(max_length=80, null=True, blank=True)
+    provider_txn_id = models.CharField(
+        max_length=120,
+        null=True,
+        blank=True,
+        help_text="The provider's own transaction id. `reference_no` holds our order id.",
+    )
+    gateway_account = models.ForeignKey(
+        "PaymentGatewayAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="payments",
+        help_text="The merchant account a checkout was opened through; reconciled against it.",
+    )
 
     class Meta:
         db_table = "payments"
@@ -1144,6 +1175,36 @@ class Payment(TenantOwnedModel):
                 fields=["tenant", "idempotency_key"],
                 name="payments_idempotency_key_unique",
                 condition=models.Q(deleted_at__isnull=True, idempotency_key__isnull=False),
+            ),
+            # Our order id is the callback's lookup key, so it must name one payment.
+            models.UniqueConstraint(
+                fields=["tenant", "gateway_provider", "reference_no"],
+                name="payments_gateway_order_id_unique",
+                condition=models.Q(
+                    deleted_at__isnull=True,
+                    method=PaymentMethod.ONLINE_GATEWAY,
+                    reference_no__isnull=False,
+                ),
+            ),
+            # One provider transaction can confirm at most one payment.
+            models.UniqueConstraint(
+                fields=["tenant", "gateway_provider", "provider_txn_id"],
+                name="payments_gateway_txn_id_unique",
+                condition=models.Q(
+                    deleted_at__isnull=True,
+                    method=PaymentMethod.ONLINE_GATEWAY,
+                    provider_txn_id__isnull=False,
+                ),
+            ),
+            # Two open checkouts for one invoice could both be paid.
+            models.UniqueConstraint(
+                fields=["tenant", "fee_invoice"],
+                name="payments_one_pending_online_per_invoice",
+                condition=models.Q(
+                    deleted_at__isnull=True,
+                    method=PaymentMethod.ONLINE_GATEWAY,
+                    status=PaymentStatus.PENDING,
+                ),
             ),
         ]
         indexes = [
@@ -1488,6 +1549,111 @@ class SettlementRow(TenantOwnedModel):
 
     def __str__(self) -> str:
         return f"{self.provider} {self.transaction_reference}"
+
+
+class PaymentGatewayAccount(TenantOwnedModel):
+    """The school's own merchant account with a payment aggregator (ADR-0034).
+
+    The school is merchant of record, so SchoolHub stores *its* credentials:
+    encrypted at rest (`core.integrations.crypto`), write-only over the API, and
+    shown back only as the adapter's masked merchant id.
+
+    `callback_token` routes the provider's callback to this row without trusting
+    anything in the body. Switching provider deactivates the old row rather than
+    rewriting it, so a late callback signed with the old account's secret still
+    finds its account.
+    """
+
+    provider = models.CharField(max_length=40)
+    is_active = models.BooleanField(default=True)
+    merchant_id_masked = models.CharField(max_length=40)
+    credentials_ciphertext = models.BinaryField()
+    callback_token = models.CharField(max_length=64, unique=True)
+
+    class Meta:
+        db_table = "payment_gateway_accounts"
+        ordering = ["-is_active", "-updated_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant"],
+                name="payment_gateway_accounts_one_active",
+                condition=models.Q(is_active=True, deleted_at__isnull=True),
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.provider} {self.merchant_id_masked}"
+
+
+class GatewayReconciliationIssue(TenantOwnedModel):
+    """An online-payment discrepancy a person has to decide on.
+
+    Raised when money and records disagree: the provider verified a different
+    amount, money arrived for a payment that had failed or for no payment at all,
+    or an invoice took more than it owed. `:resolve` either books the money at
+    the amount the provider verified or dismisses it with a note; both are set
+    once.
+    """
+
+    kind = models.CharField(max_length=30, choices=GatewayIssueKind.choices)
+    payment = models.ForeignKey(
+        Payment,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="gateway_issues",
+        help_text="Null for an unknown reference until it is booked.",
+    )
+    gateway_provider = models.CharField(max_length=40, null=True, blank=True)
+    order_id = models.CharField(max_length=80, null=True, blank=True)
+    provider_txn_id = models.CharField(max_length=120, null=True, blank=True)
+    expected_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    gateway_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    detected_at = models.DateTimeField()
+    resolution = models.CharField(
+        max_length=15, choices=GatewayIssueResolution.choices, null=True, blank=True
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolved_by = models.UUIDField(null=True, blank=True)
+    note = models.TextField(null=True, blank=True)
+
+    class Meta:
+        db_table = "gateway_reconciliation_issues"
+        ordering = ["-detected_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "payment", "kind"],
+                name="gateway_issues_one_open_per_payment_kind",
+                condition=models.Q(resolution__isnull=True, deleted_at__isnull=True),
+            ),
+            # Money for an order we have no payment for: one open issue, however many
+            # callbacks and reconcile runs report it at once.
+            models.UniqueConstraint(
+                fields=["tenant", "gateway_provider", "order_id", "kind"],
+                name="gateway_issues_one_open_unmatched_per_order_kind",
+                condition=models.Q(
+                    payment__isnull=True, resolution__isnull=True, deleted_at__isnull=True
+                ),
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(resolution__isnull=True, resolved_at__isnull=True)
+                    | models.Q(resolution__isnull=False, resolved_at__isnull=False)
+                ),
+                name="gateway_issues_resolution_has_a_time",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(resolution=GatewayIssueResolution.DISMISSED)
+                    | (models.Q(note__isnull=False) & ~models.Q(note=""))
+                ),
+                name="gateway_issues_dismissal_has_a_note",
+            ),
+        ]
+        indexes = [models.Index(fields=["tenant", "resolution", "detected_at"])]
+
+    def __str__(self) -> str:
+        return f"{self.kind} {self.order_id or ''}".strip()
 
 
 class ExpenseCategory(TenantOwnedModel):

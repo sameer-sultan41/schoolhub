@@ -114,11 +114,35 @@ def record_audit(
         return None
 
 
+def record_system_audit(
+    tenant_id, action: str, instance, *, context: dict | None = None
+) -> AuditLog | None:
+    """``record_audit`` for work no user performed: a gateway callback, a sweep, a reconcile.
+
+    No request, so no actor, IP or request id; ``context`` says what happened (e.g. the
+    provider reference) and is stored as ``after``. Never raises, for ``record_audit``'s reason.
+    """
+    try:
+        with transaction.atomic():
+            return AuditLog.objects.create(
+                tenant_id=tenant_id,
+                actor=None,
+                action=action,
+                resource_type=instance._meta.label_lower,
+                resource_id=getattr(instance, "pk", None),
+                after=_json_safe(_redact(context)) if context is not None else None,
+            )
+    except Exception:
+        logger.exception("failed to write system audit log", extra={"action": action})
+        return None
+
+
 def record_security_event(request, action: str, *, tenant=None, **context) -> None:
     """Auth-related events (login, MFA change, role change, export, impersonation).
 
-    ``tenant`` is for an unauthenticated endpoint that resolved its school from the body
-    (ADR-0033); otherwise the middleware's ``request.tenant`` is used.
+    ``tenant`` names the school for an unauthenticated endpoint that has none bound: one
+    that resolved it from the body (ADR-0033), or a payment callback whose URL names it.
+    Otherwise the middleware's ``request.tenant`` is used.
     """
     try:
         user = getattr(request, "user", None)

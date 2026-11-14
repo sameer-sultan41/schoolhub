@@ -10,6 +10,23 @@ either this file or `project-status.md`.
 
 ## Deliberately NOT done
 
+- **Online fee payments, what PR 1 leaves out** ([ADR-0034](decisions/0034-online-fee-payments.md), plan `docs/superpowers/plans/2026-11-07-fee-online-payments.md`). PR 1 runs end to end against the fake provider only.
+  - **PR 2 (blocked):** the real aggregator's adapter (PayFast or Safepay, picked after the user tests both sandboxes; enable it in `PAYMENT_PROVIDERS_ENABLED` for production and set `PAYMENT_PENDING_TTL_MINUTES` from its session lifetime), the portal Pay button and result page on `PortalInvoiceDetail` (waits for the portal stack, #156 → #158 → #160), and the staff gateway-settings and reconciliation-issues screens with `:resolve`. Until then a school can be configured only through the API.
+  - **Partial online payments.** A guardian pays the full available balance only (user decision, 2026-11-07).
+  - **Provider refunds.** No adapter `refund`: each aggregator differs. A refund of an online payment goes through fees-finance §7.3's manual flow, and the money is returned at the provider by hand; a `duplicate_at_gateway` or `overpaid` issue is dismissed with a note saying so.
+  - **`apps/fees_finance/services.py` is ~2.8k lines.** The online-payment services were kept in it, as the plan said; moving them to `apps/fees_finance/online_payments.py` (or the ADR-0010 per-resource layout) is a pure move for a later refactor.
+  - **The Fernet ciphertext is not tenant-bound.** Fernet has no associated data; RLS is the boundary. A KMS with an encryption context, behind the same `encrypt`/`decrypt` seam, would close it.
+  - **Is the provider's `failed` event terminal for an order?** Task 4's amendment (PR 2) must confirm, against the chosen aggregator's docs and sandbox, whether a `failed` status is final for an order id or whether the same order can still be paid afterwards. Today a `failed` event fails a pending payment and a later `paid` still confirms it (`paid_after_failed`); if the provider allows retries on one order, `failed` should perhaps not fail the payment at all.
+  - **Refund locking is not aligned with the online-payment lock order.** `request_refund` and `process_refund` lock the payment (and the refund) together with its invoice in one `select_for_update().select_related(...)` statement, so the row order is the planner's, not invoice-first, while every online-payment path (initiation, callbacks, the sweep, reconciliation, `:resolve`, `cancel_invoice`) takes the invoice, then the payment ([ADR-0034](decisions/0034-online-fee-payments.md) decision 10). A refund racing a gateway confirm on the same invoice could deadlock (Postgres would abort one side). Align both to lock the invoice first.
+
+- **DRF `NUM_PROXIES` is unset, so per-IP throttles key on the raw `X-Forwarded-For` header.**
+  With `NUM_PROXIES` unset, DRF's `get_ident` uses the whole `X-Forwarded-For` value when
+  present, which a client can set to anything, so a caller can rotate it to escape every per-IP
+  budget (`AuthEndpointThrottle`, `anon`, and `payment_callback_failure`'s token-guessing
+  limit). Set `REST_FRAMEWORK["NUM_PROXIES"]` to the number of proxies in front of the API in
+  each environment (the load balancer, plus any CDN), and test that a spoofed header does not
+  change the throttle key.
+
 - **Account invitations: what Task A2 left out** (PR A, `feat/account-invitations`;
   [ADR-0033](decisions/0033-account-invitations-and-auth-email.md)).
   - **Unrouted `student_management` package copies.** `guardians/viewset.py`,

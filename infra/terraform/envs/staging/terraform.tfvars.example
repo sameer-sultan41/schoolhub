@@ -51,6 +51,10 @@ backup_bucket_name  = "schoolhub-staging-backups"
 # schedule it, do not do it on a Friday.
 django_secret_key_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:schoolhub-staging/django/secret-key-AbCdEf"
 
+# INTEGRATIONS_ENCRYPTION_KEYS: comma-separated Fernet keys, newest first. Generate one with
+# python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())".
+integrations_encryption_keys_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:schoolhub-staging/integrations/encryption-keys-AbCdEf"
+
 # DATABASE_URL for the APPLICATION role only: schoolhub_app, via PgBouncer on
 # 6432. Never the RDS master URL and never a direct 5432 URL — the app must not
 # be able to run DDL, and session-scoped connections break RLS under pooling.

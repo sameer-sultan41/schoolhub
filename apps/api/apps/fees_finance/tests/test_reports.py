@@ -16,9 +16,6 @@ from __future__ import annotations
 import datetime
 from decimal import Decimal
 
-from rest_framework.test import APIClient
-from rest_framework_simplejwt.tokens import AccessToken
-
 from apps.fees_finance import reports, services
 from apps.fees_finance.models import (
     Discount,
@@ -44,6 +41,7 @@ from apps.fees_finance.tests.factories import (
     TenantFactory,
     UserFactory,
     fine_head,
+    jwt_only_client,
 )
 from core.api.exceptions import DomainRuleViolation
 from core.jobs.tests.base import assert_sent_on_commit
@@ -51,14 +49,6 @@ from core.money import ZERO
 from core.tenancy.context import tenant_context
 
 TODAY = datetime.date(2026, 9, 30)
-
-
-def jwt_only_client(user) -> APIClient:
-    """A client carrying the bearer token alone, as a real client does: no
-    `force_login` session for `TenantMiddleware` to bind the tenant from."""
-    client = APIClient()
-    client.credentials(HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(user)}")
-    return client
 
 
 # The key `GET /reports/finance-summary` declares, which `build_report_rows` scopes by.

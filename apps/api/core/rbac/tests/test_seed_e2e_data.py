@@ -32,6 +32,7 @@ from apps.fees_finance.models import (
     FeeStructure,
     FeeStructureStatus,
     InvoiceStatus,
+    LedgerAccount,
 )
 from apps.parent_portal.management.commands.seed_e2e_portal import (
     E2E_EXAM_NAME,
@@ -126,6 +127,22 @@ class SeedE2EDataTests(TestCase):
                     tenant=tenant, feature_flag__key="module.communication"
                 )
             self.assertTrue(override.enabled, slug)
+
+    def test_fees_and_online_payments_are_enabled_with_ledger_accounts(self) -> None:
+        """`online-payments.spec.ts` needs both flags and a fee income account to post to."""
+        call_command("seed_e2e_data")
+        call_command("seed_e2e_data")
+
+        tenant = Tenant.objects.get(slug=E2E_TENANT_SLUG)
+        with tenant_context(tenant.id):
+            enabled = set(
+                TenantFeatureOverride.objects.filter(tenant=tenant, enabled=True).values_list(
+                    "feature_flag__key", flat=True
+                )
+            )
+            income = LedgerAccount.objects.filter(code="4000", is_system=True).count()
+        self.assertTrue({"module.fees_finance", "fees.online-payments"} <= enabled)
+        self.assertEqual(income, 1)
 
     def test_a_comms_guardian_thread_routes_to_the_assigned_class_teacher(self) -> None:
         """The routing chain is seeded whole: the class teacher gets it, not the fallback role."""

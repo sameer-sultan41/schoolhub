@@ -58,6 +58,59 @@ class PublicFormThrottle(SimpleRateThrottle):
         return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
 
 
+class PaymentCallbackThrottle(SimpleRateThrottle):
+    """The public payment callback, per (school slug, callback token).
+
+    Not per IP: a provider sends every school's callbacks from a handful of addresses, so an
+    IP bucket would let one busy school starve the others. The token is hashed so it never
+    lands in a cache key.
+    """
+
+    scope = "payment_callback"
+
+    def get_cache_key(self, request, view):
+        kwargs = getattr(view, "kwargs", None) or {}
+        token = str(kwargs.get("callback_token", ""))
+        digest = hashlib.sha256(token.encode()).hexdigest()[:32]
+        ident = f"{kwargs.get('tenant_slug', '')}:{digest}"
+        return self.cache_format % {"scope": self.scope, "ident": ident}
+
+
+class PaymentCallbackFailureThrottle(SimpleRateThrottle):
+    """Failed callback signatures, per client IP.
+
+    Counts failures only, so a genuine provider is never slowed by its own traffic: the
+    view asks ``is_blocked`` before verifying and calls ``record_failure`` after a bad
+    signature. Not a ``throttle_classes`` entry, because those count every request.
+    """
+
+    scope = "payment_callback_failure"
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
+
+    def _recent_failures(self, request) -> tuple[str, float, list[float]]:
+        key = self.get_cache_key(request, None)
+        now = self.timer()
+        window = self.duration or 0
+        return key, now, [t for t in self.cache.get(key, []) if t > now - window]
+
+    def is_blocked(self, request) -> bool:
+        _, _, history = self._recent_failures(request)
+        return self.num_requests is not None and len(history) >= self.num_requests
+
+    def record_failure(self, request) -> None:
+        key, now, history = self._recent_failures(request)
+        self.cache.set(key, [now, *history], self.duration)
+
+    def retry_after(self, request) -> float:
+        """Seconds until the oldest counted failure leaves the window."""
+        _, now, history = self._recent_failures(request)
+        if not history:
+            return 0.0
+        return max((self.duration or 0) - (now - history[-1]), 0.0)
+
+
 class PasswordResetIPThrottle(SimpleRateThrottle):
     """Per-IP bucket for password reset and its confirm.
 
