@@ -464,6 +464,67 @@ paths:
               schema:
                 $ref: '#/components/schemas/AdmitCard'
           description: ''
+  /api/v1/ai/requests/{id}:feedback:
+    post:
+      operationId: ai_requests_:feedback_create
+      description: |-
+        Thumbs up or down on one AI output, once, by the user it was shown to.
+
+        Another user's request is a 404, as is another school's (RLS hides it): the
+        caller learns nothing about a request that is not theirs. A second vote is a
+        409; a racing second vote hits the unique constraint, which the error handler
+        turns into the same `conflict`.
+      summary: Rate an AI output
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - ai
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AIFeedbackRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AIFeedbackRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AIFeedbackRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIFeedback'
+          description: ''
+  /api/v1/ai/usage:
+    get:
+      operationId: ai_usage_retrieve
+      description: |-
+        This month's token use against the budget, by feature (ai-governance.md §9).
+
+        The mixin is here for its tenant binding only (as on `SchoolSettingsView`); RLS
+        keeps the sums to the caller's school.
+      summary: AI token usage this month
+      tags:
+      - ai
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIUsage'
+          description: ''
   /api/v1/announcements:
     get:
       operationId: announcements_list
@@ -10418,6 +10479,50 @@ paths:
       responses:
         '202':
           description: A job resource; poll GET /jobs/{id}.
+  /api/v1/reports/finance-summary:summarize:
+    post:
+      operationId: reports_finance_summary:summarize_create
+      description: |-
+        `POST /reports/finance-summary:summarize`: AI-FEE-02, a plain-language summary.
+
+        **Not wrapped in `ATOMIC_REQUESTS`** (urls.py): the gateway calls the provider
+        with no transaction open and commits its audit row in its own, so a refusal
+        still leaves its row (`core.ai.service`). That moves every database read here
+        into an explicit tenant transaction, because the tenant binding is a `SET
+        LOCAL` and lasts only as long as the transaction around it:
+
+        1. `initial` (authentication, the flag, the permission key, the throttles) runs
+           in one short transaction, so the role and flag reads see the tenant.
+        2. The report's facts are read in a `tenant_atomic`, under the route's key.
+        3. `services.summarize_report` then runs with no transaction open.
+
+        Read-only advisory output, labelled `ai_generated` (ai-governance.md §2, §8).
+        The `ai` throttle sits on top of the defaults: it bounds how far concurrent
+        calls can overshoot the token budget (ADR-0035).
+      summary: AI summary of a finance report
+      tags:
+      - reports
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FinanceReportSummaryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FinanceReportSummaryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FinanceReportSummaryRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinanceReportSummaryResponse'
+          description: ''
   /api/v1/results:
     get:
       operationId: results_list
@@ -15357,6 +15462,82 @@ paths:
           description: ''
 components:
   schemas:
+    AIFeatureUsage:
+      type: object
+      properties:
+        feature_key:
+          type: string
+        tokens:
+          type: integer
+        requests:
+          type: integer
+      required:
+      - feature_key
+      - requests
+      - tokens
+    AIFeedback:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        ai_request_id:
+          type: string
+          format: uuid
+          readOnly: true
+        value:
+          allOf:
+          - $ref: '#/components/schemas/AIFeedbackValueEnum'
+          readOnly: true
+        comment:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - ai_request_id
+      - comment
+      - created_at
+      - id
+      - value
+    AIFeedbackRequest:
+      type: object
+      properties:
+        value:
+          $ref: '#/components/schemas/AIFeedbackValueEnum'
+        comment:
+          type: string
+          default: ''
+          maxLength: 500
+      required:
+      - value
+    AIFeedbackValueEnum:
+      enum:
+      - -1
+      - 1
+      type: integer
+      description: |-
+        * `-1` - Thumbs down
+        * `1` - Thumbs up
+    AIUsage:
+      type: object
+      properties:
+        month_tokens:
+          type: integer
+          description: Tokens used this month, tenant timezone.
+        monthly_limit:
+          type: integer
+        by_feature:
+          type: array
+          items:
+            $ref: '#/components/schemas/AIFeatureUsage'
+      required:
+      - by_feature
+      - month_tokens
+      - monthly_limit
     AcademicSession:
       type: object
       properties:
@@ -18803,6 +18984,78 @@ components:
           budget-variance: '#/components/schemas/BudgetVarianceReportRow'
           expense-register: '#/components/schemas/ExpenseRegisterReportRow'
           trial-balance: '#/components/schemas/TrialBalanceReportRow'
+    FinanceReportSummary:
+      type: object
+      description: |-
+        An AI-generated summary (AI-FEE-02). `ai_generated` is always true: the client
+        labels the text "AI-generated" wherever it shows it (ai-governance.md §8).
+      properties:
+        summary:
+          type: string
+        facts:
+          type: object
+          additionalProperties:
+            type: string
+        model:
+          type: string
+        prompt_version:
+          type: string
+        ai_request_id:
+          type: string
+          format: uuid
+        ai_generated:
+          type: boolean
+      required:
+      - ai_generated
+      - ai_request_id
+      - facts
+      - model
+      - prompt_version
+      - summary
+    FinanceReportSummaryMeta:
+      type: object
+      properties:
+        budget_warning:
+          type: boolean
+      required:
+      - budget_warning
+    FinanceReportSummaryRequest:
+      type: object
+      description: |-
+        `POST /reports/finance-summary:summarize`: which report, over which period.
+
+        The report's own parameters minus `student`, `format` and the campus, session
+        and class filters: a student ledger is never summarised
+        (`services.report_summary_facts` answers 422 on `kind`), a summary is not an
+        export, and the summary's facts cover the whole school's period, so a filter it
+        would silently ignore is not accepted.
+      properties:
+        kind:
+          $ref: '#/components/schemas/FinanceReportQueryKindEnum'
+        date_from:
+          type: string
+          format: date
+        date_to:
+          type: string
+          format: date
+        group_by:
+          allOf:
+          - $ref: '#/components/schemas/GroupByEnum'
+          default: day
+      required:
+      - date_from
+      - date_to
+      - kind
+    FinanceReportSummaryResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/FinanceReportSummary'
+        meta:
+          $ref: '#/components/schemas/FinanceReportSummaryMeta'
+      required:
+      - data
+      - meta
     Fine:
       type: object
       description: A penalty on a fine-category fee head; `status` moves only through

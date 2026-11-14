@@ -12,6 +12,7 @@ from django.conf import settings
 from django.test import SimpleTestCase
 
 from core.api.throttling import (
+    AIRequestThrottle,
     AuthEndpointThrottle,
     InvitationIPThrottle,
     PasswordResetEmailThrottle,
@@ -29,6 +30,7 @@ DEFAULT_RATES = {
     "anon": "20/min",
     "auth": "10/min",
     "public_form": "5/min",
+    "ai": "10/min",
     "payment_callback": "600/min",
     "payment_callback_failure": "30/min",
     "password_reset_email": "5/hour",
@@ -47,6 +49,7 @@ class ThrottleRateTests(SimpleTestCase):
             UserRateThrottle,
             AuthEndpointThrottle,
             PublicFormThrottle,
+            AIRequestThrottle,
             PaymentCallbackThrottle,
             PaymentCallbackFailureThrottle,
             PasswordResetEmailThrottle,

@@ -77,5 +77,6 @@ REST_FRAMEWORK = {
         "invitation_ip": env.str(
             "THROTTLE_RATE_INVITATION_IP", default=THROTTLE_RATES["invitation_ip"]
         ),
+        "ai": env.str("THROTTLE_RATE_AI", default=THROTTLE_RATES["ai"]),
     },
 }

@@ -102,6 +102,7 @@ CORE_APPS = [
     "core.integrations",
     "core.jobs",
     "core.notifications",
+    "core.ai",
 ]
 
 # One app per module doc in docs/03-modules/.
@@ -220,6 +221,8 @@ THROTTLE_RATES: dict[str, str] = {
     "anon": "20/min",
     "auth": "10/min",
     "public_form": "5/min",
+    # Endpoints that call the AI provider (core.api.throttling.AIRequestThrottle).
+    "ai": "10/min",
     # The public payment callback: per (school, callback token), and failed signatures per IP.
     "payment_callback": "600/min",
     "payment_callback_failure": "30/min",
@@ -380,6 +383,8 @@ SPECTACULAR_SETTINGS = {
         # One name for a statement line's type, on the statement endpoint's `kind` and
         # the `student-ledger` report row's `entry_type`.
         "FeeStatementEntryKindEnum": "apps.fees_finance.report_serializers.STATEMENT_ENTRY_KINDS",
+        # The finance report's `kind`, shared by the report query and the AI summary request.
+        "FinanceReportQueryKindEnum": "apps.fees_finance.reports.REPORT_KINDS",
         # core.notifications' enums are first exposed through the API here —
         # communication's PR A ships the first endpoints (notification-templates,
         # delivery-logs) that serialize them. Named for the same reason as every
@@ -397,6 +402,9 @@ SPECTACULAR_SETTINGS = {
         # The thread read serializer and its oversight subclass both expose `status`;
         # pinned so the name stays `MessageThreadStatusEnum` and the client does not churn.
         "MessageThreadStatusEnum": "apps.communication.models.ThreadStatus",
+        # A bare `value` would otherwise take the generic `ValueEnum`, which any later
+        # `value` choice set anywhere on the platform would collide with.
+        "AIFeedbackValueEnum": "core.ai.models.FEEDBACK_VALUES",
     },
 }
 
@@ -571,6 +579,23 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(hour="5", minute="40"),
     },
 }
+
+# The AI gateway (core/ai). The API key is server-side only and never leaves the backend
+# (ai-architecture.md §1). An empty key leaves the gateway unconfigured: every AI request
+# then degrades to `503 ai_unavailable` rather than failing at import.
+ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", default="")
+# Which adapter in core.ai.providers serves calls: "anthropic", or "fake" (tests).
+AI_PROVIDER = env("AI_PROVIDER", default="anthropic")
+# Tokens a tenant may use per calendar month in its own timezone, unless
+# TenantSettings.ai["monthly_token_budget"] overrides it (platform-set, SEC-16).
+AI_MONTHLY_TOKEN_BUDGET_DEFAULT = env.int("AI_MONTHLY_TOKEN_BUDGET_DEFAULT", default=1_000_000)
+# Tokens one user may use per day in the tenant's timezone.
+AI_USER_DAILY_TOKEN_CAP = env.int("AI_USER_DAILY_TOKEN_CAP", default=50_000)
+# The model id each feature tier calls. Pinned; a change goes through the eval harness.
+AI_MODEL_FAST = env("AI_MODEL_FAST", default="claude-haiku-5-5")
+AI_MODEL_STANDARD = env("AI_MODEL_STANDARD", default="claude-sonnet-5-5")
+# The whole provider call, its one retry included, finishes inside this (ai-architecture.md §3).
+AI_REQUEST_DEADLINE_SECONDS = env.int("AI_REQUEST_DEADLINE_SECONDS", default=30)
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"

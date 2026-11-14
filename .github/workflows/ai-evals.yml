@@ -1,0 +1,97 @@
+name: ai-evals
+
+# Scores each AI feature's golden set on the real provider against its committed
+# baseline (ai-governance.md §6, ADR-0035). It spends real tokens, so it runs only
+# where a prompt, a feature's context, the gateway or the model settings change,
+# weekly for model drift, and by hand. The key is a spend-capped one held in the
+# protected `ai-evals` environment; without it the job fails and says so.
+#
+# The first baseline comes from a PR, because `workflow_dispatch` only works once
+# this file is on main:
+#   1. add the ANTHROPIC_API_KEY secret to the `ai-evals` environment;
+#   2. add the `ai-evals:write-baseline` label to the PR: this run writes the
+#      baseline instead of comparing, and uploads it as the `ai-eval-baseline` artifact;
+#   3. download it (`gh run download <run-id> -n ai-eval-baseline`), review it and
+#      commit it under apps/api/;
+#   4. remove the label, then push that commit: the push runs the comparison.
+# Without a committed baseline the comparison fails.
+
+on:
+  workflow_dispatch:
+    inputs:
+      feature:
+        description: AI feature key to evaluate
+        required: true
+        default: fees.report-summary
+      write_baseline:
+        description: Write this run's scores as the baseline and upload it (commit it after review)
+        type: boolean
+        default: false
+  schedule:
+    # Mondays 03:17 UTC: drift in the pinned models with no code change.
+    - cron: "17 3 * * 1"
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+    paths:
+      - "apps/**/prompts/**"
+      - "apps/**/ai.py"
+      - "apps/**/tests/evals/**"
+      - "apps/api/core/ai/**"
+      - "apps/api/config/settings/**"
+      - ".github/workflows/ai-evals.yml"
+
+defaults:
+  run:
+    working-directory: apps/api
+
+concurrency:
+  group: ai-evals-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  DJANGO_SETTINGS_MODULE: config.settings.test
+
+jobs:
+  evals:
+    # Adding any other label must not spend tokens on a second comparison.
+    if: >-
+      github.event_name != 'pull_request' || github.event.action != 'labeled' ||
+      github.event.label.name == 'ai-evals:write-baseline'
+    runs-on: ubuntu-latest
+    environment: ai-evals
+    timeout-minutes: 20
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      FEATURE: ${{ inputs.feature || 'fees.report-summary' }}
+      WRITE_BASELINE: ${{ inputs.write_baseline || contains(github.event.pull_request.labels.*.name, 'ai-evals:write-baseline') }}
+    steps:
+      - name: Require the eval key
+        # Runs before checkout, so not in the job default's apps/api (it doesn't exist yet).
+        working-directory: .
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error title=ANTHROPIC_API_KEY is not set::The AI evals call the real provider. Add a spend-capped ANTHROPIC_API_KEY secret to the protected 'ai-evals' environment (Settings > Environments), then re-run."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-api-env
+
+      - name: Write the baseline
+        if: env.WRITE_BASELINE == 'true'
+        run: uv run manage.py run_ai_evals --feature "$FEATURE" --write-baseline
+
+      - name: Upload the baseline for review
+        if: env.WRITE_BASELINE == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-eval-baseline
+          path: apps/api/apps/*/tests/evals/baseline.json
+          if-no-files-found: error
+
+      - name: Compare with the committed baseline
+        if: env.WRITE_BASELINE != 'true'
+        run: uv run manage.py run_ai_evals --feature "$FEATURE"

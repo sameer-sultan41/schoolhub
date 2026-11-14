@@ -148,6 +148,10 @@ export const API_ERROR_CODES = [
   // A 409 `Conflict` subclass with a domain code: results can't be processed while marks are
   // outstanding (apps/api/apps/examinations/processing.py `MarksOutstanding`).
   "marks_outstanding",
+  // The AI gateway (apps/api/core/ai/exceptions.py): a spent budget (429, `meta.scope` is
+  // `tenant` or `user`) and AI being unavailable (503).
+  "ai_quota_exceeded",
+  "ai_unavailable",
   // Synthesised by this client when the request never produced an envelope.
   "network_error",
   "server_error",
@@ -157,7 +161,8 @@ export const API_ERROR_CODES = [
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number] | (string & {});
 
 /** Status codes the API uses, per api-architecture.md §2.3. */
-export type ApiStatusCode = 200 | 201 | 202 | 204 | 400 | 401 | 403 | 404 | 409 | 422 | 429 | 500;
+export type ApiStatusCode =
+  200 | 201 | 202 | 204 | 400 | 401 | 403 | 404 | 409 | 422 | 429 | 500 | 503;
 
 /** Long operations return `202 Accepted` + a job resource (api-architecture.md §2.7). */
 export type JobStatus = "queued" | "running" | "succeeded" | "failed";

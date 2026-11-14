@@ -107,6 +107,13 @@ class TenantSettings(TimestampedModel):
         help_text="Communication config, e.g. notice_number_pattern. Its own "
         "namespace for the reason `hr` and `finance` each got one.",
     )
+    ai = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="AI gateway config, e.g. monthly_token_budget. Platform-set (SEC-16): "
+        "no tenant-facing endpoint writes it, because the quota is what the school's "
+        "plan pays for.",
+    )
 
     objects = TenantScopedManager()
     all_tenants = AllTenantsManager()

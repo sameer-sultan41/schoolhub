@@ -1114,11 +1114,16 @@ class FinanceReportQuerySerializer(serializers.Serializer):
     )
     format = serializers.ChoiceField(choices=["csv", "xlsx", "pdf"], required=False, default="csv")
 
-    def validate(self, attrs: dict) -> dict:
+    @staticmethod
+    def check_period_order(attrs: dict) -> None:
+        """Shared with the summary request, which keeps this rule and drops the rest."""
         if attrs["date_to"] < attrs["date_from"]:
             raise serializers.ValidationError(
                 {"date_to": "The end of the period cannot precede its start."}
             )
+
+    def validate(self, attrs: dict) -> dict:
+        self.check_period_order(attrs)
         if attrs["kind"] == "student-ledger" and not attrs.get("student"):
             raise serializers.ValidationError(
                 {"student": "A student ledger needs the student it is for."}
@@ -1141,3 +1146,45 @@ class FinanceReportQuerySerializer(serializers.Serializer):
             academic_session_id=data.get("academic_session_id"),
             class_id=data.get("class_id"),
         )
+
+
+class FinanceReportSummaryRequestSerializer(FinanceReportQuerySerializer):
+    """`POST /reports/finance-summary:summarize`: which report, over which period.
+
+    The report's own parameters minus `student`, `format` and the campus, session
+    and class filters: a student ledger is never summarised
+    (`services.report_summary_facts` answers 422 on `kind`), a summary is not an
+    export, and the summary's facts cover the whole school's period, so a filter it
+    would silently ignore is not accepted.
+    """
+
+    student = None
+    format = None
+    campus_id = None
+    academic_session_id = None
+    class_id = None
+
+    def validate(self, attrs: dict) -> dict:
+        self.check_period_order(attrs)
+        return attrs
+
+
+class FinanceReportSummarySerializer(serializers.Serializer):
+    """An AI-generated summary (AI-FEE-02). `ai_generated` is always true: the client
+    labels the text "AI-generated" wherever it shows it (ai-governance.md §8)."""
+
+    summary = serializers.CharField(allow_blank=True)
+    facts = serializers.DictField(child=serializers.CharField())
+    model = serializers.CharField(allow_blank=True)
+    prompt_version = serializers.CharField()
+    ai_request_id = serializers.UUIDField()
+    ai_generated = serializers.BooleanField()
+
+
+class FinanceReportSummaryMetaSerializer(serializers.Serializer):
+    budget_warning = serializers.BooleanField()
+
+
+class FinanceReportSummaryResponseSerializer(serializers.Serializer):
+    data = FinanceReportSummarySerializer()
+    meta = FinanceReportSummaryMetaSerializer()
