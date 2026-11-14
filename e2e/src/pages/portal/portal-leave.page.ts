@@ -25,6 +25,11 @@ export class PortalLeavePage extends BasePage {
     return within.getByRole("button", { name: "Cancel request", exact: true });
   }
 
+  /** A row's attached-document download; its name carries the leave type and dates. */
+  attachmentDownload(row: Locator): Locator {
+    return row.getByRole("button", { name: /^Download the .+ note/ });
+  }
+
   get confirmDialog(): Locator {
     return this.page.getByRole("alertdialog");
   }

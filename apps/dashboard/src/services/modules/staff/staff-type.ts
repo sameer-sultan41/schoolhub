@@ -57,7 +57,6 @@ export interface CreateStaffInput {
   departmentId?: string | null;
   designationId?: string | null;
   reportsToStaffId?: string | null;
-  userId?: string;
   photoFileId?: string;
   gender?: string;
   dateOfBirth?: string;
@@ -97,6 +96,9 @@ export interface ExitStaffInput {
  */
 export interface StaffDetailRecord {
   id: string;
+  /** The login account, read-only (ADR-0033): set by `:invite`, `null` until then. A
+   * linked account may be pending (never accepted) or active; the record doesn't say which. */
+  user_id: string | null;
   employee_number: string;
   first_name: string;
   last_name: string;

@@ -8,6 +8,7 @@ import { createLiveSession } from "@/lib/live-api";
 import { E2E_OTHER_ADMIN_EMAIL } from "@/lib/seed-constants";
 import { MockApi, authModule, dashboardHomeModule, tenantModule } from "@/mocks";
 import {
+  AcceptInvitePage,
   AllocationsPage,
   AttendanceCorrectionsPage,
   AttendanceLeavePage,
@@ -33,6 +34,7 @@ import {
   FeePaymentsPage,
   FeeReportsPage,
   FeeStructuresPage,
+  ForgotPasswordPage,
   GradingScalesPage,
   LedgerPage,
   LoginPage,
@@ -46,6 +48,7 @@ import {
   PromotionsPage,
   PublicSitePage,
   QuestionBanksPage,
+  ResetPasswordPage,
   StaffAttendancePage,
   StaffPage,
   StudentCreateStepperPage,
@@ -101,6 +104,9 @@ export interface E2EFixtures {
    */
   signedIn: AuthenticatedUser;
   loginPage: LoginPage;
+  acceptInvitePage: AcceptInvitePage;
+  forgotPasswordPage: ForgotPasswordPage;
+  resetPasswordPage: ResetPasswordPage;
   dashboardPage: DashboardPage;
   staffPage: StaffPage;
   publicSitePage: PublicSitePage;
@@ -240,6 +246,18 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
 
   loginPage: async ({ page }, use) => {
     await use(new LoginPage(page));
+  },
+
+  acceptInvitePage: async ({ page }, use) => {
+    await use(new AcceptInvitePage(page));
+  },
+
+  forgotPasswordPage: async ({ page }, use) => {
+    await use(new ForgotPasswordPage(page));
+  },
+
+  resetPasswordPage: async ({ page }, use) => {
+    await use(new ResetPasswordPage(page));
   },
 
   dashboardPage: async ({ page }, use) => {

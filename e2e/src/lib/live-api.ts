@@ -87,3 +87,11 @@ export async function createLiveSession(credentials?: LiveCredentials): Promise<
 
   return client;
 }
+
+/**
+ * A client with no session, for the unauthenticated endpoints (the emailed-link ones,
+ * ADR-0033). Costs no login, so a spec may make its own.
+ */
+export function createAnonymousLiveClient(): ApiClient {
+  return new ApiClient({ baseUrl: env.API_BASE_URL, fetchImpl: fetch });
+}

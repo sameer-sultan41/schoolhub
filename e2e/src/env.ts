@@ -70,6 +70,14 @@ export const API_PATH_PREFIX = new URL(env.API_BASE_URL).pathname.replace(/\/$/,
 export const DASHBOARD_AUTH_PROXY_GLOB = `${new URL(env.DASHBOARD_URL).origin}/api/auth/**`;
 export const DASHBOARD_AUTH_PROXY_PATH_PREFIX = "/api";
 
+/** A tenant's dashboard origin, e.g. `http://cityschool.app.localhost:3000` (the `app.` host
+ * `apps/dashboard/src/lib/host.ts` reads the school from). */
+export function dashboardTenantOrigin(slug: string): string {
+  const dashboard = new URL(env.DASHBOARD_URL);
+  const port = dashboard.port ? `:${dashboard.port}` : "";
+  return `${dashboard.protocol}//${slug}.app.${env.PLATFORM_DOMAIN}${port}`;
+}
+
 /** Host for a tenant's public site, e.g. `cityschool.localhost:3001`. */
 export function tenantHost(slug: string): string {
   const website = new URL(env.WEBSITE_URL);

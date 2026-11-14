@@ -474,6 +474,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/invitations:accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Accept an invitation: set a password and activate the account.
+         *
+         *     Unauthenticated. A password the validators refuse is 400 `validation_error`; any
+         *     unusable link is 400 `invalid_link`.
+         */
+        post: operations["auth_invitations:accept_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/invitations:preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Show who an invitation is for and which school sent it, before a password is set.
+         *
+         *     Unauthenticated. Any unusable link (unknown school, unknown, used, revoked or expired
+         *     token) is 400 `invalid_link`.
+         */
+        post: operations["auth_invitations:preview_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -517,6 +561,52 @@ export interface paths {
         get: operations["auth_me_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Ask for a password-reset link by email.
+         *
+         *     Unauthenticated. Answers 204 to every well-formed body, whether or not the address
+         *     has an account, so the answer reveals nothing; a link goes only to an active member
+         *     of the named school.
+         */
+        post: operations["auth_password_reset_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password-reset:confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Set a new password from a reset link, and sign out every device.
+         *
+         *     Unauthenticated. A password the validators refuse is 400 `validation_error`; an
+         *     unusable link (wrong school, used or expired token, inactive account) is 400
+         *     `invalid_link`.
+         */
+        post: operations["auth_password_reset:confirm_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2347,6 +2437,29 @@ export interface paths {
         patch: operations["guardians_partial_update"];
         trace?: never;
     };
+    "/api/v1/guardians/{id}:invite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Invite this guardian to the portal at their email on file, or resend
+         * @description Guardian persons (module doc §16). No destroy — a guardian with no
+         *
+         *     remaining student links simply stops appearing in any student's roster;
+         *     hard removal is a retention operation, not documented as an API action.
+         */
+        post: operations["guardians_:invite_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/holiday-calendar": {
         parameters: {
             query?: never;
@@ -2580,6 +2693,31 @@ export interface paths {
         get: operations["leave_requests_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leave-requests/{id}/attachment:download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get a signed download URL for a leave request's attachment
+         * @description `POST /leave-requests/{id}/attachment:download`.
+         *
+         *     The only way to fetch a leave attachment: the purpose is module-gated, so
+         *     `/files` never signs one. Found through `get_queryset`, so a guardian reaches only
+         *     their own child's request and staff only their scope's. Not audited, as no
+         *     download is.
+         */
+        post: operations["leave_requests_attachment:download_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4890,7 +5028,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create a portal account for this staff member and assign roles
+         * Invite this staff member by email, creating their account if needed
          * @description Staff master records (module doc §5.1).
          */
         post: operations["staff_:invite_create"];
@@ -5781,6 +5919,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/students/{id}:invite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Invite this student to the portal by email, or resend their invitation
+         * @description Student master records (module doc §5.1-2).
+         */
+        post: operations["students_:invite_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/students/{id}:withdraw": {
         parameters: {
             query?: never;
@@ -6623,7 +6781,7 @@ export interface components {
             title: string;
             sections: components["schemas"]["PaperSection"][];
         };
-        /** @description An attachment's short-lived signed link, as `POST /files/{id}:download` returns one. */
+        /** @description A file's short-lived signed link: every `:download` action answers with one. */
         AttachmentDownload: {
             download_url: string;
         };
@@ -8322,9 +8480,10 @@ export interface components {
             readonly id: string;
             /**
              * Format: uuid
-             * @description users(id) — portal account, tenant-checked at write time.
+             * @description users(id) — portal account; set only by :invite (ADR-0033).
              */
-            user_id?: string | null;
+            readonly user_id: string | null;
+            readonly portal_status: components["schemas"]["PortalStatusEnum"];
             first_name: string;
             last_name: string;
             /** @description Primary contact; indexed for duplicate matching. */
@@ -8428,10 +8587,30 @@ export interface components {
          * @enum {string}
          */
         IncomeVsExpenseReportRowKindEnum: "income-vs-expense";
+        InvitationAccept: {
+            /** @description Tenant slug, from the link's `school` fragment. */
+            school: string;
+            /** @description From the link's `token` fragment. */
+            token: string;
+            password: string;
+        };
+        InvitationLink: {
+            /** @description Tenant slug, from the link's `school` fragment. */
+            school: string;
+            /** @description From the link's `token` fragment. */
+            token: string;
+        };
+        InvitationPreview: {
+            /** Format: email */
+            email: string;
+            school_name: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
         /**
-         * @description No email is sent (§17 gap — no notification infrastructure exists yet,
-         *     see services/invite.py's ``invite_staff`` docstring); this only creates and
-         *     links the account plus assigns the requested roles.
+         * @description ``role_ids`` apply when the account is created or re-invited after an exit;
+         *
+         *     a resend to a pending invitee ignores them (services/invite.py's ``invite_staff``).
          */
         InviteRequest: {
             role_ids?: string[];
@@ -9854,6 +10033,21 @@ export interface components {
          * @enum {string}
          */
         PassFailAnalysisReportRowKindEnum: "pass-fail-analysis";
+        PasswordResetConfirm: {
+            /** @description Tenant slug, from the link's `school` fragment. */
+            school: string;
+            /** @description From the link's `uid` fragment. */
+            uid: string;
+            /** @description From the link's `token` fragment. */
+            token: string;
+            new_password: string;
+        };
+        PasswordResetRequest: {
+            /** @description Tenant slug. Required: one email can hold accounts at two schools. */
+            school: string;
+            /** Format: email */
+            email: string;
+        };
         PatchedAcademicSession: {
             /** Format: uuid */
             readonly id?: string;
@@ -10476,9 +10670,10 @@ export interface components {
             readonly id?: string;
             /**
              * Format: uuid
-             * @description users(id) — portal account, tenant-checked at write time.
+             * @description users(id) — portal account; set only by :invite (ADR-0033).
              */
-            user_id?: string | null;
+            readonly user_id?: string | null;
+            readonly portal_status?: components["schemas"]["PortalStatusEnum"];
             first_name?: string;
             last_name?: string;
             /** @description Primary contact; indexed for duplicate matching. */
@@ -10872,9 +11067,9 @@ export interface components {
             employee_number?: string;
             /**
              * Format: uuid
-             * @description users(id) — portal account, tenant-checked at write time.
+             * @description users(id) — portal account; set only by :invite (ADR-0033).
              */
-            user_id?: string | null;
+            readonly user_id?: string | null;
             first_name?: string;
             last_name?: string;
             gender?: components["schemas"]["GenderEnum"];
@@ -10947,9 +11142,10 @@ export interface components {
             admission_number?: string;
             /**
              * Format: uuid
-             * @description users(id) — portal account, tenant-checked at write time.
+             * @description users(id) — portal account; set only by :invite (ADR-0033).
              */
-            user_id?: string | null;
+            readonly user_id?: string | null;
+            readonly portal_status?: components["schemas"]["PortalStatusEnum"];
             first_name?: string;
             last_name?: string;
             preferred_name?: string | null;
@@ -11222,6 +11418,9 @@ export interface components {
             unread_threads: number | null;
             modules: components["schemas"]["PortalModules"];
         };
+        PortalInviteResponse: {
+            readonly portal_status: components["schemas"]["PortalStatusEnum"];
+        };
         PortalModules: {
             attendance: boolean;
             fees: boolean;
@@ -11251,6 +11450,16 @@ export interface components {
             /** Format: date-time */
             readonly acknowledged_at: string | null;
         };
+        /**
+         * @description * `none` - No account
+         *     * `invited` - Invited
+         *     * `expired` - Invitation expired
+         *     * `send_failed` - Invitation not delivered
+         *     * `active` - Active
+         *     * `inactive` - Inactive
+         * @enum {string}
+         */
+        PortalStatusEnum: "none" | "invited" | "expired" | "send_failed" | "active" | "inactive";
         PortalStudent: {
             /** Format: uuid */
             id: string;
@@ -12002,9 +12211,9 @@ export interface components {
             employee_number?: string;
             /**
              * Format: uuid
-             * @description users(id) — portal account, tenant-checked at write time.
+             * @description users(id) — portal account; set only by :invite (ADR-0033).
              */
-            user_id?: string | null;
+            readonly user_id: string | null;
             first_name: string;
             last_name: string;
             gender?: components["schemas"]["GenderEnum"];
@@ -12230,9 +12439,10 @@ export interface components {
             admission_number?: string;
             /**
              * Format: uuid
-             * @description users(id) — portal account, tenant-checked at write time.
+             * @description users(id) — portal account; set only by :invite (ADR-0033).
              */
-            user_id?: string | null;
+            readonly user_id: string | null;
+            readonly portal_status: components["schemas"]["PortalStatusEnum"];
             first_name: string;
             last_name: string;
             preferred_name?: string | null;
@@ -12429,6 +12639,17 @@ export interface components {
         StudentImportRequest: {
             /** Format: uri */
             file: string;
+        };
+        /**
+         * @description A student has no email on file, so the address comes with the invite.
+         *
+         *     It is stored only on the student's account. A resend to an account nobody has activated
+         *     goes to this address, which corrects a mistyped one; an account that was once active keeps
+         *     its own address.
+         */
+        StudentInviteRequest: {
+            /** Format: email */
+            email: string;
         };
         /** @description `reports.student_late_arrivals`: late days and their minutes, most late days first. */
         StudentLateArrivalsReportRow: {
@@ -13806,6 +14027,55 @@ export interface operations {
             };
         };
     };
+    "auth_invitations:accept_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvitationAccept"];
+                "application/x-www-form-urlencoded": components["schemas"]["InvitationAccept"];
+                "multipart/form-data": components["schemas"]["InvitationAccept"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "auth_invitations:preview_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvitationLink"];
+                "application/x-www-form-urlencoded": components["schemas"]["InvitationLink"];
+                "multipart/form-data": components["schemas"]["InvitationLink"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationPreview"];
+                };
+            };
+        };
+    };
     auth_login_create: {
         parameters: {
             query?: never;
@@ -13865,6 +14135,54 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["User"];
                 };
+            };
+        };
+    };
+    auth_password_reset_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PasswordResetRequest"];
+                "multipart/form-data": components["schemas"]["PasswordResetRequest"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "auth_password_reset:confirm_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetConfirm"];
+                "application/x-www-form-urlencoded": components["schemas"]["PasswordResetConfirm"];
+                "multipart/form-data": components["schemas"]["PasswordResetConfirm"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -16856,20 +17174,15 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["File"];
-                "application/x-www-form-urlencoded": components["schemas"]["File"];
-                "multipart/form-data": components["schemas"]["File"];
-            };
-        };
+        requestBody?: never;
         responses: {
-            /** @description {'download_url': str} */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AttachmentDownload"];
+                };
             };
         };
     };
@@ -17416,6 +17729,34 @@ export interface operations {
             };
         };
     };
+    "guardians_:invite_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalInviteResponse"];
+                };
+            };
+            /** @description portal_disabled, email_in_use, not_eligible or already_active */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     holiday_calendar_retrieve: {
         parameters: {
             query?: never;
@@ -17747,6 +18088,34 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LeaveRequest"];
                 };
+            };
+        };
+    };
+    "leave_requests_attachment:download_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttachmentDownload"];
+                };
+            };
+            /** @description Not a request the caller may read, or it has no ready attachment. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -21336,7 +21705,7 @@ export interface operations {
                     "application/json": components["schemas"]["Staff"];
                 };
             };
-            /** @description Already linked */
+            /** @description email_in_use, already_active, or the staff member has exited */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -21676,12 +22045,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description {'download_url': str} */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AttachmentDownload"];
+                };
             };
         };
     };
@@ -22460,6 +22830,40 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["StudentEnrollment"];
                 };
+            };
+        };
+    };
+    "students_:invite_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StudentInviteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["StudentInviteRequest"];
+                "multipart/form-data": components["schemas"]["StudentInviteRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalInviteResponse"];
+                };
+            };
+            /** @description portal_disabled, email_in_use, not_eligible or already_active */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

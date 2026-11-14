@@ -108,5 +108,10 @@ urlpatterns = [
         LeaveRequestViewSet.as_view({"post": "cancel"}),
         name="leave-requests-cancel",
     ),
+    path(
+        "leave-requests/<uuid:pk>/attachment:download",
+        LeaveRequestViewSet.as_view({"post": "download_attachment"}),
+        name="leave-requests-attachment-download",
+    ),
     *router.urls,
 ]

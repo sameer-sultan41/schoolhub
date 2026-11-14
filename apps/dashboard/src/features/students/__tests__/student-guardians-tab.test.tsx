@@ -2,9 +2,11 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
 
+import type { AuthenticatedUser } from "@schoolhub/types";
+
 import { Services } from "@/services";
 import type { GuardianLinkRecord, GuardianRecord } from "@/services";
-import { renderWithProviders } from "@/test-utils";
+import { buildUser, renderWithProviders } from "@/test-utils";
 
 import { StudentGuardiansTab } from "../student-guardians-tab";
 
@@ -21,9 +23,15 @@ jest.mock("@/services", () => ({
       searchGuardians: jest.fn(),
       createGuardian: jest.fn(),
       linkGuardianToStudent: jest.fn(),
+      inviteGuardian: jest.fn(),
     },
     files: { uploadFile: jest.fn() },
   },
+}));
+
+const mockUseCurrentUser = jest.fn<{ data: AuthenticatedUser | undefined }, []>();
+jest.mock("@/hooks/use-current-user", () => ({
+  useCurrentUser: () => mockUseCurrentUser(),
 }));
 
 const mockFetchGuardianLinks = Services.guardians.fetchGuardianLinks as jest.MockedFunction<
@@ -65,6 +73,7 @@ function guardianRecord(overrides: Partial<GuardianRecord> = {}): GuardianRecord
   return {
     id: "g1",
     user_id: null,
+    portal_status: "none",
     first_name: "Ayesha",
     last_name: "Raza",
     phone: "0300-0000000",
@@ -91,6 +100,7 @@ describe("StudentGuardiansTab", () => {
     mockCreateGuardian.mockReset();
     mockLinkGuardianToStudent.mockReset();
     mockToastError.mockReset();
+    mockUseCurrentUser.mockReturnValue({ data: buildUser([]) });
   });
 
   it("shows empty copy when the student has no guardians linked", async () => {
@@ -243,5 +253,30 @@ describe("StudentGuardiansTab", () => {
     expect(screen.queryByRole("button", { name: /link guardian/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /make primary/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /edit link/i })).not.toBeInTheDocument();
+  });
+
+  it("shows each guardian's portal status, with the invite action for a holder of the key", async () => {
+    mockUseCurrentUser.mockReturnValue({
+      data: buildUser(["students.portal-account.invite"]),
+    });
+    mockFetchGuardianLinks.mockResolvedValue([linkRecord()]);
+    mockFetchGuardianById.mockResolvedValue(guardianRecord({ portal_status: "expired" }));
+
+    renderWithProviders(<StudentGuardiansTab studentId="student-1" canCreate canUpdate />);
+
+    expect(await screen.findByText("Invitation expired")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Resend invitation — Ayesha Raza" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the portal status but no invite action without the key", async () => {
+    mockFetchGuardianLinks.mockResolvedValue([linkRecord()]);
+    mockFetchGuardianById.mockResolvedValue(guardianRecord({ portal_status: "none" }));
+
+    renderWithProviders(<StudentGuardiansTab studentId="student-1" canCreate canUpdate />);
+
+    expect(await screen.findByText("No account")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /invite to portal/i })).not.toBeInTheDocument();
   });
 });

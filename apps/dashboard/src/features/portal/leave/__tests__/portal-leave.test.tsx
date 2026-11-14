@@ -2,6 +2,8 @@ import { ApiError } from "@schoolhub/api-client";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import type * as HelpersModule from "@/lib/helpers";
+import { downloadFile } from "@/lib/helpers";
 import { Services } from "@/services";
 import {
   ATTACHMENT_FILE_ID,
@@ -30,10 +32,21 @@ jest.mock("@/services", () =>
     .servicesMock({
       auth: ["fetchCurrentUser"],
       parentPortal: ["fetchPortalDashboard"],
-      leaveRequests: ["fetchLeavePage", "fetchLeaveTypes", "createLeave", "cancelLeave"],
+      leaveRequests: [
+        "fetchLeavePage",
+        "fetchLeaveTypes",
+        "createLeave",
+        "cancelLeave",
+        "fetchLeaveAttachmentUrl",
+      ],
       files: ["uploadFile"],
     }),
 );
+
+jest.mock("@/lib/helpers", () => ({
+  ...jest.requireActual<typeof HelpersModule>("@/lib/helpers"),
+  downloadFile: jest.fn(),
+}));
 
 const CASUAL_TYPE_ID = "66666666-aaaa-4bbb-8ccc-0000000000c2";
 const STAFF_TYPE_ID = "66666666-aaaa-4bbb-8ccc-0000000000c3";
@@ -83,6 +96,54 @@ describe("PortalLeave", () => {
     expect(Services.leaveRequests.fetchLeavePage).toHaveBeenCalledWith(
       expect.objectContaining({ studentId: AYESHA_ID }),
     );
+  });
+
+  describe("attachment", () => {
+    const withFile = leaveRecord({ attachment_file_id: ATTACHMENT_FILE_ID });
+    const downloadName = /Download the Sick leave note/;
+
+    beforeEach(() => {
+      mocked(Services.leaveRequests.fetchLeavePage).mockResolvedValue(listPage([withFile]));
+      mocked(Services.leaveRequests.fetchLeaveAttachmentUrl).mockReset();
+      mocked(downloadFile).mockReset();
+    });
+
+    it("re-opens the attached document through the request's own signed URL", async () => {
+      mocked(Services.leaveRequests.fetchLeaveAttachmentUrl).mockResolvedValue(
+        "https://signed.test/note.pdf",
+      );
+      const user = await renderLeave();
+
+      await user.click(await screen.findByRole("button", { name: downloadName }));
+
+      await waitFor(() => {
+        expect(mocked(downloadFile)).toHaveBeenCalledWith("https://signed.test/note.pdf");
+      });
+      expect(Services.leaveRequests.fetchLeaveAttachmentUrl).toHaveBeenCalledWith(withFile.id);
+    });
+
+    it("says in place when the download fails, so it can be tried again", async () => {
+      mocked(Services.leaveRequests.fetchLeaveAttachmentUrl).mockRejectedValue(
+        new Error("network"),
+      );
+      const user = await renderLeave();
+
+      await user.click(await screen.findByRole("button", { name: downloadName }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "The attachment couldn't be downloaded. Please try again.",
+      );
+      expect(screen.getByRole("button", { name: downloadName })).toBeEnabled();
+      expect(mocked(downloadFile)).not.toHaveBeenCalled();
+    });
+
+    it("offers no download for a request without one", async () => {
+      mocked(Services.leaveRequests.fetchLeavePage).mockResolvedValue(listPage());
+      await renderLeave();
+
+      await screen.findByText("Sick leave");
+      expect(screen.queryByRole("button", { name: downloadName })).not.toBeInTheDocument();
+    });
   });
 
   it("offers Cancel on a pending request only, and withdraws it once confirmed", async () => {

@@ -149,7 +149,8 @@ class CrossTenantAccessTests(APITestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        # `user_id` is read-only (only `:invite` links an account), so it is ignored.
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
         with tenant_context(self.tenant_a.id):
             self.own["staff"].refresh_from_db()
         self.assertIsNone(self.own["staff"].user_id)

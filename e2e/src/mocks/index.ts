@@ -1,6 +1,7 @@
 export * from "./envelope";
 export * from "./router";
 export * from "./domains/auth";
+export * from "./domains/account-invitations";
 export * from "./domains/school-organization";
 export * from "./domains/staff";
 export * from "./domains/jobs";

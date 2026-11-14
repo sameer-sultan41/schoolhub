@@ -13,6 +13,9 @@ from django.test import SimpleTestCase
 
 from core.api.throttling import (
     AuthEndpointThrottle,
+    InvitationIPThrottle,
+    PasswordResetEmailThrottle,
+    PasswordResetIPThrottle,
     PublicFormThrottle,
     TenantRateThrottle,
     UserRateThrottle,
@@ -24,6 +27,9 @@ DEFAULT_RATES = {
     "anon": "20/min",
     "auth": "10/min",
     "public_form": "5/min",
+    "password_reset_email": "5/hour",
+    "password_reset_ip": "20/hour",
+    "invitation_ip": "60/hour",
 }
 
 
@@ -37,6 +43,9 @@ class ThrottleRateTests(SimpleTestCase):
             UserRateThrottle,
             AuthEndpointThrottle,
             PublicFormThrottle,
+            PasswordResetEmailThrottle,
+            PasswordResetIPThrottle,
+            InvitationIPThrottle,
         ):
             with self.subTest(throttle=throttle.__name__):
                 self.assertNotIn("rate", vars(throttle))

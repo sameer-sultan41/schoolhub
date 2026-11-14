@@ -1,27 +1,37 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarOff, Paperclip } from "lucide-react";
+import { CalendarOff } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { Button, Card, CardContent, EmptyState, Skeleton } from "@schoolhub/ui";
 
 import { LoadErrorCard } from "@/components/load-error-card";
 import { RequestStatusBadge } from "@/features/attendance/request-status-badge";
 import { enumLabel } from "@/lib/enum-label";
-import { formatDate } from "@/lib/helpers";
-import type { LeaveRequestRecord } from "@/services";
+import { PortalDownloadButton } from "@/features/portal/portal-download-button";
+import { downloadFile, formatDate } from "@/lib/helpers";
+import { Services, type LeaveRequestRecord } from "@/services";
 import { LEAVE_DEFAULT_DAY_PART } from "@/services/modules/leave-requests/leave-requests-constant";
 import { CancelLeaveDialog } from "./cancel-leave-dialog";
 import { LEAVE_DAY_PART_LABEL_KEY } from "./leave-labels";
 import { useChildLeave } from "./use-child-leave";
 
-/** One child's requests, with Cancel on a pending one. A guardian cannot re-download an
- * attachment (deferred), so it is only noted as attached. */
+/** One child's requests, with Cancel on a pending one and a download for an attached document
+ * (the request's own `attachment:download`, so only a reader of the request gets the file). */
 export function LeaveList({ studentId }: { studentId: string }) {
   const t = useTranslations("portal.leave");
+  const tAttendance = useTranslations("attendance");
   const locale = useLocale();
   const query = useChildLeave(studentId);
   const [cancelling, setCancelling] = useState<LeaveRequestRecord | null>(null);
+
+  const datesOf = (request: LeaveRequestRecord) =>
+    request.start_date === request.end_date
+      ? formatDate(request.start_date, locale)
+      : t("range", {
+          from: formatDate(request.start_date, locale),
+          to: formatDate(request.end_date, locale),
+        });
 
   if (query.isPending) return <Skeleton className="h-24 w-full" />;
   if (query.isError) {
@@ -54,12 +64,7 @@ export function LeaveList({ studentId }: { studentId: string }) {
                   <p className="font-medium text-foreground">{request.leave_type_name}</p>
                   <p className="text-xs text-muted-foreground">
                     {[
-                      request.start_date === request.end_date
-                        ? formatDate(request.start_date, locale)
-                        : t("range", {
-                            from: formatDate(request.start_date, locale),
-                            to: formatDate(request.end_date, locale),
-                          }),
+                      datesOf(request),
                       t("days", { count: Number(request.days_count) }),
                       enumLabel(
                         t,
@@ -70,10 +75,20 @@ export function LeaveList({ studentId }: { studentId: string }) {
                   </p>
                   <p className="text-sm text-foreground">{request.reason}</p>
                   {request.attachment_file_id ? (
-                    <p className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                      <Paperclip aria-hidden="true" className="size-3" />
-                      {t("attached")}
-                    </p>
+                    <PortalDownloadButton
+                      label={t("downloadAttachment", {
+                        type: request.leave_type_name,
+                        range: datesOf(request),
+                        // A cancelled request and its resubmission can share type and dates.
+                        status: tAttendance(`requestStatus.${request.status}`),
+                      })}
+                      failedMessage={t("attachmentFailed")}
+                      download={async () => {
+                        downloadFile(
+                          await Services.leaveRequests.fetchLeaveAttachmentUrl(request.id),
+                        );
+                      }}
+                    />
                   ) : null}
                 </div>
                 <div className="flex flex-col items-end gap-2">

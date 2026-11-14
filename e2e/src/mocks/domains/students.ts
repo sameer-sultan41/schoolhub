@@ -7,6 +7,7 @@ export interface Student {
   id: string;
   admission_number: string;
   user_id: string | null;
+  portal_status: "none" | "invited" | "expired" | "send_failed" | "active" | "inactive";
   first_name: string;
   last_name: string;
   preferred_name: string | null;
@@ -35,6 +36,7 @@ export function buildStudent(overrides: Partial<Student> = {}): Student {
     id: id("student"),
     admission_number: "2026-0001",
     user_id: null,
+    portal_status: "none",
     first_name: "Ayesha",
     last_name: "Khan",
     preferred_name: null,

@@ -56,3 +56,15 @@ class CeleryRoutingTests(SimpleTestCase):
         ):
             with self.subTest(task=task):
                 self.assertEqual(routed_queue(task), "bulk")
+
+    def test_the_account_email_tasks_run_on_the_transactional_lane(self) -> None:
+        # Someone is waiting at a sign-in screen for these (ADR-0033).
+        app.loader.import_default_modules()
+        for task in (
+            "core.rbac.invitations.tasks.send_invitation_email",
+            "core.rbac.password_reset.tasks.send_password_reset_email",
+            "core.rbac.password_reset.tasks.send_password_changed_email",
+        ):
+            with self.subTest(task=task):
+                self.assertIn(task, app.tasks)
+                self.assertEqual(routed_queue(task), "transactional")

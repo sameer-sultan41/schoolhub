@@ -26,10 +26,7 @@ from apps.communication.models import Message, MessageThread
 from apps.communication.oversight.filters import ThreadOversightFilterSet
 from apps.communication.oversight.serializers import ThreadOversightSerializer
 from apps.communication.permission_classes import FEATURE, STAFF_PERMISSIONS
-from apps.communication.threads.serializers import (
-    AttachmentDownloadSerializer,
-    MessageSerializer,
-)
+from apps.communication.threads.serializers import MessageSerializer
 from apps.communication.threads.services.attachments import attachment_download_url
 from apps.communication.threads.viewset import (
     MessageCursorPagination,
@@ -37,6 +34,7 @@ from apps.communication.threads.viewset import (
 )
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
+from core.files.serializers import AttachmentDownloadSerializer
 
 OVERSIGHT_PERMISSION = "communication.thread.oversee"
 AUDIT_OVERSIGHT_VIEW = "oversight_view"

@@ -34,6 +34,7 @@ CLIENT_KNOWN_SERVER_CODES = {
     "domain_rule_violation",
     "rate_limited",
     "module_disabled",
+    "invalid_link",
     "tenant_not_found",
     "tenant_suspended",
     "marks_outstanding",
@@ -144,6 +145,7 @@ class ErrorCodeContractTests(APITestCase):
         from core.api.exceptions import (
             Conflict,
             DomainRuleViolation,
+            InvalidLink,
             ModuleDisabled,
             TenantNotFound,
             TenantSuspended,
@@ -152,6 +154,7 @@ class ErrorCodeContractTests(APITestCase):
         emitted = set(_CODE_BY_STATUS.values()) | {
             DomainRuleViolation.default_code,
             Conflict.default_code,
+            InvalidLink.default_code,
             ModuleDisabled.default_code,
             TenantNotFound.default_code,
             TenantSuspended.default_code,

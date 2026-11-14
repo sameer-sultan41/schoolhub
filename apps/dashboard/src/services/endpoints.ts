@@ -21,6 +21,12 @@ export const endpoints = {
     me: "/auth/me",
     changePassword: "/auth/change-password",
     refresh: "/refresh",
+    /** Unauthenticated, straight to the API (no refresh cookie involved): the emailed
+     * invitation and reset links (ADR-0033). Colon-actions, not nested paths. */
+    invitationPreview: "/auth/invitations:preview",
+    invitationAccept: "/auth/invitations:accept",
+    passwordReset: "/auth/password-reset",
+    passwordResetConfirm: "/auth/password-reset:confirm",
   },
   tenant: {
     /** The authenticated user's own tenant — name, branding, locale, contact. */
@@ -37,6 +43,8 @@ export const endpoints = {
      */
     staffDetail: (id: string) => `/staff/${id}`,
     staffExit: (id: string) => `/staff/${id}:exit`,
+    /** `POST /staff/{id}:invite`: creates the account and emails an invitation, or resends one. */
+    staffInvite: (id: string) => `/staff/${id}:invite`,
     /** `POST /staff-exports`/`POST /staff-imports` -> `202` + job
      * (`apps/api/apps/staff_management/staff/urls.py`) — each queues a `core.jobs`
      * background job; poll it via `jobs.detail` below. */
@@ -169,6 +177,7 @@ export const endpoints = {
     list: "/leave-requests",
     /** `:cancel` is the requester's withdrawal, a colon-action like approve and reject. */
     cancel: (id: string) => `/leave-requests/${id}:cancel`,
+    attachmentDownload: (id: string) => `/leave-requests/${id}/attachment:download`,
     action: (id: string, action: "approve" | "reject") => `/leave-requests/${id}:${action}`,
   },
   /** `GET /leave-types`: the read-only catalogue, keyed `attendance.leave-request.view`. */
@@ -277,6 +286,8 @@ export const endpoints = {
      * `/students/{id}:enroll`/`/students/{id}:change-section`. */
     enroll: (id: string) => `/students/${id}:enroll`,
     changeSection: (id: string) => `/students/${id}:change-section`,
+    /** `POST /students/{id}:invite` (ADR-0033): portal invitation, or a resend. */
+    invite: (id: string) => `/students/${id}:invite`,
     history: (id: string) => `/students/${id}/history`,
     emergencyContacts: (studentId: string) => `/students/${studentId}/emergency-contacts`,
     documents: (studentId: string) => `/students/${studentId}/documents`,
@@ -305,6 +316,8 @@ export const endpoints = {
     /** Nested under one student — `GET` lists that student's links, `POST` creates one.
      * The guardian itself is not created here (see `guardians.list` above). */
     studentLinks: (studentId: string) => `/students/${studentId}/guardians`,
+    /** `POST /guardians/{id}:invite` (ADR-0033): portal invitation to the email on file. */
+    invite: (id: string) => `/guardians/${id}:invite`,
   },
   /** Top-level access to a single link — `PATCH` only (module doc §16: "link flags
    * updatable via PATCH /api/v1/student-guardians/{id}"). */

@@ -2,6 +2,7 @@ import {
   cancelLeave,
   createLeave,
   decideLeave,
+  fetchLeaveAttachmentUrl,
   fetchLeavePage,
   fetchLeaveTypes,
 } from "./leave-requests-service";
@@ -12,6 +13,7 @@ export const LeaveRequestsService = {
   decideLeave,
   createLeave,
   cancelLeave,
+  fetchLeaveAttachmentUrl,
 };
 export type {
   LeaveAction,
