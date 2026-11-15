@@ -7,7 +7,8 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { FormDialogLayout } from "@/components/form-dialog-layout";
-import { SwitchFormField, TextFormField } from "@/features/school/shared/text-form-field";
+import { FormSwitchField } from "@/components/form-switch-field";
+import { FormTextField } from "@/components/form-text-field";
 import { useFormDialogSubmit } from "@/hooks/use-form-dialog-submit";
 import { useInvalidateModule } from "@/hooks/use-invalidate-module";
 import { Services, type CampusRecord } from "@/services";
@@ -86,27 +87,27 @@ export function CampusFormDialog({ open, onOpenChange, record }: CampusFormDialo
       submittingLabel={tCommon("saving")}
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <TextFormField
+        <FormTextField
           form={form}
           name="name"
           label={t("fields.name")}
           maxLength={CAMPUS_NAME_MAX}
         />
-        <TextFormField
+        <FormTextField
           form={form}
           name="code"
           label={t("fields.code")}
           maxLength={CAMPUS_CODE_MAX}
           description={t("form.codeHint")}
         />
-        <TextFormField
+        <FormTextField
           form={form}
           name="phone"
           type="tel"
           label={t("fields.phone")}
           maxLength={CAMPUS_PHONE_MAX}
         />
-        <TextFormField
+        <FormTextField
           form={form}
           name="email"
           type="email"
@@ -114,7 +115,7 @@ export function CampusFormDialog({ open, onOpenChange, record }: CampusFormDialo
           maxLength={CAMPUS_EMAIL_MAX}
         />
       </div>
-      <TextFormField
+      <FormTextField
         form={form}
         name="timezone"
         label={t("fields.timezone")}
@@ -122,13 +123,13 @@ export function CampusFormDialog({ open, onOpenChange, record }: CampusFormDialo
         placeholder={t("form.timezonePlaceholder")}
         description={t("campuses.form.timezoneHint")}
       />
-      <SwitchFormField
+      <FormSwitchField
         form={form}
         name="is_primary"
         label={t("campuses.form.isPrimary")}
         description={t("campuses.form.isPrimaryHint")}
       />
-      <SwitchFormField
+      <FormSwitchField
         form={form}
         name="is_active"
         label={t("fields.isActive")}

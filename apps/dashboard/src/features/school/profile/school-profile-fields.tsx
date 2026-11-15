@@ -5,8 +5,8 @@ import { useWatch, type UseFormReturn } from "react-hook-form";
 import { Button } from "@schoolhub/ui";
 
 import { FormSelectField } from "@/components/form-select-field";
+import { FormTextField } from "@/components/form-text-field";
 import { PhotoUploadField } from "@/components/photo-upload-field";
-import { TextFormField } from "@/features/school/shared/text-form-field";
 import { SUPPORTED_LOCALES } from "@/lib/env";
 import { Regex } from "@/lib/regex";
 import type { SchoolSettingsRecord } from "@/services";
@@ -49,7 +49,7 @@ export function SchoolProfileFields({
 
   return (
     <>
-      <TextFormField
+      <FormTextField
         form={form}
         name="name"
         label={t("profile.fields.name")}
@@ -83,7 +83,7 @@ export function SchoolProfileFields({
       </div>
       <div className="flex items-end gap-3">
         <div className="flex-1">
-          <TextFormField
+          <FormTextField
             form={form}
             name="primary_color"
             label={t("profile.fields.primaryColor")}
@@ -101,7 +101,7 @@ export function SchoolProfileFields({
         ) : null}
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <TextFormField
+        <FormTextField
           form={form}
           name="timezone"
           label={t("fields.timezone")}
@@ -115,7 +115,7 @@ export function SchoolProfileFields({
           placeholder={t("profile.fields.locale")}
           options={localeOptions}
         />
-        <TextFormField
+        <FormTextField
           form={form}
           name="currency"
           label={t("profile.fields.currency")}

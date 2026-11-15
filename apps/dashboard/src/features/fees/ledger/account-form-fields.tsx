@@ -5,6 +5,7 @@ import { useWatch, type UseFormReturn } from "react-hook-form";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage, Input } from "@schoolhub/ui";
 
 import { FormSelectField } from "@/components/form-select-field";
+import { FormSwitchField } from "@/components/form-switch-field";
 import { enumLabel } from "@/lib/enum-label";
 import type { LedgerAccountRecord } from "@/services";
 import {
@@ -15,7 +16,6 @@ import {
 } from "@/services/modules/ledger-accounts/ledger-accounts-constant";
 import type { LedgerAccountFormValues } from "@/services/modules/ledger-accounts/ledger-accounts.schema";
 import { LEDGER_ACCOUNT_TYPE_LABEL_KEY } from "@/features/fees/shared/fee-setup-labels";
-import { FormSwitchField } from "@/features/fees/shared/form-switch-field";
 import { useLedgerAccountOptions } from "@/features/fees/shared/use-fee-options";
 
 export interface AccountFormFieldsProps {

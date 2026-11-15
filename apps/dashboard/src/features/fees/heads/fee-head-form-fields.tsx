@@ -13,6 +13,7 @@ import {
 } from "@schoolhub/ui";
 
 import { FormSelectField } from "@/components/form-select-field";
+import { FormSwitchField } from "@/components/form-switch-field";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { enumLabel } from "@/lib/enum-label";
 import { hasPermission } from "@/lib/permissions";
@@ -23,7 +24,6 @@ import {
 } from "@/services/modules/fee-heads/fee-heads-constant";
 import type { FeeHeadFormValues } from "@/services/modules/fee-heads/fee-heads.schema";
 import { FEE_HEAD_CATEGORY_LABEL_KEY } from "@/features/fees/shared/fee-setup-labels";
-import { FormSwitchField } from "@/features/fees/shared/form-switch-field";
 import { useLedgerAccountOptions } from "@/features/fees/shared/use-fee-options";
 
 /**

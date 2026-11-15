@@ -7,7 +7,8 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { FormDialogLayout } from "@/components/form-dialog-layout";
-import { SwitchFormField, TextFormField } from "@/features/school/shared/text-form-field";
+import { FormSwitchField } from "@/components/form-switch-field";
+import { FormTextField } from "@/components/form-text-field";
 import { useStructureFormMessages } from "@/features/school/shared/use-structure-form-messages";
 import { useFormDialogSubmit } from "@/hooks/use-form-dialog-submit";
 import { useInvalidateModule } from "@/hooks/use-invalidate-module";
@@ -84,19 +85,19 @@ export function HouseFormDialog({ open, onOpenChange, record }: HouseFormDialogP
       submittingLabel={tCommon("saving")}
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <TextFormField
+        <FormTextField
           form={form}
           name="name"
           label={t("fields.name")}
           maxLength={HOUSE_NAME_MAX}
         />
-        <TextFormField
+        <FormTextField
           form={form}
           name="code"
           label={t("fields.code")}
           maxLength={HOUSE_CODE_MAX}
         />
-        <TextFormField
+        <FormTextField
           form={form}
           name="color"
           label={t("houses.fields.color")}
@@ -104,14 +105,14 @@ export function HouseFormDialog({ open, onOpenChange, record }: HouseFormDialogP
           placeholder={t("form.colorPlaceholder")}
           description={t("form.colorHint")}
         />
-        <TextFormField
+        <FormTextField
           form={form}
           name="motto"
           label={t("houses.fields.motto")}
           maxLength={HOUSE_MOTTO_MAX}
         />
       </div>
-      <SwitchFormField
+      <FormSwitchField
         form={form}
         name="is_active"
         label={t("fields.isActive")}

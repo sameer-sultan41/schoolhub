@@ -8,7 +8,7 @@ import { toast } from "sonner";
 
 import { FormDialogLayout } from "@/components/form-dialog-layout";
 import { FormSelectField } from "@/components/form-select-field";
-import { TextFormField } from "@/features/school/shared/text-form-field";
+import { FormTextField } from "@/components/form-text-field";
 import { useStructureFormMessages } from "@/features/school/shared/use-structure-form-messages";
 import { useFormDialogSubmit } from "@/hooks/use-form-dialog-submit";
 import { useInvalidateModule } from "@/hooks/use-invalidate-module";
@@ -98,20 +98,20 @@ export function HolidayFormDialog({ open, onOpenChange, holidays, index }: Holid
       isPending={isPending}
       submittingLabel={tCommon("saving")}
     >
-      <TextFormField
+      <FormTextField
         form={form}
         name="name"
         label={t("fields.name")}
         maxLength={HOLIDAY_NAME_MAX}
       />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <TextFormField
+        <FormTextField
           form={form}
           name="start_date"
           type="date"
           label={t("calendar.fields.startDate")}
         />
-        <TextFormField
+        <FormTextField
           form={form}
           name="end_date"
           type="date"
