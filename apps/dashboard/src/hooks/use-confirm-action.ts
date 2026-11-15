@@ -50,7 +50,5 @@ export function useConfirmAction<TResult>({
     mutation.mutate();
   }
 
-  // RED: the refusal is not handed back yet.
-  const failure: unknown = null;
-  return { error, failure, isPending: mutation.isPending, confirm };
+  return { error, failure: mutation.error, isPending: mutation.isPending, confirm };
 }

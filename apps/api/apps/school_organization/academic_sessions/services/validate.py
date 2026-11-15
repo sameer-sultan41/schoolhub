@@ -58,15 +58,19 @@ def session_completeness_errors(session: AcademicSession) -> list[str]:
     if not sectioned_classes.exists():
         errors.append("At least one active class with an active section is required.")
 
-    terms = list(session.terms.filter(deleted_at__isnull=True).order_by("start_date"))
-    if not terms:
-        errors.append("At least one term is required.")
-    elif terms[0].start_date > session.start_date or terms[-1].end_date < session.end_date:
-        errors.append("Term dates must cover the whole session window.")
-
+    errors.extend(term_coverage_errors(session))
     return errors
 
 
 def term_coverage_errors(session: AcademicSession) -> list[str]:
-    """Not yet split out of `session_completeness_errors` (RED: the test drives it)."""
+    """What stops ``session``'s terms covering it: no live term, or a gap at either end.
+
+    The activation check's term rule on its own, so the onboarding wizard can tell
+    whether a session's terms are done before any campus or class exists.
+    """
+    terms = list(session.terms.filter(deleted_at__isnull=True).order_by("start_date"))
+    if not terms:
+        return ["At least one term is required."]
+    if terms[0].start_date > session.start_date or terms[-1].end_date < session.end_date:
+        return ["Term dates must cover the whole session window."]
     return []
