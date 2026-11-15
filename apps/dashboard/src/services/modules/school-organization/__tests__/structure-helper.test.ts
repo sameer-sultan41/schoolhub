@@ -154,7 +154,7 @@ describe("structure helpers", () => {
     expect(
       buildSubjectInput({ ...defaultSubjectFormValues(), name: "Art", code: "ART" }).department_id,
     ).toBeNull();
-    expect(typeFilterToSubjectType("all")).toBeUndefined();
+    expect(typeFilterToSubjectType("")).toBeUndefined();
     expect(typeFilterToSubjectType("elective")).toBe("elective");
   });
 

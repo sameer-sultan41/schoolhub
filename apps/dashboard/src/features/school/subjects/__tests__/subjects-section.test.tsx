@@ -117,6 +117,15 @@ describe("subjects section", () => {
         expect.objectContaining({ subjectType: "elective", page: 1 }),
       );
     });
+
+    await user.click(screen.getByRole("combobox", { name: "Type" }));
+    await user.click(await screen.findByRole("option", { name: "All" }));
+
+    await waitFor(() => {
+      expect(so.fetchSubjectPage).toHaveBeenLastCalledWith(
+        expect.objectContaining({ subjectType: undefined }),
+      );
+    });
   });
 
   it("adds an elective subject in a department", async () => {

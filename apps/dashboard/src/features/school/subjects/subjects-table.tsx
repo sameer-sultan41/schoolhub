@@ -1,15 +1,8 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import {
-  EmptyState,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@schoolhub/ui";
+import { EmptyState } from "@schoolhub/ui";
 import { BookOpen } from "lucide-react";
 
 import { FilterSelect } from "@/components/filter-select";
@@ -21,7 +14,6 @@ import { StructureStatusFilter } from "@/features/school/shared/structure-status
 import { useStructureList } from "@/features/school/shared/use-structure-list";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useDepartments } from "@/hooks/use-reference-data";
-import { FILTER_ALL } from "@/lib/constants";
 import { hasPermission } from "@/lib/permissions";
 import { Services, type SubjectRecord } from "@/services";
 import {
@@ -61,6 +53,10 @@ export function SubjectsTable() {
   const canUpdate = hasPermission(currentUser, SUBJECT_KEYS.update);
   const canDelete = hasPermission(currentUser, SUBJECT_KEYS.delete);
   const departmentsQuery = useDepartments();
+  const typeOptions = useMemo(
+    () => SUBJECT_TYPES.map((type) => ({ id: type, name: t(`subjects.types.${type}`) })),
+    [t],
+  );
 
   const handleEdit = useCallback((record: SubjectRecord) => {
     setEditTarget(record);
@@ -91,7 +87,7 @@ export function SubjectsTable() {
   const hasActiveFilter =
     list.search !== "" ||
     filters.department !== "" ||
-    filters.type !== FILTER_ALL ||
+    filters.type !== "" ||
     filters.status !== STRUCTURE_STATUS.all;
 
   return (
@@ -121,24 +117,15 @@ export function SubjectsTable() {
               }}
               options={departmentsQuery.data ?? []}
             />
-            <Select
+            <FilterSelect
+              label={t("subjects.fields.type")}
+              allLabel={t("filters.all")}
               value={filters.type}
-              onValueChange={(type) => {
+              onChange={(type) => {
                 setFilters({ type });
               }}
-            >
-              <SelectTrigger className="w-full sm:w-40" aria-label={t("subjects.fields.type")}>
-                <SelectValue placeholder={t("subjects.fields.type")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={FILTER_ALL}>{t("filters.all")}</SelectItem>
-                {SUBJECT_TYPES.map((type) => (
-                  <SelectItem key={type} value={type}>
-                    {t(`subjects.types.${type}`)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              options={typeOptions}
+            />
             <StructureStatusFilter
               value={filters.status}
               onChange={(status) => {

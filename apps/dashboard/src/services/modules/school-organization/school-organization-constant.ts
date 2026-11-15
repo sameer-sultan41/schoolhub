@@ -197,7 +197,8 @@ const SUBJECT_TYPE_SET: Record<SubjectType, true> = {
 export const SUBJECT_TYPES = Object.keys(SUBJECT_TYPE_SET) as SubjectType[];
 /** The model's default. */
 export const DEFAULT_SUBJECT_TYPE: SubjectType = "core";
-const SUBJECT_TYPE_FILTER_VALUES: readonly string[] = [FILTER_ALL, ...SUBJECT_TYPES];
+/** The type filter's URL values: `""` is no filter (`FilterSelect`'s "All"). */
+const SUBJECT_TYPE_FILTER_VALUES: readonly string[] = ["", ...SUBJECT_TYPES];
 
 /** The department picker's choice for "no department" (stored as a blank, sent as `null`). */
 export const NO_DEPARTMENT_OPTION = FILTER_ALL;
@@ -215,7 +216,7 @@ export const SUBJECT_DEFAULT_SORTING: { id: string; desc: boolean }[] = [
 export const SUBJECT_URL_FILTERS = {
   department: { default: "", isValid: isUuid },
   type: {
-    default: FILTER_ALL,
+    default: "",
     isValid: (value: string) => SUBJECT_TYPE_FILTER_VALUES.includes(value),
   },
   status: STATUS_URL_FILTER,

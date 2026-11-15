@@ -10,6 +10,7 @@ import {
   SESSION_STRUCTURE_FIELD,
   STRUCTURE_QUERY_FIELDS,
   STRUCTURE_STATUS,
+  SUBJECT_TYPES,
 } from "./school-organization-constant";
 import type {
   CampusFormValues,
@@ -74,9 +75,9 @@ export function typeFilterToDepartmentType(type: string): DepartmentType | undef
   return type === FILTER_ALL ? undefined : (type as DepartmentType);
 }
 
-/** The type filter -> `subject_type`: `all` is no filter. */
+/** The type filter -> `subject_type`: `""` is no filter. */
 export function typeFilterToSubjectType(type: string): SubjectType | undefined {
-  return type === FILTER_ALL ? undefined : (type as SubjectType);
+  return SUBJECT_TYPES.find((subjectType) => subjectType === type);
 }
 
 /** Trimmed, with a blank as `null`, which clears a stored value. */
