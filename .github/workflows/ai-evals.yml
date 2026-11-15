@@ -4,7 +4,9 @@ name: ai-evals
 # baseline (ai-governance.md §6, ADR-0035). It spends real tokens, so it runs only
 # where a prompt, a feature's context, the gateway or the model settings change,
 # weekly for model drift, and by hand. The key is a spend-capped one held in the
-# protected `ai-evals` environment; without it the job fails and says so.
+# protected `ai-evals` environment. Without it, a scheduled or pull-request run skips
+# with a notice and a step summary (the key is bought at go-live); a run asked for by
+# hand (`workflow_dispatch`, or the baseline label) fails and says so.
 #
 # The first baseline comes from a PR, because `workflow_dispatch` only works once
 # this file is on main:
@@ -14,7 +16,7 @@ name: ai-evals
 #   3. download it (`gh run download <run-id> -n ai-eval-baseline`), review it and
 #      commit it under apps/api/;
 #   4. remove the label, then push that commit: the push runs the comparison.
-# Without a committed baseline the comparison fails.
+# Without a committed baseline the comparison fails (once a key is set).
 
 on:
   workflow_dispatch:
@@ -68,24 +70,38 @@ jobs:
       FEATURE: ${{ inputs.feature || 'fees.report-summary' }}
       WRITE_BASELINE: ${{ inputs.write_baseline || contains(github.event.pull_request.labels.*.name, 'ai-evals:write-baseline') }}
     steps:
-      - name: Require the eval key
+      - name: Check for the eval key
+        id: key
         # Runs before checkout, so not in the job default's apps/api (it doesn't exist yet).
         working-directory: .
         run: |
-          if [ -z "$ANTHROPIC_API_KEY" ]; then
+          if [ -n "$ANTHROPIC_API_KEY" ]; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          elif [ "$WRITE_BASELINE" = "true" ] || [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            # Someone asked for a run by hand, so a missing key is an error, not a skip.
             echo "::error title=ANTHROPIC_API_KEY is not set::The AI evals call the real provider. Add a spend-capped ANTHROPIC_API_KEY secret to the protected 'ai-evals' environment (Settings > Environments), then re-run."
             exit 1
+          else
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=AI evals skipped::No ANTHROPIC_API_KEY in the 'ai-evals' environment, so the golden sets were not scored. Add the key before production."
+            {
+              echo "### AI evals skipped"
+              echo
+              echo "No \`ANTHROPIC_API_KEY\` secret in the \`ai-evals\` environment, so nothing was scored. Add a spend-capped key before production, then write the first baseline (see the comment at the top of this workflow)."
+            } >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - uses: actions/checkout@v5
+        if: steps.key.outputs.skip != 'true'
       - uses: ./.github/actions/setup-api-env
+        if: steps.key.outputs.skip != 'true'
 
       - name: Write the baseline
-        if: env.WRITE_BASELINE == 'true'
+        if: steps.key.outputs.skip != 'true' && env.WRITE_BASELINE == 'true'
         run: uv run manage.py run_ai_evals --feature "$FEATURE" --write-baseline
 
       - name: Upload the baseline for review
-        if: env.WRITE_BASELINE == 'true'
+        if: steps.key.outputs.skip != 'true' && env.WRITE_BASELINE == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ai-eval-baseline
@@ -93,5 +109,5 @@ jobs:
           if-no-files-found: error
 
       - name: Compare with the committed baseline
-        if: env.WRITE_BASELINE != 'true'
+        if: steps.key.outputs.skip != 'true' && env.WRITE_BASELINE != 'true'
         run: uv run manage.py run_ai_evals --feature "$FEATURE"

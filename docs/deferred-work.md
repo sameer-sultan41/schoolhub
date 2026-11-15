@@ -51,6 +51,12 @@ either this file or `project-status.md`.
     baseline committed and green (add the environment's `ANTHROPIC_API_KEY` secret, add the PR
     label `ai-evals:write-baseline`, commit the uploaded `baseline.json`, remove the label and push:
     the comparison then passes), and usage visible at `/ai/usage`.
+  - **The `ai-evals` job is skipped until a key exists** (decision, testing phase: the
+    key is bought at go-live). A pull-request or weekly run ends green with a notice and a step
+    summary saying nothing was scored; a run asked for by hand (`workflow_dispatch` or the
+    `ai-evals:write-baseline` label) still fails without the key. So a green `ai-evals` check
+    proves nothing about quality until the key is set and the baseline is committed, and the
+    go-live item above is what closes this.
 
 - **Account invitations: what Task A2 left out** (PR A, `feat/account-invitations`;
   [ADR-0033](decisions/0033-account-invitations-and-auth-email.md)).
