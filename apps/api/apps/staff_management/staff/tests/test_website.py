@@ -135,9 +135,7 @@ class StaffWriteTests(WebsiteTestBase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
         with tenant_context(self.tenant.id):
             self.assertEqual(Staff.objects.get(pk=staff.pk).updated_by, self.user.pk)
-            self.assertTrue(
-                AuditLog.objects.filter(action="update", entity_id=str(staff.pk)).exists()
-            )
+            self.assertTrue(AuditLog.objects.filter(action="update", resource_id=staff.pk).exists())
         self.assertEqual(self.visibility(photo), FileVisibility.PUBLIC)
 
     def test_create_with_flag_publishes_the_photo(self) -> None:
