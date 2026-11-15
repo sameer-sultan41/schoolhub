@@ -326,3 +326,6 @@ export type {
   StudentStatement,
   StudentStatementEntry,
 } from "./modules/finance-reports";
+
+/** The website CMS domains' types (`./website-types`, kept apart for the 400-line cap). */
+export type * from "./website-types";

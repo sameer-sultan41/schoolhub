@@ -57,6 +57,15 @@ import { TeacherAllocationsService } from "./modules/teacher-allocations";
 import { TeacherSubstitutionsService } from "./modules/teacher-substitutions";
 import { TenantService } from "./modules/tenant";
 import { TimetableSlotsService } from "./modules/timetable-slots";
+import { ContactSubmissionsService } from "./modules/website/contact-submissions";
+import { GalleryAlbumsService } from "./modules/website/gallery-albums";
+import { NavigationMenusService } from "./modules/website/navigation-menus";
+import { NewsPostsService } from "./modules/website/news-posts";
+import { SchoolEventsService } from "./modules/website/school-events";
+import { SeoSettingsService } from "./modules/website/seo-settings";
+import { ThemesService } from "./modules/website/themes";
+import { WebsitePagesService } from "./modules/website/website-pages";
+import { WebsiteSettingsService } from "./modules/website/website-settings";
 
 /**
  * `ApiError` is re-exported so feature code can `instanceof`-check API failures without
@@ -140,4 +149,13 @@ export const Services = {
   settlementImports: SettlementImportsService,
   vouchers: VouchersService,
   results: ResultsService,
+  websiteSettings: WebsiteSettingsService,
+  themes: ThemesService,
+  websitePages: WebsitePagesService,
+  navigationMenus: NavigationMenusService,
+  seoSettings: SeoSettingsService,
+  newsPosts: NewsPostsService,
+  schoolEvents: SchoolEventsService,
+  galleryAlbums: GalleryAlbumsService,
+  contactSubmissions: ContactSubmissionsService,
 } as const;

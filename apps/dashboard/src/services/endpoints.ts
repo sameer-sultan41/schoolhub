@@ -1,3 +1,5 @@
+import { websiteEndpoints } from "./website-endpoints";
+
 /**
  * Every API endpoint path the dashboard calls, grouped by domain.
  *
@@ -511,4 +513,7 @@ export const endpoints = {
     list: "/fee-schedules",
     detail: (id: string) => `/fee-schedules/${id}`,
   },
+  /** The website CMS (`website-endpoints.ts`): pages, news, events, gallery, settings, menus,
+   * SEO and the contact inbox. */
+  website: websiteEndpoints,
 } as const;
