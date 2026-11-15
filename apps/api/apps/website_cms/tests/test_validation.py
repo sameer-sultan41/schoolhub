@@ -12,7 +12,11 @@ from apps.website_cms import visibility as website_visibility
 from apps.website_cms.media import public_file_url, to_public, url_key
 from apps.website_cms.models import ContentStatus
 from apps.website_cms.tests.factories import (
+    GalleryAlbumFactory,
+    GalleryItemFactory,
+    NewsPostFactory,
     PageSectionFactory,
+    SchoolEventFactory,
     SeoSettingFactory,
     TenantFactory,
     WebsitePageFactory,
@@ -365,3 +369,79 @@ class SyncVisibilityTests(TestCase):
     def test_no_candidates_runs_no_query(self) -> None:
         with self.assertNumQueries(0):
             self.assertEqual(website_visibility.page_section_files(set()), set())
+
+
+class ProviderNarrowingTests(TestCase):
+    """The news, event and gallery providers load only what can mention a candidate (L71)."""
+
+    def setUp(self) -> None:
+        self.tenant = TenantFactory()
+        self.ctx = tenant_context(self.tenant.id)
+        self.ctx.__enter__()
+        self.addCleanup(self.ctx.__exit__, None, None, None)
+        self.file = FileFactory(tenant=self.tenant, purpose=WEBSITE_MEDIA.key)
+
+    @staticmethod
+    def _doc(file_id) -> dict:
+        return {"blocks": [{"type": "image", "file_id": str(file_id), "alt": "Photo"}]}
+
+    def _walked_rows(self, provider, factory, field: str) -> tuple[set, int]:
+        """The provider's answer and how many rows its confirming walk ran on."""
+        status = ContentStatus.PUBLISHED
+        factory(tenant=self.tenant, status=status, **{field: self._doc(self.file.id)})
+        factory(tenant=self.tenant, status=status, **{field: self._doc(uuid4())})
+        factory(tenant=self.tenant, status=status)
+        with mock.patch.object(
+            website_visibility,
+            "rich_text_file_ids",
+            wraps=website_visibility.rich_text_file_ids,
+        ) as walk:
+            return provider({self.file.id}), walk.call_count
+
+    def test_news_walks_only_the_post_that_mentions_the_candidate(self) -> None:
+        claimed, walked = self._walked_rows(website_visibility.news_files, NewsPostFactory, "body")
+        self.assertEqual((claimed, walked), ({self.file.id}, 1))
+
+    def test_events_walk_only_the_event_that_mentions_the_candidate(self) -> None:
+        claimed, walked = self._walked_rows(
+            website_visibility.event_files, SchoolEventFactory, "description"
+        )
+        self.assertEqual((claimed, walked), ({self.file.id}, 1))
+
+    def test_draft_rows_mentioning_the_candidate_are_not_walked(self) -> None:
+        NewsPostFactory(tenant=self.tenant, body=self._doc(self.file.id))
+        with mock.patch.object(website_visibility, "rich_text_file_ids") as walk:
+            self.assertEqual(website_visibility.news_files({self.file.id}), set())
+        walk.assert_not_called()
+
+    def test_gallery_answers_from_two_id_filtered_queries(self) -> None:
+        album = GalleryAlbumFactory(tenant=self.tenant, status=ContentStatus.PUBLISHED)
+        GalleryItemFactory(
+            tenant=self.tenant, gallery_album=album, media_type="image", file_id=self.file.id
+        )
+        for _ in range(3):
+            other = GalleryAlbumFactory(tenant=self.tenant, status=ContentStatus.PUBLISHED)
+            GalleryItemFactory(
+                tenant=self.tenant,
+                gallery_album=other,
+                media_type="image",
+                file_id=FileFactory(tenant=self.tenant, purpose=WEBSITE_MEDIA.key).id,
+            )
+        with self.assertNumQueries(2):
+            self.assertEqual(website_visibility.gallery_files({self.file.id}), {self.file.id})
+
+    def test_an_item_of_an_unpublished_album_is_not_claimed(self) -> None:
+        draft = GalleryAlbumFactory(tenant=self.tenant)
+        GalleryItemFactory(
+            tenant=self.tenant, gallery_album=draft, media_type="image", file_id=self.file.id
+        )
+        self.assertEqual(website_visibility.gallery_files({self.file.id}), set())
+
+    def test_no_candidates_run_no_query_in_any_provider(self) -> None:
+        for provider in (
+            website_visibility.news_files,
+            website_visibility.event_files,
+            website_visibility.gallery_files,
+        ):
+            with self.assertNumQueries(0):
+                self.assertEqual(provider(set()), set())

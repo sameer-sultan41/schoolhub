@@ -6,6 +6,7 @@ from unittest import mock
 
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 
 from apps.website_cms.models import ContentStatus, NewsPost
 from apps.website_cms.tests.base import WebsiteAPITestCase
@@ -267,3 +268,22 @@ class NewsLifecycleTests(WebsiteAPITestCase):
                 )
                 write = next(i for i, q in enumerate(sql) if q.startswith('UPDATE "news_posts"'))
                 self.assertLess(lock, write)
+
+
+class NewsBearerAndOrderTests(WebsiteAPITestCase):
+    def test_bearer_token_alone_lists_404s_a_foreign_id_and_writes(self) -> None:
+        self.allow("website.page.view", "website.news-post.update")
+        mine = self.make_news()
+        foreign = self.make_news(tenant=self.make_other_tenant())
+        client = self.bearer_client()
+        self.assertEqual(client.get(LIST).status_code, 200)
+        self.assertEqual(client.get(detail(foreign)).status_code, 404)
+        response = client.patch(detail(mine), {"title": "Renamed"}, format="json")
+        self.assertEqual(response.status_code, 200, response.content)
+
+    def test_rows_tied_on_every_sort_key_page_apart(self) -> None:
+        self.allow("website.page.view")
+        rows = [self.make_news(), self.make_news()]
+        self.assert_ties_page_apart(
+            LIST, NewsPost, rows, created_at=timezone.now(), published_at=None
+        )
