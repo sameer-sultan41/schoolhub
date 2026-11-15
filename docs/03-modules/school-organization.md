@@ -258,7 +258,10 @@ response shape changed anywhere in the module.
   sees the school.
 - `PATCH /school-settings` lives in `school_settings/services.py`. The audited `before`/`after`
   (`services.represent`) carry `name` and `logo_file_id` and never the signed `logo_url`, which
-  would change on every read.
+  would change on every read. It reads the settings row under `SELECT ... FOR UPDATE`
+  (`tenant_settings.lock_settings_row`, which the `/holiday-calendar` PUT and the attendance
+  settings take too) and saves only the columns it changed, so an overlapping write to
+  `academic` or `ai` is neither lost nor reverted.
 - `Tenant.name` has two writers: this `PATCH`, and the platform console's tenant `PATCH`. The last
   write wins, and both are audited. A billing legal name, if one is ever needed, is a separate
   field.

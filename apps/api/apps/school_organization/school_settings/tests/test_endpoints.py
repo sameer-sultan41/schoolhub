@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import uuid
+from unittest import mock
 
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 
+from apps.school_organization.school_settings import services
 from apps.school_organization.tests.base import SchoolOrganizationAPITestCase
 from apps.school_organization.tests.factories import TenantFactory
 from core.audit.models import AuditLog
@@ -126,6 +130,36 @@ class SchoolSettingsProfileTests(SchoolOrganizationAPITestCase):
             self.client.get(SETTINGS).json()["data"]["branding"],
             {"primary_color": "#1E88E5", "radius": "0.5rem", "secondary_color": "#FFFFFF"},
         )
+
+    def test_patch_locks_the_row_and_writes_only_the_columns_it_changes(self) -> None:
+        """A write to another column between the PATCH's read and its save survives it."""
+        concurrent = {"ai": {"monthly_token_budget": 5000}, "academic": {"working_days": [0, 1]}}
+        real_represent = services.represent
+        calls: list[int] = []
+
+        def write_elsewhere_then_represent(tenant, settings_row):
+            # The first call is the `before` read, taken after the row is read and locked.
+            if not calls:
+                TenantSettings.objects.filter(pk=settings_row.pk).update(**concurrent)
+            calls.append(1)
+            return real_represent(tenant, settings_row)
+
+        with (
+            mock.patch.object(services, "represent", side_effect=write_elsewhere_then_represent),
+            CaptureQueriesContext(connection) as captured,
+        ):
+            response = self._patch({"branding": {"primary_color": "#123456"}})
+        sql = [query["sql"] for query in captured.captured_queries]
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertTrue(
+            any("FOR UPDATE" in q and '"tenant_settings"' in q for q in sql), "row not locked"
+        )
+        with tenant_context(self.tenant.id):
+            row = TenantSettings.objects.get(tenant=self.tenant)
+        self.assertEqual(row.ai, concurrent["ai"])
+        self.assertEqual(row.academic, concurrent["academic"])
+        self.assertEqual(row.branding, {"primary_color": "#123456"})
 
     def test_branding_rejects_a_primary_color_that_is_not_hex(self) -> None:
         response = self._patch({"branding": {"primary_color": "bg-blue-500"}})
