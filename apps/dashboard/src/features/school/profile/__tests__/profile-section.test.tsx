@@ -120,7 +120,8 @@ describe("profile section", () => {
     const issue = "This file is not a ready school logo upload.";
     mockUploadFile.mockResolvedValue(LOGO_FILE_ID);
     settings.updateSchoolSettings.mockRejectedValue(fieldError("logo_file_id", issue, 422));
-    const user = renderSection();
+    const view = renderWithProviders(<ProfileSection />);
+    const user = userEvent.setup();
 
     await user.upload(
       await screen.findByLabelText("Logo"),
@@ -135,6 +136,8 @@ describe("profile section", () => {
     expect(settings.updateSchoolSettings).toHaveBeenCalledWith(
       expect.objectContaining({ logo_file_id: LOGO_FILE_ID }),
     );
+    // Unmount first: the field revokes its preview's object URL as it unmounts.
+    view.unmount();
     restoreUrls();
   });
 
