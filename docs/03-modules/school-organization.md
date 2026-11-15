@@ -313,7 +313,10 @@ API enforces either way.
   campus by name, capacity ("Unlimited" when blank), status, with Add, Edit and Remove on the
   section keys. The section form's class and campus pickers ask the API for the active ones only,
   since the server refuses an inactive class or campus; an inactive class's sections are listed
-  and removable but not added to or edited. A taken level shows under the level input.
+  and removable but not added to or edited. Editing a section whose campus was since deactivated
+  still shows that campus, marked inactive, rather than a blank picker; Save then gets the
+  server's "Campus 'X' is inactive." under the field until an active one is picked. A taken level
+  shows under the level input.
 - **Subjects** (`features/school/subjects/`, PR G): a server-paged list with search and the
   department, type and status filters in the URL; a subject's department is shown by name
   (`useDepartments`, the cache entry the staff form reads), "No department" when it has none.

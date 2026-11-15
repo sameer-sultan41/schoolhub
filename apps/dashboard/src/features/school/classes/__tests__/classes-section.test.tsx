@@ -75,6 +75,8 @@ const retired = classRecord({
 /** What `ClassSerializer.validate_level` answers for a level another live class holds. */
 const LEVEL_TAKEN = "Level 1 is already used by class 'Grade 1'.";
 
+const OLD_CAMPUS_ID = "3b4c5d6e-7f8a-4b9c-8d0e-1f2a3b4c5d6e";
+
 /** `services.assert_deletable`'s 422, naming the relations that still point at the row. */
 function referenced(relations: string[], url: string) {
   const message =
@@ -368,6 +370,34 @@ describe("classes section", () => {
       });
     });
     expect(so.createSection).not.toHaveBeenCalled();
+  });
+
+  it("keeps an edited section's since-deactivated campus in the campus picker", async () => {
+    // The API's own `is_active` filter: only the all-campus list holds the old campus.
+    mockFetchCampuses.mockImplementation(({ isActive } = {}) =>
+      Promise.resolve(
+        isActive
+          ? [{ id: CAMPUS_ID, name: "Main Campus" }]
+          : [
+              { id: CAMPUS_ID, name: "Main Campus" },
+              { id: OLD_CAMPUS_ID, name: "Old Campus" },
+            ],
+      ),
+    );
+    so.fetchClassSections.mockResolvedValue([sectionRecord({ campus_id: OLD_CAMPUS_ID })]);
+    const user = renderSection();
+
+    await user.click(await screen.findByRole("button", { name: "Show sections for Grade 1" }));
+    await user.click(await screen.findByRole("button", { name: "Edit A" }));
+    const dialog = await screen.findByRole("dialog");
+    const campusPicker = within(dialog).getByRole("combobox", { name: "Campus" });
+    await waitFor(() => {
+      expect(campusPicker).toHaveTextContent("Old Campus (inactive)");
+    });
+
+    await user.click(campusPicker);
+    expect(await screen.findByRole("option", { name: "Main Campus" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Old Campus (inactive)" })).toBeInTheDocument();
   });
 
   it("shows the classes and sections only, to a viewer without the write keys", async () => {

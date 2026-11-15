@@ -41,8 +41,9 @@ export interface SectionFormDialogProps {
 
 /**
  * Adds a section to a class at one campus, or edits one. The class and campus pickers offer only
- * the active ones, as the server refuses an inactive class or campus (`SectionSerializer`); a
- * blank capacity is unlimited. A server error that names a field shows under it.
+ * the active ones, as the server refuses an inactive class or campus (`SectionSerializer`); an
+ * edited section whose campus was since deactivated still shows it, marked inactive, rather than
+ * a blank picker. A blank capacity is unlimited. A server error that names a field shows under it.
  *
  * Mounting contract: the caller mounts this only while it is open, so every open is a fresh
  * form. An edit starts from the row the panel holds, so no prefill lands after mount.
@@ -54,6 +55,21 @@ export function SectionFormDialog({ open, onOpenChange, classId, record }: Secti
   const messages = useStructureFormMessages();
   const classesQuery = useClasses({ isActive: true });
   const campusesQuery = useCampuses({ isActive: true });
+  // Every campus (the panel's cache entry): names an edited section's since-deactivated campus.
+  const allCampusesQuery = useCampuses({ enabled: record !== undefined });
+  const currentCampusId = record?.campus_id;
+
+  const campusOptions = useMemo(() => {
+    const active = campusesQuery.data ?? [];
+    if (!campusesQuery.data || !currentCampusId) return active;
+    if (active.some((campus) => campus.id === currentCampusId)) return active;
+    const current = allCampusesQuery.data?.find((campus) => campus.id === currentCampusId);
+    if (!current) return active;
+    return [
+      ...active,
+      { id: current.id, name: t("sections.inactiveCampus", { name: current.name }) },
+    ];
+  }, [campusesQuery.data, allCampusesQuery.data, currentCampusId, t]);
 
   const schema = useMemo(() => createSectionFormSchema(messages), [messages]);
   const form = useForm<SectionFormValues>({
@@ -103,7 +119,7 @@ export function SectionFormDialog({ open, onOpenChange, classId, record }: Secti
           name="campus_id"
           label={t("fields.campus")}
           placeholder={loadingOr(t("fields.campus"), campusesQuery.isPending)}
-          options={campusesQuery.data ?? []}
+          options={campusOptions}
         />
         <FormTextField
           form={form}

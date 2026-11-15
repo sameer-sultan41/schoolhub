@@ -453,6 +453,7 @@
       "saved": "Section saved.",
       "unlimited": "Unlimited",
       "qualifiedName": "{className} – {name}",
+      "inactiveCampus": "{name} (inactive)",
       "fields": {
         "class": "Class",
         "capacity": "Capacity"

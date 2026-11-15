@@ -453,6 +453,7 @@
       "saved": "سیکشن محفوظ ہو گیا۔",
       "unlimited": "لامحدود",
       "qualifiedName": "{className} – {name}",
+      "inactiveCampus": "{name} (غیر فعال)",
       "fields": {
         "class": "کلاس",
         "capacity": "گنجائش"
