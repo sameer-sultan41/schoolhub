@@ -7971,6 +7971,123 @@ paths:
               schema:
                 $ref: '#/components/schemas/ThreadRecipientListResponse'
           description: ''
+  /api/v1/navigation-menus:
+    get:
+      operationId: navigation_menus_list
+      description: |-
+        Applies tenant + record-scope narrowing and writes audit entries.
+
+        Subclasses declare::
+
+            required_feature = "module.students"   # optional; None means "core, ungated"
+            required_permission = "students.student.view"
+            required_permission_map = {"create": "students.student.create", ...}
+            scope_own_field = "user_id"      # optional, the simple `own` record scope
+            scope_campus_field = "student__campus_id"  # override on a table with no own campus_id
+
+        ``RequiresModuleFeature`` runs before ``HasPermissionKey`` deliberately —
+        docs/02-architecture/auth-and-rbac.md §2.3 orders the module-level check
+        ahead of the feature-level (permission-key) check, and DRF evaluates
+        ``permission_classes`` in list order.
+
+        ``scope_own_field`` is only the *fallback* for ``RecordScope.OWN``. When "own"
+        means more than one column — a guardian's own children, say — the model
+        declares a ``filter_owned_by_user`` classmethod and ``scope_queryset`` prefers
+        it, the same way ``filter_assigned_to_user`` already works for
+        ``RecordScope.ASSIGNED``. See ``apps.student_management.models.Student``.
+
+        ``scope_campus_field`` defaults to ``"campus_id"``, which only the parent
+        resource in a module tends to have — a child table (a student's guardians,
+        documents, …) has no such column of its own. Getting this wrong is not a
+        narrow leak: ``scope_queryset``'s ``RecordScope.CAMPUS`` branch filters on
+        whatever this names, so a table without that column raises ``FieldError``
+        for every campus-scoped user the moment they hit the endpoint — override it
+        per child viewset rather than leaving the default.
+
+        A route whose declaration is not the read key (an update, a delete, a colon
+        action) is scoped by the read key and then by its own, so its target must be
+        one the caller may read as well as act on. The read key is
+        ``required_permission`` unless ``scope_read_permission`` names another, and
+        ``scope_read_exempt_actions`` lists any action with no read requirement.
+      tags:
+      - navigation-menus
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NavigationMenu'
+          description: ''
+  /api/v1/navigation-menus/{location}:
+    patch:
+      operationId: navigation_menus_partial_update
+      description: |-
+        Applies tenant + record-scope narrowing and writes audit entries.
+
+        Subclasses declare::
+
+            required_feature = "module.students"   # optional; None means "core, ungated"
+            required_permission = "students.student.view"
+            required_permission_map = {"create": "students.student.create", ...}
+            scope_own_field = "user_id"      # optional, the simple `own` record scope
+            scope_campus_field = "student__campus_id"  # override on a table with no own campus_id
+
+        ``RequiresModuleFeature`` runs before ``HasPermissionKey`` deliberately —
+        docs/02-architecture/auth-and-rbac.md §2.3 orders the module-level check
+        ahead of the feature-level (permission-key) check, and DRF evaluates
+        ``permission_classes`` in list order.
+
+        ``scope_own_field`` is only the *fallback* for ``RecordScope.OWN``. When "own"
+        means more than one column — a guardian's own children, say — the model
+        declares a ``filter_owned_by_user`` classmethod and ``scope_queryset`` prefers
+        it, the same way ``filter_assigned_to_user`` already works for
+        ``RecordScope.ASSIGNED``. See ``apps.student_management.models.Student``.
+
+        ``scope_campus_field`` defaults to ``"campus_id"``, which only the parent
+        resource in a module tends to have — a child table (a student's guardians,
+        documents, …) has no such column of its own. Getting this wrong is not a
+        narrow leak: ``scope_queryset``'s ``RecordScope.CAMPUS`` branch filters on
+        whatever this names, so a table without that column raises ``FieldError``
+        for every campus-scoped user the moment they hit the endpoint — override it
+        per child viewset rather than leaving the default.
+
+        A route whose declaration is not the read key (an update, a delete, a colon
+        action) is scoped by the read key and then by its own, so its target must be
+        one the caller may read as well as act on. The read key is
+        ``required_permission`` unless ``scope_read_permission`` names another, and
+        ``scope_read_exempt_actions`` lists any action with no read requirement.
+      parameters:
+      - in: path
+        name: location
+        schema:
+          type: string
+        required: true
+      tags:
+      - navigation-menus
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedNavigationMenuUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedNavigationMenuUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedNavigationMenuUpdate'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NavigationMenu'
+          description: ''
   /api/v1/notices:
     get:
       operationId: notices_list
@@ -11256,6 +11373,134 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/seo-settings:
+    get:
+      operationId: seo_settings_retrieve
+      description: |-
+        Applies tenant + record-scope narrowing and writes audit entries.
+
+        Subclasses declare::
+
+            required_feature = "module.students"   # optional; None means "core, ungated"
+            required_permission = "students.student.view"
+            required_permission_map = {"create": "students.student.create", ...}
+            scope_own_field = "user_id"      # optional, the simple `own` record scope
+            scope_campus_field = "student__campus_id"  # override on a table with no own campus_id
+
+        ``RequiresModuleFeature`` runs before ``HasPermissionKey`` deliberately —
+        docs/02-architecture/auth-and-rbac.md §2.3 orders the module-level check
+        ahead of the feature-level (permission-key) check, and DRF evaluates
+        ``permission_classes`` in list order.
+
+        ``scope_own_field`` is only the *fallback* for ``RecordScope.OWN``. When "own"
+        means more than one column — a guardian's own children, say — the model
+        declares a ``filter_owned_by_user`` classmethod and ``scope_queryset`` prefers
+        it, the same way ``filter_assigned_to_user`` already works for
+        ``RecordScope.ASSIGNED``. See ``apps.student_management.models.Student``.
+
+        ``scope_campus_field`` defaults to ``"campus_id"``, which only the parent
+        resource in a module tends to have — a child table (a student's guardians,
+        documents, …) has no such column of its own. Getting this wrong is not a
+        narrow leak: ``scope_queryset``'s ``RecordScope.CAMPUS`` branch filters on
+        whatever this names, so a table without that column raises ``FieldError``
+        for every campus-scoped user the moment they hit the endpoint — override it
+        per child viewset rather than leaving the default.
+
+        A route whose declaration is not the read key (an update, a delete, a colon
+        action) is scoped by the read key and then by its own, so its target must be
+        one the caller may read as well as act on. The read key is
+        ``required_permission`` unless ``scope_read_permission`` names another, and
+        ``scope_read_exempt_actions`` lists any action with no read requirement.
+      parameters:
+      - in: query
+        name: target_id
+        schema:
+          type: string
+      - in: query
+        name: target_type
+        schema:
+          type: string
+        required: true
+      tags:
+      - seo-settings
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SeoSetting'
+          description: ''
+    patch:
+      operationId: seo_settings_partial_update
+      description: |-
+        Applies tenant + record-scope narrowing and writes audit entries.
+
+        Subclasses declare::
+
+            required_feature = "module.students"   # optional; None means "core, ungated"
+            required_permission = "students.student.view"
+            required_permission_map = {"create": "students.student.create", ...}
+            scope_own_field = "user_id"      # optional, the simple `own` record scope
+            scope_campus_field = "student__campus_id"  # override on a table with no own campus_id
+
+        ``RequiresModuleFeature`` runs before ``HasPermissionKey`` deliberately —
+        docs/02-architecture/auth-and-rbac.md §2.3 orders the module-level check
+        ahead of the feature-level (permission-key) check, and DRF evaluates
+        ``permission_classes`` in list order.
+
+        ``scope_own_field`` is only the *fallback* for ``RecordScope.OWN``. When "own"
+        means more than one column — a guardian's own children, say — the model
+        declares a ``filter_owned_by_user`` classmethod and ``scope_queryset`` prefers
+        it, the same way ``filter_assigned_to_user`` already works for
+        ``RecordScope.ASSIGNED``. See ``apps.student_management.models.Student``.
+
+        ``scope_campus_field`` defaults to ``"campus_id"``, which only the parent
+        resource in a module tends to have — a child table (a student's guardians,
+        documents, …) has no such column of its own. Getting this wrong is not a
+        narrow leak: ``scope_queryset``'s ``RecordScope.CAMPUS`` branch filters on
+        whatever this names, so a table without that column raises ``FieldError``
+        for every campus-scoped user the moment they hit the endpoint — override it
+        per child viewset rather than leaving the default.
+
+        A route whose declaration is not the read key (an update, a delete, a colon
+        action) is scoped by the read key and then by its own, so its target must be
+        one the caller may read as well as act on. The read key is
+        ``required_permission`` unless ``scope_read_permission`` names another, and
+        ``scope_read_exempt_actions`` lists any action with no read requirement.
+      parameters:
+      - in: query
+        name: target_id
+        schema:
+          type: string
+      - in: query
+        name: target_type
+        schema:
+          type: string
+        required: true
+      tags:
+      - seo-settings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSeoSetting'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSeoSetting'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSeoSetting'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SeoSetting'
+          description: ''
   /api/v1/staff:
     get:
       operationId: staff_list
@@ -21473,6 +21718,87 @@ components:
       - section_id
       - section_name
       - start_time
+    NavChild:
+      type: object
+      properties:
+        label:
+          type: string
+          maxLength: 60
+        target_type:
+          $ref: '#/components/schemas/NavigationTargetTypeEnum'
+        target:
+          type: string
+          nullable: true
+        children:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+      required:
+      - label
+      - target_type
+    NavItem:
+      type: object
+      properties:
+        label:
+          type: string
+          maxLength: 60
+        target_type:
+          $ref: '#/components/schemas/NavigationTargetTypeEnum'
+        target:
+          type: string
+          nullable: true
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/NavChild'
+      required:
+      - label
+      - target_type
+    NavigationMenu:
+      type: object
+      properties:
+        location:
+          allOf:
+          - $ref: '#/components/schemas/NavigationMenuLocationEnum'
+          readOnly: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/NavItem'
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - items
+      - location
+      - updated_at
+    NavigationMenuLocationEnum:
+      enum:
+      - header
+      - footer_primary
+      - footer_secondary
+      type: string
+      description: |-
+        * `header` - Header
+        * `footer_primary` - Footer (primary)
+        * `footer_secondary` - Footer (secondary)
+    NavigationTargetTypeEnum:
+      enum:
+      - page
+      - url
+      - news_index
+      - events_index
+      - gallery_index
+      type: string
+      description: |-
+        * `page` - Page
+        * `url` - External or relative URL
+        * `news_index` - News listing
+        * `events_index` - Events listing
+        * `gallery_index` - Gallery listing
     Notice:
       type: object
       properties:
@@ -24801,6 +25127,13 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedNavigationMenuUpdate:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/NavItem'
     PatchedNotice:
       type: object
       properties:
@@ -25439,6 +25772,48 @@ components:
           type: string
           format: date-time
           readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedSeoSetting:
+      type: object
+      properties:
+        exists:
+          type: boolean
+          description: False for the unsaved default `GET` shows before the row exists.
+          readOnly: true
+        target_type:
+          allOf:
+          - $ref: '#/components/schemas/SeoTargetTypeEnum'
+          readOnly: true
+        target_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        meta_title:
+          type: string
+          nullable: true
+          maxLength: 70
+        meta_description:
+          type: string
+          nullable: true
+          maxLength: 170
+        og_image_file_id:
+          type: string
+          format: uuid
+          nullable: true
+        canonical_url:
+          type: string
+          nullable: true
+          maxLength: 500
+        robots:
+          type: string
+          nullable: true
+          maxLength: 50
+        structured_data:
+          nullable: true
         updated_at:
           type: string
           format: date-time
@@ -28000,6 +28375,67 @@ components:
           maxLength: 500
       required:
       - reason
+    SeoSetting:
+      type: object
+      properties:
+        exists:
+          type: boolean
+          description: False for the unsaved default `GET` shows before the row exists.
+          readOnly: true
+        target_type:
+          allOf:
+          - $ref: '#/components/schemas/SeoTargetTypeEnum'
+          readOnly: true
+        target_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        meta_title:
+          type: string
+          nullable: true
+          maxLength: 70
+        meta_description:
+          type: string
+          nullable: true
+          maxLength: 170
+        og_image_file_id:
+          type: string
+          format: uuid
+          nullable: true
+        canonical_url:
+          type: string
+          nullable: true
+          maxLength: 500
+        robots:
+          type: string
+          nullable: true
+          maxLength: 50
+        structured_data:
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - exists
+      - target_id
+      - target_type
+      - updated_at
+    SeoTargetTypeEnum:
+      enum:
+      - site
+      - page
+      - news_post
+      - school_event
+      - gallery_album
+      type: string
+      description: |-
+        * `site` - Site
+        * `page` - Page
+        * `news_post` - News post
+        * `school_event` - School event
+        * `gallery_album` - Gallery album
     SessionClone:
       type: object
       description: Input for ``POST /academic-sessions/{id}:clone`` — the new session's

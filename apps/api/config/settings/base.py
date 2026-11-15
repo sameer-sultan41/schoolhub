@@ -417,6 +417,7 @@ SPECTACULAR_SETTINGS = {
         "WebsitePageTypeEnum": "apps.website_cms.models.PageType",
         "NavigationMenuLocationEnum": "apps.website_cms.models.MenuLocation",
         "SeoTargetTypeEnum": "apps.website_cms.models.SeoTargetType",
+        "NavigationTargetTypeEnum": "apps.website_cms.constants.NavTargetType",
         "SectionTypeEnum": "apps.website_cms.constants.SectionType",
     },
 }

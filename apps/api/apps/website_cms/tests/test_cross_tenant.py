@@ -142,3 +142,44 @@ class WebsiteCmsEndpointCrossTenantTests(WebsiteAPITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 422)
+
+
+class NavigationSeoCrossTenantTests(WebsiteAPITestCase):
+    """Menus and SEO rows of tenant B are invisible to tenant A, and not referable."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.allow_everything()
+        self.other = TenantFactory()
+        self.page_b = self.make_page(tenant=self.other, slug="theirs", status="published")
+        with tenant_context(self.other.id):
+            NavigationMenuFactory(
+                tenant=self.other,
+                items=[{"label": "Theirs", "target_type": "news_index", "children": []}],
+            )
+            SeoSettingFactory(tenant=self.other, meta_title="Theirs")
+
+    def test_menus_show_this_tenants_state_only(self) -> None:
+        data = self.client.get("/api/v1/navigation-menus").json()["data"]
+        self.assertTrue(all(menu["items"] == [] for menu in data))
+
+    def test_a_foreign_page_is_not_a_menu_target(self) -> None:
+        item = {"label": "X", "target_type": "page", "target": str(self.page_b.id)}
+        response = self.client.patch(
+            "/api/v1/navigation-menus/header", {"items": [item]}, format="json"
+        )
+        self.assertEqual(response.status_code, 422)
+        with tenant_context(self.other.id):
+            self.assertEqual(NavigationMenu.objects.get().items[0]["label"], "Theirs")
+
+    def test_seo_shows_this_tenants_state_only(self) -> None:
+        data = self.client.get("/api/v1/seo-settings", {"target_type": "site"}).json()["data"]
+        self.assertFalse(data["exists"])
+        self.assertIsNone(data["meta_title"])
+
+    def test_seo_write_creates_a_row_for_this_tenant_only(self) -> None:
+        url = "/api/v1/seo-settings?target_type=site"
+        response = self.client.patch(url, {"meta_title": "Mine"}, format="json")
+        self.assertEqual(response.status_code, 200)
+        with tenant_context(self.other.id):
+            self.assertEqual(SeoSetting.objects.get().meta_title, "Theirs")

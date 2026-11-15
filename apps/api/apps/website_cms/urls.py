@@ -8,4 +8,6 @@ from django.urls import URLPattern, URLResolver, include, path
 urlpatterns: list[URLPattern | URLResolver] = [
     path("", include("apps.website_cms.settings.urls")),
     path("", include("apps.website_cms.pages.urls")),
+    path("", include("apps.website_cms.navigation.urls")),
+    path("", include("apps.website_cms.seo.urls")),
 ]

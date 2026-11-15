@@ -3544,6 +3544,110 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/navigation-menus": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Applies tenant + record-scope narrowing and writes audit entries.
+         *
+         *     Subclasses declare::
+         *
+         *         required_feature = "module.students"   # optional; None means "core, ungated"
+         *         required_permission = "students.student.view"
+         *         required_permission_map = {"create": "students.student.create", ...}
+         *         scope_own_field = "user_id"      # optional, the simple `own` record scope
+         *         scope_campus_field = "student__campus_id"  # override on a table with no own campus_id
+         *
+         *     ``RequiresModuleFeature`` runs before ``HasPermissionKey`` deliberately —
+         *     docs/02-architecture/auth-and-rbac.md §2.3 orders the module-level check
+         *     ahead of the feature-level (permission-key) check, and DRF evaluates
+         *     ``permission_classes`` in list order.
+         *
+         *     ``scope_own_field`` is only the *fallback* for ``RecordScope.OWN``. When "own"
+         *     means more than one column — a guardian's own children, say — the model
+         *     declares a ``filter_owned_by_user`` classmethod and ``scope_queryset`` prefers
+         *     it, the same way ``filter_assigned_to_user`` already works for
+         *     ``RecordScope.ASSIGNED``. See ``apps.student_management.models.Student``.
+         *
+         *     ``scope_campus_field`` defaults to ``"campus_id"``, which only the parent
+         *     resource in a module tends to have — a child table (a student's guardians,
+         *     documents, …) has no such column of its own. Getting this wrong is not a
+         *     narrow leak: ``scope_queryset``'s ``RecordScope.CAMPUS`` branch filters on
+         *     whatever this names, so a table without that column raises ``FieldError``
+         *     for every campus-scoped user the moment they hit the endpoint — override it
+         *     per child viewset rather than leaving the default.
+         *
+         *     A route whose declaration is not the read key (an update, a delete, a colon
+         *     action) is scoped by the read key and then by its own, so its target must be
+         *     one the caller may read as well as act on. The read key is
+         *     ``required_permission`` unless ``scope_read_permission`` names another, and
+         *     ``scope_read_exempt_actions`` lists any action with no read requirement.
+         */
+        get: operations["navigation_menus_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/navigation-menus/{location}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description Applies tenant + record-scope narrowing and writes audit entries.
+         *
+         *     Subclasses declare::
+         *
+         *         required_feature = "module.students"   # optional; None means "core, ungated"
+         *         required_permission = "students.student.view"
+         *         required_permission_map = {"create": "students.student.create", ...}
+         *         scope_own_field = "user_id"      # optional, the simple `own` record scope
+         *         scope_campus_field = "student__campus_id"  # override on a table with no own campus_id
+         *
+         *     ``RequiresModuleFeature`` runs before ``HasPermissionKey`` deliberately —
+         *     docs/02-architecture/auth-and-rbac.md §2.3 orders the module-level check
+         *     ahead of the feature-level (permission-key) check, and DRF evaluates
+         *     ``permission_classes`` in list order.
+         *
+         *     ``scope_own_field`` is only the *fallback* for ``RecordScope.OWN``. When "own"
+         *     means more than one column — a guardian's own children, say — the model
+         *     declares a ``filter_owned_by_user`` classmethod and ``scope_queryset`` prefers
+         *     it, the same way ``filter_assigned_to_user`` already works for
+         *     ``RecordScope.ASSIGNED``. See ``apps.student_management.models.Student``.
+         *
+         *     ``scope_campus_field`` defaults to ``"campus_id"``, which only the parent
+         *     resource in a module tends to have — a child table (a student's guardians,
+         *     documents, …) has no such column of its own. Getting this wrong is not a
+         *     narrow leak: ``scope_queryset``'s ``RecordScope.CAMPUS`` branch filters on
+         *     whatever this names, so a table without that column raises ``FieldError``
+         *     for every campus-scoped user the moment they hit the endpoint — override it
+         *     per child viewset rather than leaving the default.
+         *
+         *     A route whose declaration is not the read key (an update, a delete, a colon
+         *     action) is scoped by the read key and then by its own, so its target must be
+         *     one the caller may read as well as act on. The read key is
+         *     ``required_permission`` unless ``scope_read_permission`` names another, and
+         *     ``scope_read_exempt_actions`` lists any action with no read requirement.
+         */
+        patch: operations["navigation_menus_partial_update"];
+        trace?: never;
+    };
     "/api/v1/notices": {
         parameters: {
             query?: never;
@@ -4930,6 +5034,94 @@ export interface paths {
         head?: never;
         /** @description Divisions of a class at a campus, with capacity (module doc §5.5). */
         patch: operations["sections_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/seo-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Applies tenant + record-scope narrowing and writes audit entries.
+         *
+         *     Subclasses declare::
+         *
+         *         required_feature = "module.students"   # optional; None means "core, ungated"
+         *         required_permission = "students.student.view"
+         *         required_permission_map = {"create": "students.student.create", ...}
+         *         scope_own_field = "user_id"      # optional, the simple `own` record scope
+         *         scope_campus_field = "student__campus_id"  # override on a table with no own campus_id
+         *
+         *     ``RequiresModuleFeature`` runs before ``HasPermissionKey`` deliberately —
+         *     docs/02-architecture/auth-and-rbac.md §2.3 orders the module-level check
+         *     ahead of the feature-level (permission-key) check, and DRF evaluates
+         *     ``permission_classes`` in list order.
+         *
+         *     ``scope_own_field`` is only the *fallback* for ``RecordScope.OWN``. When "own"
+         *     means more than one column — a guardian's own children, say — the model
+         *     declares a ``filter_owned_by_user`` classmethod and ``scope_queryset`` prefers
+         *     it, the same way ``filter_assigned_to_user`` already works for
+         *     ``RecordScope.ASSIGNED``. See ``apps.student_management.models.Student``.
+         *
+         *     ``scope_campus_field`` defaults to ``"campus_id"``, which only the parent
+         *     resource in a module tends to have — a child table (a student's guardians,
+         *     documents, …) has no such column of its own. Getting this wrong is not a
+         *     narrow leak: ``scope_queryset``'s ``RecordScope.CAMPUS`` branch filters on
+         *     whatever this names, so a table without that column raises ``FieldError``
+         *     for every campus-scoped user the moment they hit the endpoint — override it
+         *     per child viewset rather than leaving the default.
+         *
+         *     A route whose declaration is not the read key (an update, a delete, a colon
+         *     action) is scoped by the read key and then by its own, so its target must be
+         *     one the caller may read as well as act on. The read key is
+         *     ``required_permission`` unless ``scope_read_permission`` names another, and
+         *     ``scope_read_exempt_actions`` lists any action with no read requirement.
+         */
+        get: operations["seo_settings_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description Applies tenant + record-scope narrowing and writes audit entries.
+         *
+         *     Subclasses declare::
+         *
+         *         required_feature = "module.students"   # optional; None means "core, ungated"
+         *         required_permission = "students.student.view"
+         *         required_permission_map = {"create": "students.student.create", ...}
+         *         scope_own_field = "user_id"      # optional, the simple `own` record scope
+         *         scope_campus_field = "student__campus_id"  # override on a table with no own campus_id
+         *
+         *     ``RequiresModuleFeature`` runs before ``HasPermissionKey`` deliberately —
+         *     docs/02-architecture/auth-and-rbac.md §2.3 orders the module-level check
+         *     ahead of the feature-level (permission-key) check, and DRF evaluates
+         *     ``permission_classes`` in list order.
+         *
+         *     ``scope_own_field`` is only the *fallback* for ``RecordScope.OWN``. When "own"
+         *     means more than one column — a guardian's own children, say — the model
+         *     declares a ``filter_owned_by_user`` classmethod and ``scope_queryset`` prefers
+         *     it, the same way ``filter_assigned_to_user`` already works for
+         *     ``RecordScope.ASSIGNED``. See ``apps.student_management.models.Student``.
+         *
+         *     ``scope_campus_field`` defaults to ``"campus_id"``, which only the parent
+         *     resource in a module tends to have — a child table (a student's guardians,
+         *     documents, …) has no such column of its own. Getting this wrong is not a
+         *     narrow leak: ``scope_queryset``'s ``RecordScope.CAMPUS`` branch filters on
+         *     whatever this names, so a table without that column raises ``FieldError``
+         *     for every campus-scoped user the moment they hit the endpoint — override it
+         *     per child viewset rather than leaving the default.
+         *
+         *     A route whose declaration is not the read key (an update, a delete, a colon
+         *     action) is scoped by the read key and then by its own, so its target must be
+         *     one the caller may read as well as act on. The read key is
+         *     ``required_permission`` unless ``scope_read_permission`` names another, and
+         *     ``scope_read_exempt_actions`` lists any action with no read requirement.
+         */
+        patch: operations["seo_settings_partial_update"];
         trace?: never;
     };
     "/api/v1/staff": {
@@ -9654,6 +9846,42 @@ export interface components {
             readonly marked_count: number;
             readonly roster_count: number;
         };
+        NavChild: {
+            label: string;
+            target_type: components["schemas"]["NavigationTargetTypeEnum"];
+            target?: string | null;
+            children?: {
+                [key: string]: unknown;
+            }[];
+        };
+        NavItem: {
+            label: string;
+            target_type: components["schemas"]["NavigationTargetTypeEnum"];
+            target?: string | null;
+            children?: components["schemas"]["NavChild"][];
+        };
+        NavigationMenu: {
+            readonly location: components["schemas"]["NavigationMenuLocationEnum"];
+            readonly items: components["schemas"]["NavItem"][];
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `header` - Header
+         *     * `footer_primary` - Footer (primary)
+         *     * `footer_secondary` - Footer (secondary)
+         * @enum {string}
+         */
+        NavigationMenuLocationEnum: "header" | "footer_primary" | "footer_secondary";
+        /**
+         * @description * `page` - Page
+         *     * `url` - External or relative URL
+         *     * `news_index` - News listing
+         *     * `events_index` - Events listing
+         *     * `gallery_index` - Gallery listing
+         * @enum {string}
+         */
+        NavigationTargetTypeEnum: "page" | "url" | "news_index" | "events_index" | "gallery_index";
         Notice: {
             /** Format: uuid */
             readonly id: string;
@@ -11301,6 +11529,9 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        PatchedNavigationMenuUpdate: {
+            items?: components["schemas"]["NavItem"][];
+        };
         PatchedNotice: {
             /** Format: uuid */
             readonly id?: string;
@@ -11632,6 +11863,22 @@ export interface components {
             is_active?: boolean;
             /** Format: date-time */
             readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        PatchedSeoSetting: {
+            /** @description False for the unsaved default `GET` shows before the row exists. */
+            readonly exists?: boolean;
+            readonly target_type?: components["schemas"]["SeoTargetTypeEnum"];
+            /** Format: uuid */
+            readonly target_id?: string | null;
+            meta_title?: string | null;
+            meta_description?: string | null;
+            /** Format: uuid */
+            og_image_file_id?: string | null;
+            canonical_url?: string | null;
+            robots?: string | null;
+            structured_data?: unknown;
             /** Format: date-time */
             readonly updated_at?: string;
         };
@@ -12821,6 +13068,31 @@ export interface components {
         SendResultsBack: {
             reason: string;
         };
+        SeoSetting: {
+            /** @description False for the unsaved default `GET` shows before the row exists. */
+            readonly exists: boolean;
+            readonly target_type: components["schemas"]["SeoTargetTypeEnum"];
+            /** Format: uuid */
+            readonly target_id: string | null;
+            meta_title?: string | null;
+            meta_description?: string | null;
+            /** Format: uuid */
+            og_image_file_id?: string | null;
+            canonical_url?: string | null;
+            robots?: string | null;
+            structured_data?: unknown;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `site` - Site
+         *     * `page` - Page
+         *     * `news_post` - News post
+         *     * `school_event` - School event
+         *     * `gallery_album` - Gallery album
+         * @enum {string}
+         */
+        SeoTargetTypeEnum: "site" | "page" | "news_post" | "school_event" | "gallery_album";
         /** @description Input for ``POST /academic-sessions/{id}:clone`` — the new session's identity. */
         SessionClone: {
             name: string;
@@ -19880,6 +20152,52 @@ export interface operations {
             };
         };
     };
+    navigation_menus_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NavigationMenu"][];
+                };
+            };
+        };
+    };
+    navigation_menus_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                location: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedNavigationMenuUpdate"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedNavigationMenuUpdate"];
+                "multipart/form-data": components["schemas"]["PatchedNavigationMenuUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NavigationMenu"];
+                };
+            };
+        };
+    };
     notices_list: {
         parameters: {
             query?: {
@@ -22163,6 +22481,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Section"];
+                };
+            };
+        };
+    };
+    seo_settings_retrieve: {
+        parameters: {
+            query: {
+                target_id?: string;
+                target_type: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeoSetting"];
+                };
+            };
+        };
+    };
+    seo_settings_partial_update: {
+        parameters: {
+            query: {
+                target_id?: string;
+                target_type: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedSeoSetting"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedSeoSetting"];
+                "multipart/form-data": components["schemas"]["PatchedSeoSetting"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeoSetting"];
                 };
             };
         };

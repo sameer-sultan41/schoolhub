@@ -177,7 +177,7 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 
 - CMS: `GET/POST /api/v1/website-pages` · `GET/PATCH/DELETE /api/v1/website-pages/{id}` · `POST /api/v1/website-pages/{id}:publish` / `:unpublish` · `PATCH /api/v1/website-pages/{id}/page-sections` (ordered bulk update)
 - `GET/POST/PATCH /api/v1/news-posts` (+ `:publish`) · `/api/v1/school-events` · `/api/v1/gallery-albums` · `/api/v1/gallery-albums/{id}/gallery-items`
-- `GET/PATCH /api/v1/website-settings` · `GET/PATCH /api/v1/navigation-menus` · `GET/PATCH /api/v1/seo-settings` · `GET /api/v1/themes`
+- `GET/PATCH /api/v1/website-settings` · `GET /api/v1/navigation-menus` · `PATCH /api/v1/navigation-menus/{location}` (`header`, `footer_primary`, `footer_secondary`; at most 50 items, two levels, labels 1–60 characters) · `GET/PATCH /api/v1/seo-settings?target_type=&target_id=` (`site` takes no `target_id`; news, event and album targets are refused with `unsupported_target` until their resources ship) · `GET /api/v1/themes`
 - `GET/POST /api/v1/custom-domains` · `POST /api/v1/custom-domains/{id}:verify` · `DELETE /api/v1/custom-domains/{id}`
 - `GET /api/v1/contact-submissions` (filters: `status`, `created_at__gte`) · `PATCH /api/v1/contact-submissions/{id}`
 - Public (renderer/visitor): `GET /api/v1/public/site` (resolved by domain) · `GET /api/v1/public/pages/{slug}` · `GET /api/v1/public/news-posts` · `POST /api/v1/public/contact-submissions` (rate-limited, `Idempotency-Key` supported) · `POST /api/v1/public/admission-forms` (proxies to admissions).

@@ -20,6 +20,7 @@ from apps.website_cms.constants import (
     PAGE_SLUG_RE,
     RESERVED_PAGE_SLUGS,
 )
+from apps.website_cms.errors import violation as _violation
 from apps.website_cms.models import (
     ContentStatus,
     NavigationMenu,
@@ -44,11 +45,6 @@ from core.tenancy.models import Tenant
 
 #: Added to existing positions first, so `unique(website_page_id, position)` never collides.
 POSITION_PARK_OFFSET = 10_000
-
-
-def _violation(field: str, reason: str, message: str) -> DomainRuleViolation:
-    """A 422 whose detail is `<reason>: <message>` under `field`, with `reason` in `meta`."""
-    return DomainRuleViolation({field: f"{reason}: {message}"}, meta={"reason": reason})
 
 
 def _active_theme() -> Theme:

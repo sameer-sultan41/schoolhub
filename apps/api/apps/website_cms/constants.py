@@ -74,3 +74,16 @@ class SectionType(models.TextChoices):
 MAX_SECTIONS_PER_PAGE = 50
 
 DEFAULT_THEME_CODE = "default"
+
+#: Navigation menus: label length, items per menu (all levels) and nesting depth (top + one).
+NAV_LABEL_MAX_LENGTH = 60
+NAV_MAX_ITEMS = 50
+NAV_MAX_DEPTH = 2
+
+
+class NavTargetType(models.TextChoices):
+    PAGE = "page", "Page"
+    URL = "url", "External or relative URL"
+    NEWS_INDEX = "news_index", "News listing"
+    EVENTS_INDEX = "events_index", "Events listing"
+    GALLERY_INDEX = "gallery_index", "Gallery listing"
