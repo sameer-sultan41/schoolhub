@@ -44,3 +44,14 @@ class MeTenantSummaryTests(APITestCase):
         # `tenant` stays the UUID clients already read; the summary is a separate field.
         self.assertEqual(body["tenant"], str(tenant.pk))
         self.assertEqual(body["tenant_summary"], {"name": "City School", "slug": "city-school"})
+
+    def test_me_tenant_summary_is_null_for_a_platform_user(self) -> None:
+        user = UserFactory(tenant=None, is_platform=True)
+        authenticate(self.client, user)
+
+        response = self.client.get("/api/v1/auth/me")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        body = response.json()["data"]
+        self.assertIsNone(body["tenant"])
+        self.assertIsNone(body["tenant_summary"])
