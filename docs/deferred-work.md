@@ -24,6 +24,20 @@ either this file or `project-status.md`.
   - **Renderer i18n.** `apps/website` has no i18n today. New visible strings live in one `src/themes/default/copy.ts` constant map (English), so a later pass has one source.
   - **Contact-notification email batching.** One email per submission in v1.
   - **`provision_tenant` calling `ensure_default_site`.** Until platform-admin ships it, the default site is created on the first CMS write.
+  - **Editable SEO `structured_data` (JSON-LD).** Read-only through the API until the renderer task defines its shape. Making it writable needs a JSON Schema for the allowed JSON-LD types and, in the renderer, escaping of `<`, `>` and `&` when it is emitted inside `<script type="application/ld+json">`; free JSON there is stored XSS.
+  - **PR A follow-ups** (minor review findings, each left for the PR that next touches its file):
+    - The `post_migrate` theme sync is not guarded for `migrate website_cms zero`, where the `themes` table no longer exists when the signal fires. Harmless until someone reverses the app.
+    - `tests/test_registry.py` repeats constants it should import (`"safe-url"` instead of `SAFE_URL_FORMAT`, a third copy of the 14 section types instead of `SectionType.values`). Test-only duplication.
+    - `tests/test_cross_tenant.py` duplicates part of `apps/api/tests/test_rls_coverage.py`, and its insert-denied test should pin `ProgrammingError` rather than any exception. Coverage exists; the test is just looser than it should be.
+    - `themes` has `unique(code)` rather than a partial unique on `deleted_at IS NULL`. Themes are code-declared and never soft-deleted today.
+    - `validation.IMAGE_WIDGET` duplicates the `image` member of `constants.SCHEMA_WIDGETS`. One constant to fold.
+    - `ensure_default_site`'s `try/except IntegrityError` wraps `_seed_pages` as well as the settings create; it should wrap only the create, so a seeding fault is not read as a lost race.
+    - The active theme is resolved in three places (`pages/services.py`, `visibility.py`, `settings/services.py`). One helper, before a second theme exists.
+    - 422 `meta.reason` is set on some violations and not others. Make it consistent before PR F's dashboard branches on reasons.
+    - The settings-or-unsaved-default lookup for `GET /website-settings` lives in the view, not a service. Move it with the next settings change.
+    - The first write of a navigation menu is audited as `update`, not `create`. Cosmetic in the audit log.
+    - SEO text-length limits answer 400 (serializer) while other rules answer 422 (service). Accepted: a length is input shape.
+    - Issuing a `:preview` token is not audited. A preview exposes a draft to whoever holds the link for 600 s; record it once the audit catalogue has a `preview` action.
 
 - **Online fee payments, what PR 1 leaves out** ([ADR-0034](decisions/0034-online-fee-payments.md), plan `docs/superpowers/plans/2026-11-07-fee-online-payments.md`). PR 1 runs end to end against the fake provider only.
   - **PR 2 (blocked):** the real aggregator's adapter (PayFast or Safepay, picked after the user tests both sandboxes; enable it in `PAYMENT_PROVIDERS_ENABLED` for production and set `PAYMENT_PENDING_TTL_MINUTES` from its session lifetime), the portal Pay button and result page on `PortalInvoiceDetail` (waits for the portal stack, #156 → #158 → #160), and the staff gateway-settings and reconciliation-issues screens with `:resolve`. Until then a school can be configured only through the API.

@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-15
-- **Enforced by:** `apps/api/apps/website_cms/tests/test_registry.py` (theme schemas use only the allowed keywords, widgets and formats; the default theme syncs on `post_migrate` and re-syncs without a migration; the rich-text schema is valid; `SectionType` equals the theme's keys); `test_validation.py` (section content against its schema, `javascript:`, `data:`, `http:`, `//host` and `/\host` refused, image ids from another tenant or not `ready` refused, `sync_file_visibility` public only while a published row references the file); `pages/tests/test_endpoints.py` (invalid section content is a 422 keyed by path, replace and reorder with colliding positions, theme switch); `navigation/tests/test_endpoints.py` and `seo/tests/test_endpoints.py` (links and `canonical_url` through `safe-url`); `core/files/tests/test_visibility.py` (the provider registry); `website_cms/tests/test_cross_tenant.py`. A dashboard widget for a new schema keyword is review only
+- **Enforced by:** `apps/api/apps/website_cms/tests/test_registry.py` (theme schemas use only the allowed keywords, widgets and formats; the default theme syncs on `post_migrate` and re-syncs without a migration; the rich-text schema is valid; `SectionType` equals the theme's keys); `test_validation.py` (section content against its schema, `javascript:`, `data:`, `http:`, `//host` and `/\host` refused, image ids from another tenant or not `ready` refused, image ids rewritten canonically, `sync_file_visibility` public only while a published row references the file); `pages/tests/test_endpoints.py` (invalid section content is a 422 keyed by path, replace and reorder with colliding positions, an uppercase or `urn:` image id stored canonically and made public on publish); `settings/tests/test_endpoints.py`, `navigation/tests/test_endpoints.py` and `seo/tests/test_endpoints.py` (links and `canonical_url` through `safe-url`, `structured_data` not writable); `core/files/tests/test_visibility.py` (the provider registry); `website_cms/tests/test_cross_tenant.py`. A dashboard widget for a new schema keyword is review only
 
 ## Context
 
@@ -39,7 +39,15 @@ how links are checked, or how a theme reaches the database. The plan is
    not start `//` or `/\`, with no whitespace or control characters. It is a custom JSON Schema
    format checked by a `FormatChecker` that the validator is **explicitly** given and that
    knows no other format. The same `is_safe_url` function backs every non-schema link: social
-   links, header and footer links, `canonical_url` and navigation targets.
+   links, header and footer links, `canonical_url` and navigation targets. Header and footer
+   config is free-form until the theme declares a `config_schema` for it, so a link there is
+   checked only under a `url` or `href` key, and the renderer reads links from those keys only.
+5. **Image references are stored canonically.** Every `x-widget: image` value is a 36-character
+   string (`minLength` and `maxLength` 36) that must parse as a UUID, and validation rewrites it
+   in place as `str(UUID(value))` before it is stored. The visibility pre-filter text-matches
+   stored content against canonical ids, and the public-file route accepts only the lowercase
+   hyphenated form, so a stored uppercase or `urn:` spelling would leave a published image
+   private and its URL broken.
 
 ## Alternatives considered
 
@@ -58,6 +66,9 @@ how links are checked, or how a theme reaches the database. The plan is
 - An editor can store neither markup nor a script URL, whatever route the content takes in. The
   cost is that rich text has no inline marks or links until a block type adds them (a schema
   change, no migration).
+- SEO `structured_data` (JSON-LD) is read-only through the API until the renderer defines its
+  shape: free JSON emitted inside a `<script>` element is stored XSS unless it is schema-checked
+  and `<`, `>` and `&` are escaped. Both are recorded in `docs/deferred-work.md`.
 - A theme author may use only the subset. A new keyword means a change to `SCHEMA_KEYWORDS`, to
   the dashboard's `SchemaFields` and to its test, in one PR.
 - Switching theme re-validates `theme_config` but not stored sections. A section whose type the

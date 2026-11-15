@@ -498,11 +498,23 @@
 
 - **Mistake.** The AI gateway plan made `FinanceReportSummaryView` `non_atomic_requests` so the provider call holds no transaction, but the tenant binding is a `SET LOCAL`: with no transaction around `initial()`, the role and flag reads ran unbound (caught in Task 1's report, before Task 2 built the view). `TestCase` hid it: its test-wide transaction keeps the binding alive, and `force_login` gives the middleware a session production lacks.
 - **Check.** On a `non_atomic_requests` view, wrap `initial()` in `transaction.atomic()` and every database read in `tenant_atomic`, then call the long external step with nothing open (`FinanceReportSummaryView` is the pattern). Prove it with a `TransactionTestCase` that authenticates by token only (`test_report_summary_commit.py`). Its error-path `TestCase` tests need production's rollback: L67.
+- **Mistake (again, website CMS A3).** The `ensure_default_site` race test ran each thread's call under `tenant_context` with `transaction.atomic()` opened inside it. In a `TransactionTestCase` thread nothing is open, so the `SET LOCAL` ran in autocommit and unwound at once; the call then ran unbound. `TestCase` would have hidden it again.
+- **Check (tests).** In a `TransactionTestCase`, and in every thread a test starts, bind with `tenant_atomic(tenant.id)`, never a bare `tenant_context`: it opens the transaction first and binds inside it (`website_cms/tests/test_default_site.py`, `core/rbac/tests/test_concurrency.py`).
 
 ### L69. Hand `scope_queryset` a QuerySet, never a Manager
 
 - **Mistake.** `_ledger_report_queryset` passed `LedgerEntry.objects` to `scope_queryset`, which returns its input unchanged for an `all` scope. The finance summary ANDs two of these, so every `all`-scoped caller of the `income-vs-expense` and `trial-balance` summaries got a `TypeError` (500): `&` is not defined on a Manager (PR #167 CI, the cross-tenant test).
 - **Check.** Pass `Model.objects.all()` (or a filtered queryset) to `scope_queryset`, and test every combinator (`&`, `|`, `.union`) applied to its result with an `all`-scoped caller, not only a narrowed one.
+
+### L70. Canonicalise an id when it is written, if anything later compares or text-matches it
+
+- **Mistake.** Website navigation stored a page target as sent, so an uppercase id never equalled `str(page.id)` and the page-in-use guard let a linked page be archived (A4 review). PR A then stored section image ids as sent: the visibility pre-filter text-matches canonical ids, so an uppercase or `urn:` spelling left a published image private, and the public-file route's `<uuid:>` converter rejects uppercase (PR A change review).
+- **Check.** For every id kept inside a JSON or text column, find each reader that compares it (`==`, `in`, a SQL text match, a URL converter) and rewrite the value as `str(UUID(value))` in the one validation path every write passes through. Test it with an uppercase and an unhyphenated spelling, and assert the stored value and the reader's outcome (the guard refuses, the file goes public).
+
+### L71. A reference provider narrows to the candidate ids; it never scans every published row
+
+- **Mistake.** The first `page_section_files` provider loaded and schema-walked every visible section of every published page on each `sync_file_visibility` call, whichever file was asked about, so one image change cost a walk of the whole site (website CMS A2 review, `6b65e241`).
+- **Check.** A provider for `core.files.visibility` (or any "who still references X" lookup) filters its query on the ids it was handed (`id__in`, or a text pre-filter that is a superset, then an exact confirm) and returns early on an empty set. Test that a row not mentioning a candidate is neither loaded nor walked (`website_cms/tests/test_validation.py`, `SyncVisibilityTests`).
 
 ## 4. Adding a lesson
 
