@@ -79,7 +79,7 @@ class PageCrudTests(WebsiteAPITestCase):
         self.allow("website.page.create")
         self.assertEqual(self._create(slug="about/history").status_code, 201)
 
-    def test_slug_unique_per_locale_including_null(self) -> None:
+    def test_slug_unique_per_locale_including_default(self) -> None:
         self.allow("website.page.create")
         self.assertEqual(self._create().status_code, 201)
         self.assertEqual(self._create().status_code, 422)

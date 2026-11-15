@@ -175,7 +175,7 @@ class PageConstraintTests(TestCase):
     def setUp(self) -> None:
         self.tenant = TenantFactory()
 
-    def test_null_locale_slugs_collide_per_tenant(self) -> None:
+    def test_default_locale_slugs_collide_per_tenant(self) -> None:
         with tenant_context(self.tenant.id):
             WebsitePageFactory(tenant=self.tenant, slug="about-us")
             with self.assertRaises(IntegrityError), transaction.atomic():

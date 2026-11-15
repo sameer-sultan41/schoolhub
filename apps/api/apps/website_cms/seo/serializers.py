@@ -8,7 +8,7 @@ from rest_framework import serializers
 
 from apps.website_cms.models import SeoSetting, SeoTargetType
 
-_TEXT = {"required": False, "allow_null": True, "allow_blank": True}
+_TEXT = {"required": False, "allow_blank": True}
 
 
 class SeoTargetQuerySerializer(serializers.Serializer):
@@ -47,8 +47,3 @@ class SeoSettingSerializer(serializers.ModelSerializer):
     def get_exists(self, obj: SeoSetting) -> bool:
         """False for the unsaved default `GET` shows before the row exists."""
         return not obj._state.adding
-
-    def to_internal_value(self, data):
-        values = super().to_internal_value(data)
-        # Blank text clears the field, so one stored shape (null) means "unset".
-        return {k: (None if v == "" else v) for k, v in values.items()}

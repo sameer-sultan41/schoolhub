@@ -15,7 +15,7 @@ either this file or `project-status.md`.
   - **§19 recommendations: publish scheduling, slug-rename redirects, CAPTCHA, RSS, the analytics embed.** All wait on client confirmation. `analytics_id` is stored but not emitted.
   - **`AI-WEB-01`, `-02`, `-03`** (content drafting, the SEO assistant, alt-text). The AI gateway is still in review (#182). Every AI draft stays behind the publish permission (invariant 5).
   - **Page duplication and a submit-for-review queue.** Drafts wait for a publisher; the content inventory shows them.
-  - **Multi-locale content.** The `locale` column and its `nulls_distinct=False` uniqueness ship; v1 is single-locale. The client has not decided between full translation and a single-locale site (module doc §19).
+  - **Multi-locale content.** The `locale` column and its (tenant, slug, locale) uniqueness ship; v1 is single-locale. The client has not decided between full translation and a single-locale site (module doc §19).
   - **Outbound `website.*` webhooks** (`website.page.published`, `website.contact-submission.created`). No webhook system exists.
   - **Contact CSV export and the traffic summary report** (§13). The inbox ships first; the traffic report needs the analytics integration.
   - **A real TLS edge provider, and plan-gating of custom domains.** The `EdgeCertificateProvisioner` adapter ships with a `NullProvisioner` that leaves `tls_status=pending`; gating waits for platform-admin's plan resolver.

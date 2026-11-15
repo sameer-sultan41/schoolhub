@@ -54,7 +54,7 @@ def sync_themes() -> dict[str, int]:
         fields = {
             "name": spec["name"],
             "version": spec["version"],
-            "description": spec.get("description"),
+            "description": spec.get("description", ""),
             "section_types": spec["section_types"],
             "config_schema": spec.get("config_schema", {}),
         }

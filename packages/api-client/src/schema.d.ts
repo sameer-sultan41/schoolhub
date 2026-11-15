@@ -11872,12 +11872,12 @@ export interface components {
             readonly target_type?: components["schemas"]["SeoTargetTypeEnum"];
             /** Format: uuid */
             readonly target_id?: string | null;
-            meta_title?: string | null;
-            meta_description?: string | null;
+            meta_title?: string;
+            meta_description?: string;
             /** Format: uuid */
             og_image_file_id?: string | null;
-            canonical_url?: string | null;
-            robots?: string | null;
+            canonical_url?: string;
+            robots?: string;
             readonly structured_data?: unknown;
             /** Format: date-time */
             readonly updated_at?: string;
@@ -12148,7 +12148,7 @@ export interface components {
         PatchedWebsitePageUpdate: {
             title?: string;
             slug?: string;
-            locale?: string | null;
+            locale?: string;
             show_in_search?: boolean;
         };
         PatchedWebsiteSettings: {
@@ -12166,8 +12166,8 @@ export interface components {
             header_config?: unknown;
             footer_config?: unknown;
             social_links?: components["schemas"]["SocialLink"][];
-            analytics_id?: string | null;
-            default_locale?: string | null;
+            analytics_id?: string;
+            default_locale?: string;
             /** Format: date-time */
             readonly updated_at?: string;
         };
@@ -13074,12 +13074,12 @@ export interface components {
             readonly target_type: components["schemas"]["SeoTargetTypeEnum"];
             /** Format: uuid */
             readonly target_id: string | null;
-            meta_title?: string | null;
-            meta_description?: string | null;
+            meta_title?: string;
+            meta_description?: string;
             /** Format: uuid */
             og_image_file_id?: string | null;
-            canonical_url?: string | null;
-            robots?: string | null;
+            canonical_url?: string;
+            robots?: string;
             readonly structured_data: unknown;
             /** Format: date-time */
             readonly updated_at: string;
@@ -13940,7 +13940,7 @@ export interface components {
             readonly code: string;
             readonly name: string;
             readonly version: string;
-            readonly description: string | null;
+            readonly description: string;
             readonly config_schema: unknown;
             /** @description Section catalogue keyed by type: {label, schema} per type. */
             readonly section_types: unknown;
@@ -14278,7 +14278,7 @@ export interface components {
             readonly status: components["schemas"]["WebsiteContentStatusEnum"];
             /** Format: date-time */
             readonly published_at: string | null;
-            readonly locale: string | null;
+            readonly locale: string;
             readonly show_in_search: boolean;
             /** Format: date-time */
             readonly created_at: string;
@@ -14295,7 +14295,7 @@ export interface components {
             readonly status: components["schemas"]["WebsiteContentStatusEnum"];
             /** Format: date-time */
             readonly published_at: string | null;
-            readonly locale: string | null;
+            readonly locale: string;
             readonly show_in_search: boolean;
             /** Format: date-time */
             readonly created_at: string;
@@ -14320,7 +14320,7 @@ export interface components {
             title: string;
             slug: string;
             page_type?: components["schemas"]["WebsitePageTypeEnum"];
-            locale?: string | null;
+            locale?: string;
             show_in_search?: boolean;
         };
         WebsiteSettings: {
@@ -14338,8 +14338,8 @@ export interface components {
             header_config?: unknown;
             footer_config?: unknown;
             social_links?: components["schemas"]["SocialLink"][];
-            analytics_id?: string | null;
-            default_locale?: string | null;
+            analytics_id?: string;
+            default_locale?: string;
             /** Format: date-time */
             readonly updated_at: string;
         };

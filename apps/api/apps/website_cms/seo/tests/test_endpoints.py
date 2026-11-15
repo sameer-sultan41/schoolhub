@@ -29,7 +29,7 @@ class SeoReadTests(WebsiteAPITestCase):
         data = self.client.get(URL, {"target_type": "site"}).json()["data"]
         self.assertFalse(data["exists"])
         self.assertEqual(data["target_type"], "site")
-        self.assertIsNone(data["meta_title"])
+        self.assertEqual(data["meta_title"], "")
         with tenant_context(self.tenant.id):
             self.assertEqual(SeoSetting.objects.count(), 0)
 
@@ -79,7 +79,7 @@ class SeoUpdateTests(WebsiteAPITestCase):
         self.allow("website.seo.update")
         self._patch({"meta_title": "A", "meta_description": "B"})
         data = self._patch({"meta_title": ""}).json()["data"]
-        self.assertIsNone(data["meta_title"])
+        self.assertEqual(data["meta_title"], "")
         self.assertEqual(data["meta_description"], "B")
 
     def test_site_takes_no_target_id(self) -> None:

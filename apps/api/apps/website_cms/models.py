@@ -4,10 +4,9 @@ Behaviour: docs/03-modules/website-cms.md. Column-level specs:
 docs/05-database/entities/website-cms.md.
 
 Uniqueness is enforced by partial unique indexes on live rows (`deleted_at IS NULL`), so a
-soft-deleted slug or menu can be reused (decision 14). Nullable string columns are
-NULL-not-blank by design, hence the blanket DJ001 suppression.
+soft-deleted slug or menu can be reused (decision 14). String columns use "" for "unset"
+(never NULL), so a nullable text column does not exist and DJ001 holds without suppression.
 """
-# ruff: noqa: DJ001
 
 from __future__ import annotations
 
@@ -58,7 +57,7 @@ class Theme(TimestampedModel):
     name = models.CharField(max_length=100)
     code = models.CharField(max_length=50)
     version = models.CharField(max_length=20)
-    description = models.TextField(null=True, blank=True)
+    description = models.TextField(blank=True, default="")
     preview_file_id = models.UUIDField(null=True, blank=True)
     section_types = models.JSONField(
         default=dict,
@@ -97,8 +96,8 @@ class WebsiteSettings(TenantOwnedModel):
     header_config = models.JSONField(default=dict, blank=True)
     footer_config = models.JSONField(default=dict, blank=True)
     social_links = models.JSONField(default=list, blank=True)
-    analytics_id = models.CharField(max_length=60, null=True, blank=True)
-    default_locale = models.CharField(max_length=10, null=True, blank=True)
+    analytics_id = models.CharField(max_length=60, blank=True, default="")
+    default_locale = models.CharField(max_length=10, blank=True, default="")
 
     class Meta:
         db_table = "website_settings"
@@ -124,19 +123,18 @@ class WebsitePage(TenantOwnedModel):
         max_length=20, choices=ContentStatus.choices, default=ContentStatus.DRAFT
     )
     published_at = models.DateTimeField(null=True, blank=True)
-    locale = models.CharField(max_length=10, null=True, blank=True)
+    locale = models.CharField(max_length=10, blank=True, default="")
     show_in_search = models.BooleanField(default=True)
 
     class Meta:
         db_table = "website_pages"
         ordering = ["slug", "id"]
         constraints = [
-            # `nulls_distinct=False`: a null locale (the default locale) must still collide.
+            # `locale` is "" for the default locale, so a plain unique collides as needed.
             models.UniqueConstraint(
                 fields=["tenant", "slug", "locale"],
                 name="website_pages_unique_slug_locale",
                 condition=models.Q(deleted_at__isnull=True),
-                nulls_distinct=False,
             ),
             # Exactly one live home page per tenant.
             models.UniqueConstraint(
@@ -205,11 +203,11 @@ class SeoSetting(TenantOwnedModel):
 
     target_type = models.CharField(max_length=30, choices=SeoTargetType.choices)
     target_id = models.UUIDField(null=True, blank=True)
-    meta_title = models.CharField(max_length=70, null=True, blank=True)
-    meta_description = models.CharField(max_length=170, null=True, blank=True)
+    meta_title = models.CharField(max_length=70, blank=True, default="")
+    meta_description = models.CharField(max_length=170, blank=True, default="")
     og_image_file_id = models.UUIDField(null=True, blank=True)
-    canonical_url = models.CharField(max_length=500, null=True, blank=True)
-    robots = models.CharField(max_length=50, null=True, blank=True)
+    canonical_url = models.CharField(max_length=500, blank=True, default="")
+    robots = models.CharField(max_length=50, blank=True, default="")
     structured_data = models.JSONField(null=True, blank=True)
 
     class Meta:

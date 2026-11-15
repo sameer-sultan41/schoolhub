@@ -43,7 +43,7 @@ def get_or_default(target_type: str, target_id: UUID | None) -> SeoSetting:
 
 def _validate(data: dict[str, Any]) -> None:
     canonical = data.get("canonical_url")
-    if canonical is not None and not is_safe_url(canonical):
+    if canonical and not is_safe_url(canonical):
         raise DomainRuleViolation(
             {"canonical_url": "invalid_url: must be an https URL or a relative path."},
             meta={"reason": "invalid_url"},

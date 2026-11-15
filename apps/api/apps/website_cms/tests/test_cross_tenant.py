@@ -175,7 +175,7 @@ class NavigationSeoCrossTenantTests(WebsiteAPITestCase):
     def test_seo_shows_this_tenants_state_only(self) -> None:
         data = self.client.get("/api/v1/seo-settings", {"target_type": "site"}).json()["data"]
         self.assertFalse(data["exists"])
-        self.assertIsNone(data["meta_title"])
+        self.assertEqual(data["meta_title"], "")
 
     def test_seo_write_creates_a_row_for_this_tenant_only(self) -> None:
         url = "/api/v1/seo-settings?target_type=site"
