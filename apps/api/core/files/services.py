@@ -17,7 +17,7 @@ from django.db import transaction
 from django.utils.http import content_disposition_header
 
 from core.api.exceptions import Conflict, DomainRuleViolation
-from core.files.models import File, FileStatus
+from core.files.models import File, FileStatus, FileVisibility
 from core.files.purposes import registry as upload_purposes
 from core.files.storage import NullPresigner, get_presigner, storage_key_for
 from core.tenancy.context import tenant_atomic
@@ -156,6 +156,16 @@ def confirm_upload(*, file: File, actor_id: uuid.UUID) -> File:
     file.updated_by = actor_id
     file.save(update_fields=["status", "updated_by", "updated_at"])
     return file
+
+
+def set_visibility(file: File, visibility: str) -> None:
+    """Set `file.visibility`, writing only when it changes."""
+    if visibility not in FileVisibility.values:
+        raise ValueError(f"Unknown file visibility '{visibility}'.")
+    if file.visibility == visibility:
+        return
+    file.visibility = visibility
+    file.save(update_fields=["visibility", "updated_at"])
 
 
 def get_download_url(file: File) -> str:
