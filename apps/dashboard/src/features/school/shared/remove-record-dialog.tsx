@@ -14,17 +14,26 @@ export interface RemoveRecordDialogProps {
   /** The record's name, shown in the title. */
   name: string;
   remove: () => Promise<unknown>;
+  /** The body text; defaults to the structure records' "deactivate it instead" warning. */
+  description?: string;
 }
 
 /**
  * Removes one campus, department, house or holiday. The server refuses a structure record
  * that other records still point at (`services.assert_deletable`, a 422 naming them and
- * saying to deactivate it instead); that sentence shows inline and the dialog stays open.
+ * saying to deactivate it instead); that sentence shows inline and the dialog stays open. A
+ * holiday can't be deactivated, so it passes its own `description`.
  *
  * Mounting contract: the caller mounts this only while it is open, so every open starts with
  * no stale error.
  */
-export function RemoveRecordDialog({ open, onOpenChange, name, remove }: RemoveRecordDialogProps) {
+export function RemoveRecordDialog({
+  open,
+  onOpenChange,
+  name,
+  remove,
+  description,
+}: RemoveRecordDialogProps) {
   const t = useTranslations("school");
   const tCommon = useTranslations("common");
   const invalidate = useInvalidateModule(SCHOOL_ORGANIZATION_QUERY_MODULE);
@@ -44,7 +53,7 @@ export function RemoveRecordDialog({ open, onOpenChange, name, remove }: RemoveR
       open={open}
       onOpenChange={onOpenChange}
       title={t("remove.title", { name })}
-      description={t("remove.description")}
+      description={description ?? t("remove.description")}
       confirmLabel={t("actions.remove")}
       variant="destructive"
       isPending={isPending}

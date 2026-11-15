@@ -145,6 +145,7 @@ export function HolidaysCard({ holidays, canEdit }: HolidaysCardProps) {
           open
           onOpenChange={close}
           name={removing.name}
+          description={t("calendar.holidays.removeDescription")}
           remove={() =>
             Services.schoolOrganization.updateHolidayCalendar({
               holidays: withoutHoliday(holidays, target.index),

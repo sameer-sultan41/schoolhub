@@ -169,6 +169,9 @@ describe("calendar section", () => {
 
     await user.click(await screen.findByRole("button", { name: "Remove Spring break" }));
     const dialog = await screen.findByRole("alertdialog");
+    // A holiday can't be deactivated, so not the structure records' warning.
+    expect(within(dialog).getByText("Its days count as school days again.")).toBeInTheDocument();
+    expect(within(dialog).queryByText(/deactivate it instead/)).not.toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "Remove" }));
 
     await waitFor(() => {

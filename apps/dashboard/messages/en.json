@@ -408,7 +408,8 @@
         "caption": "Holidays",
         "days": "Days",
         "range": "{start} to {end}",
-        "saved": "Holidays saved."
+        "saved": "Holidays saved.",
+        "removeDescription": "Its days count as school days again."
       },
       "form": {
         "createTitle": "Add a holiday",

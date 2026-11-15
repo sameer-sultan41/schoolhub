@@ -293,7 +293,8 @@ API enforces either way.
   one day is picked) and the holidays in date order. Each holiday add, edit or remove `PUT`s the
   whole list with the one change, since the calendar is one document. DRF keys a list entry's
   error by index (`holidays.2.end_date`), so the dialog maps its own entry's errors onto its
-  inputs.
+  inputs. Removing a holiday says its days become school days again, not the structure
+  records' "deactivate it instead".
 - Each section is one exported unit (`CampusesSection`, `DepartmentsSection`, `HousesSection`,
   `ProfileSection`, `CalendarSection`): toolbar, list and dialogs, each dialog mounted only while
   open. The `/school/*` pages wrap them in the shell's `Container`, and the onboarding wizard
