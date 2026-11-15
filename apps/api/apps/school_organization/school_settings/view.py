@@ -36,7 +36,7 @@ class SchoolSettingsView(TenantScopedViewSetMixin, APIView):
     academic payloads live on ``tenant_settings``.
 
     `Tenant.name` has a second writer, the platform console's tenant PATCH: the last write
-    wins and both are audited (platform-admin §20).
+    wins and both are audited (school-organization §20).
 
     Mixes in ``TenantScopedViewSetMixin`` purely for its ``initial()``/
     ``finalize_response()`` tenant binding — this is a plain ``APIView``, not a
