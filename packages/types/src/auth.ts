@@ -42,6 +42,13 @@ export interface Role {
   scope?: RecordScope;
 }
 
+/** The caller's school as `/auth/me` names it (the generated `TenantSummary` schema). */
+export interface TenantSummary {
+  name: string;
+  /** Wildcard subdomain label. */
+  slug: string;
+}
+
 export interface AuthenticatedUser {
   id: string;
   email: string | null;
@@ -50,6 +57,8 @@ export interface AuthenticatedUser {
   avatar_url: string | null;
   locale: string;
   tenant_id: string;
+  /** The user's school, beside its id; null for a platform user, who belongs to none. */
+  tenant_summary: TenantSummary | null;
   roles: Role[];
   /** Effective permission keys — the union across all roles. */
   permissions: PermissionKey[];

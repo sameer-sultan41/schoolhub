@@ -4,18 +4,21 @@ No split into per-action files: a singleton resource has no distinct
 actions the way `academic_sessions` does, so one file holds the whole
 view — the same shape `apps/communication`'s `preferences/view.py` uses
 for its own singleton resource (PR #73, adopting the same file-per-action
-layout independently).
+layout independently). The write itself is `services.update_school_settings`.
 """
 
 from __future__ import annotations
 
-from django.db import transaction
 from drf_spectacular.utils import extend_schema
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.school_organization.school_settings.serializers import SchoolSettingsSerializer
+from apps.school_organization.school_settings import services
+from apps.school_organization.school_settings.serializers import (
+    SchoolSettingsSerializer,
+    SchoolSettingsUpdateSerializer,
+)
 from apps.school_organization.tenant_settings import get_settings_row
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
@@ -27,10 +30,13 @@ from core.tenancy.models import TenantSettings
 class SchoolSettingsView(TenantScopedViewSetMixin, APIView):
     """Singleton school profile and academic configuration (module doc §16).
 
-    A singleton rather than a collection because a tenant is one school; the
-    branding/academic payloads live in ``tenant_settings`` JSONB while timezone,
-    locale and currency stay on the tenant row, which is where the request
-    middleware and every other module already read them from.
+    A singleton rather than a collection because a tenant is one school. `name`,
+    timezone, locale and currency stay on the tenant row, which is where the request
+    middleware and every other module already read them from; the logo, branding and
+    academic payloads live on ``tenant_settings``.
+
+    `Tenant.name` has a second writer, the platform console's tenant PATCH: the last write
+    wins and both are audited (platform-admin §20).
 
     Mixes in ``TenantScopedViewSetMixin`` purely for its ``initial()``/
     ``finalize_response()`` tenant binding — this is a plain ``APIView``, not a
@@ -48,43 +54,32 @@ class SchoolSettingsView(TenantScopedViewSetMixin, APIView):
 
     @extend_schema(responses={200: SchoolSettingsSerializer})
     def get(self, request) -> Response:
-        return ActionResponse.ok(self._represent(request, get_settings_row(request)))
+        return ActionResponse.ok(self._response(request, get_settings_row(request)))
 
-    @extend_schema(request=SchoolSettingsSerializer, responses={200: SchoolSettingsSerializer})
+    @extend_schema(
+        request=SchoolSettingsUpdateSerializer, responses={200: SchoolSettingsSerializer}
+    )
     def patch(self, request) -> Response:
-        serializer = SchoolSettingsSerializer(data=request.data, partial=True)
+        serializer = SchoolSettingsUpdateSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        changes = serializer.validated_data
 
         settings_row = get_settings_row(request)
-        before = self._represent(request, settings_row)
-
-        with transaction.atomic():
-            for field in ("branding", "academic"):
-                if field in changes:
-                    setattr(settings_row, field, changes[field])
-            settings_row.updated_by = request.user.pk
-            settings_row.save()
-
-            tenant = request.tenant
-            tenant_fields = [f for f in ("timezone", "locale", "currency") if f in changes]
-            for field in tenant_fields:
-                setattr(tenant, field, changes[field])
-            if tenant_fields:
-                tenant.updated_by = request.user.pk
-                tenant.save(update_fields=[*tenant_fields, "updated_by", "updated_at"])
-
-        after = self._represent(request, settings_row)
+        before = services.represent(request.tenant, settings_row)
+        services.update_school_settings(
+            tenant=request.tenant,
+            settings_row=settings_row,
+            changes=serializer.validated_data,
+            actor_id=request.user.pk,
+        )
+        after = services.represent(request.tenant, settings_row)
         record_audit(request, "update", settings_row, before=before, after=after)
-        return ActionResponse.ok(after, message="School settings updated.")
+        return ActionResponse.ok(
+            self._response(request, settings_row), message="School settings updated."
+        )
 
     @staticmethod
-    def _represent(request, settings_row: TenantSettings) -> dict:
-        tenant = request.tenant
+    def _response(request, settings_row: TenantSettings) -> dict:
         return {
-            "branding": settings_row.branding,
-            "academic": settings_row.academic,
-            "timezone": tenant.timezone,
-            "locale": tenant.locale,
-            "currency": tenant.currency,
+            **services.represent(request.tenant, settings_row),
+            "logo_url": services.logo_url(settings_row),
         }

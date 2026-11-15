@@ -14,6 +14,7 @@ function userWith(permissions: PermissionKey[]): AuthenticatedUser {
     avatar_url: null,
     locale: "en",
     tenant_id: "tenant-1",
+    tenant_summary: { name: "City School", slug: "city-school" },
     roles: [],
     permissions,
   };

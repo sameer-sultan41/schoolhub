@@ -444,6 +444,7 @@ export function buildUser(overrides: Partial<AuthenticatedUser> = {}): Authentic
     avatar_url: null,
     locale: "en",
     tenant_id: DEFAULT_TENANT_ID,
+    tenant_summary: { name: "City School", slug: "cityschool" },
     roles: [buildRole()],
     permissions: SCHOOL_ADMIN_PERMISSIONS,
     ...overrides,

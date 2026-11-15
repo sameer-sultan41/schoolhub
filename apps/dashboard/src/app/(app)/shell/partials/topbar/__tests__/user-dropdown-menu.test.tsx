@@ -68,6 +68,7 @@ describe("UserDropdownMenu", () => {
       avatar_url: null,
       locale: "en",
       tenant_id: "t1",
+      tenant_summary: { name: "City School", slug: "city-school" },
       roles: [],
       permissions: [],
     };
@@ -82,6 +83,7 @@ describe("UserDropdownMenu", () => {
       avatar_url: null,
       locale: "en",
       tenant_id: "t1",
+      tenant_summary: { name: "City School", slug: "city-school" },
       roles: [{ id: "r1", slug: "school_admin", name: "School Admin", is_custom: false }],
       permissions: [],
     });
@@ -105,6 +107,7 @@ describe("UserDropdownMenu", () => {
       avatar_url: null,
       locale: "en",
       tenant_id: "t1",
+      tenant_summary: { name: "City School", slug: "city-school" },
       roles: [],
       permissions: [],
     });
@@ -125,6 +128,7 @@ describe("UserDropdownMenu", () => {
       avatar_url: null,
       locale: "en",
       tenant_id: "t1",
+      tenant_summary: { name: "City School", slug: "city-school" },
       roles: [],
       permissions: [],
     });
@@ -144,6 +148,7 @@ describe("UserDropdownMenu", () => {
       avatar_url: null,
       locale: "en",
       tenant_id: "t1",
+      tenant_summary: { name: "City School", slug: "city-school" },
       roles: [],
       permissions: [],
     });

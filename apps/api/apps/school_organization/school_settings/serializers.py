@@ -1,27 +1,65 @@
-"""`SchoolSettingsSerializer` — `/school-settings` request/response shape
-(module doc §16, singleton resource).
-"""
+"""`/school-settings` request and response shapes (module doc §16, singleton resource)."""
 
 from __future__ import annotations
+
+import re
 
 from rest_framework import serializers
 
 from apps.school_organization import services
 
+# A colour in data is a hex string, never a class name (the `TenantBranding` contract in
+# `packages/types/src/tenant.ts`): the dashboard and the website both read it as CSS.
+HEX_COLOR = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+
 
 class SchoolSettingsSerializer(serializers.Serializer):
-    """School profile and academic configuration (module doc §16, singleton resource).
+    """School profile and academic configuration, as `GET` and `PATCH` return it.
 
-    Backed by ``tenant_settings`` JSONB rather than its own table: the shape is
-    tenant-configurable (accreditation fields, holiday calendar, weekend definition)
-    and columns would force a migration per school that wants one more field.
+    `name` is the tenant's own name and `logo_file_id` a real column; `branding` and
+    `academic` live in `tenant_settings` JSONB, because their shape is tenant-configurable and
+    columns would force a migration per school that wants one more field.
     """
 
-    branding = serializers.JSONField(required=False)
+    name = serializers.CharField(read_only=True)
+    logo_file_id = serializers.UUIDField(read_only=True, allow_null=True)
+    logo_url = serializers.CharField(
+        read_only=True, allow_null=True, help_text="A short-lived signed link to the logo."
+    )
+    branding = serializers.JSONField(read_only=True)
+    academic = serializers.JSONField(read_only=True)
+    timezone = serializers.CharField(read_only=True)
+    locale = serializers.CharField(read_only=True)
+    currency = serializers.CharField(read_only=True)
+
+
+class SchoolSettingsUpdateSerializer(serializers.Serializer):
+    """`PATCH /school-settings`: every field optional. `slug` and `status` are not fields, so a
+    body that sends them is ignored rather than written."""
+
+    name = serializers.CharField(max_length=200, required=False)
+    logo_file_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text="A ready `school.logo` upload of this school; null removes the logo.",
+    )
+    branding = serializers.JSONField(
+        required=False, help_text="Merged into the stored branding, key by key."
+    )
     academic = serializers.JSONField(required=False)
     timezone = serializers.CharField(max_length=64, required=False)
     locale = serializers.CharField(max_length=10, required=False)
     currency = serializers.CharField(min_length=3, max_length=3, required=False)
+
+    def validate_branding(self, value: object) -> dict:
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("branding must be an object.")
+        color = value.get("primary_color")
+        if color is not None and not (isinstance(color, str) and HEX_COLOR.match(color)):
+            raise serializers.ValidationError(
+                {"primary_color": "Enter a hex colour such as #1E88E5."}
+            )
+        return value
 
     def validate_timezone(self, value: str) -> str:
         if not services.is_valid_timezone(value):
