@@ -66,7 +66,7 @@ def _slug_taken() -> DomainRuleViolation:
     return DomainRuleViolation({"slug": "slug_taken: another page already uses this address."})
 
 
-def _slug_in_use(slug: str, locale: str | None, exclude_id: UUID | None = None) -> bool:
+def _slug_in_use(slug: str, locale: str, exclude_id: UUID | None = None) -> bool:
     rows = WebsitePage.objects.alive().filter(slug=slug, locale=locale)
     return rows.exclude(id=exclude_id).exists() if exclude_id else rows.exists()
 
@@ -76,7 +76,7 @@ def create_page(tenant: Tenant, data: dict[str, Any], actor_id: UUID | None) -> 
     page_type = data.get("page_type", PageType.STANDARD)
     if page_type == PageType.HOME:
         raise DomainRuleViolation({"page_type": "home_exists: the site has one home page."})
-    locale = data.get("locale")
+    locale = data.get("locale", "")
     if _slug_in_use(data["slug"], locale):
         raise _slug_taken()
     try:

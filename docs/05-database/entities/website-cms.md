@@ -21,8 +21,8 @@ One row per tenant: the website's global state and theme binding.
 | header_config | jsonb | no | `'{}'` | Announcement bar, contact strip, CTA button |
 | footer_config | jsonb | no | `'{}'` | Footer columns, contact block, copyright line |
 | social_links | jsonb | no | `'[]'` | Ordered `{platform, url}` list |
-| analytics_id | varchar(60) | yes | — | Tenant-supplied analytics property id *(recommendation)* |
-| default_locale | varchar(10) | yes | — | Falls back to `tenant_settings.locale` |
+| analytics_id | varchar(60) | no | `''` | Tenant-supplied analytics property id *(recommendation)* |
+| default_locale | varchar(10) | no | `''` | Empty falls back to `tenant_settings.locale` |
 
 Indexes: unique(tenant_id) among live rows (`deleted_at IS NULL`).
 Relationships: N:1 `themes`; 1:1 `tenants`; optional 1:1 `website_pages` (homepage).
@@ -35,7 +35,7 @@ Relationships: N:1 `themes`; 1:1 `tenants`; optional 1:1 `website_pages` (homepa
 | name | varchar(100) | no | — | Display name |
 | code | varchar(50) | no | — | Unique, stable key used by the renderer |
 | version | varchar(20) | no | — | Semver; renderer pins per-version templates |
-| description | text | yes | — | |
+| description | text | no | `''` | |
 | preview_file_id | uuid | yes | — | FK → files (platform asset) |
 | section_types | jsonb | no | `'{}'` | Declared section catalog as a dict keyed by type: `{type: {label, schema}}`, where `schema` is the constrained JSON Schema subset (ADR-0038). Synced from the code-declared theme files on `post_migrate`, never edited through the API |
 | config_schema | jsonb | no | `'{}'` | JSON schema for `website_settings.theme_config` |
@@ -54,10 +54,10 @@ A page on the public site — standard (homepage, about, principal message, depa
 | page_type | varchar(30) | no | `'standard'` | Enum: `home` `about` `principal_message` `departments` `teachers` `classes` `admissions` `contact` `standard` |
 | status | varchar(20) | no | `'draft'` | Enum: `draft` `published` `archived` |
 | published_at | timestamptz | yes | — | |
-| locale | varchar(10) | yes | — | Per-locale page variants; null = default locale |
+| locale | varchar(10) | no | `''` | Per-locale page variants; empty = default locale |
 | show_in_search | boolean | no | `true` | Renderer no-indexes when false |
 
-Indexes: unique(tenant_id, slug, locale) among live rows, with `nulls_distinct=False` so two pages with a null `locale` and the same slug collide; unique(tenant_id) where `page_type = 'home'` among live rows (one homepage per tenant); (tenant_id, status, page_type). A slug is reusable once its page is soft-deleted.
+Indexes: unique(tenant_id, slug, locale) among live rows (an empty `locale` is a value, so two default-locale pages with the same slug collide); unique(tenant_id) where `page_type = 'home'` among live rows (one homepage per tenant); (tenant_id, status, page_type). A slug is reusable once its page is soft-deleted.
 Relationships: 1:N `page_sections`; targeted by `navigation_menus` items and `seo_settings`.
 
 ### page_sections
@@ -177,11 +177,11 @@ Site-wide and per-content SEO metadata (scope §11 SEO; §22 SEO for public webs
 | ------ | ---- | ---- | ------- | ----- |
 | target_type | varchar(30) | no | — | Enum: `site` `page` `news_post` `school_event` `gallery_album` |
 | target_id | uuid | yes | — | FK to the target row; NULL when target_type = `site` |
-| meta_title | varchar(70) | yes | — | |
-| meta_description | varchar(170) | yes | — | |
+| meta_title | varchar(70) | no | `''` | |
+| meta_description | varchar(170) | no | `''` | |
 | og_image_file_id | uuid | yes | — | FK → files |
-| canonical_url | varchar(500) | yes | — | |
-| robots | varchar(50) | yes | — | e.g. `noindex,nofollow` |
+| canonical_url | varchar(500) | no | `''` | |
+| robots | varchar(50) | no | `''` | e.g. `noindex,nofollow` |
 | structured_data | jsonb | yes | — | JSON-LD overrides; renderer emits sane defaults |
 
 Indexes: unique(tenant_id, target_type, target_id) among live rows, with `nulls_distinct=False` so the single `site` row (null `target_id`) cannot be duplicated.

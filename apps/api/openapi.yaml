@@ -27077,11 +27077,9 @@ components:
           nullable: true
         meta_title:
           type: string
-          nullable: true
           maxLength: 70
         meta_description:
           type: string
-          nullable: true
           maxLength: 170
         og_image_file_id:
           type: string
@@ -27089,11 +27087,9 @@ components:
           nullable: true
         canonical_url:
           type: string
-          nullable: true
           maxLength: 500
         robots:
           type: string
-          nullable: true
           maxLength: 50
         structured_data:
           readOnly: true
@@ -27658,7 +27654,6 @@ components:
           type: string
         locale:
           type: string
-          nullable: true
           maxLength: 10
         show_in_search:
           type: boolean
@@ -27695,11 +27690,9 @@ components:
             $ref: '#/components/schemas/SocialLink'
         analytics_id:
           type: string
-          nullable: true
           maxLength: 60
         default_locale:
           type: string
-          nullable: true
           maxLength: 10
         updated_at:
           type: string
@@ -29825,11 +29818,9 @@ components:
           nullable: true
         meta_title:
           type: string
-          nullable: true
           maxLength: 70
         meta_description:
           type: string
-          nullable: true
           maxLength: 170
         og_image_file_id:
           type: string
@@ -29837,11 +29828,9 @@ components:
           nullable: true
         canonical_url:
           type: string
-          nullable: true
           maxLength: 500
         robots:
           type: string
-          nullable: true
           maxLength: 50
         structured_data:
           readOnly: true
@@ -31735,7 +31724,6 @@ components:
         description:
           type: string
           readOnly: true
-          nullable: true
         config_schema:
           readOnly: true
         section_types:
@@ -32430,7 +32418,6 @@ components:
         locale:
           type: string
           readOnly: true
-          nullable: true
         show_in_search:
           type: boolean
           readOnly: true
@@ -32488,7 +32475,6 @@ components:
         locale:
           type: string
           readOnly: true
-          nullable: true
         show_in_search:
           type: boolean
           readOnly: true
@@ -32546,7 +32532,6 @@ components:
           $ref: '#/components/schemas/WebsitePageTypeEnum'
         locale:
           type: string
-          nullable: true
           maxLength: 10
         show_in_search:
           type: boolean
@@ -32586,11 +32571,9 @@ components:
             $ref: '#/components/schemas/SocialLink'
         analytics_id:
           type: string
-          nullable: true
           maxLength: 60
         default_locale:
           type: string
-          nullable: true
           maxLength: 10
         updated_at:
           type: string
