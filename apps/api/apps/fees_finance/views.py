@@ -53,6 +53,7 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.settings import api_settings
 from rest_framework.views import APIView
 
 from apps.fees_finance import documents, services, uploads
@@ -119,6 +120,8 @@ from apps.fees_finance.serializers import (
     FeeStructureSerializer,
     FeeVoucherSerializer,
     FinanceReportQuerySerializer,
+    FinanceReportSummaryRequestSerializer,
+    FinanceReportSummaryResponseSerializer,
     FineSerializer,
     GatewayReconciliationIssueSerializer,
     GenerateInvoicesSerializer,
@@ -154,7 +157,11 @@ from apps.student_management.models import Student
 from apps.student_management.services import STUDENT_SCOPE
 from core.api.exceptions import DomainRuleViolation, ModuleDisabled
 from core.api.permissions import RequiresModuleFeature
-from core.api.throttling import PaymentCallbackFailureThrottle, PaymentCallbackThrottle
+from core.api.throttling import (
+    AIRequestThrottle,
+    PaymentCallbackFailureThrottle,
+    PaymentCallbackThrottle,
+)
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit, record_security_event
 from core.exports.scope import SCOPE_PERMISSION, scope_permission_payload
@@ -1850,6 +1857,79 @@ class FinanceReportView(TenantScopedViewSetMixin, APIView):
         )
         enqueue_job(job=job, task=export_finance_report_task)
         return ActionResponse.accepted(str(job.pk), message="Report export queued.")
+
+
+class FinanceReportSummaryView(TenantScopedViewSetMixin, APIView):
+    """`POST /reports/finance-summary:summarize`: AI-FEE-02, a plain-language summary.
+
+    **Not wrapped in `ATOMIC_REQUESTS`** (urls.py): the gateway calls the provider
+    with no transaction open and commits its audit row in its own, so a refusal
+    still leaves its row (`core.ai.service`). That moves every database read here
+    into an explicit tenant transaction, because the tenant binding is a `SET
+    LOCAL` and lasts only as long as the transaction around it:
+
+    1. `initial` (authentication, the flag, the permission key, the throttles) runs
+       in one short transaction, so the role and flag reads see the tenant.
+    2. The report's facts are read in a `tenant_atomic`, under the route's key.
+    3. `services.summarize_report` then runs with no transaction open.
+
+    Read-only advisory output, labelled `ai_generated` (ai-governance.md §2, §8).
+    The `ai` throttle sits on top of the defaults: it bounds how far concurrent
+    calls can overshoot the token budget (ADR-0035).
+    """
+
+    permission_classes = STAFF_PERMISSIONS
+    required_feature = FEATURE
+    required_permission = "fees.report.summarize"
+    throttle_classes = [*api_settings.DEFAULT_THROTTLE_CLASSES, AIRequestThrottle]
+    # The report reads its own campus fields per table (`report_summary_facts`).
+    scope_campus_field = None
+
+    def initial(self, request: Request, *args: object, **kwargs: object) -> None:
+        with transaction.atomic():
+            super().initial(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="AI summary of a finance report",
+        request=FinanceReportSummaryRequestSerializer,
+        responses={200: FinanceReportSummaryResponseSerializer},
+    )
+    def post(self, request: Request) -> Response:
+        serializer = FinanceReportSummaryRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+        tenant = request.tenant
+
+        # Facts before the AI flag on purpose: `run_feature` checks the flag and writes
+        # the `disabled` audit row, so checking it here first would leave no row.
+        with tenant_atomic(tenant.pk):
+            facts = services.report_summary_facts(
+                kind=payload["kind"],
+                user=request.user,
+                permission=route_permission(request, self),
+                date_from=payload["date_from"],
+                date_to=payload["date_to"],
+                group_by=payload.get("group_by", "day"),
+                currency=tenant.currency or "",
+            )
+
+        result = services.summarize_report(
+            kind=payload["kind"], summary=facts, user=request.user, tenant=tenant
+        )
+        # Pre-shaped `{data, meta}`, as `FinanceReportView` returns it.
+        return Response(
+            {
+                "data": {
+                    "summary": result.summary,
+                    "facts": result.facts,
+                    "model": result.model,
+                    "prompt_version": result.prompt_version,
+                    "ai_request_id": str(result.ai_request_id),
+                    "ai_generated": True,
+                },
+                "meta": {"budget_warning": result.budget_warning},
+            }
+        )
 
 
 class StudentLedgerView(TenantScopedViewSetMixin, APIView):

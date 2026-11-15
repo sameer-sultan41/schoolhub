@@ -1,7 +1,7 @@
 # ERD Overview
 
 > **Agent Context** — Load this block first.
-> **Summary:** Entity-relationship overview of the full SchoolHub schema (136 tables across 11 entity files): a domain map of which file owns which tables, per-domain Mermaid ER diagrams showing key relationships only (no attribute lists), a catalog of representative 1:1 / 1:N / M:N and cross-domain relationships, and a conventions recap. Column-level truth lives in [`entities/`](entities/); platform-wide column and RLS rules live in [`../02-architecture/database-architecture.md`](../02-architecture/database-architecture.md).
+> **Summary:** Entity-relationship overview of the full SchoolHub schema (138 tables across 12 entity files): a domain map of which file owns which tables, per-domain Mermaid ER diagrams showing key relationships only (no attribute lists), a catalog of representative 1:1 / 1:N / M:N and cross-domain relationships, and a conventions recap. Column-level truth lives in [`entities/`](entities/); platform-wide column and RLS rules live in [`../02-architecture/database-architecture.md`](../02-architecture/database-architecture.md).
 > **Co-load with:** [`../02-architecture/database-architecture.md`](../02-architecture/database-architecture.md) · [`entities/`](entities/) (the file owning the domain under discussion)
 
 ## 1. Domain Map
@@ -19,6 +19,7 @@
 | [`entities/library-transport-inventory.md`](entities/library-transport-inventory.md) | Library, transport, inventory & assets | book_categories, book_titles, book_copies, library_members, book_issues, library_fines, vehicles, drivers, routes, route_stops, student_transport_assignments, vehicle_maintenance, suppliers, asset_categories, assets, asset_assignments, asset_maintenance, stock_items, stock_movements, purchase_orders, purchase_order_items |
 | [`entities/website-cms.md`](entities/website-cms.md) | Website & CMS | website_settings, themes, website_pages, page_sections, navigation_menus, news_posts, school_events, gallery_albums, gallery_items, contact_submissions, seo_settings |
 | [`entities/documents.md`](entities/documents.md) | Certificates & documents | document_templates, generated_documents, issued_certificates |
+| [`entities/ai.md`](entities/ai.md) | AI gateway audit | ai_requests, ai_request_feedback |
 
 ## 2. Domain Diagrams
 

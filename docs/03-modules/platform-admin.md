@@ -65,7 +65,7 @@ Tenant users can never hold `platform.*` keys; the seed matrix forbids it struct
 - **Plans:** versioned plan changes never mutate existing subscriptions retroactively; grandfathering supported *(recommendation)*.
 - **Billing:** billing-provider webhooks (payment succeeded/failed) drive subscription state; manual invoicing mode for bank-transfer markets *(recommendation — payment rails vary by country; currency per plan/tenant, none assumed)*.
 - **Flags:** override expiry dates; flag audit trail; percentage rollouts for gradual feature releases *(recommendation)*.
-- **Quotas:** per-quota grace thresholds (e.g. warn at 90%); AI token budgets enforced at the AI gateway; storage measured nightly.
+- **Quotas:** per-quota grace thresholds (AI tokens warn at 80%, ai-governance.md §5); AI token budgets enforced at the AI gateway; storage measured nightly.
 - **Migration:** reusable mapping templates per source system; AI-assisted column mapping (`AI-PLA-01`); imports run as background jobs with per-row error files.
 
 ## 7. Workflows
@@ -135,7 +135,7 @@ Support agent requests elevation (tenant, target user, reason) → grant issued 
 | Trial expiring (7/3/1 days) | School owner | Email, in-app | `pla-trial-expiring` |
 | Payment failed / dunning sequence | School owner, `platform_super_admin` | Email | `pla-payment-failed` |
 | Tenant suspended / reinstated | School owner; platform ops | Email, in-app | `pla-tenant-suspended` |
-| Quota threshold reached (90% / 100%) | School owner, `it_admin`; platform ops | Email, in-app | `pla-quota-threshold` |
+| Quota threshold reached (80% / 100%) | School owner, `it_admin`; platform ops | Email, in-app | `pla-quota-threshold` |
 | Import completed / failed | Initiating admin | In-app, email | `pla-import-result` |
 | Impersonation grant issued/expired | Platform ops log; tenant owner *(recommendation)* | In-app | `pla-impersonation` |
 

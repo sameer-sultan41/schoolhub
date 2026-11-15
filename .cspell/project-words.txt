@@ -358,6 +358,7 @@ uncleareable
 autoretry
 blacklistedtoken
 harfbuzz
+pseudonymizer
 Safepay
 allauth
 otpauth

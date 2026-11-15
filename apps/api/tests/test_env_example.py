@@ -21,9 +21,6 @@ NOT_READ_BY_SETTINGS = {
     # setdefault() it, so it matters here only when the environment is loaded before Django
     # starts (e.g. `uv run --env-file .env ...`); settings never read it.
     "DJANGO_SETTINGS_MODULE",
-    # For the planned core/ai gateway (apps/api/AGENTS.md rule 6); remove once it reads them.
-    "ANTHROPIC_API_KEY",
-    "AI_MONTHLY_TOKEN_BUDGET_DEFAULT",
 }
 
 

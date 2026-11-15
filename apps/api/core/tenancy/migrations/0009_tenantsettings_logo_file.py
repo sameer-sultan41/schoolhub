@@ -8,7 +8,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('files', '0002_rls_policies'),
-        ('tenancy', '0007_tenantsettings_communication'),
+        ('tenancy', '0008_tenantsettings_ai'),
     ]
 
     operations = [

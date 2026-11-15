@@ -260,6 +260,17 @@ registry.register(
     REPORT_VIEWERS,
 )
 
+# --- AI report summaries (AI-FEE-02) --------------------------------------- #
+
+# Its own key rather than `fees.report.view` on a POST: a school can grant the
+# reports without AI, and a write route never borrows a read key
+# (`WritePermissionContractTests`). The same roles as the report it summarises.
+registry.register(
+    "fees.report.summarize",
+    "Ask for an AI-generated summary of a financial report.",
+    REPORT_VIEWERS,
+)
+
 # Referenced by the module docstring's scope note; keeps ruff from flagging the
 # tuple as unused while PR B is what first needs it.
 __all__ = [

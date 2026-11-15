@@ -16,43 +16,44 @@
 
 ```mermaid
 flowchart LR
-    UI[Dashboard / Portal UI] -->|/api/v1/ai/*| GW[AI Gateway service]
+    UI[Dashboard / Portal UI] -->|module endpoint, e.g. /reports/finance-summary:summarize| MOD[Owning module view]
     subgraph Backend
-      GW --> CTX[Context Builder<br/>RBAC+RLS-scoped queries]
-      GW --> TOOLS[Tool Registry<br/>whitelisted module functions]
-      GW --> BUD[Budget & Rate Limiter<br/>Redis]
-      GW --> LOG[AI Audit Log]
+      MOD --> CTX[Feature context builder<br/>module ai.py: allowlist + scoped aggregates]
+      MOD --> GW[AI Gateway<br/>core/ai run_feature]
+      GW --> BUD[Budget meter<br/>DB sum over ai_requests]
+      GW --> LOG[AI audit log<br/>ai_requests]
+      GW --> GRD[Grounding<br/>fact placeholders]
     end
     GW --> PA[Provider Adapter]
-    PA --> LLM1[Anthropic Claude API<br/>primary — recommendation]
-    PA --> LLM2[Secondary provider<br/>fallback]
+    PA --> LLM1[Anthropic Claude API<br/>the one provider]
     GW --> Q[Celery: batch jobs<br/>analytics, bulk generation]
 ```
 
-- **AI Gateway:** one internal service (Django app `core/ai/`) exposing typed feature endpoints (`POST /api/v1/ai/assistant:ask`, `POST /api/v1/ai/lesson-plans:generate`, …). No free-form proxy endpoint.
-- **Context Builder:** assembles the prompt context via scoped queries (never raw table dumps); applies PII redaction rules from `ai-governance.md`.
+- **AI Gateway:** one internal Django app, `core/ai/`, with one entry point, `run_feature()`. **Feature endpoints live in the module that owns the data** (`POST /api/v1/reports/finance-summary:summarize` in `fees_finance`), because core may not import an app ([ADR-0013](../decisions/0013-cross-app-dependencies.md)); `core/ai` serves only `GET /api/v1/ai/usage` and `POST /api/v1/ai/requests/{id}:feedback` ([ADR-0035](../decisions/0035-ai-gateway-shape.md)). Features self-register from each app's `ai.py`. No free-form proxy endpoint.
+- **Context Builder:** each feature's `ai.py` assembles the prompt context via scoped queries (aggregates, never raw table dumps), keeps only the fields its per-kind allowlist names, pseudonymizes identities and fences record text as untrusted, per `ai-governance.md`.
 - **Tool Registry:** for agentic features (NL search, assistants), the model may call only whitelisted read functions; each tool re-checks the caller's permission key. Write-tools are draft-only.
-- **Provider Adapter:** provider-agnostic interface (messages, tools, streaming). Primary: Anthropic Claude (recommendation — strongest tool-use + safety fit); a secondary provider configured for failover. Per-feature model tiers: cheap/fast model for classification & summarization, top model for assistants & generation.
-- **Budgets:** per-tenant monthly token quota by plan + per-user daily caps; soft-warning at 80%, hard-stop with graceful UI message. Usage metered per feature for platform reporting.
+- **Provider Adapter:** provider-agnostic interface (`core/ai/providers/`); `anthropic.py` is the only module that imports a provider SDK, and no SDK type crosses it. One provider at launch, Anthropic Claude; a secondary provider is deferred (ADR-0035). Per-feature model tiers: `fast` for classification & summarization, `standard` for assistants & generation, each pinned in settings (`AI_MODEL_FAST`, `AI_MODEL_STANDARD`).
+- **Budgets:** per-tenant monthly token quota (`AI_MONTHLY_TOKEN_BUDGET_DEFAULT`, overridable per tenant in `TenantSettings.ai`, which only the platform writes) + per-user daily caps (`AI_USER_DAILY_TOKEN_CAP`); soft warning at 80% (`meta.budget_warning`), hard stop at 100% with `429 ai_quota_exceeded`. The meter is a database sum over `ai_requests` in the tenant's timezone, all four token counts included; concurrent calls may overshoot by at most concurrency × (context + `max_output_tokens`), bounded by the per-user `ai` throttle. A Redis reservation is deferred until load justifies it (ADR-0035).
 
 ## 3. Feature Execution Patterns
 
 | Pattern | Used by | Behavior |
 | ------- | ------- | -------- |
-| **Synchronous ask** | assistants, NL search, summarization | Streamed response (SSE), 30 s cap |
+| **Synchronous ask** | assistants, NL search, summarization | 30 s cap; one JSON response for now (AI-FEE-02), SSE streaming deferred (`deferred-work.md`) |
 | **Draft-for-approval** | announcements, notices, lesson plans, quizzes, exam questions, parent messages | Output saved as `draft` on the owning module's entity; publishing requires that module's `publish`/`approve` permission |
 | **Batch analytics** | at-risk detection, attendance anomalies, fee-payment prediction, performance insights | Nightly Celery jobs writing *scored suggestions* tables; surfaced in dashboards with explanations; never auto-acts |
 | **Document intake** | OCR/extraction (admissions documents, imports) | Async job + human verification screen before data is committed |
 
 ## 4. Reliability & Fallback
 
-- Provider timeout → one retry → secondary provider → feature-specific graceful degradation (assistant apologizes; batch job reschedules; UI hides AI panel if the flag is off).
-- All AI features sit behind feature flags (per plan and per tenant kill-switch) — see [`multi-tenancy.md`](multi-tenancy.md) §5.
+- Provider error or timeout → one retry, only if it fits inside the 30 s overall deadline (`AI_REQUEST_DEADLINE_SECONDS`; the SDK's own retries are off) → explicit `503 ai_unavailable` and feature-specific graceful degradation (assistant apologizes; batch job reschedules; UI hides AI panel if the flag is off). A non-`end_turn` stop or an answer the feature's validator refuses is also a `503`. No secondary provider at launch ([ADR-0035](../decisions/0035-ai-gateway-shape.md)).
+- The provider is called with **no database transaction open**; the gates run in one short tenant transaction before it, and the audit row is committed in its own transaction before any error is returned, so a refusal still leaves exactly one row.
+- All AI features sit behind feature flags — see [`multi-tenancy.md`](multi-tenancy.md) §5. `ai.gateway` is the platform-wide kill switch (on by default; a tenant override or ops can only turn it off) and each feature has its own default-off flag, the per-tenant opt-in (`ai.fee-report-summary`).
 - Prompt templates are versioned in the repo; every response logs `feature, prompt_version, model, tokens, latency, tenant, user` to the AI audit log (no raw student PII in logs).
 
 ## 5. Quality & Monitoring
 
-- **Evaluation harness:** golden-set prompts per feature run in CI on prompt/model changes (regression scoring).
+- **Evaluation harness:** golden-set prompts per feature (`apps/<module>/tests/evals/`) scored on the real provider by `manage.py run_ai_evals` in the `ai-evals` workflow on prompt, model or gateway changes and weekly for drift; a score below the committed baseline's tolerance, an adversarial leak or a missing baseline fails it.
 - **Runtime monitoring:** error rate, latency, token spend per tenant/feature, refusal rate; alerting on spend anomalies.
 - **Feedback loop:** thumbs up/down + comment on every AI output, reviewed for prompt iteration.
 
