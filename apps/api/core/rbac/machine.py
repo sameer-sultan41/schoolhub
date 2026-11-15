@@ -26,6 +26,8 @@ from rest_framework.settings import api_settings
 from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.views import APIView
 
+from core.tenancy.hosts import normalise_host
+
 #: Every scope a machine client may hold. A machine-guarded view's scope must be listed here.
 MACHINE_SCOPES = frozenset({"website.public-content.view"})
 
@@ -113,7 +115,8 @@ class MachineClientThrottle(SimpleRateThrottle):
         user = request.user
         if not isinstance(user, MachinePrincipal):
             return None
-        host = str(request.query_params.get("host", "")).strip().lower()
+        # Canonical host, so `A.test:3001` and `a.test` share a bucket; garbage shares one too.
+        host = normalise_host(str(request.query_params.get("host", ""))) or "-"
         digest = hashlib.sha256(host.encode()).hexdigest()[:32]
         return self.cache_format % {"scope": self.scope, "ident": f"{user.client}:{digest}"}
 

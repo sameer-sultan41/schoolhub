@@ -6,6 +6,8 @@ classes `PublicContentView` will declare, so the boundary is proven before any r
 
 from __future__ import annotations
 
+from unittest import mock
+
 from django.conf import settings
 from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase, override_settings
@@ -157,14 +159,37 @@ class MachineClientThrottleTests(SimpleTestCase):
         statuses = {response.status_code for response in responses}
         self.assertEqual(statuses, {200})
 
-    def test_bucket_is_per_host(self) -> None:
+    def test_the_rate_is_enforced_per_host(self) -> None:
+        """At 3/min the 4th read on one host is refused, while another host still reads."""
+        rates = {**MachineClientThrottle.THROTTLE_RATES, "machine_client": "3/min"}
+        with mock.patch.object(MachineClientThrottle, "THROTTLE_RATES", rates):
+            responses = [call(_ProbeView, NEW, host="busy.schools.test") for _ in range(4)]
+            statuses = [response.status_code for response in responses]
+            other = call(_ProbeView, NEW, host="quiet.schools.test").status_code
+        self.assertEqual(statuses, [200, 200, 200, 429])
+        self.assertEqual(other, 200)
+
+    def _keys(self, *hosts: str) -> set[str | None]:
         throttle = MachineClientThrottle()
         principal = MachinePrincipal(client="website-renderer", scopes=frozenset({SCOPE}))
         keys = set()
-        for host in ("a.schools.test", "b.schools.test", "A.schools.test "):
+        for host in hosts:
             request = _drf_request(APIRequestFactory().get("/", {"host": host}), principal)
             keys.add(throttle.get_cache_key(request, None))
-        self.assertEqual(len(keys), 2)
+        return keys
+
+    def test_bucket_is_per_host(self) -> None:
+        self.assertEqual(len(self._keys("a.schools.test", "b.schools.test")), 2)
+
+    def test_bucket_uses_the_normalised_host(self) -> None:
+        """Case, port and a trailing dot cannot split one host into several buckets."""
+        keys = self._keys(
+            "a.schools.test", "A.Schools.Test", "a.schools.test:3001", " a.schools.test. "
+        )
+        self.assertEqual(len(keys), 1)
+
+    def test_invalid_hosts_share_one_bucket(self) -> None:
+        self.assertEqual(len(self._keys("", "not a host", "evil.test/x", "a..b.test")), 1)
 
 
 class ClientIpTests(SimpleTestCase):

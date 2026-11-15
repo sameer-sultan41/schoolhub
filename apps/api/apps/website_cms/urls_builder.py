@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from django.conf import settings
 
+from apps.website_cms.context import bound_to
 from apps.website_cms.models import CustomDomain, CustomDomainStatus
-from core.tenancy.context import tenant_atomic
 from core.tenancy.models import Tenant
 
 
@@ -21,7 +21,7 @@ def platform_site_host(tenant: Tenant) -> str:
 
 def tenant_site_host(tenant: Tenant) -> str:
     """The primary active custom domain, else the platform subdomain."""
-    with tenant_atomic(tenant.pk):
+    with bound_to(tenant):
         primary = (
             CustomDomain.objects.alive()
             .filter(is_primary=True, status=CustomDomainStatus.ACTIVE)

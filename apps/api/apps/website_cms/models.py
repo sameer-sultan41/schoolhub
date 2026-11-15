@@ -471,12 +471,16 @@ class CustomDomain(TenantOwnedModel):
                 condition=models.Q(is_primary=True, deleted_at__isnull=True),
             ),
             models.CheckConstraint(
-                condition=models.Q(is_primary=False) | models.Q(status="active"),
+                condition=(models.Q(is_primary=False) | models.Q(status=CustomDomainStatus.ACTIVE)),
                 name="custom_domains_primary_is_active",
             ),
             models.CheckConstraint(
                 condition=models.Q(domain=Lower("domain")),
                 name="custom_domains_domain_lowercase",
+            ),
+            # The target of `custom_domain_routes`' composite foreign key (migration 0007).
+            models.UniqueConstraint(
+                fields=["id", "tenant"], name="custom_domains_unique_id_tenant"
             ),
         ]
 
@@ -490,7 +494,9 @@ class CustomDomainRoute(TimestampedModel):
     Platform scope: no RLS and not a `TenantOwnedModel`, because the lookup has no tenant to
     bind. It holds only active domains; services insert a row on activation and delete it on
     disable, failure or delete, in the same transaction. Rows are hard-deleted, never
-    soft-deleted. Every write filters by both `custom_domain_id` and `tenant_id`.
+    soft-deleted. Every write filters by both `custom_domain_id` and `tenant_id`, and a composite
+    foreign key `(custom_domain_id, tenant_id) -> custom_domains (id, tenant_id)` (migration 0007)
+    makes the database refuse a route whose tenant is not its domain's tenant.
     """
 
     domain = models.CharField(max_length=DOMAIN_MAX_LENGTH, unique=True)

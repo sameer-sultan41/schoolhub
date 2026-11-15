@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from django.db import IntegrityError, connection, transaction
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
-from apps.website_cms.hosts import normalise_host, resolve_host, tenant_hosts, website_status
+from apps.website_cms.context import TenantContextMismatch
+from apps.website_cms.hosts import resolve_host, tenant_hosts, website_status
 from apps.website_cms.models import CustomDomainRoute, CustomDomainStatus
 from apps.website_cms.tests.factories import (
     TenantFactory,
@@ -14,6 +16,7 @@ from apps.website_cms.tests.factories import (
 )
 from apps.website_cms.urls_builder import tenant_site_host, tenant_site_url
 from core.tenancy.context import tenant_context
+from core.tenancy.hosts import normalise_host
 from core.tenancy.models import Tenant
 
 PLATFORM = "schools.test"
@@ -73,6 +76,35 @@ class ResolveHostTests(TestCase):
         CustomDomainRoute.objects.filter(domain="active.example.org").delete()
         self.assertIsNone(resolve_host("active.example.org"))
 
+    def test_soft_deleted_route_never_resolves(self) -> None:
+        make_custom_domain(self.tenant, "gone.example.org", CustomDomainStatus.ACTIVE)
+        CustomDomainRoute.objects.filter(domain="gone.example.org").update(
+            deleted_at=timezone.now()
+        )
+        self.assertIsNone(resolve_host("gone.example.org"))
+        self.assertNotIn("gone.example.org", tenant_hosts(self.tenant))
+
+    def test_route_tenant_must_be_its_domains_tenant(self) -> None:
+        """The composite foreign key: no route can point tenant A's domain at tenant B."""
+        domain = make_custom_domain(self.tenant, "a.example.org", CustomDomainStatus.PENDING_DNS)
+        intruder = TenantFactory()
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            CustomDomainRoute.objects.create(
+                domain="a.example.org", tenant=intruder, custom_domain=domain
+            )
+            # The key is deferrable like Django's own; check it now, inside the savepoint.
+            connection.check_constraints()
+        self.assertIsNone(resolve_host("a.example.org"))
+
+    def test_route_for_its_own_tenant_is_accepted(self) -> None:
+        domain = make_custom_domain(self.tenant, "b.example.org", CustomDomainStatus.PENDING_DNS)
+        with transaction.atomic():
+            CustomDomainRoute.objects.create(
+                domain="b.example.org", tenant=self.tenant, custom_domain=domain
+            )
+            connection.check_constraints()
+        self.assertEqual(resolve_host("b.example.org"), self.tenant)
+
     def test_another_tenants_pending_claim_does_not_steal_the_host(self) -> None:
         make_custom_domain(self.tenant, "contested.example.org", CustomDomainStatus.ACTIVE)
         make_custom_domain(TenantFactory(), "contested.example.org", CustomDomainStatus.PENDING_DNS)
@@ -123,6 +155,15 @@ class WebsiteStatusTests(TestCase):
         self._settings(is_published=True, deleted_at=timezone.now())
         self.assertEqual(website_status(self.tenant), "unpublished")
 
+    def test_reuses_a_binding_to_the_same_tenant(self) -> None:
+        self._settings(is_published=True)
+        with tenant_context(self.tenant.id):
+            self.assertEqual(website_status(self.tenant), "live")
+
+    def test_refuses_while_another_tenant_is_bound(self) -> None:
+        with tenant_context(TenantFactory().id), self.assertRaises(TenantContextMismatch):
+            website_status(self.tenant)
+
     def test_another_tenants_site_does_not_count(self) -> None:
         other = TenantFactory()
         with tenant_context(other.id):
@@ -162,6 +203,17 @@ class TenantSiteHostTests(TestCase):
             TenantFactory(), "www.other.org", CustomDomainStatus.ACTIVE, is_primary=True
         )
         self.assertEqual(tenant_site_host(self.tenant), "greenfield.schools.test")
+
+    def test_site_host_refuses_while_another_tenant_is_bound(self) -> None:
+        with tenant_context(TenantFactory().id), self.assertRaises(TenantContextMismatch):
+            tenant_site_host(self.tenant)
+
+    def test_site_host_reuses_a_binding_to_the_same_tenant(self) -> None:
+        make_custom_domain(
+            self.tenant, "www.greenfield.org", CustomDomainStatus.ACTIVE, is_primary=True
+        )
+        with tenant_context(self.tenant.id):
+            self.assertEqual(tenant_site_host(self.tenant), "www.greenfield.org")
 
     @override_settings(DASHBOARD_URL_SCHEME="http", WEBSITE_URL_PORT="3001")
     def test_dev_url_carries_the_renderer_port(self) -> None:

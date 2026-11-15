@@ -62,3 +62,19 @@ class ThrottleRateTests(SimpleTestCase):
             with self.subTest(throttle=throttle.__name__):
                 self.assertNotIn("rate", vars(throttle))
                 self.assertEqual(throttle().get_rate(), DEFAULT_RATES[throttle.scope])
+
+
+class NumProxiesWiringTests(SimpleTestCase):
+    """`NUM_PROXIES` (env, base.py) reaches DRF, whose `get_ident` every per-IP throttle uses."""
+
+    def test_drf_reads_the_num_proxies_setting(self) -> None:
+        from rest_framework.settings import api_settings
+
+        self.assertIn("NUM_PROXIES", settings.REST_FRAMEWORK)
+        self.assertEqual(settings.REST_FRAMEWORK["NUM_PROXIES"], settings.NUM_PROXIES)
+        self.assertEqual(api_settings.NUM_PROXIES, settings.NUM_PROXIES)
+
+    def test_base_settings_pass_the_variable_through(self) -> None:
+        from config.settings import base
+
+        self.assertIs(base.REST_FRAMEWORK["NUM_PROXIES"], base.NUM_PROXIES)
