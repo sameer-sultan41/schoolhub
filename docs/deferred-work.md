@@ -168,14 +168,28 @@ either this file or `project-status.md`.
     (`ALL_STAFF`), so only a custom role meets it. If one does, either grant the key or answer
     403 with a reason.
 
-- **`tenant`/`files`/`jobs`/`school-organization`/`dashboard` still have only the
-  original three service-module files** (`<domain>-service.ts`/`index.ts`, no
-  `-type`/`-constant`/`-helper`/`.schema`), not yet retrofitted to the five-file shape
-  [ADR-0019](decisions/0019-every-module-uses-the-five-file-shape.md) now requires for
-  every domain. `students`/`staff`/`auth` already have it. Bringing each of the five
-  remaining domains up to it is its own small PR, not bundled into ADR-0019's own PR —
-  pick it up the next time one of them is touched for an unrelated reason, or as a
-  standalone pass.
+- **`files`, `jobs` and `dashboard` still lack the full five-file service shape**
+  [ADR-0019](decisions/0019-every-module-uses-the-five-file-shape.md) requires.
+  `school-organization` has had all five files since before the School module PR (PR F), and
+  that PR deleted the dead `tenant` domain outright. Of the three left, `files` has
+  `-service`/`-constant`/`index.ts`, and `jobs` and `dashboard` only `-service`/`index.ts`.
+  Bringing each up is its own small PR: pick it up the next time one is touched for another
+  reason. Moving `fetchCampuses`/`fetchDepartments` out of `Services.dashboard` into
+  `Services.schoolOrganization` belongs with the `dashboard` one; the School module's own lists
+  already read through `Services.schoolOrganization`.
+- **The School module (PR F) leaves four things out.**
+  - The public website does not show the uploaded logo yet: it still reads
+    `branding.logo_url`, and `/school-settings`' `logo_url` is a short-lived signed link, so the
+    renderer needs its own logo resolution (a public file or a website-side signer).
+  - A duplicate campus or department code, or a duplicate house name, reaches the API's
+    `IntegrityError` handler as a generic 409, which the dialog shows as "That change conflicts
+    with the current data." The serializers need a validator naming the field.
+  - The campus head, department head and house master pickers (`head_staff_id`,
+    `house_master_staff_id`) and a campus's address are not on the forms; an edit leaves them as
+    stored.
+  - Two admins editing the holidays at once: each `PUT` sends the list the sender loaded, so the
+    later save drops the earlier one's change. The calendar is one document with no version to
+    check.
 
 - **Staff's wire types are hand-written structs, not generated `ApiSchemas["Staff"]`
   aliases.** `services/modules/staff/staff-type.ts`'s `StaffDirectoryRecord`,
