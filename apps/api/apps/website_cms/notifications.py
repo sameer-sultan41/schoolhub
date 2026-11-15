@@ -12,6 +12,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from apps.website_cms.models import ContactSubmission
+from apps.website_cms.permissions import INBOX_STAFF
 from core.notifications.catalog import registry as catalog
 from core.notifications.models import Notification, NotificationCategory, NotificationChannel
 from core.notifications.services import Recipient, notify
@@ -23,10 +24,13 @@ DOMAIN_ACTIVE = "website.domain-active"
 DOMAIN_FAILED = "website.domain-failed"
 
 CONTACT_SOURCE = "contact_submission"
-CONTACT_RECIPIENT_ROLES = ("reception", "school_admin")
+CONTACT_RECIPIENT_ROLES = INBOX_STAFF
 DOMAIN_RECIPIENT_ROLES = ("it_admin",)
 
 PREVIEW_LENGTH = 200
+CONTACT_TITLE_PREFIX = "New website message: "
+# `Notification.title` and the email subject hold 200 characters, prefix included.
+SUBJECT_LENGTH = 200 - len(CONTACT_TITLE_PREFIX)
 
 _CONTACT_VARS = {"contact.name", "contact.subject", "contact.preview", "school.name"}
 _DOMAIN_ACTIVE_VARS = {"domain.hostname", "school.name"}
@@ -44,7 +48,7 @@ for _channel in (NotificationChannel.IN_APP, NotificationChannel.EMAIL):
     templates.register(
         CONTACT_RECEIVED,
         channel=_channel,
-        subject="New website message: {{ contact.subject }}",
+        subject=CONTACT_TITLE_PREFIX + "{{ contact.subject }}",
         body=(
             "{{ contact.name }} sent a message through the {{ school.name }} website: "
             "{{ contact.preview }}"
@@ -92,11 +96,22 @@ for _channel in (NotificationChannel.IN_APP, NotificationChannel.EMAIL):
     )
 
 
+def one_line(text: str, limit: int) -> str:
+    """Whitespace collapsed to single spaces and cut to `limit` characters, ellipsis included."""
+    flat = " ".join(text.split())
+    return flat if len(flat) <= limit else f"{flat[: limit - 1]}…"
+
+
 def role_recipients(tenant_id: UUID, role_slugs: tuple[str, ...]) -> list[Recipient]:
     """The tenant's users holding any of the roles, once each."""
     user_ids = (
         UserRole.objects.filter(
-            role__slug__in=role_slugs, role__deleted_at__isnull=True, user__tenant_id=tenant_id
+            role__slug__in=role_slugs,
+            role__deleted_at__isnull=True,
+            deleted_at__isnull=True,
+            user__tenant_id=tenant_id,
+            user__is_active=True,
+            user__deleted_at__isnull=True,
         )
         .values_list("user_id", flat=True)
         .distinct()
@@ -116,16 +131,14 @@ def notify_contact_received(submission: ContactSubmission) -> None:
     recipients = role_recipients(submission.tenant_id, CONTACT_RECIPIENT_ROLES)
     if not recipients:
         return
-    preview = submission.message
-    if len(preview) > PREVIEW_LENGTH:
-        preview = f"{preview[: PREVIEW_LENGTH - 1]}…"
+    preview = one_line(submission.message, PREVIEW_LENGTH)
     notify(
         CONTACT_RECEIVED,
         tenant_id=submission.tenant_id,
         recipients=recipients,
         context={
             "contact.name": submission.name,
-            "contact.subject": submission.subject or "(no subject)",
+            "contact.subject": one_line(submission.subject or "(no subject)", SUBJECT_LENGTH),
             "contact.preview": preview,
             "school.name": submission.tenant.name,
         },
