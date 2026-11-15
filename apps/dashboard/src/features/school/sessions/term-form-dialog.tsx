@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { FormDialogLayout } from "@/components/form-dialog-layout";
-import { TextFormField } from "@/features/school/shared/text-form-field";
+import { FormTextField } from "@/components/form-text-field";
 import { useStructureFormMessages } from "@/features/school/shared/use-structure-form-messages";
 import { useFormDialogSubmit } from "@/hooks/use-form-dialog-submit";
 import { useInvalidateModule } from "@/hooks/use-invalidate-module";
@@ -96,15 +96,15 @@ export function TermFormDialog({
       submittingLabel={tCommon("saving")}
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <TextFormField form={form} name="name" label={t("fields.name")} maxLength={TERM_NAME_MAX} />
-        <TextFormField
+        <FormTextField form={form} name="name" label={t("fields.name")} maxLength={TERM_NAME_MAX} />
+        <FormTextField
           form={form}
           name="sequence"
           label={t("terms.fields.sequence")}
           description={t("terms.form.sequenceHint")}
         />
-        <TextFormField form={form} name="start_date" type="date" label={t("fields.startDate")} />
-        <TextFormField form={form} name="end_date" type="date" label={t("fields.endDate")} />
+        <FormTextField form={form} name="start_date" type="date" label={t("fields.startDate")} />
+        <FormTextField form={form} name="end_date" type="date" label={t("fields.endDate")} />
       </div>
     </FormDialogLayout>
   );

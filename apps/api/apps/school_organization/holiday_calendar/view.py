@@ -17,7 +17,7 @@ from rest_framework.views import APIView
 
 from apps.school_organization import calendar
 from apps.school_organization.holiday_calendar.serializers import HolidayCalendarSerializer
-from apps.school_organization.tenant_settings import get_settings_row
+from apps.school_organization.tenant_settings import lock_settings_row
 from core.api.permissions import RequiresModuleFeature
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
@@ -66,24 +66,25 @@ class HolidayCalendarView(TenantScopedViewSetMixin, APIView):
         serializer.is_valid(raise_exception=True)
         changes = serializer.validated_data
 
-        settings_row = get_settings_row(request)
-        before = dict(settings_row.academic or {})
-        academic = dict(before)
-
-        if "working_days" in changes:
-            academic["working_days"] = changes["working_days"]
-        if "holidays" in changes:
-            academic["holidays"] = [
-                {
-                    "start_date": entry["start_date"].isoformat(),
-                    "end_date": entry["end_date"].isoformat(),
-                    "name": entry["name"],
-                    "campus_id": str(entry["campus_id"]) if entry.get("campus_id") else None,
-                }
-                for entry in changes["holidays"]
-            ]
-
         with transaction.atomic():
+            # Locked, so a concurrent write to another `academic` key isn't saved over.
+            settings_row = lock_settings_row(tenant_id=request.tenant.pk, actor_id=request.user.pk)
+            before = dict(settings_row.academic or {})
+            academic = dict(before)
+
+            if "working_days" in changes:
+                academic["working_days"] = changes["working_days"]
+            if "holidays" in changes:
+                academic["holidays"] = [
+                    {
+                        "start_date": entry["start_date"].isoformat(),
+                        "end_date": entry["end_date"].isoformat(),
+                        "name": entry["name"],
+                        "campus_id": str(entry["campus_id"]) if entry.get("campus_id") else None,
+                    }
+                    for entry in changes["holidays"]
+                ]
+
             settings_row.academic = academic
             settings_row.updated_by = request.user.pk
             settings_row.save(update_fields=["academic", "updated_by", "updated_at"])

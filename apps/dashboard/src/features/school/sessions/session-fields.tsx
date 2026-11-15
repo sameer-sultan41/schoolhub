@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import type { UseFormReturn } from "react-hook-form";
 
-import { TextFormField } from "@/features/school/shared/text-form-field";
+import { FormTextField } from "@/components/form-text-field";
 import { SESSION_NAME_MAX } from "@/services/modules/school-organization/school-organization-constant";
 import type { SessionFormValues } from "@/services/modules/school-organization/school-organization.schema";
 
@@ -13,7 +13,7 @@ export function SessionFields({ form }: { form: UseFormReturn<SessionFormValues>
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <div className="sm:col-span-2">
-        <TextFormField
+        <FormTextField
           form={form}
           name="name"
           label={t("fields.name")}
@@ -21,8 +21,8 @@ export function SessionFields({ form }: { form: UseFormReturn<SessionFormValues>
           placeholder={t("sessions.form.namePlaceholder")}
         />
       </div>
-      <TextFormField form={form} name="start_date" type="date" label={t("fields.startDate")} />
-      <TextFormField form={form} name="end_date" type="date" label={t("fields.endDate")} />
+      <FormTextField form={form} name="start_date" type="date" label={t("fields.startDate")} />
+      <FormTextField form={form} name="end_date" type="date" label={t("fields.endDate")} />
     </div>
   );
 }

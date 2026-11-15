@@ -8,7 +8,8 @@ import { toast } from "sonner";
 
 import { FormDialogLayout } from "@/components/form-dialog-layout";
 import { FormSelectField } from "@/components/form-select-field";
-import { SwitchFormField, TextFormField } from "@/features/school/shared/text-form-field";
+import { FormSwitchField } from "@/components/form-switch-field";
+import { FormTextField } from "@/components/form-text-field";
 import { useStructureFormMessages } from "@/features/school/shared/use-structure-form-messages";
 import { useFormDialogSubmit } from "@/hooks/use-form-dialog-submit";
 import { useInvalidateModule } from "@/hooks/use-invalidate-module";
@@ -93,13 +94,13 @@ export function DepartmentFormDialog({ open, onOpenChange, record }: DepartmentF
       submittingLabel={tCommon("saving")}
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <TextFormField
+        <FormTextField
           form={form}
           name="name"
           label={t("fields.name")}
           maxLength={DEPARTMENT_NAME_MAX}
         />
-        <TextFormField
+        <FormTextField
           form={form}
           name="code"
           label={t("fields.code")}
@@ -122,13 +123,13 @@ export function DepartmentFormDialog({ open, onOpenChange, record }: DepartmentF
           emptyOption={{ value: ALL_CAMPUSES_OPTION, label: t("allCampuses") }}
         />
       </div>
-      <TextFormField
+      <FormTextField
         form={form}
         name="description"
         label={t("departments.fields.description")}
         maxLength={DEPARTMENT_DESCRIPTION_MAX}
       />
-      <SwitchFormField
+      <FormSwitchField
         form={form}
         name="is_active"
         label={t("fields.isActive")}

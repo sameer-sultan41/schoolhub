@@ -258,7 +258,10 @@ response shape changed anywhere in the module.
   sees the school.
 - `PATCH /school-settings` lives in `school_settings/services.py`. The audited `before`/`after`
   (`services.represent`) carry `name` and `logo_file_id` and never the signed `logo_url`, which
-  would change on every read.
+  would change on every read. It reads the settings row under `SELECT ... FOR UPDATE`
+  (`tenant_settings.lock_settings_row`, which the `/holiday-calendar` PUT and the attendance
+  settings take too) and saves only the columns it changed, so an overlapping write to
+  `academic` or `ai` is neither lost nor reverted.
 - `Tenant.name` has two writers: this `PATCH`, and the platform console's tenant `PATCH`. The last
   write wins, and both are audited. A billing legal name, if one is ever needed, is a separate
   field.
@@ -287,7 +290,8 @@ API enforces either way.
   swatch), timezone, language and currency. The logo is sent only when it changed, and a cleared
   logo is sent as `null`. The colour's server error, which the API nests under
   `branding.primary_color`, lands under the colour input. A rename stales `/auth/me`, which names
-  the school.
+  the school. Without `school.settings.update` every control is disabled (the logo picker
+  included, so a viewer can't upload) and Save and Remove logo are hidden.
 - **Campuses, Departments, Houses** (`features/school/{campuses,departments,houses}/`): each a
   server-paged list with search, status (and for departments campus and type) filters in the URL,
   an add/edit dialog on `FormDialogLayout` + `useFormDialogSubmit`, and `RowEditRemoveActions`. The
@@ -317,12 +321,13 @@ API enforces either way.
   one day is picked) and the holidays in date order. Each holiday add, edit or remove `PUT`s the
   whole list with the one change, since the calendar is one document. DRF keys a list entry's
   error by index (`holidays.2.end_date`), so the dialog maps its own entry's errors onto its
-  inputs.
+  inputs. Removing a holiday says its days become school days again, not the structure
+  records' "deactivate it instead".
 - Each section is one exported unit (`CampusesSection`, `SessionsSection`, `ClassesSection`,
   `SubjectsSection`, `DepartmentsSection`, `HousesSection`, `ProfileSection`, `CalendarSection`):
-  toolbar, list and dialogs, each dialog mounted only while
-  open. The `/school/*` pages wrap them in the shell's `Container`, and the onboarding wizard
-  (PR H) embeds the same units rather than forms of its own.
+  toolbar, list and dialogs, each dialog mounted only while open. The `/school/*` pages wrap
+  them in the shell's `Container`, and the onboarding wizard (PR H) embeds the same units rather
+  than forms of its own.
 - Every structure write invalidates the `school-organization` query module, which the reference
   pickers other screens use (`useCampuses` and the rest) live under too.
 - Tests: Jest per section (`features/school/**/__tests__/`), including each dialog's server field

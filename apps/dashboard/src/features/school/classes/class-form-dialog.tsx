@@ -7,7 +7,8 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { FormDialogLayout } from "@/components/form-dialog-layout";
-import { SwitchFormField, TextFormField } from "@/features/school/shared/text-form-field";
+import { FormSwitchField } from "@/components/form-switch-field";
+import { FormTextField } from "@/components/form-text-field";
 import { useStructureFormMessages } from "@/features/school/shared/use-structure-form-messages";
 import { useFormDialogSubmit } from "@/hooks/use-form-dialog-submit";
 import { useInvalidateModule } from "@/hooks/use-invalidate-module";
@@ -83,27 +84,27 @@ export function ClassFormDialog({ open, onOpenChange, record }: ClassFormDialogP
       submittingLabel={tCommon("saving")}
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <TextFormField
+        <FormTextField
           form={form}
           name="name"
           label={t("fields.name")}
           maxLength={CLASS_NAME_MAX}
           placeholder={t("classes.form.namePlaceholder")}
         />
-        <TextFormField
+        <FormTextField
           form={form}
           name="code"
           label={t("fields.code")}
           maxLength={CLASS_CODE_MAX}
         />
-        <TextFormField
+        <FormTextField
           form={form}
           name="level"
           label={t("classes.fields.level")}
           description={t("classes.form.levelHint")}
         />
       </div>
-      <SwitchFormField
+      <FormSwitchField
         form={form}
         name="is_active"
         label={t("fields.isActive")}

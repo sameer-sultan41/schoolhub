@@ -63,15 +63,9 @@ class SchoolSettingsView(TenantScopedViewSetMixin, APIView):
         serializer = SchoolSettingsUpdateSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
 
-        settings_row = get_settings_row(request)
-        before = services.represent(request.tenant, settings_row)
-        services.update_school_settings(
-            tenant=request.tenant,
-            settings_row=settings_row,
-            changes=serializer.validated_data,
-            actor_id=request.user.pk,
+        settings_row, before, after = services.update_school_settings(
+            tenant=request.tenant, changes=serializer.validated_data, actor_id=request.user.pk
         )
-        after = services.represent(request.tenant, settings_row)
         record_audit(request, "update", settings_row, before=before, after=after)
         return ActionResponse.ok(
             self._response(request, settings_row), message="School settings updated."

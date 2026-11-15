@@ -18,9 +18,9 @@ import { useWatch, type FieldValues, type Path, type UseFormReturn } from "react
 import { getInitials, stableSignedUrl } from "@/lib/helpers";
 import { Services } from "@/services";
 
-/** The minimal shape `PhotoUploadField` needs from any host form — both
- * `StudentFormValues` and `GuardianFormValues` satisfy this already, since both use the
- * API's own snake_case field names directly (Phase 1's established convention). */
+/** The person-photo shape: a host form with it may leave out `fileIdField` and `fallbackName`
+ * (both `StudentFormValues` and `GuardianFormValues` satisfy it, using the API's own
+ * snake_case field names, Phase 1's convention). Any other form must pass both. */
 export interface PhotoUploadFieldValues extends FieldValues {
   first_name: string;
   last_name: string;
@@ -46,16 +46,25 @@ export interface PhotoUploadFieldProps<TFieldValues extends FieldValues> {
    * stable (pass a `useState` setter): it is an effect dependency below, and a new
    * identity every render would re-run that effect's cleanup mid-upload. */
   onUploadingChange: (uploading: boolean) => void;
-  /** The form field the uploaded file's id is stored in. Defaults to `photo_file_id`. */
+  /** The form field the uploaded file's id is stored in. Defaults to `photo_file_id`;
+   * required for a form that isn't `PhotoUploadFieldValues` (`NamedFileFieldProps`). */
   fileIdField?: Path<TFieldValues>;
   /** The preview's fallback text, for a form with no `first_name`/`last_name` (a school's
-   * logo); defaults to their initials. */
+   * logo); defaults to their initials, and is required where `fileIdField` is. */
   fallbackName?: string;
   /** The field's label; defaults to "Photo". */
   label?: string;
   /** The picker's `accept` list; defaults to JPEG and PNG. */
   accept?: string;
 }
+
+/** A form that isn't `PhotoUploadFieldValues` has neither default, so it must name its file
+ * field and the preview's fallback. Tuple-wrapped so a union form isn't split. */
+export type NamedFileFieldProps<TFieldValues extends FieldValues> = [TFieldValues] extends [
+  PhotoUploadFieldValues,
+]
+  ? object
+  : Required<Pick<PhotoUploadFieldProps<TFieldValues>, "fileIdField" | "fallbackName">>;
 
 const DEFAULT_FILE_ID_FIELD = "photo_file_id";
 const DEFAULT_ACCEPT = "image/jpeg,image/png";
@@ -72,18 +81,21 @@ const DEFAULT_ACCEPT = "image/jpeg,image/png";
  * upload is in flight" is lifted, through `onUploadingChange`, because the dialog's Save
  * button needs it.
  */
-export function PhotoUploadField<TFieldValues extends FieldValues>({
-  form,
-  uploadPurpose,
-  savedPhotoFileId,
-  savedPhotoUrl,
-  onUploadStart,
-  onUploadingChange,
-  fileIdField = DEFAULT_FILE_ID_FIELD as Path<TFieldValues>,
-  fallbackName,
-  label,
-  accept = DEFAULT_ACCEPT,
-}: PhotoUploadFieldProps<TFieldValues>) {
+export function PhotoUploadField<TFieldValues extends FieldValues>(
+  props: PhotoUploadFieldProps<TFieldValues> & NamedFileFieldProps<TFieldValues>,
+) {
+  const {
+    form,
+    uploadPurpose,
+    savedPhotoFileId,
+    savedPhotoUrl,
+    onUploadStart,
+    onUploadingChange,
+    fileIdField = DEFAULT_FILE_ID_FIELD as Path<TFieldValues>,
+    fallbackName,
+    label,
+    accept = DEFAULT_ACCEPT,
+  }: PhotoUploadFieldProps<TFieldValues> = props;
   const t = useTranslations("common.photoUpload");
   const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "error">("idle");

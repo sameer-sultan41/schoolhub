@@ -4,14 +4,14 @@ import { useQuery } from "@tanstack/react-query";
 
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
+import { SCHOOL_ORGANIZATION_QUERY_MODULE } from "@/services/modules/school-organization/school-organization-constant";
 import {
   STAFF_QUERY_MODULE,
   TEACHING_OPTIONS_RESOURCE,
 } from "@/services/modules/staff/staff-constant";
 import { toStaffOptions } from "@/services/modules/staff/staff-helper";
 
-/** The query-key module and resource the term list lives under. */
-const SCHOOL_ORGANIZATION_QUERY_MODULE = "school-organization";
+/** The query-key resource the term list lives under. */
 const TERMS_RESOURCE = "terms";
 
 /**
@@ -34,7 +34,7 @@ export interface ActivityReferenceDataOptions extends ReferenceDataOptions {
 export function useCampuses({ isActive, enabled = true }: ActivityReferenceDataOptions = {}) {
   const params = isActive === undefined ? undefined : { isActive };
   return useQuery({
-    queryKey: queryKeys.list("school-organization", "campuses", params),
+    queryKey: queryKeys.list(SCHOOL_ORGANIZATION_QUERY_MODULE, "campuses", params),
     queryFn: () =>
       params ? Services.dashboard.fetchCampuses(params) : Services.dashboard.fetchCampuses(),
     enabled,
@@ -44,7 +44,7 @@ export function useCampuses({ isActive, enabled = true }: ActivityReferenceDataO
 /** Every department; the staff form reads the same list under the same key. */
 export function useDepartments({ enabled = true }: ReferenceDataOptions = {}) {
   return useQuery({
-    queryKey: queryKeys.list("school-organization", "departments"),
+    queryKey: queryKeys.list(SCHOOL_ORGANIZATION_QUERY_MODULE, "departments"),
     queryFn: () => Services.dashboard.fetchDepartments(),
     enabled,
   });
@@ -53,7 +53,7 @@ export function useDepartments({ enabled = true }: ReferenceDataOptions = {}) {
 /** Every academic session, newest first as the API orders them. */
 export function useAcademicSessions({ enabled = true }: ReferenceDataOptions = {}) {
   return useQuery({
-    queryKey: queryKeys.list("school-organization", "academic-sessions"),
+    queryKey: queryKeys.list(SCHOOL_ORGANIZATION_QUERY_MODULE, "academic-sessions"),
     queryFn: () => Services.schoolOrganization.fetchAcademicSessions(),
     enabled,
   });
@@ -63,7 +63,7 @@ export function useAcademicSessions({ enabled = true }: ReferenceDataOptions = {
 export function useClasses({ isActive, enabled = true }: ActivityReferenceDataOptions = {}) {
   const params = isActive === undefined ? undefined : { isActive };
   return useQuery({
-    queryKey: queryKeys.list("school-organization", "classes", params),
+    queryKey: queryKeys.list(SCHOOL_ORGANIZATION_QUERY_MODULE, "classes", params),
     queryFn: () => Services.schoolOrganization.fetchClasses(params),
     enabled,
   });
@@ -73,7 +73,7 @@ export function useClasses({ isActive, enabled = true }: ActivityReferenceDataOp
 export function useSubjects({ isActive, enabled = true }: ActivityReferenceDataOptions = {}) {
   const params = isActive === undefined ? undefined : { isActive };
   return useQuery({
-    queryKey: queryKeys.list("school-organization", "subjects", params),
+    queryKey: queryKeys.list(SCHOOL_ORGANIZATION_QUERY_MODULE, "subjects", params),
     queryFn: () => Services.schoolOrganization.fetchSubjects(params),
     enabled,
   });
@@ -86,7 +86,7 @@ export function useSubjects({ isActive, enabled = true }: ActivityReferenceDataO
 export function useSections(classId: string, { isActive }: { isActive?: boolean } = {}) {
   const params = isActive === undefined ? { classId } : { classId, isActive };
   return useQuery({
-    queryKey: queryKeys.list("school-organization", "sections", params),
+    queryKey: queryKeys.list(SCHOOL_ORGANIZATION_QUERY_MODULE, "sections", params),
     queryFn: () => Services.schoolOrganization.fetchSections(params),
     enabled: classId !== "",
   });

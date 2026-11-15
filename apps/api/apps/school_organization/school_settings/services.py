@@ -6,6 +6,7 @@ import uuid
 
 from django.db import transaction
 
+from apps.school_organization.tenant_settings import lock_settings_row
 from apps.school_organization.uploads import SCHOOL_LOGO
 from core.api.exceptions import DomainRuleViolation
 from core.files.models import File, FileStatus
@@ -56,20 +57,31 @@ def logo_url(settings_row: TenantSettings) -> str | None:
 
 @transaction.atomic
 def update_school_settings(
-    *, tenant: Tenant, settings_row: TenantSettings, changes: dict, actor_id: uuid.UUID
-) -> None:
-    """Apply a validated PATCH. `branding` merges into the stored keys, never replacing them,
-    so a form that edits one colour cannot wipe the rest."""
+    *, tenant: Tenant, changes: dict, actor_id: uuid.UUID
+) -> tuple[TenantSettings, dict, dict]:
+    """Apply a validated PATCH: `(row, before, after)`, the audited states.
+
+    `branding` merges into the stored keys, never replacing them, so a form that edits one
+    colour cannot wipe the rest. The row is read under a lock and only the changed columns
+    are written, so a concurrent PATCH, `/holiday-calendar` PUT or platform `ai` write is
+    neither lost nor reverted.
+    """
+    settings_row = lock_settings_row(tenant_id=tenant.pk, actor_id=actor_id)
+    before = represent(tenant, settings_row)
+    changed: list[str] = []
     if "logo_file_id" in changes:
         settings_row.logo_file = resolve_logo(
             changes["logo_file_id"], current_id=settings_row.logo_file_id
         )
+        changed.append("logo_file")
     if "branding" in changes:
         settings_row.branding = {**(settings_row.branding or {}), **changes["branding"]}
+        changed.append("branding")
     if "academic" in changes:
         settings_row.academic = changes["academic"]
+        changed.append("academic")
     settings_row.updated_by = actor_id
-    settings_row.save()
+    settings_row.save(update_fields=[*changed, "updated_by", "updated_at"])
 
     tenant_fields = [field for field in TENANT_FIELDS if field in changes]
     for field in tenant_fields:
@@ -77,3 +89,4 @@ def update_school_settings(
     if tenant_fields:
         tenant.updated_by = actor_id
         tenant.save(update_fields=[*tenant_fields, "updated_by", "updated_at"])
+    return settings_row, before, represent(tenant, settings_row)

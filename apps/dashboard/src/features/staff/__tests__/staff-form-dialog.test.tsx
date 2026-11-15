@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 import { Services } from "@/services";
 import type { StaffDetailRecord } from "@/services/modules/staff/staff-type";
-import { renderWithProviders, stubImageLoading } from "@/test-utils";
+import { renderWithProviders, stubImageLoading, stubObjectUrls } from "@/test-utils";
 
 import { StaffFormDialog } from "../staff-form-dialog";
 
@@ -134,22 +134,6 @@ async function chooseOption(
  * a change event instead, same as this suite treats the file input's change event. */
 function setDate(input: HTMLElement, value: string) {
   fireEvent.change(input, { target: { value } });
-}
-
-/** jsdom has no object URLs; the dialog creates one for a picked file's local preview.
- * Descriptors, not method references, so restoring trips no unbound-method lint. */
-function stubObjectUrls(url: string) {
-  const saved = ["createObjectURL", "revokeObjectURL"].map(
-    (name) => [name, Object.getOwnPropertyDescriptor(URL, name)] as const,
-  );
-  Object.defineProperty(URL, "createObjectURL", { value: jest.fn(() => url), configurable: true });
-  Object.defineProperty(URL, "revokeObjectURL", { value: jest.fn(), configurable: true });
-  return () => {
-    for (const [name, descriptor] of saved) {
-      if (descriptor) Object.defineProperty(URL, name, descriptor);
-      else Reflect.deleteProperty(URL, name);
-    }
-  };
 }
 
 async function fillRequiredCreateFields(user: ReturnType<typeof userEvent.setup>) {
@@ -431,9 +415,8 @@ describe("StaffFormDialog", () => {
 
     it("shows the newly picked photo instead of the saved one", async () => {
       const restoreImages = stubImageLoading();
+      // The restore unmounts the dialog first, as it revokes its object URL on unmount.
       const restoreObjectUrls = stubObjectUrls("blob:new-photo");
-      // Unmounted before the stubs are restored: the dialog revokes its object URL on unmount.
-      let unmount: (() => void) | undefined;
       try {
         mockReferenceData();
         mockFetchStaffById.mockResolvedValue(
@@ -442,9 +425,9 @@ describe("StaffFormDialog", () => {
         mockUploadFile.mockResolvedValue("file-2");
         const user = userEvent.setup();
 
-        ({ unmount } = renderWithProviders(
+        renderWithProviders(
           <StaffFormDialog open mode="edit" staffId="st-1" onOpenChange={jest.fn()} />,
-        ));
+        );
 
         const dialog = await screen.findByRole("dialog", { name: "Edit staff member" });
         await user.upload(
@@ -456,7 +439,6 @@ describe("StaffFormDialog", () => {
           expect(dialog.querySelector("img")).toHaveAttribute("src", "blob:new-photo");
         });
       } finally {
-        unmount?.();
         restoreObjectUrls();
         restoreImages();
       }

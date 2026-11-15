@@ -44,6 +44,14 @@ function renderSection() {
   return userEvent.setup();
 }
 
+/** Renders for the configurer and waits for Save: the fields stay disabled until `/auth/me`
+ * says the viewer may update. */
+async function renderEditableSection() {
+  const user = renderSection();
+  await screen.findByRole("button", { name: "Save" });
+  return user;
+}
+
 function fieldError(field: string, issue: string, status = 400) {
   return new ApiError({
     code: status === 422 ? "domain_rule_violation" : "validation_error",
@@ -65,7 +73,7 @@ describe("profile section", () => {
 
   it("saves the name, colour and currency, leaving the untouched logo out", async () => {
     settings.updateSchoolSettings.mockResolvedValue(schoolSettingsRecord({ name: "North" }));
-    const user = renderSection();
+    const user = await renderEditableSection();
 
     const name = await screen.findByLabelText("School name");
     await user.clear(name);
@@ -89,7 +97,7 @@ describe("profile section", () => {
 
   it("refreshes /auth/me after a rename, since it names the school", async () => {
     settings.updateSchoolSettings.mockResolvedValue(schoolSettingsRecord({ name: "North" }));
-    const user = renderSection();
+    const user = await renderEditableSection();
 
     const name = await screen.findByLabelText("School name");
     await user.clear(name);
@@ -105,7 +113,7 @@ describe("profile section", () => {
   it("shows the server's colour error under the colour, though it names branding", async () => {
     const issue = "Enter a hex colour such as #1E88E5.";
     settings.updateSchoolSettings.mockRejectedValue(fieldError("branding.primary_color", issue));
-    const user = renderSection();
+    const user = await renderEditableSection();
 
     const name = await screen.findByLabelText("School name");
     await user.type(name, " Trust");
@@ -120,8 +128,7 @@ describe("profile section", () => {
     const issue = "This file is not a ready school logo upload.";
     mockUploadFile.mockResolvedValue(LOGO_FILE_ID);
     settings.updateSchoolSettings.mockRejectedValue(fieldError("logo_file_id", issue, 422));
-    const view = renderWithProviders(<ProfileSection />);
-    const user = userEvent.setup();
+    const user = await renderEditableSection();
 
     await user.upload(
       await screen.findByLabelText("Logo"),
@@ -136,8 +143,6 @@ describe("profile section", () => {
     expect(settings.updateSchoolSettings).toHaveBeenCalledWith(
       expect.objectContaining({ logo_file_id: LOGO_FILE_ID }),
     );
-    // Unmount first: the field revokes its preview's object URL as it unmounts.
-    view.unmount();
     restoreUrls();
   });
 
@@ -146,7 +151,7 @@ describe("profile section", () => {
       schoolSettingsRecord({ logo_file_id: LOGO_FILE_ID }),
     );
     settings.updateSchoolSettings.mockResolvedValue(schoolSettingsRecord());
-    const user = renderSection();
+    const user = await renderEditableSection();
 
     await user.click(await screen.findByRole("button", { name: "Remove logo" }));
     await user.click(screen.getByRole("button", { name: "Save" }));
@@ -159,7 +164,7 @@ describe("profile section", () => {
   });
 
   it("refuses a currency that is not three letters before sending", async () => {
-    const user = renderSection();
+    const user = await renderEditableSection();
 
     const currency = await screen.findByLabelText("Currency");
     await user.clear(currency);
@@ -172,6 +177,9 @@ describe("profile section", () => {
 
   it("is read only, and says so, without the update key", async () => {
     mockFetchCurrentUser.mockResolvedValue(buildUser(["school.settings.view"]));
+    settings.fetchSchoolSettings.mockResolvedValue(
+      schoolSettingsRecord({ logo_file_id: LOGO_FILE_ID }),
+    );
 
     renderSection();
 
@@ -179,6 +187,11 @@ describe("profile section", () => {
       await screen.findByText("You can view these settings but not change them."),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
+    // No input takes an edit, and the logo picker can't start an upload.
+    expect(screen.getByLabelText("Logo")).toBeDisabled();
+    expect(screen.getByLabelText("School name")).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "Language" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Remove logo" })).not.toBeInTheDocument();
   });
 
   it("says when the profile can't be loaded", async () => {

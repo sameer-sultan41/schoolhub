@@ -2,6 +2,7 @@ import type { AuthenticatedUser, PermissionKey } from "@schoolhub/types";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   act,
+  cleanup,
   render,
   renderHook,
   type RenderHookOptions,
@@ -199,7 +200,9 @@ export function setMatchesMobile(matches: boolean) {
   }));
 }
 
-/** jsdom has no object URLs; a picked file's local preview needs one. */
+/** jsdom has no object URLs; a picked file's local preview needs one. The returned restore
+ * unmounts every rendered tree first: a preview revokes its URL as it unmounts, and RTL's own
+ * cleanup runs only after the test, by when jsdom has no `revokeObjectURL` to call. */
 export function stubObjectUrls(url: string) {
   const saved = ["createObjectURL", "revokeObjectURL"].map(
     (name) => [name, Object.getOwnPropertyDescriptor(URL, name)] as const,
@@ -207,6 +210,7 @@ export function stubObjectUrls(url: string) {
   Object.defineProperty(URL, "createObjectURL", { value: jest.fn(() => url), configurable: true });
   Object.defineProperty(URL, "revokeObjectURL", { value: jest.fn(), configurable: true });
   return () => {
+    cleanup();
     for (const [name, descriptor] of saved) {
       if (descriptor) Object.defineProperty(URL, name, descriptor);
       else Reflect.deleteProperty(URL, name);

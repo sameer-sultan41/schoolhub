@@ -8,7 +8,8 @@ import { toast } from "sonner";
 
 import { FormDialogLayout } from "@/components/form-dialog-layout";
 import { FormSelectField } from "@/components/form-select-field";
-import { SwitchFormField, TextFormField } from "@/features/school/shared/text-form-field";
+import { FormSwitchField } from "@/components/form-switch-field";
+import { FormTextField } from "@/components/form-text-field";
 import { useStructureFormMessages } from "@/features/school/shared/use-structure-form-messages";
 import { useFormDialogSubmit } from "@/hooks/use-form-dialog-submit";
 import { useInvalidateModule } from "@/hooks/use-invalidate-module";
@@ -104,21 +105,21 @@ export function SectionFormDialog({ open, onOpenChange, classId, record }: Secti
           placeholder={loadingOr(t("fields.campus"), campusesQuery.isPending)}
           options={campusesQuery.data ?? []}
         />
-        <TextFormField
+        <FormTextField
           form={form}
           name="name"
           label={t("fields.name")}
           maxLength={SECTION_NAME_MAX}
           placeholder={t("sections.form.namePlaceholder")}
         />
-        <TextFormField
+        <FormTextField
           form={form}
           name="capacity"
           label={t("sections.fields.capacity")}
           description={t("sections.form.capacityHint")}
         />
       </div>
-      <SwitchFormField
+      <FormSwitchField
         form={form}
         name="is_active"
         label={t("fields.isActive")}
