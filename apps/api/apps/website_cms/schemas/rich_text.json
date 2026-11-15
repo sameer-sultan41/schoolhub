@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Rich text document",
+  "type": "object",
+  "required": ["blocks"],
+  "additionalProperties": false,
+  "properties": {
+    "blocks": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/paragraph" },
+          { "$ref": "#/$defs/heading" },
+          { "$ref": "#/$defs/list" },
+          { "$ref": "#/$defs/quote" },
+          { "$ref": "#/$defs/image" }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "paragraph": {
+      "type": "object",
+      "required": ["type", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "paragraph" },
+        "text": { "type": "string", "maxLength": 5000 }
+      }
+    },
+    "heading": {
+      "type": "object",
+      "required": ["type", "level", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "heading" },
+        "level": { "enum": [2, 3, 4] },
+        "text": { "type": "string", "maxLength": 300 }
+      }
+    },
+    "list": {
+      "type": "object",
+      "required": ["type", "ordered", "items"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "list" },
+        "ordered": { "type": "boolean" },
+        "items": {
+          "type": "array",
+          "maxItems": 100,
+          "items": { "type": "string", "maxLength": 1000 }
+        }
+      }
+    },
+    "quote": {
+      "type": "object",
+      "required": ["type", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "quote" },
+        "text": { "type": "string", "maxLength": 2000 }
+      }
+    },
+    "image": {
+      "type": "object",
+      "required": ["type", "file_id"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "image" },
+        "file_id": { "type": "string", "minLength": 36, "maxLength": 36, "x-widget": "image" },
+        "alt": { "type": "string", "maxLength": 300 }
+      }
+    }
+  }
+}

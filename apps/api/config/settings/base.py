@@ -36,6 +36,11 @@ DASHBOARD_URL_PORT = ""
 # from the request's Host header. Empty here; prod.py requires it, dev and test set their own.
 API_PUBLIC_URL = env("API_PUBLIC_URL", default="")
 
+# The renderer's cache-invalidation webhook (website_cms.revalidation). Empty URL = disabled,
+# so a stack with no renderer never errors. The secret is the renderer's REVALIDATE_SECRET.
+WEBSITE_REVALIDATE_URL = env("WEBSITE_REVALIDATE_URL", default="")
+WEBSITE_REVALIDATE_SECRET = env("WEBSITE_REVALIDATE_SECRET", default="")
+
 # Encrypts each school's payment-gateway credentials (core.integrations.crypto): Fernet
 # keys, newest first. No default here, so production must set it (prod.py reads it from the
 # environment and fails at boot without it); dev.py and test.py supply their own.
@@ -117,6 +122,7 @@ MODULE_APPS = [
     "apps.fees_finance",
     "apps.communication",
     "apps.parent_portal",
+    "apps.website_cms",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + CORE_APPS + MODULE_APPS
@@ -405,6 +411,14 @@ SPECTACULAR_SETTINGS = {
         # A bare `value` would otherwise take the generic `ValueEnum`, which any later
         # `value` choice set anywhere on the platform would collide with.
         "AIFeedbackValueEnum": "core.ai.models.FEEDBACK_VALUES",
+        # website_cms: one `status` shared by pages, news, events and albums; `section_type`
+        # is the OpenAPI enum the renderer's registry is typed against (plan decision 6).
+        "WebsiteContentStatusEnum": "apps.website_cms.models.ContentStatus",
+        "WebsitePageTypeEnum": "apps.website_cms.models.PageType",
+        "NavigationMenuLocationEnum": "apps.website_cms.models.MenuLocation",
+        "SeoTargetTypeEnum": "apps.website_cms.models.SeoTargetType",
+        "NavigationTargetTypeEnum": "apps.website_cms.constants.NavTargetType",
+        "SectionTypeEnum": "apps.website_cms.constants.SectionType",
     },
 }
 

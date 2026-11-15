@@ -26,6 +26,9 @@ dependencies = [
     "qrcode[pil]>=8.2",
     # The AI gateway's provider SDK. Imported only by core/ai/providers/anthropic.py.
     "anthropic>=2.6.0",
+    # Validates website section content against the theme's JSON Schemas (website_cms),
+    # and live responses against the OpenAPI components in tests.
+    "jsonschema>=4.26",
 ]
 
 [dependency-groups]
@@ -38,9 +41,6 @@ dev = [
     # Serves the Swagger UI assets locally instead of from a CDN, which keeps the
     # docs page working offline and under a strict CSP.
     "drf-spectacular-sidecar",
-    # Validates live responses against the generated OpenAPI components in tests;
-    # declared rather than relied on through drf-spectacular's own dependency.
-    "jsonschema>=4.26",
 ]
 
 [tool.uv]

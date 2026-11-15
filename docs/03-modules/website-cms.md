@@ -48,6 +48,8 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 | `website.custom-domain.create` / `update` / `delete` | Bind/verify/remove custom domains | `it_admin`, `school_owner` |
 | `website.contact-submission.view` / `update` | Read and triage contact submissions | `reception`, `school_admin` |
 
+`website.page.view` is the CMS **read key for all website content** (pages, themes, settings, navigation, SEO, and later news, events and galleries): this table has no separate view key for those, and every `website.*` row above is registered in `permissions.py`. `website.public-content.view` is **not** a role permission: it is the machine scope of the renderer's platform token, which will be declared in `MACHINE_SCOPES` in `core/rbac/machine.py` when the public content API ships (PR C), so no grantable `Permission` row exists for it and no role can hold it. Once PR C lands, a JWT is refused on public routes and the machine token on CMS routes.
+
 ## 5. Main Features
 
 1. **Standard pages** — homepage, about school, principal message, departments, teachers, classes, admissions, contact (scope §11), each composed of theme-defined dynamic sections; unlimited additional custom pages.
@@ -135,10 +137,12 @@ Visitor submits admissions/contact form → rate-limit + spam checks → contact
 
 | Event | Recipients | Channels | Template ref |
 | ----- | ---------- | -------- | ------------ |
-| Contact form submitted | `reception`, `school_admin` | In-app, email | `web-contact-received` |
+| Contact form submitted | `reception`, `school_admin` | In-app, email | `website.contact-received` |
 | Admission form submitted | `admission_staff`, `reception` | In-app, email | `web-admission-enquiry` (owned by admissions) |
-| Custom domain verified / TLS issued | `it_admin` | In-app, email | `web-domain-active` |
-| Custom domain verification failing > 24 h | `it_admin` | Email | `web-domain-failed` |
+| Custom domain verified / TLS issued | `it_admin` | In-app, email | `website.domain-active` |
+| Custom domain verification failing > 24 h | `it_admin` | Email | `website.domain-failed` |
+
+Template codes follow the locked `module.event-name` vocabulary ([`docs/AGENTS.md`](../AGENTS.md)); `web-admission-enquiry` stays owned by admissions. None of these is sent yet (see §20).
 
 Channels and delivery behavior follow [`notifications.md`](../02-architecture/notifications.md).
 
@@ -175,12 +179,12 @@ Referenced (not owned): `custom_domains`, `tenant_settings`, `files` ([`tenancy.
 
 Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md). Two surfaces: authenticated CMS API and the read-only public content API consumed by the renderer via a scoped machine token.
 
-- CMS: `GET/POST /api/v1/website-pages` · `GET/PATCH/DELETE /api/v1/website-pages/{id}` · `POST /api/v1/website-pages/{id}:publish` / `:unpublish` · `PATCH /api/v1/website-pages/{id}/page-sections` (ordered bulk update)
-- `GET/POST/PATCH /api/v1/news-posts` (+ `:publish`) · `/api/v1/school-events` · `/api/v1/gallery-albums` · `/api/v1/gallery-albums/{id}/gallery-items`
-- `GET/PATCH /api/v1/website-settings` · `GET/PATCH /api/v1/navigation-menus` · `GET/PATCH /api/v1/seo-settings` · `GET /api/v1/themes`
-- `GET/POST /api/v1/custom-domains` · `POST /api/v1/custom-domains/{id}:verify` · `DELETE /api/v1/custom-domains/{id}`
-- `GET /api/v1/contact-submissions` (filters: `status`, `created_at__gte`) · `PATCH /api/v1/contact-submissions/{id}`
-- Public (renderer/visitor): `GET /api/v1/public/site` (resolved by domain) · `GET /api/v1/public/pages/{slug}` · `GET /api/v1/public/news-posts` · `POST /api/v1/public/contact-submissions` (rate-limited, `Idempotency-Key` supported) · `POST /api/v1/public/admission-forms` (proxies to admissions).
+- CMS, **built in PR A**: `GET/POST /api/v1/website-pages` (filters `status`, `page_type`, `search` on title and slug) · `GET/PATCH/DELETE /api/v1/website-pages/{id}` · `POST /api/v1/website-pages/{id}:publish` / `:unpublish` / `:archive` / `:preview` · `PATCH /api/v1/website-pages/{id}/page-sections` (ordered bulk replace, at most 50 sections)
+- Not yet built (PR B onward): `GET/POST/PATCH /api/v1/news-posts` (+ `:publish`) · `/api/v1/school-events` · `/api/v1/gallery-albums` · `/api/v1/gallery-albums/{id}/gallery-items`
+- Built in PR A: `GET/PATCH /api/v1/website-settings` · `GET /api/v1/navigation-menus` · `PATCH /api/v1/navigation-menus/{location}` (`header`, `footer_primary`, `footer_secondary`; at most 50 items, two levels, labels 1–60 characters) · `GET/PATCH /api/v1/seo-settings?target_type=&target_id=` (`site` takes no `target_id`; news, event and album targets are refused with `unsupported_target` until their resources ship) · `GET /api/v1/themes` (active themes, with their section schemas). Every route above is JWT-only; `GET`s read under `website.page.view`, writes under the keys in §4; `:preview` needs `website.page.view` and returns a URL on the tenant's own host.
+- Not yet built: `GET/POST /api/v1/custom-domains` · `POST /api/v1/custom-domains/{id}:verify` · `DELETE /api/v1/custom-domains/{id}`
+- Not yet built: `GET /api/v1/contact-submissions` (filters: `status`, `created_at__gte`) · `PATCH /api/v1/contact-submissions/{id}`
+- Not yet built (PR C onward), public (renderer/visitor): `GET /api/v1/public/site` (resolved by domain) · `GET /api/v1/public/pages/{slug}` · `GET /api/v1/public/news-posts` · `POST /api/v1/public/contact-submissions` (rate-limited, `Idempotency-Key` supported) · `POST /api/v1/public/admission-forms` (proxies to admissions).
 
 ## 17. Integration Requirements
 
@@ -205,3 +209,29 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - Publish scheduling, slug-rename redirects, CAPTCHA, RSS, and the analytics embed are **recommendations** pending client confirmation.
 - Multi-locale public content (full page translation vs. single-locale site) needs a client decision; the data model supports per-locale content.
 - Theme marketplace/pricing for future themes is a platform-admin commercial decision, out of initial scope.
+
+## 20. Implementation notes
+
+### Built (PR A: backend foundation)
+
+PR A of [`docs/superpowers/plans/2026-11-15-website-cms.md`](../superpowers/plans/2026-11-15-website-cms.md) ships the Django app, its models and the CMS endpoints for settings, pages, sections, navigation and SEO. Decisions are in [ADR-0038](../decisions/0038-website-content-blocks-and-schema-validated-sections.md).
+
+| Area | State |
+| ---- | ----- |
+| App layout | `apps/api/apps/website_cms/`, ADR-0010 resource packages: `settings/` (site settings, themes), `pages/` (pages and sections), `navigation/`, `seo/`, each with its serializers, services and tests. Root files hold what autodiscovery needs (`apps.py`, `permissions.py`, `features.py`, `uploads.py`) and the shared pieces: `models.py`, `constants.py`, `validation.py`, `media.py`, `visibility.py`, `revalidation.py`, `tasks.py`, `preview.py`, `urls_builder.py`, `defaults.py`, `errors.py`. Feature flag `module.website` (default off); upload purpose `website.media` (four image MIME types, 10 MB, module-gated) |
+| Tables | `website_settings`, `website_pages`, `page_sections`, `navigation_menus`, `seo_settings` (RLS, migration `0002`) and the platform-scope `themes`. Uniques are partial on `deleted_at IS NULL`; see [the entity doc](../05-database/entities/website-cms.md) |
+| Themes | Declared in code (`themes/default.json`, code `default`, version `1.0.0`: the renderer's 12 section types plus `rich_text` and `faq`) and synced into `themes` on `post_migrate` (`sync_themes_on_migrate`, the pattern of the feature-flag sync). A theme edit therefore needs no data migration (§5.10). `themes.section_types` is stored as `{type: {label, schema}}`, not a list. `section_type` is emitted as the `SectionTypeEnum` OpenAPI enum |
+| Section schemas | A constrained JSON Schema subset, checked by `Draft202012Validator`: `type`, `properties`, `required`, `items`, `enum`, `maxLength`, `minLength`, `minimum`, `maximum` (the last three mirror the renderer's zod bounds, which render nothing on a failed parse), `format: safe-url`, `$ref` to the rich-text schema, and an `x-widget` hint (`text`, `textarea`, `image`, `rich-text`, `url`) for the dashboard. A test fails if a theme uses anything else |
+| Rich text and links | Rich text is a block document (`{"blocks": [...]}`: paragraph, heading levels 2 to 4, list, quote, image), validated by `schemas/rich_text.json`, so no markup can be stored. Every URL field uses the `safe-url` format: an `https:` URL or a `/`-relative path (not `//` or `/\`), checked by an explicitly supplied `FormatChecker` that knows no other format. The same function backs `social_links`, header and footer links, `canonical_url` and navigation targets. Header and footer config has no `config_schema` yet, so a link there is checked only under a `url` or `href` key; the renderer must read links from those keys only |
+| File visibility | `core/files/visibility.py` holds the provider registry and `sync_file_visibility(file_ids)`: a file is `public` when any registered provider claims it as referenced by published content, else `private`. `core/` never imports the app (ADR-0013); `website_cms/visibility.py` registers the section and SEO-image providers in `ready()`. Services call it on publish, unpublish, section replace and SEO image change, over the union of old and new ids. A file another tenant owns, or one not `ready`, is refused with a 422 on `file_id`. Image values are 36 characters and rewritten as `str(UUID(value))` during validation, so stored content is always the lowercase hyphenated form the visibility pre-filter text-matches and the public-file route accepts. Providers receive the candidate ids and narrow their query to rows that mention them; they never scan every published row. `sync_file_visibility` writes with two bulk updates (claimed and not public, unclaimed and not private). Media URLs are built by `media.py` (`<name>_url`) for the public route PR C adds |
+| Empty text | Optional string columns (`description`, `locale`, `default_locale`, `analytics_id`, SEO `meta_*`, `canonical_url`, `robots`) are `NOT NULL DEFAULT ''`, never NULL (Django convention, ruff `DJ001`). An empty `locale` is the default locale, so the page slug unique is a plain unique; `seo_settings` keeps `nulls_distinct=False` for its nullable `target_id`. The API returns `""` for an unset text field; blank input clears it |
+| Positions | `page_sections` has a partial `unique(page, position)`, which Postgres cannot defer, so `replace_sections` writes in two passes: kept rows are parked at `+10000`, then written `0..n-1`; removed rows are soft-deleted |
+| Locking | Publish, unpublish, archive, delete and `replace_sections` first re-read the page under `select_for_update()` and decide on the locked row's status, so publish's "has a visible section" check and a concurrent section write serialise, and two first writes on an empty page cannot collide on the position index. `PATCH /website-settings` locks the settings row and writes only the changed columns; a menu `PATCH` validates under the menu's row lock |
+| Default site | `ensure_default_site(tenant)` creates the settings row (theme `default`, unpublished) and the eight standard pages as drafts. It runs only on the first write (`PATCH /website-settings`, first page create) and never on a `GET`: `GET /website-settings` answers an unsaved default with `exists: false`, and `GET /navigation-menus` returns empty menus. It is race-safe (savepoint create under `unique(tenant)`, re-read on `IntegrityError`) |
+| Revalidation | Any publish, unpublish or settings change queues one whole-tenant invalidation on commit (`queue_revalidation`). The Celery task `website_cms.revalidate_website` POSTs `{tenant_id, tags}` signed with HMAC-SHA256 over the raw body (header `x-schoolhub-signature`) to `WEBSITE_REVALIDATE_URL`, secret `WEBSITE_REVALIDATE_SECRET`. A 5xx or network error retries with backoff (at most 5); a 4xx is logged and not retried; an empty URL is a no-op and an empty secret with a URL fails closed. Host-scoped `tenant-host:<h>` tags are sent for settings changes, but the renderer ignores them until its route learns them (PR E) |
+| Preview | `POST /website-pages/{id}:preview` returns `<scheme>://<slug>.<PLATFORM_DOMAIN>/api/preview?token=...` with a signed token (`TimestampSigner`, salt `website-preview`, 600 s, payload `tenant_id:page_id`). The primary-custom-domain branch and the dev port arrive with PR C; the renderer's `/api/preview` is PR E |
+| Extra 422 rules | Beyond §11: archiving or deleting the homepage or a page a menu points at is `page_in_use`; creating a second `home` page is refused; `PATCH` cannot change `page_type` or `status` (use the actions); `homepage_page_id` can be reassigned but never cleared; deleting needs the page unpublished first (`unpublish_first`); publishing with no visible section is `no_visible_sections`. Slug, reserved-slug and uniqueness failures are 422 as well. Unpublishing a navigation target is allowed: the public read drops unpublished targets (PR C). A menu `PATCH` requires only *new* page targets to be published; a page target the stored menu already holds need only still exist, so an unpublished target never blocks an unrelated edit of its menu |
+| SEO structured data | `structured_data` is returned by `GET /seo-settings` but is read-only: a `PATCH` ignores it until the renderer defines a JSON-LD shape and its escaping (see [`deferred-work.md`](../deferred-work.md)) |
+| Theme switch | Changing the theme validates `theme_config` against the new theme but does not re-validate existing sections. A section whose type the new theme lacks stays stored, and the renderer skips unknown types ([`website-builder.md`](../02-architecture/website-builder.md) §5); such a section stops claiming its file, so the file goes private on the next sync |
+| Not yet shipped | PR B: news, events, galleries and their SEO targets, staff, department and class opt-ins. PR C: the public content API, machine-token auth, host resolution and the media redirect. PR D: custom domains. PR E onward: contact submissions and their notifications (the three template codes in §12), the renderer on the generated contract, the dashboard Website area. The deferred list is in [`deferred-work.md`](../deferred-work.md) |
+| Tests | `website_cms/tests/` (registry and theme subset, validation, default site, cross-tenant RLS), per-package `tests/` for settings, pages, navigation and SEO, and `core/files/tests/test_visibility.py` |

@@ -1,0 +1,357 @@
+{
+  "code": "default",
+  "name": "Default",
+  "version": "1.0.0",
+  "description": "The launch theme: a clean, accessible school site.",
+  "config_schema": {
+    "type": "object",
+    "properties": {}
+  },
+  "section_types": {
+    "hero": {
+      "label": "Hero",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "heading": {
+            "type": "string",
+            "maxLength": 200,
+            "x-widget": "text",
+            "minLength": 1
+          },
+          "subheading": {
+            "type": "string",
+            "maxLength": 300,
+            "x-widget": "text"
+          },
+          "image_file_id": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36,
+            "x-widget": "image"
+          },
+          "image_alt": {
+            "type": "string",
+            "maxLength": 200,
+            "x-widget": "text"
+          },
+          "cta_label": {
+            "type": "string",
+            "maxLength": 60,
+            "x-widget": "text"
+          },
+          "cta_href": {
+            "type": "string",
+            "maxLength": 500,
+            "format": "safe-url",
+            "x-widget": "url"
+          }
+        },
+        "required": [
+          "heading"
+        ]
+      }
+    },
+    "about_school": {
+      "label": "About the school",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "heading": {
+            "type": "string",
+            "maxLength": 200,
+            "x-widget": "text"
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 5000,
+            "x-widget": "textarea",
+            "minLength": 1
+          },
+          "image_file_id": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36,
+            "x-widget": "image"
+          },
+          "image_alt": {
+            "type": "string",
+            "maxLength": 200,
+            "x-widget": "text"
+          }
+        },
+        "required": [
+          "body"
+        ]
+      }
+    },
+    "principal_message": {
+      "label": "Principal's message",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "heading": {
+            "type": "string",
+            "maxLength": 200,
+            "x-widget": "text"
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 5000,
+            "x-widget": "textarea",
+            "minLength": 1
+          },
+          "principal_name": {
+            "type": "string",
+            "maxLength": 100,
+            "x-widget": "text"
+          },
+          "principal_title": {
+            "type": "string",
+            "maxLength": 100,
+            "x-widget": "text"
+          },
+          "photo_file_id": {
+            "type": "string",
+            "minLength": 36,
+            "maxLength": 36,
+            "x-widget": "image"
+          }
+        },
+        "required": [
+          "message"
+        ]
+      }
+    },
+    "departments_grid": {
+      "label": "Departments",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "heading": {
+            "type": "string",
+            "maxLength": 200,
+            "x-widget": "text"
+          },
+          "intro": {
+            "type": "string",
+            "maxLength": 1000,
+            "x-widget": "textarea"
+          }
+        }
+      }
+    },
+    "teachers_grid": {
+      "label": "Teachers",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "heading": {
+            "type": "string",
+            "maxLength": 200,
+            "x-widget": "text"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60
+          }
+        }
+      }
+    },
+    "classes_list": {
+      "label": "Classes",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "heading": {
+            "type": "string",
+            "maxLength": 200,
+            "x-widget": "text"
+          }
+        }
+      }
+    },
+    "admissions_cta": {
+      "label": "Admissions call to action",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "heading": {
+            "type": "string",
+            "maxLength": 200,
+            "x-widget": "text"
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 1000,
+            "x-widget": "textarea"
+          },
+          "cta_label": {
+            "type": "string",
+            "maxLength": 60,
+            "x-widget": "text"
+          },
+          "cta_href": {
+            "type": "string",
+            "maxLength": 500,
+            "format": "safe-url",
+            "x-widget": "url"
+          }
+        }
+      }
+    },
+    "events_list": {
+      "label": "Events",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "heading": {
+            "type": "string",
+            "maxLength": 200,
+            "x-widget": "text"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 24
+          }
+        }
+      }
+    },
+    "news_list": {
+      "label": "News",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "heading": {
+            "type": "string",
+            "maxLength": 200,
+            "x-widget": "text"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 24
+          }
+        }
+      }
+    },
+    "notice_board": {
+      "label": "Notice board",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "heading": {
+            "type": "string",
+            "maxLength": 200,
+            "x-widget": "text"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30
+          }
+        }
+      }
+    },
+    "gallery": {
+      "label": "Gallery",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "heading": {
+            "type": "string",
+            "maxLength": 200,
+            "x-widget": "text"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60
+          }
+        }
+      }
+    },
+    "contact_form": {
+      "label": "Contact form",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "heading": {
+            "type": "string",
+            "maxLength": 200,
+            "x-widget": "text"
+          },
+          "intro": {
+            "type": "string",
+            "maxLength": 1000,
+            "x-widget": "textarea"
+          },
+          "form": {
+            "type": "string",
+            "enum": [
+              "contact",
+              "admission_enquiry"
+            ]
+          }
+        }
+      }
+    },
+    "rich_text": {
+      "label": "Rich text",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "$ref": "rich_text.json",
+            "x-widget": "rich-text"
+          }
+        },
+        "required": [
+          "body"
+        ]
+      }
+    },
+    "faq": {
+      "label": "FAQ",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "heading": {
+            "type": "string",
+            "maxLength": 200,
+            "x-widget": "text"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "question": {
+                  "type": "string",
+                  "maxLength": 300,
+                  "x-widget": "text",
+                  "minLength": 1
+                },
+                "answer": {
+                  "type": "string",
+                  "maxLength": 2000,
+                  "x-widget": "textarea",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "question",
+                "answer"
+              ]
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      }
+    }
+  }
+}

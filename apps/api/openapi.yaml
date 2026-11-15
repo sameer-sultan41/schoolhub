@@ -7971,6 +7971,123 @@ paths:
               schema:
                 $ref: '#/components/schemas/ThreadRecipientListResponse'
           description: ''
+  /api/v1/navigation-menus:
+    get:
+      operationId: navigation_menus_list
+      description: |-
+        Applies tenant + record-scope narrowing and writes audit entries.
+
+        Subclasses declare::
+
+            required_feature = "module.students"   # optional; None means "core, ungated"
+            required_permission = "students.student.view"
+            required_permission_map = {"create": "students.student.create", ...}
+            scope_own_field = "user_id"      # optional, the simple `own` record scope
+            scope_campus_field = "student__campus_id"  # override on a table with no own campus_id
+
+        ``RequiresModuleFeature`` runs before ``HasPermissionKey`` deliberately —
+        docs/02-architecture/auth-and-rbac.md §2.3 orders the module-level check
+        ahead of the feature-level (permission-key) check, and DRF evaluates
+        ``permission_classes`` in list order.
+
+        ``scope_own_field`` is only the *fallback* for ``RecordScope.OWN``. When "own"
+        means more than one column — a guardian's own children, say — the model
+        declares a ``filter_owned_by_user`` classmethod and ``scope_queryset`` prefers
+        it, the same way ``filter_assigned_to_user`` already works for
+        ``RecordScope.ASSIGNED``. See ``apps.student_management.models.Student``.
+
+        ``scope_campus_field`` defaults to ``"campus_id"``, which only the parent
+        resource in a module tends to have — a child table (a student's guardians,
+        documents, …) has no such column of its own. Getting this wrong is not a
+        narrow leak: ``scope_queryset``'s ``RecordScope.CAMPUS`` branch filters on
+        whatever this names, so a table without that column raises ``FieldError``
+        for every campus-scoped user the moment they hit the endpoint — override it
+        per child viewset rather than leaving the default.
+
+        A route whose declaration is not the read key (an update, a delete, a colon
+        action) is scoped by the read key and then by its own, so its target must be
+        one the caller may read as well as act on. The read key is
+        ``required_permission`` unless ``scope_read_permission`` names another, and
+        ``scope_read_exempt_actions`` lists any action with no read requirement.
+      tags:
+      - navigation-menus
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NavigationMenu'
+          description: ''
+  /api/v1/navigation-menus/{location}:
+    patch:
+      operationId: navigation_menus_partial_update
+      description: |-
+        Applies tenant + record-scope narrowing and writes audit entries.
+
+        Subclasses declare::
+
+            required_feature = "module.students"   # optional; None means "core, ungated"
+            required_permission = "students.student.view"
+            required_permission_map = {"create": "students.student.create", ...}
+            scope_own_field = "user_id"      # optional, the simple `own` record scope
+            scope_campus_field = "student__campus_id"  # override on a table with no own campus_id
+
+        ``RequiresModuleFeature`` runs before ``HasPermissionKey`` deliberately —
+        docs/02-architecture/auth-and-rbac.md §2.3 orders the module-level check
+        ahead of the feature-level (permission-key) check, and DRF evaluates
+        ``permission_classes`` in list order.
+
+        ``scope_own_field`` is only the *fallback* for ``RecordScope.OWN``. When "own"
+        means more than one column — a guardian's own children, say — the model
+        declares a ``filter_owned_by_user`` classmethod and ``scope_queryset`` prefers
+        it, the same way ``filter_assigned_to_user`` already works for
+        ``RecordScope.ASSIGNED``. See ``apps.student_management.models.Student``.
+
+        ``scope_campus_field`` defaults to ``"campus_id"``, which only the parent
+        resource in a module tends to have — a child table (a student's guardians,
+        documents, …) has no such column of its own. Getting this wrong is not a
+        narrow leak: ``scope_queryset``'s ``RecordScope.CAMPUS`` branch filters on
+        whatever this names, so a table without that column raises ``FieldError``
+        for every campus-scoped user the moment they hit the endpoint — override it
+        per child viewset rather than leaving the default.
+
+        A route whose declaration is not the read key (an update, a delete, a colon
+        action) is scoped by the read key and then by its own, so its target must be
+        one the caller may read as well as act on. The read key is
+        ``required_permission`` unless ``scope_read_permission`` names another, and
+        ``scope_read_exempt_actions`` lists any action with no read requirement.
+      parameters:
+      - in: path
+        name: location
+        schema:
+          type: string
+        required: true
+      tags:
+      - navigation-menus
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedNavigationMenuUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedNavigationMenuUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedNavigationMenuUpdate'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NavigationMenu'
+          description: ''
   /api/v1/notices:
     get:
       operationId: notices_list
@@ -11256,6 +11373,134 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/seo-settings:
+    get:
+      operationId: seo_settings_retrieve
+      description: |-
+        Applies tenant + record-scope narrowing and writes audit entries.
+
+        Subclasses declare::
+
+            required_feature = "module.students"   # optional; None means "core, ungated"
+            required_permission = "students.student.view"
+            required_permission_map = {"create": "students.student.create", ...}
+            scope_own_field = "user_id"      # optional, the simple `own` record scope
+            scope_campus_field = "student__campus_id"  # override on a table with no own campus_id
+
+        ``RequiresModuleFeature`` runs before ``HasPermissionKey`` deliberately —
+        docs/02-architecture/auth-and-rbac.md §2.3 orders the module-level check
+        ahead of the feature-level (permission-key) check, and DRF evaluates
+        ``permission_classes`` in list order.
+
+        ``scope_own_field`` is only the *fallback* for ``RecordScope.OWN``. When "own"
+        means more than one column — a guardian's own children, say — the model
+        declares a ``filter_owned_by_user`` classmethod and ``scope_queryset`` prefers
+        it, the same way ``filter_assigned_to_user`` already works for
+        ``RecordScope.ASSIGNED``. See ``apps.student_management.models.Student``.
+
+        ``scope_campus_field`` defaults to ``"campus_id"``, which only the parent
+        resource in a module tends to have — a child table (a student's guardians,
+        documents, …) has no such column of its own. Getting this wrong is not a
+        narrow leak: ``scope_queryset``'s ``RecordScope.CAMPUS`` branch filters on
+        whatever this names, so a table without that column raises ``FieldError``
+        for every campus-scoped user the moment they hit the endpoint — override it
+        per child viewset rather than leaving the default.
+
+        A route whose declaration is not the read key (an update, a delete, a colon
+        action) is scoped by the read key and then by its own, so its target must be
+        one the caller may read as well as act on. The read key is
+        ``required_permission`` unless ``scope_read_permission`` names another, and
+        ``scope_read_exempt_actions`` lists any action with no read requirement.
+      parameters:
+      - in: query
+        name: target_id
+        schema:
+          type: string
+      - in: query
+        name: target_type
+        schema:
+          type: string
+        required: true
+      tags:
+      - seo-settings
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SeoSetting'
+          description: ''
+    patch:
+      operationId: seo_settings_partial_update
+      description: |-
+        Applies tenant + record-scope narrowing and writes audit entries.
+
+        Subclasses declare::
+
+            required_feature = "module.students"   # optional; None means "core, ungated"
+            required_permission = "students.student.view"
+            required_permission_map = {"create": "students.student.create", ...}
+            scope_own_field = "user_id"      # optional, the simple `own` record scope
+            scope_campus_field = "student__campus_id"  # override on a table with no own campus_id
+
+        ``RequiresModuleFeature`` runs before ``HasPermissionKey`` deliberately —
+        docs/02-architecture/auth-and-rbac.md §2.3 orders the module-level check
+        ahead of the feature-level (permission-key) check, and DRF evaluates
+        ``permission_classes`` in list order.
+
+        ``scope_own_field`` is only the *fallback* for ``RecordScope.OWN``. When "own"
+        means more than one column — a guardian's own children, say — the model
+        declares a ``filter_owned_by_user`` classmethod and ``scope_queryset`` prefers
+        it, the same way ``filter_assigned_to_user`` already works for
+        ``RecordScope.ASSIGNED``. See ``apps.student_management.models.Student``.
+
+        ``scope_campus_field`` defaults to ``"campus_id"``, which only the parent
+        resource in a module tends to have — a child table (a student's guardians,
+        documents, …) has no such column of its own. Getting this wrong is not a
+        narrow leak: ``scope_queryset``'s ``RecordScope.CAMPUS`` branch filters on
+        whatever this names, so a table without that column raises ``FieldError``
+        for every campus-scoped user the moment they hit the endpoint — override it
+        per child viewset rather than leaving the default.
+
+        A route whose declaration is not the read key (an update, a delete, a colon
+        action) is scoped by the read key and then by its own, so its target must be
+        one the caller may read as well as act on. The read key is
+        ``required_permission`` unless ``scope_read_permission`` names another, and
+        ``scope_read_exempt_actions`` lists any action with no read requirement.
+      parameters:
+      - in: query
+        name: target_id
+        schema:
+          type: string
+      - in: query
+        name: target_type
+        schema:
+          type: string
+        required: true
+      tags:
+      - seo-settings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSeoSetting'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSeoSetting'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSeoSetting'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SeoSetting'
+          description: ''
   /api/v1/staff:
     get:
       operationId: staff_list
@@ -14822,6 +15067,47 @@ paths:
               schema:
                 $ref: '#/components/schemas/Term'
           description: ''
+  /api/v1/themes:
+    get:
+      operationId: themes_list
+      description: '`GET /themes`: the platform theme catalogue (no tenant data, active
+        themes only).'
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - themes
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedThemeList'
+          description: ''
   /api/v1/timetable-slots:
     get:
       operationId: timetable_slots_list
@@ -15459,6 +15745,412 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FeeVoucher'
+          description: ''
+  /api/v1/website-pages:
+    get:
+      operationId: website_pages_list
+      description: '`website-pages`: pages with their ordered sections, publish workflow
+        and preview.'
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: page_type
+        schema:
+          type: string
+          enum:
+          - about
+          - admissions
+          - classes
+          - contact
+          - departments
+          - home
+          - principal_message
+          - standard
+          - teachers
+        description: |-
+          * `home` - Home
+          * `about` - About
+          * `principal_message` - Principal message
+          * `departments` - Departments
+          * `teachers` - Teachers
+          * `classes` - Classes
+          * `admissions` - Admissions
+          * `contact` - Contact
+          * `standard` - Standard
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - archived
+          - draft
+          - published
+        description: |-
+          * `draft` - Draft
+          * `published` - Published
+          * `archived` - Archived
+      tags:
+      - website-pages
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedWebsitePageListList'
+          description: ''
+    post:
+      operationId: website_pages_create
+      description: '`website-pages`: pages with their ordered sections, publish workflow
+        and preview.'
+      tags:
+      - website-pages
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebsitePageWrite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WebsitePageWrite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WebsitePageWrite'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebsitePageDetail'
+          description: ''
+  /api/v1/website-pages/{id}:
+    get:
+      operationId: website_pages_retrieve
+      description: '`website-pages`: pages with their ordered sections, publish workflow
+        and preview.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - website-pages
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebsitePageDetail'
+          description: ''
+    patch:
+      operationId: website_pages_partial_update
+      description: '`website-pages`: pages with their ordered sections, publish workflow
+        and preview.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - website-pages
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedWebsitePageUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedWebsitePageUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedWebsitePageUpdate'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebsitePageDetail'
+          description: ''
+    delete:
+      operationId: website_pages_destroy
+      description: '`website-pages`: pages with their ordered sections, publish workflow
+        and preview.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - website-pages
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/website-pages/{id}/page-sections:
+    patch:
+      operationId: website_pages_page_sections_partial_update
+      description: '`website-pages`: pages with their ordered sections, publish workflow
+        and preview.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: page_type
+        schema:
+          type: string
+          enum:
+          - about
+          - admissions
+          - classes
+          - contact
+          - departments
+          - home
+          - principal_message
+          - standard
+          - teachers
+        description: |-
+          * `home` - Home
+          * `about` - About
+          * `principal_message` - Principal message
+          * `departments` - Departments
+          * `teachers` - Teachers
+          * `classes` - Classes
+          * `admissions` - Admissions
+          * `contact` - Contact
+          * `standard` - Standard
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - archived
+          - draft
+          - published
+        description: |-
+          * `draft` - Draft
+          * `published` - Published
+          * `archived` - Archived
+      tags:
+      - website-pages
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedReplaceSections'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedReplaceSections'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedReplaceSections'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPageSectionList'
+          description: ''
+  /api/v1/website-pages/{id}:archive:
+    post:
+      operationId: website_pages_:archive_create
+      description: '`website-pages`: pages with their ordered sections, publish workflow
+        and preview.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - website-pages
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebsitePageDetail'
+          description: ''
+  /api/v1/website-pages/{id}:preview:
+    post:
+      operationId: website_pages_:preview_create
+      description: '`website-pages`: pages with their ordered sections, publish workflow
+        and preview.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - website-pages
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagePreview'
+          description: ''
+  /api/v1/website-pages/{id}:publish:
+    post:
+      operationId: website_pages_:publish_create
+      description: '`website-pages`: pages with their ordered sections, publish workflow
+        and preview.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - website-pages
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebsitePageDetail'
+          description: ''
+  /api/v1/website-pages/{id}:unpublish:
+    post:
+      operationId: website_pages_:unpublish_create
+      description: '`website-pages`: pages with their ordered sections, publish workflow
+        and preview.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - website-pages
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebsitePageDetail'
+          description: ''
+  /api/v1/website-settings:
+    get:
+      operationId: website_settings_retrieve
+      description: Singleton site settings. `GET` never writes; the first `PATCH`
+        creates the site.
+      tags:
+      - website-settings
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebsiteSettings'
+          description: ''
+    patch:
+      operationId: website_settings_partial_update
+      description: Singleton site settings. `GET` never writes; the first `PATCH`
+        creates the site.
+      tags:
+      - website-settings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedWebsiteSettings'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedWebsiteSettings'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedWebsiteSettings'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebsiteSettings'
           description: ''
 components:
   schemas:
@@ -21026,6 +21718,85 @@ components:
       - section_id
       - section_name
       - start_time
+    NavChild:
+      type: object
+      properties:
+        label:
+          type: string
+        target_type:
+          $ref: '#/components/schemas/NavigationTargetTypeEnum'
+        target:
+          type: string
+          nullable: true
+        children:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+      required:
+      - label
+      - target_type
+    NavItem:
+      type: object
+      properties:
+        label:
+          type: string
+        target_type:
+          $ref: '#/components/schemas/NavigationTargetTypeEnum'
+        target:
+          type: string
+          nullable: true
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/NavChild'
+      required:
+      - label
+      - target_type
+    NavigationMenu:
+      type: object
+      properties:
+        location:
+          allOf:
+          - $ref: '#/components/schemas/NavigationMenuLocationEnum'
+          readOnly: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/NavItem'
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - items
+      - location
+      - updated_at
+    NavigationMenuLocationEnum:
+      enum:
+      - header
+      - footer_primary
+      - footer_secondary
+      type: string
+      description: |-
+        * `header` - Header
+        * `footer_primary` - Footer (primary)
+        * `footer_secondary` - Footer (secondary)
+    NavigationTargetTypeEnum:
+      enum:
+      - page
+      - url
+      - news_index
+      - events_index
+      - gallery_index
+      type: string
+      description: |-
+        * `page` - Page
+        * `url` - External or relative URL
+        * `news_index` - News listing
+        * `events_index` - Events listing
+        * `gallery_index` - Gallery listing
     Notice:
       type: object
       properties:
@@ -21396,6 +22167,41 @@ components:
       - outstanding-aging
       type: string
       description: '* `outstanding-aging` - outstanding-aging'
+    PagePreview:
+      type: object
+      properties:
+        url:
+          type: string
+        expires_in:
+          type: integer
+      required:
+      - expires_in
+      - url
+    PageSection:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        section_type:
+          allOf:
+          - $ref: '#/components/schemas/SectionTypeEnum'
+          readOnly: true
+        position:
+          type: integer
+          readOnly: true
+        content:
+          readOnly: true
+        is_visible:
+          type: boolean
+          readOnly: true
+      required:
+      - content
+      - id
+      - is_visible
+      - position
+      - section_type
     PaginatedAcademicSessionList:
       type: object
       properties:
@@ -22215,6 +23021,27 @@ components:
                   nullable: true
                 page_size:
                   type: integer
+    PaginatedPageSectionList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageSection'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                page:
+                  type: integer
+                page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
+                  type: integer
     PaginatedPaymentList:
       type: object
       properties:
@@ -22740,6 +23567,27 @@ components:
                   nullable: true
                 page_size:
                   type: integer
+    PaginatedThemeList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Theme'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                page:
+                  type: integer
+                page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
+                  type: integer
     PaginatedThreadOversightList:
       type: object
       properties:
@@ -22802,6 +23650,27 @@ components:
                   type: string
                   nullable: true
                 page_size:
+                  type: integer
+    PaginatedWebsitePageListList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebsitePageList'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                page:
+                  type: integer
+                page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
                   type: integer
     PaperAssemblyAccepted:
       type: object
@@ -24256,6 +25125,13 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedNavigationMenuUpdate:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/NavItem'
     PatchedNotice:
       type: object
       properties:
@@ -24639,6 +25515,13 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedReplaceSections:
+      type: object
+      properties:
+        sections:
+          type: array
+          items:
+            $ref: '#/components/schemas/SectionInput'
     PatchedReportCard:
       type: object
       description: |-
@@ -24887,6 +25770,45 @@ components:
           type: string
           format: date-time
           readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedSeoSetting:
+      type: object
+      properties:
+        exists:
+          type: boolean
+          description: False for the unsaved default `GET` shows before the row exists.
+          readOnly: true
+        target_type:
+          allOf:
+          - $ref: '#/components/schemas/SeoTargetTypeEnum'
+          readOnly: true
+        target_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        meta_title:
+          type: string
+          maxLength: 70
+        meta_description:
+          type: string
+          maxLength: 170
+        og_image_file_id:
+          type: string
+          format: uuid
+          nullable: true
+        canonical_url:
+          type: string
+          maxLength: 500
+        robots:
+          type: string
+          maxLength: 50
+        structured_data:
+          readOnly: true
+          nullable: true
         updated_at:
           type: string
           format: date-time
@@ -25431,6 +26353,62 @@ components:
           type: string
           format: date-time
           readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedWebsitePageUpdate:
+      type: object
+      description: 'PATCH cannot change `page_type`: a page''s type fixes its role
+        on the site.'
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        slug:
+          type: string
+        locale:
+          type: string
+          maxLength: 10
+        show_in_search:
+          type: boolean
+    PatchedWebsiteSettings:
+      type: object
+      properties:
+        exists:
+          type: boolean
+          description: False for the unsaved default `GET` shows before the site exists.
+          readOnly: true
+        theme_id:
+          type: string
+          format: uuid
+        theme_code:
+          type: string
+          readOnly: true
+        theme_version:
+          type: string
+          readOnly: true
+        theme_config: {}
+        homepage_page_id:
+          type: string
+          format: uuid
+          nullable: true
+        is_published:
+          type: boolean
+        maintenance_mode:
+          type: boolean
+        header_config: {}
+        footer_config: {}
+        social_links:
+          type: array
+          items:
+            $ref: '#/components/schemas/SocialLink'
+        analytics_id:
+          type: string
+          maxLength: 60
+        default_locale:
+          type: string
+          maxLength: 10
         updated_at:
           type: string
           format: date-time
@@ -27324,6 +28302,55 @@ components:
       - id
       - name
       - updated_at
+    SectionInput:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        section_type:
+          $ref: '#/components/schemas/SectionTypeEnum'
+        content:
+          type: object
+          additionalProperties: {}
+        is_visible:
+          type: boolean
+          default: true
+      required:
+      - content
+      - section_type
+    SectionTypeEnum:
+      enum:
+      - hero
+      - about_school
+      - principal_message
+      - departments_grid
+      - teachers_grid
+      - classes_list
+      - admissions_cta
+      - events_list
+      - news_list
+      - notice_board
+      - gallery
+      - contact_form
+      - rich_text
+      - faq
+      type: string
+      description: |-
+        * `hero` - Hero
+        * `about_school` - About the school
+        * `principal_message` - Principal's message
+        * `departments_grid` - Departments
+        * `teachers_grid` - Teachers
+        * `classes_list` - Classes
+        * `admissions_cta` - Admissions call to action
+        * `events_list` - Events
+        * `news_list` - News
+        * `notice_board` - Notice board
+        * `gallery` - Gallery
+        * `contact_form` - Contact form
+        * `rich_text` - Rich text
+        * `faq` - FAQ
     SendResultsBack:
       type: object
       description: |-
@@ -27340,6 +28367,65 @@ components:
           maxLength: 500
       required:
       - reason
+    SeoSetting:
+      type: object
+      properties:
+        exists:
+          type: boolean
+          description: False for the unsaved default `GET` shows before the row exists.
+          readOnly: true
+        target_type:
+          allOf:
+          - $ref: '#/components/schemas/SeoTargetTypeEnum'
+          readOnly: true
+        target_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        meta_title:
+          type: string
+          maxLength: 70
+        meta_description:
+          type: string
+          maxLength: 170
+        og_image_file_id:
+          type: string
+          format: uuid
+          nullable: true
+        canonical_url:
+          type: string
+          maxLength: 500
+        robots:
+          type: string
+          maxLength: 50
+        structured_data:
+          readOnly: true
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - exists
+      - structured_data
+      - target_id
+      - target_type
+      - updated_at
+    SeoTargetTypeEnum:
+      enum:
+      - site
+      - page
+      - news_post
+      - school_event
+      - gallery_album
+      type: string
+      description: |-
+        * `site` - Site
+        * `page` - Page
+        * `news_post` - News post
+        * `school_event` - School event
+        * `gallery_album` - Gallery album
     SessionClone:
       type: object
       description: Input for ``POST /academic-sessions/{id}:clone`` — the new session's
@@ -27433,6 +28519,18 @@ components:
       - room_name
       - substitute_staff_id
       - substitute_staff_name
+    SocialLink:
+      type: object
+      properties:
+        platform:
+          type: string
+          maxLength: 50
+        url:
+          type: string
+          maxLength: 500
+      required:
+      - platform
+      - url
     Staff:
       type: object
       properties:
@@ -29174,6 +30272,38 @@ components:
       - sequence
       - start_date
       - updated_at
+    Theme:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        version:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        config_schema:
+          readOnly: true
+        section_types:
+          readOnly: true
+          description: 'Section catalogue keyed by type: {label, schema} per type.'
+      required:
+      - code
+      - config_schema
+      - description
+      - id
+      - name
+      - section_types
+      - version
     ThreadOversight:
       type: object
       description: |-
@@ -29816,6 +30946,211 @@ components:
           maxLength: 2000
       required:
       - reason
+    WebsiteContentStatusEnum:
+      enum:
+      - draft
+      - published
+      - archived
+      type: string
+      description: |-
+        * `draft` - Draft
+        * `published` - Published
+        * `archived` - Archived
+    WebsitePageDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+        page_type:
+          allOf:
+          - $ref: '#/components/schemas/WebsitePageTypeEnum'
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/WebsiteContentStatusEnum'
+          readOnly: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        locale:
+          type: string
+          readOnly: true
+        show_in_search:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        sections:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageSection'
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - locale
+      - page_type
+      - published_at
+      - sections
+      - show_in_search
+      - slug
+      - status
+      - title
+      - updated_at
+    WebsitePageList:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+        page_type:
+          allOf:
+          - $ref: '#/components/schemas/WebsitePageTypeEnum'
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/WebsiteContentStatusEnum'
+          readOnly: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        locale:
+          type: string
+          readOnly: true
+        show_in_search:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - locale
+      - page_type
+      - published_at
+      - show_in_search
+      - slug
+      - status
+      - title
+      - updated_at
+    WebsitePageTypeEnum:
+      enum:
+      - home
+      - about
+      - principal_message
+      - departments
+      - teachers
+      - classes
+      - admissions
+      - contact
+      - standard
+      type: string
+      description: |-
+        * `home` - Home
+        * `about` - About
+        * `principal_message` - Principal message
+        * `departments` - Departments
+        * `teachers` - Teachers
+        * `classes` - Classes
+        * `admissions` - Admissions
+        * `contact` - Contact
+        * `standard` - Standard
+    WebsitePageWrite:
+      type: object
+      description: Input for create and PATCH; slug rules live in the service (422s).
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        slug:
+          type: string
+        page_type:
+          $ref: '#/components/schemas/WebsitePageTypeEnum'
+        locale:
+          type: string
+          maxLength: 10
+        show_in_search:
+          type: boolean
+      required:
+      - slug
+      - title
+    WebsiteSettings:
+      type: object
+      properties:
+        exists:
+          type: boolean
+          description: False for the unsaved default `GET` shows before the site exists.
+          readOnly: true
+        theme_id:
+          type: string
+          format: uuid
+        theme_code:
+          type: string
+          readOnly: true
+        theme_version:
+          type: string
+          readOnly: true
+        theme_config: {}
+        homepage_page_id:
+          type: string
+          format: uuid
+          nullable: true
+        is_published:
+          type: boolean
+        maintenance_mode:
+          type: boolean
+        header_config: {}
+        footer_config: {}
+        social_links:
+          type: array
+          items:
+            $ref: '#/components/schemas/SocialLink'
+        analytics_id:
+          type: string
+          maxLength: 60
+        default_locale:
+          type: string
+          maxLength: 10
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - exists
+      - theme_code
+      - theme_version
+      - updated_at
     WithdrawRequest:
       type: object
       properties:

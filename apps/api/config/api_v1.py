@@ -22,4 +22,5 @@ urlpatterns = [
     path("", include("apps.fees_finance.urls")),
     path("", include("apps.communication.urls")),
     path("", include("apps.parent_portal.urls")),
+    path("", include("apps.website_cms.urls")),
 ]

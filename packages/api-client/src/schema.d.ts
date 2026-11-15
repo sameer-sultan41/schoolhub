@@ -3544,6 +3544,110 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/navigation-menus": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Applies tenant + record-scope narrowing and writes audit entries.
+         *
+         *     Subclasses declare::
+         *
+         *         required_feature = "module.students"   # optional; None means "core, ungated"
+         *         required_permission = "students.student.view"
+         *         required_permission_map = {"create": "students.student.create", ...}
+         *         scope_own_field = "user_id"      # optional, the simple `own` record scope
+         *         scope_campus_field = "student__campus_id"  # override on a table with no own campus_id
+         *
+         *     ``RequiresModuleFeature`` runs before ``HasPermissionKey`` deliberately —
+         *     docs/02-architecture/auth-and-rbac.md §2.3 orders the module-level check
+         *     ahead of the feature-level (permission-key) check, and DRF evaluates
+         *     ``permission_classes`` in list order.
+         *
+         *     ``scope_own_field`` is only the *fallback* for ``RecordScope.OWN``. When "own"
+         *     means more than one column — a guardian's own children, say — the model
+         *     declares a ``filter_owned_by_user`` classmethod and ``scope_queryset`` prefers
+         *     it, the same way ``filter_assigned_to_user`` already works for
+         *     ``RecordScope.ASSIGNED``. See ``apps.student_management.models.Student``.
+         *
+         *     ``scope_campus_field`` defaults to ``"campus_id"``, which only the parent
+         *     resource in a module tends to have — a child table (a student's guardians,
+         *     documents, …) has no such column of its own. Getting this wrong is not a
+         *     narrow leak: ``scope_queryset``'s ``RecordScope.CAMPUS`` branch filters on
+         *     whatever this names, so a table without that column raises ``FieldError``
+         *     for every campus-scoped user the moment they hit the endpoint — override it
+         *     per child viewset rather than leaving the default.
+         *
+         *     A route whose declaration is not the read key (an update, a delete, a colon
+         *     action) is scoped by the read key and then by its own, so its target must be
+         *     one the caller may read as well as act on. The read key is
+         *     ``required_permission`` unless ``scope_read_permission`` names another, and
+         *     ``scope_read_exempt_actions`` lists any action with no read requirement.
+         */
+        get: operations["navigation_menus_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/navigation-menus/{location}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description Applies tenant + record-scope narrowing and writes audit entries.
+         *
+         *     Subclasses declare::
+         *
+         *         required_feature = "module.students"   # optional; None means "core, ungated"
+         *         required_permission = "students.student.view"
+         *         required_permission_map = {"create": "students.student.create", ...}
+         *         scope_own_field = "user_id"      # optional, the simple `own` record scope
+         *         scope_campus_field = "student__campus_id"  # override on a table with no own campus_id
+         *
+         *     ``RequiresModuleFeature`` runs before ``HasPermissionKey`` deliberately —
+         *     docs/02-architecture/auth-and-rbac.md §2.3 orders the module-level check
+         *     ahead of the feature-level (permission-key) check, and DRF evaluates
+         *     ``permission_classes`` in list order.
+         *
+         *     ``scope_own_field`` is only the *fallback* for ``RecordScope.OWN``. When "own"
+         *     means more than one column — a guardian's own children, say — the model
+         *     declares a ``filter_owned_by_user`` classmethod and ``scope_queryset`` prefers
+         *     it, the same way ``filter_assigned_to_user`` already works for
+         *     ``RecordScope.ASSIGNED``. See ``apps.student_management.models.Student``.
+         *
+         *     ``scope_campus_field`` defaults to ``"campus_id"``, which only the parent
+         *     resource in a module tends to have — a child table (a student's guardians,
+         *     documents, …) has no such column of its own. Getting this wrong is not a
+         *     narrow leak: ``scope_queryset``'s ``RecordScope.CAMPUS`` branch filters on
+         *     whatever this names, so a table without that column raises ``FieldError``
+         *     for every campus-scoped user the moment they hit the endpoint — override it
+         *     per child viewset rather than leaving the default.
+         *
+         *     A route whose declaration is not the read key (an update, a delete, a colon
+         *     action) is scoped by the read key and then by its own, so its target must be
+         *     one the caller may read as well as act on. The read key is
+         *     ``required_permission`` unless ``scope_read_permission`` names another, and
+         *     ``scope_read_exempt_actions`` lists any action with no read requirement.
+         */
+        patch: operations["navigation_menus_partial_update"];
+        trace?: never;
+    };
     "/api/v1/notices": {
         parameters: {
             query?: never;
@@ -4930,6 +5034,94 @@ export interface paths {
         head?: never;
         /** @description Divisions of a class at a campus, with capacity (module doc §5.5). */
         patch: operations["sections_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/seo-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Applies tenant + record-scope narrowing and writes audit entries.
+         *
+         *     Subclasses declare::
+         *
+         *         required_feature = "module.students"   # optional; None means "core, ungated"
+         *         required_permission = "students.student.view"
+         *         required_permission_map = {"create": "students.student.create", ...}
+         *         scope_own_field = "user_id"      # optional, the simple `own` record scope
+         *         scope_campus_field = "student__campus_id"  # override on a table with no own campus_id
+         *
+         *     ``RequiresModuleFeature`` runs before ``HasPermissionKey`` deliberately —
+         *     docs/02-architecture/auth-and-rbac.md §2.3 orders the module-level check
+         *     ahead of the feature-level (permission-key) check, and DRF evaluates
+         *     ``permission_classes`` in list order.
+         *
+         *     ``scope_own_field`` is only the *fallback* for ``RecordScope.OWN``. When "own"
+         *     means more than one column — a guardian's own children, say — the model
+         *     declares a ``filter_owned_by_user`` classmethod and ``scope_queryset`` prefers
+         *     it, the same way ``filter_assigned_to_user`` already works for
+         *     ``RecordScope.ASSIGNED``. See ``apps.student_management.models.Student``.
+         *
+         *     ``scope_campus_field`` defaults to ``"campus_id"``, which only the parent
+         *     resource in a module tends to have — a child table (a student's guardians,
+         *     documents, …) has no such column of its own. Getting this wrong is not a
+         *     narrow leak: ``scope_queryset``'s ``RecordScope.CAMPUS`` branch filters on
+         *     whatever this names, so a table without that column raises ``FieldError``
+         *     for every campus-scoped user the moment they hit the endpoint — override it
+         *     per child viewset rather than leaving the default.
+         *
+         *     A route whose declaration is not the read key (an update, a delete, a colon
+         *     action) is scoped by the read key and then by its own, so its target must be
+         *     one the caller may read as well as act on. The read key is
+         *     ``required_permission`` unless ``scope_read_permission`` names another, and
+         *     ``scope_read_exempt_actions`` lists any action with no read requirement.
+         */
+        get: operations["seo_settings_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description Applies tenant + record-scope narrowing and writes audit entries.
+         *
+         *     Subclasses declare::
+         *
+         *         required_feature = "module.students"   # optional; None means "core, ungated"
+         *         required_permission = "students.student.view"
+         *         required_permission_map = {"create": "students.student.create", ...}
+         *         scope_own_field = "user_id"      # optional, the simple `own` record scope
+         *         scope_campus_field = "student__campus_id"  # override on a table with no own campus_id
+         *
+         *     ``RequiresModuleFeature`` runs before ``HasPermissionKey`` deliberately —
+         *     docs/02-architecture/auth-and-rbac.md §2.3 orders the module-level check
+         *     ahead of the feature-level (permission-key) check, and DRF evaluates
+         *     ``permission_classes`` in list order.
+         *
+         *     ``scope_own_field`` is only the *fallback* for ``RecordScope.OWN``. When "own"
+         *     means more than one column — a guardian's own children, say — the model
+         *     declares a ``filter_owned_by_user`` classmethod and ``scope_queryset`` prefers
+         *     it, the same way ``filter_assigned_to_user`` already works for
+         *     ``RecordScope.ASSIGNED``. See ``apps.student_management.models.Student``.
+         *
+         *     ``scope_campus_field`` defaults to ``"campus_id"``, which only the parent
+         *     resource in a module tends to have — a child table (a student's guardians,
+         *     documents, …) has no such column of its own. Getting this wrong is not a
+         *     narrow leak: ``scope_queryset``'s ``RecordScope.CAMPUS`` branch filters on
+         *     whatever this names, so a table without that column raises ``FieldError``
+         *     for every campus-scoped user the moment they hit the endpoint — override it
+         *     per child viewset rather than leaving the default.
+         *
+         *     A route whose declaration is not the read key (an update, a delete, a colon
+         *     action) is scoped by the read key and then by its own, so its target must be
+         *     one the caller may read as well as act on. The read key is
+         *     ``required_permission`` unless ``scope_read_permission`` names another, and
+         *     ``scope_read_exempt_actions`` lists any action with no read requirement.
+         */
+        patch: operations["seo_settings_partial_update"];
         trace?: never;
     };
     "/api/v1/staff": {
@@ -6544,6 +6736,23 @@ export interface paths {
         patch: operations["terms_partial_update"];
         trace?: never;
     };
+    "/api/v1/themes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET /themes`: the platform theme catalogue (no tenant data, active themes only). */
+        get: operations["themes_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/timetable-slots": {
         parameters: {
             query?: never;
@@ -6856,6 +7065,146 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/website-pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `website-pages`: pages with their ordered sections, publish workflow and preview. */
+        get: operations["website_pages_list"];
+        put?: never;
+        /** @description `website-pages`: pages with their ordered sections, publish workflow and preview. */
+        post: operations["website_pages_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/website-pages/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `website-pages`: pages with their ordered sections, publish workflow and preview. */
+        get: operations["website_pages_retrieve"];
+        put?: never;
+        post?: never;
+        /** @description `website-pages`: pages with their ordered sections, publish workflow and preview. */
+        delete: operations["website_pages_destroy"];
+        options?: never;
+        head?: never;
+        /** @description `website-pages`: pages with their ordered sections, publish workflow and preview. */
+        patch: operations["website_pages_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/website-pages/{id}/page-sections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description `website-pages`: pages with their ordered sections, publish workflow and preview. */
+        patch: operations["website_pages_page_sections_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/website-pages/{id}:archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `website-pages`: pages with their ordered sections, publish workflow and preview. */
+        post: operations["website_pages_:archive_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/website-pages/{id}:preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `website-pages`: pages with their ordered sections, publish workflow and preview. */
+        post: operations["website_pages_:preview_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/website-pages/{id}:publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `website-pages`: pages with their ordered sections, publish workflow and preview. */
+        post: operations["website_pages_:publish_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/website-pages/{id}:unpublish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `website-pages`: pages with their ordered sections, publish workflow and preview. */
+        post: operations["website_pages_:unpublish_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/website-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Singleton site settings. `GET` never writes; the first `PATCH` creates the site. */
+        get: operations["website_settings_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Singleton site settings. `GET` never writes; the first `PATCH` creates the site. */
+        patch: operations["website_settings_partial_update"];
         trace?: never;
     };
 }
@@ -9497,6 +9846,42 @@ export interface components {
             readonly marked_count: number;
             readonly roster_count: number;
         };
+        NavChild: {
+            label: string;
+            target_type: components["schemas"]["NavigationTargetTypeEnum"];
+            target?: string | null;
+            children?: {
+                [key: string]: unknown;
+            }[];
+        };
+        NavItem: {
+            label: string;
+            target_type: components["schemas"]["NavigationTargetTypeEnum"];
+            target?: string | null;
+            children?: components["schemas"]["NavChild"][];
+        };
+        NavigationMenu: {
+            readonly location: components["schemas"]["NavigationMenuLocationEnum"];
+            readonly items: components["schemas"]["NavItem"][];
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `header` - Header
+         *     * `footer_primary` - Footer (primary)
+         *     * `footer_secondary` - Footer (secondary)
+         * @enum {string}
+         */
+        NavigationMenuLocationEnum: "header" | "footer_primary" | "footer_secondary";
+        /**
+         * @description * `page` - Page
+         *     * `url` - External or relative URL
+         *     * `news_index` - News listing
+         *     * `events_index` - Events listing
+         *     * `gallery_index` - Gallery listing
+         * @enum {string}
+         */
+        NavigationTargetTypeEnum: "page" | "url" | "news_index" | "events_index" | "gallery_index";
         Notice: {
             /** Format: uuid */
             readonly id: string;
@@ -9663,6 +10048,18 @@ export interface components {
          * @enum {string}
          */
         OutstandingAgingReportRowKindEnum: "outstanding-aging";
+        PagePreview: {
+            url: string;
+            expires_in: number;
+        };
+        PageSection: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly section_type: components["schemas"]["SectionTypeEnum"];
+            readonly position: number;
+            readonly content: unknown;
+            readonly is_visible: boolean;
+        };
         PaginatedAcademicSessionList: {
             data?: components["schemas"]["AcademicSession"][];
             meta?: {
@@ -10061,6 +10458,17 @@ export interface components {
                 };
             };
         };
+        PaginatedPageSectionList: {
+            data?: components["schemas"]["PageSection"][];
+            meta?: {
+                pagination?: {
+                    page?: number;
+                    page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
+                };
+            };
+        };
         PaginatedPaymentList: {
             data?: components["schemas"]["Payment"][];
             meta?: {
@@ -10321,6 +10729,17 @@ export interface components {
                 };
             };
         };
+        PaginatedThemeList: {
+            data?: components["schemas"]["Theme"][];
+            meta?: {
+                pagination?: {
+                    page?: number;
+                    page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
+                };
+            };
+        };
         PaginatedThreadOversightList: {
             data?: components["schemas"]["ThreadOversight"][];
             meta?: {
@@ -10348,6 +10767,17 @@ export interface components {
                     next_cursor?: string | null;
                     previous_cursor?: string | null;
                     page_size?: number;
+                };
+            };
+        };
+        PaginatedWebsitePageListList: {
+            data?: components["schemas"]["WebsitePageList"][];
+            meta?: {
+                pagination?: {
+                    page?: number;
+                    page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
                 };
             };
         };
@@ -11099,6 +11529,9 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        PatchedNavigationMenuUpdate: {
+            items?: components["schemas"]["NavItem"][];
+        };
         PatchedNotice: {
             /** Format: uuid */
             readonly id?: string;
@@ -11301,6 +11734,9 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        PatchedReplaceSections: {
+            sections?: components["schemas"]["SectionInput"][];
+        };
         /**
          * @description `report_cards` — read, plus the two remark fields (§5.7).
          *
@@ -11427,6 +11863,22 @@ export interface components {
             is_active?: boolean;
             /** Format: date-time */
             readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        PatchedSeoSetting: {
+            /** @description False for the unsaved default `GET` shows before the row exists. */
+            readonly exists?: boolean;
+            readonly target_type?: components["schemas"]["SeoTargetTypeEnum"];
+            /** Format: uuid */
+            readonly target_id?: string | null;
+            meta_title?: string;
+            meta_description?: string;
+            /** Format: uuid */
+            og_image_file_id?: string | null;
+            canonical_url?: string;
+            robots?: string;
+            readonly structured_data?: unknown;
             /** Format: date-time */
             readonly updated_at?: string;
         };
@@ -11689,6 +12141,33 @@ export interface components {
             notes?: string | null;
             /** Format: date-time */
             readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+        };
+        /** @description PATCH cannot change `page_type`: a page's type fixes its role on the site. */
+        PatchedWebsitePageUpdate: {
+            title?: string;
+            slug?: string;
+            locale?: string;
+            show_in_search?: boolean;
+        };
+        PatchedWebsiteSettings: {
+            /** @description False for the unsaved default `GET` shows before the site exists. */
+            readonly exists?: boolean;
+            /** Format: uuid */
+            theme_id?: string;
+            readonly theme_code?: string;
+            readonly theme_version?: string;
+            theme_config?: unknown;
+            /** Format: uuid */
+            homepage_page_id?: string | null;
+            is_published?: boolean;
+            maintenance_mode?: boolean;
+            header_config?: unknown;
+            footer_config?: unknown;
+            social_links?: components["schemas"]["SocialLink"][];
+            analytics_id?: string;
+            default_locale?: string;
             /** Format: date-time */
             readonly updated_at?: string;
         };
@@ -12549,6 +13028,34 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        SectionInput: {
+            /** Format: uuid */
+            id?: string;
+            section_type: components["schemas"]["SectionTypeEnum"];
+            content: {
+                [key: string]: unknown;
+            };
+            /** @default true */
+            is_visible: boolean;
+        };
+        /**
+         * @description * `hero` - Hero
+         *     * `about_school` - About the school
+         *     * `principal_message` - Principal's message
+         *     * `departments_grid` - Departments
+         *     * `teachers_grid` - Teachers
+         *     * `classes_list` - Classes
+         *     * `admissions_cta` - Admissions call to action
+         *     * `events_list` - Events
+         *     * `news_list` - News
+         *     * `notice_board` - Notice board
+         *     * `gallery` - Gallery
+         *     * `contact_form` - Contact form
+         *     * `rich_text` - Rich text
+         *     * `faq` - FAQ
+         * @enum {string}
+         */
+        SectionTypeEnum: "hero" | "about_school" | "principal_message" | "departments_grid" | "teachers_grid" | "classes_list" | "admissions_cta" | "events_list" | "news_list" | "notice_board" | "gallery" | "contact_form" | "rich_text" | "faq";
         /**
          * @description The body of `POST /exams/{id}:send-results-back` (§7.1).
          *
@@ -12561,6 +13068,31 @@ export interface components {
         SendResultsBack: {
             reason: string;
         };
+        SeoSetting: {
+            /** @description False for the unsaved default `GET` shows before the row exists. */
+            readonly exists: boolean;
+            readonly target_type: components["schemas"]["SeoTargetTypeEnum"];
+            /** Format: uuid */
+            readonly target_id: string | null;
+            meta_title?: string;
+            meta_description?: string;
+            /** Format: uuid */
+            og_image_file_id?: string | null;
+            canonical_url?: string;
+            robots?: string;
+            readonly structured_data: unknown;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `site` - Site
+         *     * `page` - Page
+         *     * `news_post` - News post
+         *     * `school_event` - School event
+         *     * `gallery_album` - Gallery album
+         * @enum {string}
+         */
+        SeoTargetTypeEnum: "site" | "page" | "news_post" | "school_event" | "gallery_album";
         /** @description Input for ``POST /academic-sessions/{id}:clone`` — the new session's identity. */
         SessionClone: {
             name: string;
@@ -12607,6 +13139,10 @@ export interface components {
             readonly room_id: string | null;
             readonly room_name: string | null;
             readonly reason: string | null;
+        };
+        SocialLink: {
+            platform: string;
+            url: string;
         };
         Staff: {
             /** Format: uuid */
@@ -13398,6 +13934,17 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        Theme: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly code: string;
+            readonly name: string;
+            readonly version: string;
+            readonly description: string;
+            readonly config_schema: unknown;
+            /** @description Section catalogue keyed by type: {label, schema} per type. */
+            readonly section_types: unknown;
+        };
         /**
          * @description A thread as an overseer reads it: the inbox row minus `unread_count`.
          *
@@ -13714,6 +14261,87 @@ export interface components {
          */
         Waive: {
             reason: string;
+        };
+        /**
+         * @description * `draft` - Draft
+         *     * `published` - Published
+         *     * `archived` - Archived
+         * @enum {string}
+         */
+        WebsiteContentStatusEnum: "draft" | "published" | "archived";
+        WebsitePageDetail: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly title: string;
+            readonly slug: string;
+            readonly page_type: components["schemas"]["WebsitePageTypeEnum"];
+            readonly status: components["schemas"]["WebsiteContentStatusEnum"];
+            /** Format: date-time */
+            readonly published_at: string | null;
+            readonly locale: string;
+            readonly show_in_search: boolean;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+            readonly sections: components["schemas"]["PageSection"][];
+        };
+        WebsitePageList: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly title: string;
+            readonly slug: string;
+            readonly page_type: components["schemas"]["WebsitePageTypeEnum"];
+            readonly status: components["schemas"]["WebsiteContentStatusEnum"];
+            /** Format: date-time */
+            readonly published_at: string | null;
+            readonly locale: string;
+            readonly show_in_search: boolean;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `home` - Home
+         *     * `about` - About
+         *     * `principal_message` - Principal message
+         *     * `departments` - Departments
+         *     * `teachers` - Teachers
+         *     * `classes` - Classes
+         *     * `admissions` - Admissions
+         *     * `contact` - Contact
+         *     * `standard` - Standard
+         * @enum {string}
+         */
+        WebsitePageTypeEnum: "home" | "about" | "principal_message" | "departments" | "teachers" | "classes" | "admissions" | "contact" | "standard";
+        /** @description Input for create and PATCH; slug rules live in the service (422s). */
+        WebsitePageWrite: {
+            title: string;
+            slug: string;
+            page_type?: components["schemas"]["WebsitePageTypeEnum"];
+            locale?: string;
+            show_in_search?: boolean;
+        };
+        WebsiteSettings: {
+            /** @description False for the unsaved default `GET` shows before the site exists. */
+            readonly exists: boolean;
+            /** Format: uuid */
+            theme_id?: string;
+            readonly theme_code: string;
+            readonly theme_version: string;
+            theme_config?: unknown;
+            /** Format: uuid */
+            homepage_page_id?: string | null;
+            is_published?: boolean;
+            maintenance_mode?: boolean;
+            header_config?: unknown;
+            footer_config?: unknown;
+            social_links?: components["schemas"]["SocialLink"][];
+            analytics_id?: string;
+            default_locale?: string;
+            /** Format: date-time */
+            readonly updated_at: string;
         };
         WithdrawRequest: {
             reason: string;
@@ -19524,6 +20152,52 @@ export interface operations {
             };
         };
     };
+    navigation_menus_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NavigationMenu"][];
+                };
+            };
+        };
+    };
+    navigation_menus_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                location: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedNavigationMenuUpdate"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedNavigationMenuUpdate"];
+                "multipart/form-data": components["schemas"]["PatchedNavigationMenuUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NavigationMenu"];
+                };
+            };
+        };
+    };
     notices_list: {
         parameters: {
             query?: {
@@ -21807,6 +22481,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Section"];
+                };
+            };
+        };
+    };
+    seo_settings_retrieve: {
+        parameters: {
+            query: {
+                target_id?: string;
+                target_type: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeoSetting"];
+                };
+            };
+        };
+    };
+    seo_settings_partial_update: {
+        parameters: {
+            query: {
+                target_id?: string;
+                target_type: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedSeoSetting"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedSeoSetting"];
+                "multipart/form-data": components["schemas"]["PatchedSeoSetting"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeoSetting"];
                 };
             };
         };
@@ -24384,6 +25108,34 @@ export interface operations {
             };
         };
     };
+    themes_list: {
+        parameters: {
+            query?: {
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedThemeList"];
+                };
+            };
+        };
+    };
     timetable_slots_list: {
         parameters: {
             query?: {
@@ -24786,6 +25538,327 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FeeVoucher"];
+                };
+            };
+        };
+    };
+    website_pages_list: {
+        parameters: {
+            query?: {
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /**
+                 * @description * `home` - Home
+                 *     * `about` - About
+                 *     * `principal_message` - Principal message
+                 *     * `departments` - Departments
+                 *     * `teachers` - Teachers
+                 *     * `classes` - Classes
+                 *     * `admissions` - Admissions
+                 *     * `contact` - Contact
+                 *     * `standard` - Standard
+                 */
+                page_type?: "about" | "admissions" | "classes" | "contact" | "departments" | "home" | "principal_message" | "standard" | "teachers";
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `draft` - Draft
+                 *     * `published` - Published
+                 *     * `archived` - Archived
+                 */
+                status?: "archived" | "draft" | "published";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedWebsitePageListList"];
+                };
+            };
+        };
+    };
+    website_pages_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebsitePageWrite"];
+                "application/x-www-form-urlencoded": components["schemas"]["WebsitePageWrite"];
+                "multipart/form-data": components["schemas"]["WebsitePageWrite"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebsitePageDetail"];
+                };
+            };
+        };
+    };
+    website_pages_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebsitePageDetail"];
+                };
+            };
+        };
+    };
+    website_pages_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    website_pages_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedWebsitePageUpdate"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedWebsitePageUpdate"];
+                "multipart/form-data": components["schemas"]["PatchedWebsitePageUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebsitePageDetail"];
+                };
+            };
+        };
+    };
+    website_pages_page_sections_partial_update: {
+        parameters: {
+            query?: {
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /**
+                 * @description * `home` - Home
+                 *     * `about` - About
+                 *     * `principal_message` - Principal message
+                 *     * `departments` - Departments
+                 *     * `teachers` - Teachers
+                 *     * `classes` - Classes
+                 *     * `admissions` - Admissions
+                 *     * `contact` - Contact
+                 *     * `standard` - Standard
+                 */
+                page_type?: "about" | "admissions" | "classes" | "contact" | "departments" | "home" | "principal_message" | "standard" | "teachers";
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `draft` - Draft
+                 *     * `published` - Published
+                 *     * `archived` - Archived
+                 */
+                status?: "archived" | "draft" | "published";
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedReplaceSections"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedReplaceSections"];
+                "multipart/form-data": components["schemas"]["PatchedReplaceSections"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPageSectionList"];
+                };
+            };
+        };
+    };
+    "website_pages_:archive_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebsitePageDetail"];
+                };
+            };
+        };
+    };
+    "website_pages_:preview_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PagePreview"];
+                };
+            };
+        };
+    };
+    "website_pages_:publish_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebsitePageDetail"];
+                };
+            };
+        };
+    };
+    "website_pages_:unpublish_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebsitePageDetail"];
+                };
+            };
+        };
+    };
+    website_settings_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebsiteSettings"];
+                };
+            };
+        };
+    };
+    website_settings_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedWebsiteSettings"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedWebsiteSettings"];
+                "multipart/form-data": components["schemas"]["PatchedWebsiteSettings"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebsiteSettings"];
                 };
             };
         };

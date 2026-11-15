@@ -220,6 +220,7 @@ resubmittable
 retriable
 RFID
 Rimsha
+RJSF
 rolbypassrls
 rolcreaterole
 rollouts
@@ -310,6 +311,7 @@ wordprocessingml
 worktree
 writability
 xact
+youtu
 YYYYMMDDTHHMMSSZ
 Yusuf
 Zain
