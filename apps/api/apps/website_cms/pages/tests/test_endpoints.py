@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest import mock
 
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken
 
@@ -293,6 +295,26 @@ class PublishWorkflowTests(WebsiteAPITestCase):
         self.assertEqual(self._visibility(file), FileVisibility.PRIVATE)
         task.delay.assert_called_once()
 
+    def test_every_transition_locks_the_page_row_before_writing_it(self) -> None:
+        self.allow("website.page.delete")
+        page = self.make_page()
+        self.make_section(page, position=0)
+        calls = [
+            ("publish", lambda: self._post(page, "publish")),
+            ("unpublish", lambda: self._post(page, "unpublish")),
+            ("archive", lambda: self._post(page, "archive")),
+            ("delete", lambda: self.client.delete(detail(page))),
+        ]
+        for name, call in calls:
+            with self.subTest(action=name), CaptureQueriesContext(connection) as queries:
+                self.assertLess(call().status_code, 300)
+                sql = [q["sql"] for q in queries.captured_queries]
+                lock = next(
+                    i for i, q in enumerate(sql) if "FOR UPDATE" in q and '"website_pages"' in q
+                )
+                write = next(i for i, q in enumerate(sql) if q.startswith('UPDATE "website_pages"'))
+                self.assertLess(lock, write)
+
     def test_archive_homepage_422(self) -> None:
         page = self.make_page(slug="home", page_type=PageType.HOME)
         self.assertEqual(self._post(page, "archive").status_code, 422)
@@ -428,6 +450,35 @@ class ReplaceSectionsTests(WebsiteAPITestCase):
         with tenant_context(self.tenant.id):
             self.assertEqual(File.objects.get(id=new.id).visibility, FileVisibility.PUBLIC)
             self.assertEqual(File.objects.get(id=old.id).visibility, FileVisibility.PRIVATE)
+
+    def test_image_ids_are_stored_canonically_and_go_public_on_publish(self) -> None:
+        self.allow("website.page.publish")
+        with tenant_context(self.tenant.id):
+            upper = FileFactory(tenant=self.tenant, purpose=WEBSITE_MEDIA.key)
+            urn = FileFactory(tenant=self.tenant, purpose=WEBSITE_MEDIA.key)
+        # Both spellings are 36 characters and parse as UUIDs, but neither is canonical.
+        sections = [
+            hero("One", image_file_id=str(upper.id).upper()),
+            hero("Two", image_file_id=f"urn:{urn.id.hex}"),
+        ]
+        response = self._put(sections)
+        self.assertEqual(response.status_code, 200)
+        expected = [str(upper.id), str(urn.id)]
+        returned = [s["content"]["image_file_id"] for s in response.json()["data"]]
+        self.assertEqual(returned, expected)
+        self.assertEqual([s.content["image_file_id"] for s in self._live()], expected)
+
+        self.assertEqual(self.client.post(f"{detail(self.page)}:publish").status_code, 200)
+        with tenant_context(self.tenant.id):
+            for file in (upper, urn):
+                self.assertEqual(File.objects.get(id=file.id).visibility, FileVisibility.PUBLIC)
+
+    def test_unhyphenated_image_id_is_rejected_by_the_schema(self) -> None:
+        with tenant_context(self.tenant.id):
+            file = FileFactory(tenant=self.tenant, purpose=WEBSITE_MEDIA.key)
+        response = self._put([hero(image_file_id=file.id.hex)])
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("sections.0.image_file_id", response.content.decode())
 
     def test_replacing_sections_of_a_draft_leaves_files_private(self) -> None:
         with tenant_context(self.tenant.id):

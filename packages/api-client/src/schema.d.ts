@@ -11878,7 +11878,7 @@ export interface components {
             og_image_file_id?: string | null;
             canonical_url?: string | null;
             robots?: string | null;
-            structured_data?: unknown;
+            readonly structured_data?: unknown;
             /** Format: date-time */
             readonly updated_at?: string;
         };
@@ -13080,7 +13080,7 @@ export interface components {
             og_image_file_id?: string | null;
             canonical_url?: string | null;
             robots?: string | null;
-            structured_data?: unknown;
+            readonly structured_data: unknown;
             /** Format: date-time */
             readonly updated_at: string;
         };

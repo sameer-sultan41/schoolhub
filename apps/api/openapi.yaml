@@ -25811,6 +25811,7 @@ components:
           nullable: true
           maxLength: 50
         structured_data:
+          readOnly: true
           nullable: true
         updated_at:
           type: string
@@ -28410,6 +28411,7 @@ components:
           nullable: true
           maxLength: 50
         structured_data:
+          readOnly: true
           nullable: true
         updated_at:
           type: string
@@ -28417,6 +28419,7 @@ components:
           readOnly: true
       required:
       - exists
+      - structured_data
       - target_id
       - target_type
       - updated_at

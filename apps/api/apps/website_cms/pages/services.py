@@ -11,6 +11,7 @@ from typing import Any
 from uuid import UUID
 
 from django.db import IntegrityError, transaction
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
 from apps.website_cms.constants import (
@@ -161,49 +162,68 @@ def _touch(page: WebsitePage, actor_id: UUID | None, **fields: Any) -> None:
     page.save(update_fields=[*fields, "updated_by", "updated_at"])
 
 
+def _locked(page: WebsitePage) -> WebsitePage:
+    """The page re-read under its row lock, so its status is the committed one (L52).
+
+    Every writer of a page's status or sections takes this lock first: publish's
+    "has a visible section" gate and the section writes serialise on it.
+    """
+    return get_object_or_404(WebsitePage.objects.alive().select_for_update(), pk=page.pk)
+
+
 def publish_page(page: WebsitePage, user: Any) -> WebsitePage:
-    if page.status == ContentStatus.PUBLISHED:
-        return page
-    if not PageSection.objects.alive().filter(website_page=page, is_visible=True).exists():
-        raise _violation(
-            "sections", "no_visible_sections", "add at least one visible section before publishing."
-        )
-    _touch(page, user.pk, status=ContentStatus.PUBLISHED, published_at=timezone.now())
-    sync_file_visibility(page_file_ids(page))
-    queue_revalidation(page.tenant_id)
-    return page
-
-
-def unpublish_page(page: WebsitePage, user: Any) -> WebsitePage:
-    if page.status != ContentStatus.PUBLISHED:
-        return page
-    _touch(page, user.pk, status=ContentStatus.DRAFT, published_at=None)
-    sync_file_visibility(page_file_ids(page))
-    queue_revalidation(page.tenant_id)
-    return page
-
-
-def archive_page(page: WebsitePage, user: Any) -> WebsitePage:
-    if page.status == ContentStatus.ARCHIVED:
-        return page
-    _assert_not_in_use(page)
-    was_published = page.status == ContentStatus.PUBLISHED
-    _touch(page, user.pk, status=ContentStatus.ARCHIVED, published_at=None)
-    if was_published:
+    with transaction.atomic():
+        page = _locked(page)
+        if page.status == ContentStatus.PUBLISHED:
+            return page
+        if not PageSection.objects.alive().filter(website_page=page, is_visible=True).exists():
+            raise _violation(
+                "sections",
+                "no_visible_sections",
+                "add at least one visible section before publishing.",
+            )
+        _touch(page, user.pk, status=ContentStatus.PUBLISHED, published_at=timezone.now())
         sync_file_visibility(page_file_ids(page))
         queue_revalidation(page.tenant_id)
     return page
 
 
+def unpublish_page(page: WebsitePage, user: Any) -> WebsitePage:
+    with transaction.atomic():
+        page = _locked(page)
+        if page.status != ContentStatus.PUBLISHED:
+            return page
+        _touch(page, user.pk, status=ContentStatus.DRAFT, published_at=None)
+        sync_file_visibility(page_file_ids(page))
+        queue_revalidation(page.tenant_id)
+    return page
+
+
+def archive_page(page: WebsitePage, user: Any) -> WebsitePage:
+    with transaction.atomic():
+        page = _locked(page)
+        if page.status == ContentStatus.ARCHIVED:
+            return page
+        _assert_not_in_use(page)
+        was_published = page.status == ContentStatus.PUBLISHED
+        _touch(page, user.pk, status=ContentStatus.ARCHIVED, published_at=None)
+        if was_published:
+            sync_file_visibility(page_file_ids(page))
+            queue_revalidation(page.tenant_id)
+    return page
+
+
 def delete_page(page: WebsitePage, user: Any) -> None:
-    if page.status == ContentStatus.PUBLISHED:
-        raise _violation("status", "unpublish_first", "unpublish this page before deleting it.")
-    _assert_not_in_use(page)
-    file_ids = page_file_ids(page)
-    page.deleted_at = timezone.now()
-    page.updated_by = user.pk
-    page.save(update_fields=["deleted_at", "updated_by", "updated_at"])
-    sync_file_visibility(file_ids)
+    with transaction.atomic():
+        page = _locked(page)
+        if page.status == ContentStatus.PUBLISHED:
+            raise _violation("status", "unpublish_first", "unpublish this page before deleting it.")
+        _assert_not_in_use(page)
+        file_ids = page_file_ids(page)
+        page.deleted_at = timezone.now()
+        page.updated_by = user.pk
+        page.save(update_fields=["deleted_at", "updated_by", "updated_at"])
+        sync_file_visibility(file_ids)
 
 
 def _validated_sections(theme: Theme, sections: list[dict[str, Any]]) -> set[UUID]:
@@ -241,6 +261,9 @@ def replace_sections(
     theme = _active_theme()
     new_ids = _validated_sections(theme, sections)
     with transaction.atomic():
+        # The page lock serialises this with publish and with a concurrent first write on an
+        # empty page, which would otherwise collide on `unique(website_page_id, position)`.
+        page = _locked(page)
         live = {
             s.id: s
             for s in PageSection.objects.alive().select_for_update().filter(website_page=page)

@@ -101,10 +101,19 @@ def _link_errors(value: Any, path: str, errors: dict[str, str]) -> None:
             _link_errors(item, f"{path}.{index}", errors)
 
 
+def lock_settings(row: WebsiteSettings) -> WebsiteSettings:
+    """`row` re-read under its row lock, so a concurrent PATCH cannot be lost."""
+    return WebsiteSettings.objects.alive().select_for_update().get(pk=row.pk)
+
+
 def update_settings(
     row: WebsiteSettings, data: dict[str, Any], actor_id: UUID | None
 ) -> tuple[WebsiteSettings, set[str]]:
-    """Apply a validated PATCH; returns the row and the names of the fields that changed."""
+    """Apply a validated PATCH; returns the locked row and the names of the fields that changed.
+
+    Only the changed columns are written, against the row as re-read under its lock.
+    """
+    row = lock_settings(row)
     errors: dict[str, str] = {}
     theme = row.theme
     if "theme_id" in data and data["theme_id"] != row.theme_id:
@@ -139,5 +148,5 @@ def update_settings(
             changed.add(name)
     if changed:
         row.updated_by = actor_id
-        row.save()
+        row.save(update_fields=[*changed, "updated_by", "updated_at"])
     return row, changed

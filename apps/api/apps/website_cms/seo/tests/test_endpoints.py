@@ -5,6 +5,9 @@ from __future__ import annotations
 from unittest import mock
 from uuid import uuid4
 
+from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import AccessToken
+
 from apps.website_cms.models import ContentStatus, SeoSetting
 from apps.website_cms.tests.base import WebsiteAPITestCase
 from apps.website_cms.tests.factories import TenantFactory
@@ -14,6 +17,7 @@ from core.files.tests.factories import FileFactory
 from core.tenancy.context import tenant_context
 
 URL = "/api/v1/seo-settings"
+PAGES = "/api/v1/website-pages"
 
 
 class SeoReadTests(WebsiteAPITestCase):
@@ -114,9 +118,14 @@ class SeoUpdateTests(WebsiteAPITestCase):
         self.assertIn("canonical_url", str(bad.json()))
         self.assertEqual(self._patch({"canonical_url": "https://school.example/"}).status_code, 200)
 
-    def test_structured_data_must_be_an_object(self) -> None:
+    def test_structured_data_is_read_only(self) -> None:
         self.allow("website.seo.update")
-        self.assertEqual(self._patch({"structured_data": [1]}).status_code, 400)
+        payload = {"meta_title": "T", "structured_data": {"@type": "School", "name": "</script>"}}
+        response = self._patch(payload)
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["data"]["structured_data"])
+        with tenant_context(self.tenant.id):
+            self.assertIsNone(SeoSetting.objects.get().structured_data)
 
     def test_og_image_must_be_a_ready_website_media_file(self) -> None:
         self.allow("website.seo.update")
@@ -146,6 +155,13 @@ class SeoUpdateTests(WebsiteAPITestCase):
             image.refresh_from_db()
         self.assertEqual(image.visibility, FileVisibility.PRIVATE)
 
+        self.allow("website.page.publish")
+        self.make_section(page, position=0)
+        self.assertEqual(self.client.post(f"{PAGES}/{page.id}:publish").status_code, 200)
+        with tenant_context(self.tenant.id):
+            image.refresh_from_db()
+        self.assertEqual(image.visibility, FileVisibility.PUBLIC)
+
 
 class SeoCrossTenantTests(WebsiteAPITestCase):
     def test_another_tenants_page_is_not_a_valid_target(self) -> None:
@@ -155,3 +171,25 @@ class SeoCrossTenantTests(WebsiteAPITestCase):
         self.assertEqual(self.client.get(f"{URL}{query}").status_code, 422)
         patched = self.client.patch(f"{URL}{query}", {"meta_title": "T"}, format="json")
         self.assertEqual(patched.status_code, 422)
+
+
+class SeoBearerOnlyTests(WebsiteAPITestCase):
+    """L63: the view works under a bearer token with no session, as real clients call it."""
+
+    def test_bearer_token_alone_reads_and_writes_and_a_foreign_target_is_unknown(self) -> None:
+        self.allow("website.page.view", "website.seo.update")
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(self.user)}")
+        self.assertEqual(client.get(URL, {"target_type": "site"}).status_code, 200)
+        patched = client.patch(f"{URL}?target_type=site", {"meta_title": "T"}, format="json")
+        self.assertEqual(patched.status_code, 200)
+        self.assertEqual(patched.json()["data"]["meta_title"], "T")
+
+        foreign = self.make_page(tenant=TenantFactory(), slug="theirs")
+        answers = []
+        for target_id in (foreign.id, uuid4()):
+            response = client.get(URL, {"target_type": "page", "target_id": str(target_id)})
+            error = {k: v for k, v in response.json()["error"].items() if k != "request_id"}
+            answers.append((response.status_code, error))
+        self.assertEqual(answers[0], answers[1])
+        self.assertEqual(answers[0][0], 422)

@@ -26,6 +26,7 @@
           },
           "image_file_id": {
             "type": "string",
+            "minLength": 36,
             "maxLength": 36,
             "x-widget": "image"
           },
@@ -69,6 +70,7 @@
           },
           "image_file_id": {
             "type": "string",
+            "minLength": 36,
             "maxLength": 36,
             "x-widget": "image"
           },
@@ -111,6 +113,7 @@
           },
           "photo_file_id": {
             "type": "string",
+            "minLength": 36,
             "maxLength": 36,
             "x-widget": "image"
           }

@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from unittest import mock
 
+from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import AccessToken
+
 from apps.website_cms.models import ContentStatus, NavigationMenu
 from apps.website_cms.tests.base import WebsiteAPITestCase
 from apps.website_cms.tests.factories import NavigationMenuFactory
@@ -184,3 +187,40 @@ class NavigationMenuUpdateTests(WebsiteAPITestCase):
         deleted = self.client.delete(f"/api/v1/website-pages/{page.id}")
         self.assertEqual(deleted.status_code, 422)
         self.assertIn("page_in_use", str(deleted.json()))
+
+    def test_a_stored_target_since_unpublished_does_not_block_an_unrelated_edit(self) -> None:
+        self.allow("website.navigation.update", "website.page.publish")
+        page = self.make_page(status=ContentStatus.PUBLISHED)
+        self.make_section(page)
+        self.assertEqual(self._patch([_page_item(page)]).status_code, 200)
+        self.client.post(f"/api/v1/website-pages/{page.id}:unpublish")
+
+        renamed = self._patch(
+            [_page_item(page, label="About us"), {"label": "News", "target_type": "news_index"}]
+        )
+        self.assertEqual(renamed.status_code, 200)
+        self.assertEqual(renamed.json()["data"]["items"][0]["label"], "About us")
+
+        other = self.make_page(status=ContentStatus.DRAFT)
+        added = self._patch([_page_item(page), _page_item(other)])
+        self.assertEqual(added.status_code, 422)
+        self.assertIn("items.1.target", str(added.json()))
+        self.assertNotIn("items.0.target", str(added.json()))
+
+
+class NavigationBearerOnlyTests(WebsiteAPITestCase):
+    """L63: both views work under a bearer token with no session, as real clients call them."""
+
+    def test_bearer_token_alone_reads_and_writes_menus(self) -> None:
+        self.allow("website.page.view", "website.navigation.update")
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(self.user)}")
+        listed = client.get(LIST_URL)
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(len(listed.json()["data"]), 3)
+        items = [{"label": "News", "target_type": "news_index"}]
+        patched = client.patch(_url(), {"items": items}, format="json")
+        self.assertEqual(patched.status_code, 200)
+        self.assertEqual(patched.json()["data"]["items"][0]["label"], "News")
+        unknown = client.patch(_url("sidebar"), {"items": []}, format="json")
+        self.assertEqual(unknown.status_code, 404)

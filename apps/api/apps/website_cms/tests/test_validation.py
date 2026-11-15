@@ -74,6 +74,18 @@ class SectionContentTests(TestCase):
             validate_section_content(self.theme, "hero", content)
         self.assertEqual(_fields(ctx.exception), {"image_file_id"})
 
+    def test_image_values_are_rewritten_canonically_in_place(self) -> None:
+        file_id = uuid4()
+        content = {"heading": "Hi", "image_file_id": str(file_id).upper()}
+        validate_section_content(self.theme, "hero", content)
+        self.assertEqual(content["image_file_id"], str(file_id))
+
+    def test_rich_text_image_block_is_rewritten_canonically(self) -> None:
+        file_id = uuid4()
+        doc = {"blocks": [{"type": "image", "file_id": f"urn:{file_id.hex}"}]}
+        validate_rich_text(doc)
+        self.assertEqual(doc["blocks"][0]["file_id"], str(file_id))
+
 
 class RichTextTests(TestCase):
     def test_valid_document_passes(self) -> None:

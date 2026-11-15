@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from typing import Any
 from uuid import UUID
 
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 
 from apps.website_cms.constants import (
     NAV_LABEL_MAX_LENGTH,
@@ -16,7 +18,7 @@ from apps.website_cms.constants import (
 from apps.website_cms.errors import violation
 from apps.website_cms.models import ContentStatus, MenuLocation, NavigationMenu, WebsitePage
 from apps.website_cms.revalidation import queue_revalidation
-from apps.website_cms.validation import is_safe_url
+from apps.website_cms.validation import as_uuid, is_safe_url
 from core.api.exceptions import DomainRuleViolation
 from core.tenancy.models import Tenant
 
@@ -33,13 +35,6 @@ def _count(items: list[dict[str, Any]]) -> int:
     return sum(1 + _count(item.get("children") or []) for item in items)
 
 
-def _as_uuid(value: object) -> UUID | None:
-    try:
-        return UUID(str(value))
-    except ValueError:
-        return None
-
-
 def _check_item(item: dict[str, Any], path: str, depth: int, errors: dict[str, str]) -> None:
     label = item.get("label")
     if not isinstance(label, str) or not 1 <= len(label.strip()) <= NAV_LABEL_MAX_LENGTH:
@@ -50,7 +45,7 @@ def _check_item(item: dict[str, Any], path: str, depth: int, errors: dict[str, s
         if not isinstance(target, str) or not is_safe_url(target):
             errors[f"{path}.target"] = f"invalid_target: {_URL_MESSAGE}"
     elif target_type == NavTargetType.PAGE:
-        if _as_uuid(target) is None:
+        if as_uuid(target) is None:
             errors[f"{path}.target"] = "invalid_target: choose a published page."
     elif target:
         errors[f"{path}.target"] = "invalid_target: this link type takes no target."
@@ -65,7 +60,7 @@ def _check_item(item: dict[str, Any], path: str, depth: int, errors: dict[str, s
 def _page_targets(items: list[dict[str, Any]], path: str, found: dict[UUID, list[str]]) -> None:
     for index, item in enumerate(items):
         where = f"{path}.{index}"
-        if item.get("target_type") == NavTargetType.PAGE and (pid := _as_uuid(item.get("target"))):
+        if item.get("target_type") == NavTargetType.PAGE and (pid := as_uuid(item.get("target"))):
             found.setdefault(pid, []).append(f"{where}.target")
         _page_targets(item.get("children") or [], f"{where}.children", found)
 
@@ -87,8 +82,21 @@ def _normalise(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
-def validate_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Return the tree in stored shape, or raise a 422 keyed by item path."""
+def _stored_page_targets(items: list[dict[str, Any]]) -> set[UUID]:
+    """Page ids a stored menu tree already links to."""
+    found: dict[UUID, list[str]] = {}
+    _page_targets(items or [], "items", found)
+    return set(found)
+
+
+def validate_items(
+    items: list[dict[str, Any]], kept: Collection[UUID] = frozenset()
+) -> list[dict[str, Any]]:
+    """Return the tree in stored shape, or raise a 422 keyed by item path.
+
+    A new page target must be published. One in `kept` (already in the stored menu) need only
+    still exist, so unpublishing a linked page never blocks an unrelated edit of its menu.
+    """
     if _count(items) > NAV_MAX_ITEMS:
         raise violation("items", "too_many_items", f"at most {NAV_MAX_ITEMS} items per menu.")
     errors: dict[str, str] = {}
@@ -99,7 +107,8 @@ def validate_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         _page_targets(items, "items", wanted)
         live = set(
             WebsitePage.objects.alive()
-            .filter(id__in=wanted, status=ContentStatus.PUBLISHED)
+            .filter(id__in=wanted)
+            .filter(Q(status=ContentStatus.PUBLISHED) | Q(id__in=kept))
             .values_list("id", flat=True)
         )
         for page_id, paths in wanted.items():
@@ -128,11 +137,14 @@ def _locked_menu(tenant: Tenant, location: str, actor_id: UUID | None) -> Naviga
 def update_menu(
     tenant: Tenant, location: str, items: list[dict[str, Any]], actor_id: UUID | None
 ) -> tuple[NavigationMenu, list[dict[str, Any]], bool]:
-    """Replace a menu's tree; returns the row, the previous items and whether anything changed."""
-    stored = validate_items(items)
+    """Replace a menu's tree; returns the row, the previous items and whether anything changed.
+
+    Validated under the menu's row lock, against the targets it already holds.
+    """
     with transaction.atomic():
         menu = _locked_menu(tenant, location, actor_id)
         before = menu.items
+        stored = validate_items(items, kept=_stored_page_targets(before))
         changed = before != stored
         if changed:
             menu.items = stored

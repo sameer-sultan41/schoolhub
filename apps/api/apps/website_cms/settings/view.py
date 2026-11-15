@@ -47,7 +47,7 @@ class WebsiteSettingsView(TenantScopedViewSetMixin, APIView):
     def patch(self, request) -> Response:
         serializer = WebsiteSettingsSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        row = services.ensure_default_site(request.tenant, request.user.pk)
+        row = services.lock_settings(services.ensure_default_site(request.tenant, request.user.pk))
         before = WebsiteSettingsSerializer(row).data
         row, changed = services.update_settings(
             row, _model_fields(serializer.validated_data), request.user.pk

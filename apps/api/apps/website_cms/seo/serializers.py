@@ -24,7 +24,8 @@ class SeoSettingSerializer(serializers.ModelSerializer):
     canonical_url = serializers.CharField(max_length=500, **_TEXT)
     robots = serializers.CharField(max_length=50, **_TEXT)
     og_image_file_id = serializers.UUIDField(required=False, allow_null=True)
-    structured_data = serializers.JSONField(required=False, allow_null=True)
+    # Read-only until the renderer defines a JSON-LD shape and its escaping (deferred-work.md).
+    structured_data = serializers.JSONField(read_only=True, allow_null=True)
 
     class Meta:
         model = SeoSetting
@@ -46,11 +47,6 @@ class SeoSettingSerializer(serializers.ModelSerializer):
     def get_exists(self, obj: SeoSetting) -> bool:
         """False for the unsaved default `GET` shows before the row exists."""
         return not obj._state.adding
-
-    def validate_structured_data(self, value: object) -> dict | None:
-        if value is not None and not isinstance(value, dict):
-            raise serializers.ValidationError("structured_data must be an object.")
-        return value
 
     def to_internal_value(self, data):
         values = super().to_internal_value(data)

@@ -93,14 +93,15 @@ def validate_section_content(theme: Any, section_type: str, content: dict[str, A
     """Raise `DomainRuleViolation` for an unknown type or content the type's schema rejects.
 
     Errors are keyed by the JSON path inside `content` (`items.0.question`). Image values must
-    also be UUID-shaped, so `assert_files_usable` never sees a free-form string.
+    also be UUID-shaped, and are rewritten in place to the canonical lowercase hyphenated form,
+    so what is stored matches the visibility pre-filter and the public-file route.
     """
     entry = (theme.section_types or {}).get(section_type)
     if entry is None:
         raise DomainRuleViolation({"section_type": f"Unknown section type '{section_type}'."})
     schema = entry["schema"]
     _raise_schema_errors(_validator(schema), content)
-    _assert_file_ids_shaped(schema, content)
+    _canonicalise_file_ids(schema, content)
 
 
 def validate_theme_config(theme: Any, config: Any) -> None:
@@ -121,23 +122,28 @@ def prefix_details(exc: DomainRuleViolation, prefix: str) -> dict[str, Any]:
 
 
 def validate_rich_text(doc: dict[str, Any]) -> None:
-    """Raise `DomainRuleViolation` unless `doc` is a valid block document."""
+    """Raise `DomainRuleViolation` unless `doc` is a valid block document; canonicalises ids."""
     schema = load_rich_text_schema()
     _raise_schema_errors(_validator(schema), doc)
-    _assert_file_ids_shaped(schema, doc)
+    _canonicalise_file_ids(schema, doc)
 
 
-def _assert_file_ids_shaped(schema: dict[str, Any], content: Any) -> None:
-    bad = {
-        path: "Must be a file id."
-        for path, parent, name in image_slots(schema, content)
-        if parent[name] not in (None, "") and _as_uuid(parent[name]) is None
-    }
+def _canonicalise_file_ids(schema: dict[str, Any], content: Any) -> None:
+    """Reject a non-UUID image value; rewrite every other one as `str(UUID(value))`, in place."""
+    bad: dict[str, str] = {}
+    for path, parent, name in image_slots(schema, content):
+        if parent[name] in (None, ""):
+            continue
+        if (parsed := as_uuid(parent[name])) is None:
+            bad[path] = "Must be a file id."
+        else:
+            parent[name] = str(parsed)
     if bad:
         raise DomainRuleViolation(bad)
 
 
-def _as_uuid(value: object) -> UUID | None:
+def as_uuid(value: object) -> UUID | None:
+    """`value` as a UUID, or None when it is not one (never raises)."""
     if isinstance(value, UUID):
         return value
     if not isinstance(value, str):
@@ -191,7 +197,7 @@ def image_slots(schema: dict[str, Any], content: Any) -> Iterable[tuple[str, dic
 
 def referenced_file_ids(schema: dict[str, Any], content: Any) -> set[UUID]:
     """Every file id at an `x-widget: image` property, through arrays and the rich-text `$ref`."""
-    ids = (_as_uuid(parent[name]) for _, parent, name in image_slots(schema, content))
+    ids = (as_uuid(parent[name]) for _, parent, name in image_slots(schema, content))
     return {file_id for file_id in ids if file_id is not None}
 
 
@@ -203,7 +209,7 @@ def assert_files_usable(ids: Iterable[UUID | str]) -> None:
     """
     wanted: set[UUID] = set()
     for raw in ids:
-        parsed = _as_uuid(raw)
+        parsed = as_uuid(raw)
         if parsed is None:
             raise DomainRuleViolation({"file_id": _FILE_NOT_AVAILABLE})
         wanted.add(parsed)
