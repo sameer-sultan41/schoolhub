@@ -118,19 +118,43 @@ Indexes: unique(tenant_id, feature_flag_id).
 Relationships: N:1 `tenants`, `feature_flags`.
 
 ### custom_domains
-A tenant's custom domain(s) for its public website (multi-tenancy §4; bound via website-cms).
+A tenant's custom domain claims for its public website (multi-tenancy §4). **Owned by
+`website_cms`** (`apps/api/apps/website_cms/models.py`), not platform-admin: the
+`website.custom-domain.*` keys and the website are its only users, and the tenancy app's
+migrations are platform-admin's in flight (website-cms plan, decision 7). A `TenantOwnedModel`
+with RLS.
 
 | Column | Type | Null | Default | Notes |
 | ------ | ---- | ---- | ------- | ----- |
-| domain | varchar(253) | no | — | Globally unique FQDN across all tenants |
+| domain | varchar(253) | no | — | Lowercase A-label FQDN (UTS #46), at least two labels, never under `PLATFORM_DOMAIN`. Unique per tenant among live rows, **not** globally: a claim proves nothing until DNS does |
 | status | varchar(20) | no | `'pending_dns'` | Enum: `pending_dns` `verifying` `active` `failed` `disabled` |
-| verification_token | varchar(64) | no | — | DNS TXT/CNAME challenge value |
-| verified_at | timestamptz | yes | — | |
-| tls_status | varchar(20) | no | `'pending'` | Enum: `pending` `issued` `failed` (edge-automated) |
-| is_primary | boolean | no | `false` | One primary per tenant |
+| verification_token | varchar(64) | no | — | Random token the school publishes as TXT `_schoolhub-verify.<domain>` |
+| verified_at | timestamptz | yes | — | Set on activation |
+| tls_status | varchar(20) | no | `'pending'` | Enum: `pending` `issued` `failed` (edge-automated; v1 has no provider, so `pending`) |
+| is_primary | boolean | no | `false` | At most one live primary per tenant; only an `active` domain may be primary (CHECK) |
+| last_error | varchar(300) | no | `''` | Why the last check failed, shown to the school |
+| failure_notified_at | timestamptz | yes | — | When `website.domain-failed` was sent, so it is sent once |
+| consecutive_failures | smallint | no | `0` | Failed daily re-checks of an active domain in a row; three lapse it to `failed` |
 
-Indexes: unique(domain); (tenant_id, is_primary).
-Relationships: N:1 `tenants`; consumed by the website renderer for domain→tenant resolution.
+Indexes: partial unique `(tenant_id, domain)` and `(tenant_id) WHERE is_primary` among live rows;
+unique `(id, tenant_id)` (the route table's foreign-key target). Checks: `domain` is lowercase;
+`is_primary` implies `status = 'active'`.
+Relationships: N:1 `tenants`; 1:0..1 `custom_domain_routes`.
+
+### custom_domain_routes
+Active custom domain → tenant, read by host resolution before any tenant is known. **Platform
+scope:** no RLS (the lookup has no tenant to bind), owned by `website_cms`. Holds only active
+domains; services insert a row on activation and hard-delete it on failure or delete, in the
+same transaction as the status change.
+
+| Column | Type | Null | Default | Notes |
+| ------ | ---- | ---- | ------- | ----- |
+| domain | varchar(253) | no | — | Globally unique: the database decides which school holds an active domain |
+| tenant_id | uuid | no | — | FK → tenants |
+| custom_domain_id | uuid | no | — | Unique; composite FK `(custom_domain_id, tenant_id)` → `custom_domains (id, tenant_id)`, deferrable, so a route always names its domain's own tenant |
+
+Indexes: unique(domain); unique(custom_domain_id). Check: `domain` is lowercase. Every write and
+delete filters by both `custom_domain_id` and `tenant_id`.
 
 ### users
 All user accounts — tenant members **and** platform staff. **Exception:** `tenant_id` is **nullable**; `NULL` = platform-scope account (auth-and-rbac §1).
@@ -332,4 +356,4 @@ Relationships: N:1 `saved_reports`; executions recorded as `background_jobs`.
 
 - `tenants` 1:1 `tenant_settings`; 1:N `subscriptions` (one live), `custom_domains`, `tenant_feature_overrides`, `users` (nullable for platform staff).
 - Identity: `users` N:M `roles` via `user_roles` (with record scope); `roles` N:M `permissions` via `role_permissions`.
-- Platform-scope tables (`tenants`, `plans`, `feature_flags`, `permissions`, plus `themes` in [`website-cms.md`](website-cms.md)) carry no `tenant_id` and are exempt from RLS; every other table here participates in the RLS policy from [`multi-tenancy.md`](../../02-architecture/multi-tenancy.md) §3.
+- Platform-scope tables (`tenants`, `plans`, `feature_flags`, `permissions`, `custom_domain_routes`, plus `themes` in [`website-cms.md`](website-cms.md)) carry no RLS policy; every other table here participates in the RLS policy from [`multi-tenancy.md`](../../02-architecture/multi-tenancy.md) §3.

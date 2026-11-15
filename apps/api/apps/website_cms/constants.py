@@ -36,6 +36,19 @@ DOMAIN_MAX_LENGTH = 253
 DOMAIN_TOKEN_MAX_LENGTH = 64
 DOMAIN_ERROR_MAX_LENGTH = 300
 
+#: Custom domain lifecycle (module doc §20 "Custom domains").
+MAX_CUSTOM_DOMAINS = 5
+#: Consecutive failed daily re-checks before an active domain lapses to `failed`.
+ACTIVE_RECHECK_FAILURE_LIMIT = 3
+#: Each DNS query's whole lifetime, in seconds.
+DNS_TIMEOUT_SECONDS = 3.0
+#: The TXT record holding the verification token is `<prefix>.<domain>`.
+DOMAIN_VERIFY_TXT_PREFIX = "_schoolhub-verify"
+#: The beat retries a claim that is not active for this many hours after it was added.
+DOMAIN_RETRY_WINDOW_HOURS = 72
+#: `website.domain-failed` is sent once, when a claim is still failing after this many hours.
+DOMAIN_FAILURE_NOTIFY_AFTER_HOURS = 24
+
 #: The only `x-widget` hints a theme schema may carry.
 SCHEMA_WIDGETS = frozenset({"text", "textarea", "image", "rich-text", "url"})
 

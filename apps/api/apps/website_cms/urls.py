@@ -14,4 +14,5 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("", include("apps.website_cms.school_events.urls")),
     path("", include("apps.website_cms.gallery.urls")),
     path("", include("apps.website_cms.contact_submissions.urls")),
+    path("", include("apps.website_cms.custom_domains.urls")),
 ]

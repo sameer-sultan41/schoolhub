@@ -19,6 +19,8 @@ either this file or `project-status.md`.
   - **Outbound `website.*` webhooks** (`website.page.published`, `website.contact-submission.created`). No webhook system exists.
   - **Contact CSV export and the traffic summary report** (§13). The inbox ships first; the traffic report needs the analytics integration.
   - **A real TLS edge provider, and plan-gating of custom domains.** The `EdgeCertificateProvisioner` adapter ships with a `NullProvisioner` that leaves `tls_status=pending`; gating waits for platform-admin's plan resolver.
+  - **Apex custom domains.** Verification requires a CNAME from the domain to `WEBSITE_CNAME_TARGET`, and DNS forbids a CNAME at a zone apex, so a school binds `www.myschool.tld`, not `myschool.tld`. Accepting an apex needs an A/ALIAS check against the edge's addresses, which depends on the real edge provider above.
+  - **Disabling a custom domain without deleting it.** `custom_domains.status` has `disabled`, but no route sets it in v1 (the module doc's §16 has no disable action); remove the domain instead, and re-add it to restore it.
   - **Notice attachments on the site, and teacher subjects.** Neither is in the public notices or teachers payload yet.
   - **Consent text on public forms** (§6), as a tenant-configurable string, and **a retention purge of `contact_submissions.ip`**. Until the purge ships, the staff API never serialises `ip`.
   - **Renderer i18n.** `apps/website` has no i18n today. New visible strings live in one `src/themes/default/copy.ts` constant map (English), so a later pass has one source.

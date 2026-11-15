@@ -29,6 +29,10 @@ dependencies = [
     # Validates website section content against the theme's JSON Schemas (website_cms),
     # and live responses against the OpenAPI components in tests.
     "jsonschema>=4.26",
+    # Custom-domain verification: the TXT token and CNAME lookups (website_cms.custom_domains).
+    "dnspython>=2.8",
+    # UTS #46 / IDNA 2008 mapping of a custom domain as entered, the form browsers send.
+    "idna>=3.10",
 ]
 
 [dependency-groups]

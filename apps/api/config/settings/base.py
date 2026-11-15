@@ -52,6 +52,12 @@ MACHINE_CLIENTS: dict[str, dict[str, str | list[str]]] = {
 WEBSITE_MACHINE_TOKENS = env("WEBSITE_MACHINE_TOKENS", default="")
 # The hostname a school's custom domain must CNAME to (website_cms custom domains).
 WEBSITE_CNAME_TARGET = env("WEBSITE_CNAME_TARGET", default="")
+# Custom-domain adapters (website_cms.custom_domains.adapters), selected as ADR-0034 selects a
+# payment provider. `dnspython` checks real DNS; `fake` (dev and tests) passes `*.test` only.
+# `null` is the only TLS provisioner until an edge provider ships: tls_status stays `pending`.
+# An empty value (a copied .env.example) means the default.
+WEBSITE_DNS_VERIFIER = env("WEBSITE_DNS_VERIFIER", default="") or "dnspython"
+WEBSITE_EDGE_PROVISIONER = env("WEBSITE_EDGE_PROVISIONER", default="") or "null"
 # The renderer's dev server port in links onto a tenant's site (preview); empty means the
 # scheme's default. The scheme is DASHBOARD_URL_SCHEME, as both front ends share it.
 WEBSITE_URL_PORT = ""
@@ -445,6 +451,8 @@ SPECTACULAR_SETTINGS = {
         "NavigationTargetTypeEnum": "apps.website_cms.constants.NavTargetType",
         "SectionTypeEnum": "apps.website_cms.constants.SectionType",
         "GalleryMediaTypeEnum": "apps.website_cms.models.MediaType",
+        "CustomDomainStatusEnum": "apps.website_cms.models.CustomDomainStatus",
+        "CustomDomainTlsStatusEnum": "apps.website_cms.models.TlsStatus",
     },
 }
 
@@ -508,6 +516,9 @@ CELERY_TASK_ROUTES = {
     "apps.fees_finance.tasks.export_finance_report_task": {"queue": "bulk"},
     "apps.fees_finance.tasks.expire_pending_online_payments": {"queue": "bulk"},
     "apps.fees_finance.tasks.reconcile_gateway_payments": {"queue": "bulk"},
+    # The custom-domain sweeps look DNS up for every claim; nobody waits on them.
+    "website_cms.reverify_custom_domains": {"queue": "bulk"},
+    "website_cms.recheck_active_custom_domains": {"queue": "bulk"},
     # A receipt confirmation is the one fee message a family is actively waiting
     # for — they are standing at the counter — so it takes the transactional
     # lane for the reason attendance's absence alert does.
@@ -617,6 +628,18 @@ CELERY_BEAT_SCHEDULE = {
     "reconcile-gateway-payments": {
         "task": "apps.fees_finance.tasks.reconcile_gateway_payments",
         "schedule": crontab(hour="5", minute="40"),
+    },
+    # Every 15 minutes: a school that has just set its DNS records sees its custom domain go
+    # live without pressing Verify again. Claims older than 72 hours are left alone.
+    "reverify-custom-domains": {
+        "task": "website_cms.reverify_custom_domains",
+        "schedule": crontab(minute="*/15"),
+    },
+    # Daily: an active domain whose DNS no longer points at us lapses after three failed
+    # checks in a row, and the site falls back to its subdomain (website-builder §1).
+    "recheck-active-custom-domains": {
+        "task": "website_cms.recheck_active_custom_domains",
+        "schedule": crontab(hour="2", minute="50"),
     },
 }
 

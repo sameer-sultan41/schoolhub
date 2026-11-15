@@ -2204,6 +2204,152 @@ paths:
               schema:
                 $ref: '#/components/schemas/ContactSubmission'
           description: ''
+  /api/v1/custom-domains:
+    get:
+      operationId: custom_domains_list
+      description: '`custom-domains`: claim, verify, choose the primary, remove. JWT
+        only.'
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - custom-domains
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCustomDomainList'
+          description: ''
+    post:
+      operationId: custom_domains_create
+      description: '`custom-domains`: claim, verify, choose the primary, remove. JWT
+        only.'
+      tags:
+      - custom-domains
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomDomainCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CustomDomainCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CustomDomainCreate'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomDomain'
+          description: ''
+  /api/v1/custom-domains/{id}:
+    patch:
+      operationId: custom_domains_partial_update
+      description: '`custom-domains`: claim, verify, choose the primary, remove. JWT
+        only.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - custom-domains
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCustomDomainUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCustomDomainUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCustomDomainUpdate'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomDomain'
+          description: ''
+    delete:
+      operationId: custom_domains_destroy
+      description: '`custom-domains`: claim, verify, choose the primary, remove. JWT
+        only.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - custom-domains
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/custom-domains/{id}:verify:
+    post:
+      operationId: custom_domains_:verify_create
+      description: |-
+        `POST /custom-domains/{id}:verify`: check DNS now and activate on success.
+
+        Not wrapped in ATOMIC_REQUESTS: each database step opens its own `tenant_atomic`
+        and the DNS lookup runs between them (ADR-0034).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - custom-domains
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomDomain'
+          description: ''
   /api/v1/delivery-logs:
     get:
       operationId: delivery_logs_list
@@ -18589,6 +18735,92 @@ components:
       - subject_id
       - subject_name
       - updated_at
+    CustomDomain:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        domain:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/CustomDomainStatusEnum'
+          readOnly: true
+        tls_status:
+          allOf:
+          - $ref: '#/components/schemas/CustomDomainTlsStatusEnum'
+          readOnly: true
+        is_primary:
+          type: boolean
+          readOnly: true
+        verified_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        last_error:
+          type: string
+          readOnly: true
+        dns_records:
+          type: array
+          items:
+            $ref: '#/components/schemas/DnsRecord'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - dns_records
+      - domain
+      - id
+      - is_primary
+      - last_error
+      - status
+      - tls_status
+      - updated_at
+      - verified_at
+    CustomDomainCreate:
+      type: object
+      description: POST input. Shape only; the service normalises and validates the
+        name (422).
+      properties:
+        domain:
+          type: string
+      required:
+      - domain
+    CustomDomainStatusEnum:
+      enum:
+      - pending_dns
+      - verifying
+      - active
+      - failed
+      - disabled
+      type: string
+      description: |-
+        * `pending_dns` - Pending DNS
+        * `verifying` - Verifying
+        * `active` - Active
+        * `failed` - Failed
+        * `disabled` - Disabled
+    CustomDomainTlsStatusEnum:
+      enum:
+      - pending
+      - issued
+      - failed
+      type: string
+      description: |-
+        * `pending` - Pending
+        * `issued` - Issued
+        * `failed` - Failed
     DailyRegisterReportRow:
       type: object
       description: |-
@@ -19024,6 +19256,21 @@ components:
       - student
       - student_name
       - updated_at
+      - value
+    DnsRecord:
+      type: object
+      description: 'One DNS record the school must create: `TXT` (the token) or `CNAME`
+        (the target).'
+      properties:
+        type:
+          type: string
+        name:
+          type: string
+        value:
+          type: string
+      required:
+      - name
+      - type
       - value
     DocumentVerificationDecisionEnum:
       enum:
@@ -23612,6 +23859,27 @@ components:
                   type: integer
                 total_pages:
                   type: integer
+    PaginatedCustomDomainList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomDomain'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                page:
+                  type: integer
+                page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
+                  type: integer
     PaginatedDeliveryLogList:
       type: object
       properties:
@@ -25468,6 +25736,12 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedCustomDomainUpdate:
+      type: object
+      description: 'PATCH input: `is_primary` is the only writable field.'
+      properties:
+        is_primary:
+          type: boolean
     PatchedDepartment:
       type: object
       properties:

@@ -18,9 +18,14 @@ from apps.website_cms.tasks import revalidate_website
 from core.tenancy.models import Tenant
 
 
+def host_tag(host: str) -> str:
+    """The renderer's `by-host` cache tag for one host."""
+    return f"tenant-host:{host}"
+
+
 def host_tags(tenant: Tenant) -> list[str]:
     """The renderer's `by-host` tag for every host of the tenant (subdomain and active domains)."""
-    return [f"tenant-host:{host}" for host in tenant_hosts(tenant)]
+    return [host_tag(host) for host in tenant_hosts(tenant)]
 
 
 def queue_revalidation(tenant_id: UUID, extra_tags: Iterable[str] = ()) -> None:
