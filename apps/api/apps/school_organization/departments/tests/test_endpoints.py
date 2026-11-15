@@ -65,3 +65,17 @@ class DepartmentEndpointTests(SchoolOrganizationAPITestCase):
         # ProgrammingError.
         self.assertEqual(self._ids("/api/v1/departments?ordering=description"), by_name)
         self.assertEqual(self._ids("/api/v1/departments?ordering=campus__name"), by_name)
+
+    def test_patch_round_trips_show_on_website(self) -> None:
+        self.allow("school.department.view", "school.department.update")
+        with tenant_context(self.tenant.id):
+            row = DepartmentFactory(tenant=self.tenant)
+        self.assertFalse(row.show_on_website)
+        for flag in (True, False):
+            response = self.client.patch(
+                f"/api/v1/departments/{row.pk}", {"show_on_website": flag}, format="json"
+            )
+            self.assertEqual(response.status_code, 200, response.json())
+            self.assertIs(response.json()["data"]["show_on_website"], flag)
+            with tenant_context(self.tenant.id):
+                self.assertIs(type(row).objects.get(pk=row.pk).show_on_website, flag)

@@ -41,6 +41,13 @@ class PublicOrganizationTests(TestCase):
         ClassFactory(tenant=self.tenant, level=4, show_on_website=True, is_active=False)
         self.assertEqual([r.id for r in public_classes()], [low.id, high.id])
 
+    def test_departments_with_equal_names_list_in_id_order(self) -> None:
+        departments = [
+            DepartmentFactory(tenant=self.tenant, name="Same", show_on_website=True)
+            for _ in range(2)
+        ]
+        self.assertEqual([r.id for r in public_departments()], sorted(d.id for d in departments))
+
     def test_contact_comes_from_the_primary_campus(self) -> None:
         CampusFactory(tenant=self.tenant, phone="000")
         CampusFactory(

@@ -8,6 +8,7 @@ from apps.staff_management.models import EmploymentStatus, Staff
 from apps.staff_management.public import public_teachers
 from apps.staff_management.tests.base import StaffManagementAPITestCase
 from apps.staff_management.tests.factories import DesignationFactory, StaffFactory
+from apps.staff_management.uploads import STAFF_PHOTO
 from apps.staff_management.visibility import staff_photo_files, sync_staff_photos
 from core.audit.models import AuditLog
 from core.files.models import File, FileVisibility
@@ -18,7 +19,7 @@ from core.tenancy.context import tenant_context
 class WebsiteTestBase(StaffManagementAPITestCase):
     def photo(self) -> File:
         with tenant_context(self.tenant.id):
-            return FileFactory(tenant=self.tenant, purpose="staff.photo", mime_type="image/png")
+            return FileFactory(tenant=self.tenant, purpose=STAFF_PHOTO.key, mime_type="image/png")
 
     def staff(self, **fields) -> Staff:
         with tenant_context(self.tenant.id):
@@ -120,6 +121,23 @@ class PhotoVisibilityTests(WebsiteTestBase):
         with tenant_context(self.tenant.id):
             self.assertEqual(staff_photo_files({used.pk, unused.pk}), {used.pk})
             self.assertEqual(staff_photo_files(set()), set())
+
+    def test_provider_loads_only_rows_naming_a_candidate_in_one_query(self) -> None:
+        used = self.photo()
+        for _ in range(3):
+            self.staff(photo_file=self.photo(), show_on_website=True)
+        self.staff(photo_file=used, show_on_website=True)
+        with tenant_context(self.tenant.id), self.assertNumQueries(1):
+            self.assertEqual(staff_photo_files({used.pk}), {used.pk})
+        with tenant_context(self.tenant.id), self.assertNumQueries(0):
+            self.assertEqual(staff_photo_files(set()), set())
+
+    def test_provider_ignores_a_file_that_is_not_a_staff_photo(self) -> None:
+        with tenant_context(self.tenant.id):
+            document = FileFactory(tenant=self.tenant, purpose="staff.document")
+        self.staff(photo_file=document, show_on_website=True)
+        with tenant_context(self.tenant.id):
+            self.assertEqual(staff_photo_files({document.pk}), set())
 
 
 class StaffWriteTests(WebsiteTestBase):
