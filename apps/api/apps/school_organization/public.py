@@ -11,7 +11,7 @@ from typing import Any
 
 from apps.school_organization.models import Campus, Class, Department
 
-# Address JSON is tenant-configurable; these keys read naturally, in this order, when present.
+# Only these address keys are published, in this order; anything else stays internal.
 _ADDRESS_KEYS = ("line1", "line2", "street", "area", "city", "state", "postal_code", "country")
 
 
@@ -53,15 +53,11 @@ def public_classes() -> list[PublicClassRow]:
 
 
 def format_address(address: Any) -> str:
-    """One display line from the address JSON: known keys first, else any text values."""
-    if isinstance(address, str):
-        return address.strip()
+    """One display line from the known address keys only, in `_ADDRESS_KEYS` order."""
     if not isinstance(address, dict):
         return ""
-    known = [address.get(key) for key in _ADDRESS_KEYS]
-    values = known if any(known) else list(address.values())
-    parts = [value.strip() for value in values if isinstance(value, str) and value.strip()]
-    return ", ".join(parts)
+    parts = [address.get(key) for key in _ADDRESS_KEYS]
+    return ", ".join(part.strip() for part in parts if isinstance(part, str) and part.strip())
 
 
 def primary_campus_contact() -> PublicContactRow | None:

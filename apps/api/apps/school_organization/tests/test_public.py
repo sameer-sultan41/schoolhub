@@ -59,11 +59,14 @@ class PublicOrganizationTests(TestCase):
         CampusFactory(tenant=self.tenant)
         self.assertIsNone(primary_campus_contact())
 
-    def test_format_address_shapes(self) -> None:
+    def test_format_address_uses_known_keys_only(self) -> None:
         self.assertEqual(format_address(None), "")
-        self.assertEqual(format_address(" Plot 4 "), "Plot 4")
-        self.assertEqual(format_address({"text": "Plot 4", "n": 3}), "Plot 4")
-        self.assertEqual(format_address({"city": "Lahore", "zip": ""}), "Lahore")
+        self.assertEqual(format_address("Plot 4"), "")
+        self.assertEqual(format_address({"notes": "gate code 1234"}), "")
+        self.assertEqual(
+            format_address({"notes": "gate code 1234", "city": " Lahore ", "line1": "1 Main"}),
+            "1 Main, Lahore",
+        )
 
     def test_public_queries_are_constant(self) -> None:
         for level in range(1, 6):

@@ -9,6 +9,7 @@ from apps.staff_management.public import public_teachers
 from apps.staff_management.tests.base import StaffManagementAPITestCase
 from apps.staff_management.tests.factories import DesignationFactory, StaffFactory
 from apps.staff_management.visibility import staff_photo_files, sync_staff_photos
+from core.audit.models import AuditLog
 from core.files.models import File, FileVisibility
 from core.files.tests.factories import FileFactory
 from core.tenancy.context import tenant_context
@@ -119,3 +120,46 @@ class PhotoVisibilityTests(WebsiteTestBase):
         with tenant_context(self.tenant.id):
             self.assertEqual(staff_photo_files({used.pk, unused.pk}), {used.pk})
             self.assertEqual(staff_photo_files(set()), set())
+
+
+class StaffWriteTests(WebsiteTestBase):
+    def test_patch_sets_updated_by_audits_and_syncs_photo(self) -> None:
+        self.allow("staff.staff.view", "staff.staff.update")
+        photo = self.photo()
+        staff = self.staff(photo_file=photo)
+
+        response = self.client.patch(
+            f"/api/v1/staff/{staff.pk}", {"show_on_website": True}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        with tenant_context(self.tenant.id):
+            self.assertEqual(Staff.objects.get(pk=staff.pk).updated_by, self.user.pk)
+            self.assertTrue(
+                AuditLog.objects.filter(action="update", entity_id=str(staff.pk)).exists()
+            )
+        self.assertEqual(self.visibility(photo), FileVisibility.PUBLIC)
+
+    def test_create_with_flag_publishes_the_photo(self) -> None:
+        self.allow("staff.staff.view", "staff.staff.create")
+        shown, hidden = self.photo(), self.photo()
+        for photo, flag, expected in (
+            (shown, True, FileVisibility.PUBLIC),
+            (hidden, False, FileVisibility.PRIVATE),
+        ):
+            response = self.client.post(
+                "/api/v1/staff",
+                {
+                    "campus_id": str(self.campus.pk),
+                    "first_name": "Ada",
+                    "last_name": "Lovelace",
+                    "staff_type": "teaching",
+                    "phone": f"+92300{int(flag)}000001",
+                    "joining_date": "2026-04-01",
+                    "photo_file_id": str(photo.pk),
+                    "show_on_website": flag,
+                },
+                format="json",
+            )
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.json())
+            self.assertEqual(self.visibility(photo), expected)
