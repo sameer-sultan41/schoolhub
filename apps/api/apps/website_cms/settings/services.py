@@ -117,9 +117,10 @@ def update_settings(
     errors: dict[str, str] = {}
     theme = row.theme
     if "theme_id" in data and data["theme_id"] != row.theme_id:
-        theme = Theme.objects.filter(id=data["theme_id"], is_active=True).first()
-        if theme is None:
+        chosen = Theme.objects.filter(id=data["theme_id"], is_active=True).first()
+        if chosen is None:
             raise DomainRuleViolation({"theme_id": "Unknown or inactive theme."})
+        theme = chosen
     if "theme_config" in data or theme.id != row.theme_id:
         validate_theme_config(theme, data.get("theme_config", row.theme_config))
     if "homepage_page_id" in data and data["homepage_page_id"] is None:

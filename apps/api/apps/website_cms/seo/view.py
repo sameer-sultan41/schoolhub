@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -30,10 +32,12 @@ class SeoSettingView(TenantScopedViewSetMixin, APIView):
     serializer_class = SeoSettingSerializer
 
     @staticmethod
-    def _target(request) -> tuple[str, object]:
+    def _target(request) -> tuple[str, UUID | None]:
         query = SeoTargetQuerySerializer(data=request.query_params)
         query.is_valid(raise_exception=True)
-        return query.validated_data["target_type"], query.validated_data.get("target_id")
+        target_type: str = query.validated_data["target_type"]
+        target_id: UUID | None = query.validated_data.get("target_id")
+        return target_type, target_id
 
     @extend_schema(parameters=_PARAMS, responses={200: SeoSettingSerializer})
     def get(self, request) -> Response:
