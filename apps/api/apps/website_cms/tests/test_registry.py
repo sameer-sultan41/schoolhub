@@ -94,7 +94,9 @@ class PermissionRegistryTests(TestCase):
 
 class FeatureAndUploadTests(TestCase):
     def test_module_flag_is_registered_and_off_by_default(self) -> None:
-        self.assertIn("module.website", feature_registry.keys)
+        self.assertIn("module.website", feature_registry.keys())
+        spec = next(spec for spec in feature_registry.all() if spec.key == "module.website")
+        self.assertIs(spec.default_enabled, False)
 
     def test_website_media_purpose(self) -> None:
         spec = upload_registry.get("website.media")
