@@ -278,7 +278,8 @@ API enforces either way.
   swatch), timezone, language and currency. The logo is sent only when it changed, and a cleared
   logo is sent as `null`. The colour's server error, which the API nests under
   `branding.primary_color`, lands under the colour input. A rename stales `/auth/me`, which names
-  the school.
+  the school. Without `school.settings.update` every control is disabled (the logo picker
+  included, so a viewer can't upload) and Save and Remove logo are hidden.
 - **Campuses, Departments, Houses** (`features/school/{campuses,departments,houses}/`): each a
   server-paged list with search, status (and for departments campus and type) filters in the URL,
   an add/edit dialog on `FormDialogLayout` + `useFormDialogSubmit`, and `RowEditRemoveActions`. The

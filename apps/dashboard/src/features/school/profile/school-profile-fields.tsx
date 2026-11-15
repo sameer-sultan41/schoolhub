@@ -25,6 +25,9 @@ const SAME_SESSION = () => () => true;
 export interface SchoolProfileFieldsProps {
   form: UseFormReturn<SchoolProfileFormValues>;
   settings: SchoolSettingsRecord;
+  /** No update key: Remove logo is hidden and the locale picker disabled, which a Radix
+   * `Select` takes only as a prop (its trigger opens on pointer-down). */
+  readOnly: boolean;
   /** A `useState` setter, so it is stable (the upload field's effect depends on it). */
   onUploadingChange: (uploading: boolean) => void;
 }
@@ -34,6 +37,7 @@ export interface SchoolProfileFieldsProps {
 export function SchoolProfileFields({
   form,
   settings,
+  readOnly,
   onUploadingChange,
 }: SchoolProfileFieldsProps) {
   const t = useTranslations("school");
@@ -68,7 +72,7 @@ export function SchoolProfileFields({
           onUploadStart={SAME_SESSION}
           onUploadingChange={onUploadingChange}
         />
-        {logoFileId ? (
+        {logoFileId && !readOnly ? (
           <Button
             type="button"
             variant="ghost"
@@ -114,6 +118,7 @@ export function SchoolProfileFields({
           label={t("profile.fields.locale")}
           placeholder={t("profile.fields.locale")}
           options={localeOptions}
+          disabled={readOnly}
         />
         <FormTextField
           form={form}

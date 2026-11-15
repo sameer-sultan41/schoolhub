@@ -147,11 +147,16 @@ function ProfileFormBody({ settings, canUpdate, permissionsKnown }: ProfileFormB
               </Alert>
             )}
             {formError && <Alert variant="destructive">{formError}</Alert>}
-            <SchoolProfileFields
-              form={form}
-              settings={settings}
-              onUploadingChange={setIsUploading}
-            />
+            {/* A native `disabled` reaches every control inside, the logo picker included, so a
+                viewer can't start an upload. */}
+            <fieldset disabled={!canUpdate} className="min-w-0 space-y-6">
+              <SchoolProfileFields
+                form={form}
+                settings={settings}
+                readOnly={!canUpdate}
+                onUploadingChange={setIsUploading}
+              />
+            </fieldset>
             {canUpdate && (
               <Button
                 type="submit"
