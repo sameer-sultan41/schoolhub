@@ -36,6 +36,11 @@ DASHBOARD_URL_PORT = ""
 # from the request's Host header. Empty here; prod.py requires it, dev and test set their own.
 API_PUBLIC_URL = env("API_PUBLIC_URL", default="")
 
+# The renderer's cache-invalidation webhook (website_cms.revalidation). Empty URL = disabled,
+# so a stack with no renderer never errors. The secret is the renderer's REVALIDATE_SECRET.
+WEBSITE_REVALIDATE_URL = env("WEBSITE_REVALIDATE_URL", default="")
+WEBSITE_REVALIDATE_SECRET = env("WEBSITE_REVALIDATE_SECRET", default="")
+
 # Encrypts each school's payment-gateway credentials (core.integrations.crypto): Fernet
 # keys, newest first. No default here, so production must set it (prod.py reads it from the
 # environment and fails at boot without it); dev.py and test.py supply their own.

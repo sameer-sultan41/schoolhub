@@ -13,6 +13,7 @@ from uuid import UUID
 
 from django.db.models import Q
 
+from apps.website_cms.constants import DEFAULT_THEME_CODE
 from apps.website_cms.models import (
     ContentStatus,
     PageSection,
@@ -24,8 +25,6 @@ from apps.website_cms.models import (
 )
 from apps.website_cms.validation import referenced_file_ids
 from core.files.visibility import register_public_reference_provider
-
-DEFAULT_THEME_CODE = "default"
 
 
 def _active_section_types() -> dict:

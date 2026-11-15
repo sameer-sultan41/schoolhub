@@ -68,3 +68,9 @@ class SectionType(models.TextChoices):
     CONTACT_FORM = "contact_form", "Contact form"
     RICH_TEXT = "rich_text", "Rich text"
     FAQ = "faq", "FAQ"
+
+
+#: Upper bound on sections in one page, so a payload cannot grow without limit.
+MAX_SECTIONS_PER_PAGE = 50
+
+DEFAULT_THEME_CODE = "default"

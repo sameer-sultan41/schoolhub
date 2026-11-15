@@ -1,9 +1,11 @@
 """Routes for the website module (module doc §16).
 
-Pure aggregator: each resource declares its routes in its own package's ``urls.py`` and is
-included here. No resource exists yet.
+Pure aggregator: each resource declares its routes in its own package's ``urls.py``.
 """
 
-from django.urls import URLPattern, URLResolver
+from django.urls import URLPattern, URLResolver, include, path
 
-urlpatterns: list[URLPattern | URLResolver] = []
+urlpatterns: list[URLPattern | URLResolver] = [
+    path("", include("apps.website_cms.settings.urls")),
+    path("", include("apps.website_cms.pages.urls")),
+]

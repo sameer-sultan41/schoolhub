@@ -49,6 +49,9 @@ x-api-env: &api-env
   AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-schoolhub}
   AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
   PLATFORM_DOMAIN: ${PLATFORM_DOMAIN:-localhost}
+  # Renderer cache invalidation (website_cms): the renderer's internal origin and its shared secret.
+  WEBSITE_REVALIDATE_URL: http://website:3001/api/revalidate
+  WEBSITE_REVALIDATE_SECRET: ${REVALIDATE_SECRET:-}
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
   SENTRY_DSN: ${SENTRY_DSN:-}
   # Overridable per-developer (infra/compose/.env, gitignored) for whoever runs the

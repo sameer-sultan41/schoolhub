@@ -103,6 +103,23 @@ def validate_section_content(theme: Any, section_type: str, content: dict[str, A
     _assert_file_ids_shaped(schema, content)
 
 
+def validate_theme_config(theme: Any, config: Any) -> None:
+    """Raise `DomainRuleViolation`, keyed under `theme_config`, unless `config` fits the theme."""
+    try:
+        _raise_schema_errors(_validator(theme.config_schema or {}), config)
+    except DomainRuleViolation as exc:
+        raise DomainRuleViolation(prefix_details(exc, "theme_config")) from exc
+
+
+def prefix_details(exc: DomainRuleViolation, prefix: str) -> dict[str, Any]:
+    """`exc`'s field-keyed details with every key moved under `prefix` (`non_field` -> prefix)."""
+    detail = exc.detail if isinstance(exc.detail, dict) else {"non_field": exc.detail}
+    return {
+        (prefix if key == "non_field" else f"{prefix}.{key}"): value
+        for key, value in detail.items()
+    }
+
+
 def validate_rich_text(doc: dict[str, Any]) -> None:
     """Raise `DomainRuleViolation` unless `doc` is a valid block document."""
     schema = load_rich_text_schema()
