@@ -10893,17 +10893,6 @@ export interface components {
                 };
             };
         };
-        PaginatedPageSectionList: {
-            data?: components["schemas"]["PageSection"][];
-            meta?: {
-                pagination?: {
-                    page?: number;
-                    page_size?: number;
-                    total_count?: number;
-                    total_pages?: number;
-                };
-            };
-        };
         PaginatedPaymentList: {
             data?: components["schemas"]["Payment"][];
             meta?: {
@@ -12209,12 +12198,6 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
-        PatchedReorderItems: {
-            ids?: string[];
-        };
-        PatchedReplaceSections: {
-            sections?: components["schemas"]["SectionInput"][];
-        };
         /**
          * @description `report_cards` — read, plus the two remark fields (§5.7).
          *
@@ -13187,6 +13170,12 @@ export interface components {
          * @enum {string}
          */
         RelationshipEnum: "father" | "mother" | "grandparent" | "sibling" | "legal_guardian" | "other";
+        ReorderItems: {
+            ids: string[];
+        };
+        ReplaceSections: {
+            sections: components["schemas"]["SectionInput"][];
+        };
         /**
          * @description `report_cards` — read, plus the two remark fields (§5.7).
          *
@@ -19206,27 +19195,18 @@ export interface operations {
     };
     "gallery_albums_gallery_items:reorder_partial_update": {
         parameters: {
-            query?: {
-                /** @description Which field to use when ordering the results. */
-                ordering?: string;
-                /** @description A page number within the paginated result set. */
-                page?: number;
-                /** @description Number of results to return per page. */
-                page_size?: number;
-                /** @description A search term. */
-                search?: string;
-            };
+            query?: never;
             header?: never;
             path: {
                 id: string;
             };
             cookie?: never;
         };
-        requestBody?: {
+        requestBody: {
             content: {
-                "application/json": components["schemas"]["PatchedReorderItems"];
-                "application/x-www-form-urlencoded": components["schemas"]["PatchedReorderItems"];
-                "multipart/form-data": components["schemas"]["PatchedReorderItems"];
+                "application/json": components["schemas"]["ReorderItems"];
+                "application/x-www-form-urlencoded": components["schemas"]["ReorderItems"];
+                "multipart/form-data": components["schemas"]["ReorderItems"];
             };
         };
         responses: {
@@ -19235,7 +19215,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedGalleryItemList"];
+                    "application/json": components["schemas"]["GalleryItem"][];
                 };
             };
         };
@@ -26902,45 +26882,18 @@ export interface operations {
     };
     website_pages_page_sections_partial_update: {
         parameters: {
-            query?: {
-                /** @description Which field to use when ordering the results. */
-                ordering?: string;
-                /** @description A page number within the paginated result set. */
-                page?: number;
-                /** @description Number of results to return per page. */
-                page_size?: number;
-                /**
-                 * @description * `home` - Home
-                 *     * `about` - About
-                 *     * `principal_message` - Principal message
-                 *     * `departments` - Departments
-                 *     * `teachers` - Teachers
-                 *     * `classes` - Classes
-                 *     * `admissions` - Admissions
-                 *     * `contact` - Contact
-                 *     * `standard` - Standard
-                 */
-                page_type?: "about" | "admissions" | "classes" | "contact" | "departments" | "home" | "principal_message" | "standard" | "teachers";
-                /** @description A search term. */
-                search?: string;
-                /**
-                 * @description * `draft` - Draft
-                 *     * `published` - Published
-                 *     * `archived` - Archived
-                 */
-                status?: "archived" | "draft" | "published";
-            };
+            query?: never;
             header?: never;
             path: {
                 id: string;
             };
             cookie?: never;
         };
-        requestBody?: {
+        requestBody: {
             content: {
-                "application/json": components["schemas"]["PatchedReplaceSections"];
-                "application/x-www-form-urlencoded": components["schemas"]["PatchedReplaceSections"];
-                "multipart/form-data": components["schemas"]["PatchedReplaceSections"];
+                "application/json": components["schemas"]["ReplaceSections"];
+                "application/x-www-form-urlencoded": components["schemas"]["ReplaceSections"];
+                "multipart/form-data": components["schemas"]["ReplaceSections"];
             };
         };
         responses: {
@@ -26949,7 +26902,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedPageSectionList"];
+                    "application/json": components["schemas"]["PageSection"][];
                 };
             };
         };

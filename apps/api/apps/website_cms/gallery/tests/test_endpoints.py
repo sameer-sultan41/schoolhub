@@ -8,7 +8,7 @@ from uuid import uuid4
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
-from apps.website_cms.constants import EMBED_HOSTS
+from apps.website_cms.constants import EMBED_HOSTS, EMBED_URL_MAX_LENGTH
 from apps.website_cms.models import ContentStatus, GalleryItem
 from apps.website_cms.tests.base import WebsiteAPITestCase
 from core.files.models import FileVisibility
@@ -236,6 +236,15 @@ class ItemTests(WebsiteAPITestCase):
         ):
             with self.subTest(url=url):
                 self.assertEqual(self._video(url).status_code, 422)
+
+    def test_video_embed_url_over_the_column_length_is_422_not_500(self) -> None:
+        url = "https://www.youtube.com/watch?v=" + "a" * EMBED_URL_MAX_LENGTH
+        response = self._video(url)
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("invalid_url", response.content.decode())
+
+    def test_video_embed_unparseable_url_is_422_not_500(self) -> None:
+        self.assertEqual(self._video("https://[www.youtube.com/x").status_code, 422)
 
     def test_video_embed_accepts_every_whitelisted_host(self) -> None:
         for index, host in enumerate(sorted(EMBED_HOSTS)):

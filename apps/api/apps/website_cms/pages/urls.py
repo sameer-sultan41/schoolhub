@@ -16,7 +16,10 @@ urlpatterns = [
     ),
     path(
         "website-pages/<uuid:pk>/page-sections",
-        WebsitePageViewSet.as_view({"patch": "replace_page_sections"}),
+        # A bulk replace of one page's sections: neither paginated nor filterable.
+        WebsitePageViewSet.as_view(
+            {"patch": "replace_page_sections"}, pagination_class=None, filter_backends=[]
+        ),
         name="website-pages-sections",
     ),
     *(

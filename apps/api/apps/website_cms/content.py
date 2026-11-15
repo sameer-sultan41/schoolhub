@@ -8,9 +8,24 @@ from uuid import UUID
 from django.shortcuts import get_object_or_404
 
 from apps.website_cms.constants import CONTENT_SLUG_MAX_LENGTH, CONTENT_SLUG_RE
-from apps.website_cms.models import SeoSetting
+from apps.website_cms.models import (
+    GalleryAlbum,
+    NewsPost,
+    SchoolEvent,
+    SeoSetting,
+    SeoTargetType,
+    WebsitePage,
+)
 from core.api.exceptions import DomainRuleViolation
 from core.tenancy.models import TenantOwnedModel
+
+#: Each SEO target type's model (`site` has none); a target must be a live row of the tenant.
+TARGET_MODELS: dict[str, type[TenantOwnedModel]] = {
+    SeoTargetType.PAGE: WebsitePage,
+    SeoTargetType.NEWS_POST: NewsPost,
+    SeoTargetType.SCHOOL_EVENT: SchoolEvent,
+    SeoTargetType.GALLERY_ALBUM: GalleryAlbum,
+}
 
 
 def validate_content_slug(slug: str) -> None:

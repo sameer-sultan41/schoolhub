@@ -42,8 +42,11 @@ def is_safe_url(value: str) -> bool:
         return not value.startswith(("//", "/\\"))
     if "\\" in value:
         return False
-    parts = urlsplit(value)
-    return parts.scheme == "https" and bool(parts.hostname)
+    try:
+        parts = urlsplit(value)
+        return parts.scheme == "https" and bool(parts.hostname)
+    except ValueError:  # e.g. an unclosed IPv6 bracket
+        return False
 
 
 @cache

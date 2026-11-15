@@ -7,28 +7,14 @@ from uuid import UUID
 
 from django.db import IntegrityError, transaction
 
+from apps.website_cms.content import TARGET_MODELS
 from apps.website_cms.errors import violation
-from apps.website_cms.models import (
-    GalleryAlbum,
-    NewsPost,
-    SchoolEvent,
-    SeoSetting,
-    SeoTargetType,
-    WebsitePage,
-)
+from apps.website_cms.models import SeoSetting, SeoTargetType
 from apps.website_cms.revalidation import queue_revalidation
 from apps.website_cms.validation import assert_files_usable, is_safe_url
 from core.api.exceptions import DomainRuleViolation
 from core.files.visibility import sync_file_visibility
-from core.tenancy.models import Tenant, TenantOwnedModel
-
-#: Each target type's model; `site` has none. A target must be a live row of the tenant.
-TARGET_MODELS: dict[str, type[TenantOwnedModel]] = {
-    SeoTargetType.PAGE: WebsitePage,
-    SeoTargetType.NEWS_POST: NewsPost,
-    SeoTargetType.SCHOOL_EVENT: SchoolEvent,
-    SeoTargetType.GALLERY_ALBUM: GalleryAlbum,
-}
+from core.tenancy.models import Tenant
 
 
 def resolve_target(target_type: str, target_id: UUID | None) -> UUID | None:

@@ -12,7 +12,12 @@ from __future__ import annotations
 
 from django.db import models
 
-from apps.website_cms.constants import CONTENT_SLUG_MAX_LENGTH, PAGE_SLUG_MAX_LENGTH
+from apps.website_cms.constants import (
+    CONTENT_SLUG_MAX_LENGTH,
+    EMBED_URL_MAX_LENGTH,
+    PAGE_SLUG_MAX_LENGTH,
+    empty_rich_text,
+)
 from core.tenancy.models import TenantOwnedModel, TimestampedModel
 
 
@@ -237,7 +242,7 @@ class NewsPost(TenantOwnedModel):
     title = models.CharField(max_length=200)
     slug = models.CharField(max_length=CONTENT_SLUG_MAX_LENGTH)
     excerpt = models.CharField(max_length=500, blank=True, default="")
-    body = models.JSONField(default=dict, blank=True)
+    body = models.JSONField(default=empty_rich_text, blank=True)
     cover_image_file_id = models.UUIDField(null=True, blank=True)
     status = models.CharField(
         max_length=20, choices=ContentStatus.choices, default=ContentStatus.DRAFT
@@ -270,7 +275,7 @@ class SchoolEvent(TenantOwnedModel):
 
     title = models.CharField(max_length=200)
     slug = models.CharField(max_length=CONTENT_SLUG_MAX_LENGTH)
-    description = models.JSONField(default=dict, blank=True)
+    description = models.JSONField(default=empty_rich_text, blank=True)
     starts_at = models.DateTimeField()
     ends_at = models.DateTimeField(null=True, blank=True)
     is_all_day = models.BooleanField(default=False)
@@ -339,7 +344,7 @@ class GalleryItem(TenantOwnedModel):
     gallery_album = models.ForeignKey(GalleryAlbum, on_delete=models.CASCADE, related_name="items")
     media_type = models.CharField(max_length=20, choices=MediaType.choices, default=MediaType.IMAGE)
     file_id = models.UUIDField(null=True, blank=True)
-    embed_url = models.CharField(max_length=500, blank=True, default="")
+    embed_url = models.CharField(max_length=EMBED_URL_MAX_LENGTH, blank=True, default="")
     caption = models.CharField(max_length=300, blank=True, default="")
     alt_text = models.CharField(max_length=300, blank=True, default="")
     position = models.PositiveIntegerField()

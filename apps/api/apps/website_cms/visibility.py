@@ -14,6 +14,7 @@ from uuid import UUID
 from django.db.models import Q
 
 from apps.website_cms.constants import DEFAULT_THEME_CODE
+from apps.website_cms.content import TARGET_MODELS
 from apps.website_cms.models import (
     ContentStatus,
     GalleryAlbum,
@@ -24,7 +25,6 @@ from apps.website_cms.models import (
     SeoSetting,
     SeoTargetType,
     Theme,
-    WebsitePage,
     WebsiteSettings,
 )
 from apps.website_cms.validation import referenced_file_ids, rich_text_file_ids
@@ -72,17 +72,11 @@ def _published_ids(model: type[TenantOwnedModel], ids: set[UUID | None]) -> set[
 def seo_image_files(candidates: set[UUID]) -> set[UUID]:
     """OG images of the site, or of a published page, post, event or album."""
     rows = list(SeoSetting.objects.alive().filter(og_image_file_id__in=candidates))
-    targets = {
-        SeoTargetType.PAGE: WebsitePage,
-        SeoTargetType.NEWS_POST: NewsPost,
-        SeoTargetType.SCHOOL_EVENT: SchoolEvent,
-        SeoTargetType.GALLERY_ALBUM: GalleryAlbum,
-    }
     published = {
         target_type: _published_ids(
             model, {row.target_id for row in rows if row.target_type == target_type}
         )
-        for target_type, model in targets.items()
+        for target_type, model in TARGET_MODELS.items()
     }
     return {
         row.og_image_file_id

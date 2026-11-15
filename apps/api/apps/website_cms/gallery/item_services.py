@@ -15,7 +15,7 @@ from django.db.models import Max
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
-from apps.website_cms.constants import EMBED_HOSTS
+from apps.website_cms.constants import EMBED_HOSTS, EMBED_URL_MAX_LENGTH
 from apps.website_cms.content import locked
 from apps.website_cms.errors import violation
 from apps.website_cms.models import ContentStatus, GalleryAlbum, GalleryItem, MediaType
@@ -37,6 +37,8 @@ def _validate_item(row: GalleryItem) -> None:
         return
     if not row.embed_url:
         raise violation("embed_url", "embed_required", "a video item needs an embed URL.")
+    if len(row.embed_url) > EMBED_URL_MAX_LENGTH:
+        raise violation("embed_url", "invalid_url", "the embed URL is too long.")
     if not is_safe_url(row.embed_url) or not row.embed_url.startswith("https://"):
         raise violation("embed_url", "invalid_url", "the embed URL must be an https URL.")
     if (urlsplit(row.embed_url).hostname or "").lower() not in EMBED_HOSTS:

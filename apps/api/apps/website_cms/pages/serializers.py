@@ -7,6 +7,7 @@ from rest_framework import serializers
 
 from apps.website_cms.constants import MAX_SECTIONS_PER_PAGE, SectionType
 from apps.website_cms.models import PageSection, PageType, WebsitePage
+from apps.website_cms.serializer_mixins import FullBodyMixin
 
 
 class PageSectionSerializer(serializers.ModelSerializer):
@@ -78,7 +79,7 @@ class SectionInputSerializer(serializers.Serializer):
     is_visible = serializers.BooleanField(default=True)
 
 
-class ReplaceSectionsSerializer(serializers.Serializer):
+class ReplaceSectionsSerializer(FullBodyMixin, serializers.Serializer):
     sections = SectionInputSerializer(many=True, max_length=MAX_SECTIONS_PER_PAGE)
 
 

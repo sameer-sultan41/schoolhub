@@ -25,7 +25,8 @@ urlpatterns = [
     ),
     path(
         "gallery-albums/<uuid:pk>/gallery-items:reorder",
-        GalleryItemViewSet.as_view({"patch": "reorder"}),
+        # A bulk action over one album: neither paginated nor filterable.
+        GalleryItemViewSet.as_view({"patch": "reorder"}, pagination_class=None, filter_backends=[]),
         name="gallery-items-reorder",
     ),
     path(

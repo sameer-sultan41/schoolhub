@@ -94,6 +94,15 @@ CONTENT_SLUG_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
 CONTENT_SLUG_RE = re.compile(CONTENT_SLUG_PATTERN)
 CONTENT_SLUG_MAX_LENGTH = 120
 
+#: Longest stored embed URL (the column is varchar(500)); the service answers 422 above it.
+EMBED_URL_MAX_LENGTH = 500
+
+
+def empty_rich_text() -> dict[str, list[dict[str, object]]]:
+    """The empty block document, the default for news `body` and event `description`."""
+    return {"blocks": []}
+
+
 #: Hosts a gallery `video_embed` item may point at.
 EMBED_HOSTS = frozenset(
     {"www.youtube.com", "youtube.com", "youtu.be", "player.vimeo.com", "vimeo.com"}

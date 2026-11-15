@@ -9,6 +9,7 @@ from django.test.utils import CaptureQueriesContext
 
 from apps.website_cms.models import ContentStatus, NewsPost
 from apps.website_cms.tests.base import WebsiteAPITestCase
+from apps.website_cms.validation import validate_rich_text
 from core.files.models import FileVisibility
 from core.tenancy.context import tenant_context
 
@@ -53,6 +54,14 @@ class NewsCrudTests(WebsiteAPITestCase):
         self.assertIsNone(data["published_at"])
         self.assertEqual(data["excerpt"], "Short")
         self.assertEqual(data["body"], body())
+
+    def test_omitted_body_stores_a_valid_empty_document(self) -> None:
+        self.allow("website.news-post.create")
+        response = self._create()
+        self.assertEqual(response.json()["data"]["body"], {"blocks": []})
+        validate_rich_text(response.json()["data"]["body"])
+        publish = self.client.post(f"{LIST}/{response.json()['data']['id']}:publish")
+        self.assertEqual(publish.status_code, 200)
 
     def test_news_body_must_be_rich_text(self) -> None:
         self.allow("website.news-post.create")

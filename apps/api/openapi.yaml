@@ -5709,43 +5709,20 @@ paths:
           type: string
           format: uuid
         required: true
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
-      - name: page_size
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
       tags:
       - gallery-albums
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedReorderItems'
+              $ref: '#/components/schemas/ReorderItems'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedReorderItems'
+              $ref: '#/components/schemas/ReorderItems'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedReorderItems'
+              $ref: '#/components/schemas/ReorderItems'
+        required: true
       security:
       - jwtAuth: []
       responses:
@@ -5753,7 +5730,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedGalleryItemList'
+                type: array
+                items:
+                  $ref: '#/components/schemas/GalleryItem'
           description: ''
   /api/v1/gallery-albums/{id}:publish:
     post:
@@ -16761,79 +16740,20 @@ paths:
           type: string
           format: uuid
         required: true
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
-      - name: page_size
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - in: query
-        name: page_type
-        schema:
-          type: string
-          enum:
-          - about
-          - admissions
-          - classes
-          - contact
-          - departments
-          - home
-          - principal_message
-          - standard
-          - teachers
-        description: |-
-          * `home` - Home
-          * `about` - About
-          * `principal_message` - Principal message
-          * `departments` - Departments
-          * `teachers` - Teachers
-          * `classes` - Classes
-          * `admissions` - Admissions
-          * `contact` - Contact
-          * `standard` - Standard
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      - in: query
-        name: status
-        schema:
-          type: string
-          enum:
-          - archived
-          - draft
-          - published
-        description: |-
-          * `draft` - Draft
-          * `published` - Published
-          * `archived` - Archived
       tags:
       - website-pages
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedReplaceSections'
+              $ref: '#/components/schemas/ReplaceSections'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedReplaceSections'
+              $ref: '#/components/schemas/ReplaceSections'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedReplaceSections'
+              $ref: '#/components/schemas/ReplaceSections'
+        required: true
       security:
       - jwtAuth: []
       responses:
@@ -16841,7 +16761,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedPageSectionList'
+                type: array
+                items:
+                  $ref: '#/components/schemas/PageSection'
           description: ''
   /api/v1/website-pages/{id}:archive:
     post:
@@ -24190,27 +24112,6 @@ components:
                   nullable: true
                 page_size:
                   type: integer
-    PaginatedPageSectionList:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/PageSection'
-        meta:
-          type: object
-          properties:
-            pagination:
-              type: object
-              properties:
-                page:
-                  type: integer
-                page_size:
-                  type: integer
-                total_count:
-                  type: integer
-                total_pages:
-                  type: integer
     PaginatedPaymentList:
       type: object
       properties:
@@ -26765,21 +26666,6 @@ components:
           type: string
           format: date-time
           readOnly: true
-    PatchedReorderItems:
-      type: object
-      properties:
-        ids:
-          type: array
-          items:
-            type: string
-            format: uuid
-    PatchedReplaceSections:
-      type: object
-      properties:
-        sections:
-          type: array
-          items:
-            $ref: '#/components/schemas/SectionInput'
     PatchedReportCard:
       type: object
       description: |-
@@ -28834,6 +28720,25 @@ components:
         * `sibling` - Sibling
         * `legal_guardian` - Legal guardian
         * `other` - Other
+    ReorderItems:
+      type: object
+      properties:
+        ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - ids
+    ReplaceSections:
+      type: object
+      properties:
+        sections:
+          type: array
+          items:
+            $ref: '#/components/schemas/SectionInput'
+      required:
+      - sections
     ReportCard:
       type: object
       description: |-

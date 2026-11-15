@@ -9,6 +9,7 @@ from django.test.utils import CaptureQueriesContext
 
 from apps.website_cms.models import ContentStatus
 from apps.website_cms.tests.base import WebsiteAPITestCase
+from apps.website_cms.validation import validate_rich_text
 from core.files.models import FileVisibility
 
 LIST = "/api/v1/school-events"
@@ -66,6 +67,12 @@ class EventCrudTests(WebsiteAPITestCase):
     def test_equal_start_and_end_is_allowed(self) -> None:
         self.allow("website.school-event.create")
         self.assertEqual(self._create(ends_at=START).status_code, 201)
+
+    def test_omitted_description_stores_a_valid_empty_document(self) -> None:
+        self.allow("website.school-event.create")
+        data = self._create().json()["data"]
+        self.assertEqual(data["description"], {"blocks": []})
+        validate_rich_text(data["description"])
 
     def test_description_must_be_rich_text(self) -> None:
         self.allow("website.school-event.create")

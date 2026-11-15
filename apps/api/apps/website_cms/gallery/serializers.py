@@ -5,6 +5,7 @@ from __future__ import annotations
 from rest_framework import serializers
 
 from apps.website_cms.models import GalleryAlbum, GalleryItem
+from apps.website_cms.serializer_mixins import FullBodyMixin
 
 
 class GalleryAlbumSerializer(serializers.ModelSerializer):
@@ -73,5 +74,5 @@ class GalleryItemWriteSerializer(serializers.ModelSerializer):
         }
 
 
-class ReorderItemsSerializer(serializers.Serializer):
+class ReorderItemsSerializer(FullBodyMixin, serializers.Serializer):
     ids = serializers.ListField(child=serializers.UUIDField(), allow_empty=True)

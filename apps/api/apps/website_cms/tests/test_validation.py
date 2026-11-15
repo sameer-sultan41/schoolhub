@@ -202,6 +202,8 @@ class SafeUrlTests(SimpleTestCase):
             "https://ex ample.test",
             "",
             "mailto:a@b.test",
+            "https://[x",
+            "https://[::1",
         ):
             with self.subTest(value=value):
                 self.assertFalse(is_safe_url(value))
