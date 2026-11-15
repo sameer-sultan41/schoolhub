@@ -138,10 +138,12 @@ class NavigationMenuUpdateTests(WebsiteAPITestCase):
 
     def test_label_length_is_bounded(self) -> None:
         self.allow("website.navigation.update")
-        too_long = self._patch([{"label": "x" * 61, "target_type": "news_index"}])
-        self.assertEqual(too_long.status_code, 400)
-        blank = self._patch([{"label": "   ", "target_type": "news_index"}])
-        self.assertEqual(blank.status_code, 422)
+        for label in ("x" * 61, "   ", ""):
+            with self.subTest(label=label):
+                response = self._patch([{"label": label, "target_type": "news_index"}])
+                self.assertEqual(response.status_code, 422)
+                self.assertIn("items.0.label", str(response.json()))
+                self.assertIn("invalid_label", str(response.json()))
 
     def test_index_target_takes_no_target(self) -> None:
         self.allow("website.navigation.update")
@@ -167,3 +169,18 @@ class NavigationMenuUpdateTests(WebsiteAPITestCase):
         response = self.client.post(f"/api/v1/website-pages/{page.id}:archive")
         self.assertEqual(response.status_code, 422)
         self.assertIn("page_in_use", str(response.json()))
+
+    def test_page_target_is_stored_canonically_so_the_in_use_guard_holds(self) -> None:
+        self.allow("website.navigation.update", "website.page.publish", "website.page.delete")
+        page = self.make_page(status=ContentStatus.PUBLISHED)
+        item = {"label": "A", "target_type": "page", "target": str(page.id).upper()}
+        response = self._patch([item])
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"]["items"][0]["target"], str(page.id))
+        archived = self.client.post(f"/api/v1/website-pages/{page.id}:archive")
+        self.assertEqual(archived.status_code, 422)
+        self.assertIn("page_in_use", str(archived.json()))
+        self.client.post(f"/api/v1/website-pages/{page.id}:unpublish")
+        deleted = self.client.delete(f"/api/v1/website-pages/{page.id}")
+        self.assertEqual(deleted.status_code, 422)
+        self.assertIn("page_in_use", str(deleted.json()))

@@ -21723,7 +21723,6 @@ components:
       properties:
         label:
           type: string
-          maxLength: 60
         target_type:
           $ref: '#/components/schemas/NavigationTargetTypeEnum'
         target:
@@ -21742,7 +21741,6 @@ components:
       properties:
         label:
           type: string
-          maxLength: 60
         target_type:
           $ref: '#/components/schemas/NavigationTargetTypeEnum'
         target:

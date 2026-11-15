@@ -78,7 +78,10 @@ def _normalise(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "target_type": item["target_type"],
             "children": _normalise(item.get("children") or []),
         }
-        if item["target_type"] in (NavTargetType.PAGE, NavTargetType.URL):
+        if item["target_type"] == NavTargetType.PAGE:
+            # Canonical form, so the page-in-use guard's `str(page.id)` comparison matches.
+            row["target"] = str(UUID(str(item["target"])))
+        elif item["target_type"] == NavTargetType.URL:
             row["target"] = str(item["target"])
         out.append(row)
     return out
