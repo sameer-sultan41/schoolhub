@@ -10,6 +10,7 @@ soft-deleted slug or menu can be reused (decision 14). String columns use "" for
 
 from __future__ import annotations
 
+from django.conf import settings
 from django.db import models
 
 from apps.website_cms.constants import (
@@ -56,6 +57,13 @@ class SeoTargetType(models.TextChoices):
 class MediaType(models.TextChoices):
     IMAGE = "image", "Image"
     VIDEO_EMBED = "video_embed", "Video embed"
+
+
+class ContactStatus(models.TextChoices):
+    NEW = "new", "New"
+    READ = "read", "Read"
+    RESPONDED = "responded", "Responded"
+    SPAM = "spam", "Spam"
 
 
 class Theme(TimestampedModel):
@@ -363,3 +371,36 @@ class GalleryItem(TenantOwnedModel):
 
     def __str__(self) -> str:
         return f"{self.media_type}@{self.position}"
+
+
+class ContactSubmission(TenantOwnedModel):
+    """A public contact-form message. `created_by` stays NULL (anonymous submitter) and `ip`
+    is never serialised to staff (privacy; retention-limited)."""
+
+    name = models.CharField(max_length=150)
+    email = models.CharField(max_length=254, blank=True, default="")
+    phone = models.CharField(max_length=30, blank=True, default="")
+    subject = models.CharField(max_length=200, blank=True, default="")
+    message = models.TextField()
+    source_page = models.ForeignKey(
+        WebsitePage, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    status = models.CharField(
+        max_length=20, choices=ContactStatus.choices, default=ContactStatus.NEW
+    )
+    handled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    ip = models.GenericIPAddressField(null=True, blank=True)
+
+    class Meta:
+        db_table = "contact_submissions"
+        ordering = ["-created_at", "id"]
+        indexes = [
+            models.Index(
+                fields=["tenant", "status", "created_at"], name="contact_sub_status_created_idx"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.status})"

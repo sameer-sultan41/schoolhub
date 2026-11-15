@@ -69,6 +69,7 @@ class WebsiteRlsIsolationTests(TestCase):
             "school_events",
             "gallery_albums",
             "gallery_items",
+            "contact_submissions",
         ]
         with connection.cursor() as cursor:
             cursor.execute("SELECT tablename FROM pg_policies WHERE tablename = ANY(%s)", [tables])
@@ -273,3 +274,23 @@ class ContentCrossTenantTests(WebsiteAPITestCase):
                     format="json",
                 )
                 self.assertEqual(response.status_code, 422)
+
+
+class ContactCrossTenantTests(WebsiteAPITestCase):
+    """Another tenant's submissions are invisible to the inbox: 404, never 403."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.allow_everything()
+        self.other = TenantFactory()
+        self.contact_b = self.make_contact(tenant=self.other)
+
+    def test_list_does_not_leak(self) -> None:
+        response = self.client.get("/api/v1/contact-submissions")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"], [])
+
+    def test_detail_and_patch_are_404(self) -> None:
+        url = f"/api/v1/contact-submissions/{self.contact_b.id}"
+        self.assertEqual(self.client.get(url).status_code, 404)
+        self.assertEqual(self.client.patch(url, {"status": "read"}, format="json").status_code, 404)

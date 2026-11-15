@@ -8,9 +8,12 @@ import http.client
 import json
 import logging
 from urllib.parse import urlsplit
+from uuid import UUID
 
 from celery import shared_task
 from django.conf import settings
+
+from core.tenancy.tasks import TenantAwareTask
 
 logger = logging.getLogger(__name__)
 
@@ -76,3 +79,17 @@ def revalidate_website(tenant_id: str, tags: list[str]) -> None:
     if status >= 400:
         # A 4xx is a configuration fault (bad secret, wrong URL); retrying cannot fix it.
         logger.error("website revalidation rejected with %s for tenant %s", status, tenant_id)
+
+
+@shared_task(base=TenantAwareTask, name="website_cms.notify_contact_received")
+def notify_contact_received(*, tenant_id: str, submission_id: str) -> None:
+    """Notify staff of a stored contact submission (queued on commit by its service)."""
+    from apps.website_cms import notifications
+    from apps.website_cms.models import ContactSubmission
+    from core.tenancy.context import tenant_atomic
+
+    with tenant_atomic(UUID(tenant_id)):
+        rows = ContactSubmission.objects.alive().select_related("tenant")
+        submission = rows.filter(pk=submission_id).first()
+        if submission is not None:
+            notifications.notify_contact_received(submission)

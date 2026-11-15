@@ -945,6 +945,41 @@ export interface paths {
         patch: operations["classes_partial_update"];
         trace?: never;
     };
+    "/api/v1/contact-submissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `contact-submissions`: the inbox. Rows arrive from the public form, never from staff. */
+        get: operations["contact_submissions_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/contact-submissions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `contact-submissions`: the inbox. Rows arrive from the public form, never from staff. */
+        get: operations["contact_submissions_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description `contact-submissions`: the inbox. Rows arrive from the public form, never from staff. */
+        patch: operations["contact_submissions_partial_update"];
+        trace?: never;
+    };
     "/api/v1/delivery-logs": {
         parameters: {
             query?: never;
@@ -8169,6 +8204,32 @@ export interface components {
          * @enum {string}
          */
         ConflictSeverityEnum: "hard" | "soft";
+        ContactSubmission: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly name: string;
+            readonly email: string;
+            readonly phone: string;
+            readonly subject: string;
+            readonly message: string;
+            /** Format: uuid */
+            readonly source_page_id: string;
+            readonly status: components["schemas"]["ContactSubmissionStatusEnum"];
+            /** Format: uuid */
+            readonly handled_by_id: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `new` - New
+         *     * `read` - Read
+         *     * `responded` - Responded
+         *     * `spam` - Spam
+         * @enum {string}
+         */
+        ContactSubmissionStatusEnum: "new" | "read" | "responded" | "spam";
         /**
          * @description Body for `:approve` / `:reject` — an optional note, nothing else.
          *
@@ -10534,6 +10595,17 @@ export interface components {
                 };
             };
         };
+        PaginatedContactSubmissionList: {
+            data?: components["schemas"]["ContactSubmission"][];
+            meta?: {
+                pagination?: {
+                    page?: number;
+                    page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
+                };
+            };
+        };
         PaginatedCurriculumList: {
             data?: components["schemas"]["Curriculum"][];
             meta?: {
@@ -11410,6 +11482,10 @@ export interface components {
             readonly created_at?: string;
             /** Format: date-time */
             readonly updated_at?: string;
+        };
+        /** @description PATCH input: `status` is the only writable field. */
+        PatchedContactSubmissionTriage: {
+            status?: components["schemas"]["ContactSubmissionStatusEnum"];
         };
         /**
          * @description `class_subjects` through the academics contract (§16).
@@ -16509,6 +16585,91 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Class"];
+                };
+            };
+        };
+    };
+    contact_submissions_list: {
+        parameters: {
+            query?: {
+                created_at__gte?: string;
+                created_at__lte?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `new` - New
+                 *     * `read` - Read
+                 *     * `responded` - Responded
+                 *     * `spam` - Spam
+                 */
+                status?: "new" | "read" | "responded" | "spam";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedContactSubmissionList"];
+                };
+            };
+        };
+    };
+    contact_submissions_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactSubmission"];
+                };
+            };
+        };
+    };
+    contact_submissions_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedContactSubmissionTriage"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedContactSubmissionTriage"];
+                "multipart/form-data": components["schemas"]["PatchedContactSubmissionTriage"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactSubmission"];
                 };
             };
         };

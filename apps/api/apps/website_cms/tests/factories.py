@@ -16,6 +16,8 @@ from apps.school_organization.tests.factories import (
     grant,
 )
 from apps.website_cms.models import (
+    ContactStatus,
+    ContactSubmission,
     ContentStatus,
     GalleryAlbum,
     GalleryItem,
@@ -105,6 +107,18 @@ class NewsPostFactory(factory.django.DjangoModelFactory):
     status = ContentStatus.DRAFT
 
 
+class ContactSubmissionFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = ContactSubmission
+
+    tenant = factory.SubFactory(TenantFactory)
+    name = factory.Sequence(lambda n: f"Visitor {n}")
+    email = factory.Sequence(lambda n: f"visitor{n}@example.com")
+    message = "Do you have places in Grade 3?"
+    status = ContactStatus.NEW
+    ip = "203.0.113.7"
+
+
 class SchoolEventFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = SchoolEvent
@@ -152,6 +166,7 @@ def enable_feature(tenant, key: str) -> None:
 
 
 __all__ = [
+    "ContactSubmissionFactory",
     "GalleryAlbumFactory",
     "GalleryItemFactory",
     "NavigationMenuFactory",

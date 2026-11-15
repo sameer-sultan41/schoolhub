@@ -2083,6 +2083,127 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/contact-submissions:
+    get:
+      operationId: contact_submissions_list
+      description: '`contact-submissions`: the inbox. Rows arrive from the public
+        form, never from staff.'
+      parameters:
+      - in: query
+        name: created_at__gte
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: created_at__lte
+        schema:
+          type: string
+          format: date-time
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - new
+          - read
+          - responded
+          - spam
+        description: |-
+          * `new` - New
+          * `read` - Read
+          * `responded` - Responded
+          * `spam` - Spam
+      tags:
+      - contact-submissions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedContactSubmissionList'
+          description: ''
+  /api/v1/contact-submissions/{id}:
+    get:
+      operationId: contact_submissions_retrieve
+      description: '`contact-submissions`: the inbox. Rows arrive from the public
+        form, never from staff.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - contact-submissions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactSubmission'
+          description: ''
+    patch:
+      operationId: contact_submissions_partial_update
+      description: '`contact-submissions`: the inbox. Rows arrive from the public
+        form, never from staff.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - contact-submissions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedContactSubmissionTriage'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedContactSubmissionTriage'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedContactSubmissionTriage'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactSubmission'
+          description: ''
   /api/v1/delivery-logs:
     get:
       operationId: delivery_logs_list
@@ -18288,6 +18409,72 @@ components:
       description: |-
         * `hard` - hard
         * `soft` - soft
+    ContactSubmission:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          readOnly: true
+        phone:
+          type: string
+          readOnly: true
+        subject:
+          type: string
+          readOnly: true
+        message:
+          type: string
+          readOnly: true
+        source_page_id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ContactSubmissionStatusEnum'
+          readOnly: true
+        handled_by_id:
+          type: string
+          format: uuid
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - email
+      - handled_by_id
+      - id
+      - message
+      - name
+      - phone
+      - source_page_id
+      - status
+      - subject
+      - updated_at
+    ContactSubmissionStatusEnum:
+      enum:
+      - new
+      - read
+      - responded
+      - spam
+      type: string
+      description: |-
+        * `new` - New
+        * `read` - Read
+        * `responded` - Responded
+        * `spam` - Spam
     CorrectionDecision:
       type: object
       description: |-
@@ -23377,6 +23564,27 @@ components:
                   type: integer
                 total_pages:
                   type: integer
+    PaginatedContactSubmissionList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContactSubmission'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                page:
+                  type: integer
+                page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
+                  type: integer
     PaginatedCurriculumList:
       type: object
       properties:
@@ -25174,6 +25382,12 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedContactSubmissionTriage:
+      type: object
+      description: 'PATCH input: `status` is the only writable field.'
+      properties:
+        status:
+          $ref: '#/components/schemas/ContactSubmissionStatusEnum'
     PatchedCurriculum:
       type: object
       description: |-

@@ -5,6 +5,7 @@ from __future__ import annotations
 from rest_framework.test import APITestCase
 
 from apps.website_cms.tests.factories import (
+    ContactSubmissionFactory,
     GalleryAlbumFactory,
     GalleryItemFactory,
     NewsPostFactory,
@@ -68,6 +69,11 @@ class WebsiteAPITestCase(APITestCase):
     def make_item(self, album, **kwargs):
         with tenant_context(album.tenant_id):
             return GalleryItemFactory(tenant=album.tenant, gallery_album=album, **kwargs)
+
+    def make_contact(self, tenant=None, **kwargs):
+        tenant = tenant or self.tenant
+        with tenant_context(tenant.id):
+            return ContactSubmissionFactory(tenant=tenant, **kwargs)
 
     def make_media(self, tenant=None):
         """A ready `website.media` file of the tenant."""
