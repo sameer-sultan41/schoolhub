@@ -25,6 +25,17 @@ RESERVED_PAGE_SLUGS = frozenset(
     }
 )
 
+#: Platform subdomain labels that never name a tenant's site. Mirrors the renderer's
+#: `RESERVED_LABELS` (apps/website/src/lib/host.ts); keep the two in step.
+RESERVED_SUBDOMAIN_LABELS = frozenset(
+    {"www", "api", "app", "admin", "dashboard", "static", "cdn", "mail", "status"}
+)
+
+#: Custom domain columns (docs/05-database/entities/tenancy.md `custom_domains`).
+DOMAIN_MAX_LENGTH = 253
+DOMAIN_TOKEN_MAX_LENGTH = 64
+DOMAIN_ERROR_MAX_LENGTH = 300
+
 #: The only `x-widget` hints a theme schema may carry.
 SCHEMA_WIDGETS = frozenset({"text", "textarea", "image", "rich-text", "url"})
 

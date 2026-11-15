@@ -2,7 +2,8 @@
 
 Invalidation is whole-tenant: the renderer tags every read `tenant:<id>`, so any publish,
 unpublish or settings change drops the tenant's cache. Queued on commit, so the renderer never
-re-reads before the change is visible.
+re-reads before the change is visible. Changes to what `by-host` reports (site settings, the
+module flag, domains) also tag every host of the tenant, so its cached status never goes stale.
 """
 
 from __future__ import annotations
@@ -12,14 +13,14 @@ from uuid import UUID
 
 from django.db import transaction
 
+from apps.website_cms.hosts import tenant_hosts
 from apps.website_cms.tasks import revalidate_website
-from apps.website_cms.urls_builder import tenant_site_host
 from core.tenancy.models import Tenant
 
 
-def host_tag(tenant: Tenant) -> str:
-    """The tag the renderer puts on its `by-host` read, for a tenant's platform subdomain."""
-    return f"tenant-host:{tenant_site_host(tenant)}"
+def host_tags(tenant: Tenant) -> list[str]:
+    """The renderer's `by-host` tag for every host of the tenant (subdomain and active domains)."""
+    return [f"tenant-host:{host}" for host in tenant_hosts(tenant)]
 
 
 def queue_revalidation(tenant_id: UUID, extra_tags: Iterable[str] = ()) -> None:

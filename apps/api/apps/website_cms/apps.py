@@ -1,5 +1,5 @@
 from django.apps import AppConfig
-from django.db.models.signals import post_migrate
+from django.db.models.signals import post_delete, post_migrate, post_save
 
 
 class WebsiteCmsConfig(AppConfig):
@@ -19,3 +19,18 @@ class WebsiteCmsConfig(AppConfig):
 
         # Tell core.files which files published website content keeps public (ADR-0013).
         register_providers()
+
+        from apps.website_cms.signals import revalidate_on_module_flag_change
+        from core.tenancy.models import TenantFeatureOverride
+
+        # `module.website` switched for a tenant: drop its cached site and `by-host` status.
+        post_save.connect(
+            revalidate_on_module_flag_change,
+            sender=TenantFeatureOverride,
+            dispatch_uid="website_cms.module_flag_saved",
+        )
+        post_delete.connect(
+            revalidate_on_module_flag_change,
+            sender=TenantFeatureOverride,
+            dispatch_uid="website_cms.module_flag_deleted",
+        )

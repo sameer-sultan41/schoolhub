@@ -23,6 +23,7 @@ from core.api.throttling import (
     TenantRateThrottle,
     UserRateThrottle,
 )
+from core.rbac.machine import MachineClientThrottle
 
 DEFAULT_RATES = {
     "tenant": "600/min",
@@ -36,6 +37,7 @@ DEFAULT_RATES = {
     "password_reset_email": "5/hour",
     "password_reset_ip": "20/hour",
     "invitation_ip": "60/hour",
+    "machine_client": "1200/min",
 }
 
 
@@ -55,6 +57,7 @@ class ThrottleRateTests(SimpleTestCase):
             PasswordResetEmailThrottle,
             PasswordResetIPThrottle,
             InvitationIPThrottle,
+            MachineClientThrottle,
         ):
             with self.subTest(throttle=throttle.__name__):
                 self.assertNotIn("rate", vars(throttle))
