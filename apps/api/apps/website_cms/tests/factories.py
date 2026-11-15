@@ -1,0 +1,116 @@
+"""Factories for the website module tests.
+
+See school_organization/tests/factories.py's module docstring for why every factory writes
+through the tenant-scoped default manager inside ``tenant_context(...)``.
+"""
+
+from __future__ import annotations
+
+import factory
+
+from apps.school_organization.tests.factories import (
+    TenantFactory,
+    UserFactory,
+    authenticate,
+    grant,
+)
+from apps.website_cms.models import (
+    ContentStatus,
+    MenuLocation,
+    NavigationMenu,
+    PageSection,
+    PageType,
+    SeoSetting,
+    SeoTargetType,
+    Theme,
+    WebsitePage,
+    WebsiteSettings,
+)
+from core.tenancy.models import FeatureFlag, TenantFeatureOverride
+
+
+def default_theme() -> Theme:
+    """The synced `default` theme; `post_migrate` creates it, this is the safety net."""
+    from apps.website_cms.themes import sync_themes
+
+    theme = Theme.objects.filter(code="default").first()
+    if theme is None:
+        sync_themes()
+        theme = Theme.objects.get(code="default")
+    return theme
+
+
+class WebsiteSettingsFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = WebsiteSettings
+
+    tenant = factory.SubFactory(TenantFactory)
+    theme = factory.LazyFunction(default_theme)
+
+
+class WebsitePageFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = WebsitePage
+
+    tenant = factory.SubFactory(TenantFactory)
+    title = factory.Sequence(lambda n: f"Page {n}")
+    slug = factory.Sequence(lambda n: f"page-{n}")
+    page_type = PageType.STANDARD
+    status = ContentStatus.DRAFT
+
+
+class PageSectionFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = PageSection
+
+    tenant = factory.SubFactory(TenantFactory)
+    website_page = factory.SubFactory(WebsitePageFactory)
+    section_type = "hero"
+    position = factory.Sequence(lambda n: n)
+    content = factory.LazyFunction(lambda: {"heading": "Welcome"})
+
+
+class NavigationMenuFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = NavigationMenu
+
+    tenant = factory.SubFactory(TenantFactory)
+    location = MenuLocation.HEADER
+    items = factory.LazyFunction(list)
+
+
+class SeoSettingFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = SeoSetting
+
+    tenant = factory.SubFactory(TenantFactory)
+    target_type = SeoTargetType.SITE
+    meta_title = "A school"
+
+
+def enable_feature(tenant, key: str) -> None:
+    """Force ``key`` on for ``tenant``; `module.website` ships `default_enabled=False`."""
+    from core.tenancy.context import tenant_context
+
+    flag = FeatureFlag.objects.get(key=key)
+    with tenant_context(tenant.id):
+        TenantFeatureOverride.objects.update_or_create(
+            tenant=tenant,
+            feature_flag=flag,
+            defaults={"enabled": True, "reason": "website_cms test fixture"},
+        )
+
+
+__all__ = [
+    "NavigationMenuFactory",
+    "PageSectionFactory",
+    "SeoSettingFactory",
+    "TenantFactory",
+    "UserFactory",
+    "WebsitePageFactory",
+    "WebsiteSettingsFactory",
+    "authenticate",
+    "default_theme",
+    "enable_feature",
+    "grant",
+]

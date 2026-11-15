@@ -117,6 +117,7 @@ MODULE_APPS = [
     "apps.fees_finance",
     "apps.communication",
     "apps.parent_portal",
+    "apps.website_cms",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + CORE_APPS + MODULE_APPS
@@ -405,6 +406,13 @@ SPECTACULAR_SETTINGS = {
         # A bare `value` would otherwise take the generic `ValueEnum`, which any later
         # `value` choice set anywhere on the platform would collide with.
         "AIFeedbackValueEnum": "core.ai.models.FEEDBACK_VALUES",
+        # website_cms: one `status` shared by pages, news, events and albums; `section_type`
+        # is the OpenAPI enum the renderer's registry is typed against (plan decision 6).
+        "WebsiteContentStatusEnum": "apps.website_cms.models.ContentStatus",
+        "WebsitePageTypeEnum": "apps.website_cms.models.PageType",
+        "NavigationMenuLocationEnum": "apps.website_cms.models.MenuLocation",
+        "SeoTargetTypeEnum": "apps.website_cms.models.SeoTargetType",
+        "SectionTypeEnum": "apps.website_cms.constants.SectionType",
     },
 }
 
