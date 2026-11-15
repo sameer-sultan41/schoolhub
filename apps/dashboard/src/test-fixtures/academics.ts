@@ -1,4 +1,4 @@
-import type { AcademicSessionSummary } from "@/services";
+import type { AcademicSessionSummary, TermRecord } from "@/services";
 
 /**
  * Fixtures the Academics tests share: the academic sessions and the ids of the records a
@@ -34,3 +34,20 @@ export const CLOSED_SESSION: AcademicSessionSummary = {
   is_current: false,
 };
 export const SESSIONS = [CURRENT_SESSION, PLANNED_SESSION, CLOSED_SESSION];
+
+export const TERM_ID = "7c8d9e0f-1a2b-4c3d-9e4f-5a6b7c8d9e0f";
+
+/** Term 1 of the current session, its first half; override what a test needs. */
+export function termRecord(overrides: Partial<TermRecord> = {}): TermRecord {
+  return {
+    id: TERM_ID,
+    academic_session_id: SESSION_ID,
+    name: "Term 1",
+    sequence: 1,
+    start_date: "2026-04-01",
+    end_date: "2026-09-30",
+    created_at: "2026-03-01T00:00:00Z",
+    updated_at: "2026-03-01T00:00:00Z",
+    ...overrides,
+  };
+}

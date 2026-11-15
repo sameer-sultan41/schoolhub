@@ -1,7 +1,12 @@
 import type { Page } from "@schoolhub/types";
 
-import type { CampusRecord, DepartmentRecord, HouseRecord } from "@/services";
-import { CAMPUS_ID } from "@/test-fixtures/academics";
+import type {
+  AcademicSessionRecord,
+  CampusRecord,
+  DepartmentRecord,
+  HouseRecord,
+} from "@/services";
+import { CAMPUS_ID, SESSION_ID } from "@/test-fixtures/academics";
 
 // UUID-shaped: the URL and the form drop an id that isn't one.
 export const DEPARTMENT_ID = "7b8c9d0e-1f2a-4b3c-9d4e-5f6a7b8c9d0e";
@@ -56,6 +61,27 @@ export function houseRecord(overrides: Partial<HouseRecord> = {}): HouseRecord {
     ...TIMES,
     ...overrides,
   };
+}
+
+/** 2026-27, the active current session; override what a test needs. */
+export function sessionRecord(
+  overrides: Partial<AcademicSessionRecord> = {},
+): AcademicSessionRecord {
+  return {
+    id: SESSION_ID,
+    name: "2026-27",
+    start_date: "2026-04-01",
+    end_date: "2027-03-31",
+    status: "active",
+    is_current: true,
+    ...TIMES,
+    ...overrides,
+  };
+}
+
+/** One cursor page, as `/academic-sessions` answers (its default paginator). */
+export function cursorPage<T>(items: T[], next: string | null = null): Page<T> {
+  return { items, pagination: { next_cursor: next, previous_cursor: null, page_size: 25 } };
 }
 
 export function structurePage<T>(items: T[]): Page<T> {

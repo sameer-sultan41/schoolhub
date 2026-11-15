@@ -17,7 +17,7 @@ interface HarnessProps {
 }
 
 function Harness({ mutationFn, onSuccess = noop }: HarnessProps) {
-  const { error, isPending, confirm } = useConfirmAction({
+  const { error, failure, isPending, confirm } = useConfirmAction({
     mutationFn,
     onSuccess,
     fallbackMessage: FALLBACK,
@@ -28,6 +28,7 @@ function Harness({ mutationFn, onSuccess = noop }: HarnessProps) {
       <Button onClick={confirm}>Confirm</Button>
       {error && <p role="alert">{error}</p>}
       <span>{isPending ? "pending" : "idle"}</span>
+      <output>{failure instanceof ApiError ? failure.details.length : "none"}</output>
     </div>
   );
 }
@@ -112,6 +113,25 @@ describe("useConfirmAction", () => {
     expect(screen.queryByText("That action isn't allowed right now.")).not.toBeInTheDocument();
   });
 
+  it("hands back the refusal as it came, every detail kept, for a dialog that lists them", async () => {
+    const gaps = new ApiError({
+      code: "domain_rule_violation",
+      message: "unprocessable",
+      status: 422,
+      url: "/academic-sessions/1:activate",
+      details: [
+        { field: "structure", issue: "At least one active campus is required." },
+        { field: "structure", issue: "At least one term is required." },
+      ],
+    });
+    renderWithProviders(<Harness mutationFn={() => Promise.reject(gaps)} />);
+
+    await confirmNow();
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("2");
+  });
+
   it("falls back to its own message for a failure that isn't an API error", async () => {
     renderWithProviders(<Harness mutationFn={() => Promise.reject(new TypeError("down"))} />);
 
@@ -135,6 +155,7 @@ describe("useConfirmAction", () => {
     // The second attempt is still in flight, and the old message is already gone.
     expect(await screen.findByText("pending")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("none");
     await act(async () => {
       second.resolve("removed");
       await second.promise;

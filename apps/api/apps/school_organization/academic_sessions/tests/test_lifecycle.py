@@ -9,9 +9,11 @@ service-behaviour only, split out because `activate`/`close`/`clone` moved to
 from __future__ import annotations
 
 import datetime
+from unittest import mock
 
 from django.test import TestCase
 
+from apps.school_organization.academic_sessions.services import validate
 from apps.school_organization.academic_sessions.services.activate import activate_session
 from apps.school_organization.academic_sessions.services.clone import clone_session
 from apps.school_organization.academic_sessions.services.close import close_session
@@ -20,7 +22,7 @@ from apps.school_organization.academic_sessions.services.validate import (
     session_completeness_errors,
 )
 from apps.school_organization.models import AcademicSession, ClassSubject, SessionStatus
-from apps.school_organization.services import assert_session_writable
+from apps.school_organization.services import assert_session_writable, term_coverage_errors
 from apps.school_organization.tests.base import TenantFixtureMixin
 from apps.school_organization.tests.factories import (
     SESSION_END,
@@ -141,6 +143,39 @@ class SessionLifecycleServiceTests(TenantFixtureMixin, TestCase):
             self.assertEqual(cloned.count(), 1)
             self.assertEqual(cloned.first().weekly_periods, 5)
             self.assertEqual(target.status, SessionStatus.PLANNED)
+
+
+class TermCoverageSplitTests(TenantFixtureMixin, TestCase):
+    """`term_coverage_errors`, split out of the activation check for the onboarding wizard."""
+
+    def test_completeness_still_reports_terms_through_split(self) -> None:
+        with tenant_context(self.tenant.id):
+            grade = ClassFactory(tenant=self.tenant)
+            SectionFactory(
+                tenant=self.tenant, school_class=grade, campus=CampusFactory(tenant=self.tenant)
+            )
+            session = AcademicSessionFactory(tenant=self.tenant)
+
+            no_terms = ["At least one term is required."]
+            self.assertEqual(term_coverage_errors(session), no_terms)
+            self.assertEqual(session_completeness_errors(session), no_terms)
+
+            TermFactory(
+                tenant=self.tenant,
+                academic_session=session,
+                start_date=SESSION_START,
+                end_date=SESSION_END - datetime.timedelta(days=30),
+            )
+            gap = ["Term dates must cover the whole session window."]
+            self.assertEqual(term_coverage_errors(session), gap)
+            self.assertEqual(session_completeness_errors(session), gap)
+
+            # The activation check reads its term errors from the split, not its own copy.
+            with mock.patch.object(validate, "term_coverage_errors", return_value=["sentinel"]):
+                self.assertEqual(session_completeness_errors(session), ["sentinel"])
+
+        # One function behind both names: the module entry point (ADR-0013) and the package's.
+        self.assertIs(term_coverage_errors, validate.term_coverage_errors)
 
 
 class SessionOverlapServiceTests(TenantFixtureMixin, TestCase):

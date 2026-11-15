@@ -156,7 +156,7 @@ export function buildAcademicSession(overrides: Partial<AcademicSession> = {}): 
   };
 }
 
-/** Trimmed to what a term picker reads (`TermOption`). */
+/** Trimmed to what a term picker reads: its name and its order. */
 export interface Term {
   id: string;
   academic_session_id: string;

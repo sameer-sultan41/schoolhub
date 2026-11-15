@@ -6,6 +6,7 @@ import {
   DEPARTMENT_KEYS,
   HOUSE_KEYS,
   SCHOOL_SETTINGS_UPDATE,
+  SESSION_KEYS,
 } from "./school-permissions";
 
 /**
@@ -26,6 +27,12 @@ export const SCHOOL_SECTIONS = [
     labelKey: "nav.campuses",
     menuTitle: "Campuses",
     permission: anyWriteKey(CAMPUS_KEYS),
+  },
+  {
+    href: Paths.SCHOOL_SESSIONS,
+    labelKey: "nav.sessions",
+    menuTitle: "Sessions & terms",
+    permission: Object.values(SESSION_KEYS),
   },
   {
     href: Paths.SCHOOL_DEPARTMENTS,

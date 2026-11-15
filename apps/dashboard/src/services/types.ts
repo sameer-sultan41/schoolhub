@@ -232,6 +232,8 @@ export type {
   TimetableValidation,
 } from "./modules/timetable-slots";
 export type {
+  AcademicSessionRecord,
+  AcademicSessionStatus,
   AcademicSessionSummary,
   CampusInput,
   CampusRecord,
@@ -245,7 +247,13 @@ export type {
   HouseRecord,
   SchoolOrganizationOption,
   SectionOption,
+  SessionCloneInput,
+  SessionInput,
+  SessionPageQuery,
   StructurePageQuery,
+  TermCreateInput,
+  TermInput,
+  TermRecord,
 } from "./modules/school-organization";
 export type { SchoolSettingsRecord, SchoolSettingsUpdate } from "./modules/school-settings";
 export type {

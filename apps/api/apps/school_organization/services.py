@@ -17,6 +17,10 @@ that app), several functions here are imported directly by other apps:
 - `SECTION_SCOPE` — `SectionViewSet`'s record-scope settings, read by
   `apps/student_management/views.py` for a check on a section row (ADR-0013
   keeps another app out of `sections/viewset.py`)
+- `term_coverage_errors` — defined in `academic_sessions/services/validate.py`
+  beside the activation check that calls it, and re-exported here so the
+  onboarding wizard's session step reads it through this entry point
+  (ADR-0013) rather than reaching into the package
 
 Moving them into a resource package would mean editing import lines in
 other apps for a purely internal reorganization — a bigger, riskier blast
@@ -52,6 +56,10 @@ from collections.abc import Iterable
 
 from django.db.models import QuerySet
 
+# A redundant alias marks the re-export as deliberate (see the docstring above).
+from apps.school_organization.academic_sessions.services.validate import (
+    term_coverage_errors as term_coverage_errors,
+)
 from apps.school_organization.models import (
     AcademicSession,
     Campus,

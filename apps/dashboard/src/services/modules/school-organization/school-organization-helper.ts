@@ -1,7 +1,12 @@
+import { ApiError } from "@schoolhub/api-client";
+
 import { FILTER_ALL } from "@/lib/constants";
 import { copyMappedFields } from "@/lib/helpers";
 import {
   DEFAULT_DEPARTMENT_TYPE,
+  SESSION_QUERY_FIELDS,
+  SESSION_STATUSES,
+  SESSION_STRUCTURE_FIELD,
   STRUCTURE_QUERY_FIELDS,
   STRUCTURE_STATUS,
 } from "./school-organization-constant";
@@ -10,8 +15,12 @@ import type {
   DepartmentFormValues,
   HolidayFormValues,
   HouseFormValues,
+  SessionFormValues,
+  TermFormValues,
 } from "./school-organization.schema";
 import type {
+  AcademicSessionRecord,
+  AcademicSessionStatus,
   CampusInput,
   CampusRecord,
   DepartmentInput,
@@ -20,7 +29,11 @@ import type {
   HolidayEntry,
   HouseInput,
   HouseRecord,
+  SessionInput,
+  SessionPageQuery,
   StructurePageQuery,
+  TermInput,
+  TermRecord,
 } from "./school-organization-type";
 
 /** The school-organization module's pure helpers: plain data in, plain data out. */
@@ -221,4 +234,76 @@ export function holidaysByDate(
   return holidays
     .map((entry, index) => ({ entry, index }))
     .sort((a, b) => a.entry.start_date.localeCompare(b.entry.start_date) || a.index - b.index);
+}
+
+// --- Academic sessions and terms ------------------------------------------------------------
+
+export function toSessionQueryParams(
+  query: SessionPageQuery,
+): Record<string, string | number | undefined> {
+  const params: Record<string, unknown> = {};
+  copyMappedFields(
+    query,
+    SESSION_QUERY_FIELDS,
+    (value) => value !== undefined && value !== "",
+    params,
+  );
+  return params as Record<string, string | number | undefined>;
+}
+
+/** The status filter -> `?status=`: `all` (or anything else) is no filter. */
+export function sessionStatusFilter(status: string): AcademicSessionStatus | undefined {
+  return SESSION_STATUSES.find((candidate) => candidate === status);
+}
+
+export function defaultSessionFormValues(): SessionFormValues {
+  return { name: "", start_date: "", end_date: "" };
+}
+
+export function recordToSessionFormValues(record: AcademicSessionRecord): SessionFormValues {
+  return { name: record.name, start_date: record.start_date, end_date: record.end_date };
+}
+
+/** A create, an edit and a clone send the same three fields. */
+export function buildSessionInput(values: SessionFormValues): SessionInput {
+  return { name: values.name.trim(), start_date: values.start_date, end_date: values.end_date };
+}
+
+/** The order a new term takes: after the session's last one. */
+export function nextTermSequence(terms: readonly TermRecord[]): number {
+  return terms.reduce((highest, term) => Math.max(highest, term.sequence), 0) + 1;
+}
+
+export function defaultTermFormValues(sequence: number): TermFormValues {
+  return { name: "", sequence: String(sequence), start_date: "", end_date: "" };
+}
+
+export function recordToTermFormValues(record: TermRecord): TermFormValues {
+  return {
+    name: record.name,
+    sequence: String(record.sequence),
+    start_date: record.start_date,
+    end_date: record.end_date,
+  };
+}
+
+export function buildTermInput(values: TermFormValues): TermInput {
+  return {
+    name: values.name.trim(),
+    sequence: Number(values.sequence),
+    start_date: values.start_date,
+    end_date: values.end_date,
+  };
+}
+
+/**
+ * What a refused `:activate` says is missing (`session_completeness_errors`, a 422 with
+ * `{structure: [...]}`), one sentence per gap, or `[]` for any other failure. The envelope
+ * flattens the list to one detail per sentence, all under `structure`.
+ */
+export function sessionStructureIssues(error: unknown): string[] {
+  if (!(error instanceof ApiError)) return [];
+  return error.details
+    .filter((detail) => detail.field === SESSION_STRUCTURE_FIELD)
+    .map((detail) => detail.issue);
 }

@@ -2,8 +2,9 @@ import { collectPages, fetchPage, MAX_PAGE_SIZE } from "@schoolhub/api-client";
 import type { Page } from "@schoolhub/types";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
-import { toStructureQueryParams } from "./school-organization-helper";
+import { toSessionQueryParams, toStructureQueryParams } from "./school-organization-helper";
 import type {
+  AcademicSessionRecord,
   AcademicSessionSummary,
   CampusInput,
   CampusRecord,
@@ -15,8 +16,13 @@ import type {
   HouseRecord,
   SchoolOrganizationOption,
   SectionOption,
+  SessionCloneInput,
+  SessionInput,
+  SessionPageQuery,
   StructurePageQuery,
-  TermOption,
+  TermCreateInput,
+  TermInput,
+  TermRecord,
 } from "./school-organization-type";
 
 /**
@@ -99,8 +105,8 @@ export async function fetchAcademicSessions(): Promise<AcademicSessionSummary[]>
 }
 
 /** `GET /terms` — one session's terms, in their order within it. */
-export async function fetchTerms(academicSessionId: string): Promise<TermOption[]> {
-  const terms = await collectPages<TermOption>(apiClient, endpoints.schoolOrganization.terms, {
+export async function fetchTerms(academicSessionId: string): Promise<TermRecord[]> {
+  const terms = await collectPages<TermRecord>(apiClient, endpoints.schoolOrganization.terms, {
     query: { academic_session_id: academicSessionId, page_size: MAX_PAGE_SIZE },
   });
   return terms.sort((a, b) => a.sequence - b.sequence);
@@ -183,6 +189,76 @@ export async function updateHouse(id: string, input: HouseInput): Promise<HouseR
 
 export async function deleteHouse(id: string): Promise<void> {
   await apiClient.delete(endpoints.schoolOrganization.house(id));
+}
+
+// --- Academic sessions (cursor paged) and their terms ---------------------------------------
+
+export async function fetchSessionPage(
+  query: SessionPageQuery,
+): Promise<Page<AcademicSessionRecord>> {
+  return fetchPage<AcademicSessionRecord>(
+    apiClient,
+    endpoints.schoolOrganization.academicSessions,
+    {
+      query: toSessionQueryParams(query),
+    },
+  );
+}
+
+export async function createSession(input: SessionInput): Promise<AcademicSessionRecord> {
+  const { data } = await apiClient.post<AcademicSessionRecord>(
+    endpoints.schoolOrganization.academicSessions,
+    input,
+  );
+  return data;
+}
+
+export async function updateSession(
+  id: string,
+  input: SessionInput,
+): Promise<AcademicSessionRecord> {
+  const { data } = await apiClient.patch<AcademicSessionRecord>(
+    endpoints.schoolOrganization.academicSession(id),
+    input,
+  );
+  return data;
+}
+
+/** `:activate`: refused with a 422 `{structure: [...]}` listing every gap at once. */
+export async function activateSession(id: string): Promise<AcademicSessionRecord> {
+  const { data } = await apiClient.post<AcademicSessionRecord>(
+    endpoints.schoolOrganization.academicSessionAction(id, "activate"),
+  );
+  return data;
+}
+
+export async function closeSession(id: string): Promise<AcademicSessionRecord> {
+  const { data } = await apiClient.post<AcademicSessionRecord>(
+    endpoints.schoolOrganization.academicSessionAction(id, "close"),
+  );
+  return data;
+}
+
+/** `:clone`: a new planned session with the source's curriculum; its terms are not copied. */
+export async function cloneSession(
+  id: string,
+  input: SessionCloneInput,
+): Promise<AcademicSessionRecord> {
+  const { data } = await apiClient.post<AcademicSessionRecord>(
+    endpoints.schoolOrganization.academicSessionAction(id, "clone"),
+    input,
+  );
+  return data;
+}
+
+export async function createTerm(input: TermCreateInput): Promise<TermRecord> {
+  const { data } = await apiClient.post<TermRecord>(endpoints.schoolOrganization.terms, input);
+  return data;
+}
+
+export async function updateTerm(id: string, input: TermInput): Promise<TermRecord> {
+  const { data } = await apiClient.patch<TermRecord>(endpoints.schoolOrganization.term(id), input);
+  return data;
 }
 
 /** `GET /holiday-calendar`: the effective working week (Monday to Friday when nothing is

@@ -16,6 +16,8 @@ import {
   HOUSE_COLOR_MAX,
   HOUSE_MOTTO_MAX,
   HOUSE_NAME_MAX,
+  SESSION_NAME_MAX,
+  TERM_NAME_MAX,
 } from "./school-organization-constant";
 import type { DepartmentType } from "./school-organization-type";
 
@@ -25,7 +27,12 @@ import type { DepartmentType } from "./school-organization-type";
  */
 
 export type StructureFormMessages = Record<
-  "required" | "emailInvalid" | "colorInvalid" | "endBeforeStart",
+  | "required"
+  | "emailInvalid"
+  | "colorInvalid"
+  | "endBeforeStart"
+  | "endNotAfterStart"
+  | "sequenceInvalid",
   string
 >;
 
@@ -34,6 +41,8 @@ export const STRUCTURE_FORM_MESSAGE_KEYS: StructureFormMessages = {
   emailInvalid: "emailInvalid",
   colorInvalid: "colorInvalid",
   endBeforeStart: "endBeforeStart",
+  endNotAfterStart: "endNotAfterStart",
+  sequenceInvalid: "sequenceInvalid",
 };
 
 const requiredText = (max: number, messages: StructureFormMessages) =>
@@ -97,12 +106,45 @@ export function createHolidayFormSchema(messages: StructureFormMessages) {
     });
 }
 
+/** A session's or a term's window: both days set, the last after the first (the models'
+ * `end_date > start_date` check). */
+const dateWindow = (messages: StructureFormMessages) => ({
+  start_date: z.string().regex(Regex.ISO_DATE, messages.required),
+  end_date: z.string().regex(Regex.ISO_DATE, messages.required),
+});
+
+function endsAfterStart(values: { start_date: string; end_date: string }): boolean {
+  return values.end_date > values.start_date;
+}
+
+/** A session's create, edit and clone form: the same three fields. */
+export function createSessionFormSchema(messages: StructureFormMessages) {
+  return z
+    .object({ name: requiredText(SESSION_NAME_MAX, messages), ...dateWindow(messages) })
+    .refine(endsAfterStart, { message: messages.endNotAfterStart, path: ["end_date"] });
+}
+
+/** `sequence` is a string, as an input holds it, sent as a number: 1-based order. */
+export function createTermFormSchema(messages: StructureFormMessages) {
+  return z
+    .object({
+      name: requiredText(TERM_NAME_MAX, messages),
+      sequence: z.string().trim().regex(Regex.POSITIVE_INTEGER, messages.sequenceInvalid),
+      ...dateWindow(messages),
+    })
+    .refine(endsAfterStart, { message: messages.endNotAfterStart, path: ["end_date"] });
+}
+
 export const campusFormSchema = createCampusFormSchema(STRUCTURE_FORM_MESSAGE_KEYS);
 export const departmentFormSchema = createDepartmentFormSchema(STRUCTURE_FORM_MESSAGE_KEYS);
 export const houseFormSchema = createHouseFormSchema(STRUCTURE_FORM_MESSAGE_KEYS);
 export const holidayFormSchema = createHolidayFormSchema(STRUCTURE_FORM_MESSAGE_KEYS);
+export const sessionFormSchema = createSessionFormSchema(STRUCTURE_FORM_MESSAGE_KEYS);
+export const termFormSchema = createTermFormSchema(STRUCTURE_FORM_MESSAGE_KEYS);
 
 export type CampusFormValues = z.infer<typeof campusFormSchema>;
 export type DepartmentFormValues = z.infer<typeof departmentFormSchema>;
 export type HouseFormValues = z.infer<typeof houseFormSchema>;
 export type HolidayFormValues = z.infer<typeof holidayFormSchema>;
+export type SessionFormValues = z.infer<typeof sessionFormSchema>;
+export type TermFormValues = z.infer<typeof termFormSchema>;

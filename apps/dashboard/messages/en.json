@@ -236,6 +236,7 @@
       "label": "School sections",
       "profile": "Profile & settings",
       "campuses": "Campuses",
+      "sessions": "Sessions & terms",
       "departments": "Departments",
       "houses": "Houses",
       "calendar": "Calendar"
@@ -258,7 +259,9 @@
       "phone": "Phone",
       "email": "Email",
       "timezone": "Timezone",
-      "isActive": "Active"
+      "isActive": "Active",
+      "startDate": "Start date",
+      "endDate": "End date"
     },
     "actions": {
       "editRow": "Edit {name}",
@@ -283,7 +286,8 @@
       "emailInvalid": "Enter a valid email address.",
       "colorInvalid": "Enter a hex colour such as #1E88E5.",
       "colorPlaceholder": "#1E88E5",
-      "colorHint": "A hex colour, e.g. #D32F2F."
+      "colorHint": "A hex colour, e.g. #D32F2F.",
+      "endNotAfterStart": "The end date must be after the start date."
     },
     "weekdays": {
       "0": "Monday",
@@ -329,6 +333,85 @@
         "timezoneHint": "Leave blank to use the school's timezone.",
         "isPrimary": "Primary campus",
         "isPrimaryHint": "Making this campus primary makes the current primary an ordinary campus."
+      }
+    },
+    "sessions": {
+      "title": "Sessions & terms",
+      "summary": "The school years and their terms. Activating a session makes it the year the school works in; closing it makes its records read only.",
+      "saved": "Session saved.",
+      "current": "Current",
+      "range": "{start} to {end}",
+      "status": {
+        "planned": "Planned",
+        "active": "Active",
+        "closed": "Closed",
+        "archived": "Archived"
+      },
+      "columns": {
+        "dates": "Dates"
+      },
+      "actions": {
+        "create": "Add session",
+        "activate": "Activate",
+        "close": "Close",
+        "clone": "Clone",
+        "activateRow": "Activate {name}",
+        "closeRow": "Close {name}",
+        "cloneRow": "Clone {name}"
+      },
+      "list": {
+        "caption": "Academic sessions",
+        "pagination": "Sessions pages",
+        "loadError": "The sessions couldn't be loaded.",
+        "searchPlaceholder": "Search by name",
+        "emptyTitle": "No sessions yet",
+        "emptyDescription": "Add the school year, then its terms. Activate it once the school's campuses, classes and terms are ready."
+      },
+      "form": {
+        "createTitle": "Add a session",
+        "editTitle": "Edit this session",
+        "description": "A new session starts as planned. Its dates can't overlap another session's.",
+        "namePlaceholder": "e.g. 2026-27"
+      },
+      "clone": {
+        "title": "Start next year from {name}",
+        "description": "Creates a planned session with these dates and copies this session's curriculum into it. Terms aren't copied, so add them afterwards.",
+        "done": "{name} created from {source}."
+      },
+      "lifecycle": {
+        "activateTitle": "Activate {name}?",
+        "activateDescription": "It becomes the school's current session, and the session that was current stops being so. The school needs an active campus, an active class with an active section, and terms that cover the whole session.",
+        "activateConfirm": "Activate session",
+        "activateDone": "{name} is now the current session.",
+        "closeTitle": "Close {name}?",
+        "closeDescription": "Its attendance, marks and other records become read only, and it can't be activated again.",
+        "closeConfirm": "Close session",
+        "closeDone": "{name} closed.",
+        "structureTitle": "Finish these before activating:"
+      }
+    },
+    "terms": {
+      "title": "Terms",
+      "show": "Show terms for {name}",
+      "hide": "Hide terms for {name}",
+      "summary": "The terms must cover the whole session before it can be activated.",
+      "locked": "This session is closed or archived, so its terms can't change.",
+      "empty": "No terms yet.",
+      "caption": "Terms of {session}",
+      "loadError": "The terms couldn't be loaded.",
+      "saved": "Term saved.",
+      "fields": {
+        "sequence": "Order"
+      },
+      "actions": {
+        "create": "Add term"
+      },
+      "form": {
+        "createTitle": "Add a term to {session}",
+        "editTitle": "Edit this term",
+        "description": "A term sits inside its session's dates and can't overlap another term.",
+        "sequenceHint": "1 for the session's first term.",
+        "sequenceInvalid": "Enter a whole number from 1."
       }
     },
     "departments": {

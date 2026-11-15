@@ -38,6 +38,15 @@ describe("school sections", () => {
       ["/school/profile", SETTINGS_UPDATE],
       ["/school/campuses", ["school.campus.create", CAMPUS_UPDATE, "school.campus.delete"]],
       [
+        "/school/sessions",
+        [
+          "school.academic-session.create",
+          "school.academic-session.update",
+          "school.academic-session.activate",
+          "school.academic-session.close",
+        ],
+      ],
+      [
         "/school/departments",
         ["school.department.create", "school.department.update", "school.department.delete"],
       ],

@@ -100,8 +100,13 @@ export const endpoints = {
     sections: "/sections",
     subjects: "/subjects",
     academicSessions: "/academic-sessions",
+    academicSession: (id: string) => `/academic-sessions/${id}`,
+    /** The lifecycle colon-actions (`apps/school_organization/academic_sessions/urls.py`). */
+    academicSessionAction: (id: string, action: "activate" | "close" | "clone") =>
+      `/academic-sessions/${id}:${action}`,
     /** Filtered by `academic_session_id`; governed by the academic-session permission keys. */
     terms: "/terms",
+    term: (id: string) => `/terms/${id}`,
   },
   /** Curriculum mapping (`class_subjects` in the database) is served at `/class-subjects`
    * (`apps/api/apps/academics/curriculum/urls.py`). */

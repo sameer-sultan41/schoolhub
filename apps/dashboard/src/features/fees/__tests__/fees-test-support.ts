@@ -19,6 +19,7 @@ import type {
   SettlementImportRecord,
   VoucherRecord,
 } from "@/services";
+import { termRecord } from "@/test-fixtures/academics";
 import { mocked } from "@/test-fixtures/list-screen";
 import { buildUser, setUrl } from "@/test-utils";
 
@@ -278,7 +279,7 @@ export function stubFeesServices(url = "/fees/structures") {
   fetchCampuses.mockResolvedValue([{ id: CAMPUS_ID, name: "North campus" }] as Awaited<
     ReturnType<typeof fetchCampuses>
   >);
-  fetchTerms.mockResolvedValue([{ id: TERM_ID, name: "Term 1", sequence: 1 }]);
+  fetchTerms.mockResolvedValue([termRecord({ id: TERM_ID })]);
   fetchFeeStructureOptions.mockResolvedValue([structureRecord({ status: "active" })]);
   listFeeInvoices.mockResolvedValue(cursorPage([invoiceRecord()]));
   fetchFeeInvoice.mockResolvedValue(invoiceRecord());

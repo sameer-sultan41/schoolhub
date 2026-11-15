@@ -29,6 +29,15 @@ export const HOUSE_KEYS: StructureKeys = {
   delete: "school.house.delete",
 };
 
+/** Academic sessions and their terms: terms share the session keys (`TermViewSet`), and a
+ * session is never deleted, only closed. Cloning needs `create`. */
+export const SESSION_KEYS = {
+  create: "school.academic-session.create",
+  update: "school.academic-session.update",
+  activate: "school.academic-session.activate",
+  close: "school.academic-session.close",
+} as const satisfies Record<string, PermissionKey>;
+
 /** Any one of a resource's write keys: who a structure section is for. */
 export function anyWriteKey(keys: StructureKeys): readonly PermissionKey[] {
   return [keys.create, keys.update, keys.delete];

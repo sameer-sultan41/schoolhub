@@ -1,11 +1,13 @@
-"""Validation helpers used only within academic_sessions' own services.
+"""Validation helpers for academic sessions.
 
 `assert_no_session_overlap` and `session_completeness_errors` are consumed
-exclusively inside this package (`activate.py`, `clone.py`, and this
-package's own `serializers.py`) — unlike `assert_session_writable`, which
-stays in the module root because attendance, academics, student_management
-and timetable all import it directly (see `apps.school_organization.services`'s
-docstring).
+only inside this package (`activate.py`, `clone.py`, and this package's own
+`serializers.py`). `term_coverage_errors` is also read from outside it: the
+onboarding wizard's session step reuses the activation check's term rule, so
+it is re-exported from `apps.school_organization.services`, the module's entry
+point for other apps (ADR-0013). `assert_session_writable` stays in the module
+root because attendance, academics, student_management and timetable all
+import it directly (see that file's docstring).
 """
 
 from __future__ import annotations
@@ -63,3 +65,8 @@ def session_completeness_errors(session: AcademicSession) -> list[str]:
         errors.append("Term dates must cover the whole session window.")
 
     return errors
+
+
+def term_coverage_errors(session: AcademicSession) -> list[str]:
+    """Not yet split out of `session_completeness_errors` (RED: the test drives it)."""
+    return []

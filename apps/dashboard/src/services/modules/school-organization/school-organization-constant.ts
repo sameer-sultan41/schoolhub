@@ -1,8 +1,10 @@
 import { FILTER_ALL } from "@/lib/constants";
 import { isUuid } from "@/lib/helpers";
 import type {
+  AcademicSessionStatus,
   AcademicSessionSummary,
   DepartmentType,
+  SessionPageQuery,
   StructurePageQuery,
 } from "./school-organization-type";
 
@@ -142,6 +144,59 @@ export const HOUSE_COLOR_MAX = 20;
 export const HOUSE_MOTTO_MAX = 200;
 
 export const HOUSE_ERROR_FIELDS = ["name", "code", "color", "motto", "is_active"] as const;
+
+// --- Academic sessions and terms (`AcademicSession`, `Term`) -------------------------------
+
+export const SESSION_PAGE_RESOURCE = "session-page";
+/** `/academic-sessions` pages by cursor (the API's default paginator). */
+export const SESSION_PAGE_SIZE = 25;
+
+/** Every session status, keyed so the compiler checks the set against the generated enum. */
+const SESSION_STATUS_SET: Record<AcademicSessionStatus, true> = {
+  planned: true,
+  active: true,
+  closed: true,
+  archived: true,
+};
+export const SESSION_STATUSES = Object.keys(SESSION_STATUS_SET) as AcademicSessionStatus[];
+const SESSION_STATUS_FILTER_VALUES: readonly string[] = [FILTER_ALL, ...SESSION_STATUSES];
+
+/** Column id -> `?ordering=` field (`AcademicSessionViewSet.ordering_fields`). */
+export const SESSION_SORT_FIELD: Record<string, string> = { name: "name", dates: "start_date" };
+export const SESSION_SORTABLE_IDS = Object.keys(SESSION_SORT_FIELD);
+/** Newest year first, as the model orders them. */
+export const SESSION_DEFAULT_SORTING: { id: string; desc: boolean }[] = [
+  { id: "dates", desc: true },
+];
+export const SESSION_URL_FILTERS = {
+  status: {
+    default: FILTER_ALL,
+    isValid: (value: string) => SESSION_STATUS_FILTER_VALUES.includes(value),
+  },
+};
+
+/** A camelCase `SessionPageQuery` key and `/academic-sessions`' query param for it. */
+export const SESSION_QUERY_FIELDS: ReadonlyArray<readonly [keyof SessionPageQuery, string]> = [
+  ["cursor", "cursor"],
+  ["pageSize", "page_size"],
+  ["search", "search"],
+  ["ordering", "ordering"],
+  ["status", "status"],
+];
+
+/** The column whose expanded row lists the session's terms. */
+export const SESSION_TERMS_COLUMN_ID = "terms";
+
+/** `AcademicSession.name` and `Term.name`. */
+export const SESSION_NAME_MAX = 50;
+export const TERM_NAME_MAX = 50;
+
+/** The fields the session and clone dialogs have an input for. */
+export const SESSION_ERROR_FIELDS = ["name", "start_date", "end_date"] as const;
+export const TERM_ERROR_FIELDS = ["name", "sequence", "start_date", "end_date"] as const;
+
+/** The envelope field the activation check's gaps come back under (`{structure: [...]}`). */
+export const SESSION_STRUCTURE_FIELD = "structure";
 
 // --- The school calendar (`/holiday-calendar`, `apps/school_organization/calendar.py`) -----
 

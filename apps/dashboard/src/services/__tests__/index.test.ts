@@ -187,6 +187,14 @@ describe("Services", () => {
     expect(typeof Services.schoolOrganization.deleteHouse).toBe("function");
     expect(typeof Services.schoolOrganization.fetchHolidayCalendar).toBe("function");
     expect(typeof Services.schoolOrganization.updateHolidayCalendar).toBe("function");
+    expect(typeof Services.schoolOrganization.fetchSessionPage).toBe("function");
+    expect(typeof Services.schoolOrganization.createSession).toBe("function");
+    expect(typeof Services.schoolOrganization.updateSession).toBe("function");
+    expect(typeof Services.schoolOrganization.activateSession).toBe("function");
+    expect(typeof Services.schoolOrganization.closeSession).toBe("function");
+    expect(typeof Services.schoolOrganization.cloneSession).toBe("function");
+    expect(typeof Services.schoolOrganization.createTerm).toBe("function");
+    expect(typeof Services.schoolOrganization.updateTerm).toBe("function");
     expect(typeof Services.schoolSettings.fetchSchoolSettings).toBe("function");
     expect(typeof Services.schoolSettings.updateSchoolSettings).toBe("function");
     expect(typeof Services.questionBanks.fetchBanksPage).toBe("function");
