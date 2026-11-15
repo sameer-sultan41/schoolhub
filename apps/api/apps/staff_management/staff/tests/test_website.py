@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 
 from apps.staff_management.models import EmploymentStatus, Staff
@@ -127,8 +129,13 @@ class PhotoVisibilityTests(WebsiteTestBase):
         for _ in range(3):
             self.staff(photo_file=self.photo(), show_on_website=True)
         self.staff(photo_file=used, show_on_website=True)
-        with tenant_context(self.tenant.id), self.assertNumQueries(1):
+        with tenant_context(self.tenant.id), CaptureQueriesContext(connection) as queries:
             self.assertEqual(staff_photo_files({used.pk}), {used.pk})
+        self.assertEqual(len(queries), 1)
+        sql = queries.captured_queries[0]["sql"]
+        # The candidate id is in the WHERE clause: the rows are narrowed in SQL, not after loading.
+        self.assertIn(str(used.pk), sql)
+        self.assertIn("photo_file_id", sql.split("WHERE", 1)[1])
         with tenant_context(self.tenant.id), self.assertNumQueries(0):
             self.assertEqual(staff_photo_files(set()), set())
 

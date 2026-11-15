@@ -6,7 +6,9 @@ from copy import deepcopy
 from unittest import mock
 from uuid import uuid4
 
+from django.db import connection
 from django.test import SimpleTestCase, TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 
 from apps.website_cms import visibility as website_visibility
 from apps.website_cms.media import public_file_url, to_public, url_key
@@ -427,8 +429,15 @@ class ProviderNarrowingTests(TestCase):
                 media_type="image",
                 file_id=FileFactory(tenant=self.tenant, purpose=WEBSITE_MEDIA.key).id,
             )
-        with self.assertNumQueries(2):
-            self.assertEqual(website_visibility.gallery_files({self.file.id}), {self.file.id})
+        with CaptureQueriesContext(connection) as queries:
+            claimed = website_visibility.gallery_files({self.file.id})
+        self.assertEqual(claimed, {self.file.id})
+        self.assertEqual(len(queries), 2)
+        # Every query is narrowed to the candidate id in SQL, not filtered after loading.
+        for query in queries.captured_queries:
+            sql = query["sql"]
+            self.assertIn(str(self.file.id), sql)
+            self.assertTrue("file_id" in sql and " IN (" in sql, sql)
 
     def test_an_item_of_an_unpublished_album_is_not_claimed(self) -> None:
         draft = GalleryAlbumFactory(tenant=self.tenant)
