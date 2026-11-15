@@ -28,19 +28,40 @@ class PublicTenantContactSerializer(serializers.Serializer):
     email = serializers.CharField()
 
 
+class PublicBrandingSerializer(serializers.Serializer):
+    """The renderer's `TenantBranding` keys; a value failing its pattern is null."""
+
+    primary_color = serializers.CharField(allow_null=True)
+    secondary_color = serializers.CharField(allow_null=True)
+    accent_color = serializers.CharField(allow_null=True)
+    background_color = serializers.CharField(allow_null=True)
+    foreground_color = serializers.CharField(allow_null=True)
+    heading_font = serializers.CharField(allow_null=True)
+    body_font = serializers.CharField(allow_null=True)
+    logo_url = serializers.CharField(allow_null=True)
+    logo_dark_url = serializers.CharField(allow_null=True)
+    favicon_url = serializers.CharField(allow_null=True)
+    radius = serializers.CharField(allow_null=True)
+
+
 class PublicTenantSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     slug = serializers.CharField()
     name = serializers.CharField()
     status = serializers.ChoiceField(choices=TenantStatus.choices)
     website_status = serializers.ChoiceField(choices=WebsiteStatus.choices)
-    branding = serializers.DictField(help_text="`TenantSettings.branding`, as stored.")
+    branding = PublicBrandingSerializer()
     locale = PublicTenantLocaleSerializer()
-    contact = PublicTenantContactSerializer(allow_null=True, help_text="The primary campus.")
-    custom_domain = serializers.CharField(
-        allow_null=True, help_text="The primary active custom domain, else null."
+    contact = PublicTenantContactSerializer(
+        allow_null=True, help_text="The primary campus; null unless the site is live."
     )
-    enabled_modules = serializers.ListField(child=serializers.CharField())
+    custom_domain = serializers.CharField(
+        allow_null=True,
+        help_text="The primary active custom domain; null without one or unless the site is live.",
+    )
+    enabled_modules = serializers.ListField(
+        child=serializers.CharField(), help_text="Empty unless the site is live."
+    )
 
 
 class PublicSeoSerializer(serializers.Serializer):

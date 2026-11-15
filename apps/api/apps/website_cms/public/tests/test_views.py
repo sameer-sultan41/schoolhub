@@ -20,6 +20,7 @@ from apps.school_organization.tests.factories import CampusFactory
 from apps.website_cms.constants import (
     EVENTS_PATH_PREFIX,
     GALLERY_PATH_PREFIX,
+    HOMEPAGE_SLUG,
     NEWS_PATH_PREFIX,
     RESERVED_PAGE_SLUGS,
 )
@@ -29,6 +30,7 @@ from apps.website_cms.models import (
     MenuLocation,
     PageType,
     SeoTargetType,
+    WebsitePage,
 )
 from apps.website_cms.preview import PREVIEW_TOKEN_MAX_AGE, make_preview_token
 from apps.website_cms.tests.factories import (
@@ -46,12 +48,53 @@ from apps.website_cms.tests.factories import (
     make_custom_domain,
 )
 from core.tenancy.context import tenant_context
-from core.tenancy.models import TenantSettings, TenantStatus
+from core.tenancy.models import TenantFeatureOverride, TenantSettings, TenantStatus
 
 TOKEN = "renderer-token"
 PLATFORM = "schools.test"
 PUBLISHED = ContentStatus.PUBLISHED
 ROUTES = ("tenants/by-host", "site", "pages", "sitemap")
+
+TENANT_KEYS = {
+    "id",
+    "slug",
+    "name",
+    "status",
+    "website_status",
+    "branding",
+    "locale",
+    "contact",
+    "custom_domain",
+    "enabled_modules",
+}
+BRANDING_KEYS = {
+    "primary_color",
+    "secondary_color",
+    "accent_color",
+    "background_color",
+    "foreground_color",
+    "heading_font",
+    "body_font",
+    "logo_url",
+    "logo_dark_url",
+    "favicon_url",
+    "radius",
+}
+SITE_KEYS = {"theme", "navigation", "header_config", "footer_config", "social_links", "seo"}
+SEO_KEYS = {"title", "description", "canonical_url", "og_image_url", "robots", "noindex"}
+PAGE_KEYS = {
+    "id",
+    "slug",
+    "path",
+    "title",
+    "page_type",
+    "status",
+    "is_homepage",
+    "published_at",
+    "updated_at",
+    "sections",
+    "seo",
+}
 
 
 @override_settings(WEBSITE_MACHINE_TOKENS=TOKEN, PLATFORM_DOMAIN=PLATFORM)
@@ -99,31 +142,40 @@ class PublicAPITestCase(APITestCase):
         with tenant_context(tenant.id):
             return factory_class(tenant=tenant, **kwargs)
 
-
-class TenantByHostTests(PublicAPITestCase):
-    def test_by_host_returns_the_tenant(self) -> None:
+    def set_branding(self, branding: dict) -> None:
         with tenant_context(self.tenant.id):
             row, _ = TenantSettings.objects.get_or_create(tenant=self.tenant)
-            row.branding = {"primary_color": "#0a7"}
+            row.branding = branding
             row.save(update_fields=["branding", "updated_at"])
+
+    def give_campus_and_domain(self) -> None:
+        with tenant_context(self.tenant.id):
             CampusFactory(
                 tenant=self.tenant, is_primary=True, phone="0300 1234567", email="a@school.test"
             )
         make_custom_domain(
             self.tenant, "www.greenfield.org", CustomDomainStatus.ACTIVE, is_primary=True
         )
+
+
+class TenantByHostTests(PublicAPITestCase):
+    def test_by_host_returns_the_tenant(self) -> None:
+        self.set_branding({"primary_color": "#0a7"})
+        self.give_campus_and_domain()
         self.update_site(default_locale="ur")
 
         response = self.read("tenants/by-host")
 
         self.assertEqual(response.status_code, 200)
         data = response.json()["data"]
+        self.assertEqual(set(data), TENANT_KEYS)
+        self.assertEqual(set(data["contact"]), {"campus_name", "address", "phone", "email"})
         self.assertEqual(data["id"], str(self.tenant.id))
         self.assertEqual(data["slug"], "greenfield")
         self.assertEqual(data["name"], "Greenfield School")
         self.assertEqual(data["status"], TenantStatus.ACTIVE)
         self.assertEqual(data["website_status"], "live")
-        self.assertEqual(data["branding"], {"primary_color": "#0a7"})
+        self.assertEqual(data["branding"], dict.fromkeys(BRANDING_KEYS) | {"primary_color": "#0a7"})
         self.assertEqual(
             data["locale"],
             {
@@ -155,7 +207,18 @@ class TenantByHostTests(PublicAPITestCase):
         self.assertEqual(data["locale"]["default_locale"], "en")
         self.assertEqual(data["locale"]["direction"], "ltr")
 
+    def assert_notice_only(self, data: dict) -> None:
+        """A school not serving a live site: identity, branding and state, nothing else."""
+        self.assertEqual(set(data), TENANT_KEYS)
+        self.assertIsNone(data["contact"])
+        self.assertIsNone(data["custom_domain"])
+        self.assertEqual(data["enabled_modules"], [])
+        self.assertEqual(data["name"], self.tenant.name)
+        self.assertEqual(data["branding"]["primary_color"], "#0a7")
+
     def test_by_host_reports_suspended_status(self) -> None:
+        self.set_branding({"primary_color": "#0a7"})
+        self.give_campus_and_domain()
         self.tenant.status = TenantStatus.SUSPENDED
         self.tenant.save(update_fields=["status"])
 
@@ -163,6 +226,7 @@ class TenantByHostTests(PublicAPITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["data"]["status"], "suspended")
+        self.assert_notice_only(response.json()["data"])
         # The suspended school's content is not served.
         self.make_home()
         for route in ("site", "pages", "sitemap"):
@@ -194,19 +258,80 @@ class TenantByHostTests(PublicAPITestCase):
         self.assertEqual(self.read("pages", slug="").status_code, 404)
 
     def test_by_host_reports_unpublished_when_the_module_is_off(self) -> None:
-        other = TenantFactory(slug="nomodule")
-        self.make_site(other, is_published=True)
-        response = self.read("tenants/by-host", host=f"nomodule.{PLATFORM}")
+        self.set_branding({"primary_color": "#0a7"})
+        self.give_campus_and_domain()
+        with tenant_context(self.tenant.id):
+            TenantFeatureOverride.objects.filter(
+                tenant=self.tenant, feature_flag__key="module.website"
+            ).update(enabled=False)
+        cache.clear()
+
+        response = self.read("tenants/by-host")
+
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["data"]["website_status"], "unpublished")
-        self.assertNotIn("module.website", response.json()["data"]["enabled_modules"])
+        self.assert_notice_only(response.json()["data"])
+
+    def test_by_host_withholds_details_while_unpublished_or_in_maintenance(self) -> None:
+        self.set_branding({"primary_color": "#0a7"})
+        self.give_campus_and_domain()
+        for fields in ({"is_published": False}, {"is_published": True, "maintenance_mode": True}):
+            with self.subTest(fields=fields):
+                self.update_site(**fields)
+                self.assert_notice_only(self.read("tenants/by-host").json()["data"])
+
+    def test_branding_keeps_only_the_contract_keys(self) -> None:
+        self.set_branding({"primary_color": "#0a7", "notes": "board meeting Tuesday", "x": 1})
+        branding = self.read("tenants/by-host").json()["data"]["branding"]
+        self.assertEqual(set(branding), BRANDING_KEYS)
+
+    def test_branding_keeps_valid_values(self) -> None:
+        valid = {
+            "primary_color": "#0a7",
+            "secondary_color": "#0a7b3c",
+            "accent_color": "#0a7b3cff",
+            "background_color": "rgb(255, 255, 255)",
+            "foreground_color": "oklch(0.55 0.18 342 / 80%)",
+            "heading_font": "'Noto Nastaliq Urdu', serif",
+            "body_font": "Inter, system-ui, sans-serif",
+            "logo_url": "https://cdn.example.org/logo.png",
+            "logo_dark_url": "/media/logo-dark.png",
+            "favicon_url": "https://cdn.example.org/favicon.ico",
+            "radius": "0.625rem",
+        }
+        self.set_branding(valid)
+        self.assertEqual(self.read("tenants/by-host").json()["data"]["branding"], valid)
+
+    def test_branding_nulls_injection_shaped_values(self) -> None:
+        hostile = {
+            "primary_color": "red;}body{display:none",
+            "secondary_color": "url(https://evil.test/x)",
+            "accent_color": "rgb(0,0,0);x:y",
+            "background_color": "hsl(var(--x))",
+            "foreground_color": "expression(alert(1))",
+            "heading_font": "Inter; } * { color: red",
+            "body_font": "</style><script>alert(1)</script>",
+            "logo_url": "javascript:alert(1)",
+            "logo_dark_url": "//evil.test/logo.png",
+            "favicon_url": "http://insecure.test/favicon.ico",
+            "radius": "1rem;}",
+        }
+        self.set_branding(hostile)
+        branding = self.read("tenants/by-host").json()["data"]["branding"]
+        self.assertEqual(branding, dict.fromkeys(BRANDING_KEYS))
+
+    def test_branding_non_string_values_are_null(self) -> None:
+        self.set_branding({"primary_color": 7, "logo_url": {"url": "https://x.test"}})
+        branding = self.read("tenants/by-host").json()["data"]["branding"]
+        self.assertIsNone(branding["primary_color"])
+        self.assertIsNone(branding["logo_url"])
 
 
 class PageTests(PublicAPITestCase):
     def test_homepage_for_empty_slug(self) -> None:
         home = self.make_home(title="Welcome")
         self.make_page(slug="about", status=PUBLISHED)
-        for params in ({"slug": ""}, {"slug": "home"}, {}, {"slug": "/"}):
+        for params in ({"slug": ""}, {}, {"slug": "/"}):
             with self.subTest(params=params):
                 response = self.read("pages", **params)
                 self.assertEqual(response.status_code, 200)
@@ -214,6 +339,18 @@ class PageTests(PublicAPITestCase):
                 self.assertEqual(data["id"], str(home.id))
                 self.assertEqual(data["path"], "/")
                 self.assertTrue(data["is_homepage"])
+                self.assertEqual(set(data), PAGE_KEYS)
+                self.assertEqual(set(data["seo"]), SEO_KEYS)
+
+    def test_homepage_answers_at_root_only(self) -> None:
+        """Its own slug is no second address for it: `home` is reserved, and a renamed one too."""
+        self.make_home()
+        self.assertEqual(self.read("pages", slug="home").status_code, 404)
+        with tenant_context(self.tenant.id):
+            WebsitePage.objects.filter(page_type=PageType.HOME).update(slug="welcome")
+        self.assertEqual(self.read("pages", slug="welcome").status_code, 404)
+        self.assertEqual(self.read("pages", slug="").status_code, 200)
+        self.assertIn(HOMEPAGE_SLUG, RESERVED_PAGE_SLUGS)
 
     def test_page_by_slug(self) -> None:
         page = self.make_page(slug="about/history", title="History", status=PUBLISHED)
@@ -338,14 +475,38 @@ class PreviewTests(PublicAPITestCase):
         self.draft = self.make_page(slug="admissions", status=ContentStatus.DRAFT)
         self.make_section(self.draft, position=0, content={"heading": "Apply now"})
 
-    def preview(self, token: str, slug: str = "admissions", **params):
-        return self.read("pages", meta={"HTTP_X_PREVIEW_TOKEN": token}, slug=slug, **params)
+    def preview(self, token: str, slug: str | None = "admissions", **params):
+        if slug is not None:
+            params["slug"] = slug
+        return self.read("pages", meta={"HTTP_X_PREVIEW_TOKEN": token}, **params)
 
     def test_preview_token_reads_the_draft_uncached(self) -> None:
         response = self.preview(make_preview_token(self.draft))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["data"]["status"], "draft")
         self.assertEqual(response["Cache-Control"], "no-store")
+        self.assertIn("X-Preview-Token", response["Vary"])
+
+    def test_published_page_varies_on_the_preview_header_but_is_cacheable(self) -> None:
+        self.make_page(slug="about", status=PUBLISHED)
+        response = self.read("pages", slug="about")
+        self.assertIn("X-Preview-Token", response["Vary"])
+        self.assertNotIn("no-store", response.get("Cache-Control", ""))
+
+    def test_preview_without_a_slug_reads_the_tokens_page(self) -> None:
+        """The renderer validates a token before it knows the page's address."""
+        data = self.preview(make_preview_token(self.draft), slug=None).json()["data"]
+        self.assertEqual(data["id"], str(self.draft.id))
+        self.assertEqual(data["path"], "/admissions")
+
+    def test_preview_of_the_homepage(self) -> None:
+        home = self.make_home(status=ContentStatus.DRAFT)
+        token = make_preview_token(home)
+        for slug in ("", None):
+            with self.subTest(slug=slug):
+                data = self.preview(token, slug=slug).json()["data"]
+                self.assertEqual(data["id"], str(home.id))
+                self.assertEqual(data["path"], "/")
 
     def test_preview_works_before_the_site_is_published(self) -> None:
         self.update_site(is_published=False)
@@ -398,6 +559,29 @@ class PreviewTests(PublicAPITestCase):
 
 
 class SiteTests(PublicAPITestCase):
+    def preview_site(self, token: str):
+        return self.read("site", meta={"HTTP_X_PREVIEW_TOKEN": token})
+
+    def test_site_preview_before_the_site_is_published(self) -> None:
+        self.update_site(is_published=False)
+        draft = self.make_page(slug="admissions", status=ContentStatus.DRAFT)
+
+        response = self.preview_site(make_preview_token(draft))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Cache-Control"], "no-store")
+        self.assertIn("X-Preview-Token", response["Vary"])
+        self.assertEqual(self.read("site").status_code, 404)
+
+    def test_site_preview_with_another_tenants_token_404(self) -> None:
+        self.update_site(is_published=False)
+        rival = TenantFactory(slug="rival")
+        rival_page = self.make_page(rival, slug="admissions", status=ContentStatus.DRAFT)
+        self.assertEqual(self.preview_site(make_preview_token(rival_page)).status_code, 404)
+
+    def test_site_preview_with_a_bad_token_404_even_when_live(self) -> None:
+        self.assertEqual(self.preview_site("not-a-token").status_code, 404)
+
     def test_site_navigation_drops_unpublished_targets(self) -> None:
         home = self.make_home()
         about = self.make_page(slug="about", status=PUBLISHED)
@@ -451,15 +635,23 @@ class SiteTests(PublicAPITestCase):
         self.update_site(
             social_links=[{"platform": "facebook", "url": "https://facebook.com/greenfield"}],
             header_config={"cta": {"label": "Apply", "href": "/admissions"}},
+            analytics_id="G-INTERNAL",
         )
         self.make_in(
             SeoSettingFactory,
             target_type=SeoTargetType.SITE,
             meta_title="Greenfield",
             og_image_file_id="3f1c2b8a-1111-4222-8333-444455556666",
+            structured_data={"@type": "School"},
         )
 
         data = self.read("site").json()["data"]
+
+        self.assertEqual(set(data), SITE_KEYS)
+        self.assertEqual(set(data["theme"]), {"code", "version", "config"})
+        self.assertEqual(set(data["navigation"]), {"header", "footer_primary", "footer_secondary"})
+        self.assertEqual(set(data["seo"]), SEO_KEYS)
+        self.assertNotIn("G-INTERNAL", str(data))
 
         self.assertEqual(data["theme"]["code"], "default")
         self.assertEqual(data["theme"]["version"], self.site.theme.version)
@@ -531,7 +723,28 @@ class SitemapTests(PublicAPITestCase):
             ],
         )
         self.assertTrue(all(entry["updated_at"] for entry in entries))
+        self.assertTrue(all(set(entry) == {"path", "updated_at"} for entry in entries))
         self.assertNotIn("meta", response.json())
+
+    def test_sitemap_excludes_robots_noindex(self) -> None:
+        """One rule (`is_indexable`) decides the sitemap and a page's own `seo.noindex`."""
+        hidden = self.make_page(slug="private", status=PUBLISHED)
+        self.make_page(slug="about", status=PUBLISHED)
+        post = self.make_in(NewsPostFactory, slug="internal-note", status=PUBLISHED)
+        self.make_in(
+            SeoSettingFactory, target_type=SeoTargetType.PAGE, target_id=hidden.id, robots="NoIndex"
+        )
+        self.make_in(
+            SeoSettingFactory,
+            target_type=SeoTargetType.NEWS_POST,
+            target_id=post.id,
+            robots="noindex, follow",
+        )
+
+        paths = [entry["path"] for entry in self.read("sitemap").json()["data"]]
+
+        self.assertEqual(paths, ["/about"])
+        self.assertTrue(self.read("pages", slug="private").json()["data"]["seo"]["noindex"])
 
     def test_sitemap_queries_do_not_grow_with_content(self) -> None:
         self.read("sitemap")  # warm the feature-flag cache

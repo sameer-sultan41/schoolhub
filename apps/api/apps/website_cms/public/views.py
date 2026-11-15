@@ -12,6 +12,7 @@ from collections.abc import Iterator
 from uuid import UUID
 
 from django.core.signing import BadSignature
+from django.utils.cache import patch_cache_control, patch_vary_headers
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework.exceptions import NotFound
 from rest_framework.request import Request
@@ -44,6 +45,13 @@ PREVIEW_HEADER = "X-Preview-Token"
 
 HOST_PARAMETER = OpenApiParameter(
     "host", str, required=True, description="The site's host, as the visitor's browser sent it."
+)
+PREVIEW_PARAMETER = OpenApiParameter(
+    PREVIEW_HEADER,
+    str,
+    location=OpenApiParameter.HEADER,
+    required=False,
+    description="A page preview token for this host's school: reads before the site is live.",
 )
 NOT_FOUND = OpenApiResponse(description="No live site, page or tenant answers on this host.")
 
@@ -84,14 +92,39 @@ class PublicContentView(APIView):
                 raise NotFound
             yield tenant
 
+    def preview_page_id(self, request: Request, tenant: Tenant) -> UUID | None:
+        """The page a `X-Preview-Token` header names, `None` without one; 404 if it is bad.
+
+        Only the header counts (SEC-57). An expired or tampered token, or one for another
+        school, is 404, so the renderer's `/api/preview` can trust the status code.
+        """
+        token = request.headers.get(PREVIEW_HEADER, "")
+        if not token:
+            return None
+        try:
+            tenant_id, page_id = read_preview_token(token)
+        except BadSignature as exc:  # SignatureExpired is a BadSignature
+            raise NotFound from exc
+        if tenant_id != tenant.pk:
+            raise NotFound
+        return page_id
+
+    @staticmethod
+    def mark_preview(response: Response, *, preview: bool) -> Response:
+        """Mark a response a preview token can change: never cached when it did."""
+        patch_vary_headers(response, [PREVIEW_HEADER])
+        if preview:
+            patch_cache_control(response, no_store=True)
+        return response
+
 
 class PublicTenantByHostView(PublicContentView):
     """`GET /public/tenants/by-host?host=`: who the host belongs to and the state of its site.
 
     The exception to "404 unless live": a suspended school answers 200 with its `status`, so
     the renderer shows a neutral notice, and a site that is off, unpublished or in maintenance
-    answers with its `website_status`. A provisioning, deprovisioned or deleted school, or an
-    unknown host, is 404.
+    answers with its `website_status`; either way only identity, branding and state are sent.
+    A provisioning, deprovisioned or deleted school, or an unknown host, is 404.
     """
 
     @extend_schema(
@@ -114,65 +147,58 @@ class PublicTenantByHostView(PublicContentView):
 
 
 class PublicSiteView(PublicContentView):
-    """`GET /public/site?host=`: theme, navigation, header/footer, social links and site SEO."""
+    """`GET /public/site?host=`: theme, navigation, header/footer, social links and site SEO.
+
+    A valid preview token for this school reads it before the site is live (decision 9).
+    """
 
     @extend_schema(
         operation_id="public_site",
-        parameters=[HOST_PARAMETER],
+        parameters=[HOST_PARAMETER, PREVIEW_PARAMETER],
         responses={200: PublicSiteSerializer, 404: NOT_FOUND},
     )
     def get(self, request: Request) -> Response:
-        with self.bound(self.get_tenant(request)) as tenant:
+        tenant = self.get_tenant(request)
+        preview = self.preview_page_id(request, tenant) is not None
+        with self.bound(tenant, require_live=not preview):
             data = services.read_site(tenant)
-        return Response(PublicSiteSerializer(data).data)
+        return self.mark_preview(Response(PublicSiteSerializer(data).data), preview=preview)
 
 
 class PublicPageView(PublicContentView):
     """`GET /public/pages?host=&slug=`: a published page with its visible sections, in order.
 
-    An empty slug or `home` is the homepage. A draft is read only under a preview token in the
-    `X-Preview-Token` header naming this tenant and this page (decision 9); it may preview a
-    site that is not live yet, and is never cached. A bad, expired or foreign token is 404.
+    An empty slug is the homepage, which answers at `/` only. A draft is read only under a
+    preview token in the `X-Preview-Token` header naming this tenant and this page (decision 9);
+    then `slug` is optional, the site need not be live, and the response is never cached.
     """
 
     @extend_schema(
         operation_id="public_page",
         parameters=[
             HOST_PARAMETER,
-            OpenApiParameter("slug", str, required=False, description="Empty or `home`: homepage."),
             OpenApiParameter(
-                PREVIEW_HEADER,
+                "slug",
                 str,
-                location=OpenApiParameter.HEADER,
                 required=False,
-                description="A page preview token; reads that page whatever its status.",
+                description="Empty for the homepage. Under a preview token, omit it to read the "
+                "token's page.",
             ),
+            PREVIEW_PARAMETER,
         ],
         responses={200: PublicPageSerializer, 404: NOT_FOUND},
     )
     def get(self, request: Request) -> Response:
         tenant = self.get_tenant(request)
-        token = request.headers.get(PREVIEW_HEADER, "")
-        preview_page_id = self._preview_page_id(tenant, token) if token else None
-        slug = str(request.query_params.get("slug", ""))
+        preview_page_id = self.preview_page_id(request, tenant)
+        raw_slug = request.query_params.get("slug")
+        slug = None if raw_slug is None else str(raw_slug)
         with self.bound(tenant, require_live=preview_page_id is None):
             data = services.read_page(tenant, slug, preview_page_id=preview_page_id)
         if data is None:
             raise NotFound
         response = Response(PublicPageSerializer(data).data)
-        if preview_page_id is not None:
-            response["Cache-Control"] = "no-store"
-        return response
-
-    def _preview_page_id(self, tenant: Tenant, token: str) -> UUID:
-        """The page the token names, if it is valid and for this host's tenant; else 404."""
-        try:
-            tenant_id, page_id = read_preview_token(token)
-        except BadSignature as exc:  # SignatureExpired is a BadSignature
-            raise NotFound from exc
-        if tenant_id != tenant.pk:
-            raise NotFound
-        return page_id
+        return self.mark_preview(response, preview=preview_page_id is not None)
 
 
 class PublicSitemapView(PublicContentView):

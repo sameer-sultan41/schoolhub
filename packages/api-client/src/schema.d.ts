@@ -4407,9 +4407,9 @@ export interface paths {
         /**
          * @description `GET /public/pages?host=&slug=`: a published page with its visible sections, in order.
          *
-         *     An empty slug or `home` is the homepage. A draft is read only under a preview token in the
-         *     `X-Preview-Token` header naming this tenant and this page (decision 9); it may preview a
-         *     site that is not live yet, and is never cached. A bad, expired or foreign token is 404.
+         *     An empty slug is the homepage, which answers at `/` only. A draft is read only under a
+         *     preview token in the `X-Preview-Token` header naming this tenant and this page (decision 9);
+         *     then `slug` is optional, the site need not be live, and the response is never cached.
          */
         get: operations["public_page"];
         put?: never;
@@ -4469,7 +4469,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description `GET /public/site?host=`: theme, navigation, header/footer, social links and site SEO. */
+        /**
+         * @description `GET /public/site?host=`: theme, navigation, header/footer, social links and site SEO.
+         *
+         *     A valid preview token for this school reads it before the site is live (decision 9).
+         */
         get: operations["public_site"];
         put?: never;
         post?: never;
@@ -4508,8 +4512,8 @@ export interface paths {
          *
          *     The exception to "404 unless live": a suspended school answers 200 with its `status`, so
          *     the renderer shows a neutral notice, and a site that is off, unpublished or in maintenance
-         *     answers with its `website_status`. A provisioning, deprovisioned or deleted school, or an
-         *     unknown host, is 404.
+         *     answers with its `website_status`; either way only identity, branding and state are sent.
+         *     A provisioning, deprovisioned or deleted school, or an unknown host, is 404.
          */
         get: operations["public_tenants_by_host"];
         put?: never;
@@ -13118,6 +13122,20 @@ export interface components {
         PromotionTransitionResult: {
             updated: number;
         };
+        /** @description The renderer's `TenantBranding` keys; a value failing its pattern is null. */
+        PublicBranding: {
+            primary_color: string | null;
+            secondary_color: string | null;
+            accent_color: string | null;
+            background_color: string | null;
+            foreground_color: string | null;
+            heading_font: string | null;
+            body_font: string | null;
+            logo_url: string | null;
+            logo_dark_url: string | null;
+            favicon_url: string | null;
+            radius: string | null;
+        };
         PublicNavItem: {
             label: string;
             /** @description A site path (`/about`) or an https URL. */
@@ -13211,15 +13229,13 @@ export interface components {
             name: string;
             status: components["schemas"]["TenantStatusEnum"];
             website_status: components["schemas"]["WebsiteStatusEnum"];
-            /** @description `TenantSettings.branding`, as stored. */
-            branding: {
-                [key: string]: unknown;
-            };
+            branding: components["schemas"]["PublicBranding"];
             locale: components["schemas"]["PublicTenantLocale"];
-            /** @description The primary campus. */
+            /** @description The primary campus; null unless the site is live. */
             contact: components["schemas"]["PublicTenantContact"] | null;
-            /** @description The primary active custom domain, else null. */
+            /** @description The primary active custom domain; null without one or unless the site is live. */
             custom_domain: string | null;
+            /** @description Empty unless the site is live. */
             enabled_modules: string[];
         };
         PublicTenantContact: {
@@ -22423,11 +22439,11 @@ export interface operations {
             query: {
                 /** @description The site's host, as the visitor's browser sent it. */
                 host: string;
-                /** @description Empty or `home`: homepage. */
+                /** @description Empty for the homepage. Under a preview token, omit it to read the token's page. */
                 slug?: string;
             };
             header?: {
-                /** @description A page preview token; reads that page whatever its status. */
+                /** @description A page preview token for this host's school: reads before the site is live. */
                 "X-Preview-Token"?: string;
             };
             path?: never;
@@ -22479,7 +22495,10 @@ export interface operations {
                 /** @description The site's host, as the visitor's browser sent it. */
                 host: string;
             };
-            header?: never;
+            header?: {
+                /** @description A page preview token for this host's school: reads before the site is live. */
+                "X-Preview-Token"?: string;
+            };
             path?: never;
             cookie?: never;
         };

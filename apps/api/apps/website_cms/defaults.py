@@ -9,13 +9,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from apps.website_cms.constants import HOMEPAGE_SLUG
 from apps.website_cms.models import PageType
 
 #: (page_type, slug, title, [(section_type, content), ...])
 DEFAULT_PAGES: tuple[tuple[str, str, str, tuple[tuple[str, dict[str, Any]], ...]], ...] = (
     (
         PageType.HOME,
-        "home",
+        HOMEPAGE_SLUG,
         "Home",
         (
             ("hero", {"heading": "Welcome to our school", "subheading": "Edit this headline."}),

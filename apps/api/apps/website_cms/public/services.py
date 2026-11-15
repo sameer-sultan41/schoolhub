@@ -1,12 +1,13 @@
 """Reads behind the public content API (plan decision 3, "Public API contract").
 
-Every function runs with the tenant already bound by `PublicContentView.bound_tenant`, so RLS
+Every function runs with the tenant already bound by `PublicContentView.bound`, so RLS
 and the tenant-scoped managers confine each query to the host's school. Each returns plain data
 in the shape its `Public*` serializer declares; nothing here writes.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 from uuid import UUID
 
@@ -14,6 +15,14 @@ from django.db.models import Prefetch, Q
 
 from apps.school_organization.public import primary_campus_contact
 from apps.website_cms.constants import (
+    BRANDING_COLOUR_KEYS,
+    BRANDING_COLOUR_RE,
+    BRANDING_FONT_KEYS,
+    BRANDING_FONT_RE,
+    BRANDING_LENGTH_KEYS,
+    BRANDING_LENGTH_RE,
+    BRANDING_URL_KEYS,
+    BRANDING_VALUE_MAX_LENGTH,
     DEFAULT_THEME_CODE,
     EVENTS_PATH_PREFIX,
     GALLERY_PATH_PREFIX,
@@ -41,12 +50,9 @@ from apps.website_cms.models import (
     WebsitePage,
     WebsiteSettings,
 )
-from apps.website_cms.validation import as_uuid
+from apps.website_cms.validation import as_uuid, is_safe_url
 from core.tenancy.features import enabled_feature_keys
 from core.tenancy.models import Tenant, TenantOwnedModel, TenantSettings
-
-#: The page slugs that ask for the homepage; the renderer sends `home` for `/`.
-HOMEPAGE_SLUGS = frozenset({"", "home"})
 
 #: Where the renderer lists each content type; nav "index" targets link here.
 INDEX_PATHS: dict[str, str] = {
@@ -55,11 +61,11 @@ INDEX_PATHS: dict[str, str] = {
     NavTargetType.GALLERY_INDEX.value: f"/{GALLERY_PATH_PREFIX}",
 }
 
-#: Content types with a page each on the renderer, under their path prefix.
-SITEMAP_CONTENT: tuple[tuple[str, type[TenantOwnedModel]], ...] = (
-    (NEWS_PATH_PREFIX, NewsPost),
-    (EVENTS_PATH_PREFIX, SchoolEvent),
-    (GALLERY_PATH_PREFIX, GalleryAlbum),
+#: Content types with a page each on the renderer: path prefix, model, SEO target type.
+SITEMAP_CONTENT: tuple[tuple[str, type[TenantOwnedModel], str], ...] = (
+    (NEWS_PATH_PREFIX, NewsPost, SeoTargetType.NEWS_POST.value),
+    (EVENTS_PATH_PREFIX, SchoolEvent, SeoTargetType.SCHOOL_EVENT.value),
+    (GALLERY_PATH_PREFIX, GalleryAlbum, SeoTargetType.GALLERY_ALBUM.value),
 )
 
 
@@ -84,7 +90,12 @@ def _text(value: str) -> str | None:
     return value or None
 
 
-def _seo(row: SeoSetting | None, tenant_id: UUID, *, hidden: bool = False) -> dict[str, Any]:
+def is_indexable(*, show_in_search: bool, robots: str) -> bool:
+    """Whether search engines may list a page: shown in search and not `noindex` by its SEO."""
+    return show_in_search and "noindex" not in robots.lower()
+
+
+def _seo(row: SeoSetting | None, tenant_id: UUID, *, show_in_search: bool = True) -> dict[str, Any]:
     robots = row.robots if row else ""
     return {
         "title": _text(row.meta_title) if row else None,
@@ -96,7 +107,7 @@ def _seo(row: SeoSetting | None, tenant_id: UUID, *, hidden: bool = False) -> di
             else None
         ),
         "robots": _text(robots),
-        "noindex": hidden or "noindex" in robots.lower(),
+        "noindex": not is_indexable(show_in_search=show_in_search, robots=robots),
     }
 
 
@@ -108,8 +119,38 @@ def _direction(locale: str) -> str:
     return TextDirection.RTL if language in RTL_LANGUAGES else TextDirection.LTR
 
 
+def _branding_value(value: object, allowed: Callable[[str], bool]) -> str | None:
+    if not isinstance(value, str) or len(value) > BRANDING_VALUE_MAX_LENGTH:
+        return None
+    value = value.strip()
+    return value if value and allowed(value) else None
+
+
+def public_branding(raw: object) -> dict[str, str | None]:
+    """The renderer's branding keys only, each kept only if it matches its kind's pattern.
+
+    `TenantSettings.branding` has no schema, so nothing else stored there (notes, a CSS string
+    that closes a declaration, an unchecked URL) ever reaches the public site.
+    """
+    stored = raw if isinstance(raw, dict) else {}
+    checks: list[tuple[tuple[str, ...], Callable[[str], bool]]] = [
+        (BRANDING_COLOUR_KEYS, lambda v: BRANDING_COLOUR_RE.fullmatch(v) is not None),
+        (BRANDING_FONT_KEYS, lambda v: BRANDING_FONT_RE.fullmatch(v) is not None),
+        (BRANDING_URL_KEYS, is_safe_url),
+        (BRANDING_LENGTH_KEYS, lambda v: BRANDING_LENGTH_RE.fullmatch(v) is not None),
+    ]
+    return {
+        key: _branding_value(stored.get(key), allowed) for keys, allowed in checks for key in keys
+    }
+
+
 def read_tenant(tenant: Tenant, status: WebsiteStatus) -> dict[str, Any]:
-    """`PublicTenant`. `status` is the site's state, already resolved by the caller."""
+    """`PublicTenant`. `status` is the site's state, already resolved by the caller.
+
+    A school that is not serving a live site (suspended, or its site off, unpublished or in
+    maintenance) gets identity, branding and state only: enough for the renderer's notice, and
+    nothing about its campus, domains or modules.
+    """
     settings_row = WebsiteSettings.objects.alive().values("default_locale").first()
     default_locale = (settings_row or {}).get("default_locale") or tenant.locale
     branding = (
@@ -117,12 +158,15 @@ def read_tenant(tenant: Tenant, status: WebsiteStatus) -> dict[str, Any]:
         .values_list("branding", flat=True)
         .first()
     )
-    contact = primary_campus_contact()
+    live = tenant.is_operational and status == WebsiteStatus.LIVE
+    contact = primary_campus_contact() if live else None
     custom_domain = (
         CustomDomain.objects.alive()
         .filter(is_primary=True, status=CustomDomainStatus.ACTIVE)
         .values_list("domain", flat=True)
         .first()
+        if live
+        else None
     )
     return {
         "id": tenant.pk,
@@ -130,7 +174,7 @@ def read_tenant(tenant: Tenant, status: WebsiteStatus) -> dict[str, Any]:
         "name": tenant.name,
         "status": tenant.status,
         "website_status": status,
-        "branding": branding if isinstance(branding, dict) else {},
+        "branding": public_branding(branding),
         "locale": {
             "default_locale": default_locale,
             # v1 is single-locale (deferred-work: multi-locale content).
@@ -149,7 +193,9 @@ def read_tenant(tenant: Tenant, status: WebsiteStatus) -> dict[str, Any]:
             else None
         ),
         "custom_domain": custom_domain,
-        "enabled_modules": enabled_feature_keys(tenant_id=tenant.pk, prefix="module."),
+        "enabled_modules": (
+            enabled_feature_keys(tenant_id=tenant.pk, prefix="module.") if live else []
+        ),
     }
 
 
@@ -226,23 +272,28 @@ def read_site(tenant: Tenant) -> dict[str, Any]:
 # --- pages -------------------------------------------------------------------------------
 
 
-def read_page(tenant: Tenant, slug: str, *, preview_page_id: UUID | None) -> dict[str, Any] | None:
+def read_page(
+    tenant: Tenant, slug: str | None, *, preview_page_id: UUID | None
+) -> dict[str, Any] | None:
     """`PublicPage` for `slug`, or `None`.
 
-    Without a preview only a published page is found. With one, only the page the token names
-    is, in any live status, so a token never opens a different page.
+    `""` is the homepage, which is served at `/` only: its own slug never finds it. Without a
+    preview only a published page is found. With one, only the page the token names is, in any
+    live status, so a token never opens a different page; `slug` is then optional (`None`), so
+    the renderer can validate a token before it knows the page's address.
     """
-    slug = slug.strip("/")
     pages = WebsitePage.objects.alive()
-    query = Q(page_type=PageType.HOME) if slug in HOMEPAGE_SLUGS else Q(slug=slug)
     if preview_page_id is None:
         pages = pages.filter(status=ContentStatus.PUBLISHED)
     else:
         pages = pages.filter(id=preview_page_id)
+    if slug is not None or preview_page_id is None:
+        slug = (slug or "").strip("/")
+        homepage = Q(page_type=PageType.HOME)
+        pages = pages.filter(homepage if slug == "" else Q(slug=slug) & ~homepage)
     visible = PageSection.objects.alive().filter(is_visible=True).order_by("position", "id")
     page = (
-        pages.filter(query)
-        .prefetch_related(Prefetch("sections", queryset=visible))
+        pages.prefetch_related(Prefetch("sections", queryset=visible))
         .order_by("locale", "id")
         .first()
     )
@@ -279,7 +330,7 @@ def read_page(tenant: Tenant, slug: str, *, preview_page_id: UUID | None) -> dic
         "published_at": page.published_at,
         "updated_at": page.updated_at,
         "sections": sections,
-        "seo": _seo(seo, tenant.pk, hidden=not page.show_in_search),
+        "seo": _seo(seo, tenant.pk, show_in_search=page.show_in_search),
     }
 
 
@@ -287,28 +338,39 @@ def read_page(tenant: Tenant, slug: str, *, preview_page_id: UUID | None) -> dic
 
 
 def read_sitemap() -> list[dict[str, Any]]:
-    """`[{path, updated_at}]`: published pages shown in search, then posts, events, albums.
+    """`[{path, updated_at}]`: indexable published pages, then posts, events and albums.
 
-    One query per content type, ordered by path within each.
+    `is_indexable` decides, as for a page's own `seo.noindex`. One query for the SEO rows that
+    set `robots`, then one per content type, ordered by path within each.
     """
+    robots: dict[tuple[str, UUID | None], str] = {
+        (target_type, target_id): value
+        for target_type, target_id, value in SeoSetting.objects.alive()
+        .exclude(target_type=SeoTargetType.SITE)
+        .exclude(robots="")
+        .values_list("target_type", "target_id", "robots")
+    }
     entries = [
-        {
-            "path": page_path(slug, is_homepage=page_type == PageType.HOME),
-            "updated_at": updated,
-        }
-        for slug, page_type, updated in WebsitePage.objects.alive()
-        .filter(status=ContentStatus.PUBLISHED, show_in_search=True)
+        {"path": page_path(slug, is_homepage=page_type == PageType.HOME), "updated_at": updated}
+        for page_id, slug, page_type, updated, show_in_search in WebsitePage.objects.alive()
+        .filter(status=ContentStatus.PUBLISHED)
         .order_by("slug", "id")
-        .values_list("slug", "page_type", "updated_at")
+        .values_list("id", "slug", "page_type", "updated_at", "show_in_search")
+        if is_indexable(
+            show_in_search=show_in_search,
+            robots=robots.get((SeoTargetType.PAGE.value, page_id), ""),
+        )
     ]
-    for prefix, model in SITEMAP_CONTENT:
+    for prefix, model, target_type in SITEMAP_CONTENT:
         rows = (
             model.objects.alive()
             .filter(status=ContentStatus.PUBLISHED)
             .order_by("slug", "id")
-            .values_list("slug", "updated_at")
+            .values_list("id", "slug", "updated_at")
         )
         entries.extend(
-            {"path": f"/{prefix}/{slug}", "updated_at": updated} for slug, updated in rows
+            {"path": f"/{prefix}/{slug}", "updated_at": updated}
+            for row_id, slug, updated in rows
+            if is_indexable(show_in_search=True, robots=robots.get((target_type, row_id), ""))
         )
     return entries

@@ -15,9 +15,14 @@ NEWS_PATH_PREFIX = "news"
 EVENTS_PATH_PREFIX = "events"
 GALLERY_PATH_PREFIX = "gallery"
 
+#: The homepage's seeded slug. Reserved, so no other page takes it; the homepage itself is
+#: served at `/` only (its slug is never a second address for it).
+HOMEPAGE_SLUG = "home"
+
 #: First slug segments the renderer owns as routes.
 RESERVED_PAGE_SLUGS = frozenset(
     {
+        HOMEPAGE_SLUG,
         "admin",
         "api",
         "verify",
@@ -135,6 +140,29 @@ class TextDirection(models.TextChoices):
 
 #: Language codes written right to left; the dashboard's `directionFor` covers `ur`.
 RTL_LANGUAGES = frozenset({"ar", "fa", "he", "ps", "sd", "ur"})
+
+#: The branding keys the public site receives (the renderer's `TenantBranding` contract), by
+#: kind. Any other stored key stays internal; a value failing its pattern is sent as null.
+BRANDING_COLOUR_KEYS = (
+    "primary_color",
+    "secondary_color",
+    "accent_color",
+    "background_color",
+    "foreground_color",
+)
+BRANDING_FONT_KEYS = ("heading_font", "body_font")
+BRANDING_URL_KEYS = ("logo_url", "logo_dark_url", "favicon_url")
+BRANDING_LENGTH_KEYS = ("radius",)
+BRANDING_VALUE_MAX_LENGTH = 500
+#: `#rgb`, `#rrggbb`, `#rrggbbaa`, or `rgb()`/`hsl()`/`oklch()` holding only numbers, `%`, `.`,
+#: spaces, commas and `/`: nothing that can close a declaration or start another.
+BRANDING_COLOUR_RE = re.compile(
+    r"#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})|(?:rgba?|hsla?|oklch)\([0-9.%, /]+\)"
+)
+#: A font-family list: letters, digits, spaces, quotes, commas and hyphens.
+BRANDING_FONT_RE = re.compile(r"[A-Za-z0-9 '\",-]{1,200}")
+#: A CSS length: `0`, or a number in `px`, `rem`, `em` or `%`.
+BRANDING_LENGTH_RE = re.compile(r"0|(?:\d+(?:\.\d+)?|\.\d+)(?:px|rem|em|%)")
 
 #: Hosts a gallery `video_embed` item may point at.
 EMBED_HOSTS = frozenset(
