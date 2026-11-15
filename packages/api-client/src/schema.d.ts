@@ -8146,6 +8146,8 @@ export interface components {
             /** @description Promotion ordering; the next level up is the promotion target. */
             level: number;
             is_active?: boolean;
+            /** @description Opt-in: list this class on the website. */
+            show_on_website?: boolean;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -8413,6 +8415,8 @@ export interface components {
             head_staff_id?: string | null;
             description?: string | null;
             is_active?: boolean;
+            /** @description Opt-in: list this department on the website. */
+            show_on_website?: boolean;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -11478,6 +11482,8 @@ export interface components {
             /** @description Promotion ordering; the next level up is the promotion target. */
             level?: number;
             is_active?: boolean;
+            /** @description Opt-in: list this class on the website. */
+            show_on_website?: boolean;
             /** Format: date-time */
             readonly created_at?: string;
             /** Format: date-time */
@@ -11541,6 +11547,8 @@ export interface components {
             head_staff_id?: string | null;
             description?: string | null;
             is_active?: boolean;
+            /** @description Opt-in: list this department on the website. */
+            show_on_website?: boolean;
             /** Format: date-time */
             readonly created_at?: string;
             /** Format: date-time */
@@ -12475,6 +12483,8 @@ export interface components {
             national_id?: string | null;
             /** @description Opt-in website-published bio (§10). */
             public_bio?: string | null;
+            /** @description Opt-in: list this person, with photo and bio, on the website. */
+            show_on_website?: boolean;
             address?: unknown;
             custom_fields?: unknown;
             /** Format: date-time */
@@ -13796,6 +13806,8 @@ export interface components {
             national_id?: string | null;
             /** @description Opt-in website-published bio (§10). */
             public_bio?: string | null;
+            /** @description Opt-in: list this person, with photo and bio, on the website. */
+            show_on_website?: boolean;
             address?: unknown;
             custom_fields?: unknown;
             /** Format: date-time */

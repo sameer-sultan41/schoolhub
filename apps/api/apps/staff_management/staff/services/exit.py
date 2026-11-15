@@ -9,6 +9,7 @@ from django.db import transaction
 
 from apps.staff_management.models import EmploymentStatus, Staff
 from apps.staff_management.staff.services.access import end_staff_access
+from apps.staff_management.visibility import sync_staff_photos
 from core.api.exceptions import Conflict, DomainRuleViolation
 
 
@@ -103,4 +104,5 @@ def exit_staff(
         update_fields=["employment_status", "exit_date", "exit_reason", "updated_by", "updated_at"]
     )
     end_staff_access(staff, actor_id=actor_id, reason="exit")
+    sync_staff_photos({staff.photo_file_id})
     return staff

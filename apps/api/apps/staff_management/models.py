@@ -168,6 +168,9 @@ class Staff(TenantOwnedModel):
     public_bio = models.TextField(
         null=True, blank=True, help_text="Opt-in website-published bio (§10)."
     )
+    show_on_website = models.BooleanField(
+        default=False, help_text="Opt-in: list this person, with photo and bio, on the website."
+    )
     address = models.JSONField(null=True, blank=True)
     custom_fields = models.JSONField(default=dict, blank=True)
 

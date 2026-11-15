@@ -15,3 +15,8 @@ class StaffManagementConfig(AppConfig):
         from core.rbac.models import InvitationKind
 
         register_invitation_eligibility(InvitationKind.STAFF, staff_invitation_eligible)
+
+        from apps.staff_management.visibility import register_providers
+
+        # Tell core.files which staff photos the website keeps public (ADR-0013).
+        register_providers()

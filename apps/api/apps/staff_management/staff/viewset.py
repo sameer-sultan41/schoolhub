@@ -36,8 +36,10 @@ from apps.staff_management.staff.services.access import end_staff_access
 from apps.staff_management.staff.services.create import create_staff
 from apps.staff_management.staff.services.exit import exit_staff
 from apps.staff_management.staff.services.invite import invite_staff
+from apps.staff_management.staff.services.update import update_staff
 from apps.staff_management.tasks import export_staff_task, import_staff_task
 from apps.staff_management.views import _StaffModuleViewSetMixin
+from apps.staff_management.visibility import sync_staff_photos
 from core.api.exceptions import DomainRuleViolation
 from core.api.pagination import PageNumberPagination
 from core.api.viewsets import ActionResponse
@@ -150,6 +152,7 @@ class StaffViewSet(_StaffModuleViewSetMixin, viewsets.ModelViewSet):
             email=data.get("email"),
             national_id=data.get("national_id"),
             public_bio=data.get("public_bio"),
+            show_on_website=data.get("show_on_website", False),
             address=data.get("address"),
             custom_fields=data.get("custom_fields"),
             actor_id=self.request.user.pk,
@@ -161,6 +164,10 @@ class StaffViewSet(_StaffModuleViewSetMixin, viewsets.ModelViewSet):
         """Soft-delete, then end the login as `:exit` does, so a deleted record signs nobody in."""
         super().perform_destroy(instance)
         end_staff_access(instance, actor_id=self.request.user.pk, reason="delete")
+        sync_staff_photos({instance.photo_file_id})
+
+    def perform_update(self, serializer) -> None:
+        update_staff(serializer=serializer)
 
     @extend_schema(
         summary="Invite this staff member by email, creating their account if needed",

@@ -287,3 +287,5 @@ record has no account and **Resend invitation** once one is linked, under `staff
 and hides it for an exited staff member. The record does not say whether a linked account is
 still pending, so an active one is told by the API's 409 `already_active`; the dashboard sends no
 `role_ids` (there is no role picker yet). Both are in `deferred-work.md`.
+
+**`public.py` (website read surface).** `public.py` is the only module website_cms imports from this app (ADR-0013); it is read-only, called inside a bound tenant, returns frozen dataclasses and runs a constant number of queries. `public_teachers(limit)` lists opted-in (`show_on_website`), employed staff. `visibility.py` registers a public-reference provider so a listed person's photo is public; the staff services call `sync_staff_photos` on a flag toggle, photo change, exit and delete.

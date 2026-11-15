@@ -18306,6 +18306,9 @@ components:
           description: Promotion ordering; the next level up is the promotion target.
         is_active:
           type: boolean
+        show_on_website:
+          type: boolean
+          description: 'Opt-in: list this class on the website.'
         created_at:
           type: string
           format: date-time
@@ -18886,6 +18889,9 @@ components:
           maxLength: 300
         is_active:
           type: boolean
+        show_on_website:
+          type: boolean
+          description: 'Opt-in: list this department on the website.'
         created_at:
           type: string
           format: date-time
@@ -25374,6 +25380,9 @@ components:
           description: Promotion ordering; the next level up is the promotion target.
         is_active:
           type: boolean
+        show_on_website:
+          type: boolean
+          description: 'Opt-in: list this class on the website.'
         created_at:
           type: string
           format: date-time
@@ -25489,6 +25498,9 @@ components:
           maxLength: 300
         is_active:
           type: boolean
+        show_on_website:
+          type: boolean
+          description: 'Opt-in: list this department on the website.'
         created_at:
           type: string
           format: date-time
@@ -27300,6 +27312,9 @@ components:
           type: string
           nullable: true
           description: Opt-in website-published bio (§10).
+        show_on_website:
+          type: boolean
+          description: 'Opt-in: list this person, with photo and bio, on the website.'
         address:
           nullable: true
         custom_fields: {}
@@ -30185,6 +30200,9 @@ components:
           type: string
           nullable: true
           description: Opt-in website-published bio (§10).
+        show_on_website:
+          type: boolean
+          description: 'Opt-in: list this person, with photo and bio, on the website.'
         address:
           nullable: true
         custom_fields: {}

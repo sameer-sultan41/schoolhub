@@ -38,6 +38,7 @@ Academic or administrative department.
 | head_staff_id | uuid | yes | null | FK → staff(id) |
 | description | varchar(300) | yes | null | |
 | is_active | boolean | no | `true` | |
+| show_on_website | boolean | no | `false` | Opt-in: list on the public website |
 
 Indexes: unique (tenant_id, code); (tenant_id, campus_id); (tenant_id, department_type).
 Relationships: 1:N → staff, subjects; N:1 → campuses, staff (head).
@@ -82,6 +83,7 @@ Grade level (e.g. "Grade 6"); `level` defines the promotion ladder. Structural �
 | code | varchar(20) | yes | null | Unique (tenant_id, code) when set |
 | level | smallint | no | — | Unique (tenant_id, level); promotion ordering (next level = promotion target) |
 | is_active | boolean | no | `true` | |
+| show_on_website | boolean | no | `false` | Opt-in: list on the public website |
 
 Indexes: unique (tenant_id, name); unique (tenant_id, level); unique (tenant_id, code) where code not null.
 Relationships: 1:N → sections, class_subjects; referenced by student_enrollments, student_promotions, fee_structures (see `finance.md`).
