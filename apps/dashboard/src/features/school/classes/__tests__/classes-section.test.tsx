@@ -75,6 +75,20 @@ const retired = classRecord({
 /** What `ClassSerializer.validate_level` answers for a level another live class holds. */
 const LEVEL_TAKEN = "Level 1 is already used by class 'Grade 1'.";
 
+/** `services.assert_deletable`'s 422, naming the relations that still point at the row. */
+function referenced(relations: string[], url: string) {
+  const message =
+    `Cannot delete while dependent records exist (${relations.join(", ")}). ` +
+    "Deactivate it instead.";
+  return new ApiError({
+    code: "domain_rule_violation",
+    message,
+    status: 422,
+    url,
+    details: [{ field: "non_field", issue: message }],
+  });
+}
+
 function renderSection() {
   renderWithProviders(<ClassesSection />);
   return userEvent.setup();
@@ -286,32 +300,74 @@ describe("classes section", () => {
   });
 
   it("removes a section, and shows a refusal inline", async () => {
-    const referenced =
-      "Cannot delete while dependent records exist (student enrollments). Deactivate it instead.";
-    so.deleteSection
-      .mockRejectedValueOnce(
-        new ApiError({
-          code: "domain_rule_violation",
-          message: referenced,
-          status: 422,
-          url: "/sections",
-          details: [{ field: "non_field", issue: referenced }],
-        }),
-      )
-      .mockResolvedValueOnce(undefined);
+    const refusal = referenced(["student enrollments"], "/sections");
+    so.deleteSection.mockRejectedValueOnce(refusal).mockResolvedValueOnce(undefined);
     const user = renderSection();
 
     await user.click(await screen.findByRole("button", { name: "Show sections for Grade 1" }));
     await user.click(await screen.findByRole("button", { name: "Remove A" }));
     const dialog = await screen.findByRole("alertdialog");
     await user.click(within(dialog).getByRole("button", { name: "Remove" }));
-    expect(await within(dialog).findByText(referenced)).toBeInTheDocument();
+    expect(await within(dialog).findByText(refusal.message)).toBeInTheDocument();
 
     await user.click(within(dialog).getByRole("button", { name: "Remove" }));
     await waitFor(() => {
       expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     });
     expect(so.deleteSection).toHaveBeenCalledWith(sectionRecord().id);
+  });
+
+  it("removes a class, and shows the server's refusal while sections point at it", async () => {
+    const refusal = referenced(["sections"], "/classes");
+    so.deleteClass.mockRejectedValueOnce(refusal).mockResolvedValueOnce(undefined);
+    const user = renderSection();
+
+    await user.click(await screen.findByRole("button", { name: "Remove Grade 10" }));
+    const dialog = await screen.findByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: "Remove" }));
+    // The refusal shows inline and the dialog stays open.
+    expect(await within(dialog).findByText(refusal.message)).toBeInTheDocument();
+    expect(so.deleteClass).toHaveBeenCalledWith(GRADE_10_ID);
+
+    await user.click(within(dialog).getByRole("button", { name: "Remove" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    });
+    expect(so.deleteClass).toHaveBeenCalledTimes(2);
+  });
+
+  it("edits a section from its saved values", async () => {
+    so.updateSection.mockResolvedValue(sectionRecord({ capacity: 40 }));
+    const user = renderSection();
+
+    await user.click(await screen.findByRole("button", { name: "Show sections for Grade 1" }));
+    await user.click(await screen.findByRole("button", { name: "Edit A" }));
+    const dialog = await screen.findByRole("dialog");
+    // Prefilled from the row (`recordToSectionFormValues`).
+    expect(within(dialog).getByLabelText("Name")).toHaveValue("A");
+    const capacity = within(dialog).getByLabelText("Capacity");
+    expect(capacity).toHaveValue("30");
+    await waitFor(() => {
+      expect(within(dialog).getByRole("combobox", { name: "Campus" })).toHaveTextContent(
+        "Main Campus",
+      );
+    });
+    expect(within(dialog).getByRole("combobox", { name: "Class" })).toHaveTextContent("Grade 1");
+
+    await user.clear(capacity);
+    await user.type(capacity, "40");
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(so.updateSection).toHaveBeenCalledWith(sectionRecord().id, {
+        class_id: CLASS_ID,
+        campus_id: CAMPUS_ID,
+        name: "A",
+        capacity: 40,
+        is_active: true,
+      });
+    });
+    expect(so.createSection).not.toHaveBeenCalled();
   });
 
   it("shows the classes and sections only, to a viewer without the write keys", async () => {
