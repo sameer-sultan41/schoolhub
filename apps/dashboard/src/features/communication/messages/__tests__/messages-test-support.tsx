@@ -5,13 +5,12 @@ import userEvent from "@testing-library/user-event";
 
 import { Services } from "@/services";
 import {
-  cursorPage,
   messageRecord,
   oversightRecord,
   THREAD_ID,
   threadRecord,
 } from "@/test-fixtures/communication";
-import { mocked } from "@/test-fixtures/list-screen";
+import { cursorPage, mocked } from "@/test-fixtures/list-screen";
 import { USER_LOADED, UserLoaded } from "@/test-fixtures/user-loaded";
 import { buildUser, renderWithClient, setUrl } from "@/test-utils";
 

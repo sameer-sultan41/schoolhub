@@ -8,7 +8,6 @@ import { queryKeys } from "@/lib/query-client";
 import { MESSAGE_THREADS_QUERY_MODULE } from "@/services/modules/message-threads/message-threads-constant";
 import { THREAD_OVERSIGHT_QUERY_MODULE } from "@/services/modules/thread-oversight/thread-oversight-constant";
 import {
-  cursorPage,
   FILE_ID,
   ME,
   messageRecord,
@@ -17,7 +16,7 @@ import {
   THREAD_ID,
   threadRecord,
 } from "@/test-fixtures/communication";
-import { pick, urlParam } from "@/test-fixtures/list-screen";
+import { cursorPage, pick, urlParam } from "@/test-fixtures/list-screen";
 import { buildUser } from "@/test-utils";
 
 import {

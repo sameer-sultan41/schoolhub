@@ -1,5 +1,3 @@
-import type { Page } from "@schoolhub/types";
-
 import type { StudentRecord } from "@/services";
 import type {
   MessageRecord,
@@ -68,11 +66,6 @@ export function studentRecord(overrides: Partial<StudentRecord> = {}): StudentRe
     admission_number: "ADM-1042",
     ...overrides,
   } as StudentRecord;
-}
-
-/** One cursor page, as the thread and message reads return it. */
-export function cursorPage<T>(items: T[], next: string | null = null): Page<T> {
-  return { items, pagination: { next_cursor: next, previous_cursor: null, page_size: 20 } };
 }
 
 /** The `@/services` mock the Communication tests share (see `servicesMock`). */

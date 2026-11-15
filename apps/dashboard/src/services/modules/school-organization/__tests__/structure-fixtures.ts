@@ -127,11 +127,6 @@ export function sessionRecord(
   };
 }
 
-/** One cursor page, as `/academic-sessions` answers (its default paginator). */
-export function cursorPage<T>(items: T[], next: string | null = null): Page<T> {
-  return { items, pagination: { next_cursor: next, previous_cursor: null, page_size: 25 } };
-}
-
 export function structurePage<T>(items: T[]): Page<T> {
   return {
     items,

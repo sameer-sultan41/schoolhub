@@ -2,13 +2,8 @@ import { screen, waitFor, within } from "@testing-library/react";
 
 import type * as HelpersModule from "@/lib/helpers";
 import { downloadFile } from "@/lib/helpers";
-import {
-  cursorPage,
-  FILE_ID,
-  messageRecord,
-  SIGNED_URL,
-  THREAD_ID,
-} from "@/test-fixtures/communication";
+import { FILE_ID, messageRecord, SIGNED_URL, THREAD_ID } from "@/test-fixtures/communication";
+import { cursorPage } from "@/test-fixtures/list-screen";
 
 import {
   CLOSE_THREAD,

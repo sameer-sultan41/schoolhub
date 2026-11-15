@@ -3,13 +3,12 @@ import userEvent from "@testing-library/user-event";
 
 import {
   COLLEAGUE_ID,
-  cursorPage,
   OTHER_COLLEAGUE_ID,
   STUDENT_ID,
   studentRecord,
   threadRecord,
 } from "@/test-fixtures/communication";
-import { pick } from "@/test-fixtures/list-screen";
+import { cursorPage, pick } from "@/test-fixtures/list-screen";
 import { renderWithProviders } from "@/test-utils";
 
 import { NewThreadDialog } from "../new-thread-dialog";

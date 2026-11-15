@@ -1,6 +1,5 @@
 import { ApiError } from "@schoolhub/api-client";
 import type { PermissionKey } from "@schoolhub/types";
-import type { Page } from "@schoolhub/types";
 
 import { Services } from "@/services";
 import type {
@@ -20,12 +19,12 @@ import type {
   VoucherRecord,
 } from "@/services";
 import { termRecord } from "@/test-fixtures/academics";
-import { mocked } from "@/test-fixtures/list-screen";
+import { cursorPage, mocked } from "@/test-fixtures/list-screen";
 import { buildUser, setUrl } from "@/test-utils";
 
 /** Shared setup for the fees-setup tests; each file keeps its own `jest.mock` calls. */
 
-export { mocked, rowOf, urlParam } from "@/test-fixtures/list-screen";
+export { cursorPage, mocked, rowOf, urlParam } from "@/test-fixtures/list-screen";
 
 export const listLedgerAccounts = mocked(Services.ledgerAccounts.listLedgerAccounts);
 export const fetchLedgerAccountOptions = mocked(Services.ledgerAccounts.fetchLedgerAccountOptions);
@@ -155,10 +154,6 @@ export const CATEGORY_ID = "e2222222-2222-4222-8222-222222222222";
 export const EXPENSE_ACCOUNT_ID = "e3333333-3333-4333-8333-333333333333";
 export const BUDGET_ID = "e4444444-4444-4444-8444-444444444444";
 export const IMPORT_ID = "a3333333-3333-4333-8333-333333333333";
-
-export function cursorPage<T>(items: T[], nextCursor: string | null = null): Page<T> {
-  return { items, pagination: { page_size: 25, next_cursor: nextCursor, previous_cursor: null } };
-}
 
 export function accountRecord(overrides: Partial<LedgerAccountRecord> = {}): LedgerAccountRecord {
   return {
