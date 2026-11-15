@@ -255,6 +255,13 @@ class ToPublicTests(TestCase):
         out = to_public(hero, {"heading": "Hi", "image_file_id": ""}, self.tenant_id)
         self.assertEqual(out, {"heading": "Hi"})
 
+    def test_a_slot_shared_by_two_one_of_branches_is_rewritten_once(self) -> None:
+        image = {"type": "string", "x-widget": "image"}
+        schema = {"oneOf": [{"properties": {"image_file_id": image}}] * 2}
+        file_id = uuid4()
+        out = to_public(schema, {"image_file_id": str(file_id)}, self.tenant_id)
+        self.assertEqual(out, {"image_url": public_file_url(self.tenant_id, file_id)})
+
     def test_url_key_naming(self) -> None:
         self.assertEqual(url_key("image_file_id"), "image_url")
         self.assertEqual(url_key("file_id"), "file_url")

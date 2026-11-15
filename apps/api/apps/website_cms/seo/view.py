@@ -7,13 +7,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
+from apps.website_cms.permissions import PAGE_VIEW_KEY
 from apps.website_cms.seo import services
 from apps.website_cms.seo.serializers import SeoSettingSerializer, SeoTargetQuerySerializer
 from apps.website_cms.views import FEATURE, STAFF_PERMISSIONS
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
 
-READ_KEY = "website.page.view"
 _PARAMS = [
     OpenApiParameter("target_type", str, required=True),
     OpenApiParameter("target_id", str, required=False),
@@ -24,7 +24,7 @@ class SeoSettingView(TenantScopedViewSetMixin, APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = STAFF_PERMISSIONS
     required_feature = FEATURE
-    required_permission = READ_KEY
+    required_permission = PAGE_VIEW_KEY
     required_permission_map = {"patch": "website.seo.update"}
     scope_campus_field = None
     serializer_class = SeoSettingSerializer

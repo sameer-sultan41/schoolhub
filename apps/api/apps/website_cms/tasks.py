@@ -47,7 +47,8 @@ def _post(url: str, body: bytes, headers: dict[str, str]) -> int:
 
 @shared_task(
     name="website_cms.revalidate_website",
-    autoretry_for=(OSError,),
+    # `HTTPException` covers a malformed or truncated response, which `OSError` does not.
+    autoretry_for=(OSError, http.client.HTTPException),
     retry_backoff=True,
     retry_backoff_max=REVALIDATE_BACKOFF_MAX_SECONDS,
     retry_jitter=True,

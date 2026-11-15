@@ -11,8 +11,9 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from uuid import UUID
 
+from django.utils import timezone
+
 from core.files.models import File, FileVisibility
-from core.files.services import set_visibility
 
 PublicReferenceProvider = Callable[[set[UUID]], set[UUID]]
 
@@ -39,6 +40,12 @@ def sync_file_visibility(file_ids: Iterable[UUID]) -> None:
     claimed: set[UUID] = set()
     for provider in _providers:
         claimed |= provider(ids) & ids
-    for file in File.objects.alive().filter(id__in=ids):
-        target = FileVisibility.PUBLIC if file.id in claimed else FileVisibility.PRIVATE
-        set_visibility(file, target)
+    # Two set-based writes, each touching only rows whose visibility actually changes.
+    now = timezone.now()
+    files = File.objects.alive()
+    files.filter(id__in=claimed).exclude(visibility=FileVisibility.PUBLIC).update(
+        visibility=FileVisibility.PUBLIC, updated_at=now
+    )
+    files.filter(id__in=ids - claimed).exclude(visibility=FileVisibility.PRIVATE).update(
+        visibility=FileVisibility.PRIVATE, updated_at=now
+    )

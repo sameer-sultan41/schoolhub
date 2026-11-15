@@ -10,16 +10,16 @@ from __future__ import annotations
 from collections.abc import Iterable
 from uuid import UUID
 
-from django.conf import settings
 from django.db import transaction
 
 from apps.website_cms.tasks import revalidate_website
+from apps.website_cms.urls_builder import tenant_site_host
 from core.tenancy.models import Tenant
 
 
 def host_tag(tenant: Tenant) -> str:
     """The tag the renderer puts on its `by-host` read, for a tenant's platform subdomain."""
-    return f"tenant-host:{tenant.slug}.{settings.PLATFORM_DOMAIN}"
+    return f"tenant-host:{tenant_site_host(tenant)}"
 
 
 def queue_revalidation(tenant_id: UUID, extra_tags: Iterable[str] = ()) -> None:

@@ -21,6 +21,7 @@ from apps.website_cms.pages.serializers import (
     WebsitePageUpdateSerializer,
     WebsitePageWriteSerializer,
 )
+from apps.website_cms.permissions import PAGE_VIEW_KEY
 from apps.website_cms.preview import PREVIEW_TOKEN_MAX_AGE, make_preview_token
 from apps.website_cms.settings.services import ensure_default_site
 from apps.website_cms.urls_builder import tenant_site_url
@@ -28,8 +29,6 @@ from apps.website_cms.views import FEATURE, STAFF_PERMISSIONS
 from core.api.pagination import PageNumberPagination
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
-
-PAGE_READ_KEY = "website.page.view"
 
 
 class WebsitePageViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
@@ -56,7 +55,7 @@ class WebsitePageViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     ordering = ["slug", "id"]
     scope_campus_field = None
     required_feature = FEATURE
-    required_permission = PAGE_READ_KEY
+    required_permission = PAGE_VIEW_KEY
     required_permission_map = {
         "create": "website.page.create",
         "update": "website.page.update",
@@ -66,7 +65,7 @@ class WebsitePageViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         "publish": "website.page.publish",
         "unpublish": "website.page.publish",
         "archive": "website.page.publish",
-        "preview": PAGE_READ_KEY,
+        "preview": PAGE_VIEW_KEY,
     }
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 

@@ -1,11 +1,13 @@
-"""`set_visibility` and the public-reference registry."""
+"""`set_visibility` (single-file callers) and the public-reference registry."""
 
 from __future__ import annotations
 
 from unittest import mock
 from uuid import UUID, uuid4
 
+from django.db import connection
 from django.test import SimpleTestCase, TestCase
+from django.test.utils import CaptureQueriesContext
 
 from apps.school_organization.tests.factories import TenantFactory
 from core.files import visibility
@@ -88,6 +90,24 @@ class SyncFileVisibilityTests(TestCase):
         provider = mock.Mock(return_value=set())
         self._sync([provider], [])
         provider.assert_not_called()
+
+    def test_writes_are_two_bulk_updates_whatever_the_file_count(self) -> None:
+        with tenant_context(self.tenant.id):
+            extra = [FileFactory(tenant=self.tenant) for _ in range(3)]
+        ids = [self.kept.id, self.dropped.id, *(file.id for file in extra)]
+        with CaptureQueriesContext(connection) as queries:
+            self._sync([_Claims({self.kept.id, extra[0].id})], ids)
+        updates = [q["sql"] for q in queries.captured_queries if q["sql"].startswith("UPDATE")]
+        self.assertEqual(len(updates), 2)
+        self.assertEqual(self._visibility(extra[0]), FileVisibility.PUBLIC)
+        self.assertEqual(self._visibility(extra[1]), FileVisibility.PRIVATE)
+
+    def test_a_file_already_at_its_visibility_is_not_rewritten(self) -> None:
+        with tenant_context(self.tenant.id):
+            stamped = File.objects.get(id=self.kept.id).updated_at
+        self._sync([], [self.kept.id])
+        with tenant_context(self.tenant.id):
+            self.assertEqual(File.objects.get(id=self.kept.id).updated_at, stamped)
 
     def test_another_tenants_file_is_left_alone(self) -> None:
         other = TenantFactory()

@@ -14,18 +14,17 @@ from apps.website_cms.navigation.serializers import (
     NavigationMenuSerializer,
     NavigationMenuUpdateSerializer,
 )
+from apps.website_cms.permissions import PAGE_VIEW_KEY
 from apps.website_cms.views import FEATURE, STAFF_PERMISSIONS
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
-
-READ_KEY = "website.page.view"
 
 
 class _MenuView(TenantScopedViewSetMixin, APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = STAFF_PERMISSIONS
     required_feature = FEATURE
-    required_permission = READ_KEY
+    required_permission = PAGE_VIEW_KEY
     required_permission_map = {"patch": "website.navigation.update"}
     scope_campus_field = None
     serializer_class = NavigationMenuSerializer

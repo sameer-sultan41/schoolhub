@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import http.client
 import json
 from unittest import mock
 
@@ -71,6 +72,13 @@ class RevalidateTaskTests(TestCase):
     def test_task_is_registered_under_its_contract_name(self) -> None:
         self.assertEqual(tasks.revalidate_website.name, "website_cms.revalidate_website")
         self.assertEqual(tasks.revalidate_website.max_retries, 5)
+
+    def test_a_malformed_or_truncated_response_is_retried(self) -> None:
+        # `IncompleteRead` and `BadStatusLine` are `HTTPException`s, not `OSError`s.
+        retried = tuple(tasks.revalidate_website.autoretry_for)
+        for error in (http.client.IncompleteRead, http.client.BadStatusLine):
+            with self.subTest(error=error.__name__):
+                self.assertTrue(issubclass(error, retried))
 
     def test_non_http_url_is_refused(self) -> None:
         with self.assertRaises(ValueError):

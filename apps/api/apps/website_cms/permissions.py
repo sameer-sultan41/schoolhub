@@ -1,9 +1,10 @@
 """Permission keys for the website module — docs/03-modules/website-cms.md §4.
 
 `website.page.view` is the CMS read key for all website content, including news, events and
-galleries (§4 declares no view key for those). The renderer's `website.public-content.view`
-scope is deliberately NOT registered here: it is a machine scope (core/rbac/machine.py), not a
-grantable role permission.
+galleries (§4 declares no view key for those), and every CMS view imports it as
+`PAGE_VIEW_KEY`. The renderer's `website.public-content.view` scope is deliberately NOT
+registered here: it is a machine scope, to be declared in `MACHINE_SCOPES` in
+core/rbac/machine.py (PR C), not a grantable role permission.
 """
 
 from core.rbac.registry import registry
@@ -15,8 +16,10 @@ SITE_ADMINS = ("it_admin", "school_admin")
 DOMAIN_ADMINS = ("it_admin", "school_owner")
 INBOX_STAFF = ("reception", "school_admin")
 
+PAGE_VIEW_KEY = "website.page.view"
+
 registry.register(
-    "website.page.view", "View pages, sections and website content in the CMS.", PAGE_READERS
+    PAGE_VIEW_KEY, "View pages, sections and website content in the CMS.", PAGE_READERS
 )
 registry.register("website.page.create", "Create pages and sections.", CONTENT_EDITORS)
 registry.register("website.page.update", "Edit pages and sections.", CONTENT_EDITORS)

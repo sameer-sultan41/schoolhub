@@ -34,11 +34,12 @@ def url_key(name: str) -> str:
 def to_public(schema: dict[str, Any], content: Any, tenant_id: UUID) -> Any:
     """A copy of `content` with each image property `x_file_id` replaced by `x_url`.
 
-    An empty or null reference is dropped without a URL. The input is never mutated.
+    An empty or null reference is dropped without a URL. The input is never mutated. A slot
+    reached twice (two `oneOf` branches sharing a property) is rewritten once.
     """
     public = copy.deepcopy(content)
     for _, parent, name in list(image_slots(schema, public)):
-        file_id = parent.pop(name)
+        file_id = parent.pop(name, None)
         if file_id:
             parent[url_key(name)] = public_file_url(tenant_id, file_id)
     return public

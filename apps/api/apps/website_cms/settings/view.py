@@ -14,6 +14,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from apps.website_cms.models import Theme, WebsiteSettings
+from apps.website_cms.permissions import PAGE_VIEW_KEY
 from apps.website_cms.revalidation import host_tag, queue_revalidation
 from apps.website_cms.settings import services
 from apps.website_cms.settings.serializers import ThemeSerializer, WebsiteSettingsSerializer
@@ -22,8 +23,6 @@ from core.api.pagination import PageNumberPagination
 from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
 
-READ_KEY = "website.page.view"
-
 
 class WebsiteSettingsView(TenantScopedViewSetMixin, APIView):
     """Singleton site settings. `GET` never writes; the first `PATCH` creates the site."""
@@ -31,7 +30,7 @@ class WebsiteSettingsView(TenantScopedViewSetMixin, APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = STAFF_PERMISSIONS
     required_feature = FEATURE
-    required_permission = READ_KEY
+    required_permission = PAGE_VIEW_KEY
     required_permission_map = {"patch": "website.settings.update"}
     scope_campus_field = None
     serializer_class = WebsiteSettingsSerializer
@@ -77,7 +76,7 @@ class ThemeViewSet(TenantScopedViewSetMixin, mixins.ListModelMixin, viewsets.Gen
     serializer_class = ThemeSerializer
     pagination_class = PageNumberPagination
     required_feature = FEATURE
-    required_permission = READ_KEY
+    required_permission = PAGE_VIEW_KEY
     scope_campus_field = None
     ordering_fields = ["code", "name"]
     ordering = ["code", "id"]
