@@ -55,11 +55,9 @@ describe("PhotoUploadField", () => {
 
   it("uploads the picked file with the given purpose and sets photo_file_id on success", async () => {
     mockUploadFile.mockResolvedValue("file-123");
+    // The restore unmounts the field first, as it revokes its object URL on unmount.
     const restoreObjectUrls = stubObjectUrls("blob:new-photo");
-    // Unmounted before the stubs are restored: the field revokes its object URL on
-    // unmount, and jsdom has no native revokeObjectURL for the restore to fall back to
-    // (same ordering student-form-dialog.test.tsx's own `stubObjectUrls` cases use).
-    const { unmount } = renderWithProviders(<TestHost uploadPurpose="guardian.photo" />);
+    renderWithProviders(<TestHost uploadPurpose="guardian.photo" />);
     try {
       await userEvent.upload(
         screen.getByLabelText(/photo/i),
@@ -70,7 +68,6 @@ describe("PhotoUploadField", () => {
         expect(mockUploadFile).toHaveBeenCalledWith(expect.any(File), "guardian.photo");
       });
     } finally {
-      unmount();
       restoreObjectUrls();
     }
   });
@@ -80,7 +77,7 @@ describe("PhotoUploadField", () => {
       new Error("'image/gif' is not allowed for 'guardian.photo' uploads."),
     );
     const restoreObjectUrls = stubObjectUrls("blob:rejected-photo");
-    const { unmount } = renderWithProviders(<TestHost uploadPurpose="guardian.photo" />);
+    renderWithProviders(<TestHost uploadPurpose="guardian.photo" />);
     try {
       // applyAccept: false — the input's own `accept="image/jpeg,image/png"` would
       // otherwise make userEvent silently drop a .gif file before it ever reaches
@@ -98,7 +95,6 @@ describe("PhotoUploadField", () => {
         await screen.findByText("'image/gif' is not allowed for 'guardian.photo' uploads."),
       ).toBeInTheDocument();
     } finally {
-      unmount();
       restoreObjectUrls();
     }
   });

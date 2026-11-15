@@ -504,6 +504,11 @@
 - **Mistake.** `_ledger_report_queryset` passed `LedgerEntry.objects` to `scope_queryset`, which returns its input unchanged for an `all` scope. The finance summary ANDs two of these, so every `all`-scoped caller of the `income-vs-expense` and `trial-balance` summaries got a `TypeError` (500): `&` is not defined on a Manager (PR #167 CI, the cross-tenant test).
 - **Check.** Pass `Model.objects.all()` (or a filtered queryset) to `scope_queryset`, and test every combinator (`&`, `|`, `.union`) applied to its result with an `all`-scoped caller, not only a narrowed one.
 
+### L70. Restore a global stub only after the component that uses it has unmounted
+
+- **Mistake.** The profile logo test restored the `URL.createObjectURL`/`revokeObjectURL` stubs at its end, while the form was still mounted. RTL's cleanup unmounts after the test, the logo field revoked its preview URL as it unmounted, and jsdom had no `revokeObjectURL` left to call. It passed locally and failed in CI (PR #183, fixed in `01c2fd11`).
+- **Check.** Use `stubObjectUrls` from `src/test-utils.tsx`, whose restore now unmounts every rendered tree first. For any other global a component touches on unmount (timers, `matchMedia`, `ResizeObserver`), call RTL's `cleanup()` (or the render's `unmount()`) before you restore it. A `describe`-level `afterEach` is no fix: it runs before RTL's root-level cleanup.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.
