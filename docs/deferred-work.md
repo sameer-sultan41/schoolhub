@@ -221,6 +221,12 @@ either this file or `project-status.md`.
   - Two admins editing the holidays at once: each `PUT` sends the list the sender loaded, so the
     later save drops the earlier one's change. The calendar is one document with no version to
     check.
+- **The School module's Sessions & terms section (PR G): a duplicate name is a generic 409.**
+  A second session with a name the school already uses, or a term repeating a name or order
+  within its session, reaches the `IntegrityError` handler as a generic 409, shown as "That
+  change conflicts with the current data. Reload and try again." — the same gap as the campus
+  code above.
+  `AcademicSessionSerializer` and `TermSerializer` need a validator naming the field.
 
 - **Staff's wire types are hand-written structs, not generated `ApiSchemas["Staff"]`
   aliases.** `services/modules/staff/staff-type.ts`'s `StaffDirectoryRecord`,
