@@ -193,7 +193,8 @@ its own migration; never use a merge migration.
 - **Reasons and export:** `:suspend`, `:delete` and `:restore` require a non-empty `reason`. `:delete` from
   `active` or `suspended` also requires a succeeded `tenant_export` job for that tenant, or `waive_export:
   true`.
-- **Slug:** `^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$`, globally unique, and not in `RESERVED_SLUGS`. That
+- **Slug:** the regex `^[a-z0-9]` then `(?:[a-z0-9-]{1,61}[a-z0-9])?$` (one pattern, split here
+  so the link checker does not read it as a link), globally unique, and not in `RESERVED_SLUGS`. That
   constant lives in `apps/platform_admin/constants.py` and is pinned to `apps/website/src/lib/host.ts` by a
   test. Immutable after `:provision`.
 - **Retention:** `deprovision_after = now + PLATFORM_RETENTION_DAYS`.
