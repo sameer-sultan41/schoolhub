@@ -34,7 +34,7 @@ class WebsiteSettingsSerializer(serializers.ModelSerializer):
     theme_id = serializers.UUIDField(required=False)
     theme_code = serializers.CharField(source="theme.code", read_only=True)
     theme_version = serializers.CharField(source="theme.version", read_only=True)
-    homepage_page_id = serializers.UUIDField(required=False)
+    homepage_page_id = serializers.UUIDField(required=False, allow_null=True)
     social_links = SocialLinkSerializer(many=True, required=False)
 
     class Meta:

@@ -60,13 +60,17 @@ def _seed_pages(tenant: Tenant, audit: dict[str, Any]) -> WebsitePage | None:
     """Create the missing standard pages as drafts; returns the home page."""
     taken = set(WebsitePage.objects.alive().values_list("slug", flat=True))
     home = WebsitePage.objects.alive().filter(page_type=PageType.HOME).first()
-    for page_type, slug, title, sections in DEFAULT_PAGES:
+    pages: list[WebsitePage] = []
+    sections: list[PageSection] = []
+    for page_type, slug, title, specs in DEFAULT_PAGES:
         if slug in taken or (page_type == PageType.HOME and home is not None):
             continue
-        page = WebsitePage.objects.create(
-            tenant=tenant, title=title, slug=slug, page_type=page_type, **audit
-        )
-        PageSection.objects.bulk_create(
+        # UUID primary keys are assigned client-side, so pages and sections go in two inserts.
+        page = WebsitePage(tenant=tenant, title=title, slug=slug, page_type=page_type, **audit)
+        pages.append(page)
+        if page_type == PageType.HOME:
+            home = page
+        sections.extend(
             PageSection(
                 tenant=tenant,
                 website_page=page,
@@ -75,10 +79,10 @@ def _seed_pages(tenant: Tenant, audit: dict[str, Any]) -> WebsitePage | None:
                 content=content,
                 **audit,
             )
-            for position, (section_type, content) in enumerate(sections)
+            for position, (section_type, content) in enumerate(specs)
         )
-        if page_type == PageType.HOME:
-            home = page
+    WebsitePage.objects.bulk_create(pages)
+    PageSection.objects.bulk_create(sections)
     return home
 
 
@@ -109,6 +113,8 @@ def update_settings(
             raise DomainRuleViolation({"theme_id": "Unknown or inactive theme."})
     if "theme_config" in data or theme.id != row.theme_id:
         validate_theme_config(theme, data.get("theme_config", row.theme_config))
+    if "homepage_page_id" in data and data["homepage_page_id"] is None:
+        raise DomainRuleViolation({"homepage_page_id": "A site must keep a home page."})
     if data.get("homepage_page_id") is not None and not (
         WebsitePage.objects.alive()
         .filter(id=data["homepage_page_id"], page_type=PageType.HOME)

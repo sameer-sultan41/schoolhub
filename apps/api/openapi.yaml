@@ -25997,7 +25997,6 @@ components:
           maxLength: 200
         slug:
           type: string
-          maxLength: 120
         locale:
           type: string
           nullable: true
@@ -26024,6 +26023,7 @@ components:
         homepage_page_id:
           type: string
           format: uuid
+          nullable: true
         is_published:
           type: boolean
         maintenance_mode:
@@ -30672,7 +30672,6 @@ components:
           maxLength: 200
         slug:
           type: string
-          maxLength: 120
         page_type:
           $ref: '#/components/schemas/WebsitePageTypeEnum'
         locale:
@@ -30704,6 +30703,7 @@ components:
         homepage_page_id:
           type: string
           format: uuid
+          nullable: true
         is_published:
           type: boolean
         maintenance_mode:

@@ -5,8 +5,9 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 
-from django.db import connection, transaction
+from django.db import connection
 from django.test import TestCase, TransactionTestCase
+from django.test.utils import CaptureQueriesContext
 
 from apps.website_cms.defaults import DEFAULT_PAGES
 from apps.website_cms.models import (
@@ -19,7 +20,7 @@ from apps.website_cms.models import (
 from apps.website_cms.settings.services import ensure_default_site
 from apps.website_cms.tests.factories import TenantFactory, WebsitePageFactory, default_theme
 from apps.website_cms.validation import validate_section_content
-from core.tenancy.context import tenant_context
+from core.tenancy.context import tenant_atomic, tenant_context
 
 
 class DefaultContentTests(TestCase):
@@ -53,6 +54,12 @@ class EnsureDefaultSiteTests(TestCase):
         self.assertEqual(row.homepage_page.page_type, PageType.HOME)
         self.assertEqual(sections, sum(len(sections) for *_, sections in DEFAULT_PAGES))
 
+    def test_seeding_uses_a_constant_number_of_queries(self) -> None:
+        with tenant_context(self.tenant.id), CaptureQueriesContext(connection) as queries:
+            ensure_default_site(self.tenant)
+        # One bulk insert for pages and one for sections, whatever the page count.
+        self.assertLessEqual(len(queries), 12)
+
     def test_second_call_changes_nothing(self) -> None:
         with tenant_context(self.tenant.id):
             first = ensure_default_site(self.tenant)
@@ -76,7 +83,7 @@ class EnsureDefaultSiteConcurrencyTests(TransactionTestCase):
         def call() -> str:
             try:
                 barrier.wait(timeout=10)
-                with tenant_context(tenant.id), transaction.atomic():
+                with tenant_atomic(tenant.id):
                     return str(ensure_default_site(tenant).id)
             finally:
                 connection.close()
@@ -85,6 +92,6 @@ class EnsureDefaultSiteConcurrencyTests(TransactionTestCase):
             ids = [future.result() for future in [pool.submit(call), pool.submit(call)]]
 
         self.assertEqual(len(set(ids)), 1)
-        with tenant_context(tenant.id), transaction.atomic():
+        with tenant_atomic(tenant.id):
             self.assertEqual(WebsiteSettings.objects.alive().count(), 1)
             self.assertEqual(WebsitePage.objects.alive().count(), 8)

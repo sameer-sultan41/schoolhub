@@ -11913,7 +11913,7 @@ export interface components {
             readonly theme_version?: string;
             theme_config?: unknown;
             /** Format: uuid */
-            homepage_page_id?: string;
+            homepage_page_id?: string | null;
             is_published?: boolean;
             maintenance_mode?: boolean;
             header_config?: unknown;
@@ -14060,7 +14060,7 @@ export interface components {
             readonly theme_version: string;
             theme_config?: unknown;
             /** Format: uuid */
-            homepage_page_id?: string;
+            homepage_page_id?: string | null;
             is_published?: boolean;
             maintenance_mode?: boolean;
             header_config?: unknown;

@@ -413,13 +413,17 @@ class ReplaceSectionsTests(WebsiteAPITestCase):
         self.assertIn("file_id", response.content.decode())
 
     def test_replacing_sections_of_a_published_page_resyncs_visibility(self) -> None:
+        self.allow("website.page.publish")
         with tenant_context(self.tenant.id):
             old = FileFactory(tenant=self.tenant, purpose=WEBSITE_MEDIA.key)
             new = FileFactory(tenant=self.tenant, purpose=WEBSITE_MEDIA.key)
-        page = self.make_page(slug="live", status=ContentStatus.PUBLISHED)
+        page = self.make_page(slug="live")
         section = self.make_section(
             page, position=0, content={"heading": "H", "image_file_id": str(old.id)}
         )
+        self.assertEqual(self.client.post(f"{detail(page)}:publish").status_code, 200)
+        with tenant_context(self.tenant.id):
+            self.assertEqual(File.objects.get(id=old.id).visibility, FileVisibility.PUBLIC)
         self._put([{**hero(image_file_id=str(new.id)), "id": str(section.id)}], page=page)
         with tenant_context(self.tenant.id):
             self.assertEqual(File.objects.get(id=new.id).visibility, FileVisibility.PUBLIC)

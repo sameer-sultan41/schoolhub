@@ -60,7 +60,8 @@ class WebsitePageWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = WebsitePage
         fields = ["title", "slug", "page_type", "locale", "show_in_search"]
-        extra_kwargs = {"locale": {"required": False}}
+        # No serializer max_length: the service decides every slug rule, always as a 422.
+        extra_kwargs = {"locale": {"required": False}, "slug": {"max_length": None}}
 
 
 class WebsitePageUpdateSerializer(WebsitePageWriteSerializer):
