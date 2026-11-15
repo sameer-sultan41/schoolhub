@@ -38,6 +38,20 @@ either this file or `project-status.md`.
     - The first write of a navigation menu is audited as `update`, not `create`. Cosmetic in the audit log.
     - SEO text-length limits answer 400 (serializer) while other rules answer 422 (service). Accepted: a length is input shape.
     - Issuing a `:preview` token is not audited. A preview exposes a draft to whoever holds the link for 600 s; record it once the audit catalogue has a `preview` action.
+  - **PR B follow-ups** (minor review findings from news, events, gallery, contact and the opt-in flags, each left for the PR that next touches its file):
+    - `content.seo_image_ids` and `content.locked` duplicate the equivalent helpers in `pages/`. One shared helper, once a third resource needs it; today the two copies are small and tested separately.
+    - Gallery item `partial_update` and `destroy` fetch the album twice (once to lock, once to authorise). A redundant read, harmless at the album sizes a school has.
+    - News lists order by `-published_at`, which Postgres sorts NULL first, so drafts precede published posts in the default order. Fix with `nulls_last` or an explicit status ordering when the dashboard list is built (PR F).
+    - The embed URL check validates the host only, not userinfo, port or redirect paths. The renderer must sandbox the iframe (PR E); tightening the validator then would need the final embed provider list.
+    - The generated schema documents the reorder and page-sections responses as bare arrays while the endpoints answer with the `{data, meta}` envelope. This matches how `load-summary` and other non-paginated actions are documented; check it once against the spectacular postprocessing before the dashboard consumes them.
+    - Contact notification recipients are not filtered for inactive or soft-deleted users; confirm what `notify()` and the address resolver already drop before adding a second filter.
+    - No test covers a contact submission with zero recipients. The task is a no-op there; add the test with the next change to `notifications.py`.
+    - `PATCH /contact-submissions/{id}` reads the audit "before" snapshot before it takes the row lock, so a concurrent triage can record a stale "before". Audit-only; the write itself is locked.
+    - The contact phone pattern accepts punctuation with no digit (such as `(---)`). Require at least one digit with the next validation change.
+    - The `email <> '' OR phone <> ''` CHECK does not treat whitespace-only values as empty; the service strips them first, so only a direct insert could differ. Tighten the constraint with a trimmed comparison in a later migration.
+    - The notify task's idempotency is check-then-insert without a lock, so two concurrent redeliveries could both notify. Needs a unique key on the notification source or an advisory lock; acceptable while redelivery is rare and one duplicate in-app notice is the worst case.
+    - `public_notices` reduces HTML to plain text with a regex, `strip_tags` and unescape, which can leave a literal `<script>` string in the text. The renderer must escape it (React does); consider `HTMLParser` if the text is ever used outside React.
+    - The create-with-flag-false staff test asserts the default photo visibility rather than proving nothing published it. A stricter assertion needs a spy on `sync_file_visibility`.
 
 - **Online fee payments, what PR 1 leaves out** ([ADR-0034](decisions/0034-online-fee-payments.md), plan `docs/superpowers/plans/2026-11-07-fee-online-payments.md`). PR 1 runs end to end against the fake provider only.
   - **PR 2 (blocked):** the real aggregator's adapter (PayFast or Safepay, picked after the user tests both sandboxes; enable it in `PAYMENT_PROVIDERS_ENABLED` for production and set `PAYMENT_PENDING_TTL_MINUTES` from its session lifetime), the portal Pay button and result page on `PortalInvoiceDetail` (waits for the portal stack, #156 → #158 → #160), and the staff gateway-settings and reconciliation-issues screens with `:resolve`. Until then a school can be configured only through the API.
