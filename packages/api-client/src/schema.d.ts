@@ -2309,6 +2309,130 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/gallery-albums": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `gallery-albums`: albums of images and video embeds with a publish workflow. */
+        get: operations["gallery_albums_list"];
+        put?: never;
+        /** @description `gallery-albums`: albums of images and video embeds with a publish workflow. */
+        post: operations["gallery_albums_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gallery-albums/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `gallery-albums`: albums of images and video embeds with a publish workflow. */
+        get: operations["gallery_albums_retrieve"];
+        put?: never;
+        post?: never;
+        /** @description `gallery-albums`: albums of images and video embeds with a publish workflow. */
+        delete: operations["gallery_albums_destroy"];
+        options?: never;
+        head?: never;
+        /** @description `gallery-albums`: albums of images and video embeds with a publish workflow. */
+        patch: operations["gallery_albums_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/gallery-albums/{id}/gallery-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `gallery-items`: the ordered media of one album. */
+        get: operations["gallery_albums_gallery_items_list"];
+        put?: never;
+        /** @description `gallery-items`: the ordered media of one album. */
+        post: operations["gallery_albums_gallery_items_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gallery-albums/{id}/gallery-items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description `gallery-items`: the ordered media of one album. */
+        delete: operations["gallery_albums_gallery_items_destroy"];
+        options?: never;
+        head?: never;
+        /** @description `gallery-items`: the ordered media of one album. */
+        patch: operations["gallery_albums_gallery_items_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/gallery-albums/{id}/gallery-items:reorder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description `gallery-items`: the ordered media of one album. */
+        patch: operations["gallery_albums_gallery_items:reorder_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/gallery-albums/{id}:publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `gallery-albums`: albums of images and video embeds with a publish workflow. */
+        post: operations["gallery_albums_:publish_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gallery-albums/{id}:unpublish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `gallery-albums`: albums of images and video embeds with a publish workflow. */
+        post: operations["gallery_albums_:unpublish_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/gateway-reconciliation-issues": {
         parameters: {
             query?: never;
@@ -3648,6 +3772,94 @@ export interface paths {
         patch: operations["navigation_menus_partial_update"];
         trace?: never;
     };
+    "/api/v1/news-posts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `news-posts`: articles with a rich-text body and a publish workflow. */
+        get: operations["news_posts_list"];
+        put?: never;
+        /** @description `news-posts`: articles with a rich-text body and a publish workflow. */
+        post: operations["news_posts_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/news-posts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `news-posts`: articles with a rich-text body and a publish workflow. */
+        get: operations["news_posts_retrieve"];
+        put?: never;
+        post?: never;
+        /** @description `news-posts`: articles with a rich-text body and a publish workflow. */
+        delete: operations["news_posts_destroy"];
+        options?: never;
+        head?: never;
+        /** @description `news-posts`: articles with a rich-text body and a publish workflow. */
+        patch: operations["news_posts_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/news-posts/{id}:archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `news-posts`: articles with a rich-text body and a publish workflow. */
+        post: operations["news_posts_:archive_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/news-posts/{id}:publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `news-posts`: articles with a rich-text body and a publish workflow. */
+        post: operations["news_posts_:publish_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/news-posts/{id}:unpublish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `news-posts`: articles with a rich-text body and a publish workflow. */
+        post: operations["news_posts_:unpublish_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notices": {
         parameters: {
             query?: never;
@@ -4950,6 +5162,93 @@ export interface paths {
         head?: never;
         /** @description `/scholarships` — §5.3's awards and their lifecycle. */
         patch: operations["scholarships_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/school-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `school-events`: public website events with a publish workflow. */
+        get: operations["school_events_list"];
+        put?: never;
+        /** @description `school-events`: public website events with a publish workflow. */
+        post: operations["school_events_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/school-events/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `school-events`: public website events with a publish workflow. */
+        get: operations["school_events_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description `school-events`: public website events with a publish workflow. */
+        patch: operations["school_events_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/school-events/{id}:archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `school-events`: public website events with a publish workflow. */
+        post: operations["school_events_:archive_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/school-events/{id}:publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `school-events`: public website events with a publish workflow. */
+        post: operations["school_events_:publish_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/school-events/{id}:unpublish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `school-events`: public website events with a publish workflow. */
+        post: operations["school_events_:unpublish_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/school-settings": {
@@ -8957,6 +9256,64 @@ export interface components {
          * @enum {string}
          */
         FormatEnum: "csv" | "xlsx" | "pdf";
+        GalleryAlbum: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly title: string;
+            readonly slug: string;
+            readonly description: string;
+            /** Format: uuid */
+            readonly cover_image_file_id: string | null;
+            /** Format: uuid */
+            readonly school_event_id: string | null;
+            readonly status: components["schemas"]["WebsiteContentStatusEnum"];
+            /** Format: date-time */
+            readonly published_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /** @description Input for create and PATCH; slug and event-link rules live in the service (422s). */
+        GalleryAlbumWrite: {
+            title: string;
+            slug: string;
+            description?: string;
+            /** Format: uuid */
+            cover_image_file_id?: string | null;
+            /** Format: uuid */
+            school_event_id?: string | null;
+        };
+        GalleryItem: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly media_type: components["schemas"]["GalleryMediaTypeEnum"];
+            /** Format: uuid */
+            readonly file_id: string | null;
+            readonly embed_url: string;
+            readonly caption: string;
+            readonly alt_text: string;
+            readonly position: number;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /** @description Input for create and PATCH; the media rules live in the service (422s). */
+        GalleryItemWrite: {
+            media_type?: components["schemas"]["GalleryMediaTypeEnum"];
+            /** Format: uuid */
+            file_id?: string | null;
+            embed_url?: string;
+            caption?: string;
+            alt_text?: string;
+        };
+        /**
+         * @description * `image` - Image
+         *     * `video_embed` - Video embed
+         * @enum {string}
+         */
+        GalleryMediaTypeEnum: "image" | "video_embed";
         /**
          * @description * `book_at_gateway_amount` - book_at_gateway_amount
          *     * `dismiss` - dismiss
@@ -9882,6 +10239,51 @@ export interface components {
          * @enum {string}
          */
         NavigationTargetTypeEnum: "page" | "url" | "news_index" | "events_index" | "gallery_index";
+        NewsPostDetail: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly title: string;
+            readonly slug: string;
+            readonly excerpt: string;
+            /** Format: uuid */
+            readonly cover_image_file_id: string | null;
+            readonly status: components["schemas"]["WebsiteContentStatusEnum"];
+            /** Format: date-time */
+            readonly published_at: string | null;
+            readonly locale: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+            readonly body: unknown;
+        };
+        NewsPostList: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly title: string;
+            readonly slug: string;
+            readonly excerpt: string;
+            /** Format: uuid */
+            readonly cover_image_file_id: string | null;
+            readonly status: components["schemas"]["WebsiteContentStatusEnum"];
+            /** Format: date-time */
+            readonly published_at: string | null;
+            readonly locale: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /** @description Input for create and PATCH; slug and body rules live in the service (422s). */
+        NewsPostWrite: {
+            title: string;
+            slug: string;
+            excerpt?: string;
+            body?: unknown;
+            /** Format: uuid */
+            cover_image_file_id?: string | null;
+            locale?: string;
+        };
         Notice: {
             /** Format: uuid */
             readonly id: string;
@@ -10316,6 +10718,28 @@ export interface components {
                 };
             };
         };
+        PaginatedGalleryAlbumList: {
+            data?: components["schemas"]["GalleryAlbum"][];
+            meta?: {
+                pagination?: {
+                    page?: number;
+                    page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
+                };
+            };
+        };
+        PaginatedGalleryItemList: {
+            data?: components["schemas"]["GalleryItem"][];
+            meta?: {
+                pagination?: {
+                    page?: number;
+                    page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
+                };
+            };
+        };
         PaginatedGatewayReconciliationIssueList: {
             data?: components["schemas"]["GatewayReconciliationIssue"][];
             meta?: {
@@ -10425,6 +10849,17 @@ export interface components {
                     next_cursor?: string | null;
                     previous_cursor?: string | null;
                     page_size?: number;
+                };
+            };
+        };
+        PaginatedNewsPostListList: {
+            data?: components["schemas"]["NewsPostList"][];
+            meta?: {
+                pagination?: {
+                    page?: number;
+                    page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
                 };
             };
         };
@@ -10580,6 +11015,17 @@ export interface components {
                     next_cursor?: string | null;
                     previous_cursor?: string | null;
                     page_size?: number;
+                };
+            };
+        };
+        PaginatedSchoolEventListList: {
+            data?: components["schemas"]["SchoolEventList"][];
+            meta?: {
+                pagination?: {
+                    page?: number;
+                    page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
                 };
             };
         };
@@ -11395,6 +11841,25 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        /** @description Input for create and PATCH; slug and event-link rules live in the service (422s). */
+        PatchedGalleryAlbumWrite: {
+            title?: string;
+            slug?: string;
+            description?: string;
+            /** Format: uuid */
+            cover_image_file_id?: string | null;
+            /** Format: uuid */
+            school_event_id?: string | null;
+        };
+        /** @description Input for create and PATCH; the media rules live in the service (422s). */
+        PatchedGalleryItemWrite: {
+            media_type?: components["schemas"]["GalleryMediaTypeEnum"];
+            /** Format: uuid */
+            file_id?: string | null;
+            embed_url?: string;
+            caption?: string;
+            alt_text?: string;
+        };
         /**
          * @description `grade_bands` — one band of a grading scale (§5.5).
          *
@@ -11531,6 +11996,16 @@ export interface components {
         };
         PatchedNavigationMenuUpdate: {
             items?: components["schemas"]["NavItem"][];
+        };
+        /** @description Input for create and PATCH; slug and body rules live in the service (422s). */
+        PatchedNewsPostWrite: {
+            title?: string;
+            slug?: string;
+            excerpt?: string;
+            body?: unknown;
+            /** Format: uuid */
+            cover_image_file_id?: string | null;
+            locale?: string;
         };
         PatchedNotice: {
             /** Format: uuid */
@@ -11734,6 +12209,9 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        PatchedReorderItems: {
+            ids?: string[];
+        };
         PatchedReplaceSections: {
             sections?: components["schemas"]["SectionInput"][];
         };
@@ -11824,6 +12302,20 @@ export interface components {
             readonly created_at?: string;
             /** Format: date-time */
             readonly updated_at?: string;
+        };
+        /** @description Input for create and PATCH; slug, description and date-range rules live in the service. */
+        PatchedSchoolEventWrite: {
+            title?: string;
+            slug?: string;
+            description?: unknown;
+            /** Format: date-time */
+            starts_at?: string;
+            /** Format: date-time */
+            ends_at?: string | null;
+            is_all_day?: boolean;
+            location?: string;
+            /** Format: uuid */
+            cover_image_file_id?: string | null;
         };
         /**
          * @description School profile and academic configuration (module doc §16, singleton resource).
@@ -12987,6 +13479,59 @@ export interface components {
          * @enum {string}
          */
         ScholarshipTypeEnum: "merit" | "need" | "sports" | "staff_ward" | "other";
+        SchoolEventDetail: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly title: string;
+            readonly slug: string;
+            /** Format: date-time */
+            readonly starts_at: string;
+            /** Format: date-time */
+            readonly ends_at: string | null;
+            readonly is_all_day: boolean;
+            readonly location: string;
+            /** Format: uuid */
+            readonly cover_image_file_id: string | null;
+            readonly status: components["schemas"]["WebsiteContentStatusEnum"];
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+            readonly description: unknown;
+        };
+        SchoolEventList: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly title: string;
+            readonly slug: string;
+            /** Format: date-time */
+            readonly starts_at: string;
+            /** Format: date-time */
+            readonly ends_at: string | null;
+            readonly is_all_day: boolean;
+            readonly location: string;
+            /** Format: uuid */
+            readonly cover_image_file_id: string | null;
+            readonly status: components["schemas"]["WebsiteContentStatusEnum"];
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /** @description Input for create and PATCH; slug, description and date-range rules live in the service. */
+        SchoolEventWrite: {
+            title: string;
+            slug: string;
+            description?: unknown;
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at?: string | null;
+            is_all_day?: boolean;
+            location?: string;
+            /** Format: uuid */
+            cover_image_file_id?: string | null;
+        };
         /**
          * @description School profile and academic configuration (module doc §16, singleton resource).
          *
@@ -18425,6 +18970,318 @@ export interface operations {
             };
         };
     };
+    gallery_albums_list: {
+        parameters: {
+            query?: {
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                school_event_id?: string;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `draft` - Draft
+                 *     * `published` - Published
+                 *     * `archived` - Archived
+                 */
+                status?: "archived" | "draft" | "published";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedGalleryAlbumList"];
+                };
+            };
+        };
+    };
+    gallery_albums_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GalleryAlbumWrite"];
+                "application/x-www-form-urlencoded": components["schemas"]["GalleryAlbumWrite"];
+                "multipart/form-data": components["schemas"]["GalleryAlbumWrite"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GalleryAlbum"];
+                };
+            };
+        };
+    };
+    gallery_albums_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GalleryAlbum"];
+                };
+            };
+        };
+    };
+    gallery_albums_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    gallery_albums_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedGalleryAlbumWrite"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedGalleryAlbumWrite"];
+                "multipart/form-data": components["schemas"]["PatchedGalleryAlbumWrite"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GalleryAlbum"];
+                };
+            };
+        };
+    };
+    gallery_albums_gallery_items_list: {
+        parameters: {
+            query?: {
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedGalleryItemList"];
+                };
+            };
+        };
+    };
+    gallery_albums_gallery_items_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["GalleryItemWrite"];
+                "application/x-www-form-urlencoded": components["schemas"]["GalleryItemWrite"];
+                "multipart/form-data": components["schemas"]["GalleryItemWrite"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GalleryItem"];
+                };
+            };
+        };
+    };
+    gallery_albums_gallery_items_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    gallery_albums_gallery_items_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedGalleryItemWrite"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedGalleryItemWrite"];
+                "multipart/form-data": components["schemas"]["PatchedGalleryItemWrite"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GalleryItem"];
+                };
+            };
+        };
+    };
+    "gallery_albums_gallery_items:reorder_partial_update": {
+        parameters: {
+            query?: {
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedReorderItems"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedReorderItems"];
+                "multipart/form-data": components["schemas"]["PatchedReorderItems"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedGalleryItemList"];
+                };
+            };
+        };
+    };
+    "gallery_albums_:publish_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GalleryAlbum"];
+                };
+            };
+        };
+    };
+    "gallery_albums_:unpublish_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GalleryAlbum"];
+                };
+            };
+        };
+    };
     gateway_reconciliation_issues_list: {
         parameters: {
             query?: {
@@ -20194,6 +21051,196 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NavigationMenu"];
+                };
+            };
+        };
+    };
+    news_posts_list: {
+        parameters: {
+            query?: {
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `draft` - Draft
+                 *     * `published` - Published
+                 *     * `archived` - Archived
+                 */
+                status?: "archived" | "draft" | "published";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedNewsPostListList"];
+                };
+            };
+        };
+    };
+    news_posts_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewsPostWrite"];
+                "application/x-www-form-urlencoded": components["schemas"]["NewsPostWrite"];
+                "multipart/form-data": components["schemas"]["NewsPostWrite"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewsPostDetail"];
+                };
+            };
+        };
+    };
+    news_posts_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewsPostDetail"];
+                };
+            };
+        };
+    };
+    news_posts_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    news_posts_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedNewsPostWrite"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedNewsPostWrite"];
+                "multipart/form-data": components["schemas"]["PatchedNewsPostWrite"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewsPostDetail"];
+                };
+            };
+        };
+    };
+    "news_posts_:archive_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewsPostDetail"];
+                };
+            };
+        };
+    };
+    "news_posts_:publish_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewsPostDetail"];
+                };
+            };
+        };
+    };
+    "news_posts_:unpublish_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewsPostDetail"];
                 };
             };
         };
@@ -22282,6 +23329,178 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Scholarship"];
+                };
+            };
+        };
+    };
+    school_events_list: {
+        parameters: {
+            query?: {
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                starts_after?: string;
+                starts_before?: string;
+                /**
+                 * @description * `draft` - Draft
+                 *     * `published` - Published
+                 *     * `archived` - Archived
+                 */
+                status?: "archived" | "draft" | "published";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedSchoolEventListList"];
+                };
+            };
+        };
+    };
+    school_events_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SchoolEventWrite"];
+                "application/x-www-form-urlencoded": components["schemas"]["SchoolEventWrite"];
+                "multipart/form-data": components["schemas"]["SchoolEventWrite"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolEventDetail"];
+                };
+            };
+        };
+    };
+    school_events_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolEventDetail"];
+                };
+            };
+        };
+    };
+    school_events_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedSchoolEventWrite"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedSchoolEventWrite"];
+                "multipart/form-data": components["schemas"]["PatchedSchoolEventWrite"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolEventDetail"];
+                };
+            };
+        };
+    };
+    "school_events_:archive_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolEventDetail"];
+                };
+            };
+        };
+    };
+    "school_events_:publish_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolEventDetail"];
+                };
+            };
+        };
+    };
+    "school_events_:unpublish_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolEventDetail"];
                 };
             };
         };

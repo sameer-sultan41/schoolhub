@@ -5399,6 +5399,408 @@ paths:
               schema:
                 $ref: '#/components/schemas/Fine'
           description: ''
+  /api/v1/gallery-albums:
+    get:
+      operationId: gallery_albums_list
+      description: '`gallery-albums`: albums of images and video embeds with a publish
+        workflow.'
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: school_event_id
+        schema:
+          type: string
+          format: uuid
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - archived
+          - draft
+          - published
+        description: |-
+          * `draft` - Draft
+          * `published` - Published
+          * `archived` - Archived
+      tags:
+      - gallery-albums
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedGalleryAlbumList'
+          description: ''
+    post:
+      operationId: gallery_albums_create
+      description: '`gallery-albums`: albums of images and video embeds with a publish
+        workflow.'
+      tags:
+      - gallery-albums
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GalleryAlbumWrite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GalleryAlbumWrite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GalleryAlbumWrite'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GalleryAlbum'
+          description: ''
+  /api/v1/gallery-albums/{id}:
+    get:
+      operationId: gallery_albums_retrieve
+      description: '`gallery-albums`: albums of images and video embeds with a publish
+        workflow.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - gallery-albums
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GalleryAlbum'
+          description: ''
+    patch:
+      operationId: gallery_albums_partial_update
+      description: '`gallery-albums`: albums of images and video embeds with a publish
+        workflow.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - gallery-albums
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedGalleryAlbumWrite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedGalleryAlbumWrite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedGalleryAlbumWrite'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GalleryAlbum'
+          description: ''
+    delete:
+      operationId: gallery_albums_destroy
+      description: '`gallery-albums`: albums of images and video embeds with a publish
+        workflow.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - gallery-albums
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/gallery-albums/{id}/gallery-items:
+    get:
+      operationId: gallery_albums_gallery_items_list
+      description: '`gallery-items`: the ordered media of one album.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - gallery-albums
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedGalleryItemList'
+          description: ''
+    post:
+      operationId: gallery_albums_gallery_items_create
+      description: '`gallery-items`: the ordered media of one album.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - gallery-albums
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GalleryItemWrite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GalleryItemWrite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GalleryItemWrite'
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GalleryItem'
+          description: ''
+  /api/v1/gallery-albums/{id}/gallery-items/{item_id}:
+    patch:
+      operationId: gallery_albums_gallery_items_partial_update
+      description: '`gallery-items`: the ordered media of one album.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: item_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - gallery-albums
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedGalleryItemWrite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedGalleryItemWrite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedGalleryItemWrite'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GalleryItem'
+          description: ''
+    delete:
+      operationId: gallery_albums_gallery_items_destroy
+      description: '`gallery-items`: the ordered media of one album.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: item_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - gallery-albums
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/gallery-albums/{id}/gallery-items:reorder:
+    patch:
+      operationId: gallery_albums_gallery_items:reorder_partial_update
+      description: '`gallery-items`: the ordered media of one album.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - gallery-albums
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedReorderItems'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedReorderItems'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedReorderItems'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedGalleryItemList'
+          description: ''
+  /api/v1/gallery-albums/{id}:publish:
+    post:
+      operationId: gallery_albums_:publish_create
+      description: '`gallery-albums`: albums of images and video embeds with a publish
+        workflow.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - gallery-albums
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GalleryAlbum'
+          description: ''
+  /api/v1/gallery-albums/{id}:unpublish:
+    post:
+      operationId: gallery_albums_:unpublish_create
+      description: '`gallery-albums`: albums of images and video embeds with a publish
+        workflow.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - gallery-albums
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GalleryAlbum'
+          description: ''
   /api/v1/gateway-reconciliation-issues:
     get:
       operationId: gateway_reconciliation_issues_list
@@ -8087,6 +8489,221 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NavigationMenu'
+          description: ''
+  /api/v1/news-posts:
+    get:
+      operationId: news_posts_list
+      description: '`news-posts`: articles with a rich-text body and a publish workflow.'
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - archived
+          - draft
+          - published
+        description: |-
+          * `draft` - Draft
+          * `published` - Published
+          * `archived` - Archived
+      tags:
+      - news-posts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedNewsPostListList'
+          description: ''
+    post:
+      operationId: news_posts_create
+      description: '`news-posts`: articles with a rich-text body and a publish workflow.'
+      tags:
+      - news-posts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewsPostWrite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/NewsPostWrite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/NewsPostWrite'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NewsPostDetail'
+          description: ''
+  /api/v1/news-posts/{id}:
+    get:
+      operationId: news_posts_retrieve
+      description: '`news-posts`: articles with a rich-text body and a publish workflow.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - news-posts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NewsPostDetail'
+          description: ''
+    patch:
+      operationId: news_posts_partial_update
+      description: '`news-posts`: articles with a rich-text body and a publish workflow.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - news-posts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedNewsPostWrite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedNewsPostWrite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedNewsPostWrite'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NewsPostDetail'
+          description: ''
+    delete:
+      operationId: news_posts_destroy
+      description: '`news-posts`: articles with a rich-text body and a publish workflow.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - news-posts
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/news-posts/{id}:archive:
+    post:
+      operationId: news_posts_:archive_create
+      description: '`news-posts`: articles with a rich-text body and a publish workflow.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - news-posts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NewsPostDetail'
+          description: ''
+  /api/v1/news-posts/{id}:publish:
+    post:
+      operationId: news_posts_:publish_create
+      description: '`news-posts`: articles with a rich-text body and a publish workflow.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - news-posts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NewsPostDetail'
+          description: ''
+  /api/v1/news-posts/{id}:unpublish:
+    post:
+      operationId: news_posts_:unpublish_create
+      description: '`news-posts`: articles with a rich-text body and a publish workflow.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - news-posts
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NewsPostDetail'
           description: ''
   /api/v1/notices:
     get:
@@ -11118,6 +11735,214 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Scholarship'
+          description: ''
+  /api/v1/school-events:
+    get:
+      operationId: school_events_list
+      description: '`school-events`: public website events with a publish workflow.'
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: starts_after
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: starts_before
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - archived
+          - draft
+          - published
+        description: |-
+          * `draft` - Draft
+          * `published` - Published
+          * `archived` - Archived
+      tags:
+      - school-events
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSchoolEventListList'
+          description: ''
+    post:
+      operationId: school_events_create
+      description: '`school-events`: public website events with a publish workflow.'
+      tags:
+      - school-events
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchoolEventWrite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SchoolEventWrite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SchoolEventWrite'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolEventDetail'
+          description: ''
+  /api/v1/school-events/{id}:
+    get:
+      operationId: school_events_retrieve
+      description: '`school-events`: public website events with a publish workflow.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - school-events
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolEventDetail'
+          description: ''
+    patch:
+      operationId: school_events_partial_update
+      description: '`school-events`: public website events with a publish workflow.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - school-events
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSchoolEventWrite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSchoolEventWrite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSchoolEventWrite'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolEventDetail'
+          description: ''
+  /api/v1/school-events/{id}:archive:
+    post:
+      operationId: school_events_:archive_create
+      description: '`school-events`: public website events with a publish workflow.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - school-events
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolEventDetail'
+          description: ''
+  /api/v1/school-events/{id}:publish:
+    post:
+      operationId: school_events_:publish_create
+      description: '`school-events`: public website events with a publish workflow.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - school-events
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolEventDetail'
+          description: ''
+  /api/v1/school-events/{id}:unpublish:
+    post:
+      operationId: school_events_:unpublish_create
+      description: '`school-events`: public website events with a publish workflow.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - school-events
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolEventDetail'
           description: ''
   /api/v1/school-settings:
     get:
@@ -19855,6 +20680,156 @@ components:
         * `csv` - csv
         * `xlsx` - xlsx
         * `pdf` - pdf
+    GalleryAlbum:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        cover_image_file_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        school_event_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/WebsiteContentStatusEnum'
+          readOnly: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - cover_image_file_id
+      - created_at
+      - description
+      - id
+      - published_at
+      - school_event_id
+      - slug
+      - status
+      - title
+      - updated_at
+    GalleryAlbumWrite:
+      type: object
+      description: Input for create and PATCH; slug and event-link rules live in the
+        service (422s).
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        slug:
+          type: string
+        description:
+          type: string
+        cover_image_file_id:
+          type: string
+          format: uuid
+          nullable: true
+        school_event_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - slug
+      - title
+    GalleryItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        media_type:
+          allOf:
+          - $ref: '#/components/schemas/GalleryMediaTypeEnum'
+          readOnly: true
+        file_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        embed_url:
+          type: string
+          readOnly: true
+        caption:
+          type: string
+          readOnly: true
+        alt_text:
+          type: string
+          readOnly: true
+        position:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - alt_text
+      - caption
+      - created_at
+      - embed_url
+      - file_id
+      - id
+      - media_type
+      - position
+      - updated_at
+    GalleryItemWrite:
+      type: object
+      description: Input for create and PATCH; the media rules live in the service
+        (422s).
+      properties:
+        media_type:
+          $ref: '#/components/schemas/GalleryMediaTypeEnum'
+        file_id:
+          type: string
+          format: uuid
+          nullable: true
+        embed_url:
+          type: string
+        caption:
+          type: string
+          maxLength: 300
+        alt_text:
+          type: string
+          maxLength: 300
+    GalleryMediaTypeEnum:
+      enum:
+      - image
+      - video_embed
+      type: string
+      description: |-
+        * `image` - Image
+        * `video_embed` - Video embed
     GatewayIssueActionEnum:
       enum:
       - book_at_gateway_amount
@@ -21797,6 +22772,137 @@ components:
         * `news_index` - News listing
         * `events_index` - Events listing
         * `gallery_index` - Gallery listing
+    NewsPostDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+        excerpt:
+          type: string
+          readOnly: true
+        cover_image_file_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/WebsiteContentStatusEnum'
+          readOnly: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        locale:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        body:
+          readOnly: true
+      required:
+      - body
+      - cover_image_file_id
+      - created_at
+      - excerpt
+      - id
+      - locale
+      - published_at
+      - slug
+      - status
+      - title
+      - updated_at
+    NewsPostList:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+        excerpt:
+          type: string
+          readOnly: true
+        cover_image_file_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/WebsiteContentStatusEnum'
+          readOnly: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        locale:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - cover_image_file_id
+      - created_at
+      - excerpt
+      - id
+      - locale
+      - published_at
+      - slug
+      - status
+      - title
+      - updated_at
+    NewsPostWrite:
+      type: object
+      description: Input for create and PATCH; slug and body rules live in the service
+        (422s).
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        slug:
+          type: string
+        excerpt:
+          type: string
+          maxLength: 500
+        body: {}
+        cover_image_file_id:
+          type: string
+          format: uuid
+          nullable: true
+        locale:
+          type: string
+          maxLength: 10
+      required:
+      - slug
+      - title
     Notice:
       type: object
       properties:
@@ -22727,6 +23833,48 @@ components:
                   nullable: true
                 page_size:
                   type: integer
+    PaginatedGalleryAlbumList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/GalleryAlbum'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                page:
+                  type: integer
+                page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
+                  type: integer
+    PaginatedGalleryItemList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/GalleryItem'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                page:
+                  type: integer
+                page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
+                  type: integer
     PaginatedGatewayReconciliationIssueList:
       type: object
       properties:
@@ -22957,6 +24105,27 @@ components:
                   type: string
                   nullable: true
                 page_size:
+                  type: integer
+    PaginatedNewsPostListList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/NewsPostList'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                page:
+                  type: integer
+                page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
                   type: integer
     PaginatedNoticeReadList:
       type: object
@@ -23272,6 +24441,27 @@ components:
                   type: string
                   nullable: true
                 page_size:
+                  type: integer
+    PaginatedSchoolEventListList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolEventList'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                page:
+                  type: integer
+                page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
                   type: integer
     PaginatedSectionList:
       type: object
@@ -24876,6 +26066,45 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedGalleryAlbumWrite:
+      type: object
+      description: Input for create and PATCH; slug and event-link rules live in the
+        service (422s).
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        slug:
+          type: string
+        description:
+          type: string
+        cover_image_file_id:
+          type: string
+          format: uuid
+          nullable: true
+        school_event_id:
+          type: string
+          format: uuid
+          nullable: true
+    PatchedGalleryItemWrite:
+      type: object
+      description: Input for create and PATCH; the media rules live in the service
+        (422s).
+      properties:
+        media_type:
+          $ref: '#/components/schemas/GalleryMediaTypeEnum'
+        file_id:
+          type: string
+          format: uuid
+          nullable: true
+        embed_url:
+          type: string
+        caption:
+          type: string
+          maxLength: 300
+        alt_text:
+          type: string
+          maxLength: 300
     PatchedGradeBand:
       type: object
       description: |-
@@ -25132,6 +26361,27 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/NavItem'
+    PatchedNewsPostWrite:
+      type: object
+      description: Input for create and PATCH; slug and body rules live in the service
+        (422s).
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        slug:
+          type: string
+        excerpt:
+          type: string
+          maxLength: 500
+        body: {}
+        cover_image_file_id:
+          type: string
+          format: uuid
+          nullable: true
+        locale:
+          type: string
+          maxLength: 10
     PatchedNotice:
       type: object
       properties:
@@ -25515,6 +26765,14 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedReorderItems:
+      type: object
+      properties:
+        ids:
+          type: array
+          items:
+            type: string
+            format: uuid
     PatchedReplaceSections:
       type: object
       properties:
@@ -25710,6 +26968,33 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedSchoolEventWrite:
+      type: object
+      description: Input for create and PATCH; slug, description and date-range rules
+        live in the service.
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        slug:
+          type: string
+        description: {}
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+          nullable: true
+        is_all_day:
+          type: boolean
+        location:
+          type: string
+          maxLength: 200
+        cover_image_file_id:
+          type: string
+          format: uuid
+          nullable: true
     PatchedSchoolSettings:
       type: object
       description: |-
@@ -28238,6 +29523,154 @@ components:
         * `sports` - Sports
         * `staff_ward` - Staff ward
         * `other` - Other
+    SchoolEventDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+        starts_at:
+          type: string
+          format: date-time
+          readOnly: true
+        ends_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        is_all_day:
+          type: boolean
+          readOnly: true
+        location:
+          type: string
+          readOnly: true
+        cover_image_file_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/WebsiteContentStatusEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        description:
+          readOnly: true
+      required:
+      - cover_image_file_id
+      - created_at
+      - description
+      - ends_at
+      - id
+      - is_all_day
+      - location
+      - slug
+      - starts_at
+      - status
+      - title
+      - updated_at
+    SchoolEventList:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+        starts_at:
+          type: string
+          format: date-time
+          readOnly: true
+        ends_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        is_all_day:
+          type: boolean
+          readOnly: true
+        location:
+          type: string
+          readOnly: true
+        cover_image_file_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/WebsiteContentStatusEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - cover_image_file_id
+      - created_at
+      - ends_at
+      - id
+      - is_all_day
+      - location
+      - slug
+      - starts_at
+      - status
+      - title
+      - updated_at
+    SchoolEventWrite:
+      type: object
+      description: Input for create and PATCH; slug, description and date-range rules
+        live in the service.
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        slug:
+          type: string
+        description: {}
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+          nullable: true
+        is_all_day:
+          type: boolean
+        location:
+          type: string
+          maxLength: 200
+        cover_image_file_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - slug
+      - starts_at
+      - title
     SchoolSettings:
       type: object
       description: |-

@@ -5,7 +5,11 @@ from __future__ import annotations
 from rest_framework.test import APITestCase
 
 from apps.website_cms.tests.factories import (
+    GalleryAlbumFactory,
+    GalleryItemFactory,
+    NewsPostFactory,
     PageSectionFactory,
+    SchoolEventFactory,
     TenantFactory,
     UserFactory,
     WebsitePageFactory,
@@ -42,6 +46,43 @@ class WebsiteAPITestCase(APITestCase):
     def make_section(self, page, **kwargs):
         with tenant_context(page.tenant_id):
             return PageSectionFactory(tenant=page.tenant, website_page=page, **kwargs)
+
+    def make_other_tenant(self):
+        return TenantFactory()
+
+    def make_news(self, tenant=None, **kwargs):
+        tenant = tenant or self.tenant
+        with tenant_context(tenant.id):
+            return NewsPostFactory(tenant=tenant, **kwargs)
+
+    def make_event(self, tenant=None, **kwargs):
+        tenant = tenant or self.tenant
+        with tenant_context(tenant.id):
+            return SchoolEventFactory(tenant=tenant, **kwargs)
+
+    def make_album(self, tenant=None, **kwargs):
+        tenant = tenant or self.tenant
+        with tenant_context(tenant.id):
+            return GalleryAlbumFactory(tenant=tenant, **kwargs)
+
+    def make_item(self, album, **kwargs):
+        with tenant_context(album.tenant_id):
+            return GalleryItemFactory(tenant=album.tenant, gallery_album=album, **kwargs)
+
+    def make_media(self, tenant=None):
+        """A ready `website.media` file of the tenant."""
+        from apps.website_cms.uploads import WEBSITE_MEDIA
+        from core.files.tests.factories import FileFactory
+
+        tenant = tenant or self.tenant
+        with tenant_context(tenant.id):
+            return FileFactory(tenant=tenant, purpose=WEBSITE_MEDIA.key)
+
+    def file_visibility(self, file) -> str:
+        from core.files.models import File
+
+        with tenant_context(self.tenant.id):
+            return File.objects.get(id=file.id).visibility
 
     def make_settings(self, tenant=None, **kwargs):
         tenant = tenant or self.tenant

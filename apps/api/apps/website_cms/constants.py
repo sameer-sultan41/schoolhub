@@ -87,3 +87,14 @@ class NavTargetType(models.TextChoices):
     NEWS_INDEX = "news_index", "News listing"
     EVENTS_INDEX = "events_index", "Events listing"
     GALLERY_INDEX = "gallery_index", "Gallery listing"
+
+
+#: News, event and album slugs: one lowercase segment, 120 characters at most (decision 14).
+CONTENT_SLUG_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
+CONTENT_SLUG_RE = re.compile(CONTENT_SLUG_PATTERN)
+CONTENT_SLUG_MAX_LENGTH = 120
+
+#: Hosts a gallery `video_embed` item may point at.
+EMBED_HOSTS = frozenset(
+    {"www.youtube.com", "youtube.com", "youtu.be", "player.vimeo.com", "vimeo.com"}
+)

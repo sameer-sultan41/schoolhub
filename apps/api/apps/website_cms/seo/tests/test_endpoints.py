@@ -97,13 +97,32 @@ class SeoUpdateTests(WebsiteAPITestCase):
         self.allow("website.seo.update")
         self.assertEqual(self._patch({"meta_title": "T"}, "page").status_code, 422)
 
-    def test_news_event_album_targets_are_unsupported_until_b1(self) -> None:
+    def test_news_event_album_targets_must_exist_for_this_tenant(self) -> None:
         self.allow("website.seo.update")
-        for target_type in ("news_post", "school_event", "gallery_album"):
+        rows = {
+            "news_post": self.make_news(),
+            "school_event": self.make_event(),
+            "gallery_album": self.make_album(),
+        }
+        for target_type, row in rows.items():
             with self.subTest(target_type=target_type):
-                response = self._patch({"meta_title": "T"}, target_type, uuid4())
-                self.assertEqual(response.status_code, 422)
-                self.assertIn("unsupported_target", str(response.json()))
+                missing = self._patch({"meta_title": "T"}, target_type, uuid4())
+                self.assertEqual(missing.status_code, 422)
+                self.assertIn("invalid_target", str(missing.json()))
+                ok = self._patch({"meta_title": "T"}, target_type, row.id)
+                self.assertEqual(ok.status_code, 200)
+                self.assertEqual(ok.json()["data"]["meta_title"], "T")
+
+    def test_og_image_of_published_content_is_public_and_reverts_on_unpublish(self) -> None:
+        self.allow("website.seo.update", "website.news-post.publish")
+        file = self.make_media()
+        news = self.make_news()
+        self._patch({"og_image_file_id": str(file.id)}, "news_post", news.id)
+        self.assertEqual(self.file_visibility(file), FileVisibility.PRIVATE)
+        self.client.post(f"/api/v1/news-posts/{news.id}:publish")
+        self.assertEqual(self.file_visibility(file), FileVisibility.PUBLIC)
+        self.client.post(f"/api/v1/news-posts/{news.id}:unpublish")
+        self.assertEqual(self.file_visibility(file), FileVisibility.PRIVATE)
 
     def test_lengths_are_enforced(self) -> None:
         self.allow("website.seo.update")

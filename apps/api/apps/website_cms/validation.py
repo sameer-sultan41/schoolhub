@@ -222,3 +222,8 @@ def assert_files_usable(ids: Iterable[UUID | str]) -> None:
     )
     if wanted - usable:
         raise DomainRuleViolation({"file_id": _FILE_NOT_AVAILABLE})
+
+
+def rich_text_file_ids(doc: Any) -> set[UUID]:
+    """Every image file id in a rich-text block document."""
+    return referenced_file_ids(load_rich_text_schema(), doc)

@@ -419,6 +419,7 @@ SPECTACULAR_SETTINGS = {
         "SeoTargetTypeEnum": "apps.website_cms.models.SeoTargetType",
         "NavigationTargetTypeEnum": "apps.website_cms.constants.NavTargetType",
         "SectionTypeEnum": "apps.website_cms.constants.SectionType",
+        "GalleryMediaTypeEnum": "apps.website_cms.models.MediaType",
     },
 }
 
