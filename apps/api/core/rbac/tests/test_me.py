@@ -29,3 +29,18 @@ class MeRestrictedPrincipalTests(APITestCase):
         grant(self.user, "communication.thread.close")
 
         self.assertIs(self.me()["is_restricted_principal"], False)
+
+
+class MeTenantSummaryTests(APITestCase):
+    def test_me_has_tenant_summary_and_tenant_uuid_unchanged(self) -> None:
+        tenant = TenantFactory(name="City School", slug="city-school")
+        user = UserFactory(tenant=tenant)
+        authenticate(self.client, user)
+
+        response = self.client.get("/api/v1/auth/me")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        body = response.json()["data"]
+        # `tenant` stays the UUID clients already read; the summary is a separate field.
+        self.assertEqual(body["tenant"], str(tenant.pk))
+        self.assertEqual(body["tenant_summary"], {"name": "City School", "slug": "city-school"})
