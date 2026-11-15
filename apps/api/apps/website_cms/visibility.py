@@ -7,7 +7,11 @@ and gallery add their own function here and one line to `PROVIDERS`.
 from __future__ import annotations
 
 from collections.abc import Callable
+from functools import reduce
+from operator import or_
 from uuid import UUID
+
+from django.db.models import Q
 
 from apps.website_cms.models import (
     ContentStatus,
@@ -33,8 +37,13 @@ def _active_section_types() -> dict:
 
 def page_section_files(candidates: set[UUID]) -> set[UUID]:
     """Files in visible sections of published pages."""
+    if not candidates:
+        return set()
     section_types = _active_section_types()
+    # The text match only narrows the rows loaded (a superset); the schema walk confirms.
+    mentions = reduce(or_, (Q(content__icontains=str(file_id)) for file_id in candidates))
     sections = PageSection.objects.alive().filter(
+        mentions,
         is_visible=True,
         website_page__status=ContentStatus.PUBLISHED,
         website_page__deleted_at__isnull=True,
@@ -49,12 +58,13 @@ def page_section_files(candidates: set[UUID]) -> set[UUID]:
 
 def seo_image_files(candidates: set[UUID]) -> set[UUID]:
     """OG images of the site, or of a published page."""
+    rows = list(SeoSetting.objects.alive().filter(og_image_file_id__in=candidates))
+    page_ids = {row.target_id for row in rows if row.target_type == SeoTargetType.PAGE}
     published_pages = set(
         WebsitePage.objects.alive()
-        .filter(status=ContentStatus.PUBLISHED)
+        .filter(id__in=page_ids, status=ContentStatus.PUBLISHED)
         .values_list("id", flat=True)
     )
-    rows = SeoSetting.objects.alive().filter(og_image_file_id__in=candidates)
     return {
         row.og_image_file_id
         for row in rows

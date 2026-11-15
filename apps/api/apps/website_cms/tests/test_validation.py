@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from unittest import mock
 from uuid import uuid4
 
 from django.test import SimpleTestCase, TestCase, override_settings
 
+from apps.website_cms import visibility as website_visibility
 from apps.website_cms.media import public_file_url, to_public, url_key
 from apps.website_cms.models import ContentStatus
 from apps.website_cms.tests.factories import (
@@ -322,3 +324,23 @@ class SyncVisibilityTests(TestCase):
         page.save(update_fields=["status"])
         sync_file_visibility([self.file.id])
         self.assertEqual(self._visibility(), FileVisibility.PUBLIC)
+
+    def test_sections_not_mentioning_a_candidate_are_not_loaded_or_walked(self) -> None:
+        page = self._page_with_image()
+        PageSectionFactory(
+            tenant=self.tenant,
+            website_page=page,
+            content={"heading": "Unrelated", "image_file_id": str(uuid4())},
+        )
+        with mock.patch.object(
+            website_visibility,
+            "referenced_file_ids",
+            wraps=website_visibility.referenced_file_ids,
+        ) as walk:
+            claimed = website_visibility.page_section_files({self.file.id})
+        self.assertEqual(claimed, {self.file.id})
+        self.assertEqual(walk.call_count, 1)
+
+    def test_no_candidates_runs_no_query(self) -> None:
+        with self.assertNumQueries(0):
+            self.assertEqual(website_visibility.page_section_files(set()), set())
