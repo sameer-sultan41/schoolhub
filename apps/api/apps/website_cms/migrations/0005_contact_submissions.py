@@ -38,6 +38,7 @@ class Migration(migrations.Migration):
             options={
                 'db_table': 'contact_submissions',
                 'ordering': ['-created_at', 'id'],
+                'constraints': [models.CheckConstraint(condition=models.Q(('email', ''), _negated=True) | models.Q(('phone', ''), _negated=True), name='contact_submissions_email_or_phone')],
                 'indexes': [models.Index(fields=['tenant', 'status', 'created_at'], name='contact_sub_status_created_idx')],
             },
         ),

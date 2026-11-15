@@ -107,3 +107,13 @@ def empty_rich_text() -> dict[str, list[dict[str, object]]]:
 EMBED_HOSTS = frozenset(
     {"www.youtube.com", "youtube.com", "youtu.be", "player.vimeo.com", "vimeo.com"}
 )
+
+#: Contact form limits, declared once for the model columns and the service's checks.
+CONTACT_NAME_MAX = 150
+CONTACT_EMAIL_MAX = 254
+CONTACT_PHONE_MAX = 30
+CONTACT_PHONE_MIN = 7
+CONTACT_SUBJECT_MAX = 200
+CONTACT_MESSAGE_MAX = 5000
+#: Digits, spaces and `+-()`, between 7 and 30 characters.
+CONTACT_PHONE_RE = re.compile(rf"^[0-9 +\-()]{{{CONTACT_PHONE_MIN},{CONTACT_PHONE_MAX}}}$")

@@ -14,6 +14,10 @@ from django.conf import settings
 from django.db import models
 
 from apps.website_cms.constants import (
+    CONTACT_EMAIL_MAX,
+    CONTACT_NAME_MAX,
+    CONTACT_PHONE_MAX,
+    CONTACT_SUBJECT_MAX,
     CONTENT_SLUG_MAX_LENGTH,
     EMBED_URL_MAX_LENGTH,
     PAGE_SLUG_MAX_LENGTH,
@@ -377,10 +381,10 @@ class ContactSubmission(TenantOwnedModel):
     """A public contact-form message. `created_by` stays NULL (anonymous submitter) and `ip`
     is never serialised to staff (privacy; retention-limited)."""
 
-    name = models.CharField(max_length=150)
-    email = models.CharField(max_length=254, blank=True, default="")
-    phone = models.CharField(max_length=30, blank=True, default="")
-    subject = models.CharField(max_length=200, blank=True, default="")
+    name = models.CharField(max_length=CONTACT_NAME_MAX)
+    email = models.CharField(max_length=CONTACT_EMAIL_MAX, blank=True, default="")
+    phone = models.CharField(max_length=CONTACT_PHONE_MAX, blank=True, default="")
+    subject = models.CharField(max_length=CONTACT_SUBJECT_MAX, blank=True, default="")
     message = models.TextField()
     source_page = models.ForeignKey(
         WebsitePage, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
@@ -396,6 +400,12 @@ class ContactSubmission(TenantOwnedModel):
     class Meta:
         db_table = "contact_submissions"
         ordering = ["-created_at", "id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(email="") | ~models.Q(phone=""),
+                name="contact_submissions_email_or_phone",
+            ),
+        ]
         indexes = [
             models.Index(
                 fields=["tenant", "status", "created_at"], name="contact_sub_status_created_idx"

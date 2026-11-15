@@ -13,7 +13,7 @@ from uuid import UUID
 
 from apps.website_cms.models import ContactSubmission
 from core.notifications.catalog import registry as catalog
-from core.notifications.models import NotificationCategory, NotificationChannel
+from core.notifications.models import Notification, NotificationCategory, NotificationChannel
 from core.notifications.services import Recipient, notify
 from core.notifications.templates import registry as templates
 from core.rbac.models import UserRole
@@ -22,6 +22,7 @@ CONTACT_RECEIVED = "website.contact-received"
 DOMAIN_ACTIVE = "website.domain-active"
 DOMAIN_FAILED = "website.domain-failed"
 
+CONTACT_SOURCE = "contact_submission"
 CONTACT_RECIPIENT_ROLES = ("reception", "school_admin")
 DOMAIN_RECIPIENT_ROLES = ("it_admin",)
 
@@ -103,6 +104,13 @@ def role_recipients(tenant_id: UUID, role_slugs: tuple[str, ...]) -> list[Recipi
     return [Recipient(user_id=user_id) for user_id in user_ids]
 
 
+def already_notified(submission: ContactSubmission) -> bool:
+    """A redelivered task must not notify twice: `notify()` stamps the source on every row."""
+    return Notification.objects.filter(
+        event_key=CONTACT_RECEIVED, source_type=CONTACT_SOURCE, source_id=submission.id
+    ).exists()
+
+
 def notify_contact_received(submission: ContactSubmission) -> None:
     """Tell reception and the school admins; a school with neither is a silent no-op."""
     recipients = role_recipients(submission.tenant_id, CONTACT_RECIPIENT_ROLES)
@@ -121,6 +129,6 @@ def notify_contact_received(submission: ContactSubmission) -> None:
             "contact.preview": preview,
             "school.name": submission.tenant.name,
         },
-        source_type="contact_submission",
+        source_type=CONTACT_SOURCE,
         source_id=submission.id,
     )

@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
+from django.db import IntegrityError, transaction
+
 from apps.school_organization.tests.factories import grant_default_role
+from apps.website_cms.constants import (
+    CONTACT_MESSAGE_MAX,
+    CONTACT_NAME_MAX,
+    CONTACT_SUBJECT_MAX,
+)
 from apps.website_cms.contact_submissions.services import create_contact_submission
-from apps.website_cms.models import ContactStatus, ContactSubmission
+from apps.website_cms.models import ContactStatus, ContactSubmission, ContentStatus
+from apps.website_cms.tasks import notify_contact_received
 from apps.website_cms.tests.base import WebsiteAPITestCase
 from apps.website_cms.tests.factories import UserFactory
+from core.api.exceptions import DomainRuleViolation
 from core.notifications.models import Notification
 from core.tenancy.context import tenant_context
 
@@ -148,3 +157,71 @@ class CreateContactSubmissionTests(WebsiteAPITestCase):
             row = self._create()
         with tenant_context(other.id):
             self.assertFalse(Notification.objects.filter(source_id=row.id).exists())
+
+
+class ContactValidationTests(WebsiteAPITestCase):
+    def _create(self, source_page=None, **data):
+        payload = {"name": "Sara", "email": "sara@example.com", "message": "Hello", **data}
+        with tenant_context(self.tenant.id):
+            return create_contact_submission(self.tenant, payload, None, source_page)
+
+    def _assert_422(self, field: str, **data) -> None:
+        with self.assertRaises(DomainRuleViolation) as caught:
+            self._create(**data)
+        self.assertIn(field, caught.exception.detail)
+
+    def test_neither_email_nor_phone_is_422(self) -> None:
+        self._assert_422("email", email="", phone="")
+
+    def test_phone_alone_is_accepted(self) -> None:
+        row = self._create(email="", phone="+92 300 1234567")
+        self.assertEqual(row.phone, "+92 300 1234567")
+
+    def test_invalid_email_is_422(self) -> None:
+        self._assert_422("email", email="not-an-email")
+
+    def test_bad_phone_is_422(self) -> None:
+        self._assert_422("phone", email="", phone="call me")
+
+    def test_message_over_limit_is_422(self) -> None:
+        self._assert_422("message", message="x" * (CONTACT_MESSAGE_MAX + 1))
+
+    def test_blank_message_is_422(self) -> None:
+        self._assert_422("message", message="   ")
+
+    def test_name_over_limit_is_422(self) -> None:
+        self._assert_422("name", name="n" * (CONTACT_NAME_MAX + 1))
+
+    def test_subject_over_limit_is_422(self) -> None:
+        self._assert_422("subject", subject="s" * (CONTACT_SUBJECT_MAX + 1))
+
+    def test_unpublished_source_page_is_422(self) -> None:
+        page = self.make_page(status=ContentStatus.DRAFT)
+        with self.assertRaises(DomainRuleViolation) as caught:
+            self._create(source_page=page)
+        self.assertIn("source_page", caught.exception.detail)
+
+    def test_published_source_page_is_kept(self) -> None:
+        page = self.make_page(status=ContentStatus.PUBLISHED)
+        self.assertEqual(self._create(source_page=page).source_page_id, page.id)
+
+    def test_database_rejects_a_row_with_neither_email_nor_phone(self) -> None:
+        with (
+            tenant_context(self.tenant.id),
+            self.assertRaises(IntegrityError),
+            transaction.atomic(),
+        ):
+            ContactSubmission.objects.create(
+                tenant=self.tenant, name="X", message="Hi", email="", phone=""
+            )
+
+
+class NotifyContactIdempotencyTests(WebsiteAPITestCase):
+    def test_running_the_task_twice_notifies_once_per_recipient(self) -> None:
+        user = UserFactory(tenant=self.tenant)
+        grant_default_role(user, "reception")
+        row = self.make_contact()
+        for _ in range(2):
+            notify_contact_received(tenant_id=str(self.tenant.id), submission_id=str(row.id))
+        with tenant_context(self.tenant.id):
+            self.assertEqual(Notification.objects.filter(source_id=row.id).count(), 1)

@@ -91,5 +91,5 @@ def notify_contact_received(*, tenant_id: str, submission_id: str) -> None:
     with tenant_atomic(UUID(tenant_id)):
         rows = ContactSubmission.objects.alive().select_related("tenant")
         submission = rows.filter(pk=submission_id).first()
-        if submission is not None:
+        if submission is not None and not notifications.already_notified(submission):
             notifications.notify_contact_received(submission)
