@@ -287,7 +287,8 @@
       "colorInvalid": "Enter a hex colour such as #1E88E5.",
       "colorPlaceholder": "#1E88E5",
       "colorHint": "A hex colour, e.g. #D32F2F.",
-      "endNotAfterStart": "The end date must be after the start date."
+      "endNotAfterStart": "The end date must be after the start date.",
+      "wholeNumberInvalid": "Enter a whole number from 1."
     },
     "weekdays": {
       "0": "Monday",
@@ -410,8 +411,7 @@
         "createTitle": "Add a term to {session}",
         "editTitle": "Edit this term",
         "description": "A term sits inside its session's dates and can't overlap another term.",
-        "sequenceHint": "1 for the session's first term.",
-        "sequenceInvalid": "Enter a whole number from 1."
+        "sequenceHint": "1 for the session's first term."
       }
     },
     "departments": {

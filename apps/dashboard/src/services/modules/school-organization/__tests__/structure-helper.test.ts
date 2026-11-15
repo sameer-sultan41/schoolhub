@@ -1,25 +1,42 @@
 import {
   buildCampusInput,
+  buildClassInput,
   buildDepartmentInput,
   buildHolidayEntry,
   buildHouseInput,
+  buildSectionInput,
+  buildSubjectInput,
   defaultCampusFormValues,
+  defaultClassFormValues,
   defaultDepartmentFormValues,
   defaultHolidayFormValues,
   defaultHouseFormValues,
+  defaultSectionFormValues,
+  defaultSubjectFormValues,
   holidayErrorField,
   holidaysByDate,
   holidayToFormValues,
   recordToCampusFormValues,
+  recordToClassFormValues,
   recordToDepartmentFormValues,
   recordToHouseFormValues,
+  recordToSectionFormValues,
+  recordToSubjectFormValues,
   structureStatusToIsActive,
   toStructureQueryParams,
   typeFilterToDepartmentType,
+  typeFilterToSubjectType,
   withHoliday,
   withoutHoliday,
 } from "../school-organization-helper";
-import { campusRecord, departmentRecord, houseRecord } from "./structure-fixtures";
+import {
+  campusRecord,
+  classRecord,
+  departmentRecord,
+  houseRecord,
+  sectionRecord,
+  subjectRecord,
+} from "./structure-fixtures";
 
 const EID = {
   name: "Spring break",
@@ -94,6 +111,51 @@ describe("structure helpers", () => {
       motto: "Courage first",
       is_active: true,
     });
+  });
+
+  it("round-trips a class, sending its level as a number and a blank code as null", () => {
+    expect(buildClassInput(recordToClassFormValues(classRecord()))).toEqual({
+      name: "Grade 1",
+      code: "G1",
+      level: 1,
+      is_active: true,
+    });
+    expect(buildClassInput({ ...defaultClassFormValues(), name: " Grade 2 ", level: "2" })).toEqual(
+      { name: "Grade 2", code: null, level: 2, is_active: true },
+    );
+  });
+
+  it("round-trips a section, a blank capacity meaning unlimited", () => {
+    const record = sectionRecord();
+    expect(buildSectionInput(recordToSectionFormValues(record))).toEqual({
+      class_id: record.class_id,
+      campus_id: record.campus_id,
+      name: "A",
+      capacity: 30,
+      is_active: true,
+    });
+    expect(recordToSectionFormValues(sectionRecord({ capacity: null })).capacity).toBe("");
+    expect(defaultSectionFormValues("c-1")).toMatchObject({ class_id: "c-1", capacity: "" });
+    expect(
+      buildSectionInput({ ...defaultSectionFormValues("c-1"), campus_id: "k-1", name: "B" })
+        .capacity,
+    ).toBeNull();
+  });
+
+  it("round-trips a subject, a blank department meaning none", () => {
+    expect(buildSubjectInput(recordToSubjectFormValues(subjectRecord()))).toEqual({
+      name: "Mathematics",
+      code: "MATH",
+      subject_type: "core",
+      department_id: subjectRecord().department_id,
+      description: null,
+      is_active: true,
+    });
+    expect(
+      buildSubjectInput({ ...defaultSubjectFormValues(), name: "Art", code: "ART" }).department_id,
+    ).toBeNull();
+    expect(typeFilterToSubjectType("all")).toBeUndefined();
+    expect(typeFilterToSubjectType("elective")).toBe("elective");
   });
 
   it("shows a one-day holiday's end as blank and sends it as the start", () => {

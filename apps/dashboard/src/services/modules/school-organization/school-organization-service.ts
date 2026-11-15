@@ -8,6 +8,8 @@ import type {
   AcademicSessionSummary,
   CampusInput,
   CampusRecord,
+  ClassInput,
+  ClassRecord,
   DepartmentInput,
   DepartmentRecord,
   HolidayCalendarRecord,
@@ -15,11 +17,15 @@ import type {
   HouseInput,
   HouseRecord,
   SchoolOrganizationOption,
+  SectionInput,
   SectionOption,
+  SectionRecord,
   SessionCloneInput,
   SessionInput,
   SessionPageQuery,
   StructurePageQuery,
+  SubjectInput,
+  SubjectRecord,
   TermCreateInput,
   TermInput,
   TermRecord,
@@ -189,6 +195,86 @@ export async function updateHouse(id: string, input: HouseInput): Promise<HouseR
 
 export async function deleteHouse(id: string): Promise<void> {
   await apiClient.delete(endpoints.schoolOrganization.house(id));
+}
+
+export async function fetchClassPage(query: StructurePageQuery): Promise<Page<ClassRecord>> {
+  return fetchPage<ClassRecord>(apiClient, endpoints.schoolOrganization.classes, {
+    query: toStructureQueryParams(query),
+  });
+}
+
+export async function createClass(input: ClassInput): Promise<ClassRecord> {
+  const { data } = await apiClient.post<ClassRecord>(endpoints.schoolOrganization.classes, input);
+  return data;
+}
+
+export async function updateClass(id: string, input: ClassInput): Promise<ClassRecord> {
+  const { data } = await apiClient.patch<ClassRecord>(
+    endpoints.schoolOrganization.class(id),
+    input,
+  );
+  return data;
+}
+
+export async function deleteClass(id: string): Promise<void> {
+  await apiClient.delete(endpoints.schoolOrganization.class(id));
+}
+
+/** `GET /sections?class_id=` — one class's sections in full, active or not, by name: one page
+ * of the largest size, as `fetchSections` reads the same list for a picker. */
+export async function fetchClassSections(classId: string): Promise<SectionRecord[]> {
+  const { items } = await fetchPage<SectionRecord>(
+    apiClient,
+    endpoints.schoolOrganization.sections,
+    { query: { class_id: classId, page_size: MAX_PAGE_SIZE } },
+  );
+  return items;
+}
+
+export async function createSection(input: SectionInput): Promise<SectionRecord> {
+  const { data } = await apiClient.post<SectionRecord>(
+    endpoints.schoolOrganization.sections,
+    input,
+  );
+  return data;
+}
+
+export async function updateSection(id: string, input: SectionInput): Promise<SectionRecord> {
+  const { data } = await apiClient.patch<SectionRecord>(
+    endpoints.schoolOrganization.section(id),
+    input,
+  );
+  return data;
+}
+
+export async function deleteSection(id: string): Promise<void> {
+  await apiClient.delete(endpoints.schoolOrganization.section(id));
+}
+
+export async function fetchSubjectPage(query: StructurePageQuery): Promise<Page<SubjectRecord>> {
+  return fetchPage<SubjectRecord>(apiClient, endpoints.schoolOrganization.subjects, {
+    query: toStructureQueryParams(query),
+  });
+}
+
+export async function createSubject(input: SubjectInput): Promise<SubjectRecord> {
+  const { data } = await apiClient.post<SubjectRecord>(
+    endpoints.schoolOrganization.subjects,
+    input,
+  );
+  return data;
+}
+
+export async function updateSubject(id: string, input: SubjectInput): Promise<SubjectRecord> {
+  const { data } = await apiClient.patch<SubjectRecord>(
+    endpoints.schoolOrganization.subject(id),
+    input,
+  );
+  return data;
+}
+
+export async function deleteSubject(id: string): Promise<void> {
+  await apiClient.delete(endpoints.schoolOrganization.subject(id));
 }
 
 // --- Academic sessions (cursor paged) and their terms ---------------------------------------

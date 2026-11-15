@@ -124,10 +124,11 @@ export const TIMETABLE_SETUP_PERMISSIONS: PermissionKey[] = [
 ];
 
 /**
- * The `school.*` keys `school_admin` holds for the School module's five sections
- * (`apps/school_organization/permissions.py`: `CONFIG_MANAGERS`, `OWNER_ADMIN` and
- * `ACADEMIC_MANAGERS`), kept apart from `SCHOOL_ADMIN_PERMISSIONS` so the default admin has no
- * School sidebar group unless a spec opts in.
+ * The `school.*` keys `school_admin` holds for every School module section
+ * (`apps/school_organization/permissions.py`: `CONFIG_MANAGERS`, `OWNER_ADMIN`,
+ * `ACADEMIC_MANAGERS` and the session keys, which `school_admin` holds all of), kept apart from
+ * `SCHOOL_ADMIN_PERMISSIONS` so the default admin has no School sidebar group unless a spec
+ * opts in.
  */
 export const SCHOOL_SETUP_PERMISSIONS: PermissionKey[] = [
   "school.settings.view",
@@ -136,6 +137,23 @@ export const SCHOOL_SETUP_PERMISSIONS: PermissionKey[] = [
   "school.campus.create",
   "school.campus.update",
   "school.campus.delete",
+  "school.academic-session.view",
+  "school.academic-session.create",
+  "school.academic-session.update",
+  "school.academic-session.activate",
+  "school.academic-session.close",
+  "school.class.view",
+  "school.class.create",
+  "school.class.update",
+  "school.class.delete",
+  "school.section.view",
+  "school.section.create",
+  "school.section.update",
+  "school.section.delete",
+  "school.subject.view",
+  "school.subject.create",
+  "school.subject.update",
+  "school.subject.delete",
   "school.department.view",
   "school.department.create",
   "school.department.update",

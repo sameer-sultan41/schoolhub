@@ -4,6 +4,7 @@ import { FILTER_ALL } from "@/lib/constants";
 import { copyMappedFields } from "@/lib/helpers";
 import {
   DEFAULT_DEPARTMENT_TYPE,
+  DEFAULT_SUBJECT_TYPE,
   SESSION_QUERY_FIELDS,
   SESSION_STATUSES,
   SESSION_STRUCTURE_FIELD,
@@ -12,10 +13,13 @@ import {
 } from "./school-organization-constant";
 import type {
   CampusFormValues,
+  ClassFormValues,
   DepartmentFormValues,
   HolidayFormValues,
   HouseFormValues,
+  SectionFormValues,
   SessionFormValues,
+  SubjectFormValues,
   TermFormValues,
 } from "./school-organization.schema";
 import type {
@@ -23,15 +27,22 @@ import type {
   AcademicSessionStatus,
   CampusInput,
   CampusRecord,
+  ClassInput,
+  ClassRecord,
   DepartmentInput,
   DepartmentRecord,
   DepartmentType,
   HolidayEntry,
   HouseInput,
   HouseRecord,
+  SectionInput,
+  SectionRecord,
   SessionInput,
   SessionPageQuery,
   StructurePageQuery,
+  SubjectInput,
+  SubjectRecord,
+  SubjectType,
   TermInput,
   TermRecord,
 } from "./school-organization-type";
@@ -61,6 +72,11 @@ export function structureStatusToIsActive(status: string): boolean | undefined {
 /** The type filter -> `department_type`: `all` is no filter. */
 export function typeFilterToDepartmentType(type: string): DepartmentType | undefined {
   return type === FILTER_ALL ? undefined : (type as DepartmentType);
+}
+
+/** The type filter -> `subject_type`: `all` is no filter. */
+export function typeFilterToSubjectType(type: string): SubjectType | undefined {
+  return type === FILTER_ALL ? undefined : (type as SubjectType);
 }
 
 /** Trimmed, with a blank as `null`, which clears a stored value. */
@@ -167,6 +183,92 @@ export function buildHouseInput(values: HouseFormValues): HouseInput {
     code: blankToNull(values.code),
     color: blankToNull(values.color),
     motto: blankToNull(values.motto),
+    is_active: values.is_active,
+  };
+}
+
+// --- Classes and their sections -------------------------------------------------------------
+
+export function defaultClassFormValues(): ClassFormValues {
+  return { name: "", code: "", level: "", is_active: true };
+}
+
+export function recordToClassFormValues(record: ClassRecord): ClassFormValues {
+  return {
+    name: record.name,
+    code: record.code ?? "",
+    level: String(record.level),
+    is_active: record.is_active ?? true,
+  };
+}
+
+export function buildClassInput(values: ClassFormValues): ClassInput {
+  return {
+    name: values.name.trim(),
+    code: blankToNull(values.code),
+    level: Number(values.level),
+    is_active: values.is_active,
+  };
+}
+
+/** A new section starts in the class it is added from. */
+export function defaultSectionFormValues(classId: string): SectionFormValues {
+  return { class_id: classId, campus_id: "", name: "", capacity: "", is_active: true };
+}
+
+export function recordToSectionFormValues(record: SectionRecord): SectionFormValues {
+  return {
+    class_id: record.class_id,
+    campus_id: record.campus_id,
+    name: record.name,
+    capacity: record.capacity == null ? "" : String(record.capacity),
+    is_active: record.is_active ?? true,
+  };
+}
+
+/** A blank capacity is `null`: the section takes any number of students. */
+export function buildSectionInput(values: SectionFormValues): SectionInput {
+  return {
+    class_id: values.class_id,
+    campus_id: values.campus_id,
+    name: values.name.trim(),
+    capacity: values.capacity === "" ? null : Number(values.capacity),
+    is_active: values.is_active,
+  };
+}
+
+// --- Subjects -------------------------------------------------------------------------------
+
+export function defaultSubjectFormValues(): SubjectFormValues {
+  return {
+    name: "",
+    code: "",
+    subject_type: DEFAULT_SUBJECT_TYPE,
+    department_id: "",
+    description: "",
+    is_active: true,
+  };
+}
+
+export function recordToSubjectFormValues(record: SubjectRecord): SubjectFormValues {
+  return {
+    name: record.name,
+    code: record.code,
+    subject_type: record.subject_type ?? DEFAULT_SUBJECT_TYPE,
+    department_id: record.department_id ?? "",
+    description: record.description ?? "",
+    is_active: record.is_active ?? true,
+  };
+}
+
+/** A blank department is `null`: the subject belongs to none. */
+export function buildSubjectInput(values: SubjectFormValues): SubjectInput {
+  return {
+    name: values.name.trim(),
+    code: values.code.trim(),
+    subject_type: values.subject_type,
+    department_id: values.department_id || null,
+    description: blankToNull(values.description),
     is_active: values.is_active,
   };
 }

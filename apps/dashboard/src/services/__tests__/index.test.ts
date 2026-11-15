@@ -195,6 +195,18 @@ describe("Services", () => {
     expect(typeof Services.schoolOrganization.cloneSession).toBe("function");
     expect(typeof Services.schoolOrganization.createTerm).toBe("function");
     expect(typeof Services.schoolOrganization.updateTerm).toBe("function");
+    expect(typeof Services.schoolOrganization.fetchClassPage).toBe("function");
+    expect(typeof Services.schoolOrganization.createClass).toBe("function");
+    expect(typeof Services.schoolOrganization.updateClass).toBe("function");
+    expect(typeof Services.schoolOrganization.deleteClass).toBe("function");
+    expect(typeof Services.schoolOrganization.fetchClassSections).toBe("function");
+    expect(typeof Services.schoolOrganization.createSection).toBe("function");
+    expect(typeof Services.schoolOrganization.updateSection).toBe("function");
+    expect(typeof Services.schoolOrganization.deleteSection).toBe("function");
+    expect(typeof Services.schoolOrganization.fetchSubjectPage).toBe("function");
+    expect(typeof Services.schoolOrganization.createSubject).toBe("function");
+    expect(typeof Services.schoolOrganization.updateSubject).toBe("function");
+    expect(typeof Services.schoolOrganization.deleteSubject).toBe("function");
     expect(typeof Services.schoolSettings.fetchSchoolSettings).toBe("function");
     expect(typeof Services.schoolSettings.updateSchoolSettings).toBe("function");
     expect(typeof Services.questionBanks.fetchBanksPage).toBe("function");

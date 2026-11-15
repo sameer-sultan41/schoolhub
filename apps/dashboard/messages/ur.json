@@ -287,7 +287,8 @@
       "colorInvalid": "ہیکس رنگ درج کریں، جیسے #1E88E5۔",
       "colorPlaceholder": "#1E88E5",
       "colorHint": "ہیکس رنگ، مثلاً #D32F2F۔",
-      "endNotAfterStart": "تاریخ اختتام، تاریخ آغاز کے بعد ہونی چاہیے۔"
+      "endNotAfterStart": "تاریخ اختتام، تاریخ آغاز کے بعد ہونی چاہیے۔",
+      "wholeNumberInvalid": "1 یا اس سے بڑا پورا عدد درج کریں۔"
     },
     "weekdays": {
       "0": "پیر",
@@ -410,8 +411,7 @@
         "createTitle": "{session} میں ٹرم شامل کریں",
         "editTitle": "اس ٹرم میں ترمیم کریں",
         "description": "ٹرم اپنے سیشن کی تاریخوں کے اندر ہوتی ہے اور کسی دوسری ٹرم سے نہیں ٹکرا سکتی۔",
-        "sequenceHint": "سیشن کی پہلی ٹرم کے لیے 1۔",
-        "sequenceInvalid": "1 یا اس سے بڑا پورا عدد درج کریں۔"
+        "sequenceHint": "سیشن کی پہلی ٹرم کے لیے 1۔"
       }
     },
     "departments": {

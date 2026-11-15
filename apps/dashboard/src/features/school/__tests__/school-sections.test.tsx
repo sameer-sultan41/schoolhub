@@ -47,6 +47,21 @@ describe("school sections", () => {
         ],
       ],
       [
+        "/school/classes",
+        [
+          "school.class.create",
+          "school.class.update",
+          "school.class.delete",
+          "school.section.create",
+          "school.section.update",
+          "school.section.delete",
+        ],
+      ],
+      [
+        "/school/subjects",
+        ["school.subject.create", "school.subject.update", "school.subject.delete"],
+      ],
+      [
         "/school/departments",
         ["school.department.create", "school.department.update", "school.department.delete"],
       ],

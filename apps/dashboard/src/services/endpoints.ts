@@ -97,8 +97,11 @@ export const endpoints = {
      * not a duplication to clean up.
      */
     classes: "/classes",
+    class: (id: string) => `/classes/${id}`,
     sections: "/sections",
+    section: (id: string) => `/sections/${id}`,
     subjects: "/subjects",
+    subject: (id: string) => `/subjects/${id}`,
     academicSessions: "/academic-sessions",
     academicSession: (id: string) => `/academic-sessions/${id}`,
     /** The lifecycle colon-actions (`apps/school_organization/academic_sessions/urls.py`). */

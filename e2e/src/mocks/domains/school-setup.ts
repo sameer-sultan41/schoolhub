@@ -64,12 +64,12 @@ export interface SchoolSetupState {
 
 const HEX_COLOR = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
-function validation(field: string, issue: string): MockResponse {
+export function validation(field: string, issue: string): MockResponse {
   return fail(400, issue, { details: [{ field, issue }] });
 }
 
 /** `services.assert_deletable`'s 422, naming the relations that still point at the row. */
-function referenced(relations: string[]): MockResponse {
+export function referenced(relations: string[]): MockResponse {
   const message =
     `Cannot delete while dependent records exist (${relations.sort().join(", ")}). ` +
     "Deactivate it instead.";
@@ -79,14 +79,14 @@ function referenced(relations: string[]): MockResponse {
   });
 }
 
-function removeRow(rows: { id: string }[], rowId: string | undefined): MockResponse {
+export function removeRow(rows: { id: string }[], rowId: string | undefined): MockResponse {
   const index = rows.findIndex((row) => row.id === rowId);
   if (index === -1) return fail(404, "Not found.");
   rows.splice(index, 1);
   return noContent();
 }
 
-function requireName(body: { name?: string | null } | null): MockResponse | undefined {
+export function requireName(body: { name?: string | null } | null): MockResponse | undefined {
   return body?.name?.trim() ? undefined : validation("name", "This field is required.");
 }
 

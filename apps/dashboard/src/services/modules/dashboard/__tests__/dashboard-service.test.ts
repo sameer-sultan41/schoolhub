@@ -122,6 +122,17 @@ describe("DashboardService", () => {
       expect(mockGet).toHaveBeenCalledWith("/campuses", { query: { page_size: 100 } });
       expect(result).toEqual(campuses);
     });
+
+    it("narrows to the active campuses when asked", async () => {
+      const { fetchCampuses } = await import("../dashboard-service");
+      mockGet.mockResolvedValue({ data: [], meta: {} });
+
+      await fetchCampuses({ isActive: true });
+
+      expect(mockGet).toHaveBeenCalledWith("/campuses", {
+        query: { page_size: 100, is_active: true },
+      });
+    });
   });
 
   describe("fetchDepartments", () => {

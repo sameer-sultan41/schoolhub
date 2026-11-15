@@ -6,6 +6,7 @@ import type {
   DepartmentType,
   SessionPageQuery,
   StructurePageQuery,
+  SubjectType,
 } from "./school-organization-type";
 
 /** Session statuses that make its records read-only — mirrors `LOCKED_SESSION_STATES`
@@ -49,6 +50,8 @@ export const STRUCTURE_QUERY_FIELDS: readonly StructureQueryField[] = [
   ["isActive", "is_active"],
   ["campusId", "campus_id"],
   ["departmentType", "department_type"],
+  ["departmentId", "department_id"],
+  ["subjectType", "subject_type"],
 ];
 
 // --- Campuses (`apps/school_organization/models.py` `Campus`) -----------------------------
@@ -144,6 +147,93 @@ export const HOUSE_COLOR_MAX = 20;
 export const HOUSE_MOTTO_MAX = 200;
 
 export const HOUSE_ERROR_FIELDS = ["name", "code", "color", "motto", "is_active"] as const;
+
+// --- Classes and their sections (`Class`, `Section`) ---------------------------------------
+
+export const CLASS_PAGE_RESOURCE = "class-page";
+/** One class's sections, in full (`fetchClassSections`), apart from the pickers' options. */
+export const CLASS_SECTIONS_RESOURCE = "class-sections";
+
+/** Column id -> `?ordering=` field (`ClassViewSet.ordering_fields`). */
+export const CLASS_SORT_FIELD: Record<string, string> = {
+  level: "level",
+  name: "name",
+  code: "code",
+};
+export const CLASS_SORTABLE_IDS = Object.keys(CLASS_SORT_FIELD);
+/** The promotion ladder, lowest first, as the API orders classes. */
+export const CLASS_DEFAULT_SORTING: { id: string; desc: boolean }[] = [
+  { id: "level", desc: false },
+];
+export const CLASS_URL_FILTERS = { status: STATUS_URL_FILTER };
+
+/** The column whose expanded row lists the class's sections. */
+export const CLASS_SECTIONS_COLUMN_ID = "sections";
+
+/** `Class.name`, `Class.code` and `Section.name`. */
+export const CLASS_NAME_MAX = 80;
+export const CLASS_CODE_MAX = 20;
+export const SECTION_NAME_MAX = 30;
+
+export const CLASS_ERROR_FIELDS = ["name", "code", "level", "is_active"] as const;
+export const SECTION_ERROR_FIELDS = [
+  "class_id",
+  "campus_id",
+  "name",
+  "capacity",
+  "is_active",
+] as const;
+
+// --- Subjects (`Subject`) ------------------------------------------------------------------
+
+export const SUBJECT_PAGE_RESOURCE = "subject-page";
+
+/** Every subject type, keyed so the compiler checks the set against the generated enum. */
+const SUBJECT_TYPE_SET: Record<SubjectType, true> = {
+  core: true,
+  elective: true,
+  co_curricular: true,
+};
+export const SUBJECT_TYPES = Object.keys(SUBJECT_TYPE_SET) as SubjectType[];
+/** The model's default. */
+export const DEFAULT_SUBJECT_TYPE: SubjectType = "core";
+const SUBJECT_TYPE_FILTER_VALUES: readonly string[] = [FILTER_ALL, ...SUBJECT_TYPES];
+
+/** The department picker's choice for "no department" (stored as a blank, sent as `null`). */
+export const NO_DEPARTMENT_OPTION = FILTER_ALL;
+
+/** Column id -> `?ordering=` field (`SubjectViewSet.ordering_fields`). */
+export const SUBJECT_SORT_FIELD: Record<string, string> = {
+  code: "code",
+  name: "name",
+  department: "department_name",
+};
+export const SUBJECT_SORTABLE_IDS = Object.keys(SUBJECT_SORT_FIELD);
+export const SUBJECT_DEFAULT_SORTING: { id: string; desc: boolean }[] = [
+  { id: "name", desc: false },
+];
+export const SUBJECT_URL_FILTERS = {
+  department: { default: "", isValid: isUuid },
+  type: {
+    default: FILTER_ALL,
+    isValid: (value: string) => SUBJECT_TYPE_FILTER_VALUES.includes(value),
+  },
+  status: STATUS_URL_FILTER,
+};
+
+/** `Subject.name`, `.code` and `.description`. */
+export const SUBJECT_NAME_MAX = 120;
+export const SUBJECT_CODE_MAX = 20;
+export const SUBJECT_DESCRIPTION_MAX = 300;
+
+export const SUBJECT_ERROR_FIELDS = [
+  "name",
+  "code",
+  "subject_type",
+  "department_id",
+  "description",
+  "is_active",
+] as const;
 
 // --- Academic sessions and terms (`AcademicSession`, `Term`) -------------------------------
 
