@@ -10,6 +10,7 @@ import { RowEditRemoveActions } from "@/components/row-edit-remove-actions";
 import { formatDate } from "@/lib/helpers";
 import type { AcademicSessionRecord, AcademicSessionStatus } from "@/services";
 import {
+  LOCKED_SESSION_STATUSES,
   SESSION_TERMS_COLUMN_ID,
   STRUCTURE_ACTIONS_COLUMN_ID,
 } from "@/services/modules/school-organization/school-organization-constant";
@@ -144,7 +145,11 @@ export function useSessionColumns(
           return (
             <div className="flex flex-wrap items-center gap-1.5">
               <RowEditRemoveActions
-                editLabel={canUpdate ? t("actions.editRow", { name: session.name }) : undefined}
+                editLabel={
+                  canUpdate && !LOCKED_SESSION_STATUSES.includes(session.status)
+                    ? t("actions.editRow", { name: session.name })
+                    : undefined
+                }
                 onEdit={() => {
                   onEdit(session);
                 }}

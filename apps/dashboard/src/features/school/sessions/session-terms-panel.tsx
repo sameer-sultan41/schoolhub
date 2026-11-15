@@ -46,7 +46,8 @@ export function SessionTermsPanel({ session, canCreate, canUpdate }: SessionTerm
   const [target, setTarget] = useState<{ record?: TermRecord } | null>(null);
 
   const isLocked = LOCKED_SESSION_STATUSES.includes(session.status);
-  const showCreate = canCreate && !isLocked;
+  // Add waits for the list: the suggested order comes from the terms already there.
+  const showCreate = canCreate && !isLocked && termsQuery.isSuccess;
   const showEdit = canUpdate && !isLocked;
   const terms = termsQuery.data ?? [];
 

@@ -170,6 +170,16 @@ class TermCoverageSplitTests(TenantFixtureMixin, TestCase):
             self.assertEqual(term_coverage_errors(session), gap)
             self.assertEqual(session_completeness_errors(session), gap)
 
+            # Terms covering the window return `[]`: the onboarding step keys on that.
+            TermFactory(
+                tenant=self.tenant,
+                academic_session=session,
+                sequence=2,
+                start_date=SESSION_END - datetime.timedelta(days=29),
+                end_date=SESSION_END,
+            )
+            self.assertEqual(term_coverage_errors(session), [])
+
             # The activation check reads its term errors from the split, not its own copy.
             with mock.patch.object(validate, "term_coverage_errors", return_value=["sentinel"]):
                 self.assertEqual(session_completeness_errors(session), ["sentinel"])

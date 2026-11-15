@@ -4,16 +4,14 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { Services } from "@/services";
-import {
-  cursorPage,
-  sessionRecord,
-} from "@/services/modules/school-organization/__tests__/structure-fixtures";
+import { sessionRecord } from "@/services/modules/school-organization/__tests__/structure-fixtures";
 import {
   CLOSED_SESSION_ID,
   PLANNED_SESSION_ID,
   SESSION_ID,
   termRecord,
 } from "@/test-fixtures/academics";
+import { cursorPage } from "@/test-fixtures/list-screen";
 import { buildUser, renderWithProviders, setUrl } from "@/test-utils";
 
 import { SessionsSection } from "../sessions-section";
@@ -380,6 +378,24 @@ describe("sessions section", () => {
     expect(screen.getByText("Term 1")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add term" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Edit Term 1" })).not.toBeInTheDocument();
+  });
+
+  it("offers Add term only once the terms have loaded", async () => {
+    so.fetchTerms.mockReset().mockReturnValue(new Promise(() => undefined));
+    const user = renderSection();
+
+    await user.click(await screen.findByRole("button", { name: "Show terms for 2026-27" }));
+
+    await screen.findByRole("button", { name: "Edit 2026-27" });
+    expect(screen.queryByRole("button", { name: "Add term" })).not.toBeInTheDocument();
+  });
+
+  it("offers no Edit on a closed session", async () => {
+    renderSection();
+
+    await screen.findByRole("button", { name: "Edit 2026-27" });
+    expect(screen.getByRole("row", { name: /2025-26/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit 2025-26" })).not.toBeInTheDocument();
   });
 
   it("shows only the terms to a viewer without the session write keys", async () => {

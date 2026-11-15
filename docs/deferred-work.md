@@ -235,6 +235,10 @@ either this file or `project-status.md`.
     a staff picker and a room picker the form does not have yet.
   - A class's sections panel reads one page of the largest size (100) from `/sections?class_id=`;
     a class with more sections than that across every campus would show only the first 100.
+  - The dashboard hides Edit on a closed or archived session, but
+    `AcademicSessionSerializer.validate` still accepts a closed session's dates, so a direct API
+    call can shrink its window and leave its terms outside it. It needs to refuse any edit to a
+    session in `LOCKED_SESSION_STATUSES`, as the term endpoints already do.
 
 - **Staff's wire types are hand-written structs, not generated `ApiSchemas["Staff"]`
   aliases.** `services/modules/staff/staff-type.ts`'s `StaffDirectoryRecord`,
