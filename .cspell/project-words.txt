@@ -359,3 +359,8 @@ autoretry
 blacklistedtoken
 harfbuzz
 Safepay
+allauth
+otpauth
+timecode
+unskip
+unskipped
