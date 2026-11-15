@@ -1,10 +1,4 @@
-import type {
-  AuthenticatedUser,
-  LoginResponse,
-  PermissionKey,
-  Role,
-  Tenant,
-} from "@schoolhub/types";
+import type { AuthenticatedUser, LoginResponse, PermissionKey, Role } from "@schoolhub/types";
 
 /**
  * Deterministic builders for API-shaped test data.
@@ -57,25 +51,8 @@ export function buildRole(overrides: Partial<Role> = {}): Role {
   };
 }
 
-/** Shared by `buildTenant` and `buildUser` so a user always belongs to the tenant on screen. */
+/** The tenant every built user belongs to. */
 export const DEFAULT_TENANT_ID = "tenant-e2e";
-
-export function buildTenant(overrides: Partial<Tenant> = {}): Tenant {
-  return {
-    id: DEFAULT_TENANT_ID,
-    slug: "cityschool",
-    name: "City School",
-    status: "active",
-    branding: { primary_color: "oklch(0.55 0.18 264)", radius: "0.5rem" },
-    locale: {
-      default_locale: "en",
-      enabled_locales: ["en", "ur"],
-      timezone: "Asia/Karachi",
-      direction: "ltr",
-    },
-    ...overrides,
-  };
-}
 
 /**
  * Permissions a school admin holds.
@@ -144,6 +121,29 @@ export const TIMETABLE_SETUP_PERMISSIONS: PermissionKey[] = [
   "timetable.room.create",
   "timetable.room.update",
   "timetable.room.delete",
+];
+
+/**
+ * The `school.*` keys `school_admin` holds for the School module's five sections
+ * (`apps/school_organization/permissions.py`: `CONFIG_MANAGERS`, `OWNER_ADMIN` and
+ * `ACADEMIC_MANAGERS`), kept apart from `SCHOOL_ADMIN_PERMISSIONS` so the default admin has no
+ * School sidebar group unless a spec opts in.
+ */
+export const SCHOOL_SETUP_PERMISSIONS: PermissionKey[] = [
+  "school.settings.view",
+  "school.settings.update",
+  "school.campus.view",
+  "school.campus.create",
+  "school.campus.update",
+  "school.campus.delete",
+  "school.department.view",
+  "school.department.create",
+  "school.department.update",
+  "school.department.delete",
+  "school.house.view",
+  "school.house.create",
+  "school.house.update",
+  "school.house.delete",
 ];
 
 /**

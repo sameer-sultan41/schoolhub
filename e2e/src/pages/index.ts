@@ -40,6 +40,7 @@ export * from "./dashboard/students.page";
 export * from "./dashboard/students/student-create-stepper.page";
 export * from "./dashboard/students/student-detail.page";
 export * from "./dashboard/students/student-relations.panel";
+export * from "./dashboard/school/school-setup.page";
 export * from "./dashboard/timetable/my-timetable.page";
 export * from "./dashboard/timetable/periods.page";
 export * from "./dashboard/timetable/rooms.page";

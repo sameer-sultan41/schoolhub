@@ -6,7 +6,7 @@ import { buildUser } from "@/data/factories";
 import { env } from "@/env";
 import { createLiveSession } from "@/lib/live-api";
 import { E2E_OTHER_ADMIN_EMAIL } from "@/lib/seed-constants";
-import { MockApi, authModule, dashboardHomeModule, tenantModule } from "@/mocks";
+import { MockApi, authModule, dashboardHomeModule } from "@/mocks";
 import {
   AcceptInvitePage,
   AllocationsPage,
@@ -49,6 +49,7 @@ import {
   PublicSitePage,
   QuestionBanksPage,
   ResetPasswordPage,
+  SchoolSetupPage,
   StaffAttendancePage,
   StaffPage,
   StudentCreateStepperPage,
@@ -120,6 +121,7 @@ export interface E2EFixtures {
   weekGridPage: WeekGridPage;
   timetablePeriodsPage: TimetablePeriodsPage;
   timetableRoomsPage: TimetableRoomsPage;
+  schoolSetupPage: SchoolSetupPage;
   timetableSubstitutionsPage: TimetableSubstitutionsPage;
   myTimetablePage: MyTimetablePage;
   attendanceRegisterPage: AttendanceRegisterPage;
@@ -231,10 +233,9 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
   },
 
   signedIn: async ({ page, mockApi, authUser }, use) => {
-    // tenant + dashboard home: every authenticated page fetches the tenant as chrome
-    // (AppShell branding), and any test that lands on /dashboard fetches the home
-    // screen's own reads, regardless of which specific screen it is exercising.
-    mockApi.use(authModule({ user: authUser }), tenantModule(), dashboardHomeModule());
+    // Dashboard home: any test that lands on /dashboard fetches the home screen's own
+    // reads, regardless of which specific screen it is exercising.
+    mockApi.use(authModule({ user: authUser }), dashboardHomeModule());
     // Set directly rather than through a login round-trip: these tests start already
     // authenticated, so no /auth/login response exists for the side effect to hang off.
     // The cookie is presence-only — the dashboard proxy reads nothing out of it.
@@ -306,6 +307,10 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
 
   timetablePeriodsPage: async ({ page }, use) => {
     await use(new TimetablePeriodsPage(page));
+  },
+
+  schoolSetupPage: async ({ page }, use) => {
+    await use(new SchoolSetupPage(page));
   },
 
   timetableRoomsPage: async ({ page }, use) => {

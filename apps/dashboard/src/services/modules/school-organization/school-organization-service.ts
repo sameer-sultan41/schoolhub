@@ -1,10 +1,21 @@
 import { collectPages, fetchPage, MAX_PAGE_SIZE } from "@schoolhub/api-client";
+import type { Page } from "@schoolhub/types";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
+import { toStructureQueryParams } from "./school-organization-helper";
 import type {
   AcademicSessionSummary,
+  CampusInput,
+  CampusRecord,
+  DepartmentInput,
+  DepartmentRecord,
+  HolidayCalendarRecord,
+  HolidayCalendarUpdate,
+  HouseInput,
+  HouseRecord,
   SchoolOrganizationOption,
   SectionOption,
+  StructurePageQuery,
   TermOption,
 } from "./school-organization-type";
 
@@ -93,4 +104,104 @@ export async function fetchTerms(academicSessionId: string): Promise<TermOption[
     query: { academic_session_id: academicSessionId, page_size: MAX_PAGE_SIZE },
   });
   return terms.sort((a, b) => a.sequence - b.sequence);
+}
+
+// --- The School module's structure screens: one paged list and its writes per resource ------
+
+export async function fetchCampusPage(query: StructurePageQuery): Promise<Page<CampusRecord>> {
+  return fetchPage<CampusRecord>(apiClient, endpoints.schoolOrganization.campuses, {
+    query: toStructureQueryParams(query),
+  });
+}
+
+export async function createCampus(input: CampusInput): Promise<CampusRecord> {
+  const { data } = await apiClient.post<CampusRecord>(endpoints.schoolOrganization.campuses, input);
+  return data;
+}
+
+export async function updateCampus(id: string, input: CampusInput): Promise<CampusRecord> {
+  const { data } = await apiClient.patch<CampusRecord>(
+    endpoints.schoolOrganization.campus(id),
+    input,
+  );
+  return data;
+}
+
+export async function deleteCampus(id: string): Promise<void> {
+  await apiClient.delete(endpoints.schoolOrganization.campus(id));
+}
+
+export async function fetchDepartmentPage(
+  query: StructurePageQuery,
+): Promise<Page<DepartmentRecord>> {
+  return fetchPage<DepartmentRecord>(apiClient, endpoints.schoolOrganization.departments, {
+    query: toStructureQueryParams(query),
+  });
+}
+
+export async function createDepartment(input: DepartmentInput): Promise<DepartmentRecord> {
+  const { data } = await apiClient.post<DepartmentRecord>(
+    endpoints.schoolOrganization.departments,
+    input,
+  );
+  return data;
+}
+
+export async function updateDepartment(
+  id: string,
+  input: DepartmentInput,
+): Promise<DepartmentRecord> {
+  const { data } = await apiClient.patch<DepartmentRecord>(
+    endpoints.schoolOrganization.department(id),
+    input,
+  );
+  return data;
+}
+
+export async function deleteDepartment(id: string): Promise<void> {
+  await apiClient.delete(endpoints.schoolOrganization.department(id));
+}
+
+export async function fetchHousePage(query: StructurePageQuery): Promise<Page<HouseRecord>> {
+  return fetchPage<HouseRecord>(apiClient, endpoints.schoolOrganization.houses, {
+    query: toStructureQueryParams(query),
+  });
+}
+
+export async function createHouse(input: HouseInput): Promise<HouseRecord> {
+  const { data } = await apiClient.post<HouseRecord>(endpoints.schoolOrganization.houses, input);
+  return data;
+}
+
+export async function updateHouse(id: string, input: HouseInput): Promise<HouseRecord> {
+  const { data } = await apiClient.patch<HouseRecord>(
+    endpoints.schoolOrganization.house(id),
+    input,
+  );
+  return data;
+}
+
+export async function deleteHouse(id: string): Promise<void> {
+  await apiClient.delete(endpoints.schoolOrganization.house(id));
+}
+
+/** `GET /holiday-calendar`: the effective working week (Monday to Friday when nothing is
+ * configured) and the holidays. */
+export async function fetchHolidayCalendar(): Promise<HolidayCalendarRecord> {
+  const { data } = await apiClient.get<HolidayCalendarUpdate>(
+    endpoints.schoolOrganization.holidayCalendar,
+  );
+  return { working_days: data.working_days ?? [], holidays: data.holidays ?? [] };
+}
+
+/** `PUT /holiday-calendar`: each list named replaces the stored one wholesale, so removing a
+ * holiday is sending the list without it. */
+export async function updateHolidayCalendar(
+  body: HolidayCalendarUpdate,
+): Promise<HolidayCalendarRecord> {
+  const { data } = await apiClient.put<HolidayCalendarUpdate>(
+    endpoints.schoolOrganization.holidayCalendar,
+    body,
+  );
+  return { working_days: data.working_days ?? [], holidays: data.holidays ?? [] };
 }

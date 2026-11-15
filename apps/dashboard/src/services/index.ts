@@ -46,6 +46,7 @@ import { ReportCardsService } from "./modules/report-cards";
 import { RoomsService } from "./modules/rooms";
 import { ScholarshipsService } from "./modules/scholarships";
 import { SchoolOrganizationService } from "./modules/school-organization";
+import { SchoolSettingsService } from "./modules/school-settings";
 import { StaffService } from "./modules/staff";
 import { MessageThreadsService } from "./modules/message-threads";
 import { StaffAttendanceService } from "./modules/staff-attendance";
@@ -55,7 +56,6 @@ import { StudentsService } from "./modules/students";
 import { StudentTransfersService } from "./modules/student-transfers";
 import { TeacherAllocationsService } from "./modules/teacher-allocations";
 import { TeacherSubstitutionsService } from "./modules/teacher-substitutions";
-import { TenantService } from "./modules/tenant";
 import { TimetableSlotsService } from "./modules/timetable-slots";
 
 /**
@@ -82,11 +82,11 @@ export * from "./types";
  */
 export const Services = {
   auth: AuthService,
-  tenant: TenantService,
   dashboard: DashboardService,
   files: FilesService,
   jobs: JobsService,
   schoolOrganization: SchoolOrganizationService,
+  schoolSettings: SchoolSettingsService,
   curriculum: CurriculumService,
   teacherAllocations: TeacherAllocationsService,
   promotions: PromotionsService,

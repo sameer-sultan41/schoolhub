@@ -1,6 +1,6 @@
 import { id } from "@/data/factories";
 import { fail, noContent, ok } from "../envelope";
-import { compareValues, nameOf, pageOf, type Named } from "../list";
+import { nameOf, ordered, pageOf, type Named } from "../list";
 import type { MockModule } from "../router";
 
 /** The generated `Period` wire shape. `start_time`/`end_time` are `HH:MM:SS`, as the API
@@ -212,10 +212,4 @@ function removeFrom(rows: { id: string }[], rowId: string | undefined) {
   if (index === -1) return fail(404, "Not found.");
   rows.splice(index, 1);
   return noContent();
-}
-
-function ordered<T>(rows: T[], ordering: string): T[] {
-  const direction = ordering.startsWith("-") ? -1 : 1;
-  const field = ordering.replace(/^-/, "") as keyof T;
-  return [...rows].sort((a, b) => direction * compareValues(a[field], b[field]));
 }

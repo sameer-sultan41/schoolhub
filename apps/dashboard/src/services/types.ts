@@ -233,9 +233,21 @@ export type {
 } from "./modules/timetable-slots";
 export type {
   AcademicSessionSummary,
+  CampusInput,
+  CampusRecord,
+  DepartmentInput,
+  DepartmentRecord,
+  DepartmentType,
+  HolidayCalendarRecord,
+  HolidayCalendarUpdate,
+  HolidayEntry,
+  HouseInput,
+  HouseRecord,
   SchoolOrganizationOption,
   SectionOption,
+  StructurePageQuery,
 } from "./modules/school-organization";
+export type { SchoolSettingsRecord, SchoolSettingsUpdate } from "./modules/school-settings";
 export type {
   AllocateTeacherInput,
   AllocationSaveResult,

@@ -27,7 +27,7 @@ export interface PhotoUploadFieldValues extends FieldValues {
   photo_file_id?: string;
 }
 
-export interface PhotoUploadFieldProps<TFieldValues extends PhotoUploadFieldValues> {
+export interface PhotoUploadFieldProps<TFieldValues extends FieldValues> {
   form: UseFormReturn<TFieldValues>;
   /** A plain string, not a closed union — `@/components/` is outside any one feature, so
    * this never hardcodes which `core/files` purposes exist. The caller passes whichever
@@ -46,7 +46,19 @@ export interface PhotoUploadFieldProps<TFieldValues extends PhotoUploadFieldValu
    * stable (pass a `useState` setter): it is an effect dependency below, and a new
    * identity every render would re-run that effect's cleanup mid-upload. */
   onUploadingChange: (uploading: boolean) => void;
+  /** The form field the uploaded file's id is stored in. Defaults to `photo_file_id`. */
+  fileIdField?: Path<TFieldValues>;
+  /** The preview's fallback text, for a form with no `first_name`/`last_name` (a school's
+   * logo); defaults to their initials. */
+  fallbackName?: string;
+  /** The field's label; defaults to "Photo". */
+  label?: string;
+  /** The picker's `accept` list; defaults to JPEG and PNG. */
+  accept?: string;
 }
+
+const DEFAULT_FILE_ID_FIELD = "photo_file_id";
+const DEFAULT_ACCEPT = "image/jpeg,image/png";
 
 /**
  * The shared photo picker: a preview (the freshly picked file, else the saved photo), the
@@ -60,13 +72,17 @@ export interface PhotoUploadFieldProps<TFieldValues extends PhotoUploadFieldValu
  * upload is in flight" is lifted, through `onUploadingChange`, because the dialog's Save
  * button needs it.
  */
-export function PhotoUploadField<TFieldValues extends PhotoUploadFieldValues>({
+export function PhotoUploadField<TFieldValues extends FieldValues>({
   form,
   uploadPurpose,
   savedPhotoFileId,
   savedPhotoUrl,
   onUploadStart,
   onUploadingChange,
+  fileIdField = DEFAULT_FILE_ID_FIELD as Path<TFieldValues>,
+  fallbackName,
+  label,
+  accept = DEFAULT_ACCEPT,
 }: PhotoUploadFieldProps<TFieldValues>) {
   const t = useTranslations("common.photoUpload");
   const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
@@ -78,7 +94,7 @@ export function PhotoUploadField<TFieldValues extends PhotoUploadFieldValues>({
   // soundly narrow to. A tuple-typed `name` keeps the return a matching 3-tuple.
   const [firstName, lastName, photoFileId] = useWatch({
     control: form.control,
-    name: ["first_name", "last_name", "photo_file_id"] as [
+    name: ["first_name", "last_name", fileIdField] as [
       Path<TFieldValues>,
       Path<TFieldValues>,
       Path<TFieldValues>,
@@ -137,7 +153,7 @@ export function PhotoUploadField<TFieldValues extends PhotoUploadFieldValues>({
       return;
     }
     if ("fileId" in outcome) {
-      form.setValue("photo_file_id" as Path<TFieldValues>, outcome.fileId as never, {
+      form.setValue(fileIdField, outcome.fileId as never, {
         shouldDirty: true,
       });
       setUploadStatus("idle");
@@ -160,20 +176,22 @@ export function PhotoUploadField<TFieldValues extends PhotoUploadFieldValues>({
   return (
     <FormField
       control={form.control}
-      name={"photo_file_id" as Path<TFieldValues>}
+      name={fileIdField}
       render={() => (
         <FormItem>
-          <FormLabel>{t("photo")}</FormLabel>
+          <FormLabel>{label ?? t("photo")}</FormLabel>
           <div className="flex items-center gap-3">
             <Avatar className="size-12 shrink-0">
               {previewUrl ? <AvatarImage src={previewUrl} alt="" /> : null}
-              <AvatarFallback>{getInitials(`${firstName} ${lastName}`)}</AvatarFallback>
+              <AvatarFallback>
+                {getInitials(fallbackName ?? `${firstName} ${lastName}`)}
+              </AvatarFallback>
             </Avatar>
             <div className="flex-1 space-y-1">
               <FormControl>
                 <Input
                   type="file"
-                  accept="image/jpeg,image/png"
+                  accept={accept}
                   disabled={uploadStatus === "uploading"}
                   onChange={(event) => {
                     void handlePhotoChange(event);

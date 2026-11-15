@@ -107,3 +107,10 @@ export function compareValues(a: unknown, b: unknown): number {
   if (typeof x === "number" && typeof y === "number") return x - y;
   return String(x).localeCompare(String(y));
 }
+
+/** `rows` sorted by a DRF `?ordering=` value: a field name, `-` first for descending. */
+export function ordered<T>(rows: readonly T[], ordering: string): T[] {
+  const direction = ordering.startsWith("-") ? -1 : 1;
+  const field = ordering.replace(/^-/, "") as keyof T;
+  return [...rows].sort((a, b) => direction * compareValues(a[field], b[field]));
+}

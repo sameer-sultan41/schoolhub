@@ -1,4 +1,4 @@
-import { authModule, dashboardHomeModule, tenantModule } from "@/mocks";
+import { authModule, dashboardHomeModule } from "@/mocks";
 import { expect, test } from "@/fixtures";
 
 const CREDENTIALS = {
@@ -46,11 +46,7 @@ test.describe("sign in", () => {
   });
 
   test("signs in and lands on the dashboard", async ({ page, mockApi, loginPage }) => {
-    mockApi.use(
-      authModule({ credentials: CREDENTIALS, signedOut: true }),
-      tenantModule(),
-      dashboardHomeModule(),
-    );
+    mockApi.use(authModule({ credentials: CREDENTIALS, signedOut: true }), dashboardHomeModule());
     await loginPage.goto();
 
     await loginPage.signIn(CREDENTIALS);
@@ -60,11 +56,7 @@ test.describe("sign in", () => {
   });
 
   test("honours ?next= after a successful sign in", async ({ page, mockApi, loginPage }) => {
-    mockApi.use(
-      authModule({ credentials: CREDENTIALS, signedOut: true }),
-      tenantModule(),
-      dashboardHomeModule(),
-    );
+    mockApi.use(authModule({ credentials: CREDENTIALS, signedOut: true }), dashboardHomeModule());
     await page.goto("/login?next=%2Fdashboard");
 
     await loginPage.signIn(CREDENTIALS);

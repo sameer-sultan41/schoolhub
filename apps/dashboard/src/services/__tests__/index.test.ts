@@ -78,6 +78,7 @@ describe("Services", () => {
       "rooms",
       "scholarships",
       "schoolOrganization",
+      "schoolSettings",
       "settlementImports",
       "staff",
       "staffAttendance",
@@ -86,7 +87,6 @@ describe("Services", () => {
       "students",
       "teacherAllocations",
       "teacherSubstitutions",
-      "tenant",
       "threadOversight",
       "timetableSlots",
       "vouchers",
@@ -127,8 +127,6 @@ describe("Services", () => {
     expect(typeof Services.settlementImports.uploadSettlementImport).toBe("function");
     expect(typeof Services.leaveRequests.createLeave).toBe("function");
     expect(typeof Services.leaveRequests.cancelLeave).toBe("function");
-
-    expect(typeof Services.tenant.fetchCurrentTenant).toBe("function");
 
     expect(typeof Services.dashboard.fetchDashboardOverview).toBe("function");
 
@@ -175,6 +173,22 @@ describe("Services", () => {
     expect(typeof Services.examReports.runReport).toBe("function");
     expect(typeof Services.examReports.exportReport).toBe("function");
     expect(typeof Services.schoolOrganization.fetchTerms).toBe("function");
+    expect(typeof Services.schoolOrganization.fetchCampusPage).toBe("function");
+    expect(typeof Services.schoolOrganization.createCampus).toBe("function");
+    expect(typeof Services.schoolOrganization.updateCampus).toBe("function");
+    expect(typeof Services.schoolOrganization.deleteCampus).toBe("function");
+    expect(typeof Services.schoolOrganization.fetchDepartmentPage).toBe("function");
+    expect(typeof Services.schoolOrganization.createDepartment).toBe("function");
+    expect(typeof Services.schoolOrganization.updateDepartment).toBe("function");
+    expect(typeof Services.schoolOrganization.deleteDepartment).toBe("function");
+    expect(typeof Services.schoolOrganization.fetchHousePage).toBe("function");
+    expect(typeof Services.schoolOrganization.createHouse).toBe("function");
+    expect(typeof Services.schoolOrganization.updateHouse).toBe("function");
+    expect(typeof Services.schoolOrganization.deleteHouse).toBe("function");
+    expect(typeof Services.schoolOrganization.fetchHolidayCalendar).toBe("function");
+    expect(typeof Services.schoolOrganization.updateHolidayCalendar).toBe("function");
+    expect(typeof Services.schoolSettings.fetchSchoolSettings).toBe("function");
+    expect(typeof Services.schoolSettings.updateSchoolSettings).toBe("function");
     expect(typeof Services.questionBanks.fetchBanksPage).toBe("function");
     expect(typeof Services.questionBanks.fetchBank).toBe("function");
     expect(typeof Services.questionBanks.createBank).toBe("function");

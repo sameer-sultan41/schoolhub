@@ -16,3 +16,42 @@ export type AcademicSessionSummary = Pick<
 
 /** The slice of the generated `Term` schema an exam form's term picker reads. */
 export type TermOption = Pick<ApiSchemas["Term"], "id" | "name" | "sequence">;
+
+// The School module's structure screens: the generated wire shapes (ADR-0017).
+
+export type CampusRecord = ApiSchemas["Campus"];
+export type DepartmentRecord = ApiSchemas["Department"];
+export type DepartmentType = ApiSchemas["DepartmentTypeEnum"];
+export type HouseRecord = ApiSchemas["House"];
+export type HolidayEntry = ApiSchemas["HolidayEntry"];
+/** `GET /holiday-calendar` always answers both lists; the schema's optional keys describe the
+ * `PUT` body, which names only the lists it replaces. */
+export type HolidayCalendarRecord = Required<ApiSchemas["HolidayCalendar"]>;
+export type HolidayCalendarUpdate = ApiSchemas["HolidayCalendar"];
+
+/** The bodies the structure forms send, in the API's own field names. */
+export type CampusInput = Required<
+  Pick<CampusRecord, "name" | "code" | "phone" | "email" | "timezone" | "is_primary" | "is_active">
+>;
+export type DepartmentInput = Required<
+  Pick<
+    DepartmentRecord,
+    "name" | "code" | "department_type" | "campus_id" | "description" | "is_active"
+  >
+>;
+export type HouseInput = Required<
+  Pick<HouseRecord, "name" | "code" | "color" | "motto" | "is_active">
+>;
+
+/** One page of a structure list (`/campuses`, `/departments`, `/houses`). */
+export interface StructurePageQuery {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  ordering?: string;
+  isActive?: boolean;
+  /** Departments only. */
+  campusId?: string;
+  /** Departments only. */
+  departmentType?: DepartmentType;
+}
