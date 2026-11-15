@@ -58,6 +58,7 @@ class NewsCrudTests(WebsiteAPITestCase):
 
     def test_omitted_body_stores_a_valid_empty_document(self) -> None:
         self.allow("website.news-post.create")
+        self.allow("website.news-post.publish")
         response = self._create()
         self.assertEqual(response.json()["data"]["body"], {"blocks": []})
         validate_rich_text(response.json()["data"]["body"])
