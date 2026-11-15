@@ -4397,6 +4397,29 @@ export interface paths {
         patch: operations["periods_partial_update"];
         trace?: never;
     };
+    "/api/v1/public/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET /public/pages?host=&slug=`: a published page with its visible sections, in order.
+         *
+         *     An empty slug or `home` is the homepage. A draft is read only under a preview token in the
+         *     `X-Preview-Token` header naming this tenant and this page (decision 9); it may preview a
+         *     site that is not live yet, and is never cached. A bad, expired or foreign token is 404.
+         */
+        get: operations["public_page"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/payment-callbacks/{tenant_slug}/{callback_token}": {
         parameters: {
             query?: never;
@@ -4433,6 +4456,64 @@ export interface paths {
          *     genuine provider.
          */
         post: operations["public_payment_callbacks_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/site": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET /public/site?host=`: theme, navigation, header/footer, social links and site SEO. */
+        get: operations["public_site"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/sitemap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET /public/sitemap?host=`: every published, indexable path of the site. */
+        get: operations["public_sitemap"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/tenants/by-host": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET /public/tenants/by-host?host=`: who the host belongs to and the state of its site.
+         *
+         *     The exception to "404 unless live": a suspended school answers 200 with its `status`, so
+         *     the renderer shows a neutral notice, and a site that is off, unpublished or in maintenance
+         *     answers with its `website_status`. A provisioning, deprovisioned or deleted school, or an
+         *     unknown host, is 404.
+         */
+        get: operations["public_tenants_by_host"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -13037,6 +13118,122 @@ export interface components {
         PromotionTransitionResult: {
             updated: number;
         };
+        PublicNavItem: {
+            label: string;
+            /** @description A site path (`/about`) or an https URL. */
+            href: string;
+            children: components["schemas"]["PublicNavLink"][];
+        };
+        PublicNavLink: {
+            label: string;
+            /** @description A site path (`/about`) or an https URL. */
+            href: string;
+        };
+        PublicNavigation: {
+            header: components["schemas"]["PublicNavItem"][];
+            footer_primary: components["schemas"]["PublicNavItem"][];
+            footer_secondary: components["schemas"]["PublicNavItem"][];
+        };
+        PublicPage: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            /** @description `/` for the homepage, else `/<slug>`. */
+            path: string;
+            title: string;
+            page_type: components["schemas"]["WebsitePageTypeEnum"];
+            /**
+             * @description `published`, unless read under a preview token.
+             *
+             *     * `draft` - Draft
+             *     * `published` - Published
+             *     * `archived` - Archived
+             */
+            status: components["schemas"]["WebsiteContentStatusEnum"];
+            is_homepage: boolean;
+            /** Format: date-time */
+            published_at: string | null;
+            /** Format: date-time */
+            updated_at: string;
+            sections: components["schemas"]["PublicSection"][];
+            seo: components["schemas"]["PublicSeo"];
+        };
+        PublicSection: {
+            /** Format: uuid */
+            id: string;
+            type: components["schemas"]["SectionTypeEnum"];
+            position: number;
+            /** @description The section's content; image ids become `*_url`. */
+            props: {
+                [key: string]: unknown;
+            };
+        };
+        PublicSeo: {
+            title: string | null;
+            description: string | null;
+            canonical_url: string | null;
+            og_image_url: string | null;
+            robots: string | null;
+            noindex: boolean;
+        };
+        PublicSite: {
+            theme: components["schemas"]["PublicSiteTheme"];
+            navigation: components["schemas"]["PublicNavigation"];
+            header_config: {
+                [key: string]: unknown;
+            };
+            footer_config: {
+                [key: string]: unknown;
+            };
+            social_links: components["schemas"]["PublicSocialLink"][];
+            seo: components["schemas"]["PublicSeo"];
+        };
+        PublicSiteTheme: {
+            code: string;
+            version: string;
+            config: {
+                [key: string]: unknown;
+            };
+        };
+        PublicSitemapEntry: {
+            path: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        PublicSocialLink: {
+            platform: string;
+            url: string;
+        };
+        PublicTenant: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            name: string;
+            status: components["schemas"]["TenantStatusEnum"];
+            website_status: components["schemas"]["WebsiteStatusEnum"];
+            /** @description `TenantSettings.branding`, as stored. */
+            branding: {
+                [key: string]: unknown;
+            };
+            locale: components["schemas"]["PublicTenantLocale"];
+            /** @description The primary campus. */
+            contact: components["schemas"]["PublicTenantContact"] | null;
+            /** @description The primary active custom domain, else null. */
+            custom_domain: string | null;
+            enabled_modules: string[];
+        };
+        PublicTenantContact: {
+            campus_name: string;
+            address: string;
+            phone: string;
+            email: string;
+        };
+        PublicTenantLocale: {
+            default_locale: string;
+            enabled_locales: string[];
+            timezone: string;
+            direction: components["schemas"]["TextDirectionEnum"];
+        };
         /**
          * @description * `degree` - Degree
          *     * `diploma` - Diploma
@@ -14539,6 +14736,16 @@ export interface components {
          * @enum {string}
          */
         TeacherSubstitutionStatusEnum: "proposed" | "confirmed" | "declined" | "completed" | "cancelled";
+        /**
+         * @description * `provisioning` - Provisioning
+         *     * `trial` - Trial
+         *     * `active` - Active
+         *     * `past_due` - Past due
+         *     * `suspended` - Suspended
+         *     * `deprovisioned` - Deprovisioned
+         * @enum {string}
+         */
+        TenantStatusEnum: "provisioning" | "trial" | "active" | "past_due" | "suspended" | "deprovisioned";
         Term: {
             /** Format: uuid */
             readonly id: string;
@@ -14556,6 +14763,12 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /**
+         * @description * `ltr` - Left to right
+         *     * `rtl` - Right to left
+         * @enum {string}
+         */
+        TextDirectionEnum: "ltr" | "rtl";
         Theme: {
             /** Format: uuid */
             readonly id: string;
@@ -14965,6 +15178,13 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /**
+         * @description * `live` - Live
+         *     * `maintenance` - Maintenance
+         *     * `unpublished` - Unpublished
+         * @enum {string}
+         */
+        WebsiteStatusEnum: "live" | "maintenance" | "unpublished";
         WithdrawRequest: {
             reason: string;
             /** Format: date */
@@ -22198,6 +22418,40 @@ export interface operations {
             };
         };
     };
+    public_page: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+                /** @description Empty or `home`: homepage. */
+                slug?: string;
+            };
+            header?: {
+                /** @description A page preview token; reads that page whatever its status. */
+                "X-Preview-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicPage"];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     public_payment_callbacks_create: {
         parameters: {
             query?: never;
@@ -22212,6 +22466,93 @@ export interface operations {
         responses: {
             /** @description No response body */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_site: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSite"];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_sitemap: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSitemapEntry"][];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_tenants_by_host: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicTenant"];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

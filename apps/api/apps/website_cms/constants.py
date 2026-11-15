@@ -9,15 +9,21 @@ PAGE_SLUG_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*(?:/[a-z0-9]+(?:-[a-z0-9]+)*)*$"
 PAGE_SLUG_RE = re.compile(PAGE_SLUG_PATTERN)
 PAGE_SLUG_MAX_LENGTH = 120
 
+#: The renderer's routes for single news posts, events and albums (`/<prefix>/<slug>`), and
+#: for their listings (`/<prefix>`). Each is also a reserved first page-slug segment.
+NEWS_PATH_PREFIX = "news"
+EVENTS_PATH_PREFIX = "events"
+GALLERY_PATH_PREFIX = "gallery"
+
 #: First slug segments the renderer owns as routes.
 RESERVED_PAGE_SLUGS = frozenset(
     {
         "admin",
         "api",
         "verify",
-        "news",
-        "events",
-        "gallery",
+        NEWS_PATH_PREFIX,
+        EVENTS_PATH_PREFIX,
+        GALLERY_PATH_PREFIX,
         "notices",
         "preview",
         "sitemap.xml",
@@ -113,6 +119,22 @@ def empty_rich_text() -> dict[str, list[dict[str, object]]]:
     """The empty block document, the default for news `body` and event `description`."""
     return {"blocks": []}
 
+
+class WebsiteStatus(models.TextChoices):
+    """A site's public state, as `hosts.website_status` derives it (plan decision 2)."""
+
+    LIVE = "live", "Live"
+    MAINTENANCE = "maintenance", "Maintenance"
+    UNPUBLISHED = "unpublished", "Unpublished"
+
+
+class TextDirection(models.TextChoices):
+    LTR = "ltr", "Left to right"
+    RTL = "rtl", "Right to left"
+
+
+#: Language codes written right to left; the dashboard's `directionFor` covers `ur`.
+RTL_LANGUAGES = frozenset({"ar", "fa", "he", "ps", "sd", "ur"})
 
 #: Hosts a gallery `video_embed` item may point at.
 EMBED_HOSTS = frozenset(

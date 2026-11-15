@@ -1,7 +1,7 @@
 """Machine-client authentication, scope, throttling and client-IP derivation (decisions 1, 2a).
 
-The public content views arrive in PR C2; until then a test-only view carries the exact
-classes `PublicContentView` will declare, so the boundary is proven before any route exists.
+A test-only view carries the exact classes `PublicContentView` declares, so these tests stay
+independent of any route; `website_cms/public/tests` repeats the boundary on the real routes.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ NEW, OLD = "renderer-token-new", "renderer-token-old"
 
 
 class _ProbeView(APIView):
-    """The classes `PublicContentView` declares (plan Task C2)."""
+    """The classes `PublicContentView` declares."""
 
     authentication_classes = [MachineTokenAuthentication]
     permission_classes = [HasMachineScope]

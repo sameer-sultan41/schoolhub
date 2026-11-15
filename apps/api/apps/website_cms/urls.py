@@ -14,4 +14,6 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("", include("apps.website_cms.school_events.urls")),
     path("", include("apps.website_cms.gallery.urls")),
     path("", include("apps.website_cms.contact_submissions.urls")),
+    # The renderer's machine-token reads (plan decision 3); no JWT route lives under it.
+    path("public/", include("apps.website_cms.public.urls")),
 ]

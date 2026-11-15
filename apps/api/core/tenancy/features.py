@@ -16,9 +16,13 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from django.core.cache import cache
 from django.utils import timezone
+
+if TYPE_CHECKING:
+    from core.tenancy.models import FeatureFlag, TenantFeatureOverride
 
 logger = logging.getLogger(__name__)
 
@@ -204,6 +208,11 @@ def _resolve_feature(key: str, *, tenant_id: uuid.UUID) -> bool:
         .order_by("-created_at")
         .first()
     )
+    return _effective(flag, override)
+
+
+def _effective(flag: FeatureFlag, override: TenantFeatureOverride | None) -> bool:
+    """Steps 2 and 4 of `is_feature_enabled`'s order, for a loaded flag and its override."""
     if override is not None and (
         override.expires_at is None or override.expires_at > timezone.now()
     ):
@@ -216,3 +225,22 @@ def _resolve_feature(key: str, *, tenant_id: uuid.UUID) -> bool:
         return override.enabled
 
     return flag.default_enabled
+
+
+def enabled_feature_keys(*, tenant_id: uuid.UUID, prefix: str = "") -> list[str]:
+    """Every registered flag under ``prefix`` that resolves on for the tenant, sorted.
+
+    The same rules as `is_feature_enabled`, in two queries rather than two per key. Call it
+    with the tenant bound: overrides are tenant rows under RLS.
+    """
+    from core.tenancy.models import FeatureFlag, TenantFeatureOverride
+
+    keys = sorted(spec.key for spec in registry.all() if spec.key.startswith(prefix))
+    flags = list(FeatureFlag.objects.filter(key__in=keys).order_by("key"))
+    latest: dict[uuid.UUID, TenantFeatureOverride] = {}
+    overrides = TenantFeatureOverride.all_tenants.filter(
+        tenant_id=tenant_id, feature_flag__in=flags, deleted_at__isnull=True
+    ).order_by("feature_flag_id", "-created_at")
+    for override in overrides:
+        latest.setdefault(override.feature_flag_id, override)
+    return [flag.key for flag in flags if _effective(flag, latest.get(flag.id))]

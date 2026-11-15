@@ -664,3 +664,68 @@ class OrderingContractTests(TestCase):
                     broken.append(f"{route} ({view.__name__}): {field!r} — {exc}")
 
         self.assertEqual(broken, [], "\n".join(broken))
+
+
+#: The only `/public/` routes a caller reaches without the machine token, each with why. Every
+#: other `/public/` route is a machine-client read. PR C's anonymous routes add their entries
+#: here when they land: `public/files/<uuid:tenant_id>/<uuid:file_id>` (C4) and
+#: `public/contact-submissions` (C5).
+PUBLIC_ANONYMOUS_ROUTES = {
+    "api/v1/public/payment-callbacks/<slug:tenant_slug>/<str:callback_token>": (
+        "the payment provider's callback; trusted by its signature, not a token"
+    ),
+}
+
+
+class PublicEndpointContractTests(SimpleTestCase):
+    """Every `/api/v1/public/` route is a scoped machine read or a listed anonymous route.
+
+    `EXEMPT_PATTERNS` takes `/public/` out of the staff-permission checks above, so this is
+    what stops a public route from shipping with no guard at all (plan decision 1, Review
+    Focus 1): a machine route must authenticate only the machine token, require a scope in
+    `MACHINE_SCOPES` and throttle per client and host; an anonymous one must be listed and
+    carry its own throttle rather than the per-user defaults.
+    """
+
+    def _public_routes(self) -> list[tuple[str, type]]:
+        return [(route, view) for route, view in _api_views() if route.startswith("api/v1/public/")]
+
+    def test_every_public_route_declares_machine_scope_or_listed_anonymous(self):
+        from rest_framework.settings import api_settings
+
+        from core.rbac.machine import (
+            MACHINE_SCOPES,
+            HasMachineScope,
+            MachineClientThrottle,
+            MachineTokenAuthentication,
+        )
+
+        defaults = list(api_settings.DEFAULT_THROTTLE_CLASSES)
+        offenders: list[str] = []
+        machine_routes = 0
+        for route, view in self._public_routes():
+            throttles = list(getattr(view, "throttle_classes", ()))
+            if route in PUBLIC_ANONYMOUS_ROUTES:
+                if not throttles or throttles == defaults:
+                    offenders.append(f"{route}: anonymous, but no throttle of its own")
+                continue
+            machine_routes += 1
+            problems = []
+            if list(getattr(view, "authentication_classes", ())) != [MachineTokenAuthentication]:
+                problems.append("authenticates more than the machine token")
+            if HasMachineScope not in getattr(view, "permission_classes", ()):
+                problems.append("no HasMachineScope")
+            if getattr(view, "required_machine_scope", None) not in MACHINE_SCOPES:
+                problems.append("required_machine_scope is not in MACHINE_SCOPES")
+            if MachineClientThrottle not in throttles:
+                problems.append("no MachineClientThrottle")
+            if problems:
+                offenders.append(f"{route} ({view.__name__}): {', '.join(problems)}")
+        self.assertEqual(offenders, [], "\n".join(offenders))
+        # Vacuity guard: the four content reads of PR C2 at least.
+        self.assertGreaterEqual(machine_routes, 4)
+
+    def test_every_listed_anonymous_route_exists(self):
+        """A stale allowlist entry would quietly exempt whatever later reuses the path."""
+        routes = {route for route, _ in self._public_routes()}
+        self.assertEqual(set(PUBLIC_ANONYMOUS_ROUTES) - routes, set())

@@ -445,6 +445,10 @@ SPECTACULAR_SETTINGS = {
         "NavigationTargetTypeEnum": "apps.website_cms.constants.NavTargetType",
         "SectionTypeEnum": "apps.website_cms.constants.SectionType",
         "GalleryMediaTypeEnum": "apps.website_cms.models.MediaType",
+        # The public content API: `status` is a tenant's lifecycle there, beside pages' `status`.
+        "TenantStatusEnum": "core.tenancy.models.TenantStatus",
+        "WebsiteStatusEnum": "apps.website_cms.constants.WebsiteStatus",
+        "TextDirectionEnum": "apps.website_cms.constants.TextDirection",
     },
 }
 

@@ -18,6 +18,7 @@ from dataclasses import dataclass
 
 from django.conf import settings
 from django.http import HttpRequest
+from drf_spectacular.extensions import OpenApiAuthenticationExtension
 from rest_framework import exceptions
 from rest_framework.authentication import BaseAuthentication, get_authorization_header
 from rest_framework.permissions import BasePermission
@@ -28,8 +29,11 @@ from rest_framework.views import APIView
 
 from core.tenancy.hosts import normalise_host
 
+#: The website renderer's read scope over published public content (plan decision 1).
+WEBSITE_PUBLIC_CONTENT_SCOPE = "website.public-content.view"
+
 #: Every scope a machine client may hold. A machine-guarded view's scope must be listed here.
-MACHINE_SCOPES = frozenset({"website.public-content.view"})
+MACHINE_SCOPES = frozenset({WEBSITE_PUBLIC_CONTENT_SCOPE})
 
 _KEYWORD = b"bearer"
 _INVALID = "Invalid machine token."
@@ -89,6 +93,16 @@ class MachineTokenAuthentication(BaseAuthentication):
     def authenticate_header(self, request: Request) -> str:
         # Non-empty, so DRF answers a missing or bad token with 401, not 403.
         return 'Bearer realm="api"'
+
+
+class MachineTokenScheme(OpenApiAuthenticationExtension):
+    """Names the machine token in the OpenAPI schema (drf-spectacular's documented hook)."""
+
+    target_class = MachineTokenAuthentication
+    name = "machineToken"
+
+    def get_security_definition(self, auto_schema: object) -> dict[str, str]:
+        return {"type": "http", "scheme": "bearer"}
 
 
 class HasMachineScope(BasePermission):
