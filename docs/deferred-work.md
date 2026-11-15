@@ -10,6 +10,21 @@ either this file or `project-status.md`.
 
 ## Deliberately NOT done
 
+- **Website & CMS, what PR A (the foundation) and the plan leave out** ([ADR-0038](decisions/0038-website-content-blocks-and-schema-validated-sections.md), plan `docs/superpowers/plans/2026-11-15-website-cms.md`). Each item is written here by the PR that skips it, and deleted by the one that ships it.
+  - **Admission form endpoint** (`POST /public/admission-forms`). It belongs to the admissions module, which does not exist. Until then the renderer's admissions-enquiry form posts as a contact submission with `subject="Admission enquiry"`.
+  - **§19 recommendations: publish scheduling, slug-rename redirects, CAPTCHA, RSS, the analytics embed.** All wait on client confirmation. `analytics_id` is stored but not emitted.
+  - **`AI-WEB-01`, `-02`, `-03`** (content drafting, the SEO assistant, alt-text). The AI gateway is still in review (#182). Every AI draft stays behind the publish permission (invariant 5).
+  - **Page duplication and a submit-for-review queue.** Drafts wait for a publisher; the content inventory shows them.
+  - **Multi-locale content.** The `locale` column and its `nulls_distinct=False` uniqueness ship; v1 is single-locale. The client has not decided between full translation and a single-locale site (module doc §19).
+  - **Outbound `website.*` webhooks** (`website.page.published`, `website.contact-submission.created`). No webhook system exists.
+  - **Contact CSV export and the traffic summary report** (§13). The inbox ships first; the traffic report needs the analytics integration.
+  - **A real TLS edge provider, and plan-gating of custom domains.** The `EdgeCertificateProvisioner` adapter ships with a `NullProvisioner` that leaves `tls_status=pending`; gating waits for platform-admin's plan resolver.
+  - **Notice attachments on the site, and teacher subjects.** Neither is in the public notices or teachers payload yet.
+  - **Consent text on public forms** (§6), as a tenant-configurable string, and **a retention purge of `contact_submissions.ip`**. Until the purge ships, the staff API never serialises `ip`.
+  - **Renderer i18n.** `apps/website` has no i18n today. New visible strings live in one `src/themes/default/copy.ts` constant map (English), so a later pass has one source.
+  - **Contact-notification email batching.** One email per submission in v1.
+  - **`provision_tenant` calling `ensure_default_site`.** Until platform-admin ships it, the default site is created on the first CMS write.
+
 - **Online fee payments, what PR 1 leaves out** ([ADR-0034](decisions/0034-online-fee-payments.md), plan `docs/superpowers/plans/2026-11-07-fee-online-payments.md`). PR 1 runs end to end against the fake provider only.
   - **PR 2 (blocked):** the real aggregator's adapter (PayFast or Safepay, picked after the user tests both sandboxes; enable it in `PAYMENT_PROVIDERS_ENABLED` for production and set `PAYMENT_PENDING_TTL_MINUTES` from its session lifetime), the portal Pay button and result page on `PortalInvoiceDetail` (waits for the portal stack, #156 → #158 → #160), and the staff gateway-settings and reconciliation-issues screens with `:resolve`. Until then a school can be configured only through the API.
   - **Partial online payments.** A guardian pays the full available balance only (user decision, 2026-11-07).

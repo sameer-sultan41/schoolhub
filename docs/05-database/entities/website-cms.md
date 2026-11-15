@@ -15,7 +15,7 @@ One row per tenant: the website's global state and theme binding.
 | ------ | ---- | ---- | ------- | ----- |
 | theme_id | uuid | no | — | FK → themes (active theme) |
 | theme_config | jsonb | no | `'{}'` | Values validated against `themes.config_schema` |
-| homepage_page_id | uuid | yes | — | FK → website_pages; exactly one homepage |
+| homepage_page_id | uuid | yes | — | FK → website_pages; null only until the default site is seeded (the API never clears it once set); at most one live `home` page per tenant |
 | is_published | boolean | no | `false` | Master on/off for the public site |
 | maintenance_mode | boolean | no | `false` | Neutral notice page; forced during tenant suspension |
 | header_config | jsonb | no | `'{}'` | Announcement bar, contact strip, CTA button |
@@ -24,7 +24,7 @@ One row per tenant: the website's global state and theme binding.
 | analytics_id | varchar(60) | yes | — | Tenant-supplied analytics property id *(recommendation)* |
 | default_locale | varchar(10) | yes | — | Falls back to `tenant_settings.locale` |
 
-Indexes: unique(tenant_id).
+Indexes: unique(tenant_id) among live rows (`deleted_at IS NULL`).
 Relationships: N:1 `themes`; 1:1 `tenants`; optional 1:1 `website_pages` (homepage).
 
 ### themes
@@ -37,7 +37,7 @@ Relationships: N:1 `themes`; 1:1 `tenants`; optional 1:1 `website_pages` (homepa
 | version | varchar(20) | no | — | Semver; renderer pins per-version templates |
 | description | text | yes | — | |
 | preview_file_id | uuid | yes | — | FK → files (platform asset) |
-| section_types | jsonb | no | `'[]'` | Declared section catalog: type key + JSON schema per type |
+| section_types | jsonb | no | `'{}'` | Declared section catalog as a dict keyed by type: `{type: {label, schema}}`, where `schema` is the constrained JSON Schema subset (ADR-0038). Synced from the code-declared theme files on `post_migrate`, never edited through the API |
 | config_schema | jsonb | no | `'{}'` | JSON schema for `website_settings.theme_config` |
 | is_active | boolean | no | `true` | Inactive themes hidden from selection |
 
@@ -57,7 +57,7 @@ A page on the public site — standard (homepage, about, principal message, depa
 | locale | varchar(10) | yes | — | Per-locale page variants; null = default locale |
 | show_in_search | boolean | no | `true` | Renderer no-indexes when false |
 
-Indexes: unique(tenant_id, slug, locale); (tenant_id, status, page_type).
+Indexes: unique(tenant_id, slug, locale) among live rows, with `nulls_distinct=False` so two pages with a null `locale` and the same slug collide; unique(tenant_id) where `page_type = 'home'` among live rows (one homepage per tenant); (tenant_id, status, page_type). A slug is reusable once its page is soft-deleted.
 Relationships: 1:N `page_sections`; targeted by `navigation_menus` items and `seo_settings`.
 
 ### page_sections
@@ -71,7 +71,7 @@ Ordered typed content blocks composing a page; types come from the active theme'
 | content | jsonb | no | `'{}'` | Validated against the section type's JSON schema |
 | is_visible | boolean | no | `true` | Hide without deleting |
 
-Indexes: unique(website_page_id, position); (website_page_id).
+Indexes: unique(website_page_id, position) among live rows (partial, so not deferrable: reorders write in two passes); (website_page_id).
 Relationships: N:1 `website_pages`; media references inside `content` are `files` ids.
 
 ### navigation_menus
@@ -82,7 +82,7 @@ Editable menu trees per site location.
 | location | varchar(30) | no | — | Enum: `header` `footer_primary` `footer_secondary` |
 | items | jsonb | no | `'[]'` | Nested tree: `{label, target_type(page|url|news_index|events_index|gallery_index), target, children[]}` |
 
-Indexes: unique(tenant_id, location).
+Indexes: unique(tenant_id, location) among live rows.
 Relationships: item targets reference `website_pages` by id (validated on save).
 
 ### news_posts
@@ -184,7 +184,7 @@ Site-wide and per-content SEO metadata (scope §11 SEO; §22 SEO for public webs
 | robots | varchar(50) | yes | — | e.g. `noindex,nofollow` |
 | structured_data | jsonb | yes | — | JSON-LD overrides; renderer emits sane defaults |
 
-Indexes: unique(tenant_id, target_type, target_id).
+Indexes: unique(tenant_id, target_type, target_id) among live rows, with `nulls_distinct=False` so the single `site` row (null `target_id`) cannot be duplicated.
 Relationships: polymorphic target (validated in the service layer, per target_type). One `site` row per tenant.
 
 ---
