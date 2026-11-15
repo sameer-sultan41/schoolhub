@@ -38,6 +38,8 @@ CLIENT_KNOWN_SERVER_CODES = {
     "tenant_not_found",
     "tenant_suspended",
     "marks_outstanding",
+    "ai_quota_exceeded",
+    "ai_unavailable",
 }
 
 
@@ -142,6 +144,7 @@ class OffsetEnvelopeTests(APITestCase):
 class ErrorCodeContractTests(APITestCase):
     def test_the_client_knows_every_code_the_server_can_emit(self):
         from apps.examinations.processing import MarksOutstanding
+        from core.ai.exceptions import AIQuotaExceeded, AIUnavailable
         from core.api.exceptions import (
             Conflict,
             DomainRuleViolation,
@@ -160,6 +163,9 @@ class ErrorCodeContractTests(APITestCase):
             TenantSuspended.default_code,
             # A `Conflict` subclass with a domain code of its own.
             MarksOutstanding.default_code,
+            # The AI gateway's `CodedAPIException`s.
+            AIQuotaExceeded.default_code,
+            AIUnavailable.default_code,
         }
         self.assertEqual(
             emitted - CLIENT_KNOWN_SERVER_CODES,

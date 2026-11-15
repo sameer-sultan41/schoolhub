@@ -28,6 +28,7 @@ import datetime
 import uuid
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Any
 
 from django.db.models import (
     Case,
@@ -248,6 +249,14 @@ def _as_dicts(rows) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def _confirmed_in_period(
+    queryset: QuerySet[Payment], *, date_from: datetime.date, date_to: datetime.date
+) -> QuerySet[Payment]:
+    return queryset.filter(
+        status=PaymentStatus.CONFIRMED, paid_at__date__gte=date_from, paid_at__date__lte=date_to
+    )
+
+
 def collection_report(
     queryset: QuerySet[Payment],
     *,
@@ -267,9 +276,7 @@ def collection_report(
     django-stubs types each one distinctly — reassigning would be a type error
     for a real reason, since the three shapes genuinely differ.
     """
-    base = queryset.filter(
-        status=PaymentStatus.CONFIRMED, paid_at__date__gte=date_from, paid_at__date__lte=date_to
-    )
+    base = _confirmed_in_period(queryset, date_from=date_from, date_to=date_to)
 
     # The two annotations are written out per branch rather than spread from a
     # shared dict: a `**kwargs` spread hides the annotation names from
@@ -321,57 +328,129 @@ def outstanding_and_aging(
     appear on the defaulter list at 0.
     """
     today = as_of or timezone.localdate()
-    unpaid = queryset.exclude(status=InvoiceStatus.CANCELED).filter(balance_due__gt=0)
-
-    def bucket_sum(lower: int, upper: int | None):
-        """One bucket, as a conditional `SUM` over the whole set.
-
-        `default=_ZERO` and `output_field` on the `Case` are both load-bearing:
-        without a default every non-matching row contributes NULL, and without
-        an explicit output field PostgreSQL cannot infer the type of a `CASE`
-        whose branches are all NULL — which is a database error rather than a
-        wrong number, but only for the school whose data happens to trigger it.
-        """
-        overdue_days = Q(due_date__lte=today - datetime.timedelta(days=lower))
-        if upper is not None:
-            overdue_days &= Q(due_date__gt=today - datetime.timedelta(days=upper))
-        return Coalesce(
-            Sum(
-                Case(
-                    When(overdue_days, then=F("balance_due")),
-                    default=_ZERO,
-                    output_field=_MONEY,
-                )
-            ),
-            _ZERO,
-        )
-
     rows = (
-        unpaid.values(
+        _unpaid(queryset)
+        .values(
             "student_id", "student__admission_number", "student__first_name", "student__last_name"
         )
         .annotate(
             total_outstanding=Coalesce(Sum("balance_due"), _ZERO),
             invoice_count=Count("id"),
-            # Not yet due: everything with a due date still ahead.
-            not_yet_due=Coalesce(
-                Sum(
-                    Case(
-                        When(due_date__gt=today, then=F("balance_due")),
-                        default=_ZERO,
-                        output_field=_MONEY,
-                    )
-                ),
-                _ZERO,
-            ),
-            bucket_0_30=bucket_sum(0, 30),
-            bucket_31_60=bucket_sum(30, 60),
-            bucket_61_90=bucket_sum(60, 90),
-            bucket_90_plus=bucket_sum(90, None),
+            **_aging_sums(today),
         )
         .order_by("-total_outstanding")
     )
     return _as_dicts(_capped(rows, limit))
+
+
+def _unpaid(queryset: QuerySet[FeeInvoice]) -> QuerySet[FeeInvoice]:
+    """Owing money and not canceled: what aging reads."""
+    return queryset.exclude(status=InvoiceStatus.CANCELED).filter(balance_due__gt=0)
+
+
+def _aging_sums(today: datetime.date) -> dict[str, Coalesce]:
+    """Not-yet-due plus §13's four buckets, each a conditional `SUM` of `balance_due`.
+
+    Shared by the per-student report and the whole-set totals, so both put day 30
+    in the same bucket.
+
+    `default=_ZERO` and `output_field` on each `Case` are both load-bearing:
+    without a default every non-matching row contributes NULL, and without an
+    explicit output field PostgreSQL cannot infer the type of a `CASE` whose
+    branches are all NULL, which is a database error, but only for the school
+    whose data happens to trigger it.
+    """
+
+    def conditional_sum(condition: Q) -> Coalesce:
+        return Coalesce(
+            Sum(Case(When(condition, then=F("balance_due")), default=_ZERO, output_field=_MONEY)),
+            _ZERO,
+        )
+
+    def bucket(lower: int, upper: int | None) -> Coalesce:
+        overdue_days = Q(due_date__lte=today - datetime.timedelta(days=lower))
+        if upper is not None:
+            overdue_days &= Q(due_date__gt=today - datetime.timedelta(days=upper))
+        return conditional_sum(overdue_days)
+
+    return {
+        # Not yet due: everything with a due date still ahead.
+        "not_yet_due": conditional_sum(Q(due_date__gt=today)),
+        "bucket_0_30": bucket(0, 30),
+        "bucket_31_60": bucket(30, 60),
+        "bucket_61_90": bucket(60, 90),
+        "bucket_90_plus": bucket(90, None),
+    }
+
+
+def aging_totals(
+    queryset: QuerySet[FeeInvoice], *, as_of: datetime.date | None = None
+) -> dict[str, Any]:
+    """§13.2 over the whole scoped set in one aggregate query: no per-student rows.
+
+    What an AI summary reads (AI-FEE-02), so a school with more families owing
+    than the inline report's row cap still gets its summary.
+    """
+    today = as_of or timezone.localdate()
+    return _unpaid(queryset).aggregate(
+        total_outstanding=Coalesce(Sum("balance_due"), _ZERO),
+        invoice_count=Count("id"),
+        student_count=Count("student_id", distinct=True),
+        **_aging_sums(today),
+    )
+
+
+def collection_totals(
+    queryset: QuerySet[Payment], *, date_from: datetime.date, date_to: datetime.date
+) -> dict[str, Any]:
+    """§13.1's grand total and payment count, with `collection_report`'s filter."""
+    return _confirmed_in_period(queryset, date_from=date_from, date_to=date_to).aggregate(
+        total=Coalesce(Sum("amount"), _ZERO), count=Count("id")
+    )
+
+
+def grant_register_counts(
+    *,
+    discounts: QuerySet[Discount],
+    scholarships: QuerySet[Scholarship],
+    fines: QuerySet[Fine],
+) -> dict[str, Any]:
+    """§13.4 counted rather than listed: grants by status, and the waived fines' total.
+
+    Three grouped queries, none per row, and no name, student or approver column.
+    """
+    rows: list[dict[str, Any]] = []
+    for kind, source in (("discount", discounts), ("scholarship", scholarships)):
+        rows.extend(
+            {"kind": kind, "status": row["status"], "count": row["count"]}
+            for row in source.values("status").annotate(count=Count("id")).order_by("status")
+        )
+    waived = fines.filter(status=FineStatus.WAIVED).aggregate(
+        count=Count("id"), total=Coalesce(Sum("amount"), _ZERO)
+    )
+    if waived["count"]:
+        rows.append({"kind": "fine waiver", "status": FineStatus.WAIVED, "count": waived["count"]})
+    return {
+        "rows": rows,
+        "fine_waiver_count": waived["count"],
+        "fine_waived_total": waived["total"],
+    }
+
+
+def expense_totals(
+    queryset: QuerySet[Expense], *, date_from: datetime.date, date_to: datetime.date
+) -> list[dict[str, Any]]:
+    """§13's expense register grouped by category and status: no vendor, number or description."""
+    return _as_dicts(
+        queryset.filter(expense_date__gte=date_from, expense_date__lte=date_to)
+        .values("expense_category__name", "status")
+        .annotate(
+            count=Count("id"),
+            total=Coalesce(Sum("amount"), _ZERO),
+            tax=Coalesce(Sum("tax_amount"), _ZERO),
+        )
+        .order_by("expense_category__name", "status")
+    )
 
 
 def student_ledger(

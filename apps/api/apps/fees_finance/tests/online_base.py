@@ -16,10 +16,8 @@ import datetime
 import json
 import time
 from decimal import Decimal
-from unittest import mock
 
 from django.core.cache import cache
-from django.db import connections
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -34,6 +32,7 @@ from apps.fees_finance.tests.factories import (
     enable_feature,
     grant,
 )
+from core.api.tests.rollback import rollback_as_in_production
 from core.integrations.payments.base import GatewayEvent
 from core.integrations.payments.fake import SIGNATURE_HEADER, FakeAdapter, sign
 from core.integrations.payments.registry import adapter_for
@@ -53,23 +52,6 @@ def fake_adapter() -> FakeAdapter:
     return adapter
 
 
-def _set_rollback_as_in_production() -> None:
-    """DRF's `set_rollback`, blind to the atomic blocks `TestCase` itself opens.
-
-    `:initiate-payment` and the callback are `non_atomic_requests`. In production
-    an error response there finds no open transaction, so DRF's `set_rollback`
-    does nothing. Under `TestCase` it finds the test's own wrapping transaction
-    and marks *that* for rollback, so every later query in the test fails with
-    `TransactionManagementError`. Django treats those blocks the same way for
-    `atomic(durable=True)` (`Atomic._from_testcase`).
-    """
-    for db in connections.all(initialized_only=True):
-        if db.settings_dict["ATOMIC_REQUESTS"] and any(
-            not block._from_testcase for block in db.atomic_blocks
-        ):
-            db.set_rollback(True)
-
-
 def make_account(tenant, actor_id, credentials=None) -> PaymentGatewayAccount:
     with tenant_context(tenant.id):
         return services.save_gateway_account(
@@ -87,9 +69,8 @@ class OnlinePaymentsTestCase(FeesFinanceAPITestCase):
         # The failure throttle counts in the cache; a previous test's bad
         # signatures must not throttle this one.
         cache.clear()
-        patcher = mock.patch("rest_framework.views.set_rollback", _set_rollback_as_in_production)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        # `:initiate-payment` and the callback are `non_atomic_requests` (lesson L67).
+        rollback_as_in_production(self)
         self.adapter = fake_adapter()
         self.adapter.reset()
         self.addCleanup(self.adapter.reset)

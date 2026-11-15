@@ -27,6 +27,37 @@ either this file or `project-status.md`.
   each environment (the load balancer, plus any CDN), and test that a spoofed header does not
   change the throttle key.
 
+- **AI gateway and AI-FEE-02 follow-ups** (`feat/ai-gateway`, plan
+  `docs/superpowers/plans/2026-11-07-ai-gateway.md`, [ADR-0035](decisions/0035-ai-gateway-shape.md)).
+  The gateway and the on-demand finance report summary shipped backend only. Left out on purpose:
+  - **SSE streaming.** `:summarize` answers in one JSON response inside the 30 s deadline;
+    ai-architecture §3's streamed synchronous ask waits for an assistant that needs it.
+  - **Free-form natural-language finance questions.** They need a campus filter on the report
+    endpoint first, so a question about "campus B" cannot read past the caller's scope.
+  - **Summaries attached to scheduled reports.** §13's scheduled delivery does not exist yet.
+  - **The dashboard panel.** No dashboard screen hosts the finance reports yet; the panel (with the
+    "AI-generated" label and the feedback thumbs) comes with that screen.
+  - **Platform-admin usage views and plan quotas.** `GET /ai/usage` is per school; cross-tenant
+    metrics and a quota per plan (multi-tenancy §6) come with platform-admin.
+  - **A Redis budget reservation.** The meter is a database sum, with an overshoot bound of
+    concurrency × (context + `max_output_tokens`) recorded in ADR-0035.
+  - **The 80 % notification to school admins.** The response carries `meta.budget_warning`; the
+    `pla-quota-threshold` notification (platform-admin §12) is not sent yet.
+  - **A second provider.** One provider, one bounded retry, then `503 ai_unavailable` (ADR-0035).
+  - **Response caching** for idempotent reads (ai-governance §5).
+  - **Per-feature sub-limits** within a school's monthly budget (ai-governance §5).
+  - **Before any school's flag is turned on** (governance §10, outside the PR): the DPA with
+    no-training terms signed, staging exercising timeout, quota and kill switch, the `ai-evals`
+    baseline committed and green (add the environment's `ANTHROPIC_API_KEY` secret, add the PR
+    label `ai-evals:write-baseline`, commit the uploaded `baseline.json`, remove the label and push:
+    the comparison then passes), and usage visible at `/ai/usage`.
+  - **The `ai-evals` job is skipped until a key exists** (decision, testing phase: the
+    key is bought at go-live). A pull-request or weekly run ends green with a notice and a step
+    summary saying nothing was scored; a run asked for by hand (`workflow_dispatch` or the
+    `ai-evals:write-baseline` label) still fails without the key. So a green `ai-evals` check
+    proves nothing about quality until the key is set and the baseline is committed, and the
+    go-live item above is what closes this.
+
 - **Account invitations: what Task A2 left out** (PR A, `feat/account-invitations`;
   [ADR-0033](decisions/0033-account-invitations-and-auth-email.md)).
   - **Unrouted `student_management` package copies.** `guardians/viewset.py`,
