@@ -237,6 +237,8 @@
       "profile": "Profile & settings",
       "campuses": "Campuses",
       "sessions": "Sessions & terms",
+      "classes": "Classes & sections",
+      "subjects": "Subjects",
       "departments": "Departments",
       "houses": "Houses",
       "calendar": "Calendar"
@@ -412,6 +414,91 @@
         "editTitle": "Edit this term",
         "description": "A term sits inside its session's dates and can't overlap another term.",
         "sequenceHint": "1 for the session's first term."
+      }
+    },
+    "classes": {
+      "title": "Classes & sections",
+      "summary": "The school's classes in promotion order, each with its sections at every campus.",
+      "saved": "Class saved.",
+      "fields": {
+        "level": "Level"
+      },
+      "actions": {
+        "create": "Add class"
+      },
+      "list": {
+        "caption": "Classes",
+        "loadError": "The classes couldn't be loaded.",
+        "searchPlaceholder": "Search by name or code",
+        "emptyTitle": "No classes yet",
+        "emptyDescription": "Add the school's classes in order, then give each one its sections."
+      },
+      "form": {
+        "createTitle": "Add a class",
+        "editTitle": "Edit this class",
+        "description": "A class name and level are each unique in the school.",
+        "namePlaceholder": "e.g. Grade 1",
+        "levelHint": "Its place in the promotion order: 1 for the first class, and students move up one level a year."
+      }
+    },
+    "sections": {
+      "title": "Sections",
+      "show": "Show sections for {name}",
+      "hide": "Hide sections for {name}",
+      "summary": "A section is a division of this class at one campus.",
+      "inactiveClass": "This class is inactive, so its sections can't be added to or edited.",
+      "empty": "No sections yet.",
+      "caption": "Sections of {name}",
+      "loadError": "The sections couldn't be loaded.",
+      "saved": "Section saved.",
+      "unlimited": "Unlimited",
+      "qualifiedName": "{className} – {name}",
+      "fields": {
+        "class": "Class",
+        "capacity": "Capacity"
+      },
+      "actions": {
+        "create": "Add section"
+      },
+      "form": {
+        "createTitle": "Add a section",
+        "editTitle": "Edit this section",
+        "description": "A section name is unique within its class at one campus. Only active classes and campuses are offered.",
+        "namePlaceholder": "e.g. A",
+        "capacityHint": "The most students it takes. Leave blank for no limit."
+      }
+    },
+    "subjects": {
+      "title": "Subjects",
+      "summary": "The subjects the school teaches, by type and department.",
+      "saved": "Subject saved.",
+      "noDepartment": "No department",
+      "unknownDepartment": "Unknown department",
+      "fields": {
+        "type": "Type",
+        "department": "Department",
+        "description": "Description"
+      },
+      "types": {
+        "core": "Core",
+        "elective": "Elective",
+        "co_curricular": "Co-curricular"
+      },
+      "actions": {
+        "create": "Add subject"
+      },
+      "list": {
+        "caption": "Subjects",
+        "loadError": "The subjects couldn't be loaded.",
+        "searchPlaceholder": "Search by name or code",
+        "emptyTitle": "No subjects yet",
+        "emptyDescription": "Add the subjects the school teaches; curriculum, timetable and exams all use them."
+      },
+      "form": {
+        "createTitle": "Add a subject",
+        "editTitle": "Edit this subject",
+        "description": "A subject name and code are each unique in the school.",
+        "codeHint": "A short code, e.g. MATH."
       }
     },
     "departments": {

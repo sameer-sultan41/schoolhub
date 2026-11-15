@@ -28,6 +28,8 @@ export const Paths = {
   SCHOOL_PROFILE: "/school/profile",
   SCHOOL_CAMPUSES: "/school/campuses",
   SCHOOL_SESSIONS: "/school/sessions",
+  SCHOOL_CLASSES: "/school/classes",
+  SCHOOL_SUBJECTS: "/school/subjects",
   SCHOOL_DEPARTMENTS: "/school/departments",
   SCHOOL_HOUSES: "/school/houses",
   SCHOOL_CALENDAR: "/school/calendar",

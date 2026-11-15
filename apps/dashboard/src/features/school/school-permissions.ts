@@ -29,6 +29,24 @@ export const HOUSE_KEYS: StructureKeys = {
   delete: "school.house.delete",
 };
 
+export const CLASS_KEYS: StructureKeys = {
+  create: "school.class.create",
+  update: "school.class.update",
+  delete: "school.class.delete",
+};
+
+export const SECTION_KEYS: StructureKeys = {
+  create: "school.section.create",
+  update: "school.section.update",
+  delete: "school.section.delete",
+};
+
+export const SUBJECT_KEYS: StructureKeys = {
+  create: "school.subject.create",
+  update: "school.subject.update",
+  delete: "school.subject.delete",
+};
+
 /** Academic sessions and their terms: terms share the session keys (`TermViewSet`), and a
  * session is never deleted, only closed. Cloning needs `create`. */
 export const SESSION_KEYS = {

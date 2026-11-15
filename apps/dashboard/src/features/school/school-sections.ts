@@ -3,10 +3,13 @@ import { Paths } from "@/config/paths";
 import {
   anyWriteKey,
   CAMPUS_KEYS,
+  CLASS_KEYS,
   DEPARTMENT_KEYS,
   HOUSE_KEYS,
   SCHOOL_SETTINGS_UPDATE,
+  SECTION_KEYS,
   SESSION_KEYS,
+  SUBJECT_KEYS,
 } from "./school-permissions";
 
 /**
@@ -33,6 +36,19 @@ export const SCHOOL_SECTIONS = [
     labelKey: "nav.sessions",
     menuTitle: "Sessions & terms",
     permission: Object.values(SESSION_KEYS),
+  },
+  {
+    // A class's sections are managed inside its row, so either resource's writer opens it.
+    href: Paths.SCHOOL_CLASSES,
+    labelKey: "nav.classes",
+    menuTitle: "Classes & sections",
+    permission: [...anyWriteKey(CLASS_KEYS), ...anyWriteKey(SECTION_KEYS)],
+  },
+  {
+    href: Paths.SCHOOL_SUBJECTS,
+    labelKey: "nav.subjects",
+    menuTitle: "Subjects",
+    permission: anyWriteKey(SUBJECT_KEYS),
   },
   {
     href: Paths.SCHOOL_DEPARTMENTS,

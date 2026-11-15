@@ -61,6 +61,7 @@ test("sets up a school year from nothing and activates it", async ({ page, schoo
 
   await test.step("add two terms that cover the year", async () => {
     await schoolSetupPage.button("Show terms for 2027-28").click();
+    const terms = schoolSetupPage.nestedTable("Terms of 2027-28");
     for (const [name, order, start, end] of [
       ["Term 1", "1", "2027-04-01", "2027-09-30"],
       ["Term 2", "2", "2027-10-01", "2028-03-31"],
@@ -81,10 +82,9 @@ test("sets up a school year from nothing and activates it", async ({ page, schoo
         end_date: end,
       });
       await expect(schoolSetupPage.formDialog).toBeHidden();
+      // Listed before the next Add, whose order is counted from the terms already there.
+      await expect(terms.getByRole("row", { name: new RegExp(name) })).toBeVisible();
     }
-    const terms = schoolSetupPage.nestedTable("Terms of 2027-28");
-    await expect(terms.getByRole("row", { name: /Term 1/ })).toBeVisible();
-    await expect(terms.getByRole("row", { name: /Term 2/ })).toBeVisible();
   });
 
   await test.step("add a class and its section", async () => {

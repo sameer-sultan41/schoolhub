@@ -180,8 +180,8 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md) 
 
 - `GET/PATCH /api/v1/school-settings` — profile + academic configuration (singleton resource). `name` writes the tenant's name; `slug` and `status` are not fields, so a body that sends them is ignored. `logo_file_id` takes a ready `school.logo` upload of the caller's own school, and any other id (unknown, another school's, another purpose, still pending) gets the same 422; `GET` returns a signed `logo_url`. `branding` is merged key by key, never replaced, and its `primary_color` is a hex string.
 - `GET/POST /api/v1/campuses` · `GET/PATCH/DELETE /api/v1/campuses/{id}` — filters: `is_active`.
-- `GET/POST /api/v1/departments`, `/api/v1/classes`, `/api/v1/sections`, `/api/v1/subjects`, `/api/v1/houses` + `{id}` detail routes — filters: `campus_id`, `class_id`, `is_active`, `search`.
-- `GET/POST /api/v1/academic-sessions` · `PATCH /api/v1/academic-sessions/{id}` · `POST /api/v1/academic-sessions/{id}:activate` · `POST /api/v1/academic-sessions/{id}:close` · `POST /api/v1/academic-sessions/{id}:clone` (colon-actions, audited).
+- `GET/POST /api/v1/departments`, `/api/v1/classes`, `/api/v1/sections`, `/api/v1/subjects`, `/api/v1/houses` + `{id}` detail routes — filters: `is_active` and `search` on each; `campus_id` and `department_type` on departments; `class_id` and `campus_id` on sections; `department_id` and `subject_type` on subjects. Classes are ordered by `level`; a `level` another live class already holds is a 400 on the `level` field naming that class.
+- `GET/POST /api/v1/academic-sessions` (cursor paged; filters `status`, `search`) · `PATCH /api/v1/academic-sessions/{id}` · `POST /api/v1/academic-sessions/{id}:activate` · `POST /api/v1/academic-sessions/{id}:close` · `POST /api/v1/academic-sessions/{id}:clone` (colon-actions, audited). A refused `:activate` is a 422 whose `structure` details list every gap at once.
 - `GET/POST /api/v1/terms` — filter: `academic_session_id`.
 - `GET/PUT /api/v1/holiday-calendar` — calendar entries. **Built.** PUT replaces each list it names wholesale (merging entry by entry would leave no way to remove a holiday, which is what a cancelled closure needs); it takes the `school.settings.view`/`.update` keys, which §4 already describes as covering academic configuration. The `campus_id`/`from`/`to` *filters* are not built: the resource is a small singleton document, not a paginated list, so a client filters it client-side.
 - `POST /api/v1/structure-imports` → `202` + job resource (bulk import).
@@ -246,7 +246,7 @@ from `HolidayCalendarView`'s docstring to a class that had moved out of its
 file), fixed in the same commit that caused it. No endpoint, permission, or
 response shape changed anywhere in the module.
 
-### Settings fixes and the School module (PR F, `feat/school-setup`)
+### Settings fixes and the School module (PR F, `feat/school-setup`; PR G, `feat/school-setup-structure`)
 
 **Backend.**
 
@@ -264,12 +264,21 @@ response shape changed anywhere in the module.
   field.
 - `/auth/me` keeps `tenant` (the UUID clients already read) and adds a read-only
   `tenant_summary: {name, slug}`, null for a platform user.
+- **PR G (`feat/school-setup-structure`).** `term_coverage_errors(session)` is split out of
+  `session_completeness_errors` (same sentences, same order) and re-exported from the module's
+  `services.py`, so the onboarding wizard can tell whether a session's terms are done before any
+  class exists. `ClassSerializer.validate_level` refuses a level another live class holds, as
+  that field's own 400 ("Level 1 is already used by class 'Grade 1'."), where it had been the
+  constraint's generic 409; a soft-deleted class frees its level, and the partial unique
+  constraint still stops two writers racing for one.
 
 **Built (dashboard).** A **School** module at `/school`: a sidebar group, a tab bar and a landing
 that sends the viewer to their first permitted section, all from `features/school/school-sections.ts`
 (permission prefix `school`). Its sections are setup screens, so each is gated on its resource's
 **write** keys (`school.settings.update` for Profile & settings and Calendar; any of a resource's
-create/update/delete keys for Campuses, Departments and Houses). Every staff role holds the
+create/update/delete keys for Campuses, Subjects, Departments and Houses; any session key
+(create, update, activate, close) for Sessions & terms; any class or section write key for
+Classes & sections). Every staff role holds the
 `.view` keys, which would otherwise put a read-only School module in front of every teacher. The
 API enforces either way.
 
@@ -288,19 +297,40 @@ API enforces either way.
   dependent records exist (…). Deactivate it instead.") inline and stays open. A department's
   campus is shown by name from the campus list; a department or holiday with no campus spans every
   campus.
+- **Sessions & terms** (`features/school/sessions/`, PR G): sessions newest first, cursor paged,
+  searched and filtered by status in the URL. Each row opens onto its terms (Add, Edit; terms have
+  no delete), read only for a closed or archived session. Edit, Activate (a planned session),
+  Close (the active one) and Clone each follow their own key. A refused activation lists the
+  server's `structure` gaps as a checklist; the clone dialog posts the new session's name and
+  dates and says terms are not copied; a term's overlap sentence is the form's message.
+- **Classes & sections** (`features/school/classes/`, PR G): classes by `level`, server paged,
+  searched and filtered by status. Each class row opens onto its sections, read in full from
+  `/sections?class_id=` (`fetchClassSections`, its own cache entry beside the pickers' options):
+  campus by name, capacity ("Unlimited" when blank), status, with Add, Edit and Remove on the
+  section keys. The section form's class and campus pickers ask the API for the active ones only,
+  since the server refuses an inactive class or campus; an inactive class's sections are listed
+  and removable but not added to or edited. A taken level shows under the level input.
+- **Subjects** (`features/school/subjects/`, PR G): a server-paged list with search and the
+  department, type and status filters in the URL; a subject's department is shown by name
+  (`useDepartments`, the cache entry the staff form reads), "No department" when it has none.
 - **Calendar** (`features/school/calendar/`): the working week as day toggles (Save holds until
   one day is picked) and the holidays in date order. Each holiday add, edit or remove `PUT`s the
   whole list with the one change, since the calendar is one document. DRF keys a list entry's
   error by index (`holidays.2.end_date`), so the dialog maps its own entry's errors onto its
   inputs.
-- Each section is one exported unit (`CampusesSection`, `DepartmentsSection`, `HousesSection`,
-  `ProfileSection`, `CalendarSection`): toolbar, list and dialogs, each dialog mounted only while
+- Each section is one exported unit (`CampusesSection`, `SessionsSection`, `ClassesSection`,
+  `SubjectsSection`, `DepartmentsSection`, `HousesSection`, `ProfileSection`, `CalendarSection`):
+  toolbar, list and dialogs, each dialog mounted only while
   open. The `/school/*` pages wrap them in the shell's `Container`, and the onboarding wizard
   (PR H) embeds the same units rather than forms of its own.
 - Every structure write invalidates the `school-organization` query module, which the reference
   pickers other screens use (`useCampuses` and the rest) live under too.
 - Tests: Jest per section (`features/school/**/__tests__/`), including each dialog's server field
-  errors, and the mocked e2e spec `e2e/tests/dashboard/school-setup.spec.ts` over
-  `schoolOrganizationModule`, whose writes, `/school-settings` and `/holiday-calendar` stubs live
-  in `e2e/src/mocks/domains/school-setup.ts`.
+  errors, and the mocked e2e specs `e2e/tests/dashboard/school-setup.spec.ts` and
+  `school-structure.spec.ts` (a new school adds a session and its terms, a class with a section
+  and a subject, and activates the session, after an early activation lists what is missing) over
+  `schoolOrganizationModule`. Its campus, department and house writes, `/school-settings` and
+  `/holiday-calendar` live in `e2e/src/mocks/domains/school-setup.ts`; the session, term, class,
+  section and subject writes and `:activate`, with the server's refusal sentences, in
+  `school-structure.ts`.
 

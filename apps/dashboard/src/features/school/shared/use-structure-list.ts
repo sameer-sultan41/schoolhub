@@ -35,6 +35,8 @@ export interface StructureListOptions<TRow extends { id: string }, F extends str
   defaultSorting: { id: string; desc: boolean }[];
   /** False hides the actions column: the viewer may neither edit nor remove. */
   showActions: boolean;
+  /** True lets every row open onto its first column's `expandedContent` (a class's sections). */
+  expandableRows?: boolean;
   /** The URL's filter values as the page query's filters. */
   toFilterQuery: (filters: Record<F, string>) => StructureFilterQuery;
   fetchPage: (query: StructurePageQuery) => Promise<Page<TRow>>;
@@ -53,6 +55,7 @@ export function useStructureList<TRow extends { id: string }, F extends string>(
   sortableIds,
   defaultSorting,
   showActions,
+  expandableRows = false,
   toFilterQuery,
   fetchPage,
 }: StructureListOptions<TRow, F>) {
@@ -106,6 +109,7 @@ export function useStructureList<TRow extends { id: string }, F extends string>(
     onColumnVisibilityChange: urlState.onColumnVisibilityChange,
     manualPagination: true,
     manualSorting: true,
+    getRowCanExpand: () => expandableRows,
     getRowId: (record) => record.id,
     getCoreRowModel: getCoreRowModel(),
   });

@@ -221,12 +221,20 @@ either this file or `project-status.md`.
   - Two admins editing the holidays at once: each `PUT` sends the list the sender loaded, so the
     later save drops the earlier one's change. The calendar is one document with no version to
     check.
-- **The School module's Sessions & terms section (PR G): a duplicate name is a generic 409.**
-  A second session with a name the school already uses, or a term repeating a name or order
-  within its session, reaches the `IntegrityError` handler as a generic 409, shown as "That
-  change conflicts with the current data. Reload and try again." — the same gap as the campus
-  code above.
-  `AcademicSessionSerializer` and `TermSerializer` need a validator naming the field.
+- **The School module's PR G sections (Sessions & terms, Classes & sections, Subjects) leave
+  three things out.**
+  - A duplicate name is still a generic 409, shown as "That change conflicts with the current
+    data. Reload and try again." — the same gap as the campus code above: a second session with a
+    name the school already uses, a term repeating a name or order within its session, a class
+    name or code, a subject name or code, and a section name repeated within its class at one
+    campus. `AcademicSessionSerializer`, `TermSerializer`, `ClassSerializer`, `SubjectSerializer`
+    and `SectionSerializer` each need a validator naming the field, as `ClassSerializer` now has
+    for `level`, the one the class form's brief required.
+  - A section's class teacher and default room (`class_teacher_staff_id`, `room_id`) are not on
+    the section form; an edit leaves them as stored, the same as the campus head above. They need
+    a staff picker and a room picker the form does not have yet.
+  - A class's sections panel reads one page of the largest size (100) from `/sections?class_id=`;
+    a class with more sections than that across every campus would show only the first 100.
 
 - **Staff's wire types are hand-written structs, not generated `ApiSchemas["Staff"]`
   aliases.** `services/modules/staff/staff-type.ts`'s `StaffDirectoryRecord`,
