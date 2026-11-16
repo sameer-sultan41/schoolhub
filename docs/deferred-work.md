@@ -38,9 +38,13 @@ either this file or `project-status.md`.
     `:enroll` accepts that token, so whoever holds the password first can enrol. Accounts exist
     only through `create_platform_admin`, run by an operator who enrols at once; a one-time
     enrolment link from the command would close the gap.
-  - **The wrong-code counter lives in the cache.** A cache flush resets a challenge's count;
-    `AuthEndpointThrottle` and the five-minute challenge lifetime still bound guessing. There is
-    no per-account lockout yet (auth-and-rbac §1's password-policy line applies to MFA too).
+  - **Password attempts have no per-account lockout.** The second factor does
+    (`MFA_MAX_FAILED_ATTEMPTS` consecutive wrong codes lock it for `MFA_LOCKOUT_SECONDS`, counted
+    on the `users` row), but the password step has only the per-IP `AuthEndpointThrottle`, which a
+    spoofed `X-Forwarded-For` escapes while `NUM_PROXIES` is unset (entry above). auth-and-rbac
+    §1 asks for per-account lockout with exponential backoff on login. The MFA lockout is a fixed
+    window, not a backoff, and it lets anyone who holds the password lock the operator out of
+    the console for the window (NIST SP 800-63B accepts this trade-off).
   - **`packages/types` `LoginResponse` does not model the challenge.** The dashboard's login
     form expects tokens; no tenant user can have MFA on yet, and the platform console (PR D)
     handles `mfa_required`.

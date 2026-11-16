@@ -90,6 +90,11 @@ class User(AbstractBaseUser, PermissionsMixin, TimestampedModel):
     mfa_secret = models.BinaryField(null=True, blank=True, editable=False)
     # The TOTP time step of the last accepted code; an equal or older one is a replay.
     mfa_last_timecode = models.BigIntegerField(null=True, blank=True)
+    # Consecutive wrong second-factor codes, and the lockout they trigger (core/rbac/mfa.py).
+    # In the row rather than the cache: production Redis evicts (allkeys-lru), and the row
+    # lock replay prevention already takes serialises concurrent attempts.
+    mfa_failed_attempts = models.PositiveSmallIntegerField(default=0)
+    mfa_locked_until = models.DateTimeField(null=True, blank=True)
     last_login_ip = models.GenericIPAddressField(null=True, blank=True)
 
     objects = UserManager()

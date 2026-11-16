@@ -157,6 +157,8 @@ All user accounts — tenant members **and** platform staff. **Exception:** `ten
 | mfa_enabled | boolean | no | `false` | TOTP (auth-and-rbac §1); true only once a first code is confirmed |
 | mfa_secret | bytea | yes | — | The TOTP secret, Fernet-encrypted with `INTEGRATIONS_ENCRYPTION_KEYS` (`core.integrations.crypto`); set at enrolment |
 | mfa_last_timecode | bigint | yes | — | TOTP time step of the last accepted code; an equal or older one is a replay |
+| mfa_failed_attempts | smallint | no | `0` | Consecutive wrong second-factor codes; counted before each check, reset on success |
+| mfa_locked_until | timestamptz | yes | — | Second factor refused until then; set when `mfa_failed_attempts` reaches `MFA_MAX_FAILED_ATTEMPTS` |
 | last_login_at | timestamptz | yes | — | |
 | password_changed_at | timestamptz | yes | — | |
 

@@ -703,9 +703,10 @@ export interface paths {
          * @description ``POST /auth/mfa:verify``: the ``second_factor`` step, completing a challenged login.
          *
          *     Trades login's ``mfa_token`` and either a TOTP ``code`` or a ``recovery_code`` for the token
-         *     pair with ``amr=["pwd","otp"]``. A wrong code is a 400 ``invalid_mfa_code`` and counts
-         *     against the challenge (``mfa.MAX_CHALLENGE_ATTEMPTS``); an expired, tampered or used-up
-         *     challenge is a 400 ``mfa_challenge_invalid``, and the client signs in again.
+         *     pair with ``amr=["pwd","otp"]``. A wrong code is a 400 ``invalid_mfa_code``. Every attempt
+         *     counts against the challenge (``MFA_CHALLENGE_MAX_ATTEMPTS``; past it, or once used, a 400
+         *     ``mfa_challenge_invalid`` and the client signs in again) and against the account
+         *     (``MFA_MAX_FAILED_ATTEMPTS`` consecutive failures lock it: 429 ``mfa_locked``).
          */
         post: operations["auth_mfa:verify_create"];
         delete?: never;

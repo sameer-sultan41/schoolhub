@@ -197,9 +197,10 @@ class MfaVerifyView(APIView):
     """``POST /auth/mfa:verify``: the ``second_factor`` step, completing a challenged login.
 
     Trades login's ``mfa_token`` and either a TOTP ``code`` or a ``recovery_code`` for the token
-    pair with ``amr=["pwd","otp"]``. A wrong code is a 400 ``invalid_mfa_code`` and counts
-    against the challenge (``mfa.MAX_CHALLENGE_ATTEMPTS``); an expired, tampered or used-up
-    challenge is a 400 ``mfa_challenge_invalid``, and the client signs in again.
+    pair with ``amr=["pwd","otp"]``. A wrong code is a 400 ``invalid_mfa_code``. Every attempt
+    counts against the challenge (``MFA_CHALLENGE_MAX_ATTEMPTS``; past it, or once used, a 400
+    ``mfa_challenge_invalid`` and the client signs in again) and against the account
+    (``MFA_MAX_FAILED_ATTEMPTS`` consecutive failures lock it: 429 ``mfa_locked``).
     """
 
     permission_classes = [AllowAny]
@@ -218,12 +219,16 @@ class MfaVerifyView(APIView):
             return _refusal(request, exc)
 
         user = challenge.user
-        if "code" in data:
-            method, passed = "totp", mfa.verify(user, data["code"])
-        else:
-            method, passed = "recovery_code", mfa.use_recovery_code(user, data["recovery_code"])
+        method = "totp" if "code" in data else "recovery_code"
+        try:
+            if method == "totp":
+                passed = mfa.verify(user, data["code"])
+            else:
+                passed = mfa.use_recovery_code(user, data["recovery_code"])
+        except mfa.MfaLockedOut as exc:
+            record_security_event(request, "auth.mfa.locked", user_id=str(user.pk), method=method)
+            return _refusal(request, exc)
         if not passed:
-            mfa.record_failed_attempt(challenge)
             record_security_event(request, "auth.mfa.failed", user_id=str(user.pk), method=method)
             return _refusal(request, mfa.InvalidMfaCode())
 
@@ -266,7 +271,11 @@ class MfaConfirmView(APIView):
         serializer = MfaConfirmSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        recovery_codes = mfa.confirm_enrolment(request.user, serializer.validated_data["code"])
+        try:
+            recovery_codes = mfa.confirm_enrolment(request.user, serializer.validated_data["code"])
+        except mfa.MfaLockedOut as exc:
+            record_security_event(request, "auth.mfa.locked", method="totp")
+            return _refusal(request, exc)
         if recovery_codes is None:
             record_security_event(request, "auth.mfa.failed", method="totp")
             return _refusal(request, mfa.InvalidMfaCode())

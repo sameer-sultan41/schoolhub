@@ -622,6 +622,12 @@ PLATFORM_BILLING_WEBHOOK_SECRET = env("PLATFORM_BILLING_WEBHOOK_SECRET", default
 MFA_CHALLENGE_TTL_SECONDS = env.int("MFA_CHALLENGE_TTL_SECONDS", default=300)
 # The issuer an authenticator app shows beside the account.
 MFA_ISSUER_NAME = env("MFA_ISSUER_NAME", default="SchoolHub")
+# Codes one sign-in challenge accepts before the user must sign in again with the password.
+MFA_CHALLENGE_MAX_ATTEMPTS = env.int("MFA_CHALLENGE_MAX_ATTEMPTS", default=5)
+# Consecutive wrong second-factor codes, across challenges, that lock the account's second
+# factor (NIST SP 800-63B §5.2.2), and for how long. A success resets the count.
+MFA_MAX_FAILED_ATTEMPTS = env.int("MFA_MAX_FAILED_ATTEMPTS", default=10)
+MFA_LOCKOUT_SECONDS = env.int("MFA_LOCKOUT_SECONDS", default=900)
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
