@@ -8,11 +8,11 @@ const schema = z.object({
   limit: z.number().int().min(1).max(60).default(24),
 });
 
-export async function Gallery({ section, tenant }: SectionProps) {
+export async function Gallery({ section, tenant, host }: SectionProps) {
   const parsed = schema.safeParse(section.props);
   if (!parsed.success) return null;
 
-  const images = await getGallery(tenant.id, parsed.data.limit);
+  const images = await getGallery(tenant.id, host, parsed.data.limit);
   if (images.length === 0) return null;
 
   return (
@@ -23,10 +23,10 @@ export async function Gallery({ section, tenant }: SectionProps) {
           <li key={image.id}>
             <figure>
               <Image
-                src={image.url}
-                alt={image.alt}
-                width={image.width ?? 400}
-                height={image.height ?? 300}
+                src={image.image_url}
+                alt={image.alt_text}
+                width={400}
+                height={400}
                 className="aspect-square w-full rounded-[var(--sh-radius)] object-cover"
               />
               {image.caption ? (

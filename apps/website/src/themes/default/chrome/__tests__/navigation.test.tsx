@@ -1,69 +1,54 @@
-import type { SiteSettings } from "@schoolhub/types";
 import { render, screen } from "@testing-library/react";
-import { makeTenant } from "@/test-utils";
+import { makeBranding, makeSite, makeTenant } from "@/test-utils";
 import { Navigation } from "../navigation";
 
-function makeSettings(overrides: Partial<SiteSettings> = {}): SiteSettings {
-  return {
-    school_name: "City School Settings Name",
-    navigation: { primary: [], footer: [] },
-    ...overrides,
-  };
-}
-
 describe("Navigation", () => {
-  it("falls back to the tenant name when there are no settings", () => {
-    render(<Navigation tenant={makeTenant({ name: "City School" })} settings={null} />);
+  it("shows the school's name and no menu without a site", () => {
+    render(<Navigation tenant={makeTenant({ name: "City School" })} site={null} />);
     expect(screen.getByText("City School")).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Primary" })).not.toBeInTheDocument();
   });
 
-  it("prefers the CMS-configured school name over the tenant record", () => {
-    render(<Navigation tenant={makeTenant({ name: "City School" })} settings={makeSettings()} />);
-    expect(screen.getByText("City School Settings Name")).toBeInTheDocument();
-  });
-
-  it("renders the configured primary nav links", () => {
+  it("renders the header menu with its children", () => {
     render(
       <Navigation
         tenant={makeTenant()}
-        settings={makeSettings({
+        site={makeSite({
           navigation: {
-            primary: [
-              { label: "About", href: "/about" },
-              { label: "Admissions", href: "/admissions" },
+            header: [
+              {
+                label: "About",
+                href: "/about",
+                children: [{ label: "History", href: "/about/history" }],
+              },
+              { label: "Admissions", href: "/admissions", children: [] },
             ],
-            footer: [],
+            footer_primary: [],
+            footer_secondary: [],
           },
         })}
       />,
     );
 
     expect(screen.getByRole("link", { name: "About" })).toHaveAttribute("href", "/about");
+    expect(screen.getByRole("link", { name: "History" })).toHaveAttribute("href", "/about/history");
     expect(screen.getByRole("link", { name: "Admissions" })).toHaveAttribute("href", "/admissions");
   });
 
-  it("renders no logo when neither settings nor branding supply one", () => {
-    const { container } = render(<Navigation tenant={makeTenant()} settings={null} />);
+  it("renders no logo when the branding has none", () => {
+    const { container } = render(<Navigation tenant={makeTenant()} site={null} />);
     expect(container.querySelector("img")).toBeNull();
   });
 
-  it("renders the CMS-configured logo when one is set", () => {
+  it("renders the branding logo", () => {
     // The logo is decorative (alt=""), so it has ARIA role "presentation", not "img" —
     // query the DOM directly rather than by role.
     const { container } = render(
       <Navigation
-        tenant={makeTenant()}
-        settings={makeSettings({ logo_url: "https://cdn.example.com/logo.png" })}
-      />,
-    );
-    expect(container.querySelector("img")).not.toBeNull();
-  });
-
-  it("falls back to the tenant's branding logo when settings has none", () => {
-    const { container } = render(
-      <Navigation
-        tenant={makeTenant({ branding: { logo_url: "https://cdn.example.com/brand-logo.png" } })}
-        settings={null}
+        tenant={makeTenant({
+          branding: makeBranding({ logo_url: "https://cdn.example.com/brand-logo.png" }),
+        })}
+        site={null}
       />,
     );
     expect(container.querySelector("img")).not.toBeNull();

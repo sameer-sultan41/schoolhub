@@ -13,11 +13,11 @@ const schema = z.object({
  * (`show_on_website`) — the API filters; the renderer never asks for private profiles.
  * No contact details, no personal identifiers beyond what the school published.
  */
-export async function TeachersGrid({ section, tenant }: SectionProps) {
+export async function TeachersGrid({ section, tenant, host }: SectionProps) {
   const parsed = schema.safeParse(section.props);
   if (!parsed.success) return null;
 
-  const teachers = await getTeachers(tenant.id, parsed.data.limit);
+  const teachers = await getTeachers(tenant.id, host, parsed.data.limit);
   if (teachers.length === 0) return null;
 
   return (

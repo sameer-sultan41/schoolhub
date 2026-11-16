@@ -1,4 +1,5 @@
 import { Card, CardContent } from "@schoolhub/ui";
+import Link from "next/link";
 import { z } from "zod";
 import { getEvents } from "@/lib/content";
 import type { SectionProps } from "@/themes/types";
@@ -8,12 +9,12 @@ const schema = z.object({
   limit: z.number().int().min(1).max(24).default(6),
 });
 
-/** Public-flagged items from the Communication module. */
-export async function EventsList({ section, tenant }: SectionProps) {
+/** Upcoming published events, soonest first (the API's default `scope`). */
+export async function EventsList({ section, tenant, host }: SectionProps) {
   const parsed = schema.safeParse(section.props);
   if (!parsed.success) return null;
 
-  const events = await getEvents(tenant.id, parsed.data.limit);
+  const events = await getEvents(tenant.id, host, parsed.data.limit);
   if (events.length === 0) return null;
 
   const formatter = new Intl.DateTimeFormat(tenant.locale.default_locale, {
@@ -32,14 +33,13 @@ export async function EventsList({ section, tenant }: SectionProps) {
                 <time dateTime={event.starts_at} className="text-sm text-foreground/70">
                   {formatter.format(new Date(event.starts_at))}
                 </time>
-                <h3 className="font-heading text-base font-semibold text-foreground">
-                  {event.title}
+                <h3 className="font-heading text-base font-semibold">
+                  <Link href={`/events/${event.slug}`} className="text-foreground hover:underline">
+                    {event.title}
+                  </Link>
                 </h3>
                 {event.location ? (
                   <p className="text-sm text-foreground/70">{event.location}</p>
-                ) : null}
-                {event.summary ? (
-                  <p className="mt-1 text-sm text-foreground/80">{event.summary}</p>
                 ) : null}
               </CardContent>
             </Card>

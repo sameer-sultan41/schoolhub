@@ -1,18 +1,29 @@
-import type { PageSection, SectionType, SiteSettings, Tenant } from "@schoolhub/types";
+import type { ApiSchemas } from "@schoolhub/api-client";
 import type { ReactNode } from "react";
+
+export type PublicTenant = ApiSchemas["PublicTenant"];
+export type PublicSection = ApiSchemas["PublicSection"];
+export type PublicSite = ApiSchemas["PublicSite"];
+
+/** Section types the API's theme declares (`SectionTypeEnum`, generated). */
+export type SectionType = ApiSchemas["SectionTypeEnum"];
 
 /** Props every section component receives. Sections are server components by default. */
 export interface SectionProps {
-  section: PageSection;
-  tenant: Tenant;
+  section: PublicSection;
+  tenant: PublicTenant;
+  /** The request's host: every content read sends it (website-cms §16). */
+  host: string;
+  /** The page the section renders on. */
+  pageId: string;
 }
 
 export type SectionComponent = (props: SectionProps) => ReactNode | Promise<ReactNode>;
 
 /** Props for the page chrome (navigation, footer). */
 export interface ChromeProps {
-  tenant: Tenant;
-  settings: SiteSettings | null;
+  tenant: PublicTenant;
+  site: PublicSite | null;
 }
 
 export type ChromeComponent = (props: ChromeProps) => ReactNode | Promise<ReactNode>;
@@ -23,10 +34,14 @@ export type ChromeComponent = (props: ChromeProps) => ReactNode | Promise<ReactN
  * (website-builder.md §5).
  */
 export interface Theme {
+  /** The theme's `code` in the API (`PublicSite.theme.code`). */
   name: string;
   label: string;
-  /** Section types this theme implements. Unimplemented types render nothing. */
-  sections: Partial<Record<SectionType, SectionComponent>>;
+  /**
+   * Every section type the API declares, so a new enum member fails `tsc` until the theme
+   * decides about it (plan decision 6). `null` means "not rendered by this theme yet".
+   */
+  sections: Record<SectionType, SectionComponent | null>;
   Navigation: ChromeComponent;
   Footer: ChromeComponent;
 }

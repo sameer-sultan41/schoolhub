@@ -180,6 +180,9 @@ importers:
 
   apps/website:
     dependencies:
+      '@schoolhub/api-client':
+        specifier: workspace:*
+        version: link:../../packages/api-client
       '@schoolhub/types':
         specifier: workspace:*
         version: link:../../packages/types

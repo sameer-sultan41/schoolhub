@@ -16,6 +16,7 @@
     "clean": "rm -rf .next .turbo coverage *.tsbuildinfo"
   },
   "dependencies": {
+    "@schoolhub/api-client": "workspace:*",
     "@schoolhub/types": "workspace:*",
     "@schoolhub/ui": "workspace:*",
     "next": "16.3.1",

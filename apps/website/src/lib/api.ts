@@ -13,6 +13,8 @@ import { TRAILING_SLASH_PATTERN } from "./regex";
  */
 
 export interface ReadOptions {
+  /** The school's host. The API resolves the tenant from it; the renderer never asserts one. */
+  host: string;
   /** ISR revalidation window in seconds. Defaults to the configured safety net. */
   revalidate?: number;
   /** Cache tags for on-demand invalidation from the publish webhook. */
@@ -29,11 +31,12 @@ export class ContentFetchError extends Error {
   }
 }
 
-function buildUrl(path: string, query: ReadOptions["query"]): string {
+function buildUrl(path: string, host: string, query: ReadOptions["query"]): string {
   const url = new URL(
     path.startsWith("/") ? path.slice(1) : path,
     `${env.API_BASE_URL.replace(TRAILING_SLASH_PATTERN, "")}/`,
   );
+  url.searchParams.set("host", host);
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value !== undefined) url.searchParams.set(key, String(value));
   }
@@ -41,16 +44,14 @@ function buildUrl(path: string, query: ReadOptions["query"]): string {
 }
 
 /**
- * GET a public-content resource as the machine client.
+ * GET a public-content resource as the machine client. Every read carries `?host=`
+ * (website-cms §16), so a read without a school cannot be written.
  *
  * @returns the unwrapped `data`, or `null` on 404 so callers can render `notFound()`
  *          instead of a 500. Any other failure throws.
  */
-export async function readJson<TData>(
-  path: string,
-  options: ReadOptions = {},
-): Promise<TData | null> {
-  const response = await fetch(buildUrl(path, options.query), {
+export async function readJson<TData>(path: string, options: ReadOptions): Promise<TData | null> {
+  const response = await fetch(buildUrl(path, options.host, options.query), {
     method: "GET",
     headers: {
       Accept: "application/json",

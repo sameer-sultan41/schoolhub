@@ -1,6 +1,7 @@
 import { ContentFetchError, pageTag, readJson, tenantTag } from "../api";
 
 const mockFetch = jest.fn();
+const HOST = "cityschool.schoolhub.pk";
 
 beforeEach(() => {
   mockFetch.mockReset();
@@ -21,7 +22,7 @@ describe("readJson", () => {
     mockFetch.mockResolvedValue(jsonResponse(200, { data: { id: "t1" } }));
 
     const result = await readJson<{ id: string }>("/public/tenants/by-host", {
-      query: { host: "cityschool.schoolhub.pk" },
+      host: "cityschool.schoolhub.pk",
     });
 
     expect(result).toEqual({ id: "t1" });
@@ -38,28 +39,32 @@ describe("readJson", () => {
   it("returns null on a 404 instead of throwing", async () => {
     mockFetch.mockResolvedValue(jsonResponse(404, null));
 
-    await expect(readJson("/public/pages/missing")).resolves.toBeNull();
+    await expect(readJson("/public/pages", { host: HOST })).resolves.toBeNull();
   });
 
   it("throws ContentFetchError on any other non-2xx status", async () => {
     mockFetch.mockResolvedValue(jsonResponse(500, null, "Internal Server Error"));
 
-    await expect(readJson("/public/pages")).rejects.toBeInstanceOf(ContentFetchError);
+    await expect(readJson("/public/pages", { host: HOST })).rejects.toBeInstanceOf(
+      ContentFetchError,
+    );
   });
 
   it("omits undefined query values rather than sending 'undefined'", async () => {
     mockFetch.mockResolvedValue(jsonResponse(200, { data: null }));
 
-    await readJson("/public/pages", { query: { slug: "about", campus: undefined } });
+    await readJson("/public/pages", { host: HOST, query: { slug: "about", campus: undefined } });
 
     const [url] = mockFetch.mock.calls[0] as [string];
-    expect(url).toBe("https://api.test.invalid/api/v1/public/pages?slug=about");
+    expect(url).toBe(
+      "https://api.test.invalid/api/v1/public/pages?host=cityschool.schoolhub.pk&slug=about",
+    );
   });
 
   it("passes through custom revalidate and tags via next options", async () => {
     mockFetch.mockResolvedValue(jsonResponse(200, { data: null }));
 
-    await readJson("/public/pages", { revalidate: 60, tags: ["tenant:t1"] });
+    await readJson("/public/pages", { host: HOST, revalidate: 60, tags: ["tenant:t1"] });
 
     const [, init] = mockFetch.mock.calls[0] as [string, { next: Record<string, unknown> }];
     expect(init.next).toEqual({ revalidate: 60, tags: ["tenant:t1"] });

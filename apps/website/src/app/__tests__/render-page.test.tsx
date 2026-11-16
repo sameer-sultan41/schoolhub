@@ -1,10 +1,10 @@
-import type { WebsitePage } from "@schoolhub/types";
 import { render, screen } from "@testing-library/react";
 import { notFound } from "next/navigation";
-import { getPage, getSiteSettings } from "@/lib/content";
-import { getRequestHost, resolveTenant } from "@/lib/tenant";
-import { makeTenant } from "@/test-utils";
+import { getPage, getSite } from "@/lib/content";
+import { resolveTenant } from "@/lib/tenant";
+import { makePage, makeSite, makeTenant } from "@/test-utils";
 import { getTheme } from "@/themes";
+import type { SectionProps, Theme } from "@/themes";
 import { RenderPage, renderPageMetadata } from "../render-page";
 
 // The real notFound() never returns (type "never") — control flow after it assumes that.
@@ -16,12 +16,11 @@ jest.mock("next/navigation", () => ({
 }));
 jest.mock("@/lib/content", () => ({
   getPage: jest.fn(),
-  getSiteSettings: jest.fn(),
+  getSite: jest.fn(),
   toPageSlug: jest.requireActual("@/lib/content").toPageSlug,
 }));
 jest.mock("@/lib/tenant", () => ({
   resolveTenant: jest.fn(),
-  getRequestHost: jest.fn(),
   canonicalOrigin: jest.requireActual("@/lib/tenant").canonicalOrigin,
 }));
 jest.mock("@/themes", () => ({
@@ -31,46 +30,55 @@ jest.mock("@/themes", () => ({
 
 const mockNotFound = notFound as jest.MockedFunction<typeof notFound>;
 const mockGetPage = getPage as jest.MockedFunction<typeof getPage>;
-const mockGetSiteSettings = getSiteSettings as jest.MockedFunction<typeof getSiteSettings>;
+const mockGetSite = getSite as jest.MockedFunction<typeof getSite>;
 const mockResolveTenant = resolveTenant as jest.MockedFunction<typeof resolveTenant>;
-const mockGetRequestHost = getRequestHost as jest.MockedFunction<typeof getRequestHost>;
 const mockGetTheme = getTheme as jest.MockedFunction<typeof getTheme>;
 
-function makePage(overrides: Partial<WebsitePage> = {}): WebsitePage {
-  return {
-    id: "p1",
-    slug: "",
-    title: "Home",
-    seo: {},
-    is_published: true,
-    published_at: "2027-01-01T00:00:00Z",
-    updated_at: "2027-01-01T00:00:00Z",
-    sections: [],
-    ...overrides,
-  };
+const HOST = "cityschool.schoolhub.pk";
+
+function FakeSection({ section, host, pageId }: SectionProps) {
+  return (
+    <div data-testid="section">
+      {section.id}@{host}#{pageId}
+    </div>
+  );
 }
 
-function FakeSection({ section }: { section: { id: string } }) {
-  return <div data-testid="section">{section.id}</div>;
-}
-
-const FAKE_THEME = {
+const FAKE_THEME: Theme = {
   name: "default",
   label: "Fake",
-  sections: { hero: FakeSection },
+  sections: {
+    hero: FakeSection,
+    about_school: null,
+    principal_message: null,
+    departments_grid: null,
+    teachers_grid: null,
+    classes_list: null,
+    admissions_cta: null,
+    events_list: null,
+    news_list: null,
+    notice_board: null,
+    gallery: null,
+    contact_form: null,
+    rich_text: null,
+    faq: null,
+  },
   Navigation: () => <nav data-testid="nav" />,
   Footer: () => <footer data-testid="footer" />,
 };
+
+function active(tenant = makeTenant()) {
+  return { status: "active" as const, tenant, host: HOST };
+}
 
 beforeEach(() => {
   // .mockClear(), not .mockReset() — a reset would also wipe the throwing implementation
   // set in the jest.mock factory above, leaving notFound() a silent no-op.
   mockNotFound.mockClear();
   mockGetPage.mockReset();
-  mockGetSiteSettings.mockReset().mockResolvedValue(null);
+  mockGetSite.mockReset().mockResolvedValue(null);
   mockResolveTenant.mockReset();
-  mockGetRequestHost.mockReset();
-  mockGetTheme.mockReturnValue(FAKE_THEME);
+  mockGetTheme.mockReset().mockReturnValue(FAKE_THEME);
 });
 
 describe("renderPageMetadata", () => {
@@ -82,8 +90,12 @@ describe("renderPageMetadata", () => {
     });
   });
 
-  it("is unindexed and generic for a suspended tenant", async () => {
-    mockResolveTenant.mockResolvedValue({ status: "suspended", tenant: makeTenant() });
+  it("is unindexed and generic for an unavailable site", async () => {
+    mockResolveTenant.mockResolvedValue({
+      status: "unavailable",
+      tenant: makeTenant(),
+      host: HOST,
+    });
     await expect(renderPageMetadata([])).resolves.toEqual({
       title: "Not available",
       robots: { index: false, follow: false },
@@ -91,25 +103,24 @@ describe("renderPageMetadata", () => {
   });
 
   it("falls back to the tenant name, unindexed, when the page does not exist", async () => {
-    const tenant = makeTenant({ name: "City School" });
-    mockResolveTenant.mockResolvedValue({ status: "active", tenant });
+    mockResolveTenant.mockResolvedValue(active(makeTenant({ name: "City School" })));
     mockGetPage.mockResolvedValue(null);
 
     await expect(renderPageMetadata(["missing"])).resolves.toEqual({
       title: "City School",
       robots: { index: false, follow: false },
     });
+    expect(mockGetPage).toHaveBeenCalledWith("t1", HOST, "missing");
   });
 
-  it("builds full SEO metadata for a published page", async () => {
-    const tenant = makeTenant({ name: "City School" });
-    mockResolveTenant.mockResolvedValue({ status: "active", tenant });
-    mockGetRequestHost.mockResolvedValue("cityschool.schoolhub.pk");
+  it("builds full SEO metadata for a published page on its API path", async () => {
+    mockResolveTenant.mockResolvedValue(active());
     mockGetPage.mockResolvedValue(
       makePage({
         slug: "about",
+        path: "/about",
         title: "About us",
-        seo: { description: "Learn about our school." },
+        seo: { ...makePage().seo, description: "Learn about our school." },
       }),
     );
 
@@ -117,26 +128,32 @@ describe("renderPageMetadata", () => {
 
     expect(metadata.title).toBe("About us");
     expect(metadata.description).toBe("Learn about our school.");
-    expect(metadata.alternates).toEqual({
-      canonical: "https://cityschool.schoolhub.pk/about",
-    });
+    expect(metadata.alternates).toEqual({ canonical: `https://${HOST}/about` });
     expect(metadata.robots).toEqual({ index: true, follow: true });
   });
 
-  it("respects an explicit noindex flag and a custom canonical URL", async () => {
-    const tenant = makeTenant();
-    mockResolveTenant.mockResolvedValue({ status: "active", tenant });
-    mockGetRequestHost.mockResolvedValue("cityschool.schoolhub.pk");
+  it("uses the SEO title, OG image, noindex flag and custom canonical URL", async () => {
+    mockResolveTenant.mockResolvedValue(active());
     mockGetPage.mockResolvedValue(
       makePage({
-        seo: { noindex: true, canonical_url: "https://cityschool.edu.pk/" },
+        seo: {
+          ...makePage().seo,
+          title: "Welcome",
+          og_image_url: "https://api.test.invalid/api/v1/public/files/t1/f1",
+          noindex: true,
+          canonical_url: "https://cityschool.edu.pk/",
+        },
       }),
     );
 
     const metadata = await renderPageMetadata([]);
 
+    expect(metadata.title).toBe("Welcome");
     expect(metadata.robots).toEqual({ index: false, follow: false });
     expect(metadata.alternates).toEqual({ canonical: "https://cityschool.edu.pk/" });
+    expect(metadata.openGraph).toMatchObject({
+      images: [{ url: "https://api.test.invalid/api/v1/public/files/t1/f1" }],
+    });
   });
 });
 
@@ -147,44 +164,53 @@ describe("RenderPage", () => {
     expect(mockNotFound).toHaveBeenCalledTimes(1);
   });
 
-  it("shows a neutral notice for a suspended tenant", async () => {
-    mockResolveTenant.mockResolvedValue({ status: "suspended", tenant: makeTenant() });
+  it("shows a neutral notice for an unavailable site and reads no content", async () => {
+    mockResolveTenant.mockResolvedValue({
+      status: "unavailable",
+      tenant: makeTenant({ website_status: "unpublished" }),
+      host: HOST,
+    });
     const ui = await RenderPage({ segments: [] });
     render(ui);
     expect(screen.getByText("This website is unavailable")).toBeInTheDocument();
+    expect(mockGetPage).not.toHaveBeenCalled();
   });
 
-  it("calls notFound when the page does not exist", async () => {
-    mockResolveTenant.mockResolvedValue({ status: "active", tenant: makeTenant() });
+  it("calls notFound when the API has no published page", async () => {
+    mockResolveTenant.mockResolvedValue(active());
     mockGetPage.mockResolvedValue(null);
-    await expect(RenderPage({ segments: [] })).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(RenderPage({ segments: ["draft-page"] })).rejects.toThrow("NEXT_NOT_FOUND");
     expect(mockNotFound).toHaveBeenCalledTimes(1);
   });
 
-  it("calls notFound when the page exists but is not published", async () => {
-    mockResolveTenant.mockResolvedValue({ status: "active", tenant: makeTenant() });
-    mockGetPage.mockResolvedValue(makePage({ is_published: false }));
-    await expect(RenderPage({ segments: [] })).rejects.toThrow("NEXT_NOT_FOUND");
-    expect(mockNotFound).toHaveBeenCalledTimes(1);
+  it("reads the page and site by host and picks the site's theme", async () => {
+    mockResolveTenant.mockResolvedValue(active());
+    mockGetPage.mockResolvedValue(makePage());
+    mockGetSite.mockResolvedValue(makeSite());
+
+    render(await RenderPage({ segments: ["about"] }));
+
+    expect(mockGetPage).toHaveBeenCalledWith("t1", HOST, "about");
+    expect(mockGetSite).toHaveBeenCalledWith("t1", HOST);
+    expect(mockGetTheme).toHaveBeenCalledWith("default");
   });
 
-  it("renders sections in position order, skipping unresolvable types", async () => {
-    mockResolveTenant.mockResolvedValue({ status: "active", tenant: makeTenant() });
+  it("renders sections in position order with the host and page, skipping unrendered types", async () => {
+    mockResolveTenant.mockResolvedValue(active());
     mockGetPage.mockResolvedValue(
       makePage({
         sections: [
           { id: "second", type: "hero", position: 1, props: {} },
           { id: "first", type: "hero", position: 0, props: {} },
-          { id: "unknown", type: "not_implemented", position: 2, props: {} },
+          { id: "pending", type: "faq", position: 2, props: {} },
         ],
       }),
     );
 
-    const ui = await RenderPage({ segments: [] });
-    render(ui);
+    render(await RenderPage({ segments: [] }));
 
     const rendered = screen.getAllByTestId("section").map((el) => el.textContent);
-    expect(rendered).toEqual(["first", "second"]);
+    expect(rendered).toEqual([`first@${HOST}#p1`, `second@${HOST}#p1`]);
     expect(screen.getByTestId("nav")).toBeInTheDocument();
     expect(screen.getByTestId("footer")).toBeInTheDocument();
   });

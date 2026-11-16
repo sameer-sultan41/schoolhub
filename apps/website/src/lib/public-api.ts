@@ -1,3 +1,4 @@
+import type { ApiSchemas } from "@schoolhub/api-client";
 import { publicEnv } from "./env.client";
 
 /**
@@ -5,31 +6,45 @@ import { publicEnv } from "./env.client";
  *
  * Deliberately separate from `./api.ts`, which is server-only and read-only by design (it
  * carries the renderer's machine token and must never gain a POST). Public forms post **from
- * the browser** straight to the public endpoints, so the machine token is never involved
+ * the browser** straight to the public endpoint, so the machine token is never involved
  * (website-builder.md §6); the API re-validates the tenant, rate-limits and de-duplicates.
  */
-export const PUBLIC_ENDPOINTS = {
-  contact: "/api/v1/public/contact-messages",
-  admission_enquiry: "/api/v1/public/admission-enquiries",
-} as const;
+export const CONTACT_SUBMISSIONS_PATH = "/api/v1/public/contact-submissions";
 
-export type PublicFormKind = keyof typeof PUBLIC_ENDPOINTS;
+/** The honeypot field: a bot fills it, the API then answers 201 and stores nothing. */
+export const HONEYPOT_FIELD = "company_website";
+
+/**
+ * The admissions-enquiry form posts as a contact submission with this subject until the
+ * admission-form endpoint ships with the admissions module (website-cms §16, deferred).
+ */
+export const ADMISSION_ENQUIRY_SUBJECT = "Admission enquiry";
+
+export type PublicFormKind = "contact" | "admission_enquiry";
+
+export type PublicContactSubmission = ApiSchemas["PublicContactSubmission"];
 
 /** Posts a public form. Resolves to whether the API accepted it; rejects on network failure. */
 export async function submitPublicForm(
   kind: PublicFormKind,
   tenantSlug: string,
-  fields: Record<string, FormDataEntryValue>,
+  submission: PublicContactSubmission,
 ): Promise<boolean> {
-  const response = await fetch(`${publicEnv.NEXT_PUBLIC_API_ORIGIN}${PUBLIC_ENDPOINTS[kind]}`, {
+  const body: PublicContactSubmission =
+    kind === "admission_enquiry"
+      ? { ...submission, subject: ADMISSION_ENQUIRY_SUBJECT }
+      : submission;
+
+  const response = await fetch(`${publicEnv.NEXT_PUBLIC_API_ORIGIN}${CONTACT_SUBMISSIONS_PATH}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      // Re-validated server-side against the request's host; never trusted as-is.
+      // Re-validated server-side against the request's Origin; never trusted as-is.
       "X-Tenant-Slug": tenantSlug,
+      // Random per submission: a guessable key would let a later visitor replay another's reply.
       "Idempotency-Key": crypto.randomUUID(),
     },
-    body: JSON.stringify(fields),
+    body: JSON.stringify(body),
   });
   return response.ok;
 }

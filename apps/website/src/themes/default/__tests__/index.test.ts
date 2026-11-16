@@ -1,8 +1,11 @@
 import { defaultTheme } from "../index";
 
 describe("defaultTheme", () => {
-  it("registers every v1 section type", () => {
-    expect(Object.keys(defaultTheme.sections).sort()).toEqual(
+  it("renders every v1 section type", () => {
+    const rendered = Object.entries(defaultTheme.sections)
+      .filter(([, component]) => component !== null)
+      .map(([type]) => type);
+    expect(rendered.sort()).toEqual(
       [
         "hero",
         "about_school",
@@ -18,6 +21,11 @@ describe("defaultTheme", () => {
         "contact_form",
       ].sort(),
     );
+  });
+
+  it("declares the API's newer types without rendering them yet", () => {
+    expect(defaultTheme.sections.rich_text).toBeNull();
+    expect(defaultTheme.sections.faq).toBeNull();
   });
 
   it("provides Navigation and Footer chrome", () => {

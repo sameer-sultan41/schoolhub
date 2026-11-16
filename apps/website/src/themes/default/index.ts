@@ -17,8 +17,9 @@ import { TeachersGrid } from "./sections/teachers-grid";
 /**
  * Theme v1 — the default theme (website-builder.md §2).
  *
- * `section.type → component`. A type missing from this map renders nothing, which is what
- * makes content survive theme switches and new section types safe to ship.
+ * `section.type → component`, keyed by the generated `SectionTypeEnum`, so a type the API adds
+ * fails `tsc` here until it is registered. `null` renders nothing: content survives theme
+ * switches, and a declared type ships its component later (`rich_text`, `faq`).
  */
 export const defaultTheme: Theme = {
   name: "default",
@@ -36,6 +37,8 @@ export const defaultTheme: Theme = {
     notice_board: NoticeBoard,
     gallery: Gallery,
     contact_form: ContactForm,
+    rich_text: null,
+    faq: null,
   },
   Navigation,
   Footer,

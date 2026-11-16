@@ -7,11 +7,11 @@ const schema = z.object({
   limit: z.number().int().min(1).max(30).default(8),
 });
 
-export async function NoticeBoard({ section, tenant }: SectionProps) {
+export async function NoticeBoard({ section, tenant, host }: SectionProps) {
   const parsed = schema.safeParse(section.props);
   if (!parsed.success) return null;
 
-  const notices = await getNotices(tenant.id, parsed.data.limit);
+  const notices = await getNotices(tenant.id, host, parsed.data.limit);
   if (notices.length === 0) return null;
 
   const formatter = new Intl.DateTimeFormat(tenant.locale.default_locale, {
@@ -34,14 +34,6 @@ export async function NoticeBoard({ section, tenant }: SectionProps) {
               <h3 className="font-medium text-foreground">{notice.title}</h3>
               {notice.body ? (
                 <p className="mt-1 text-sm text-foreground/75">{notice.body}</p>
-              ) : null}
-              {notice.attachment_url ? (
-                <a
-                  href={notice.attachment_url}
-                  className="mt-1 inline-block text-sm text-primary underline underline-offset-4"
-                >
-                  Download attachment
-                </a>
               ) : null}
             </li>
           ))}

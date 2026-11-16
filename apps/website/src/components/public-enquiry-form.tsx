@@ -2,7 +2,7 @@
 
 import { Alert, AlertDescription, Button, Input, Label, Textarea } from "@schoolhub/ui";
 import { useEffect, useRef, useState } from "react";
-import { type PublicFormKind, submitPublicForm } from "@/lib/public-api";
+import { HONEYPOT_FIELD, type PublicFormKind, submitPublicForm } from "@/lib/public-api";
 
 /**
  * Public form submission.
@@ -20,12 +20,25 @@ import { type PublicFormKind, submitPublicForm } from "@/lib/public-api";
  */
 type Status = "idle" | "submitting" | "sent" | "error";
 
+/** Field limits mirror the API's `CONTACT_*_MAX` constants (website_cms/constants.py). */
+const NAME_MAX = 150;
+const EMAIL_MAX = 254;
+const MESSAGE_MAX = 5000;
+
+function textField(form: FormData, name: string): string {
+  const value = form.get(name);
+  return typeof value === "string" ? value : "";
+}
+
 export function PublicEnquiryForm({
   kind,
   tenantSlug,
+  sourcePageId,
 }: {
   kind: PublicFormKind;
   tenantSlug: string;
+  /** The published page the form sits on, so staff see where the message came from. */
+  sourcePageId?: string;
 }) {
   const [status, setStatus] = useState<Status>("idle");
   const confirmationRef = useRef<HTMLDivElement>(null);
@@ -44,7 +57,13 @@ export function PublicEnquiryForm({
     const form = new FormData(event.currentTarget);
 
     try {
-      const accepted = await submitPublicForm(kind, tenantSlug, Object.fromEntries(form.entries()));
+      const accepted = await submitPublicForm(kind, tenantSlug, {
+        name: textField(form, "name"),
+        email: textField(form, "email"),
+        message: textField(form, "message"),
+        [HONEYPOT_FIELD]: textField(form, HONEYPOT_FIELD),
+        ...(sourcePageId ? { source_page_id: sourcePageId } : {}),
+      });
       setStatus(accepted ? "sent" : "error");
     } catch {
       setStatus("error");
@@ -70,7 +89,7 @@ export function PublicEnquiryForm({
     <form onSubmit={(event) => void onSubmit(event)} className="space-y-4">
       <div className="space-y-1.5">
         <Label htmlFor="enquiry-name">Your name</Label>
-        <Input id="enquiry-name" name="name" required maxLength={120} autoComplete="name" />
+        <Input id="enquiry-name" name="name" required maxLength={NAME_MAX} autoComplete="name" />
       </div>
 
       <div className="space-y-1.5">
@@ -80,14 +99,26 @@ export function PublicEnquiryForm({
           name="email"
           type="email"
           required
-          maxLength={254}
+          maxLength={EMAIL_MAX}
           autoComplete="email"
         />
       </div>
 
       <div className="space-y-1.5">
         <Label htmlFor="enquiry-message">Message</Label>
-        <Textarea id="enquiry-message" name="message" required rows={5} maxLength={2000} />
+        <Textarea id="enquiry-message" name="message" required rows={5} maxLength={MESSAGE_MAX} />
+      </div>
+
+      {/* Honeypot: hidden from sight, the tab order and assistive technology; people leave it empty. */}
+      <div aria-hidden="true" className="sr-only">
+        <label htmlFor="enquiry-company-website">Company website</label>
+        <input
+          id="enquiry-company-website"
+          name={HONEYPOT_FIELD}
+          type="text"
+          tabIndex={-1}
+          autoComplete="off"
+        />
       </div>
 
       {status === "error" ? (

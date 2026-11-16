@@ -20,9 +20,9 @@ function fillAndSubmit() {
 }
 
 describe("PublicEnquiryForm", () => {
-  it("posts to the contact endpoint with the tenant slug header", async () => {
+  it("posts the fields, the empty honeypot and the source page as a contact submission", async () => {
     mockFetch.mockResolvedValue({ ok: true });
-    render(<PublicEnquiryForm kind="contact" tenantSlug="cityschool" />);
+    render(<PublicEnquiryForm kind="contact" tenantSlug="cityschool" sourcePageId="p1" />);
 
     fillAndSubmit();
 
@@ -30,16 +30,26 @@ describe("PublicEnquiryForm", () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
     });
     const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
-    expect(url).toContain("/api/v1/public/contact-messages");
+    expect(url).toContain("/api/v1/public/contact-submissions");
     expect((init.headers as Record<string, string>)["X-Tenant-Slug"]).toBe("cityschool");
     expect(JSON.parse(init.body as string)).toEqual({
       name: "Ayesha Khan",
       email: "ayesha@example.com",
       message: "Please send me the prospectus.",
+      company_website: "",
+      source_page_id: "p1",
     });
   });
 
-  it("posts to the admission-enquiry endpoint for that form kind", async () => {
+  it("keeps the honeypot out of the tab order and away from assistive technology", () => {
+    const { container } = render(<PublicEnquiryForm kind="contact" tenantSlug="cityschool" />);
+    const honeypot = container.querySelector('input[name="company_website"]');
+    expect(honeypot).toHaveAttribute("tabindex", "-1");
+    expect(honeypot).toHaveAttribute("autocomplete", "off");
+    expect(honeypot?.closest('[aria-hidden="true"]')).not.toBeNull();
+  });
+
+  it("posts an admission enquiry to the same endpoint with its fixed subject", async () => {
     mockFetch.mockResolvedValue({ ok: true });
     render(<PublicEnquiryForm kind="admission_enquiry" tenantSlug="cityschool" />);
 
@@ -48,8 +58,10 @@ describe("PublicEnquiryForm", () => {
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
     });
-    const [url] = mockFetch.mock.calls[0] as [string];
-    expect(url).toContain("/api/v1/public/admission-enquiries");
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/api/v1/public/contact-submissions");
+    expect(JSON.parse(init.body as string)).toMatchObject({ subject: "Admission enquiry" });
+    expect(JSON.parse(init.body as string)).not.toHaveProperty("source_page_id");
   });
 
   it("shows a confirmation and hides the form on success", async () => {
