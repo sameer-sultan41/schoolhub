@@ -19,10 +19,10 @@ export interface RemoveRecordDialogProps {
 }
 
 /**
- * Removes one campus, department, house or holiday. The server refuses a structure record
- * that other records still point at (`services.assert_deletable`, a 422 naming them and
- * saying to deactivate it instead); that sentence shows inline and the dialog stays open. A
- * holiday can't be deactivated, so it passes its own `description`.
+ * Removes one campus, department, house, class, section, subject or holiday. The server refuses
+ * a structure record that other records still point at (`services.assert_deletable`, a 422
+ * naming them and saying to deactivate it instead); that sentence shows inline and the dialog
+ * stays open. A holiday can't be deactivated, so it passes its own `description`.
  *
  * Mounting contract: the caller mounts this only while it is open, so every open starts with
  * no stale error.

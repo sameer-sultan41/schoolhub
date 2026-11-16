@@ -4,6 +4,7 @@ export * from "./domains/auth";
 export * from "./domains/account-invitations";
 export * from "./domains/school-organization";
 export * from "./domains/school-setup";
+export * from "./domains/school-structure";
 export * from "./domains/staff";
 export * from "./domains/jobs";
 export * from "./domains/dashboard-home";

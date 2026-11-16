@@ -1,6 +1,6 @@
 import { uuid } from "@/data/factories";
-import { fail, ok, pagedList, paginated } from "../envelope";
-import { ordered, pageOf } from "../list";
+import { fail, ok } from "../envelope";
+import { cursorPageOf, ordered, pageOf } from "../list";
 import type { MockModule } from "../router";
 import {
   buildHolidayCalendar,
@@ -9,6 +9,7 @@ import {
   type HolidayCalendar,
   type SchoolSettings,
 } from "./school-setup";
+import { registerSchoolStructure } from "./school-structure";
 
 /** The generated `Campus` wire shape, less the staff head and the timestamps nothing reads. */
 export interface Campus {
@@ -86,12 +87,13 @@ export function buildHouse(overrides: Partial<House> = {}): House {
   };
 }
 
-/** Trimmed to the fields `ClassSectionFields`/the directory filters read. Not the same
- * fixtures `dashboard-home.ts` registers for its own bare `/classes`/`/sections` count
- * stubs — a spec that needs real, named options composes this module instead. */
+/** The generated `Class` wire shape, less the timestamps. `level` orders the promotion ladder;
+ * specs that only pick a class by name leave it at the default. */
 export interface SchoolClass {
   id: string;
   name: string;
+  code: string | null;
+  level: number;
   is_active: boolean;
 }
 
@@ -99,16 +101,21 @@ export function buildSchoolClass(overrides: Partial<SchoolClass> = {}): SchoolCl
   return {
     id: uuid(),
     name: "Grade 1",
+    code: null,
+    level: 1,
     is_active: true,
     ...overrides,
   };
 }
 
+/** The generated `Section` wire shape, less the class teacher, the room and the timestamps.
+ * A null capacity is unlimited. */
 export interface Section {
   id: string;
   name: string;
   class_id: string;
   campus_id: string;
+  capacity: number | null;
   is_active: boolean;
 }
 
@@ -118,15 +125,21 @@ export function buildSection(overrides: Partial<Section> = {}): Section {
     name: "A",
     class_id: "",
     campus_id: "",
+    capacity: null,
     is_active: true,
     ...overrides,
   };
 }
 
-/** Trimmed to the fields the curriculum form's subject select reads. */
+/** The generated `Subject` wire shape, less the timestamps. */
 export interface Subject {
   id: string;
   name: string;
+  code: string;
+  subject_type: "core" | "elective" | "co_curricular";
+  /** Null belongs to no department. */
+  department_id: string | null;
+  description: string | null;
   is_active: boolean;
 }
 
@@ -134,14 +147,21 @@ export function buildSubject(overrides: Partial<Subject> = {}): Subject {
   return {
     id: uuid(),
     name: "Mathematics",
+    code: "MATH",
+    subject_type: "core",
+    department_id: null,
+    description: null,
     is_active: true,
     ...overrides,
   };
 }
 
+/** The generated `AcademicSession` wire shape, less the timestamps. */
 export interface AcademicSession {
   id: string;
   name: string;
+  start_date: string;
+  end_date: string;
   status: "planned" | "active" | "closed" | "archived";
   is_current: boolean;
 }
@@ -150,18 +170,22 @@ export function buildAcademicSession(overrides: Partial<AcademicSession> = {}): 
   return {
     id: uuid(),
     name: "2026-27",
+    start_date: "2026-04-01",
+    end_date: "2027-03-31",
     status: "active",
     is_current: true,
     ...overrides,
   };
 }
 
-/** Trimmed to what a term picker reads (`TermOption`). */
+/** The generated `Term` wire shape, less the timestamps. */
 export interface Term {
   id: string;
   academic_session_id: string;
   name: string;
   sequence: number;
+  start_date: string;
+  end_date: string;
 }
 
 export function buildTerm(overrides: Partial<Term> = {}): Term {
@@ -170,6 +194,8 @@ export function buildTerm(overrides: Partial<Term> = {}): Term {
     academic_session_id: "",
     name: "Term 1",
     sequence: 1,
+    start_date: "2026-04-01",
+    end_date: "2026-09-30",
     ...overrides,
   };
 }
@@ -210,7 +236,8 @@ function structureList<T extends { name: string; code: string | null; is_active:
 
 /**
  * `/campuses`, `/departments`, `/houses` and friends, with the School module's writes,
- * `/school-settings` and `/holiday-calendar` (`./school-setup.ts`) over the same lists.
+ * `/school-settings` and `/holiday-calendar` (`./school-setup.ts`), and the sessions, terms,
+ * classes, sections and subjects writes (`./school-structure.ts`) over the same lists.
  *
  * New modules get a sibling file here; nothing else changes. A spec opts in with
  * `mockApi.use(schoolOrganizationModule({ campuses }))`.
@@ -228,41 +255,56 @@ export function schoolOrganizationModule(options: SchoolOrganizationOptions = {}
     const settings = { ...(options.settings ?? buildSchoolSettings()) };
     const calendar = { ...(options.calendar ?? buildHolidayCalendar()) };
 
-    api.get("/classes", (request) => {
-      const isActive = request.searchParams.get("is_active");
-      const rows =
-        isActive === null ? classes : classes.filter((c) => String(c.is_active) === isActive);
-      return pagedList(rows);
-    });
+    api.get("/classes", (request) => structureList(classes, request.searchParams));
 
+    // One class's sections (the School module's class rows and every section picker).
     api.get("/sections", (request) => {
-      const classId = request.searchParams.get("class_id");
-      const campusId = request.searchParams.get("campus_id");
-      const isActive = request.searchParams.get("is_active");
+      const params = request.searchParams;
+      const classId = params.get("class_id");
+      const campusId = params.get("campus_id");
+      const isActive = params.get("is_active");
       const rows = sections.filter(
         (s) =>
           (!classId || s.class_id === classId) &&
           (!campusId || s.campus_id === campusId) &&
           (isActive === null || String(s.is_active) === isActive),
       );
-      return pagedList(rows);
+      return pageOf(rows, params);
     });
 
     api.get("/subjects", (request) => {
-      const isActive = request.searchParams.get("is_active");
-      const rows =
-        isActive === null ? subjects : subjects.filter((s) => String(s.is_active) === isActive);
-      return pagedList(rows);
+      const params = request.searchParams;
+      const departmentId = params.get("department_id");
+      const type = params.get("subject_type");
+      return structureList(
+        subjects,
+        params,
+        (row) =>
+          (!departmentId || row.department_id === departmentId) &&
+          (!type || row.subject_type === type),
+      );
     });
 
-    api.get("/academic-sessions", () => paginated(academicSessions));
-
-    // A session's terms: the exam form's term select reads them once a session is picked.
-    api.get("/terms", (request) => {
-      const sessionId = request.searchParams.get("academic_session_id");
-      return paginated(
-        terms.filter((term) => !sessionId || term.academic_session_id === sessionId),
+    // Cursor paged, as the API's default paginator; newest first unless the client orders.
+    api.get("/academic-sessions", (request) => {
+      const params = request.searchParams;
+      const search = params.get("search")?.toLowerCase();
+      const status = params.get("status");
+      const matching = academicSessions.filter(
+        (session) =>
+          (!search || session.name.toLowerCase().includes(search)) &&
+          (!status || session.status === status),
       );
+      return cursorPageOf(ordered(matching, params.get("ordering") ?? "-start_date"), params);
+    });
+
+    // A session's terms, in their order: the exam form's term select and the School module's
+    // session rows read them.
+    api.get("/terms", (request) => {
+      const params = request.searchParams;
+      const sessionId = params.get("academic_session_id");
+      const matching = terms.filter((term) => !sessionId || term.academic_session_id === sessionId);
+      return cursorPageOf(ordered(matching, "sequence"), params);
     });
 
     api.get("/campuses", (request) => structureList(campuses, request.searchParams));
@@ -289,5 +331,13 @@ export function schoolOrganizationModule(options: SchoolOrganizationOptions = {}
     api.get("/houses", (request) => structureList(houses, request.searchParams));
 
     registerSchoolSetup(api, { campuses, departments, houses, settings, calendar });
+    registerSchoolStructure(api, {
+      campuses,
+      classes,
+      sections,
+      subjects,
+      academicSessions,
+      terms,
+    });
   };
 }

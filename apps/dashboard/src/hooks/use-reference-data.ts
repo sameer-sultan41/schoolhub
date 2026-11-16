@@ -30,11 +30,22 @@ export interface ActivityReferenceDataOptions extends ReferenceDataOptions {
   isActive?: boolean;
 }
 
-/** Every campus. */
-export function useCampuses({ enabled = true }: ReferenceDataOptions = {}) {
+/** Campuses: all of them, or only the active ones with `isActive: true`. */
+export function useCampuses({ isActive, enabled = true }: ActivityReferenceDataOptions = {}) {
+  const params = isActive === undefined ? undefined : { isActive };
   return useQuery({
-    queryKey: queryKeys.list(SCHOOL_ORGANIZATION_QUERY_MODULE, "campuses"),
-    queryFn: () => Services.dashboard.fetchCampuses(),
+    queryKey: queryKeys.list(SCHOOL_ORGANIZATION_QUERY_MODULE, "campuses", params),
+    queryFn: () =>
+      params ? Services.dashboard.fetchCampuses(params) : Services.dashboard.fetchCampuses(),
+    enabled,
+  });
+}
+
+/** Every department; the staff form reads the same list under the same key. */
+export function useDepartments({ enabled = true }: ReferenceDataOptions = {}) {
+  return useQuery({
+    queryKey: queryKeys.list(SCHOOL_ORGANIZATION_QUERY_MODULE, "departments"),
+    queryFn: () => Services.dashboard.fetchDepartments(),
     enabled,
   });
 }

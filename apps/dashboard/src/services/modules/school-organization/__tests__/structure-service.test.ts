@@ -133,6 +133,81 @@ describe("school-organization structure calls", () => {
     expect(mockDelete).toHaveBeenCalledWith("/houses/h-1");
   });
 
+  it("pages /classes by level, and /subjects by department and type", async () => {
+    const service = await import("../school-organization-service");
+    mockGet.mockResolvedValue({ data: [], meta: PAGE_META });
+
+    await service.fetchClassPage({ page: 1, pageSize: 10, ordering: "level", isActive: true });
+    await service.fetchSubjectPage({
+      page: 1,
+      pageSize: 10,
+      departmentId: "d-1",
+      subjectType: "elective",
+    });
+
+    expect(mockGet).toHaveBeenNthCalledWith(1, "/classes", {
+      query: { page: 1, page_size: 10, ordering: "level", is_active: true },
+    });
+    expect(mockGet).toHaveBeenNthCalledWith(2, "/subjects", {
+      query: { page: 1, page_size: 10, department_id: "d-1", subject_type: "elective" },
+    });
+  });
+
+  it("reads one class's sections in full, at the largest page size", async () => {
+    const { fetchClassSections } = await import("../school-organization-service");
+    mockGet.mockResolvedValue({ data: [{ id: "s-1", name: "A" }], meta: PAGE_META });
+
+    await expect(fetchClassSections("c-1")).resolves.toEqual([{ id: "s-1", name: "A" }]);
+    expect(mockGet).toHaveBeenCalledWith("/sections", {
+      query: { class_id: "c-1", page_size: 100 },
+    });
+  });
+
+  it("creates, updates and deletes a class, a section and a subject on their own paths", async () => {
+    const service = await import("../school-organization-service");
+    const classInput = { name: "Grade 1", code: null, level: 1, is_active: true };
+    const sectionInput = {
+      class_id: "c-1",
+      campus_id: "k-1",
+      name: "A",
+      capacity: null,
+      is_active: true,
+    };
+    const subjectInput = {
+      name: "Mathematics",
+      code: "MATH",
+      subject_type: "core" as const,
+      department_id: null,
+      description: null,
+      is_active: true,
+    };
+    mockPost.mockResolvedValue({ data: { id: "x" } });
+    mockPatch.mockResolvedValue({ data: { id: "x" } });
+    mockDelete.mockResolvedValue({ data: null });
+
+    await service.createClass(classInput);
+    await service.updateClass("c-1", classInput);
+    await service.deleteClass("c-1");
+    await service.createSection(sectionInput);
+    await service.updateSection("s-1", sectionInput);
+    await service.deleteSection("s-1");
+    await service.createSubject(subjectInput);
+    await service.updateSubject("j-1", subjectInput);
+    await service.deleteSubject("j-1");
+
+    expect(mockPost.mock.calls).toEqual([
+      ["/classes", classInput],
+      ["/sections", sectionInput],
+      ["/subjects", subjectInput],
+    ]);
+    expect(mockPatch.mock.calls).toEqual([
+      ["/classes/c-1", classInput],
+      ["/sections/s-1", sectionInput],
+      ["/subjects/j-1", subjectInput],
+    ]);
+    expect(mockDelete.mock.calls).toEqual([["/classes/c-1"], ["/sections/s-1"], ["/subjects/j-1"]]);
+  });
+
   it("reads the calendar, filling a list the response leaves out", async () => {
     const { fetchHolidayCalendar } = await import("../school-organization-service");
     mockGet.mockResolvedValue({ data: { working_days: [0, 1, 2, 3, 4] } });

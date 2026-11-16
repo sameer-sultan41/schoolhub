@@ -20,4 +20,14 @@ class ClassSerializer(serializers.ModelSerializer):
     def validate_level(self, value: int) -> int:
         if value < 1:
             raise serializers.ValidationError("level starts at 1; it orders the promotion ladder.")
+        # One live class per rung (`classes_unique_level_per_tenant`). Checked here so the
+        # clash is this field's own error; the constraint still stops a concurrent writer (409).
+        clashes = Class.objects.alive().filter(level=value)
+        if self.instance is not None:
+            clashes = clashes.exclude(pk=self.instance.pk)
+        clash = clashes.first()
+        if clash is not None:
+            raise serializers.ValidationError(
+                f"Level {value} is already used by class '{clash.name}'."
+            )
         return value

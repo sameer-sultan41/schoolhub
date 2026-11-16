@@ -1,4 +1,5 @@
 import { screen, within } from "@testing-library/react";
+import type { Page } from "@schoolhub/types";
 import type userEvent from "@testing-library/user-event";
 
 /**
@@ -20,6 +21,11 @@ export function lastArg(fn: { mock: { calls: readonly (readonly unknown[])[] } }
 /** A cursor list's implementation: `first` for any query, `second` for the one holding `c2`. */
 export function cursorPages<P>(first: P, second: P) {
   return (query: { cursor?: string }) => Promise.resolve(query.cursor === "c2" ? second : first);
+}
+
+/** One cursor page, as a cursor-paginated list read returns it. */
+export function cursorPage<T>(items: T[], next: string | null = null): Page<T> {
+  return { items, pagination: { next_cursor: next, previous_cursor: null, page_size: 20 } };
 }
 
 /** Queries within the table row that shows `name`. */

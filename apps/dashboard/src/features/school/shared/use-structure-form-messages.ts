@@ -16,6 +16,8 @@ export function useStructureFormMessages(): StructureFormMessages {
       emailInvalid: t("form.emailInvalid"),
       colorInvalid: t("form.colorInvalid"),
       endBeforeStart: t("calendar.form.endBeforeStart"),
+      endNotAfterStart: t("form.endNotAfterStart"),
+      wholeNumberInvalid: t("form.wholeNumberInvalid"),
     }),
     [t, tCommon],
   );

@@ -21,6 +21,11 @@ that app), several functions here are imported directly by other apps:
   `apps/attendance/services.py`, which merges its keys into the same
   `tenant_settings.academic` under the same row lock
 
+`term_coverage_errors` is not in that list: no app imports it yet. It lives in
+`academic_sessions/services/validate.py` beside the activation check that
+calls it, and is re-exported here for the onboarding wizard (PR H, Task 15) to
+read through this entry point (ADR-0013) rather than the package.
+
 Moving them into a resource package would mean editing import lines in
 other apps for a purely internal reorganization — a bigger, riskier blast
 radius than this module's own size justifies. `_live_dependents` stays here
@@ -55,6 +60,10 @@ from collections.abc import Iterable
 
 from django.db.models import QuerySet
 
+# A redundant alias marks the re-export as deliberate (see the docstring above).
+from apps.school_organization.academic_sessions.services.validate import (
+    term_coverage_errors as term_coverage_errors,
+)
 from apps.school_organization.models import (
     AcademicSession,
     Campus,

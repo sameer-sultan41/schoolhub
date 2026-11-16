@@ -12,7 +12,7 @@ import {
   TERM_ID,
 } from "@/services/modules/exams/__tests__/exams-fixtures";
 import { subjectRecord } from "@/services/modules/exam-subjects/__tests__/exam-subjects-fixtures";
-import { CLASS_ID, CURRENT_SESSION, PLANNED_SESSION } from "@/test-fixtures/academics";
+import { CLASS_ID, CURRENT_SESSION, PLANNED_SESSION, termRecord } from "@/test-fixtures/academics";
 import { mocked } from "@/test-fixtures/list-screen";
 import { buildUser, setUrl } from "@/test-utils";
 
@@ -89,7 +89,7 @@ export function stubExamsServices(url = "/exams") {
   fetchActiveRooms.mockResolvedValue([]);
   mocked(Services.staff.fetchTeachingStaffOptions).mockResolvedValue([]);
   fetchAcademicSessions.mockResolvedValue([CURRENT_SESSION, PLANNED_SESSION]);
-  fetchTerms.mockResolvedValue([{ id: TERM_ID, name: "Term 1", sequence: 1 }]);
+  fetchTerms.mockResolvedValue([termRecord({ id: TERM_ID })]);
   mocked(Services.schoolOrganization.fetchClasses).mockResolvedValue([
     { id: CLASS_ID, name: "Grade 5" },
   ]);

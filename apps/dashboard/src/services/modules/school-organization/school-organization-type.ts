@@ -14,8 +14,9 @@ export type AcademicSessionSummary = Pick<
   "id" | "name" | "status" | "is_current"
 >;
 
-/** The slice of the generated `Term` schema an exam form's term picker reads. */
-export type TermOption = Pick<ApiSchemas["Term"], "id" | "name" | "sequence">;
+/** A term as `/terms` answers it: the School module lists its dates, and a picker reads its
+ * name and order. */
+export type TermRecord = ApiSchemas["Term"];
 
 // The School module's structure screens: the generated wire shapes (ADR-0017).
 
@@ -23,6 +24,10 @@ export type CampusRecord = ApiSchemas["Campus"];
 export type DepartmentRecord = ApiSchemas["Department"];
 export type DepartmentType = ApiSchemas["DepartmentTypeEnum"];
 export type HouseRecord = ApiSchemas["House"];
+export type ClassRecord = ApiSchemas["Class"];
+export type SectionRecord = ApiSchemas["Section"];
+export type SubjectRecord = ApiSchemas["Subject"];
+export type SubjectType = ApiSchemas["SubjectSubjectTypeEnum"];
 export type HolidayEntry = ApiSchemas["HolidayEntry"];
 /** `GET /holiday-calendar` always answers both lists; the schema's optional keys describe the
  * `PUT` body, which names only the lists it replaces. */
@@ -42,8 +47,41 @@ export type DepartmentInput = Required<
 export type HouseInput = Required<
   Pick<HouseRecord, "name" | "code" | "color" | "motto" | "is_active">
 >;
+export type ClassInput = Required<Pick<ClassRecord, "name" | "code" | "level" | "is_active">>;
+/** A section's class teacher and room are not set from this form. */
+export type SectionInput = Required<
+  Pick<SectionRecord, "class_id" | "campus_id" | "name" | "capacity" | "is_active">
+>;
+export type SubjectInput = Required<
+  Pick<
+    SubjectRecord,
+    "name" | "code" | "subject_type" | "department_id" | "description" | "is_active"
+  >
+>;
 
-/** One page of a structure list (`/campuses`, `/departments`, `/houses`). */
+// Academic sessions and their terms (the School module's Sessions section).
+
+export type AcademicSessionRecord = ApiSchemas["AcademicSession"];
+export type AcademicSessionStatus = ApiSchemas["AcademicSessionStatusEnum"];
+/** The body of a create or edit; the status moves only through `:activate` and `:close`. */
+export type SessionInput = Pick<AcademicSessionRecord, "name" | "start_date" | "end_date">;
+/** `POST /academic-sessions/{id}:clone`: the new session's name and dates. */
+export type SessionCloneInput = ApiSchemas["SessionClone"];
+/** A term's edit body; a new term also names its session. */
+export type TermInput = Pick<TermRecord, "name" | "sequence" | "start_date" | "end_date">;
+export type TermCreateInput = TermInput & Pick<TermRecord, "academic_session_id">;
+
+/** One cursor page of `/academic-sessions`. */
+export interface SessionPageQuery {
+  cursor?: string;
+  pageSize?: number;
+  search?: string;
+  ordering?: string;
+  status?: AcademicSessionStatus;
+}
+
+/** One page of a structure list (`/campuses`, `/departments`, `/houses`, `/classes`,
+ * `/subjects`). */
 export interface StructurePageQuery {
   page?: number;
   pageSize?: number;
@@ -54,4 +92,8 @@ export interface StructurePageQuery {
   campusId?: string;
   /** Departments only. */
   departmentType?: DepartmentType;
+  /** Subjects only. */
+  departmentId?: string;
+  /** Subjects only. */
+  subjectType?: SubjectType;
 }

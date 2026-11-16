@@ -221,6 +221,32 @@ either this file or `project-status.md`.
   - Two admins editing the holidays at once: each `PUT` sends the list the sender loaded, so the
     later save drops the earlier one's change. The calendar is one document with no version to
     check.
+- **The School module's PR G sections (Sessions & terms, Classes & sections, Subjects) leave
+  these things out.**
+  - A duplicate name is still a generic 409, shown as "That change conflicts with the current
+    data. Reload and try again." — the same gap as the campus code above: a second session with a
+    name the school already uses, a term repeating a name or order within its session, a class
+    name or code, a subject name or code, and a section name repeated within its class at one
+    campus. `AcademicSessionSerializer`, `TermSerializer`, `ClassSerializer`, `SubjectSerializer`
+    and `SectionSerializer` each need a validator naming the field, as `ClassSerializer` now has
+    for `level`, the one the class form's brief required.
+  - A section's class teacher and default room (`class_teacher_staff_id`, `room_id`) are not on
+    the section form; an edit leaves them as stored, the same as the campus head above. They need
+    a staff picker and a room picker the form does not have yet.
+  - A class's sections panel reads one page of the largest size (100) from `/sections?class_id=`;
+    a class with more sections than that across every campus would show only the first 100.
+  - The dashboard hides Edit on a closed or archived session, but
+    `AcademicSessionSerializer.validate` still accepts a closed session's dates, so a direct API
+    call can shrink its window and leave its terms outside it. It needs to refuse any edit to a
+    session in `LOCKED_SESSION_STATUSES`, as the term endpoints already do. The gap is wider than
+    closed sessions: the serializer lets a session of any status shrink past its terms, and
+    `term_coverage_errors` checks only the two ends, so terms running past a shrunk window still
+    count as covering. The server rule should refuse a window that excludes any live term.
+  - `SectionSerializer.validate` reads `campus` and `school_class` from the instance when the body
+    omits them, so the server refuses any edit, including `PATCH {is_active: false}`, to a section
+    whose campus or class is inactive. The recovery today is to reactivate the campus or class, or
+    to move the section to an active one. Relaxing the rule (for example, letting a deactivation
+    through) is a backend product decision, not a dashboard fix.
 
 - **Staff's wire types are hand-written structs, not generated `ApiSchemas["Staff"]`
   aliases.** `services/modules/staff/staff-type.ts`'s `StaffDirectoryRecord`,

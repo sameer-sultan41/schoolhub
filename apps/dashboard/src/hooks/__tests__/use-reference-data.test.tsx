@@ -4,18 +4,20 @@ import type { ReactNode } from "react";
 
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
+import { SCHOOL_ORGANIZATION_QUERY_MODULE } from "@/services/modules/school-organization/school-organization-constant";
 
 import {
   useAcademicSessions,
   useCampuses,
   useClasses,
+  useDepartments,
   useSections,
   useSubjects,
 } from "../use-reference-data";
 
 jest.mock("@/services", () => ({
   Services: {
-    dashboard: { fetchCampuses: jest.fn() },
+    dashboard: { fetchCampuses: jest.fn(), fetchDepartments: jest.fn() },
     schoolOrganization: {
       fetchClasses: jest.fn(),
       fetchSubjects: jest.fn(),
@@ -27,6 +29,9 @@ jest.mock("@/services", () => ({
 
 const mockFetchCampuses = Services.dashboard.fetchCampuses as jest.MockedFunction<
   typeof Services.dashboard.fetchCampuses
+>;
+const mockFetchDepartments = Services.dashboard.fetchDepartments as jest.MockedFunction<
+  typeof Services.dashboard.fetchDepartments
 >;
 const mockFetchClasses = Services.schoolOrganization.fetchClasses as jest.MockedFunction<
   typeof Services.schoolOrganization.fetchClasses
@@ -59,12 +64,15 @@ function setup() {
 
 /** What the cache holds under the key a reference list is read with. */
 function cached(queryClient: QueryClient, resource: string, params?: Record<string, unknown>) {
-  return queryClient.getQueryData(queryKeys.list("school-organization", resource, params));
+  return queryClient.getQueryData(
+    queryKeys.list(SCHOOL_ORGANIZATION_QUERY_MODULE, resource, params),
+  );
 }
 
 describe("use-reference-data", () => {
   beforeEach(() => {
     mockFetchCampuses.mockReset().mockResolvedValue(CAMPUSES);
+    mockFetchDepartments.mockReset().mockResolvedValue(OPTIONS);
     mockFetchClasses.mockReset().mockResolvedValue(OPTIONS);
     mockFetchSubjects.mockReset().mockResolvedValue(OPTIONS);
     mockFetchSections.mockReset().mockResolvedValue(SECTION_OPTIONS);
@@ -111,6 +119,30 @@ describe("use-reference-data", () => {
       expect(result.current.fetchStatus).toBe("idle");
       expect(mockFetchCampuses).not.toHaveBeenCalled();
     });
+
+    it("asks for only the active campuses with isActive, under their own key", async () => {
+      const { queryClient, wrapper } = setup();
+
+      const { result } = renderHook(() => useCampuses({ isActive: true }), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.isSuccess).toBe(true);
+      });
+      expect(mockFetchCampuses).toHaveBeenCalledWith({ isActive: true });
+      expect(cached(queryClient, "campuses", { isActive: true })).toEqual(CAMPUSES);
+      expect(cached(queryClient, "campuses")).toBeUndefined();
+    });
+  });
+
+  it("useDepartments reads the departments under the key the staff form shares", async () => {
+    const { queryClient, wrapper } = setup();
+
+    const { result } = renderHook(() => useDepartments(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+    expect(cached(queryClient, "departments")).toEqual(OPTIONS);
   });
 
   describe("useClasses", () => {

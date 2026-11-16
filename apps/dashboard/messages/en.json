@@ -236,6 +236,9 @@
       "label": "School sections",
       "profile": "Profile & settings",
       "campuses": "Campuses",
+      "sessions": "Sessions & terms",
+      "classes": "Classes & sections",
+      "subjects": "Subjects",
       "departments": "Departments",
       "houses": "Houses",
       "calendar": "Calendar"
@@ -258,7 +261,9 @@
       "phone": "Phone",
       "email": "Email",
       "timezone": "Timezone",
-      "isActive": "Active"
+      "isActive": "Active",
+      "startDate": "Start date",
+      "endDate": "End date"
     },
     "actions": {
       "editRow": "Edit {name}",
@@ -283,7 +288,9 @@
       "emailInvalid": "Enter a valid email address.",
       "colorInvalid": "Enter a hex colour such as #1E88E5.",
       "colorPlaceholder": "#1E88E5",
-      "colorHint": "A hex colour, e.g. #D32F2F."
+      "colorHint": "A hex colour, e.g. #D32F2F.",
+      "endNotAfterStart": "The end date must be after the start date.",
+      "wholeNumberInvalid": "Enter a whole number from 1."
     },
     "weekdays": {
       "0": "Monday",
@@ -329,6 +336,170 @@
         "timezoneHint": "Leave blank to use the school's timezone.",
         "isPrimary": "Primary campus",
         "isPrimaryHint": "Making this campus primary makes the current primary an ordinary campus."
+      }
+    },
+    "sessions": {
+      "title": "Sessions & terms",
+      "summary": "The school years and their terms. Activating a session makes it the year the school works in; closing it makes its records read only.",
+      "saved": "Session saved.",
+      "current": "Current",
+      "range": "{start} to {end}",
+      "status": {
+        "planned": "Planned",
+        "active": "Active",
+        "closed": "Closed",
+        "archived": "Archived"
+      },
+      "columns": {
+        "dates": "Dates"
+      },
+      "actions": {
+        "create": "Add session",
+        "activate": "Activate",
+        "close": "Close",
+        "clone": "Clone",
+        "activateRow": "Activate {name}",
+        "closeRow": "Close {name}",
+        "cloneRow": "Clone {name}"
+      },
+      "list": {
+        "caption": "Academic sessions",
+        "pagination": "Sessions pages",
+        "loadError": "The sessions couldn't be loaded.",
+        "searchPlaceholder": "Search by name",
+        "emptyTitle": "No sessions yet",
+        "emptyDescription": "Add the school year, then its terms. Activate it once the school's campuses, classes and terms are ready."
+      },
+      "form": {
+        "createTitle": "Add a session",
+        "editTitle": "Edit this session",
+        "description": "A new session starts as planned. Its dates can't overlap another session's.",
+        "namePlaceholder": "e.g. 2026-27"
+      },
+      "clone": {
+        "title": "Start next year from {name}",
+        "description": "Creates a planned session with these dates and copies this session's curriculum into it. Terms aren't copied, so add them afterwards.",
+        "done": "{name} created from {source}."
+      },
+      "lifecycle": {
+        "activateTitle": "Activate {name}?",
+        "activateDescription": "It becomes the school's current session, and the session that was current stops being so. The school needs an active campus, an active class with an active section, and terms that cover the whole session.",
+        "activateConfirm": "Activate session",
+        "activateDone": "{name} is now the current session.",
+        "closeTitle": "Close {name}?",
+        "closeDescription": "Its attendance, marks and other records become read only, and it can't be activated again.",
+        "closeConfirm": "Close session",
+        "closeDone": "{name} closed.",
+        "structureTitle": "Finish these before activating:"
+      }
+    },
+    "terms": {
+      "title": "Terms",
+      "show": "Show terms for {name}",
+      "hide": "Hide terms for {name}",
+      "summary": "The terms must cover the whole session before it can be activated.",
+      "locked": "This session is closed or archived, so its terms can't change.",
+      "empty": "No terms yet.",
+      "caption": "Terms of {session}",
+      "loadError": "The terms couldn't be loaded.",
+      "saved": "Term saved.",
+      "fields": {
+        "sequence": "Order"
+      },
+      "actions": {
+        "create": "Add term"
+      },
+      "form": {
+        "createTitle": "Add a term to {session}",
+        "editTitle": "Edit this term",
+        "description": "A term sits inside its session's dates and can't overlap another term.",
+        "sequenceHint": "1 for the session's first term."
+      }
+    },
+    "classes": {
+      "title": "Classes & sections",
+      "summary": "The school's classes in promotion order, each with its sections at every campus.",
+      "saved": "Class saved.",
+      "fields": {
+        "level": "Level"
+      },
+      "actions": {
+        "create": "Add class"
+      },
+      "list": {
+        "caption": "Classes",
+        "loadError": "The classes couldn't be loaded.",
+        "searchPlaceholder": "Search by name or code",
+        "emptyTitle": "No classes yet",
+        "emptyDescription": "Add the school's classes in order, then give each one its sections."
+      },
+      "form": {
+        "createTitle": "Add a class",
+        "editTitle": "Edit this class",
+        "description": "A class name and level are each unique in the school.",
+        "namePlaceholder": "e.g. Grade 1",
+        "levelHint": "Its place in the promotion order: 1 for the first class, and students move up one level a year."
+      }
+    },
+    "sections": {
+      "title": "Sections",
+      "show": "Show sections for {name}",
+      "hide": "Hide sections for {name}",
+      "summary": "A section is a division of this class at one campus.",
+      "inactiveClass": "This class is inactive, so its sections can't be added to or edited.",
+      "empty": "No sections yet.",
+      "caption": "Sections of {name}",
+      "loadError": "The sections couldn't be loaded.",
+      "saved": "Section saved.",
+      "unlimited": "Unlimited",
+      "qualifiedName": "{className} – {name}",
+      "inactiveCampus": "{name} (inactive)",
+      "fields": {
+        "class": "Class",
+        "capacity": "Capacity"
+      },
+      "actions": {
+        "create": "Add section"
+      },
+      "form": {
+        "createTitle": "Add a section",
+        "editTitle": "Edit this section",
+        "description": "A section name is unique within its class at one campus. Only active classes and campuses are offered.",
+        "namePlaceholder": "e.g. A",
+        "capacityHint": "The most students it takes. Leave blank for no limit."
+      }
+    },
+    "subjects": {
+      "title": "Subjects",
+      "summary": "The subjects the school teaches, by type and department.",
+      "saved": "Subject saved.",
+      "noDepartment": "No department",
+      "unknownDepartment": "Unknown department",
+      "fields": {
+        "type": "Type",
+        "department": "Department",
+        "description": "Description"
+      },
+      "types": {
+        "core": "Core",
+        "elective": "Elective",
+        "co_curricular": "Co-curricular"
+      },
+      "actions": {
+        "create": "Add subject"
+      },
+      "list": {
+        "caption": "Subjects",
+        "loadError": "The subjects couldn't be loaded.",
+        "searchPlaceholder": "Search by name or code",
+        "emptyTitle": "No subjects yet",
+        "emptyDescription": "Add the subjects the school teaches; curriculum, timetable and exams all use them."
+      },
+      "form": {
+        "createTitle": "Add a subject",
+        "editTitle": "Edit this subject",
+        "description": "A subject name and code are each unique in the school.",
+        "codeHint": "A short code, e.g. MATH."
       }
     },
     "departments": {

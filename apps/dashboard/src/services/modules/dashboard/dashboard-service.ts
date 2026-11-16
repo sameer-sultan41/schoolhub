@@ -78,10 +78,15 @@ export interface CampusOption {
   name: string;
 }
 
-/** Every campus, as selectable options — not just the `fetchDashboardOverview` count. */
-export async function fetchCampuses(): Promise<CampusOption[]> {
+/** Every campus, as selectable options — not just the `fetchDashboardOverview` count.
+ * `isActive: true` narrows it to the live ones, for a picker the API refuses an inactive
+ * campus from. */
+export async function fetchCampuses(params: { isActive?: boolean } = {}): Promise<CampusOption[]> {
   const { items } = await fetchPage<CampusOption>(apiClient, endpoints.dashboard.campuses, {
-    query: { page_size: MAX_PAGE_SIZE },
+    query: {
+      page_size: MAX_PAGE_SIZE,
+      ...(params.isActive !== undefined ? { is_active: params.isActive } : {}),
+    },
   });
   return items;
 }

@@ -1,7 +1,7 @@
 import { screen } from "@testing-library/react";
 
 import { Services } from "@/services";
-import { cursorPage } from "@/test-fixtures/communication";
+import { cursorPage } from "@/test-fixtures/list-screen";
 import { portalNotice } from "@/test-fixtures/portal";
 import { renderWithProviders } from "@/test-utils";
 

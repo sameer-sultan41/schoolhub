@@ -1,11 +1,13 @@
-"""Validation helpers used only within academic_sessions' own services.
+"""Validation helpers for academic sessions.
 
 `assert_no_session_overlap` and `session_completeness_errors` are consumed
-exclusively inside this package (`activate.py`, `clone.py`, and this
-package's own `serializers.py`) — unlike `assert_session_writable`, which
-stays in the module root because attendance, academics, student_management
-and timetable all import it directly (see `apps.school_organization.services`'s
-docstring).
+only inside this package (`activate.py`, `clone.py`, and this package's own
+`serializers.py`). `term_coverage_errors` is re-exported from
+`apps.school_organization.services` for the onboarding wizard (PR H, Task 15),
+which will reuse the activation check's term rule; no other app imports it
+yet. `assert_session_writable` stays in the module
+root because attendance, academics, student_management and timetable all
+import it directly (see that file's docstring).
 """
 
 from __future__ import annotations
@@ -56,10 +58,19 @@ def session_completeness_errors(session: AcademicSession) -> list[str]:
     if not sectioned_classes.exists():
         errors.append("At least one active class with an active section is required.")
 
+    errors.extend(term_coverage_errors(session))
+    return errors
+
+
+def term_coverage_errors(session: AcademicSession) -> list[str]:
+    """What stops ``session``'s terms covering it: no live term, or a gap at either end.
+
+    The activation check's term rule on its own, so the onboarding wizard can tell
+    whether a session's terms are done before any campus or class exists.
+    """
     terms = list(session.terms.filter(deleted_at__isnull=True).order_by("start_date"))
     if not terms:
-        errors.append("At least one term is required.")
-    elif terms[0].start_date > session.start_date or terms[-1].end_date < session.end_date:
-        errors.append("Term dates must cover the whole session window.")
-
-    return errors
+        return ["At least one term is required."]
+    if terms[0].start_date > session.start_date or terms[-1].end_date < session.end_date:
+        return ["Term dates must cover the whole session window."]
+    return []

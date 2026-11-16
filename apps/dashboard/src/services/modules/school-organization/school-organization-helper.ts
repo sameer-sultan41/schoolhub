@@ -1,26 +1,51 @@
+import { ApiError } from "@schoolhub/api-client";
+
 import { FILTER_ALL } from "@/lib/constants";
 import { copyMappedFields } from "@/lib/helpers";
 import {
   DEFAULT_DEPARTMENT_TYPE,
+  DEFAULT_SUBJECT_TYPE,
+  SESSION_QUERY_FIELDS,
+  SESSION_STATUSES,
+  SESSION_STRUCTURE_FIELD,
   STRUCTURE_QUERY_FIELDS,
   STRUCTURE_STATUS,
+  SUBJECT_TYPES,
 } from "./school-organization-constant";
 import type {
   CampusFormValues,
+  ClassFormValues,
   DepartmentFormValues,
   HolidayFormValues,
   HouseFormValues,
+  SectionFormValues,
+  SessionFormValues,
+  SubjectFormValues,
+  TermFormValues,
 } from "./school-organization.schema";
 import type {
+  AcademicSessionRecord,
+  AcademicSessionStatus,
   CampusInput,
   CampusRecord,
+  ClassInput,
+  ClassRecord,
   DepartmentInput,
   DepartmentRecord,
   DepartmentType,
   HolidayEntry,
   HouseInput,
   HouseRecord,
+  SectionInput,
+  SectionRecord,
+  SessionInput,
+  SessionPageQuery,
   StructurePageQuery,
+  SubjectInput,
+  SubjectRecord,
+  SubjectType,
+  TermInput,
+  TermRecord,
 } from "./school-organization-type";
 
 /** The school-organization module's pure helpers: plain data in, plain data out. */
@@ -48,6 +73,11 @@ export function structureStatusToIsActive(status: string): boolean | undefined {
 /** The type filter -> `department_type`: `all` is no filter. */
 export function typeFilterToDepartmentType(type: string): DepartmentType | undefined {
   return type === FILTER_ALL ? undefined : (type as DepartmentType);
+}
+
+/** The type filter -> `subject_type`: `""` is no filter. */
+export function typeFilterToSubjectType(type: string): SubjectType | undefined {
+  return SUBJECT_TYPES.find((subjectType) => subjectType === type);
 }
 
 /** Trimmed, with a blank as `null`, which clears a stored value. */
@@ -158,6 +188,92 @@ export function buildHouseInput(values: HouseFormValues): HouseInput {
   };
 }
 
+// --- Classes and their sections -------------------------------------------------------------
+
+export function defaultClassFormValues(): ClassFormValues {
+  return { name: "", code: "", level: "", is_active: true };
+}
+
+export function recordToClassFormValues(record: ClassRecord): ClassFormValues {
+  return {
+    name: record.name,
+    code: record.code ?? "",
+    level: String(record.level),
+    is_active: record.is_active ?? true,
+  };
+}
+
+export function buildClassInput(values: ClassFormValues): ClassInput {
+  return {
+    name: values.name.trim(),
+    code: blankToNull(values.code),
+    level: Number(values.level),
+    is_active: values.is_active,
+  };
+}
+
+/** A new section starts in the class it is added from. */
+export function defaultSectionFormValues(classId: string): SectionFormValues {
+  return { class_id: classId, campus_id: "", name: "", capacity: "", is_active: true };
+}
+
+export function recordToSectionFormValues(record: SectionRecord): SectionFormValues {
+  return {
+    class_id: record.class_id,
+    campus_id: record.campus_id,
+    name: record.name,
+    capacity: record.capacity == null ? "" : String(record.capacity),
+    is_active: record.is_active ?? true,
+  };
+}
+
+/** A blank capacity is `null`: the section takes any number of students. */
+export function buildSectionInput(values: SectionFormValues): SectionInput {
+  return {
+    class_id: values.class_id,
+    campus_id: values.campus_id,
+    name: values.name.trim(),
+    capacity: values.capacity === "" ? null : Number(values.capacity),
+    is_active: values.is_active,
+  };
+}
+
+// --- Subjects -------------------------------------------------------------------------------
+
+export function defaultSubjectFormValues(): SubjectFormValues {
+  return {
+    name: "",
+    code: "",
+    subject_type: DEFAULT_SUBJECT_TYPE,
+    department_id: "",
+    description: "",
+    is_active: true,
+  };
+}
+
+export function recordToSubjectFormValues(record: SubjectRecord): SubjectFormValues {
+  return {
+    name: record.name,
+    code: record.code,
+    subject_type: record.subject_type ?? DEFAULT_SUBJECT_TYPE,
+    department_id: record.department_id ?? "",
+    description: record.description ?? "",
+    is_active: record.is_active ?? true,
+  };
+}
+
+/** A blank department is `null`: the subject belongs to none. */
+export function buildSubjectInput(values: SubjectFormValues): SubjectInput {
+  return {
+    name: values.name.trim(),
+    code: values.code.trim(),
+    subject_type: values.subject_type,
+    department_id: values.department_id || null,
+    description: blankToNull(values.description),
+    is_active: values.is_active,
+  };
+}
+
 // --- The school calendar --------------------------------------------------------------------
 
 export function defaultHolidayFormValues(): HolidayFormValues {
@@ -221,4 +337,76 @@ export function holidaysByDate(
   return holidays
     .map((entry, index) => ({ entry, index }))
     .sort((a, b) => a.entry.start_date.localeCompare(b.entry.start_date) || a.index - b.index);
+}
+
+// --- Academic sessions and terms ------------------------------------------------------------
+
+export function toSessionQueryParams(
+  query: SessionPageQuery,
+): Record<string, string | number | undefined> {
+  const params: Record<string, unknown> = {};
+  copyMappedFields(
+    query,
+    SESSION_QUERY_FIELDS,
+    (value) => value !== undefined && value !== "",
+    params,
+  );
+  return params as Record<string, string | number | undefined>;
+}
+
+/** The status filter -> `?status=`: `all` (or anything else) is no filter. */
+export function sessionStatusFilter(status: string): AcademicSessionStatus | undefined {
+  return SESSION_STATUSES.find((candidate) => candidate === status);
+}
+
+export function defaultSessionFormValues(): SessionFormValues {
+  return { name: "", start_date: "", end_date: "" };
+}
+
+export function recordToSessionFormValues(record: AcademicSessionRecord): SessionFormValues {
+  return { name: record.name, start_date: record.start_date, end_date: record.end_date };
+}
+
+/** A create, an edit and a clone send the same three fields. */
+export function buildSessionInput(values: SessionFormValues): SessionInput {
+  return { name: values.name.trim(), start_date: values.start_date, end_date: values.end_date };
+}
+
+/** The order a new term takes: after the session's last one. */
+export function nextTermSequence(terms: readonly TermRecord[]): number {
+  return terms.reduce((highest, term) => Math.max(highest, term.sequence), 0) + 1;
+}
+
+export function defaultTermFormValues(sequence: number): TermFormValues {
+  return { name: "", sequence: String(sequence), start_date: "", end_date: "" };
+}
+
+export function recordToTermFormValues(record: TermRecord): TermFormValues {
+  return {
+    name: record.name,
+    sequence: String(record.sequence),
+    start_date: record.start_date,
+    end_date: record.end_date,
+  };
+}
+
+export function buildTermInput(values: TermFormValues): TermInput {
+  return {
+    name: values.name.trim(),
+    sequence: Number(values.sequence),
+    start_date: values.start_date,
+    end_date: values.end_date,
+  };
+}
+
+/**
+ * What a refused `:activate` says is missing (`session_completeness_errors`, a 422 with
+ * `{structure: [...]}`), one sentence per gap, or `[]` for any other failure. The envelope
+ * flattens the list to one detail per sentence, all under `structure`.
+ */
+export function sessionStructureIssues(error: unknown): string[] {
+  if (!(error instanceof ApiError)) return [];
+  return error.details
+    .filter((detail) => detail.field === SESSION_STRUCTURE_FIELD)
+    .map((detail) => detail.issue);
 }

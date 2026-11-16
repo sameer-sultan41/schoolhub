@@ -5,6 +5,9 @@ import { BasePage } from "../../base.page";
 export const SCHOOL_SECTION_PATHS = {
   "Profile & settings": "/school/profile",
   Campuses: "/school/campuses",
+  "Sessions & terms": "/school/sessions",
+  "Classes & sections": "/school/classes",
+  Subjects: "/school/subjects",
   Departments: "/school/departments",
   Houses: "/school/houses",
   Calendar: "/school/calendar",
@@ -14,7 +17,8 @@ export type SchoolSection = keyof typeof SCHOOL_SECTION_PATHS;
 
 /**
  * `/school/*` — the School module's tabs, each section's list with its per-row Edit and Remove
- * buttons, the toolbar's Add button, and the create/edit and remove dialogs. See
+ * buttons, the lists opened inside a row, the toolbar's Add button, and the create/edit and
+ * confirm dialogs. See
  * `apps/dashboard/src/features/school/`.
  */
 export class SchoolSetupPage extends BasePage {
@@ -76,6 +80,16 @@ export class SchoolSetupPage extends BasePage {
 
   get confirmRemove(): Locator {
     return this.removeDialog.getByRole("button", { name: "Remove", exact: true });
+  }
+
+  /** A confirm dialog's own button, e.g. "Activate session" (scoped: the page has its own). */
+  alertButton(name: string): Locator {
+    return this.removeDialog.getByRole("button", { name, exact: true });
+  }
+
+  /** A list inside an opened row (a session's terms, a class's sections), by its caption. */
+  nestedTable(caption: string): Locator {
+    return this.page.getByRole("table", { name: caption, exact: true });
   }
 
   /** A page-level form input (the profile form is not in a dialog). */

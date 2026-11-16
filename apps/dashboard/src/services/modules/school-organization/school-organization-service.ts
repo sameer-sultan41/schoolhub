@@ -2,11 +2,14 @@ import { collectPages, fetchPage, MAX_PAGE_SIZE } from "@schoolhub/api-client";
 import type { Page } from "@schoolhub/types";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
-import { toStructureQueryParams } from "./school-organization-helper";
+import { toSessionQueryParams, toStructureQueryParams } from "./school-organization-helper";
 import type {
+  AcademicSessionRecord,
   AcademicSessionSummary,
   CampusInput,
   CampusRecord,
+  ClassInput,
+  ClassRecord,
   DepartmentInput,
   DepartmentRecord,
   HolidayCalendarRecord,
@@ -14,9 +17,18 @@ import type {
   HouseInput,
   HouseRecord,
   SchoolOrganizationOption,
+  SectionInput,
   SectionOption,
+  SectionRecord,
+  SessionCloneInput,
+  SessionInput,
+  SessionPageQuery,
   StructurePageQuery,
-  TermOption,
+  SubjectInput,
+  SubjectRecord,
+  TermCreateInput,
+  TermInput,
+  TermRecord,
 } from "./school-organization-type";
 
 /**
@@ -99,8 +111,8 @@ export async function fetchAcademicSessions(): Promise<AcademicSessionSummary[]>
 }
 
 /** `GET /terms` — one session's terms, in their order within it. */
-export async function fetchTerms(academicSessionId: string): Promise<TermOption[]> {
-  const terms = await collectPages<TermOption>(apiClient, endpoints.schoolOrganization.terms, {
+export async function fetchTerms(academicSessionId: string): Promise<TermRecord[]> {
+  const terms = await collectPages<TermRecord>(apiClient, endpoints.schoolOrganization.terms, {
     query: { academic_session_id: academicSessionId, page_size: MAX_PAGE_SIZE },
   });
   return terms.sort((a, b) => a.sequence - b.sequence);
@@ -183,6 +195,156 @@ export async function updateHouse(id: string, input: HouseInput): Promise<HouseR
 
 export async function deleteHouse(id: string): Promise<void> {
   await apiClient.delete(endpoints.schoolOrganization.house(id));
+}
+
+export async function fetchClassPage(query: StructurePageQuery): Promise<Page<ClassRecord>> {
+  return fetchPage<ClassRecord>(apiClient, endpoints.schoolOrganization.classes, {
+    query: toStructureQueryParams(query),
+  });
+}
+
+export async function createClass(input: ClassInput): Promise<ClassRecord> {
+  const { data } = await apiClient.post<ClassRecord>(endpoints.schoolOrganization.classes, input);
+  return data;
+}
+
+export async function updateClass(id: string, input: ClassInput): Promise<ClassRecord> {
+  const { data } = await apiClient.patch<ClassRecord>(
+    endpoints.schoolOrganization.class(id),
+    input,
+  );
+  return data;
+}
+
+export async function deleteClass(id: string): Promise<void> {
+  await apiClient.delete(endpoints.schoolOrganization.class(id));
+}
+
+/** `GET /sections?class_id=` — one class's sections in full, active or not, by name: one page
+ * of the largest size, as `fetchSections` reads the same list for a picker. */
+export async function fetchClassSections(classId: string): Promise<SectionRecord[]> {
+  const { items } = await fetchPage<SectionRecord>(
+    apiClient,
+    endpoints.schoolOrganization.sections,
+    { query: { class_id: classId, page_size: MAX_PAGE_SIZE } },
+  );
+  return items;
+}
+
+export async function createSection(input: SectionInput): Promise<SectionRecord> {
+  const { data } = await apiClient.post<SectionRecord>(
+    endpoints.schoolOrganization.sections,
+    input,
+  );
+  return data;
+}
+
+export async function updateSection(id: string, input: SectionInput): Promise<SectionRecord> {
+  const { data } = await apiClient.patch<SectionRecord>(
+    endpoints.schoolOrganization.section(id),
+    input,
+  );
+  return data;
+}
+
+export async function deleteSection(id: string): Promise<void> {
+  await apiClient.delete(endpoints.schoolOrganization.section(id));
+}
+
+export async function fetchSubjectPage(query: StructurePageQuery): Promise<Page<SubjectRecord>> {
+  return fetchPage<SubjectRecord>(apiClient, endpoints.schoolOrganization.subjects, {
+    query: toStructureQueryParams(query),
+  });
+}
+
+export async function createSubject(input: SubjectInput): Promise<SubjectRecord> {
+  const { data } = await apiClient.post<SubjectRecord>(
+    endpoints.schoolOrganization.subjects,
+    input,
+  );
+  return data;
+}
+
+export async function updateSubject(id: string, input: SubjectInput): Promise<SubjectRecord> {
+  const { data } = await apiClient.patch<SubjectRecord>(
+    endpoints.schoolOrganization.subject(id),
+    input,
+  );
+  return data;
+}
+
+export async function deleteSubject(id: string): Promise<void> {
+  await apiClient.delete(endpoints.schoolOrganization.subject(id));
+}
+
+// --- Academic sessions (cursor paged) and their terms ---------------------------------------
+
+export async function fetchSessionPage(
+  query: SessionPageQuery,
+): Promise<Page<AcademicSessionRecord>> {
+  return fetchPage<AcademicSessionRecord>(
+    apiClient,
+    endpoints.schoolOrganization.academicSessions,
+    {
+      query: toSessionQueryParams(query),
+    },
+  );
+}
+
+export async function createSession(input: SessionInput): Promise<AcademicSessionRecord> {
+  const { data } = await apiClient.post<AcademicSessionRecord>(
+    endpoints.schoolOrganization.academicSessions,
+    input,
+  );
+  return data;
+}
+
+export async function updateSession(
+  id: string,
+  input: SessionInput,
+): Promise<AcademicSessionRecord> {
+  const { data } = await apiClient.patch<AcademicSessionRecord>(
+    endpoints.schoolOrganization.academicSession(id),
+    input,
+  );
+  return data;
+}
+
+/** `:activate`: refused with a 422 `{structure: [...]}` listing every gap at once. */
+export async function activateSession(id: string): Promise<AcademicSessionRecord> {
+  const { data } = await apiClient.post<AcademicSessionRecord>(
+    endpoints.schoolOrganization.academicSessionAction(id, "activate"),
+  );
+  return data;
+}
+
+export async function closeSession(id: string): Promise<AcademicSessionRecord> {
+  const { data } = await apiClient.post<AcademicSessionRecord>(
+    endpoints.schoolOrganization.academicSessionAction(id, "close"),
+  );
+  return data;
+}
+
+/** `:clone`: a new planned session with the source's curriculum; its terms are not copied. */
+export async function cloneSession(
+  id: string,
+  input: SessionCloneInput,
+): Promise<AcademicSessionRecord> {
+  const { data } = await apiClient.post<AcademicSessionRecord>(
+    endpoints.schoolOrganization.academicSessionAction(id, "clone"),
+    input,
+  );
+  return data;
+}
+
+export async function createTerm(input: TermCreateInput): Promise<TermRecord> {
+  const { data } = await apiClient.post<TermRecord>(endpoints.schoolOrganization.terms, input);
+  return data;
+}
+
+export async function updateTerm(id: string, input: TermInput): Promise<TermRecord> {
+  const { data } = await apiClient.patch<TermRecord>(endpoints.schoolOrganization.term(id), input);
+  return data;
 }
 
 /** `GET /holiday-calendar`: the effective working week (Monday to Friday when nothing is
