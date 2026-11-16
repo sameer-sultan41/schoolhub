@@ -9907,12 +9907,6 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/PublicContactSubmission'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PublicContactSubmission'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PublicContactSubmission'
       responses:
         '201':
           content:
@@ -9920,6 +9914,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/ContactReceived'
           description: ''
+        '413':
+          description: The body is over 16 KB.
+        '415':
+          description: The body is not JSON.
         '404':
           description: No live site for this school (the same for every refusal).
         '422':

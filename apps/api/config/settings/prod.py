@@ -13,6 +13,11 @@ INTEGRATIONS_ENCRYPTION_KEYS = env.list("INTEGRATIONS_ENCRYPTION_KEYS")
 # Required for the same reason: a callback URL pointing nowhere loses payments silently.
 API_PUBLIC_URL = env("API_PUBLIC_URL")
 
+# Required (0 means the API is reached directly): per-IP throttles and stored IPs trust
+# X-Forwarded-For only as far as this says, so a wrong default would be spoofable or blind.
+NUM_PROXIES = env.int("NUM_PROXIES")
+REST_FRAMEWORK = {**REST_FRAMEWORK, "NUM_PROXIES": NUM_PROXIES}
+
 SECURE_SSL_REDIRECT = True
 SECURE_HSTS_SECONDS = 31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True

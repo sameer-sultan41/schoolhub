@@ -22915,8 +22915,6 @@ export interface operations {
         requestBody?: {
             content: {
                 "application/json": components["schemas"]["PublicContactSubmission"];
-                "application/x-www-form-urlencoded": components["schemas"]["PublicContactSubmission"];
-                "multipart/form-data": components["schemas"]["PublicContactSubmission"];
             };
         };
         responses: {
@@ -22930,6 +22928,20 @@ export interface operations {
             };
             /** @description No live site for this school (the same for every refusal). */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The body is over 16 KB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The body is not JSON. */
+            415: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -8,17 +8,20 @@ is allowed for mobile clients (Invariant 7). Field rules live in `create_contact
 
 from __future__ import annotations
 
-from urllib.parse import urlparse
+import io
 from uuid import UUID
 
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import APIException, NotFound, ParseError, UnsupportedMediaType
+from rest_framework.parsers import JSONParser
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.website_cms.constants import CONTACT_BODY_MAX_BYTES
 from apps.website_cms.contact_submissions.services import create_contact_submission
+from apps.website_cms.cors import origin_host
 from apps.website_cms.errors import violation
 from apps.website_cms.hosts import resolve_host
 from apps.website_cms.models import WebsitePage
@@ -28,12 +31,40 @@ from apps.website_cms.public.serializers import (
 )
 from apps.website_cms.public.views import bound_website_tenant
 from core.api.throttling import PublicFormTenantThrottle, PublicFormThrottle
+from core.idempotency.models import IdempotencyRecord
 from core.idempotency.services import replay_or_execute
 from core.rbac.machine import client_ip
 from core.tenancy.models import Tenant
 
 TENANT_SLUG_HEADER = "X-Tenant-Slug"
 RECEIVED = {"status": "received"}
+IDEMPOTENCY_KEY_MAX = IdempotencyRecord._meta.get_field("key").max_length
+
+
+class PayloadTooLarge(APIException):
+    status_code = 413
+    default_detail = "The request body is too large."
+    default_code = "payload_too_large"
+
+
+def _json_body(request: Request) -> dict:
+    """The JSON object in the body, read at most `CONTACT_BODY_MAX_BYTES` + 1 bytes.
+
+    A declared `Content-Length` over the cap is refused without reading; an absent or invalid
+    one is still bounded by the read, so `request.data` never buffers an unbounded body.
+    """
+    if not (request.content_type or "").startswith("application/json"):
+        raise UnsupportedMediaType(request.content_type or "")
+    declared = request.META.get("CONTENT_LENGTH", "")
+    if declared.isdigit() and int(declared) > CONTACT_BODY_MAX_BYTES:
+        raise PayloadTooLarge
+    raw = request.read(CONTACT_BODY_MAX_BYTES + 1)
+    if len(raw) > CONTACT_BODY_MAX_BYTES:
+        raise PayloadTooLarge
+    data = JSONParser().parse(io.BytesIO(raw))
+    if not isinstance(data, dict):
+        raise ParseError("Expected a JSON object.")
+    return data
 
 
 def _tenant_for(request: Request) -> Tenant:
@@ -44,7 +75,7 @@ def _tenant_for(request: Request) -> Tenant:
         raise NotFound
     origin = request.headers.get("Origin")
     if origin is not None:
-        origin_tenant = resolve_host(urlparse(origin).hostname or "")
+        origin_tenant = resolve_host(origin_host(origin) or "")
         if origin_tenant is None or origin_tenant.pk != tenant.pk:
             raise NotFound
     return tenant
@@ -55,6 +86,7 @@ class PublicContactSubmissionView(APIView):
 
     authentication_classes: list = []
     permission_classes = [AllowAny]
+    parser_classes = [JSONParser]
     throttle_classes = [PublicFormThrottle, PublicFormTenantThrottle]
 
     @extend_schema(
@@ -78,6 +110,8 @@ class PublicContactSubmissionView(APIView):
         ],
         responses={
             201: ContactReceivedSerializer,
+            413: OpenApiResponse(description="The body is over 16 KB."),
+            415: OpenApiResponse(description="The body is not JSON."),
             404: OpenApiResponse(
                 description="No live site for this school (the same for every refusal)."
             ),
@@ -87,10 +121,19 @@ class PublicContactSubmissionView(APIView):
         auth=[],
     )
     def post(self, request: Request) -> Response:
-        serializer = PublicContactSubmissionSerializer(data=request.data)
+        # Header-only checks first: a bad slug or Origin is refused without parsing a body.
+        tenant = _tenant_for(request)
+        body = _json_body(request)
+        key = request.headers.get("Idempotency-Key")
+        if key is not None and len(key) > IDEMPOTENCY_KEY_MAX:
+            raise violation(
+                "idempotency_key",
+                "invalid_idempotency_key",
+                f"use at most {IDEMPOTENCY_KEY_MAX} characters.",
+            )
+        serializer = PublicContactSubmissionSerializer(data=body)
         serializer.is_valid(raise_exception=True)
         data = dict(serializer.validated_data)
-        tenant = _tenant_for(request)
         with bound_website_tenant(tenant):
             if data.pop("company_website", ""):
                 # Honeypot: a bot filled the hidden field; look like success, store nothing.
@@ -111,8 +154,8 @@ class PublicContactSubmissionView(APIView):
 
             return replay_or_execute(
                 tenant_id=tenant.pk,
-                key=request.headers.get("Idempotency-Key"),
+                key=key,
                 endpoint="public-contact-submissions:create",
-                request_data=request.data,
+                request_data=body,
                 execute=execute,
             )

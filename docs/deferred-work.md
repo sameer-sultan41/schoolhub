@@ -2298,3 +2298,9 @@ or subject)."` in English, with no plural form, so a count of one is ungrammatic
 - **The generate dialog has its own job hook.** `use-generate-invoices.ts` exists because
   `features/exams/use-exam-job.ts` keeps one idempotency key across form edits; a generic `hooks/`
   job-start hook would serve both.
+- **Audit and contact IPs are only as right as `NUM_PROXIES`.** The audit log and the stored
+  `contact_submissions.ip` both use `core.rbac.machine.client_ip`, which trusts
+  `X-Forwarded-For` only as far as `NUM_PROXIES` says (the audit log used to take the
+  spoofable left-most entry). Production now refuses to boot without the variable, but it must
+  match the real proxy chain of the deployment; a wrong count records a proxy's address or a
+  client-chosen one.

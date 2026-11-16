@@ -714,6 +714,8 @@ class PublicEndpointContractTests(SimpleTestCase):
             if route in PUBLIC_ANONYMOUS_ROUTES:
                 if not throttles or throttles == defaults:
                     offenders.append(f"{route}: anonymous, but no throttle of its own")
+                if list(getattr(view, "authentication_classes", ())) != []:
+                    offenders.append(f"{route}: anonymous, but authenticates something")
                 continue
             machine_routes += 1
             problems = []

@@ -247,3 +247,13 @@ PR A of [`docs/superpowers/plans/2026-11-15-website-cms.md`](../superpowers/plan
 | ADR-0039 candidate | The `public.py`-per-owning-module convention (a read-only, tenant-bound, dataclass-returning surface that website_cms imports) is a choice between real alternatives not covered by ADR-0038: website_cms querying the other apps' models directly, or the owning apps pushing snapshots into website_cms tables. PR C writes ADR-0039 and should record the reasons (ADR-0013's dependency direction, no duplicated tables to keep in sync, a constant query count per page render) alongside the machine-token and host-resolution decisions |
 | Not yet shipped | PR C: the public content API, machine-token auth, host resolution and the media redirect. PR D: custom domains. PR E onward: the renderer on the generated contract, the dashboard Website area. The deferred list is in [`deferred-work.md`](../deferred-work.md) |
 | Tests | `website_cms/tests/` (registry and theme subset, validation, default site, cross-tenant RLS), per-package `tests/` for settings, pages, navigation, SEO, news posts, school events, gallery and contact submissions (each with its cross-tenant 404 tests), the `public.py` tests in the three owning apps, and `core/files/tests/test_visibility.py` |
+
+### Built (PR C5: public contact form)
+
+- `POST /api/v1/public/contact-submissions` reads at most 16 KB of JSON (413 above, 415 for any
+  other content type) and checks `X-Tenant-Slug` and `Origin` (https only unless `DEBUG`) before parsing the body.
+  Throttles: 5/min per client IP and 200/hour per school.
+- The renderer must send a random `Idempotency-Key` per submission (at most 255 characters, else 422): the key is scoped to the school and endpoint, so a guessable one lets a later visitor replay an earlier visitor's response.
+- The CORS receiver allows a school's own origins on `/api/v1/public/` only, caches each host's answer for 60 seconds and fails closed on a database error.
+- Audit and contact IPs are correct only once `NUM_PROXIES` matches the deployment (production requires it); see `docs/deferred-work.md`.
+

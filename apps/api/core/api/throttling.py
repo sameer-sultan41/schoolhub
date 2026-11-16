@@ -7,8 +7,11 @@ Every rate is read from `REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]` by scope.
 """
 
 import hashlib
+import re
 
 from rest_framework.throttling import SimpleRateThrottle
+
+_SLUG_RE = re.compile(r"[a-z0-9-]{1,63}")
 
 
 class TenantRateThrottle(SimpleRateThrottle):
@@ -50,12 +53,18 @@ class AuthEndpointThrottle(SimpleRateThrottle):
 
 
 class PublicFormThrottle(SimpleRateThrottle):
-    """For unauthenticated public endpoints (contact, admission enquiry)."""
+    """For unauthenticated public endpoints (contact, admission enquiry).
+
+    Keyed on `client_ip`, not DRF's `get_ident`: with `NUM_PROXIES` unset `get_ident` keys on
+    the whole `X-Forwarded-For` value, so rotating that header would reset the bucket.
+    """
 
     scope = "public_form"
 
     def get_cache_key(self, request, view):
-        return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
+        from core.rbac.machine import client_ip
+
+        return self.cache_format % {"scope": self.scope, "ident": client_ip(request) or "unknown"}
 
 
 class PublicFormTenantThrottle(SimpleRateThrottle):
@@ -69,8 +78,10 @@ class PublicFormTenantThrottle(SimpleRateThrottle):
     scope = "public_form_tenant"
 
     def get_cache_key(self, request, view):
-        slug = request.headers.get("X-Tenant-Slug", "").strip().lower()[:63]
-        return self.cache_format % {"scope": self.scope, "ident": slug or "none"}
+        slug = request.headers.get("X-Tenant-Slug", "").strip().lower()
+        # Only a slug-shaped value is a key part; anything else shares one sentinel bucket.
+        ident = slug if _SLUG_RE.fullmatch(slug) else "invalid"
+        return self.cache_format % {"scope": self.scope, "ident": ident}
 
 
 class AIRequestThrottle(UserRateThrottle):

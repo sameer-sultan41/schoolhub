@@ -5,10 +5,12 @@ from __future__ import annotations
 from unittest import mock
 
 from django.core.cache import cache
+from django.db import DatabaseError
 from django.test import override_settings
-from rest_framework.test import APIClient, APITestCase
+from rest_framework.test import APIClient, APIRequestFactory, APITestCase
 
-from apps.website_cms.constants import CONTACT_MESSAGE_MAX
+from apps.website_cms.constants import CONTACT_BODY_MAX_BYTES, CONTACT_MESSAGE_MAX
+from apps.website_cms.hosts import resolve_host
 from apps.website_cms.models import ContactSubmission, CustomDomainStatus
 from apps.website_cms.tests.factories import (
     TenantFactory,
@@ -16,6 +18,8 @@ from apps.website_cms.tests.factories import (
     enable_feature,
     make_custom_domain,
 )
+from core.api.throttling import PublicFormTenantThrottle
+from core.idempotency.models import IdempotencyRecord
 from core.tenancy.context import tenant_context
 from core.tenancy.models import TenantStatus
 
@@ -153,6 +157,62 @@ class ContactPostTests(ContactPostCase):
 
         self.assertEqual(statuses, [201] * 5 + [429])
 
+    def test_oversized_body_413(self) -> None:
+        response = self.post(self.body(message="x" * (CONTACT_BODY_MAX_BYTES + 1)))
+
+        self.assertEqual(response.status_code, 413)
+        self.assertEqual(self.stored(), 0)
+
+    def test_multipart_is_415(self) -> None:
+        response = self.client.post(
+            URL, self.body(), format="multipart", HTTP_X_TENANT_SLUG="greenfield"
+        )
+
+        self.assertEqual(response.status_code, 415)
+
+    def test_non_object_json_is_400(self) -> None:
+        self.assertEqual(self.post(["not", "an", "object"]).status_code, 400)
+
+    def test_bad_slug_with_a_huge_body_is_404_without_parsing(self) -> None:
+        huge = self.body(message="x" * (CONTACT_BODY_MAX_BYTES * 4))
+        with mock.patch("apps.website_cms.public.contact_views.JSONParser") as parser:
+            response = self.post(huge, slug="nobody")
+
+        self.assertEqual(response.status_code, 404)
+        parser.return_value.parse.assert_not_called()
+
+    def test_bad_origin_with_a_huge_body_is_404_without_parsing(self) -> None:
+        huge = self.body(message="x" * (CONTACT_BODY_MAX_BYTES * 4))
+        with mock.patch("apps.website_cms.public.contact_views.JSONParser") as parser:
+            response = self.post(huge, origin="https://evil.example")
+
+        self.assertEqual(response.status_code, 404)
+        parser.return_value.parse.assert_not_called()
+
+    def test_http_origin_refused_unless_debug(self) -> None:
+        http_origin = f"http://greenfield.{PLATFORM}"
+
+        self.assertEqual(self.post(origin=http_origin).status_code, 404)
+        with override_settings(DEBUG=True):
+            self.assertEqual(self.post(origin=http_origin).status_code, 201)
+
+    def test_overlong_idempotency_key_is_422(self) -> None:
+        max_length = IdempotencyRecord._meta.get_field("key").max_length
+
+        response = self.post(HTTP_IDEMPOTENCY_KEY="k" * (max_length + 1))
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("idempotency_key", fields(response))
+
+    def test_tenant_throttle_key_is_slug_shaped_or_a_sentinel(self) -> None:
+        throttle = PublicFormTenantThrottle()
+        cases = (("Greenfield", "greenfield"), ("a b/..", "invalid"), ("", "invalid"))
+        for header, ident in cases:
+            with self.subTest(header=header):
+                request = APIRequestFactory().post(URL, HTTP_X_TENANT_SLUG=header)
+                key = throttle.get_cache_key(request, None)
+                self.assertTrue(key.endswith(f"_{ident}"), key)
+
     def test_tenant_throttle_429(self) -> None:
         with mock.patch(
             "core.api.throttling.PublicFormTenantThrottle.get_rate", return_value="2/hour"
@@ -186,6 +246,28 @@ class PublicCorsTests(ContactPostCase):
 
         self.assertEqual(response["Access-Control-Allow-Origin"], self.origin)
         self.assertNotIn("Access-Control-Allow-Origin", self.post(origin="https://evil.example"))
+
+    def test_http_origin_not_allowed_unless_debug(self) -> None:
+        http_origin = f"http://greenfield.{PLATFORM}"
+
+        self.assertNotIn("Access-Control-Allow-Origin", self.preflight(http_origin))
+        cache.clear()
+        with override_settings(DEBUG=True):
+            allowed = self.preflight(http_origin)
+        self.assertEqual(allowed["Access-Control-Allow-Origin"], http_origin)
+
+    def test_database_error_fails_closed(self) -> None:
+        with mock.patch("apps.website_cms.cors.resolve_host", side_effect=DatabaseError):
+            response = self.preflight(self.origin)
+
+        self.assertNotIn("Access-Control-Allow-Origin", response)
+
+    def test_answer_is_cached_between_preflights(self) -> None:
+        with mock.patch("apps.website_cms.cors.resolve_host", wraps=resolve_host) as resolve:
+            self.preflight(self.origin)
+            self.preflight(self.origin)
+
+        self.assertEqual(resolve.call_count, 1)
 
     def test_suspended_tenant_origin_not_allowed(self) -> None:
         self.tenant.status = TenantStatus.SUSPENDED
