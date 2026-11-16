@@ -7,7 +7,7 @@ import { ResponsiveAlertDialog } from "@/components/responsive-alert-dialog";
 import { useConfirmAction } from "@/hooks/use-confirm-action";
 import { useInvalidateModule } from "@/hooks/use-invalidate-module";
 import { WEBSITE_QUERY_MODULE } from "@/services/shared/website-content";
-import { useContentErrors } from "./content-errors";
+import { withReasonText } from "./reason-message";
 
 export interface DeleteContentDialogProps {
   open: boolean;
@@ -16,14 +16,20 @@ export interface DeleteContentDialogProps {
   description: string;
   /** The DELETE call. */
   remove: () => Promise<unknown>;
-  /** After the record is gone, e.g. to close the sheet or leave the album's page. */
+  /** The confirm button; "Delete" by default. */
+  confirmLabel?: string;
+  /** The toast once it is gone; "Deleted." by default. */
+  deletedMessage?: string;
+  /** The `website.reasons` scope for the refusal's copy (`reason-message.ts`). */
+  reasonScope?: string;
+  /** After the record is gone, e.g. to close the sheet or leave the record's page. */
   onDeleted?: () => void;
 }
 
 /**
- * Removes a news post, an album or a gallery item. The server refuses a published post or album
- * (`unpublish_first`); the refusal shows inline, in the viewer's language, and the dialog stays
- * open.
+ * Deletes a website record: a page, news post, album or gallery item. The server refuses a
+ * published one (`unpublish_first`) and a page in use (`page_in_use`); the refusal shows
+ * inline, translated when `website.reasons` knows it, and the dialog stays open.
  *
  * Mounting contract: the caller mounts this only while it is open, so every open starts with no
  * stale error.
@@ -34,24 +40,27 @@ export function DeleteContentDialog({
   title,
   description,
   remove,
+  confirmLabel,
+  deletedMessage,
+  reasonScope,
   onDeleted,
 }: DeleteContentDialogProps) {
   const t = useTranslations("website.content");
   const tCommon = useTranslations("common");
+  const tReasons = useTranslations("website.reasons");
   const invalidateWebsite = useInvalidateModule(WEBSITE_QUERY_MODULE);
-  const { localise } = useContentErrors();
 
   const { error, isPending, confirm } = useConfirmAction({
     mutationFn: async () => {
       try {
         await remove();
-      } catch (failure) {
-        throw localise(failure);
+      } catch (refusal) {
+        throw withReasonText(refusal, tReasons, reasonScope);
       }
     },
     onSuccess: () => {
       invalidateWebsite();
-      toast.success(t("deleted"));
+      toast.success(deletedMessage ?? t("deleted"));
       onOpenChange(false);
       onDeleted?.();
     },
@@ -64,7 +73,7 @@ export function DeleteContentDialog({
       onOpenChange={onOpenChange}
       title={title}
       description={description}
-      confirmLabel={t("delete")}
+      confirmLabel={confirmLabel ?? t("delete")}
       variant="destructive"
       isPending={isPending}
       error={error ?? undefined}

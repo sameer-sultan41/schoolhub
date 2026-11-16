@@ -92,7 +92,7 @@ function EventForm({
 }) {
   const t = useTranslations("website.events");
   const tContent = useTranslations("website.content");
-  const tErrors = useTranslations("website.contentErrors");
+  const tReasons = useTranslations("website.reasons");
   const tCommon = useTranslations("common");
   const invalidateWebsite = useInvalidateModule(WEBSITE_QUERY_MODULE);
   const tracker = useUploadTracker();
@@ -104,9 +104,9 @@ function EventForm({
       eventFormSchema({
         ...fieldMessages,
         startRequired: t("validation.startRequired"),
-        endBeforeStart: tErrors("end_before_start"),
+        endBeforeStart: tReasons("end_before_start"),
       }),
-    [fieldMessages, t, tErrors],
+    [fieldMessages, t, tReasons],
   );
   const form = useForm<EventFormValues>({
     resolver: zodResolver(schema),

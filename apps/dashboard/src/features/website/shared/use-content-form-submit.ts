@@ -7,7 +7,8 @@ import type { FieldValues, UseFormReturn } from "react-hook-form";
 import { useFormDialogSubmit } from "@/hooks/use-form-dialog-submit";
 import { rekeyFieldErrors } from "@/lib/error-message";
 import type { JsonSchema } from "@/services";
-import { useContentErrors } from "./content-errors";
+import { CONTENT_REASON_SCOPE } from "./content-fields";
+import { withReasonText } from "./reason-message";
 import { rekeySchemaErrors } from "./schema-model";
 
 /**
@@ -52,7 +53,7 @@ export function useContentFormSubmit<TValues extends FieldValues, TResult>({
   onSuccess,
 }: ContentFormSubmitOptions<TValues, TResult>) {
   const tCommon = useTranslations("common");
-  const { localise } = useContentErrors();
+  const tReasons = useTranslations("website.reasons");
   // The block inputs the last refusal named; read when that refusal is mapped.
   const richTextFields = useRef<string[]>([]);
 
@@ -62,7 +63,7 @@ export function useContentFormSubmit<TValues extends FieldValues, TResult>({
       try {
         return await save(values);
       } catch (failure) {
-        const localised = localise(failure);
+        const localised = withReasonText(failure, tReasons, CONTENT_REASON_SCOPE);
         if (richTextName === undefined) throw localised;
         const doc: unknown = values[richTextName];
         const rekeyed = rekeyRichTextErrors(localised, richTextName, doc);

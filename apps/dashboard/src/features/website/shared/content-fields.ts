@@ -17,6 +17,10 @@ export const CONTENT_TITLE_MAX = 200;
 /** `website_cms/constants.py::CONTENT_SLUG_MAX_LENGTH`. */
 export const CONTENT_SLUG_MAX = 120;
 
+/** The `website.reasons` scope whose copy differs from a page's (`reason-message.ts`): a news,
+ * event or album address is one segment, unique among its own kind. */
+export const CONTENT_REASON_SCOPE = "content";
+
 export interface ContentFieldMessages extends RichTextMessages {
   slug: string;
 }

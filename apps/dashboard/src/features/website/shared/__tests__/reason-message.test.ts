@@ -10,7 +10,11 @@ jest.mock("@/services", () =>
     .servicesMock({}),
 );
 
-const KNOWN: Record<string, string> = { page_in_use: "This page is in use." };
+const KNOWN: Record<string, string> = {
+  page_in_use: "This page is in use.",
+  slug_taken: "Another page already uses this address.",
+  "content.slug_taken": "Another item already uses this address.",
+};
 const tReasons = Object.assign((key: string) => KNOWN[key] ?? key, {
   has: (key: string) => key in KNOWN,
 });
@@ -22,6 +26,19 @@ describe("reason messages", () => {
       "Another page already uses this address.",
     );
     expect(reasonText("This field is required.", tReasons)).toBe("This field is required.");
+    expect(reasonText("empty_album: add at least one item before publishing.", tReasons)).toBe(
+      "Add at least one item before publishing.",
+    );
+  });
+
+  it("prefers a scope's own copy, and falls back to the shared one", () => {
+    const issue = "slug_taken: another item already uses this address.";
+
+    expect(reasonText(issue, tReasons, "content")).toBe("Another item already uses this address.");
+    expect(reasonText(issue, tReasons)).toBe("Another page already uses this address.");
+    expect(reasonText("page_in_use: it is the homepage.", tReasons, "content")).toBe(
+      "This page is in use.",
+    );
   });
 
   it("rewrites every detail of an API error, and leaves anything else alone", () => {

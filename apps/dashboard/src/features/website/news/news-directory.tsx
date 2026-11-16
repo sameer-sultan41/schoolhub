@@ -12,6 +12,7 @@ import {
   NEWS_SORT_FIELD,
 } from "@/services/modules/website/news-posts/news-posts-constant";
 import { ContentDirectoryCard } from "@/features/website/shared/content-directory-card";
+import { CONTENT_REASON_SCOPE } from "@/features/website/shared/content-fields";
 import { DeleteContentDialog } from "@/features/website/shared/delete-content-dialog";
 import { useContentDirectory } from "@/features/website/shared/use-content-directory";
 import { useNewsColumns } from "./news-columns";
@@ -94,6 +95,7 @@ export function NewsDirectory() {
           title={t("delete.title", { title: target.post.title })}
           description={t("delete.description")}
           remove={() => Services.newsPosts.deleteNewsPost(target.post.id)}
+          reasonScope={CONTENT_REASON_SCOPE}
         />
       )}
     </ContentDirectoryCard>

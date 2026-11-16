@@ -59,7 +59,7 @@ export interface GalleryItemDialogProps {
  */
 export function GalleryItemDialog({ open, onOpenChange, albumId, item }: GalleryItemDialogProps) {
   const t = useTranslations("website.gallery.items.form");
-  const tErrors = useTranslations("website.contentErrors");
+  const tReasons = useTranslations("website.reasons");
   const tCommon = useTranslations("common");
   const invalidateWebsite = useInvalidateModule(WEBSITE_QUERY_MODULE);
   const fieldMessages = useContentFieldMessages();
@@ -69,10 +69,10 @@ export function GalleryItemDialog({ open, onOpenChange, albumId, item }: Gallery
       galleryItemSchema({
         ...fieldMessages,
         altRequired: fieldMessages.required,
-        embedRequired: tErrors("embed_required"),
-        embedHttps: tErrors("invalid_url"),
+        embedRequired: tReasons("embed_required"),
+        embedHttps: tReasons("invalid_url"),
       }),
-    [fieldMessages, tErrors],
+    [fieldMessages, tReasons],
   );
   const form = useForm<GalleryItemFormValues>({
     resolver: zodResolver(schema),

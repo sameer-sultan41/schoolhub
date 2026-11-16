@@ -9,8 +9,8 @@ import { ArrowLeft } from "lucide-react";
 
 import { Toolbar, ToolbarActions, ToolbarHeading } from "@/app/(app)/shell/toolbar";
 import { Paths } from "@/config/paths";
-import { useContentErrors } from "@/features/website/shared/content-errors";
 import { ContentStatusBadge } from "@/features/website/shared/content-status-badge";
+import { CONTENT_REASON_SCOPE } from "@/features/website/shared/content-fields";
 import { DeleteContentDialog } from "@/features/website/shared/delete-content-dialog";
 import { PublishActions } from "@/features/website/shared/publish-actions";
 import { useCurrentUser } from "@/hooks/use-current-user";
@@ -27,7 +27,6 @@ export function AlbumHeader({ album }: { album: GalleryAlbumRecord }) {
   const t = useTranslations("website.gallery");
   const tContent = useTranslations("website.content");
   const router = useRouter();
-  const { asAction } = useContentErrors();
   const { data: user } = useCurrentUser();
   const canUpdate = hasPermission(user, "website.gallery-album.update");
   const canPublish = hasPermission(user, "website.gallery-album.publish");
@@ -62,8 +61,8 @@ export function AlbumHeader({ album }: { album: GalleryAlbumRecord }) {
           <PublishActions
             status={album.status}
             canPublish={canPublish}
-            publish={asAction(() => Services.galleryAlbums.publishGalleryAlbum(album.id))}
-            unpublish={asAction(() => Services.galleryAlbums.unpublishGalleryAlbum(album.id))}
+            publish={() => Services.galleryAlbums.publishGalleryAlbum(album.id)}
+            unpublish={() => Services.galleryAlbums.unpublishGalleryAlbum(album.id)}
           />
           {canDelete && album.status !== "published" && (
             <Button
@@ -86,6 +85,7 @@ export function AlbumHeader({ album }: { album: GalleryAlbumRecord }) {
           title={t("delete.title", { title: album.title })}
           description={t("delete.description")}
           remove={() => Services.galleryAlbums.deleteGalleryAlbum(album.id)}
+          reasonScope={CONTENT_REASON_SCOPE}
           onDeleted={() => {
             router.push(Paths.WEBSITE_GALLERY);
           }}

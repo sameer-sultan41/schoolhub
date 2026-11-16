@@ -4,7 +4,6 @@ import { useTranslations } from "next-intl";
 import { Button } from "@schoolhub/ui";
 
 import { ContentDetailSheet, ContentFact } from "@/features/website/shared/content-detail-sheet";
-import { useContentErrors } from "@/features/website/shared/content-errors";
 import { PublishActions } from "@/features/website/shared/publish-actions";
 import { EMPTY_VALUE } from "@/lib/constants";
 import { Services } from "@/services";
@@ -36,7 +35,6 @@ export function EventDetailSheet({
   const t = useTranslations("website.events");
   const tContent = useTranslations("website.content");
   const when = useEventWhen();
-  const { asAction } = useContentErrors();
   const query = useSchoolEventDetail(eventId);
   const event = query.data;
 
@@ -84,9 +82,9 @@ export function EventDetailSheet({
             <PublishActions
               status={event.status}
               canPublish={permissions.canPublish}
-              publish={asAction(() => Services.schoolEvents.publishSchoolEvent(event.id))}
-              unpublish={asAction(() => Services.schoolEvents.unpublishSchoolEvent(event.id))}
-              archive={asAction(() => Services.schoolEvents.archiveSchoolEvent(event.id))}
+              publish={() => Services.schoolEvents.publishSchoolEvent(event.id)}
+              unpublish={() => Services.schoolEvents.unpublishSchoolEvent(event.id)}
+              archive={() => Services.schoolEvents.archiveSchoolEvent(event.id)}
             />
           </>
         )

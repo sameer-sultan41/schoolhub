@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
-import { useContentErrors } from "@/features/website/shared/content-errors";
+import { CONTENT_REASON_SCOPE } from "@/features/website/shared/content-fields";
+import { withReasonText } from "@/features/website/shared/reason-message";
 import { foldUnknownFieldErrors, NON_FIELD, resolveErrorMessage } from "@/lib/error-message";
 import { queryKeys } from "@/lib/query-client";
 import { Services, type GalleryItemRecord } from "@/services";
@@ -44,7 +45,7 @@ export function useGalleryItems(albumId: string) {
   const tErrors = useTranslations("errors");
   const tCommon = useTranslations("common");
   const queryClient = useQueryClient();
-  const { localise } = useContentErrors();
+  const tReasons = useTranslations("website.reasons");
   const queryKey = galleryItemsKey(albumId);
   const [reorderError, setReorderError] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
@@ -72,7 +73,7 @@ export function useGalleryItems(albumId: string) {
       if (context?.previous) queryClient.setQueryData(queryKey, context.previous);
       setReorderError(
         resolveErrorMessage(
-          foldUnknownFieldErrors(localise(error)),
+          foldUnknownFieldErrors(withReasonText(error, tReasons, CONTENT_REASON_SCOPE)),
           tErrors,
           tCommon("submitFailed"),
           NON_FIELD,

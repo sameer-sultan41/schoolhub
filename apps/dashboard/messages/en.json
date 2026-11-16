@@ -4454,20 +4454,6 @@
       "published": "Published",
       "archived": "Archived"
     },
-    "contentErrors": {
-      "unpublish_first": "Unpublish it first: published content can't be deleted.",
-      "empty_album": "Add at least one photo or video before publishing this album.",
-      "end_before_start": "The event can't end before it starts.",
-      "invalid_url": "Use an https:// link of at most 500 characters.",
-      "embed_host_not_allowed": "Only YouTube and Vimeo videos can be embedded.",
-      "embed_required": "Enter the video's link.",
-      "file_required": "Choose an image.",
-      "slug_taken": "Another item already uses this address.",
-      "invalid_slug": "Use lowercase letters, digits and single hyphens.",
-      "invalid_event": "That event no longer exists.",
-      "invalid_item_ids": "The album changed while you were reordering. Reload it and try again.",
-      "position_conflict": "Someone else added an item at the same time. Please try again."
-    },
     "directory": {
       "search": "Search",
       "clearSearch": "Clear search",
@@ -4830,7 +4816,20 @@
       "invalid_slug": "Use lowercase letters, numbers and single hyphens, with / between parts.",
       "home_exists": "The website already has a home page.",
       "too_many_sections": "This page has more sections than a page may hold. Remove some, then save.",
-      "invalid_section_id": "The page changed since you opened it. Reload it and try again."
+      "invalid_section_id": "The page changed since you opened it. Reload it and try again.",
+      "empty_album": "Add at least one photo or video before publishing this album.",
+      "end_before_start": "The event can't end before it starts.",
+      "invalid_url": "Use an https:// link of at most 500 characters.",
+      "embed_host_not_allowed": "Only YouTube and Vimeo videos can be embedded.",
+      "embed_required": "Enter the video's link.",
+      "file_required": "Choose an image.",
+      "invalid_event": "That event no longer exists.",
+      "invalid_item_ids": "The album changed while you were reordering. Reload it and try again.",
+      "position_conflict": "Someone else added an item at the same time. Please try again.",
+      "content": {
+        "slug_taken": "Another item already uses this address.",
+        "invalid_slug": "Use lowercase letters, digits and single hyphens."
+      }
     },
     "imageField": {
       "uploading": "Uploading…",

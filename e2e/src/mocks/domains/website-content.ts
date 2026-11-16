@@ -3,6 +3,7 @@ import { uuid } from "@/data/factories";
 import { fail, noContent, ok, type MockResponse } from "../envelope";
 import { pageOf } from "../list";
 import type { MockModule, MockRequest } from "../router";
+import { refuse } from "./website";
 
 /** The generated schema marks server-set fields `readonly`; a stub is the server, so it writes
  * them (a status, a position). */
@@ -88,38 +89,27 @@ export function buildGalleryItem(overrides: Partial<GalleryItem> = {}): GalleryI
   };
 }
 
-/** `website_cms/errors.py::violation`: a 422 whose one detail is `"<reason>: <sentence>"` under
- * `field`, which the envelope handler also makes the message, with `meta.reason`. */
-function violation(field: string, reason: string, sentence: string): MockResponse {
-  const issue = `${reason}: ${sentence}`;
-  return fail(422, issue, {
-    code: "domain_rule_violation",
-    details: [{ field, issue }],
-    meta: { reason },
-  });
-}
-
 /** `content.py::validate_content_slug` and `slug_taken`, in the order the services check. */
 function slugRefusal(slug: unknown, taken: boolean): MockResponse | undefined {
   if (typeof slug !== "string" || slug.length > 120 || !SLUG.test(slug)) {
-    return violation("slug", "invalid_slug", "use lowercase letters, digits and hyphens.");
+    return refuse("slug", "invalid_slug", "use lowercase letters, digits and hyphens.");
   }
   return taken
-    ? violation("slug", "slug_taken", "another item already uses this address.")
+    ? refuse("slug", "slug_taken", "another item already uses this address.")
     : undefined;
 }
 
 /** `item_services.py::_validate_item` for a video. */
 function embedRefusal(url: string): MockResponse | undefined {
-  if (!url) return violation("embed_url", "embed_required", "a video item needs an embed URL.");
+  if (!url) return refuse("embed_url", "embed_required", "a video item needs an embed URL.");
   if (url.length > EMBED_URL_MAX) {
-    return violation("embed_url", "invalid_url", "the embed URL is too long.");
+    return refuse("embed_url", "invalid_url", "the embed URL is too long.");
   }
   if (!url.startsWith("https://")) {
-    return violation("embed_url", "invalid_url", "the embed URL must be an https URL.");
+    return refuse("embed_url", "invalid_url", "the embed URL must be an https URL.");
   }
   if (!EMBED_HOSTS.includes(new URL(url).hostname.toLowerCase())) {
-    return violation("embed_url", "embed_host_not_allowed", "this video host is not supported.");
+    return refuse("embed_url", "embed_host_not_allowed", "this video host is not supported.");
   }
   return undefined;
 }
@@ -215,7 +205,7 @@ export function websiteContentModule(options: WebsiteContentOptions = {}): MockM
       const post = posts.find((row) => row.id === request.params["postId"]);
       if (!post) return notFound();
       if (post.status === "published") {
-        return violation("status", "unpublish_first", "unpublish this post before deleting it.");
+        return refuse("status", "unpublish_first", "unpublish this post before deleting it.");
       }
       posts.splice(posts.indexOf(post), 1);
       return noContent();
@@ -242,7 +232,7 @@ export function websiteContentModule(options: WebsiteContentOptions = {}): MockM
       );
       if (refusal) return refusal;
       if (input.ends_at && input.starts_at && input.ends_at < input.starts_at) {
-        return violation("ends_at", "end_before_start", "the event cannot end before it starts.");
+        return refuse("ends_at", "end_before_start", "the event cannot end before it starts.");
       }
       const event = buildSchoolEvent({ ...input, id: uuid(), status: "draft" });
       events.unshift(event);
@@ -266,7 +256,7 @@ export function websiteContentModule(options: WebsiteContentOptions = {}): MockM
       const album = albums.find((row) => row.id === albumId);
       if (!album || action === "archive") return notFound();
       if (action === "publish" && itemsOf(album.id).length === 0) {
-        return violation("items", "empty_album", "add at least one item before publishing.");
+        return refuse("items", "empty_album", "add at least one item before publishing.");
       }
       transition(album, action);
       return ok(album);
@@ -287,7 +277,7 @@ export function websiteContentModule(options: WebsiteContentOptions = {}): MockM
         ? embedRefusal(input.embed_url ?? "")
         : input.file_id
           ? undefined
-          : violation("file_id", "file_required", "an image item needs a file.");
+          : refuse("file_id", "file_required", "an image item needs a file.");
       if (refusal) return refusal;
       const existing = itemsOf(albumId);
       const item = buildGalleryItem({
@@ -311,7 +301,7 @@ export function websiteContentModule(options: WebsiteContentOptions = {}): MockM
         ids.length === live.length &&
         live.every((item) => ids.includes(item.id));
       if (!same) {
-        return violation("ids", "invalid_item_ids", "list every item of this album exactly once.");
+        return refuse("ids", "invalid_item_ids", "list every item of this album exactly once.");
       }
       for (const item of live) item.position = ids.indexOf(item.id);
       return ok(itemsOf(albumId));

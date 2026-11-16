@@ -6,7 +6,8 @@ import { toast } from "sonner";
 import { Alert, AlertDescription, Button } from "@schoolhub/ui";
 import { Upload } from "lucide-react";
 
-import { useContentErrors } from "@/features/website/shared/content-errors";
+import { CONTENT_REASON_SCOPE } from "@/features/website/shared/content-fields";
+import { withReasonText } from "@/features/website/shared/reason-message";
 import { useInvalidateModule } from "@/hooks/use-invalidate-module";
 import { foldUnknownFieldErrors, NON_FIELD, resolveErrorMessage } from "@/lib/error-message";
 import { ApiError, Services } from "@/services";
@@ -41,7 +42,7 @@ export function GalleryUpload({
   const tErrors = useTranslations("errors");
   const tCommon = useTranslations("common");
   const invalidateWebsite = useInvalidateModule(WEBSITE_QUERY_MODULE);
-  const { localise } = useContentErrors();
+  const tReasons = useTranslations("website.reasons");
   const inputRef = useRef<HTMLInputElement>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [failures, setFailures] = useState<string[]>([]);
@@ -58,7 +59,7 @@ export function GalleryUpload({
   function reasonOf(error: unknown): string {
     if (error instanceof ApiError) {
       return resolveErrorMessage(
-        foldUnknownFieldErrors(localise(error)),
+        foldUnknownFieldErrors(withReasonText(error, tReasons, CONTENT_REASON_SCOPE)),
         tErrors,
         tCommon("submitFailed"),
         NON_FIELD,

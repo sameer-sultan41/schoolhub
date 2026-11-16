@@ -225,9 +225,7 @@ describe("news directory", () => {
     const confirm = await screen.findByRole("alertdialog");
     await user.click(within(confirm).getByRole("button", { name: "Delete" }));
 
-    expect(
-      await within(confirm).findByText("Unpublish it first: published content can't be deleted."),
-    ).toBeVisible();
+    expect(await within(confirm).findByText("Unpublish this first, then delete it.")).toBeVisible();
     expect(deletePost).toHaveBeenCalledWith(POST_ID);
   });
 });

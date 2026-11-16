@@ -21,6 +21,7 @@ import { Alert, AlertDescription, Button, Card, Skeleton } from "@schoolhub/ui";
 import { Plus } from "lucide-react";
 
 import { LoadErrorCard } from "@/components/load-error-card";
+import { CONTENT_REASON_SCOPE } from "@/features/website/shared/content-fields";
 import { DeleteContentDialog } from "@/features/website/shared/delete-content-dialog";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { Services, type GalleryItemRecord } from "@/services";
@@ -177,6 +178,7 @@ export function GalleryItems({ albumId, canUpdate }: { albumId: string; canUpdat
           title={t("removeTitle", { index: target.index + 1 })}
           description={t("removeDescription")}
           remove={() => Services.galleryAlbums.deleteGalleryItem(albumId, target.item.id)}
+          reasonScope={CONTENT_REASON_SCOPE}
         />
       )}
     </Card>

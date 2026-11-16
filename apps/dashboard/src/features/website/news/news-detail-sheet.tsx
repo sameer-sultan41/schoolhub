@@ -7,7 +7,6 @@ import { EMPTY_VALUE } from "@/lib/constants";
 import { formatDate } from "@/lib/helpers";
 import { Services } from "@/services";
 import { ContentDetailSheet, ContentFact } from "@/features/website/shared/content-detail-sheet";
-import { useContentErrors } from "@/features/website/shared/content-errors";
 import { PublishActions } from "@/features/website/shared/publish-actions";
 import { useNewsPostDetail } from "./news-form-dialog";
 
@@ -40,7 +39,6 @@ export function NewsDetailSheet({
   const t = useTranslations("website.news");
   const tContent = useTranslations("website.content");
   const locale = useLocale();
-  const { asAction } = useContentErrors();
   const query = useNewsPostDetail(postId);
   const post = query.data;
 
@@ -90,9 +88,9 @@ export function NewsDetailSheet({
             <PublishActions
               status={post.status}
               canPublish={permissions.canPublish}
-              publish={asAction(() => Services.newsPosts.publishNewsPost(post.id))}
-              unpublish={asAction(() => Services.newsPosts.unpublishNewsPost(post.id))}
-              archive={asAction(() => Services.newsPosts.archiveNewsPost(post.id))}
+              publish={() => Services.newsPosts.publishNewsPost(post.id)}
+              unpublish={() => Services.newsPosts.unpublishNewsPost(post.id)}
+              archive={() => Services.newsPosts.archiveNewsPost(post.id)}
             />
             {permissions.canDelete && post.status !== "published" && (
               <Button variant="destructive" appearance="light" onClick={onDelete}>
