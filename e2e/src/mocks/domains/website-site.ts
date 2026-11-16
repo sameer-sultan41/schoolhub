@@ -141,14 +141,29 @@ export function websiteSiteModule(options: WebsiteSiteOptions): MockModule {
       const items = (request.json() as { items?: NavItem[] } | null)?.items ?? [];
       const count = items.reduce((total, item) => total + 1 + (item.children?.length ?? 0), 0);
       if (count > NAV_MAX_ITEMS) {
-        return refuse("items", "too_many_items", "a menu holds at most 50 links.");
+        return refuse("items", "too_many_items", "at most 50 items per menu.");
       }
       // A sub-link arrives with `children: []`; one with sub-links of its own is a third level.
-      const deep = items.findIndex((item) =>
-        (item.children ?? []).some((child) => (child.children?.length ?? 0) > 0),
+      // `navigation/services.py::_check_item` keys it at that sub-link's `children`, and the
+      // tree's 422 carries `meta.reason` `invalid_target` whatever its issues are.
+      const details = items.flatMap((item, index) =>
+        (item.children ?? []).flatMap((child, childIndex) =>
+          (child.children?.length ?? 0) > 0
+            ? [
+                {
+                  field: `items.${String(index)}.children.${String(childIndex)}.children`,
+                  issue: "depth_exceeded: menus nest 2 levels at most.",
+                },
+              ]
+            : [],
+        ),
       );
-      if (deep >= 0) {
-        return refuse(`items.${String(deep)}`, "depth_exceeded", "menus go two levels deep.");
+      if (details.length > 0) {
+        return fail(422, details[0]?.issue ?? "", {
+          code: "domain_rule_violation",
+          details,
+          meta: { reason: "invalid_target" },
+        });
       }
       Object.assign(menu, { items, updated_at: ACTED_AT });
       return ok(menu);
