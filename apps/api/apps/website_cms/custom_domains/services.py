@@ -37,6 +37,7 @@ from apps.website_cms.constants import (
     DOMAIN_FAILURE_NOTIFY_AFTER_HOURS,
     DOMAIN_RETRY_WINDOW_HOURS,
     MAX_CUSTOM_DOMAINS,
+    VERIFY_IN_FLIGHT_SECONDS,
 )
 from apps.website_cms.content import locked, touch
 from apps.website_cms.custom_domains.adapters import (
@@ -199,13 +200,20 @@ def reverify_tenant_domains(tenant_id: UUID) -> int:
     """Beat step (no transaction open): re-check this school's claims added in the last 72 h.
 
     A `pending_dns` claim keeps its status on a failed check (its owner may still be setting
-    DNS up) but records the reason; `verifying` and `failed` claims become `failed`.
+    DNS up) but records the reason; `verifying` and `failed` claims become `failed`. A claim
+    moved to `verifying` in the last `VERIFY_IN_FLIGHT_SECONDS` is skipped: a user's `:verify`
+    is checking it.
     """
     tenant = Tenant.objects.get(pk=tenant_id)
-    since = timezone.now() - timedelta(hours=DOMAIN_RETRY_WINDOW_HOURS)
+    now = timezone.now()
+    since = now - timedelta(hours=DOMAIN_RETRY_WINDOW_HOURS)
+    in_flight = now - timedelta(seconds=VERIFY_IN_FLIGHT_SECONDS)
     with tenant_atomic(tenant_id):
         rows = list(
-            CustomDomain.objects.alive().filter(status__in=VERIFIABLE, created_at__gt=since)
+            CustomDomain.objects.alive()
+            .filter(status__in=VERIFIABLE, created_at__gt=since)
+            # A user's own `:verify` is mid-check: let it write its result, not this sweep.
+            .exclude(status=CustomDomainStatus.VERIFYING, updated_at__gt=in_flight)
         )
     acted = 0
     for row in rows:
@@ -224,13 +232,21 @@ def reverify_tenant_domains(tenant_id: UUID) -> int:
 def recheck_tenant_active_domains(tenant_id: UUID) -> int:
     """Daily beat step (no transaction open): re-verify this school's active domains.
 
-    `ACTIVE_RECHECK_FAILURE_LIMIT` consecutive failures turn a domain `failed`, drop its route
-    and notify: lapsed verification falls back to the subdomain (website-builder §1).
+    Only the CNAME is checked: it is what still routes the domain to us. The TXT token proved
+    ownership at verification, and schools often remove it after go-live. After
+    `ACTIVE_RECHECK_FAILURE_LIMIT` consecutive failures the domain turns `failed`, its route
+    is dropped and the school is notified: lapsed verification falls back to the subdomain
+    (website-builder §1).
     """
     tenant = Tenant.objects.get(pk=tenant_id)
     with tenant_atomic(tenant_id):
         rows = list(CustomDomain.objects.alive().filter(status=CustomDomainStatus.ACTIVE))
-    return sum(_apply_recheck(tenant, row, _check(row)) for row in rows)
+    verifier = get_dns_verifier()
+    target = settings.WEBSITE_CNAME_TARGET
+    acted = 0
+    for row in rows:
+        acted += _apply_recheck(tenant, row, verifier.check_cname(row.domain, target))
+    return acted
 
 
 def _check(row: CustomDomain) -> DnsCheck:
@@ -269,24 +285,26 @@ def _activate(
     tenant: Tenant, row: CustomDomain, expected: tuple[str, ...], actor_id: UUID | None
 ) -> Outcome:
     now = timezone.now()
-    moved = _claim(row, expected).update(
-        status=CustomDomainStatus.ACTIVE,
-        verified_at=now,
-        last_error="",
-        consecutive_failures=0,
-        failure_notified_at=None,
-        updated_by=actor_id,
-        updated_at=now,
-    )
-    if not moved:
-        return Outcome.DISCARDED
     try:
+        # One savepoint: a taken domain rolls the activation back with the route insert, so
+        # `_fail` sees the original status and the claim keeps `failure_notified_at`.
         with transaction.atomic():
+            moved = _claim(row, expected).update(
+                status=CustomDomainStatus.ACTIVE,
+                verified_at=now,
+                last_error="",
+                consecutive_failures=0,
+                failure_notified_at=None,
+                updated_by=actor_id,
+                updated_at=now,
+            )
+            if not moved:
+                return Outcome.DISCARDED
             CustomDomainRoute.objects.create(
                 domain=row.domain, tenant_id=tenant.pk, custom_domain_id=row.pk
             )
     except IntegrityError:
-        _fail(tenant, row, (CustomDomainStatus.ACTIVE,), DOMAIN_TAKEN_REASON, actor_id)
+        _fail(tenant, row, expected, DOMAIN_TAKEN_REASON, actor_id)
         return Outcome.TAKEN
     _notify(DOMAIN_ACTIVE, tenant, row)
     _revalidate(tenant, row.domain)

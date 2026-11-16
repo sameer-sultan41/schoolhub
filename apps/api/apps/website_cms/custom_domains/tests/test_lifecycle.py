@@ -12,7 +12,7 @@ from django.utils import timezone
 
 from apps.school_organization.tests.factories import grant_default_role
 from apps.website_cms import tasks
-from apps.website_cms.constants import ACTIVE_RECHECK_FAILURE_LIMIT
+from apps.website_cms.constants import ACTIVE_RECHECK_FAILURE_LIMIT, VERIFY_IN_FLIGHT_SECONDS
 from apps.website_cms.custom_domains.adapters import DnsCheck
 from apps.website_cms.custom_domains.services import (
     recheck_tenant_active_domains,
@@ -40,6 +40,9 @@ class StubVerifier:
         if self.during is not None:
             self.during()
         return self.result
+
+    def check_cname(self, domain: str, cname_target: str) -> DnsCheck:
+        return self.check(domain, "", cname_target)
 
 
 class SweepTestCase(TestCase):
@@ -133,6 +136,24 @@ class ReverifyClaimsTests(SweepTestCase):
         self.assertEqual(self.stored(row).status, CustomDomainStatus.VERIFYING)
         self.assertEqual(self.stored(row).last_error, "")
 
+    def test_a_claim_a_user_is_verifying_right_now_is_skipped(self) -> None:
+        # A fresh `verifying` row belongs to an in-flight `:verify`; an older one is stuck.
+        busy = self.claim("busy.example", CustomDomainStatus.VERIFYING)
+        stuck = self.claim("stuck.example", CustomDomainStatus.VERIFYING)
+        with tenant_context(self.tenant.id):
+            CustomDomain.objects.filter(pk=busy.pk).update(updated_at=timezone.now())
+            CustomDomain.objects.filter(pk=stuck.pk).update(
+                updated_at=timezone.now() - timedelta(seconds=VERIFY_IN_FLIGHT_SECONDS + 1)
+            )
+        verifier = mock.Mock()
+        verifier.check.return_value = DnsCheck(False, "no record")
+        with mock.patch(f"{SERVICES}.get_dns_verifier", return_value=verifier):
+            self.assertEqual(reverify_tenant_domains(self.tenant.id), 1)
+        checked = [call.args[0] for call in verifier.check.call_args_list]
+        self.assertEqual(checked, ["stuck.example"])
+        self.assertEqual(self.stored(busy).status, CustomDomainStatus.VERIFYING)
+        self.assertEqual(self.stored(stuck).status, CustomDomainStatus.FAILED)
+
     def test_the_task_sweeps_every_tenant_without_a_transaction(self) -> None:
         row = self.claim("www.greenfield.test", CustomDomainStatus.PENDING_DNS)
         summary = tasks.reverify_custom_domains()
@@ -149,6 +170,19 @@ class ActiveRecheckTests(SweepTestCase):
         recheck_tenant_active_domains(self.tenant.id)
         stored = self.stored(row)
         self.assertEqual((stored.consecutive_failures, stored.last_error), (0, ""))
+
+    def test_the_recheck_reads_only_the_cname(self) -> None:
+        # The TXT token proved ownership once; a school may delete it after go-live.
+        row = self.claim("www.greenfield.example", CustomDomainStatus.ACTIVE)
+        verifier = mock.Mock()
+        verifier.check_cname.return_value = DnsCheck(True)
+        with mock.patch(f"{SERVICES}.get_dns_verifier", return_value=verifier):
+            recheck_tenant_active_domains(self.tenant.id)
+        verifier.check.assert_not_called()
+        verifier.check_cname.assert_called_once_with(
+            "www.greenfield.example", settings.WEBSITE_CNAME_TARGET
+        )
+        self.assertEqual(self.stored(row).status, CustomDomainStatus.ACTIVE)
 
     def test_active_domain_dropped_after_three_failed_rechecks(self) -> None:
         row = self.claim("www.greenfield.example", CustomDomainStatus.ACTIVE, is_primary=True)
@@ -213,5 +247,8 @@ class BeatScheduleTests(SimpleTestCase):
             with self.subTest(entry=name):
                 entry = settings.CELERY_BEAT_SCHEDULE[name]
                 self.assertEqual(entry["task"], task)
+                if name == "reverify-custom-domains":
+                    # A tick queued behind a slow worker expires before the next one is due.
+                    self.assertEqual(entry["options"], {"expires": 14 * 60})
                 self.assertEqual(entry["schedule"], schedule)
                 self.assertIn(task, app.tasks)

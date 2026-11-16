@@ -209,3 +209,4 @@ jobs:
           DJANGO_SECRET_KEY: 7Qk2mVx9RbT4wYzA1sHf6JpLn0CdGeUiOa3ZtXrMvB8yNqEcWk5DgSjFhPuT2LiR
           DJANGO_ALLOWED_HOSTS: example.com
           API_PUBLIC_URL: https://api.example.com
+          WEBSITE_CNAME_TARGET: sites.example.com

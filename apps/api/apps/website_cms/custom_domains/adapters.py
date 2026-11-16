@@ -38,7 +38,13 @@ def txt_record_name(domain: str) -> str:
 
 
 class DnsVerifier(Protocol):
-    def check(self, domain: str, token: str, cname_target: str) -> DnsCheck: ...
+    def check(self, domain: str, token: str, cname_target: str) -> DnsCheck:
+        """Ownership and routing: the TXT token, then the CNAME (claim and `:verify`)."""
+        ...
+
+    def check_cname(self, domain: str, cname_target: str) -> DnsCheck:
+        """Routing only: the daily re-check of an active domain (its TXT may be gone)."""
+        ...
 
 
 class EdgeCertificateProvisioner(Protocol):
@@ -46,27 +52,36 @@ class EdgeCertificateProvisioner(Protocol):
 
 
 class DnspythonVerifier:
-    """Real DNS: the token in the TXT record, then a CNAME from the domain to the target.
+    """Real DNS: the token in the TXT record, then a direct CNAME from the domain to the target.
 
-    Each query's lifetime is `DNS_TIMEOUT_SECONDS`; every resolver failure is a failed check
-    with a reason, never an exception, so one bad domain cannot stop a sweep.
+    Each query's lifetime is `DNS_TIMEOUT_SECONDS`; every resolver failure, building the
+    resolver included, is a failed check with a reason, never an exception, so one bad
+    domain cannot stop a sweep. CNAME chains are not followed.
     """
 
     def check(self, domain: str, token: str, cname_target: str) -> DnsCheck:
+        return self._run(domain, cname_target, token)
+
+    def check_cname(self, domain: str, cname_target: str) -> DnsCheck:
+        return self._run(domain, cname_target, None)
+
+    def _run(self, domain: str, cname_target: str, token: str | None) -> DnsCheck:
         if not cname_target:
             return DnsCheck(False, "The platform's CNAME target is not configured.")
-        resolver = dns.resolver.Resolver()
-        resolver.timeout = DNS_TIMEOUT_SECONDS
-        resolver.lifetime = DNS_TIMEOUT_SECONDS
-        txt_name = txt_record_name(domain)
         try:
-            values = {
-                b"".join(rdata.strings).decode("utf-8", "replace")
-                for rdata in resolver.resolve(txt_name, "TXT")
-                if isinstance(rdata, TXT)
-            }
-            if token not in values:
-                return DnsCheck(False, f"The TXT record at {txt_name} does not hold the token.")
+            # Reads the host's resolver configuration, which can itself fail.
+            resolver = dns.resolver.Resolver()
+            resolver.timeout = DNS_TIMEOUT_SECONDS
+            resolver.lifetime = DNS_TIMEOUT_SECONDS
+            if token is not None:
+                txt_name = txt_record_name(domain)
+                values = {
+                    b"".join(rdata.strings).decode("utf-8", "replace")
+                    for rdata in resolver.resolve(txt_name, "TXT")
+                    if isinstance(rdata, TXT)
+                }
+                if token not in values:
+                    return DnsCheck(False, f"The TXT record at {txt_name} does not hold the token.")
             targets = {
                 rdata.target.to_text(omit_final_dot=True).lower()
                 for rdata in resolver.resolve(domain, "CNAME")
@@ -79,7 +94,7 @@ class DnspythonVerifier:
         except dns.exception.DNSException:
             return DnsCheck(False, "The DNS lookup failed.")
         if cname_target.lower().rstrip(".") not in targets:
-            return DnsCheck(False, f"{domain} does not have a CNAME to {cname_target}.")
+            return DnsCheck(False, f"{domain} does not have a direct CNAME to {cname_target}.")
         return DnsCheck(True)
 
 
@@ -93,6 +108,11 @@ class FakeDnsVerifier:
         if domain.endswith(FAKE_VERIFIED_SUFFIX):
             return DnsCheck(True)
         return DnsCheck(False, f"The TXT record at {txt_record_name(domain)} was not found.")
+
+    def check_cname(self, domain: str, cname_target: str) -> DnsCheck:
+        if domain.endswith(FAKE_VERIFIED_SUFFIX):
+            return DnsCheck(True)
+        return DnsCheck(False, f"{domain} does not have a direct CNAME to {cname_target}.")
 
 
 class NullProvisioner:

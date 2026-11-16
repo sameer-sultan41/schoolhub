@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from unittest import mock
 
 from django.test import override_settings
+from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken
 
@@ -124,8 +126,14 @@ class CreateDomainTests(DomainTestCase):
                     "type": "TXT",
                     "name": "_schoolhub-verify.www.greenfield.test",
                     "value": row.verification_token,
+                    "keep_after_verification": False,
                 },
-                {"type": "CNAME", "name": "www.greenfield.test", "value": CNAME_TARGET},
+                {
+                    "type": "CNAME",
+                    "name": "www.greenfield.test",
+                    "value": CNAME_TARGET,
+                    "keep_after_verification": True,
+                },
             ],
         )
 
@@ -275,6 +283,23 @@ class VerifyDomainTests(DomainTestCase):
         self.assertEqual(stored.last_error, DOMAIN_TAKEN_REASON)
         route = CustomDomainRoute.objects.get(domain="shared.test")
         self.assertEqual((route.tenant_id, route.custom_domain_id), (other.id, theirs.id))
+
+    def test_taken_domain_notifies_failure_once_and_never_looks_verified(self) -> None:
+        # The activation rolls back with the route insert, so the claim keeps
+        # `failure_notified_at` and a second attempt does not notify again.
+        self.claim("shared.test", CustomDomainStatus.ACTIVE, tenant=self.make_other_tenant())
+        mine = self.claim("shared.test")
+        with tenant_context(self.tenant.id):
+            CustomDomain.objects.filter(pk=mine.pk).update(
+                created_at=timezone.now() - timedelta(hours=25)
+            )
+        for _ in range(2):
+            self.assertEqual(self.client.post(verify_url(mine)).status_code, 409)
+        self.assertEqual(len(self.notifications("website.domain-failed", mine)), 1)
+        stored = self.stored(mine)
+        self.assertIsNone(stored.verified_at)
+        self.assertEqual(stored.status, CustomDomainStatus.FAILED)
+        self.assertEqual(stored.last_error, DOMAIN_TAKEN_REASON)
 
     def test_concurrent_activation_second_gets_409_not_500(self) -> None:
         # The other school activates between this check's read and its write: nothing was

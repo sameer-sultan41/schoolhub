@@ -11,11 +11,16 @@ from apps.website_cms.models import CustomDomain
 
 
 class DnsRecordSerializer(serializers.Serializer):
-    """One DNS record the school must create: `TXT` (the token) or `CNAME` (the target)."""
+    """One DNS record the school must create: `TXT` (the token) or `CNAME` (the target).
+
+    The CNAME must point directly at the target (chains are not followed) and stay: the
+    daily re-check reads it. The TXT record proves ownership once and may then be removed.
+    """
 
     type = serializers.CharField()
     name = serializers.CharField()
     value = serializers.CharField()
+    keep_after_verification = serializers.BooleanField()
 
 
 class CustomDomainSerializer(serializers.ModelSerializer):
@@ -38,11 +43,21 @@ class CustomDomainSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     @extend_schema_field(DnsRecordSerializer(many=True))
-    def get_dns_records(self, obj: CustomDomain) -> list[dict[str, str]]:
+    def get_dns_records(self, obj: CustomDomain) -> list[dict[str, str | bool]]:
         """The guided DNS instructions (§6): the verification TXT record and the CNAME."""
         return [
-            {"type": "TXT", "name": txt_record_name(obj.domain), "value": obj.verification_token},
-            {"type": "CNAME", "name": obj.domain, "value": settings.WEBSITE_CNAME_TARGET},
+            {
+                "type": "TXT",
+                "name": txt_record_name(obj.domain),
+                "value": obj.verification_token,
+                "keep_after_verification": False,
+            },
+            {
+                "type": "CNAME",
+                "name": obj.domain,
+                "value": settings.WEBSITE_CNAME_TARGET,
+                "keep_after_verification": True,
+            },
         ]
 
 

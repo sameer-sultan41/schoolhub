@@ -8570,11 +8570,17 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
-        /** @description One DNS record the school must create: `TXT` (the token) or `CNAME` (the target). */
+        /**
+         * @description One DNS record the school must create: `TXT` (the token) or `CNAME` (the target).
+         *
+         *     The CNAME must point directly at the target (chains are not followed) and stay: the
+         *     daily re-check reads it. The TXT record proves ownership once and may then be removed.
+         */
         DnsRecord: {
             type: string;
             name: string;
             value: string;
+            keep_after_verification: boolean;
         };
         /**
          * @description * `verified` - verified

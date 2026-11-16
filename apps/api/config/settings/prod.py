@@ -17,6 +17,10 @@ API_PUBLIC_URL = env("API_PUBLIC_URL")
 # The fake verifier activates any `*.test` domain without DNS; never in production.
 if WEBSITE_DNS_VERIFIER == "fake":
     raise ImproperlyConfigured("WEBSITE_DNS_VERIFIER=fake is for development and tests only.")
+# Required: with no CNAME target every custom domain fails verification, and lapses.
+WEBSITE_CNAME_TARGET = env("WEBSITE_CNAME_TARGET")
+if not WEBSITE_CNAME_TARGET:
+    raise ImproperlyConfigured("WEBSITE_CNAME_TARGET must name the custom-domain CNAME target.")
 
 SECURE_SSL_REDIRECT = True
 SECURE_HSTS_SECONDS = 31536000

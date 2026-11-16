@@ -48,6 +48,8 @@ DOMAIN_VERIFY_TXT_PREFIX = "_schoolhub-verify"
 DOMAIN_RETRY_WINDOW_HOURS = 72
 #: `website.domain-failed` is sent once, when a claim is still failing after this many hours.
 DOMAIN_FAILURE_NOTIFY_AFTER_HOURS = 24
+#: The beat skips a `verifying` claim moved there this recently: a user's `:verify` owns it.
+VERIFY_IN_FLIGHT_SECONDS = 60
 
 #: The only `x-widget` hints a theme schema may carry.
 SCHEMA_WIDGETS = frozenset({"text", "textarea", "image", "rich-text", "url"})

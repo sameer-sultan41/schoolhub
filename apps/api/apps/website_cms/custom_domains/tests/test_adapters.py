@@ -33,7 +33,7 @@ def cname(target: str) -> list:
 
 
 class DnspythonVerifierTests(SimpleTestCase):
-    def run_check(self, answers: dict[str, object], target: str = TARGET):
+    def run_check(self, answers: dict[str, object], target: str = TARGET, *, cname_only=False):
         """`answers` maps a record type to its rdata list or an exception to raise."""
         seen: list[tuple[str, str, float]] = []
 
@@ -46,7 +46,11 @@ class DnspythonVerifierTests(SimpleTestCase):
 
         with mock.patch.object(dns.resolver.Resolver, "resolve", autospec=True) as patched:
             patched.side_effect = resolve
-            result = DnspythonVerifier().check(DOMAIN, TOKEN, target)
+            verifier = DnspythonVerifier()
+            if cname_only:
+                result = verifier.check_cname(DOMAIN, target)
+            else:
+                result = verifier.check(DOMAIN, TOKEN, target)
         return result, seen
 
     def test_token_and_cname_verify(self) -> None:
@@ -88,6 +92,26 @@ class DnspythonVerifierTests(SimpleTestCase):
                 self.assertFalse(result.ok)
                 self.assertIn(words, result.reason)
 
+    def test_cname_only_check_ignores_the_txt_record(self) -> None:
+        result, seen = self.run_check({"CNAME": cname(TARGET)}, cname_only=True)
+        self.assertTrue(result.ok)
+        self.assertEqual(seen, [(DOMAIN, "CNAME", DNS_TIMEOUT_SECONDS)])
+        result, _ = self.run_check({"CNAME": cname("chain.example.")}, cname_only=True)
+        self.assertFalse(result.ok)
+        self.assertIn("direct CNAME", result.reason)
+
+    def test_an_unconfigured_resolver_is_a_failed_check_not_a_500(self) -> None:
+        broken = mock.patch.object(
+            dns.resolver, "Resolver", side_effect=dns.resolver.NoResolverConfiguration()
+        )
+        with broken:
+            for result in (
+                DnspythonVerifier().check(DOMAIN, TOKEN, TARGET),
+                DnspythonVerifier().check_cname(DOMAIN, TARGET),
+            ):
+                self.assertFalse(result.ok)
+                self.assertIn("failed", result.reason)
+
     def test_no_cname_target_fails_closed(self) -> None:
         result, seen = self.run_check({}, target="")
         self.assertFalse(result.ok)
@@ -100,6 +124,8 @@ class FakeVerifierTests(SimpleTestCase):
         self.assertTrue(verifier.check("www.greenfield.test", TOKEN, "").ok)
         self.assertFalse(verifier.check("www.greenfield.example", TOKEN, "").ok)
         self.assertFalse(verifier.check("test.example", TOKEN, "").ok)
+        self.assertTrue(verifier.check_cname("www.greenfield.test", TARGET).ok)
+        self.assertFalse(verifier.check_cname("www.greenfield.example", TARGET).ok)
 
 
 class AdapterSelectionTests(SimpleTestCase):

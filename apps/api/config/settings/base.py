@@ -634,6 +634,8 @@ CELERY_BEAT_SCHEDULE = {
     "reverify-custom-domains": {
         "task": "website_cms.reverify_custom_domains",
         "schedule": crontab(minute="*/15"),
+        # A tick still queued when the next is due is dropped, so ticks never pile up.
+        "options": {"expires": 14 * 60},
     },
     # Daily: an active domain whose DNS no longer points at us lapses after three failed
     # checks in a row, and the site falls back to its subdomain (website-builder §1).
