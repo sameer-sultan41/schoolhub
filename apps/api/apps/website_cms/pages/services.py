@@ -34,6 +34,7 @@ from apps.website_cms.models import (
     WebsitePage,
     WebsiteSettings,
 )
+from apps.website_cms.permissions import PAGE_PUBLISH_KEY
 from apps.website_cms.revalidation import queue_revalidation
 from apps.website_cms.validation import (
     assert_files_usable,
@@ -44,8 +45,6 @@ from apps.website_cms.validation import (
 from core.api.exceptions import DomainRuleViolation
 from core.files.visibility import sync_file_visibility
 from core.tenancy.models import Tenant
-
-PAGE_PUBLISH_KEY = "website.page.publish"
 
 #: Added to existing positions first, so `unique(website_page_id, position)` never collides.
 POSITION_PARK_OFFSET = 10_000

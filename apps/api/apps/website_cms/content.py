@@ -19,7 +19,7 @@ from apps.website_cms.models import (
     WebsitePage,
 )
 from core.api.exceptions import DomainRuleViolation
-from core.rbac.permissions import effective_permission_keys
+from core.rbac.permissions import RbacUser, effective_permission_keys
 from core.tenancy.models import TenantOwnedModel
 
 #: Each SEO target type's model (`site` has none); a target must be a live row of the tenant.
@@ -58,13 +58,14 @@ def locked[RowT: TenantOwnedModel](model: type[RowT], pk: UUID) -> RowT:
     return row
 
 
-def assert_may_edit(status: str, user: Any, publish_key: str) -> None:
+def assert_may_edit(status: str, user: RbacUser, publish_key: str) -> None:
     """A published row is edited only by a publisher: the publish gate is the approval (§7.1)."""
     if status == ContentStatus.PUBLISHED and publish_key not in effective_permission_keys(user):
         raise violation(
             "",
             "publish_required",
-            f"this is live; editing it needs {publish_key}. Unpublish it first.",
+            "Only a publisher can edit published content — "
+            "ask a publisher to edit it or unpublish it.",
         )
 
 

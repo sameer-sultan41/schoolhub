@@ -18,8 +18,8 @@ from django.utils import timezone
 from apps.website_cms.constants import EMBED_HOSTS, EMBED_URL_MAX_LENGTH
 from apps.website_cms.content import assert_may_edit, locked
 from apps.website_cms.errors import violation
-from apps.website_cms.gallery.services import ALBUM_PUBLISH_KEY
 from apps.website_cms.models import ContentStatus, GalleryAlbum, GalleryItem, MediaType
+from apps.website_cms.permissions import ALBUM_PUBLISH_KEY
 from apps.website_cms.revalidation import queue_revalidation
 from apps.website_cms.validation import assert_files_usable, is_safe_url
 from core.files.visibility import sync_file_visibility

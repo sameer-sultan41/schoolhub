@@ -23,6 +23,7 @@ from apps.website_cms.content import (
 )
 from apps.website_cms.errors import violation
 from apps.website_cms.models import ContentStatus, SchoolEvent, SeoTargetType
+from apps.website_cms.permissions import EVENT_PUBLISH_KEY
 from apps.website_cms.revalidation import queue_revalidation
 from apps.website_cms.validation import assert_files_usable, rich_text_file_ids, validate_rich_text
 from core.files.visibility import sync_file_visibility
@@ -76,7 +77,7 @@ def update_school_event(event: SchoolEvent, data: dict[str, Any], user: Any) -> 
     try:
         with transaction.atomic():
             event = locked(SchoolEvent, event.pk)
-            assert_may_edit(event.status, user, "website.school-event.publish")
+            assert_may_edit(event.status, user, EVENT_PUBLISH_KEY)
             _validate_range(
                 data.get("starts_at", event.starts_at), data.get("ends_at", event.ends_at)
             )

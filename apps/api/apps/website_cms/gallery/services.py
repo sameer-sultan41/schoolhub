@@ -30,12 +30,11 @@ from apps.website_cms.models import (
     SchoolEvent,
     SeoTargetType,
 )
+from apps.website_cms.permissions import ALBUM_PUBLISH_KEY
 from apps.website_cms.revalidation import queue_revalidation
 from apps.website_cms.validation import assert_files_usable
 from core.files.visibility import sync_file_visibility
 from core.tenancy.models import Tenant
-
-ALBUM_PUBLISH_KEY = "website.gallery-album.publish"
 
 
 def album_file_ids(album: GalleryAlbum) -> set[UUID]:
