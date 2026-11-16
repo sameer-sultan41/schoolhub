@@ -1,3 +1,4 @@
+import type { ApiSchemas } from "@schoolhub/api-client";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getPage, getSite, toPageSlug } from "@/lib/content";
@@ -17,6 +18,31 @@ const UNAVAILABLE_METADATA: Metadata = {
   robots: { index: false, follow: false },
 };
 
+/**
+ * `noindex` plus the free-text `robots` directives (`noindex`, `nofollow`, `none`; others are
+ * ignored). Either source can only narrow indexing, never widen it.
+ */
+export function robotsFor(seo: ApiSchemas["PublicSeo"]): { index: boolean; follow: boolean } {
+  const directives = new Set(
+    (seo.robots ?? "")
+      .toLowerCase()
+      .split(",")
+      .map((directive) => directive.trim()),
+  );
+  const none = directives.has("none");
+  return {
+    index: !seo.noindex && !none && !directives.has("noindex"),
+    follow: !seo.noindex && !none && !directives.has("nofollow"),
+  };
+}
+
+/** A `/`-relative canonical (the API's safe-url allows one) is made absolute on the school's origin. */
+function canonicalUrl(seo: ApiSchemas["PublicSeo"], origin: string, path: string): string {
+  const canonical = seo.canonical_url;
+  if (!canonical) return `${origin}${path}`;
+  return canonical.startsWith("/") ? `${origin}${canonical}` : canonical;
+}
+
 export async function renderPageMetadata(segments: string[] | undefined): Promise<Metadata> {
   const resolution = await resolveTenant();
   // Unknown, suspended, unpublished or maintenance sites must never be indexed.
@@ -35,8 +61,8 @@ export async function renderPageMetadata(segments: string[] | undefined): Promis
   return {
     title,
     ...(description ? { description } : {}),
-    alternates: { canonical: page.seo.canonical_url ?? `${origin}${page.path}` },
-    robots: page.seo.noindex ? { index: false, follow: false } : { index: true, follow: true },
+    alternates: { canonical: canonicalUrl(page.seo, origin, page.path) },
+    robots: robotsFor(page.seo),
     openGraph: {
       type: "website",
       siteName: tenant.name,

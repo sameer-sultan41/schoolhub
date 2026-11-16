@@ -46,7 +46,10 @@ describe("PublicEnquiryForm", () => {
     const honeypot = container.querySelector('input[name="company_website"]');
     expect(honeypot).toHaveAttribute("tabindex", "-1");
     expect(honeypot).toHaveAttribute("autocomplete", "off");
+    expect(honeypot).toHaveAttribute("data-1p-ignore");
+    expect(honeypot).toHaveAttribute("data-lpignore", "true");
     expect(honeypot?.closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(screen.getByText("Leave this field empty")).toBeInTheDocument();
   });
 
   it("posts an admission enquiry to the same endpoint with its fixed subject", async () => {

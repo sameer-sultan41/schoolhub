@@ -5,7 +5,7 @@ import { resolveTenant } from "@/lib/tenant";
 import { makePage, makeSite, makeTenant } from "@/test-utils";
 import { getTheme } from "@/themes";
 import type { SectionProps, Theme } from "@/themes";
-import { RenderPage, renderPageMetadata } from "../render-page";
+import { RenderPage, renderPageMetadata, robotsFor } from "../render-page";
 
 // The real notFound() never returns (type "never") — control flow after it assumes that.
 // A no-op mock would fall through into code that assumes a tenant is present.
@@ -154,6 +154,36 @@ describe("renderPageMetadata", () => {
     expect(metadata.openGraph).toMatchObject({
       images: [{ url: "https://api.test.invalid/api/v1/public/files/t1/f1" }],
     });
+  });
+});
+
+describe("renderPageMetadata canonical", () => {
+  it("makes a /-relative canonical absolute on the school's origin", async () => {
+    mockResolveTenant.mockResolvedValue(active());
+    mockGetPage.mockResolvedValue(
+      makePage({ seo: { ...makePage().seo, canonical_url: "/admissions" } }),
+    );
+
+    const metadata = await renderPageMetadata([]);
+
+    expect(metadata.alternates).toEqual({ canonical: `https://${HOST}/admissions` });
+  });
+});
+
+describe("robotsFor", () => {
+  const seo = makePage().seo;
+
+  it.each([
+    [null, false, { index: true, follow: true }],
+    ["", false, { index: true, follow: true }],
+    ["noindex", false, { index: false, follow: true }],
+    ["index, nofollow", false, { index: true, follow: false }],
+    ["NoIndex , NoFollow", false, { index: false, follow: false }],
+    ["none", false, { index: false, follow: false }],
+    ["max-snippet:50", false, { index: true, follow: true }],
+    ["index, follow", true, { index: false, follow: false }],
+  ])("robots %p with noindex=%p", (robots, noindex, expected) => {
+    expect(robotsFor({ ...seo, robots, noindex })).toEqual(expected);
   });
 });
 

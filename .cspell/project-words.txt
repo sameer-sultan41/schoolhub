@@ -130,6 +130,7 @@ libpango
 libpangoft
 libpq
 linkedunion
+lpignore
 Mahnoor
 Mailpit
 manylinux

@@ -25,6 +25,9 @@ const NAME_MAX = 150;
 const EMAIL_MAX = 254;
 const MESSAGE_MAX = 5000;
 
+/** Neutral: a person who reaches the honeypot anyway is told to skip it, not what it is. */
+const HONEYPOT_LABEL = "Leave this field empty";
+
 function textField(form: FormData, name: string): string {
   const value = form.get(name);
   return typeof value === "string" ? value : "";
@@ -111,13 +114,16 @@ export function PublicEnquiryForm({
 
       {/* Honeypot: hidden from sight, the tab order and assistive technology; people leave it empty. */}
       <div aria-hidden="true" className="sr-only">
-        <label htmlFor="enquiry-company-website">Company website</label>
+        <label htmlFor="enquiry-company-website">{HONEYPOT_LABEL}</label>
         <input
           id="enquiry-company-website"
           name={HONEYPOT_FIELD}
           type="text"
           tabIndex={-1}
           autoComplete="off"
+          // Password managers would otherwise offer to fill it and trip the trap.
+          data-1p-ignore
+          data-lpignore="true"
         />
       </div>
 
