@@ -6,6 +6,7 @@ from unittest import mock
 
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 
 from apps.website_cms.models import ContentStatus, NewsPost
 from apps.website_cms.tests.base import WebsiteAPITestCase
@@ -57,6 +58,7 @@ class NewsCrudTests(WebsiteAPITestCase):
 
     def test_omitted_body_stores_a_valid_empty_document(self) -> None:
         self.allow("website.news-post.create")
+        self.allow("website.news-post.publish")
         response = self._create()
         self.assertEqual(response.json()["data"]["body"], {"blocks": []})
         validate_rich_text(response.json()["data"]["body"])
@@ -267,3 +269,54 @@ class NewsLifecycleTests(WebsiteAPITestCase):
                 )
                 write = next(i for i, q in enumerate(sql) if q.startswith('UPDATE "news_posts"'))
                 self.assertLess(lock, write)
+
+
+class NewsBearerAndOrderTests(WebsiteAPITestCase):
+    def test_bearer_token_alone_lists_404s_a_foreign_id_and_writes(self) -> None:
+        self.allow("website.page.view", "website.news-post.update")
+        mine = self.make_news()
+        foreign = self.make_news(tenant=self.make_other_tenant())
+        client = self.bearer_client()
+        self.assertEqual(client.get(LIST).status_code, 200)
+        self.assertEqual(client.get(detail(foreign)).status_code, 404)
+        response = client.patch(detail(mine), {"title": "Renamed"}, format="json")
+        self.assertEqual(response.status_code, 200, response.content)
+
+    def test_rows_tied_on_every_sort_key_page_apart(self) -> None:
+        self.allow("website.page.view")
+        rows = [self.make_news(), self.make_news()]
+        self.assert_ties_page_apart(
+            LIST, NewsPost, rows, created_at=timezone.now(), published_at=None
+        )
+
+
+class PublishedNewsEditGateTests(WebsiteAPITestCase):
+    """§7.1: editing a published post needs the publish key; drafts and publishers are free."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.allow("website.page.view", "website.news-post.update")
+
+    def _patch(self, post):
+        return self.client.patch(detail(post), {"title": "Changed"}, format="json")
+
+    def test_update_only_user_cannot_edit_a_published_post(self) -> None:
+        post = self.make_news(title="Live", status=ContentStatus.PUBLISHED)
+        with (
+            mock.patch("apps.website_cms.revalidation.revalidate_website") as task,
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            response = self._patch(post)
+        self.assertEqual(response.status_code, 422, response.content)
+        self.assertIn("publish_required", response.json()["error"]["message"])
+        task.delay.assert_not_called()
+        post.refresh_from_db()
+        self.assertEqual(post.title, "Live")
+
+    def test_update_only_user_edits_a_draft_post(self) -> None:
+        self.assertEqual(self._patch(self.make_news()).status_code, 200)
+
+    def test_publisher_edits_a_published_post(self) -> None:
+        self.allow("website.news-post.publish")
+        post = self.make_news(status=ContentStatus.PUBLISHED)
+        self.assertEqual(self._patch(post).status_code, 200)

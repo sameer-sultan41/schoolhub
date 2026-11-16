@@ -7,18 +7,14 @@ anything else must be an active custom domain in `custom_domain_routes`.
 
 from __future__ import annotations
 
-from typing import Literal
-
 from django.conf import settings
 
-from apps.website_cms.constants import RESERVED_SUBDOMAIN_LABELS
+from apps.website_cms.constants import RESERVED_SUBDOMAIN_LABELS, WebsiteStatus
 from apps.website_cms.context import bound_to
 from apps.website_cms.models import CustomDomainRoute, WebsiteSettings
 from apps.website_cms.urls_builder import platform_site_host
 from core.tenancy.hosts import normalise_host
 from core.tenancy.models import Tenant
-
-type WebsiteStatus = Literal["live", "maintenance", "unpublished"]
 
 
 def resolve_host(host: str) -> Tenant | None:
@@ -58,5 +54,5 @@ def website_status(tenant: Tenant) -> WebsiteStatus:
     with bound_to(tenant):
         row = WebsiteSettings.objects.alive().values("is_published", "maintenance_mode").first()
     if row is None or not row["is_published"]:
-        return "unpublished"
-    return "maintenance" if row["maintenance_mode"] else "live"
+        return WebsiteStatus.UNPUBLISHED
+    return WebsiteStatus.MAINTENANCE if row["maintenance_mode"] else WebsiteStatus.LIVE

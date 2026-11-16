@@ -4455,6 +4455,204 @@ export interface paths {
         patch: operations["periods_partial_update"];
         trace?: never;
     };
+    "/api/v1/public/classes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Classes that opted in to the website. */
+        get: operations["public_classes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/contact-submissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Store a contact message for a live site and notify its staff; 404 for any refusal. */
+        post: operations["public_contact_submissions_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/departments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Departments that opted in to the website. */
+        get: operations["public_departments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/files/{tenant_id}/{file_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Redirect to a `ready`, `public`, live file of an operational school; 404 otherwise.
+         *
+         *     Every miss (unknown or suspended school, other school's file, private, pending, deleted)
+         *     answers the same 404, so a caller learns nothing about which check failed.
+         */
+        get: operations["public_files_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/gallery-albums": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Published gallery albums with their item counts. */
+        get: operations["public_gallery_albums"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/gallery-albums/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description One published album by slug, with its items (at most 200). */
+        get: operations["public_gallery_album"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/gallery-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The latest images across published albums. */
+        get: operations["public_gallery_items"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/news-posts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Published news posts, newest first. */
+        get: operations["public_news_posts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/news-posts/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description One published news post by slug. */
+        get: operations["public_news_post"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/notices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Published school notices, newest first. */
+        get: operations["public_notices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET /public/pages?host=&slug=`: a published page with its visible sections, in order.
+         *
+         *     An empty slug is the homepage, which answers at `/` only. A draft is read only under a
+         *     preview token in the `X-Preview-Token` header naming this tenant and this page (decision 9);
+         *     then `slug` is optional, the site need not be live, and the response is never cached.
+         */
+        get: operations["public_page"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/payment-callbacks/{tenant_slug}/{callback_token}": {
         parameters: {
             query?: never;
@@ -4491,6 +4689,119 @@ export interface paths {
          *     genuine provider.
          */
         post: operations["public_payment_callbacks_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/school-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Published events by `scope`: upcoming (soonest first, the default) or past. */
+        get: operations["public_school_events"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/school-events/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description One published event by slug. */
+        get: operations["public_school_event"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/site": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET /public/site?host=`: theme, navigation, header/footer, social links and site SEO.
+         *
+         *     A valid preview token for this school reads it before the site is live (decision 9).
+         */
+        get: operations["public_site"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/sitemap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET /public/sitemap?host=`: every published, indexable path of the site. */
+        get: operations["public_sitemap"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/teachers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Staff who opted in to the website, as public teacher cards. */
+        get: operations["public_teachers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/tenants/by-host": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET /public/tenants/by-host?host=`: who the host belongs to and the state of its site.
+         *
+         *     The exception to "404 unless live": a suspended school answers 200 with its `status`, so
+         *     the renderer shows a neutral notice, and a site that is off, unpublished or in maintenance
+         *     answers with its `website_status`; either way only identity, branding and state are sent.
+         *     A provisioning, deprovisioned or deleted school, or an unknown host, is 404.
+         */
+        get: operations["public_tenants_by_host"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -8264,6 +8575,14 @@ export interface components {
          * @enum {string}
          */
         ConflictSeverityEnum: "hard" | "soft";
+        ContactReceived: {
+            status: components["schemas"]["ContactReceivedStatusEnum"];
+        };
+        /**
+         * @description * `received` - received
+         * @enum {string}
+         */
+        ContactReceivedStatusEnum: "received";
         ContactSubmission: {
             /** Format: uuid */
             readonly id: string;
@@ -13173,6 +13492,280 @@ export interface components {
         PromotionTransitionResult: {
             updated: number;
         };
+        /** @description The renderer's `TenantBranding` keys; a value failing its pattern is null. */
+        PublicBranding: {
+            primary_color: string | null;
+            secondary_color: string | null;
+            accent_color: string | null;
+            background_color: string | null;
+            foreground_color: string | null;
+            heading_font: string | null;
+            body_font: string | null;
+            logo_url: string | null;
+            logo_dark_url: string | null;
+            favicon_url: string | null;
+            radius: string | null;
+        };
+        PublicClass: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            level: number;
+        };
+        /** @description Shape only; `create_contact_submission` owns every field rule (field-keyed 422s). */
+        PublicContactSubmission: {
+            name?: string | null;
+            email?: string | null;
+            phone?: string | null;
+            subject?: string | null;
+            message?: string | null;
+            /** Format: uuid */
+            source_page_id?: string | null;
+            company_website?: string | null;
+        };
+        PublicDepartment: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description: string;
+        };
+        PublicGalleryAlbum: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            title: string;
+            description: string;
+            cover_image_url: string | null;
+            /** Format: date-time */
+            published_at: string | null;
+            item_count: number;
+        };
+        PublicGalleryAlbumDetail: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            title: string;
+            description: string;
+            cover_image_url: string | null;
+            /** Format: date-time */
+            published_at: string | null;
+            /** @description All live items; `items` is capped. */
+            item_count: number;
+            items: components["schemas"]["PublicGalleryItem"][];
+        };
+        PublicGalleryImage: {
+            /** Format: uuid */
+            id: string;
+            image_url: string;
+            caption: string;
+            alt_text: string;
+            album_slug: string;
+            album_title: string;
+        };
+        PublicGalleryItem: {
+            /** Format: uuid */
+            id: string;
+            media_type: components["schemas"]["GalleryMediaTypeEnum"];
+            /** @description Null for a video embed. */
+            image_url: string | null;
+            /** @description Null for an image. */
+            embed_url: string | null;
+            caption: string;
+            alt_text: string;
+            position: number;
+        };
+        PublicNavItem: {
+            label: string;
+            /** @description A site path (`/about`) or an https URL. */
+            href: string;
+            children: components["schemas"]["PublicNavLink"][];
+        };
+        PublicNavLink: {
+            label: string;
+            /** @description A site path (`/about`) or an https URL. */
+            href: string;
+        };
+        PublicNavigation: {
+            header: components["schemas"]["PublicNavItem"][];
+            footer_primary: components["schemas"]["PublicNavItem"][];
+            footer_secondary: components["schemas"]["PublicNavItem"][];
+        };
+        PublicNewsPost: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            title: string;
+            excerpt: string;
+            cover_image_url: string | null;
+            /** Format: date-time */
+            published_at: string | null;
+        };
+        PublicNewsPostDetail: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            title: string;
+            excerpt: string;
+            cover_image_url: string | null;
+            /** Format: date-time */
+            published_at: string | null;
+            /** @description A rich-text block document; image ids become `*_url`. */
+            body: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            updated_at: string;
+        };
+        PublicNotice: {
+            /** Format: uuid */
+            id: string;
+            /** @description `announcement` or `notice`. */
+            kind: string;
+            title: string;
+            /** @description Plain text. */
+            body: string;
+            /** Format: date-time */
+            published_at: string;
+        };
+        PublicPage: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            /** @description `/` for the homepage, else `/<slug>`. */
+            path: string;
+            title: string;
+            page_type: components["schemas"]["WebsitePageTypeEnum"];
+            /**
+             * @description `published`, unless read under a preview token.
+             *
+             *     * `draft` - Draft
+             *     * `published` - Published
+             *     * `archived` - Archived
+             */
+            status: components["schemas"]["WebsiteContentStatusEnum"];
+            is_homepage: boolean;
+            /** Format: date-time */
+            published_at: string | null;
+            /** Format: date-time */
+            updated_at: string;
+            sections: components["schemas"]["PublicSection"][];
+            seo: components["schemas"]["PublicSeo"];
+        };
+        PublicSchoolEvent: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            title: string;
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string | null;
+            is_all_day: boolean;
+            location: string;
+            cover_image_url: string | null;
+        };
+        PublicSchoolEventDetail: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            title: string;
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string | null;
+            is_all_day: boolean;
+            location: string;
+            cover_image_url: string | null;
+            /** @description A rich-text block document; image ids become `*_url`. */
+            description: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            updated_at: string;
+        };
+        PublicSection: {
+            /** Format: uuid */
+            id: string;
+            type: components["schemas"]["SectionTypeEnum"];
+            position: number;
+            /** @description The section's content; image ids become `*_url`. */
+            props: {
+                [key: string]: unknown;
+            };
+        };
+        PublicSeo: {
+            title: string | null;
+            description: string | null;
+            canonical_url: string | null;
+            og_image_url: string | null;
+            robots: string | null;
+            noindex: boolean;
+        };
+        PublicSite: {
+            theme: components["schemas"]["PublicSiteTheme"];
+            navigation: components["schemas"]["PublicNavigation"];
+            header_config: {
+                [key: string]: unknown;
+            };
+            footer_config: {
+                [key: string]: unknown;
+            };
+            social_links: components["schemas"]["PublicSocialLink"][];
+            seo: components["schemas"]["PublicSeo"];
+        };
+        PublicSiteTheme: {
+            code: string;
+            version: string;
+            config: {
+                [key: string]: unknown;
+            };
+        };
+        PublicSitemapEntry: {
+            path: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        PublicSocialLink: {
+            platform: string;
+            url: string;
+        };
+        PublicTeacher: {
+            /** Format: uuid */
+            id: string;
+            full_name: string;
+            designation: string;
+            /** @description Null unless the photo is public. */
+            photo_url: string | null;
+            bio: string;
+        };
+        PublicTenant: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            name: string;
+            status: components["schemas"]["TenantStatusEnum"];
+            website_status: components["schemas"]["WebsiteStatusEnum"];
+            branding: components["schemas"]["PublicBranding"];
+            locale: components["schemas"]["PublicTenantLocale"];
+            /** @description The primary campus; null unless the site is live. */
+            contact: components["schemas"]["PublicTenantContact"] | null;
+            /** @description The primary active custom domain; null without one or unless the site is live. */
+            custom_domain: string | null;
+            /** @description Empty unless the site is live. */
+            enabled_modules: string[];
+        };
+        PublicTenantContact: {
+            campus_name: string;
+            address: string;
+            phone: string;
+            email: string;
+        };
+        PublicTenantLocale: {
+            default_locale: string;
+            enabled_locales: string[];
+            timezone: string;
+            direction: components["schemas"]["TextDirectionEnum"];
+        };
         /**
          * @description * `degree` - Degree
          *     * `diploma` - Diploma
@@ -14675,6 +15268,16 @@ export interface components {
          * @enum {string}
          */
         TeacherSubstitutionStatusEnum: "proposed" | "confirmed" | "declined" | "completed" | "cancelled";
+        /**
+         * @description * `provisioning` - Provisioning
+         *     * `trial` - Trial
+         *     * `active` - Active
+         *     * `past_due` - Past due
+         *     * `suspended` - Suspended
+         *     * `deprovisioned` - Deprovisioned
+         * @enum {string}
+         */
+        TenantStatusEnum: "provisioning" | "trial" | "active" | "past_due" | "suspended" | "deprovisioned";
         Term: {
             /** Format: uuid */
             readonly id: string;
@@ -14692,6 +15295,12 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /**
+         * @description * `ltr` - Left to right
+         *     * `rtl` - Right to left
+         * @enum {string}
+         */
+        TextDirectionEnum: "ltr" | "rtl";
         Theme: {
             /** Format: uuid */
             readonly id: string;
@@ -15101,6 +15710,13 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /**
+         * @description * `live` - Live
+         *     * `maintenance` - Maintenance
+         *     * `unpublished` - Unpublished
+         * @enum {string}
+         */
+        WebsiteStatusEnum: "live" | "maintenance" | "unpublished";
         WithdrawRequest: {
             reason: string;
             /** Format: date */
@@ -22455,6 +23071,381 @@ export interface operations {
             };
         };
     };
+    public_classes: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+                /** @description Rows to return, 1 to 50 (the default and the cap). */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicClass"][];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_contact_submissions_create: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A retry with the same key replays the first response. */
+                "Idempotency-Key"?: string;
+                /** @description The school's slug. */
+                "X-Tenant-Slug": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PublicContactSubmission"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactReceived"];
+                };
+            };
+            /** @description No live site for this school (the same for every refusal). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The body is over 32 KB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The body is not JSON. */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A field broke a rule; keyed by field. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many submissions. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_departments: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+                /** @description Rows to return, 1 to 50 (the default and the cap). */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicDepartment"][];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_files_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_id: string;
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such public file (the same for every miss). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_gallery_albums: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+                /** @description Rows to return, 1 to 50 (the default and the cap). */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicGalleryAlbum"][];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_gallery_album: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+            };
+            header?: never;
+            path: {
+                /** @description The item's slug. */
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicGalleryAlbumDetail"];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_gallery_items: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+                /** @description Rows to return, 1 to 50 (the default and the cap). */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicGalleryImage"][];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_news_posts: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+                /** @description Rows to return, 1 to 50 (the default and the cap). */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicNewsPost"][];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_news_post: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+            };
+            header?: never;
+            path: {
+                /** @description The item's slug. */
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicNewsPostDetail"];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_notices: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+                /** @description Rows to return, 1 to 50 (the default and the cap). */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicNotice"][];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_page: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+                /** @description Empty for the homepage. Under a preview token, omit it to read the token's page. */
+                slug?: string;
+            };
+            header?: {
+                /** @description A page preview token for this host's school: reads before the site is live. */
+                "X-Preview-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicPage"];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     public_payment_callbacks_create: {
         parameters: {
             query?: never;
@@ -22469,6 +23460,192 @@ export interface operations {
         responses: {
             /** @description No response body */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_school_events: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+                /** @description Rows to return, 1 to 50 (the default and the cap). */
+                page_size?: number;
+                /** @description `upcoming` (default): not over yet. `past`: over. */
+                scope?: "past" | "upcoming";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSchoolEvent"][];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_school_event: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+            };
+            header?: never;
+            path: {
+                /** @description The item's slug. */
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSchoolEventDetail"];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_site: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+            };
+            header?: {
+                /** @description A page preview token for this host's school: reads before the site is live. */
+                "X-Preview-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSite"];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_sitemap: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSitemapEntry"][];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_teachers: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+                /** @description Rows to return, 1 to 50 (the default and the cap). */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicTeacher"][];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_tenants_by_host: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicTenant"];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

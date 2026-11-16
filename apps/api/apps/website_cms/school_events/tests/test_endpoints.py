@@ -6,8 +6,9 @@ from unittest import mock
 
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 
-from apps.website_cms.models import ContentStatus
+from apps.website_cms.models import ContentStatus, SchoolEvent
 from apps.website_cms.tests.base import WebsiteAPITestCase
 from apps.website_cms.validation import validate_rich_text
 from core.files.models import FileVisibility
@@ -177,3 +178,52 @@ class EventLifecycleTests(WebsiteAPITestCase):
                 )
                 write = next(i for i, q in enumerate(sql) if q.startswith('UPDATE "school_events"'))
                 self.assertLess(lock, write)
+
+
+class EventBearerAndOrderTests(WebsiteAPITestCase):
+    def test_bearer_token_alone_lists_404s_a_foreign_id_and_writes(self) -> None:
+        self.allow("website.page.view", "website.school-event.update")
+        mine = self.make_event()
+        foreign = self.make_event(tenant=self.make_other_tenant())
+        client = self.bearer_client()
+        self.assertEqual(client.get(LIST).status_code, 200)
+        self.assertEqual(client.get(detail(foreign)).status_code, 404)
+        response = client.patch(detail(mine), {"location": "Hall"}, format="json")
+        self.assertEqual(response.status_code, 200, response.content)
+
+    def test_rows_tied_on_every_sort_key_page_apart(self) -> None:
+        self.allow("website.page.view")
+        rows = [self.make_event(), self.make_event()]
+        self.assert_ties_page_apart(LIST, SchoolEvent, rows, starts_at=timezone.now())
+
+
+class PublishedEventEditGateTests(WebsiteAPITestCase):
+    """§7.1: editing a published event needs the publish key; drafts and publishers are free."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.allow("website.page.view", "website.school-event.update")
+
+    def _patch(self, event):
+        return self.client.patch(detail(event), {"title": "Changed"}, format="json")
+
+    def test_update_only_user_cannot_edit_a_published_event(self) -> None:
+        event = self.make_event(title="Live", status=ContentStatus.PUBLISHED)
+        with (
+            mock.patch("apps.website_cms.revalidation.revalidate_website") as task,
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            response = self._patch(event)
+        self.assertEqual(response.status_code, 422, response.content)
+        self.assertIn("publish_required", response.json()["error"]["message"])
+        task.delay.assert_not_called()
+        event.refresh_from_db()
+        self.assertEqual(event.title, "Live")
+
+    def test_update_only_user_edits_a_draft_event(self) -> None:
+        self.assertEqual(self._patch(self.make_event()).status_code, 200)
+
+    def test_publisher_edits_a_published_event(self) -> None:
+        self.allow("website.school-event.publish")
+        event = self.make_event(status=ContentStatus.PUBLISHED)
+        self.assertEqual(self._patch(event).status_code, 200)

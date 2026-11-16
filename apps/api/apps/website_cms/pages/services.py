@@ -21,6 +21,7 @@ from apps.website_cms.constants import (
     PAGE_SLUG_RE,
     RESERVED_PAGE_SLUGS,
 )
+from apps.website_cms.content import assert_may_edit
 from apps.website_cms.errors import violation as _violation
 from apps.website_cms.models import (
     ContentStatus,
@@ -33,6 +34,7 @@ from apps.website_cms.models import (
     WebsitePage,
     WebsiteSettings,
 )
+from apps.website_cms.permissions import PAGE_PUBLISH_KEY
 from apps.website_cms.revalidation import queue_revalidation
 from apps.website_cms.validation import (
     assert_files_usable,
@@ -91,24 +93,26 @@ def create_page(tenant: Tenant, data: dict[str, Any], actor_id: UUID | None) -> 
         raise _slug_taken() from exc
 
 
-def update_page(page: WebsitePage, data: dict[str, Any], actor_id: UUID | None) -> WebsitePage:
-    slug = data.get("slug", page.slug)
-    locale = data.get("locale", page.locale)
-    if (slug, locale) != (page.slug, page.locale):
-        validate_slug(slug)
-        if _slug_in_use(slug, locale, exclude_id=page.id):
-            raise _slug_taken()
-    for name, value in data.items():
-        setattr(page, name, value)
-    page.updated_by = actor_id
+def update_page(page: WebsitePage, data: dict[str, Any], user: Any) -> WebsitePage:
     try:
         with transaction.atomic():
+            page = _locked(page)
+            assert_may_edit(page.status, user, PAGE_PUBLISH_KEY)
+            slug = data.get("slug", page.slug)
+            locale = data.get("locale", page.locale)
+            if (slug, locale) != (page.slug, page.locale):
+                validate_slug(slug)
+                if _slug_in_use(slug, locale, exclude_id=page.id):
+                    raise _slug_taken()
+            for name, value in data.items():
+                setattr(page, name, value)
+            page.updated_by = user.pk
             page.save()
+            if page.status == ContentStatus.PUBLISHED:
+                # A slug or search-visibility change is visible on the live site.
+                queue_revalidation(page.tenant_id)
     except IntegrityError as exc:
         raise _slug_taken() from exc
-    if page.status == ContentStatus.PUBLISHED:
-        # A slug or search-visibility change is visible on the live site.
-        queue_revalidation(page.tenant_id)
     return page
 
 
@@ -264,6 +268,13 @@ def replace_sections(
         # The page lock serialises this with publish and with a concurrent first write on an
         # empty page, which would otherwise collide on `unique(website_page_id, position)`.
         page = _locked(page)
+        assert_may_edit(page.status, user, PAGE_PUBLISH_KEY)
+        if page.status == ContentStatus.PUBLISHED and not any(s["is_visible"] for s in sections):
+            raise _violation(
+                "sections",
+                "no_visible_sections",
+                "a published page needs at least one visible section.",
+            )
         live = {
             s.id: s
             for s in PageSection.objects.alive().select_for_update().filter(website_page=page)

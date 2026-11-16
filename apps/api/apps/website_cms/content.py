@@ -8,7 +8,9 @@ from uuid import UUID
 from django.shortcuts import get_object_or_404
 
 from apps.website_cms.constants import CONTENT_SLUG_MAX_LENGTH, CONTENT_SLUG_RE
+from apps.website_cms.errors import violation
 from apps.website_cms.models import (
+    ContentStatus,
     GalleryAlbum,
     NewsPost,
     SchoolEvent,
@@ -17,6 +19,7 @@ from apps.website_cms.models import (
     WebsitePage,
 )
 from core.api.exceptions import DomainRuleViolation
+from core.rbac.permissions import RbacUser, effective_permission_keys
 from core.tenancy.models import TenantOwnedModel
 
 #: Each SEO target type's model (`site` has none); a target must be a live row of the tenant.
@@ -53,6 +56,17 @@ def locked[RowT: TenantOwnedModel](model: type[RowT], pk: UUID) -> RowT:
     """The row re-read under its row lock, so its status is the committed one (L52)."""
     row: RowT = get_object_or_404(model.objects.alive().select_for_update(), pk=pk)
     return row
+
+
+def assert_may_edit(status: str, user: RbacUser, publish_key: str) -> None:
+    """A published row is edited only by a publisher: the publish gate is the approval (§7.1)."""
+    if status == ContentStatus.PUBLISHED and publish_key not in effective_permission_keys(user):
+        raise violation(
+            "",
+            "publish_required",
+            "Only a publisher can edit published content — "
+            "ask a publisher to edit it or unpublish it.",
+        )
 
 
 def touch(row: TenantOwnedModel, actor_id: UUID | None, **fields: Any) -> None:

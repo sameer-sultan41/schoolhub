@@ -12,24 +12,25 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import ipaddress
 from collections.abc import Mapping
 from dataclasses import dataclass
 
 from django.conf import settings
-from django.http import HttpRequest
+from drf_spectacular.extensions import OpenApiAuthenticationExtension
 from rest_framework import exceptions
 from rest_framework.authentication import BaseAuthentication, get_authorization_header
 from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
-from rest_framework.settings import api_settings
 from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.views import APIView
 
 from core.tenancy.hosts import normalise_host
 
+#: The website renderer's read scope over published public content (plan decision 1).
+WEBSITE_PUBLIC_CONTENT_SCOPE = "website.public-content.view"
+
 #: Every scope a machine client may hold. A machine-guarded view's scope must be listed here.
-MACHINE_SCOPES = frozenset({"website.public-content.view"})
+MACHINE_SCOPES = frozenset({WEBSITE_PUBLIC_CONTENT_SCOPE})
 
 _KEYWORD = b"bearer"
 _INVALID = "Invalid machine token."
@@ -91,6 +92,16 @@ class MachineTokenAuthentication(BaseAuthentication):
         return 'Bearer realm="api"'
 
 
+class MachineTokenScheme(OpenApiAuthenticationExtension):
+    """Names the machine token in the OpenAPI schema (drf-spectacular's documented hook)."""
+
+    target_class = MachineTokenAuthentication
+    name = "machineToken"
+
+    def get_security_definition(self, auto_schema: object) -> dict[str, str]:
+        return {"type": "http", "scheme": "bearer"}
+
+
 class HasMachineScope(BasePermission):
     """Allows a machine client holding `view.required_machine_scope`. Fails closed."""
 
@@ -119,25 +130,3 @@ class MachineClientThrottle(SimpleRateThrottle):
         host = normalise_host(str(request.query_params.get("host", ""))) or "-"
         digest = hashlib.sha256(host.encode()).hexdigest()[:32]
         return self.cache_format % {"scope": self.scope, "ident": f"{user.client}:{digest}"}
-
-
-def client_ip(request: HttpRequest | Request) -> str | None:
-    """The caller's IP address, trusting `X-Forwarded-For` only as far as `NUM_PROXIES` says.
-
-    With `NUM_PROXIES` unset (`None`) or 0 the header is ignored, since anyone can send it;
-    with N, the address the outermost of our N proxies saw is used, as DRF's throttles do.
-    Returns `None` when there is no valid address (never a raw header value).
-    """
-    remote = request.META.get("REMOTE_ADDR")
-    num_proxies = api_settings.NUM_PROXIES
-    forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
-    candidate = remote
-    if num_proxies and forwarded:
-        addresses = [address.strip() for address in forwarded.split(",")]
-        candidate = addresses[-min(num_proxies, len(addresses))]
-    if not candidate:
-        return None
-    try:
-        return str(ipaddress.ip_address(candidate))
-    except ValueError:
-        return None

@@ -210,3 +210,4 @@ jobs:
           DJANGO_ALLOWED_HOSTS: example.com
           API_PUBLIC_URL: https://api.example.com
           WEBSITE_CNAME_TARGET: sites.example.com
+          NUM_PROXIES: "1"

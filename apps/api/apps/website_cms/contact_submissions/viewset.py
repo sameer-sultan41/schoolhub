@@ -21,6 +21,12 @@ from core.api.viewsets import ActionResponse, TenantScopedViewSetMixin
 from core.audit.services import record_audit
 
 
+def _triage_snapshot(submission: ContactSubmission) -> dict[str, str | None]:
+    """Only what triage changes: the audit log does not copy the visitor's personal data."""
+    handler = submission.handled_by_id
+    return {"status": submission.status, "handled_by_id": str(handler) if handler else None}
+
+
 class ContactSubmissionViewSet(
     TenantScopedViewSetMixin,
     mixins.ListModelMixin,
@@ -52,10 +58,11 @@ class ContactSubmissionViewSet(
         submission = self.get_object()
         serializer = ContactSubmissionTriageSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        before = ContactSubmissionSerializer(submission).data
+        before = _triage_snapshot(submission)
         submission = services.set_status(
             submission.pk, serializer.validated_data["status"], request.user
         )
+        after = _triage_snapshot(submission)
+        record_audit(request, "update", submission, before=before, after=after)
         data = ContactSubmissionSerializer(submission).data
-        record_audit(request, "update", submission, before=before, after=data)
         return ActionResponse.ok(data, message="Contact submission updated.")

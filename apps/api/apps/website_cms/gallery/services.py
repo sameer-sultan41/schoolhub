@@ -14,6 +14,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from apps.website_cms.content import (
+    assert_may_edit,
     locked,
     seo_image_ids,
     slug_in_use,
@@ -29,6 +30,7 @@ from apps.website_cms.models import (
     SchoolEvent,
     SeoTargetType,
 )
+from apps.website_cms.permissions import ALBUM_PUBLISH_KEY
 from apps.website_cms.revalidation import queue_revalidation
 from apps.website_cms.validation import assert_files_usable
 from core.files.visibility import sync_file_visibility
@@ -74,22 +76,21 @@ def create_gallery_album(
         raise slug_taken() from exc
 
 
-def update_gallery_album(
-    album: GalleryAlbum, data: dict[str, Any], actor_id: UUID | None
-) -> GalleryAlbum:
+def update_gallery_album(album: GalleryAlbum, data: dict[str, Any], user: Any) -> GalleryAlbum:
     if "slug" in data and data["slug"] != album.slug:
         validate_content_slug(data["slug"])
     _validate_content(data)
     try:
         with transaction.atomic():
             album = locked(GalleryAlbum, album.pk)
+            assert_may_edit(album.status, user, ALBUM_PUBLISH_KEY)
             renamed = "slug" in data and data["slug"] != album.slug
             if renamed and slug_in_use(GalleryAlbum, data["slug"], exclude_id=album.id):
                 raise slug_taken()
             old_ids = album_file_ids(album)
             for name, value in data.items():
                 setattr(album, name, value)
-            album.updated_by = actor_id
+            album.updated_by = user.pk
             album.save()
             if album.status == ContentStatus.PUBLISHED:
                 sync_file_visibility(old_ids | album_file_ids(album))

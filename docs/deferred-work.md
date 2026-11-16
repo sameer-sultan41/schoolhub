@@ -56,10 +56,7 @@ either this file or `project-status.md`.
     - News lists order by `-published_at`, which Postgres sorts NULL first, so drafts precede published posts in the default order. Fix with `nulls_last` or an explicit status ordering when the dashboard list is built (PR F).
     - The embed URL check validates the host only, not userinfo, port or redirect paths. The renderer must sandbox the iframe (PR E); tightening the validator then would need the final embed provider list.
     - The generated schema documents the reorder and page-sections responses as bare arrays while the endpoints answer with the `{data, meta}` envelope. This matches how `load-summary` and other non-paginated actions are documented; check it once against the spectacular postprocessing before the dashboard consumes them.
-    - Contact notification recipients are not filtered for inactive or soft-deleted users; confirm what `notify()` and the address resolver already drop before adding a second filter.
-    - No test covers a contact submission with zero recipients. The task is a no-op there; add the test with the next change to `notifications.py`.
     - `PATCH /contact-submissions/{id}` reads the audit "before" snapshot before it takes the row lock, so a concurrent triage can record a stale "before". Audit-only; the write itself is locked.
-    - The contact phone pattern accepts punctuation with no digit (such as `(---)`). Require at least one digit with the next validation change.
     - The `email <> '' OR phone <> ''` CHECK does not treat whitespace-only values as empty; the service strips them first, so only a direct insert could differ. Tighten the constraint with a trimmed comparison in a later migration.
     - The notify task's idempotency is check-then-insert without a lock, so two concurrent redeliveries could both notify. Needs a unique key on the notification source or an advisory lock; acceptable while redelivery is rare and one duplicate in-app notice is the worst case.
     - `public_notices` reduces HTML to plain text with a regex, `strip_tags` and unescape, which can leave a literal `<script>` string in the text. The renderer must escape it (React does); consider `HTMLParser` if the text is ever used outside React.
@@ -74,13 +71,45 @@ either this file or `project-status.md`.
   - **Is the provider's `failed` event terminal for an order?** Task 4's amendment (PR 2) must confirm, against the chosen aggregator's docs and sandbox, whether a `failed` status is final for an order id or whether the same order can still be paid afterwards. Today a `failed` event fails a pending payment and a later `paid` still confirms it (`paid_after_failed`); if the provider allows retries on one order, `failed` should perhaps not fail the payment at all.
   - **Refund locking is not aligned with the online-payment lock order.** `request_refund` and `process_refund` lock the payment (and the refund) together with its invoice in one `select_for_update().select_related(...)` statement, so the row order is the planner's, not invoice-first, while every online-payment path (initiation, callbacks, the sweep, reconciliation, `:resolve`, `cancel_invoice`) takes the invoice, then the payment ([ADR-0034](decisions/0034-online-fee-payments.md) decision 10). A refund racing a gateway confirm on the same invoice could deadlock (Postgres would abort one side). Align both to lock the invoice first.
 
-- **DRF `NUM_PROXIES` is unset, so per-IP throttles key on the raw `X-Forwarded-For` header.**
-  With `NUM_PROXIES` unset, DRF's `get_ident` uses the whole `X-Forwarded-For` value when
-  present, which a client can set to anything, so a caller can rotate it to escape every per-IP
-  budget (`AuthEndpointThrottle`, `anon`, and `payment_callback_failure`'s token-guessing
-  limit). Set `REST_FRAMEWORK["NUM_PROXIES"]` to the number of proxies in front of the API in
-  each environment (the load balancer, plus any CDN), and test that a spoofed header does not
-  change the throttle key.
+- **Website & CMS, PR C follow-ups** (the public content API; minor review findings, each left for the PR that next touches its file):
+  - `MAX_HOSTNAME_LENGTH` (`core/tenancy/hosts.py`) duplicates `DOMAIN_MAX_LENGTH` (`website_cms`); make the model reference the core constant.
+  - Changing only the locale of the seeded homepage (slug `home`) fails with 422 `reserved_slug`; exempt `page_type=home` from the reserved-slug check.
+  - A page that already had the slug `home` before it became reserved is still served at `/home`. Rename or migrate such rows.
+  - Departments and classes are sliced in Python; push the limit into `public.py`'s queries.
+  - Gallery and cover URLs are not checked for publicness when built, so the renderer can show a broken image after an unpublish (the redirect answers 404). Check `visibility` where the URL is built.
+  - An unknown `scope` on `school-events` falls back to `upcoming`; answer 400 instead.
+  - No test pins the album list's nulls-last ordering by `published_at`.
+  - Random file ids give a scanner a fresh throttle bucket each; add a coarse per-IP ceiling beside the per-(IP, file) one.
+  - **A change to the platform default of the `module.website` flag does not revalidate the renderer.** Only a tenant override does (the flag signal). The 300 s TTL bounds the staleness; whole-platform invalidation is the natural fix.
+  - **A tenant override that expires does not revalidate** either: nothing runs when it lapses, so the cached site can show the module on or off for up to the TTL.
+  - **Platform-admin creating a tenant should lowercase and validate the slug.** `resolve_host` lowercases the host, so a tenant slug with capitals would never match; the slug validator applies to the tenant endpoints but the platform-admin create path must use the same lowercase rule.
+  - `CONTACT_BODY_MAX_BYTES` (32 KB) could clip a 5000-character message written in a script of four-byte characters; raise it if a school reports one.
+  - The contact tenant throttle keys on the raw `X-Tenant-Slug` before the school is resolved; bogus slugs only fill their own buckets, but a shape-valid flood costs a cache key each.
+  - The renderer must send an empty slug for `/` (not `home`), a random `Idempotency-Key` and the preview header; these land with PR E.
+
+- **`NUM_PROXIES` is now required, and operators must set the real hop count.** Production
+  refuses to boot without `NUM_PROXIES` (`0` means no proxy), and the production and staging
+  Terraform take a required `num_proxies` input with no default. DRF's throttles and
+  `core.api.client_ip.client_ip` (the stored `contact_submissions.ip` and the audit log, which used to take the spoofable left-most entry) both honour it. What remains is operational: the example
+  `num_proxies = 2` assumes CloudFront then the ALB, and each environment must confirm its real
+  chain. A wrong value is not detected by the boot check (too small records a proxy's address,
+  too large trusts a client-supplied `X-Forwarded-For` entry). It blocks launching the public
+  site until set. An unset value in dev and test keeps keying on the raw header.
+
+- **LAUNCH BLOCKER: restrict the ALB to CloudFront before trusting `num_proxies = 2`.** The
+  value is safe only once the ALB accepts traffic from CloudFront alone: the origin-facing
+  managed prefix list on the ALB security group, or a CloudFront custom origin header checked by
+  an ALB listener rule. Until then anyone connecting to the ALB directly controls
+  `X-Forwarded-For`, so the per-IP limits (public form, login, password reset, invitations,
+  payment-callback failures) and the stored audit and contact IPs are spoofable.
+  ([ADR-0039](decisions/0039-public-content-api.md) Consequences.)
+
+- **Terraform wiring for the public website is missing.** The API container needs
+  `WEBSITE_MACHINE_TOKENS`, `WEBSITE_REVALIDATE_URL` (the renderer's internal origin) and
+  `WEBSITE_REVALIDATE_SECRET` (both secrets as `api_secrets` ARNs) and `WEBSITE_CNAME_TARGET`;
+  the renderer task needs `WEBSITE_MACHINE_TOKEN` and the same revalidate secret. Until wired,
+  staging and production sites are dark (the renderer's reads get 401 and fail closed) and
+  revalidation is a no-op.
 
 - **AI gateway and AI-FEE-02 follow-ups** (`feat/ai-gateway`, plan
   `docs/superpowers/plans/2026-11-07-ai-gateway.md`, [ADR-0035](decisions/0035-ai-gateway-shape.md)).

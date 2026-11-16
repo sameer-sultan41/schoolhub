@@ -22,6 +22,13 @@ WEBSITE_CNAME_TARGET = env("WEBSITE_CNAME_TARGET")
 if not WEBSITE_CNAME_TARGET:
     raise ImproperlyConfigured("WEBSITE_CNAME_TARGET must name the custom-domain CNAME target.")
 
+# Required (0 means the API is reached directly): per-IP throttles and stored IPs trust
+# X-Forwarded-For only as far as this says, so a wrong default would be spoofable or blind.
+NUM_PROXIES = env.int("NUM_PROXIES")
+if NUM_PROXIES < 0:
+    raise ImproperlyConfigured("NUM_PROXIES must be 0 (direct) or the proxy count, not negative.")
+REST_FRAMEWORK = {**REST_FRAMEWORK, "NUM_PROXIES": NUM_PROXIES}
+
 SECURE_SSL_REDIRECT = True
 SECURE_HSTS_SECONDS = 31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True

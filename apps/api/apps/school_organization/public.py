@@ -39,7 +39,11 @@ class PublicContactRow:
 
 def public_departments() -> list[PublicDepartmentRow]:
     """Active, opted-in departments by name; one query."""
-    rows = Department.objects.alive().filter(is_active=True, show_on_website=True).order_by("name")
+    rows = (
+        Department.objects.alive()
+        .filter(is_active=True, show_on_website=True)
+        .order_by("name", "id")
+    )
     return [
         PublicDepartmentRow(id=row.id, name=row.name, description=row.description or "")
         for row in rows
@@ -48,7 +52,9 @@ def public_departments() -> list[PublicDepartmentRow]:
 
 def public_classes() -> list[PublicClassRow]:
     """Active, opted-in classes up the promotion ladder; one query."""
-    rows = Class.objects.alive().filter(is_active=True, show_on_website=True).order_by("level")
+    rows = (
+        Class.objects.alive().filter(is_active=True, show_on_website=True).order_by("level", "id")
+    )
     return [PublicClassRow(id=row.id, name=row.name, level=row.level) for row in rows]
 
 

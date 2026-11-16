@@ -51,3 +51,5 @@ the two cross-app view/report imports are the known violations, baselined in the
 `KNOWN_VIOLATIONS`; the seed commands leave it when they move into a dedicated package. Test code is out
 of scope for these contracts: about a dozen `core/` test modules import apps' test factories,
 which is legitimate, so the contracts must exclude `tests` packages.
+
+See also [ADR-0039](0039-public-content-api.md) decision 4: the read-only `public.py` an owning app exposes to `website_cms` (tenant-bound, frozen dataclasses, a constant number of queries) is the convention for cross-app reads that are not `services`.

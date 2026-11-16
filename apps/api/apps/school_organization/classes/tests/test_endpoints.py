@@ -44,3 +44,17 @@ class ClassEndpointTests(SchoolOrganizationAPITestCase):
         self.assertEqual(
             self._ids("/api/v1/classes?ordering=is_active"), [str(two.pk), str(ten.pk)]
         )
+
+    def test_patch_round_trips_show_on_website(self) -> None:
+        self.allow("school.class.view", "school.class.update")
+        with tenant_context(self.tenant.id):
+            row = ClassFactory(tenant=self.tenant)
+        self.assertFalse(row.show_on_website)
+        for flag in (True, False):
+            response = self.client.patch(
+                f"/api/v1/classes/{row.pk}", {"show_on_website": flag}, format="json"
+            )
+            self.assertEqual(response.status_code, 200, response.json())
+            self.assertIs(response.json()["data"]["show_on_website"], flag)
+            with tenant_context(self.tenant.id):
+                self.assertIs(type(row).objects.get(pk=row.pk).show_on_website, flag)

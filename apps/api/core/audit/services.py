@@ -14,6 +14,7 @@ from typing import Any
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction
 
+from core.api.client_ip import client_ip
 from core.audit.models import AuditLog
 
 logger = logging.getLogger(__name__)
@@ -68,14 +69,6 @@ def _json_safe(payload: Any) -> Any:
     return json.loads(json.dumps(payload, cls=DjangoJSONEncoder))
 
 
-def _client_ip(request) -> str | None:
-    forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
-    if forwarded:
-        # Left-most entry is the originating client.
-        return forwarded.split(",")[0].strip()
-    return request.META.get("REMOTE_ADDR")
-
-
 def record_audit(
     request,
     action: str,
@@ -106,7 +99,7 @@ def record_audit(
                 before=_json_safe(_redact(before)) if before is not None else None,
                 after=_json_safe(_redact(after)) if after is not None else None,
                 request_id=getattr(request, "request_id", "") or "",
-                ip_address=_client_ip(request),
+                ip_address=client_ip(request),
                 user_agent=request.META.get("HTTP_USER_AGENT", "")[:400],
             )
     except Exception:
@@ -156,7 +149,7 @@ def record_security_event(request, action: str, *, tenant=None, **context) -> No
                 resource_type="security.event",
                 after=_json_safe(_redact(context)) or None,
                 request_id=getattr(request, "request_id", "") or "",
-                ip_address=_client_ip(request),
+                ip_address=client_ip(request),
                 user_agent=request.META.get("HTTP_USER_AGENT", "")[:400],
             )
     except Exception:

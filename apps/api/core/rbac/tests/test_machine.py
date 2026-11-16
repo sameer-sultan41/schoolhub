@@ -1,7 +1,7 @@
 """Machine-client authentication, scope, throttling and client-IP derivation (decisions 1, 2a).
 
-The public content views arrive in PR C2; until then a test-only view carries the exact
-classes `PublicContentView` will declare, so the boundary is proven before any route exists.
+A test-only view carries the exact classes `PublicContentView` declares, so these tests stay
+independent of any route; `website_cms/public/tests` repeats the boundary on the real routes.
 """
 
 from __future__ import annotations
@@ -12,11 +12,13 @@ from django.conf import settings
 from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase, override_settings
 from rest_framework.response import Response
+from rest_framework.settings import api_settings
 from rest_framework.test import APIClient, APIRequestFactory
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import AccessToken
 
 from apps.school_organization.tests.factories import TenantFactory, UserFactory
+from core.api.client_ip import client_ip
 from core.api.throttling import PublicFormThrottle
 from core.rbac.machine import (
     MACHINE_SCOPES,
@@ -24,7 +26,6 @@ from core.rbac.machine import (
     MachineClientThrottle,
     MachinePrincipal,
     MachineTokenAuthentication,
-    client_ip,
 )
 
 SCOPE = "website.public-content.view"
@@ -32,7 +33,7 @@ NEW, OLD = "renderer-token-new", "renderer-token-old"
 
 
 class _ProbeView(APIView):
-    """The classes `PublicContentView` declares (plan Task C2)."""
+    """The classes `PublicContentView` declares."""
 
     authentication_classes = [MachineTokenAuthentication]
     permission_classes = [HasMachineScope]
@@ -214,6 +215,25 @@ class ClientIpTests(SimpleTestCase):
     @override_settings(REST_FRAMEWORK={**settings.REST_FRAMEWORK, "NUM_PROXIES": 1})
     def test_no_header_falls_back_to_the_peer(self) -> None:
         self.assertEqual(client_ip(self._request()), "10.0.0.9")
+
+
+@override_settings(REST_FRAMEWORK={**settings.REST_FRAMEWORK, "NUM_PROXIES": None})
+class UnsetNumProxiesThrottleTests(SimpleTestCase):
+    """`NUM_PROXIES` unset: `get_ident` would key on the whole header, and rotating it escape."""
+
+    def setUp(self) -> None:
+        cache.clear()
+
+    def test_rotating_xff_does_not_reset_public_form_throttle(self) -> None:
+        self.assertIsNone(api_settings.NUM_PROXIES)
+        limit = PublicFormThrottle().num_requests
+        allowed = []
+        for n in range(limit + 1):
+            request = APIRequestFactory().get(
+                "/", HTTP_X_FORWARDED_FOR=f"192.0.2.{n}", REMOTE_ADDR="10.0.0.1"
+            )
+            allowed.append(PublicFormThrottle().allow_request(request, None))
+        self.assertEqual(allowed, [True] * limit + [False])
 
 
 @override_settings(REST_FRAMEWORK={**settings.REST_FRAMEWORK, "NUM_PROXIES": 1})

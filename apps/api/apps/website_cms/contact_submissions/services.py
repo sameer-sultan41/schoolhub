@@ -28,6 +28,8 @@ from core.rbac.models import User
 from core.tenancy.models import Tenant
 
 _email_validator = EmailValidator()
+# Single-line fields: a newline in them would reach an email header or a one-line title.
+_SINGLE_LINE_FIELDS = ("name", "subject", "phone")
 
 
 def _clean(data: dict[str, Any], source_page: WebsitePage | None) -> dict[str, str]:
@@ -36,6 +38,8 @@ def _clean(data: dict[str, Any], source_page: WebsitePage | None) -> dict[str, s
         key: str(data.get(key) or "").strip()
         for key in ("name", "email", "phone", "subject", "message")
     }
+    for key in _SINGLE_LINE_FIELDS:
+        values[key] = " ".join(values[key].split())
     if not values["name"] or len(values["name"]) > CONTACT_NAME_MAX:
         raise violation(
             "name", "invalid_name", f"enter a name of 1 to {CONTACT_NAME_MAX} characters."
@@ -49,7 +53,8 @@ def _clean(data: dict[str, Any], source_page: WebsitePage | None) -> dict[str, s
             raise violation("email", "invalid_email", "enter a valid email address.") from None
         if len(values["email"]) > CONTACT_EMAIL_MAX:
             raise violation("email", "invalid_email", "enter a valid email address.")
-    if values["phone"] and not CONTACT_PHONE_RE.match(values["phone"]):
+    phone = values["phone"]
+    if phone and not (CONTACT_PHONE_RE.match(phone) and any(ch.isdigit() for ch in phone)):
         raise violation("phone", "invalid_phone", "enter a valid phone number.")
     if len(values["subject"]) > CONTACT_SUBJECT_MAX:
         raise violation(

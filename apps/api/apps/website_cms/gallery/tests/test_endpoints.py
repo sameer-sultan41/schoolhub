@@ -7,9 +7,10 @@ from uuid import uuid4
 
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 
 from apps.website_cms.constants import EMBED_HOSTS, EMBED_URL_MAX_LENGTH
-from apps.website_cms.models import ContentStatus, GalleryItem
+from apps.website_cms.models import ContentStatus, GalleryAlbum, GalleryItem
 from apps.website_cms.tests.base import WebsiteAPITestCase
 from core.files.models import FileVisibility
 from core.tenancy.context import tenant_context
@@ -397,3 +398,104 @@ class ItemTests(WebsiteAPITestCase):
                     if q.startswith(('INSERT INTO "gallery_items"', 'UPDATE "gallery_items"'))
                 )
                 self.assertLess(lock, write)
+
+
+class GalleryBearerAndOrderTests(WebsiteAPITestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        self.allow("website.page.view", "website.gallery-album.update")
+        self.bearer = self.bearer_client()
+        self.album = self.make_album()
+        self.foreign = self.make_album(tenant=self.make_other_tenant())
+
+    def test_bearer_token_alone_lists_404s_a_foreign_album_and_writes(self) -> None:
+        self.assertEqual(self.bearer.get(LIST).status_code, 200)
+        self.assertEqual(self.bearer.get(detail(self.foreign)).status_code, 404)
+        response = self.bearer.patch(detail(self.album), {"title": "Renamed"}, format="json")
+        self.assertEqual(response.status_code, 200, response.content)
+
+    def test_bearer_token_alone_reaches_items_and_a_foreign_album_is_404(self) -> None:
+        item = self.make_item(self.album)
+        self.assertEqual(self.bearer.get(items_url(self.album)).status_code, 200)
+        self.assertEqual(self.bearer.get(items_url(self.foreign)).status_code, 404)
+        response = self.bearer.patch(
+            f"{items_url(self.album)}/{item.id}", {"caption": "Cheers"}, format="json"
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+
+    def test_albums_tied_on_every_sort_key_page_apart(self) -> None:
+        rows = [self.album, self.make_album()]
+        self.assert_ties_page_apart(LIST, GalleryAlbum, rows, created_at=timezone.now())
+
+    def test_items_tied_on_created_at_page_apart(self) -> None:
+        rows = [self.make_item(self.album), self.make_item(self.album)]
+        self.assert_ties_page_apart(
+            items_url(self.album),
+            GalleryItem,
+            rows,
+            params={"ordering": "created_at"},
+            created_at=timezone.now(),
+        )
+
+
+class PublishedAlbumEditGateTests(WebsiteAPITestCase):
+    """§7.1: editing a published album or its items needs the publish key."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.allow("website.page.view", "website.gallery-album.update")
+        self.live = self.make_album(slug="live", title="Live", status=ContentStatus.PUBLISHED)
+        self.live_item = self.make_item(self.live, position=0)
+        self.live_item2 = self.make_item(self.live, position=1)
+        self.draft = self.make_album(slug="draft")
+        self.draft_item = self.make_item(self.draft, position=0)
+
+    def _writes(self, album, item):
+        url = items_url(album)
+        return {
+            "album": lambda: self.client.patch(detail(album), {"title": "T"}, format="json"),
+            "add": lambda: self.client.post(
+                url,
+                {"media_type": "video_embed", "embed_url": "https://www.youtube.com/watch?v=a"},
+                format="json",
+            ),
+            "edit": lambda: self.client.patch(f"{url}/{item.id}", {"caption": "C"}, format="json"),
+            "reorder": lambda: self.client.patch(
+                f"{url}:reorder", {"ids": self._reversed_ids(album)}, format="json"
+            ),
+            "delete": lambda: self.client.delete(f"{url}/{item.id}"),
+        }
+
+    def _items(self, album):
+        with tenant_context(self.tenant.id):
+            rows = GalleryItem.objects.alive().filter(gallery_album=album)
+            return list(rows.order_by("position"))
+
+    def _reversed_ids(self, album) -> list[str]:
+        return [str(i.id) for i in self._items(album)][::-1]
+
+    def test_update_only_user_cannot_edit_a_published_album_or_its_items(self) -> None:
+        for name, call in self._writes(self.live, self.live_item).items():
+            with (
+                self.subTest(write=name),
+                mock.patch("apps.website_cms.revalidation.revalidate_website") as task,
+                self.captureOnCommitCallbacks(execute=True),
+            ):
+                response = call()
+                self.assertEqual(response.status_code, 422, response.content)
+                self.assertIn("publish_required", response.json()["error"]["message"])
+                task.delay.assert_not_called()
+        self.live.refresh_from_db()
+        self.assertEqual(self.live.title, "Live")
+        self.assertEqual(len(self._items(self.live)), 2)
+
+    def test_update_only_user_edits_a_draft_album_and_its_items(self) -> None:
+        for name, call in self._writes(self.draft, self.draft_item).items():
+            with self.subTest(write=name):
+                self.assertLess(call().status_code, 300)
+
+    def test_publisher_edits_a_published_album_and_its_items(self) -> None:
+        self.allow("website.gallery-album.publish")
+        for name, call in self._writes(self.live, self.live_item2).items():
+            with self.subTest(write=name):
+                self.assertLess(call().status_code, 300)
