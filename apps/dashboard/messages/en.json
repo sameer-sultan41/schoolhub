@@ -4832,6 +4832,10 @@
       "content": {
         "slug_taken": "Another item already uses this address.",
         "invalid_slug": "Use lowercase letters, digits and single hyphens."
+      },
+      "seo": {
+        "invalid_url": "Use an https:// link, or a path on this site starting with /.",
+        "invalid_target": "This item no longer exists. Close this and reload the page."
       }
     },
     "imageField": {
@@ -4921,6 +4925,28 @@
         "unsafeUrl": "Use an https:// link, or a path on this site starting with /.",
         "notAnOption": "Choose one of the options.",
         "imageRequired": "Choose an image."
+      }
+    },
+    "seo": {
+      "action": "SEO",
+      "dialogTitle": "SEO: {title}",
+      "dialogIntro": "How this appears in search results and when it is shared.",
+      "siteTitle": "SEO",
+      "siteSummary": "The website's own search title, description and share image. Each page, post, event and album sets its own from its editor.",
+      "loadError": "The SEO settings couldn't be loaded.",
+      "saved": "SEO settings saved.",
+      "fields": {
+        "meta_title": "Search title",
+        "meta_description": "Search description",
+        "og_image_file_id": "Share image",
+        "canonical_url": "Canonical link",
+        "robots": "Robots"
+      },
+      "hints": {
+        "meta_title": "Up to 70 characters, shown as the title in search results.",
+        "meta_description": "Up to 170 characters, shown under the title in search results.",
+        "canonical_url": "Only when this content's main address is elsewhere: an https:// link, or a path on this site starting with /.",
+        "robots": "An instruction for search engines, such as noindex. Leave it empty for the default."
       }
     }
   },
