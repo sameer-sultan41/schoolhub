@@ -58,6 +58,7 @@ import { TeacherSubstitutionsService } from "./modules/teacher-substitutions";
 import { TenantService } from "./modules/tenant";
 import { TimetableSlotsService } from "./modules/timetable-slots";
 import { ContactSubmissionsService } from "./modules/website/contact-submissions";
+import { CustomDomainsService } from "./modules/website/custom-domains";
 import { GalleryAlbumsService } from "./modules/website/gallery-albums";
 import { NavigationMenusService } from "./modules/website/navigation-menus";
 import { NewsPostsService } from "./modules/website/news-posts";
@@ -158,4 +159,5 @@ export const Services = {
   schoolEvents: SchoolEventsService,
   galleryAlbums: GalleryAlbumsService,
   contactSubmissions: ContactSubmissionsService,
+  customDomains: CustomDomainsService,
 } as const;

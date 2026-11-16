@@ -8,6 +8,7 @@ const pages = "/website-pages";
 const newsPosts = "/news-posts";
 const schoolEvents = "/school-events";
 const galleryAlbums = "/gallery-albums";
+const customDomains = "/custom-domains";
 
 export const websiteEndpoints = {
   /** `GET` (an unsaved default with `exists: false` before the first save) and `PATCH`. */
@@ -57,5 +58,11 @@ export const websiteEndpoints = {
   contactSubmissions: {
     list: "/contact-submissions",
     detail: (id: string) => `/contact-submissions/${id}`,
+  },
+  /** Listed with `AnyOf(website.custom-domain.create, .update)`; each write needs its own key. */
+  customDomains: {
+    list: customDomains,
+    detail: (id: string) => `${customDomains}/${id}`,
+    verify: (id: string) => `${customDomains}/${id}:verify`,
   },
 } as const;

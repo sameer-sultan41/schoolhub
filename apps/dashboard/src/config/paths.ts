@@ -82,6 +82,8 @@ export const Paths = {
   WEBSITE_NAVIGATION: "/website/navigation",
   WEBSITE_SETTINGS: "/website/settings",
   WEBSITE_SEO: "/website/seo",
+  WEBSITE_DOMAINS: "/website/domains",
+  WEBSITE_INBOX: "/website/inbox",
   LOGIN: "/login",
   FORGOT_PASSWORD: "/forgot-password",
   RESET_PASSWORD: "/reset-password",

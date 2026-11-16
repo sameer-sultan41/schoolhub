@@ -58,10 +58,42 @@ describe("MENU_SIDEBAR's Website group", () => {
     expect(websiteGroup(filterMenuByAccess(MENU_SIDEBAR, undefined))).toBeUndefined();
   });
 
-  it("drops the group when a website key reaches no shipped section", () => {
-    // A key for a section that ships later (the contact inbox) must not leave an empty group.
-    const user = buildUser(["website.contact-submission.view"]);
+  it("shows a reception user only the contact inbox", () => {
+    // `reception` holds only the inbox keys (`website_cms/permissions.py`: `INBOX_STAFF`).
+    const user = buildUser([
+      "website.contact-submission.view",
+      "website.contact-submission.update",
+    ]);
+    const group = websiteGroup(filterMenuByAccess(MENU_SIDEBAR, user));
 
-    expect(websiteGroup(filterMenuByAccess(MENU_SIDEBAR, user))).toBeUndefined();
+    expect(group?.children?.map((child) => [child.title, child.path])).toEqual([
+      ["Contact inbox", Paths.WEBSITE_INBOX],
+    ]);
+  });
+
+  it("shows a school owner only Domains", () => {
+    // `school_owner` holds only the domain keys (`DOMAIN_ADMINS`); §4 has no view key for them.
+    const user = buildUser([
+      "website.custom-domain.create",
+      "website.custom-domain.update",
+      "website.custom-domain.delete",
+    ]);
+    const group = websiteGroup(filterMenuByAccess(MENU_SIDEBAR, user));
+
+    expect(group?.children?.map((child) => [child.title, child.path])).toEqual([
+      ["Domains", Paths.WEBSITE_DOMAINS],
+    ]);
+  });
+
+  it("opens Domains with either key the list reads under, and not with delete alone", () => {
+    const withUpdate = buildUser(["website.custom-domain.update"]);
+    const deleteOnly = buildUser(["website.custom-domain.delete"]);
+
+    expect(
+      websiteGroup(filterMenuByAccess(MENU_SIDEBAR, withUpdate))?.children?.map(
+        (child) => child.title,
+      ),
+    ).toEqual(["Domains"]);
+    expect(websiteGroup(filterMenuByAccess(MENU_SIDEBAR, deleteOnly))).toBeUndefined();
   });
 });
