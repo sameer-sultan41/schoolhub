@@ -40,6 +40,7 @@ CLIENT_KNOWN_SERVER_CODES = {
     "marks_outstanding",
     "ai_quota_exceeded",
     "ai_unavailable",
+    "mfa_required",
 }
 
 
