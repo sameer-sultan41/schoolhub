@@ -2,6 +2,7 @@
 import "server-only";
 import type { ApiSuccessEnvelope } from "@schoolhub/types";
 import { env } from "./env";
+import { PREVIEW_HEADER } from "./preview";
 import { TRAILING_SLASH_PATTERN } from "./regex";
 
 /**
@@ -22,6 +23,11 @@ export interface ReadOptions {
   /** Cache tags for on-demand invalidation from the publish webhook. */
   tags?: string[];
   query?: Record<string, string | number | undefined>;
+  /**
+   * A page preview token (decision 9): sent as `X-Preview-Token` and read with `no-store`, so a
+   * draft is never cached. Only `pages` and `site` accept one.
+   */
+  previewToken?: string | null;
 }
 
 export class ContentFetchError extends Error {
@@ -53,16 +59,25 @@ function buildUrl(path: string, host: string, query: ReadOptions["query"]): stri
  *          instead of a 500. Any other failure throws.
  */
 export async function readJson<TData>(path: string, options: ReadOptions): Promise<TData | null> {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    Authorization: `Bearer ${env.WEBSITE_MACHINE_TOKEN}`,
+  };
+  const { previewToken } = options;
+  const caching: RequestInit = previewToken
+    ? { cache: "no-store" }
+    : {
+        next: {
+          revalidate: options.revalidate ?? env.CONTENT_REVALIDATE_SECONDS,
+          ...(options.tags ? { tags: options.tags } : {}),
+        },
+      };
+  if (previewToken) headers[PREVIEW_HEADER] = previewToken;
+
   const response = await fetch(buildUrl(path, options.host, options.query), {
     method: "GET",
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${env.WEBSITE_MACHINE_TOKEN}`,
-    },
-    next: {
-      revalidate: options.revalidate ?? env.CONTENT_REVALIDATE_SECONDS,
-      ...(options.tags ? { tags: options.tags } : {}),
-    },
+    headers,
+    ...caching,
   });
 
   if (response.status === 404) return null;
@@ -91,6 +106,9 @@ export function tenantTag(tenantId: string): string {
 export function hostTag(host: string): string {
   return `tenant-host:${host}`;
 }
+
+/** Tags every cached host → school lookup, so one invalidation drops them all. */
+export const ALL_HOSTS_TAG = "tenant-hosts";
 
 /** Per-path cache tag within a tenant. */
 export function pageTag(tenantId: string, path: string): string {

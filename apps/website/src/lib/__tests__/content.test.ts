@@ -1,11 +1,14 @@
 import type * as ReactModule from "react";
 import { readJson } from "../api";
 import {
+  getAlbum,
   getClasses,
   getDepartments,
+  getEvent,
   getEvents,
   getGallery,
   getNews,
+  getNewsPost,
   getNotices,
   getPage,
   getPublishedPaths,
@@ -14,6 +17,7 @@ import {
   PUBLIC_LIST_MAX,
   toPageSlug,
 } from "../content";
+import { getPreviewToken } from "../preview";
 
 jest.mock("react", () => ({
   ...jest.requireActual<typeof ReactModule>("react"),
@@ -26,11 +30,15 @@ jest.mock("../api", () => ({
   pageTag: (id: string, path: string) => `tenant:${id}:page:${path || "/"}`,
 }));
 
+jest.mock("../preview", () => ({ getPreviewToken: jest.fn() }));
+
 const mockReadJson = readJson as jest.MockedFunction<typeof readJson>;
+const mockGetPreviewToken = getPreviewToken as jest.MockedFunction<typeof getPreviewToken>;
 const HOST = "cityschool.schoolhub.pk";
 
 beforeEach(() => {
   mockReadJson.mockReset();
+  mockGetPreviewToken.mockReset().mockResolvedValue(null);
 });
 
 describe("toPageSlug", () => {
@@ -62,6 +70,9 @@ describe("every read sends the host to its contract path", () => {
     ["getNews", () => getNews("t1", HOST), "/public/news-posts"],
     ["getNotices", () => getNotices("t1", HOST), "/public/notices"],
     ["getGallery", () => getGallery("t1", HOST), "/public/gallery-items"],
+    ["getNewsPost", () => getNewsPost("t1", HOST, "sports-day"), "/public/news-posts/sports-day"],
+    ["getEvent", () => getEvent("t1", HOST, "sports-day"), "/public/school-events/sports-day"],
+    ["getAlbum", () => getAlbum("t1", HOST, "sports-day"), "/public/gallery-albums/sports-day"],
   ])("%s", async (_name, call, path) => {
     mockReadJson.mockResolvedValue(null);
     await call();
@@ -101,6 +112,66 @@ describe("getPage", () => {
   it("returns the page content on a hit", async () => {
     mockReadJson.mockResolvedValue({ id: "p1" });
     await expect(getPage("t1", HOST, "about")).resolves.toEqual({ id: "p1" });
+  });
+});
+
+describe("preview", () => {
+  it.each([
+    ["getPage", () => getPage("t1", HOST, "about")],
+    ["getSite", () => getSite("t1", HOST)],
+  ])("%s sends the Draft Mode token", async (_name, call) => {
+    mockGetPreviewToken.mockResolvedValue("tok-1");
+    mockReadJson.mockResolvedValue(null);
+    await call();
+    expect(mockReadJson).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ previewToken: "tok-1" }),
+    );
+  });
+
+  it("sends no token outside Draft Mode", async () => {
+    mockReadJson.mockResolvedValue(null);
+    await getPage("t1", HOST, "about");
+    expect(mockReadJson).toHaveBeenCalledWith(
+      "/public/pages",
+      expect.objectContaining({ previewToken: null }),
+    );
+  });
+
+  it("never sends it on a module read", async () => {
+    mockGetPreviewToken.mockResolvedValue("tok-1");
+    mockReadJson.mockResolvedValue(null);
+    await getNews("t1", HOST);
+    expect(mockReadJson).toHaveBeenCalledWith(
+      "/public/news-posts",
+      expect.not.objectContaining({ previewToken: expect.anything() }),
+    );
+  });
+});
+
+describe("detail readers", () => {
+  it("tag the item so a publish of it can be evicted", async () => {
+    mockReadJson.mockResolvedValue(null);
+    await getNewsPost("t1", HOST, "sports-day");
+    expect(mockReadJson).toHaveBeenCalledWith("/public/news-posts/sports-day", {
+      host: HOST,
+      tags: ["tenant:t1", `tenant-host:${HOST}`, "tenant:t1:news-posts:sports-day"],
+    });
+  });
+
+  it.each(["..", "a/b", "Sports-Day", "sports day", "", "-x"])(
+    "never fetch a slug that cannot exist (%p)",
+    async (slug) => {
+      await expect(getNewsPost("t1", HOST, slug)).resolves.toBeNull();
+      await expect(getEvent("t1", HOST, slug)).resolves.toBeNull();
+      await expect(getAlbum("t1", HOST, slug)).resolves.toBeNull();
+      expect(mockReadJson).not.toHaveBeenCalled();
+    },
+  );
+
+  it("return the item on a hit", async () => {
+    mockReadJson.mockResolvedValue({ id: "a1" });
+    await expect(getAlbum("t1", HOST, "annual-day")).resolves.toEqual({ id: "a1" });
   });
 });
 

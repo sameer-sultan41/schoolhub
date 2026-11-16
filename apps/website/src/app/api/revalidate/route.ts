@@ -1,6 +1,8 @@
 import { revalidateTag } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
+import { ALL_HOSTS_TAG, hostTag } from "@/lib/api";
 import { env } from "@/lib/env";
+import { normalizeHost } from "@/lib/host";
 import { SHA256_PREFIX_PATTERN } from "@/lib/regex";
 
 /**
@@ -11,12 +13,30 @@ import { SHA256_PREFIX_PATTERN } from "@/lib/regex";
  * cache tags so the next request re-renders. Edits go live in seconds without cold-rendering
  * every request.
  *
- * This is the app's only non-GET route, and it writes **nothing**: it invalidates a cache.
- * The renderer's read-only machine token is not involved.
+ * Besides the tenant's own `tenant:<id>…` tags, a signed body may name host tags: the API sends
+ * `tenant-host:<host>` for every host of the school when its settings, module flag or domains
+ * change, so the cached `by-host` answer is never stale (plan decision 8), and `tenant-hosts`
+ * drops every cached host lookup.
+ *
+ * It writes **nothing**: it invalidates a cache. The renderer's read-only machine token is not
+ * involved.
  */
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const HOST_TAG_PREFIX = hostTag("");
+
+/** A tag the signing tenant may invalidate; anything else is ignored. */
+function isAllowedTag(tag: string, tenantId: string): boolean {
+  if (tag === ALL_HOSTS_TAG) return true;
+  if (tag.startsWith(HOST_TAG_PREFIX)) {
+    // Only a well-formed host, exactly as `hostTag` writes it.
+    const host = tag.slice(HOST_TAG_PREFIX.length);
+    return normalizeHost(host) === host;
+  }
+  return tag.startsWith(`tenant:${tenantId}`);
+}
 
 function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -76,12 +96,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Always drop the tenant-wide tag; optional finer tags let a single-page publish be cheap.
+  // Always drop the tenant-wide tag; finer tenant tags and host tags come from the body.
   const tags = new Set<string>([`tenant:${tenantId}`]);
   if (Array.isArray(payload.tags)) {
     for (const tag of payload.tags) {
-      // Only ever invalidate within the tenant that signed the request.
-      if (typeof tag === "string" && tag.startsWith(`tenant:${tenantId}`)) tags.add(tag);
+      if (typeof tag === "string" && isAllowedTag(tag, tenantId)) tags.add(tag);
     }
   }
 

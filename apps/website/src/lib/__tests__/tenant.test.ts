@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import type * as ReactModule from "react";
 import { makeTenant } from "@/test-utils";
 import { readJson } from "../api";
+import { getPreviewToken } from "../preview";
 import { TENANT_HOST_HEADER, TENANT_KIND_HEADER, TENANT_PATH_HEADER } from "../host";
 import {
   canonicalOrigin,
@@ -22,12 +23,15 @@ jest.mock("react", () => ({
 
 jest.mock("next/headers", () => ({ headers: jest.fn() }));
 jest.mock("../api", () => ({
+  ALL_HOSTS_TAG: "tenant-hosts",
   readJson: jest.fn(),
   hostTag: (host: string) => `tenant-host:${host}`,
 }));
+jest.mock("../preview", () => ({ getPreviewToken: jest.fn() }));
 
 const mockHeaders = headers as jest.MockedFunction<typeof headers>;
 const mockReadJson = readJson as jest.MockedFunction<typeof readJson>;
+const mockGetPreviewToken = getPreviewToken as jest.MockedFunction<typeof getPreviewToken>;
 
 const HOST = "cityschool.schoolhub.pk";
 
@@ -95,6 +99,8 @@ describe("classifyTenant", () => {
 });
 
 describe("resolveTenant", () => {
+  beforeEach(() => mockGetPreviewToken.mockReset().mockResolvedValue(null));
+
   it("is unknown when there is no request host", async () => {
     mockHost(null);
     await expect(resolveTenant()).resolves.toEqual({ status: "unknown" });
@@ -132,6 +138,25 @@ describe("resolveTenant", () => {
   ] as const)("is unavailable for a %s school with a %s site", async (status, websiteStatus) => {
     mockHost(HOST);
     const tenant = makeTenant({ status, website_status: websiteStatus });
+    mockReadJson.mockResolvedValue(tenant);
+    await expect(resolveTenant()).resolves.toEqual({ status: "unavailable", tenant, host: HOST });
+  });
+
+  it.each(["maintenance", "unpublished"] as const)(
+    "renders a %s site under a validated preview token",
+    async (websiteStatus) => {
+      mockHost(HOST);
+      mockGetPreviewToken.mockResolvedValue("tok-1");
+      const tenant = makeTenant({ website_status: websiteStatus });
+      mockReadJson.mockResolvedValue(tenant);
+      await expect(resolveTenant()).resolves.toEqual({ status: "active", tenant, host: HOST });
+    },
+  );
+
+  it("never renders a suspended school under a preview token", async () => {
+    mockHost(HOST);
+    mockGetPreviewToken.mockResolvedValue("tok-1");
+    const tenant = makeTenant({ status: "suspended" });
     mockReadJson.mockResolvedValue(tenant);
     await expect(resolveTenant()).resolves.toEqual({ status: "unavailable", tenant, host: HOST });
   });

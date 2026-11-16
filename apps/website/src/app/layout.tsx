@@ -1,6 +1,7 @@
 import { Fraunces, Inter, Noto_Nastaliq_Urdu } from "next/font/google";
 import { permanentRedirect } from "next/navigation";
 import type { ReactNode } from "react";
+import { PreviewBanner } from "@/components/preview-banner";
 import { customDomainRedirectTarget, resolveTenant } from "@/lib/tenant";
 import { themeStyle } from "@/themes/default";
 import "./globals.css";
@@ -47,7 +48,10 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       className={`${inter.variable} ${fraunces.variable} ${notoNastaliqUrdu.variable}`}
       style={themeStyle(tenant?.branding)}
     >
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        <PreviewBanner />
+        {children}
+      </body>
     </html>
   );
 }

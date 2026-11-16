@@ -69,6 +69,29 @@ describe("readJson", () => {
     const [, init] = mockFetch.mock.calls[0] as [string, { next: Record<string, unknown> }];
     expect(init.next).toEqual({ revalidate: 60, tags: ["tenant:t1"] });
   });
+
+  it("sends a preview token as the header, uncached and untagged", async () => {
+    mockFetch.mockResolvedValue(jsonResponse(200, { data: null }));
+
+    await readJson("/public/pages", { host: HOST, tags: ["tenant:t1"], previewToken: "tok-1" });
+
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect((init.headers as Record<string, string>)["X-Preview-Token"]).toBe("tok-1");
+    expect(init.cache).toBe("no-store");
+    expect(init.next).toBeUndefined();
+    // Never in the query string (SEC-57).
+    expect(url).not.toContain("tok-1");
+  });
+
+  it("sends no preview header without a token", async () => {
+    mockFetch.mockResolvedValue(jsonResponse(200, { data: null }));
+
+    await readJson("/public/pages", { host: HOST, previewToken: null });
+
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(init.headers as Record<string, string>).not.toHaveProperty("X-Preview-Token");
+    expect(init.cache).toBeUndefined();
+  });
 });
 
 describe("tenantTag", () => {

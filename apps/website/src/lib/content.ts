@@ -1,6 +1,8 @@
 import type { ApiSchemas } from "@schoolhub/api-client";
 import { cache } from "react";
 import { hostTag, pageTag, readJson, tenantTag } from "./api";
+import { getPreviewToken } from "./preview";
+import { CONTENT_SLUG_PATTERN } from "./regex";
 
 /**
  * Public content reads. **Every export in this file is a read.**
@@ -24,6 +26,9 @@ type PublicDepartment = ApiSchemas["PublicDepartment"];
 type PublicClass = ApiSchemas["PublicClass"];
 type PublicSchoolEvent = ApiSchemas["PublicSchoolEvent"];
 type PublicNewsPost = ApiSchemas["PublicNewsPost"];
+type PublicNewsPostDetail = ApiSchemas["PublicNewsPostDetail"];
+type PublicSchoolEventDetail = ApiSchemas["PublicSchoolEventDetail"];
+type PublicGalleryAlbumDetail = ApiSchemas["PublicGalleryAlbumDetail"];
 type PublicNotice = ApiSchemas["PublicNotice"];
 type PublicGalleryImage = ApiSchemas["PublicGalleryImage"];
 
@@ -41,21 +46,60 @@ export function toPageSlug(segments: string[] | undefined): string {
   return (segments ?? []).filter(Boolean).join("/");
 }
 
-/** The homepage is asked for with no slug: `slug=home` is a 404 by contract. */
+/**
+ * The homepage is asked for with no slug: `slug=home` is a 404 by contract. In Draft Mode the
+ * preview token goes along (uncached), so the token's own page reads in any status.
+ */
 export const getPage = cache(
   async (tenantId: string, host: string, slug: string): Promise<PublicPage | null> =>
     readJson<PublicPage>("/public/pages", {
       host,
       query: { slug: slug || undefined },
       tags: [tenantTag(tenantId), hostTag(host), pageTag(tenantId, slug)],
+      previewToken: await getPreviewToken(),
     }),
 );
 
+/** In Draft Mode the preview token lets a site that is not live yet be read. */
 export const getSite = cache(async (tenantId: string, host: string): Promise<PublicSite | null> =>
   readJson<PublicSite>("/public/site", {
     host,
     tags: [tenantTag(tenantId), hostTag(host), `tenant:${tenantId}:site`],
+    previewToken: await getPreviewToken(),
   }),
+);
+
+/**
+ * One published item by slug, or null. A slug that is not a single kebab-case segment is never
+ * sent: it cannot exist, and a `..` would otherwise walk the API path.
+ */
+async function readDetail<TData>(
+  resource: string,
+  tenantId: string,
+  host: string,
+  slug: string,
+): Promise<TData | null> {
+  if (!CONTENT_SLUG_PATTERN.test(slug)) return null;
+  return readJson<TData>(`/public/${resource}/${slug}`, {
+    host,
+    tags: [tenantTag(tenantId), hostTag(host), `tenant:${tenantId}:${resource}:${slug}`],
+  });
+}
+
+export const getNewsPost = cache(
+  async (tenantId: string, host: string, slug: string): Promise<PublicNewsPostDetail | null> =>
+    readDetail<PublicNewsPostDetail>("news-posts", tenantId, host, slug),
+);
+
+export const getEvent = cache(
+  async (tenantId: string, host: string, slug: string): Promise<PublicSchoolEventDetail | null> =>
+    readDetail<PublicSchoolEventDetail>("school-events", tenantId, host, slug),
+);
+
+/** An album with its first items (the API caps them; `item_count` is the full total). */
+export const getAlbum = cache(
+  async (tenantId: string, host: string, slug: string): Promise<PublicGalleryAlbumDetail | null> =>
+    readDetail<PublicGalleryAlbumDetail>("gallery-albums", tenantId, host, slug),
 );
 
 export const getPublishedPaths = cache(

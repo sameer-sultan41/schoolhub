@@ -84,6 +84,56 @@ describe("POST /api/revalidate", () => {
     expect(mockRevalidateTag).toHaveBeenCalledWith("tenant:t1:page:/about", { expire: 0 });
   });
 
+  it("revalidates the host tags the API sends on settings, module and domain changes", async () => {
+    const body = JSON.stringify({
+      tenant_id: "t1",
+      tags: ["tenant-host:cityschool.schoolhub.pk", "tenant-host:www.cityschool.edu.pk"],
+    });
+    const response = await POST(makeRequest(body, await sign(body)));
+
+    expect(response.status).toBe(200);
+    expect(mockRevalidateTag).toHaveBeenCalledWith("tenant-host:cityschool.schoolhub.pk", {
+      expire: 0,
+    });
+    expect(mockRevalidateTag).toHaveBeenCalledWith("tenant-host:www.cityschool.edu.pk", {
+      expire: 0,
+    });
+    const payload = (await response.json()) as { data: { revalidated: string[] } };
+    expect(payload.data.revalidated).toEqual([
+      "tenant:t1",
+      "tenant-host:cityschool.schoolhub.pk",
+      "tenant-host:www.cityschool.edu.pk",
+    ]);
+  });
+
+  it("revalidates every cached host lookup on tenant-hosts", async () => {
+    const body = JSON.stringify({ tenant_id: "t1", tags: ["tenant-hosts"] });
+    const response = await POST(makeRequest(body, await sign(body)));
+
+    expect(response.status).toBe(200);
+    expect(mockRevalidateTag).toHaveBeenCalledWith("tenant-hosts", { expire: 0 });
+  });
+
+  it.each(["tenant-host:", "tenant-host:Bad Host", "tenant-host:a/b", "tenant-hosts-all", 7])(
+    "ignores a malformed host tag (%p)",
+    async (tag) => {
+      const body = JSON.stringify({ tenant_id: "t1", tags: [tag] });
+      const response = await POST(makeRequest(body, await sign(body)));
+
+      expect(response.status).toBe(200);
+      expect(mockRevalidateTag).toHaveBeenCalledTimes(1);
+      expect(mockRevalidateTag).toHaveBeenCalledWith("tenant:t1", { expire: 0 });
+    },
+  );
+
+  it("never revalidates a host tag from an unsigned body", async () => {
+    const body = JSON.stringify({ tenant_id: "t1", tags: ["tenant-host:cityschool.schoolhub.pk"] });
+    const response = await POST(makeRequest(body, "sha256=deadbeef"));
+
+    expect(response.status).toBe(401);
+    expect(mockRevalidateTag).not.toHaveBeenCalled();
+  });
+
   it("never revalidates a tag belonging to another tenant", async () => {
     const body = JSON.stringify({ tenant_id: "t1", tags: ["tenant:t2:page:/about"] });
     const response = await POST(makeRequest(body, await sign(body)));

@@ -15,3 +15,6 @@ export const HOSTNAME_PATTERN = /^[a-z0-9.-]+$/;
 
 /** Strips the "sha256=" scheme prefix HMAC signature headers are conventionally sent with. */
 export const SHA256_PREFIX_PATTERN = /^sha256=/;
+
+/** A news, event or album slug: one lowercase kebab-case segment (website-cms plan decision 14). */
+export const CONTENT_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;

@@ -1,8 +1,9 @@
 import type { ApiSchemas } from "@schoolhub/api-client";
 import { headers } from "next/headers";
 import { cache } from "react";
-import { hostTag, readJson } from "./api";
+import { ALL_HOSTS_TAG, hostTag, readJson } from "./api";
 import { TENANT_HOST_HEADER, TENANT_KIND_HEADER, TENANT_PATH_HEADER } from "./host";
+import { getPreviewToken } from "./preview";
 
 /**
  * Tenant resolution for server components (website-builder.md §1, §7).
@@ -89,12 +90,12 @@ export const resolveTenant = cache(async (): Promise<TenantResolution> => {
     host,
     // Host→tenant mappings change rarely; settings and domain changes invalidate these tags.
     revalidate: 300,
-    tags: ["tenant-hosts", hostTag(host)],
+    tags: [ALL_HOSTS_TAG, hostTag(host)],
   });
 
   if (!tenant) return { status: "unknown" };
-  // Draft mode (preview) is wired by the preview route; until then no request is a draft.
-  const status = classifyTenant(tenant);
+  // A validated preview (Draft Mode plus its token cookie) renders a site that is not live yet.
+  const status = classifyTenant(tenant, { draft: (await getPreviewToken()) !== null });
   if (status === "unknown") return { status };
   return { status, tenant, host };
 });
