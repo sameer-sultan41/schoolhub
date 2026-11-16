@@ -71,7 +71,7 @@ class NewsPostViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         serializer = NewsPostWriteSerializer(post, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         before = NewsPostDetailSerializer(post).data
-        post = services.update_news_post(post, serializer.validated_data, request.user.pk)
+        post = services.update_news_post(post, serializer.validated_data, request.user)
         data = NewsPostDetailSerializer(post).data
         record_audit(request, "update", post, before=before, after=data)
         return ActionResponse.ok(data, message="News post updated.")

@@ -72,7 +72,7 @@ class SchoolEventViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         serializer = SchoolEventWriteSerializer(event, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         before = SchoolEventDetailSerializer(event).data
-        event = services.update_school_event(event, serializer.validated_data, request.user.pk)
+        event = services.update_school_event(event, serializer.validated_data, request.user)
         data = SchoolEventDetailSerializer(event).data
         record_audit(request, "update", event, before=before, after=data)
         return ActionResponse.ok(data, message="Event updated.")

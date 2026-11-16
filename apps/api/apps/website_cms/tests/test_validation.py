@@ -436,7 +436,7 @@ class ProviderNarrowingTests(TestCase):
         # Every query is narrowed to the candidate id in SQL, not filtered after loading.
         for query in queries.captured_queries:
             sql = query["sql"]
-            self.assertIn(str(self.file.id), sql)
+            self.assertIn(self.file.id.hex, sql)
             self.assertTrue("file_id" in sql and " IN (" in sql, sql)
 
     def test_an_item_of_an_unpublished_album_is_not_claimed(self) -> None:
