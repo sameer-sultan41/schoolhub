@@ -75,7 +75,7 @@ def scope_grants(user: RbacUser) -> ScopeGrants:
     return grants
 
 
-def holders_of_permission(key: str, *, tenant_id: uuid.UUID) -> QuerySet[User]:
+def holders_of_permission(key: str, *, tenant_id: uuid.UUID | None) -> QuerySet[User]:
     """Active users of ``tenant_id`` who hold ``key`` through a live role assignment.
 
     The one way to ask "who in this school can do X" (approver notices). `users`,
@@ -84,7 +84,12 @@ def holders_of_permission(key: str, *, tenant_id: uuid.UUID) -> QuerySet[User]:
     one school. It filters on `User.tenant_id` rather than the nullable
     `UserRole.tenant_id`, and reads the same live rows `scope_grants` does, so the
     holders are exactly the users the permission class lets through.
+
+    Fails closed on a missing tenant: `tenant_id=None` would compile to `IS NULL`
+    and return platform users.
     """
+    if tenant_id is None:
+        return User.objects.none()
     holding = UserRole.objects.filter(
         deleted_at__isnull=True,
         role__deleted_at__isnull=True,

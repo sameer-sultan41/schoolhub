@@ -62,6 +62,13 @@ class HoldersOfPermissionTests(TestCase):
         evict_rbac_caches([mine.pk, theirs.pk])
 
         self.assertEqual(self.holders(), {mine.pk})
+        self.assertEqual(self.holders(self.other), {theirs.pk})
+
+    def test_no_tenant_returns_nobody_not_platform_users(self) -> None:
+        platform_user = UserFactory(tenant=None, is_platform=True)
+        grant(platform_user, KEY)
+
+        self.assertFalse(holders_of_permission(KEY, tenant_id=None).exists())
 
     def test_a_holder_of_another_key_is_not_returned(self) -> None:
         grant(UserFactory(tenant=self.tenant), OTHER_KEY)
