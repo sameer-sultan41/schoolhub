@@ -5,19 +5,19 @@ import { publicEnv } from "./env.client";
  * Build-time configuration, read by `next.config.ts` (the image optimiser's allow-list is fixed
  * when the config loads, so a standalone build fixes it at `next build`).
  *
- * `WEBSITE_IMAGES_ALLOW_LOCAL_IP` lets the optimiser fetch from a private address. Only compose
- * and the E2E live lane set it, where the API is on a local network; production never does,
- * because it would expose the internal network to the optimiser (an SSRF risk).
+ * `WEBSITE_IMAGES_UNOPTIMIZED` turns the optimiser off, so the browser loads each image from its
+ * public URL. Only compose and the E2E lanes set it: their API is on a local address the optimiser
+ * cannot (and must not) fetch from. Production leaves it off and optimises the API's file route.
  */
 const buildEnvSchema = z.object({
-  WEBSITE_IMAGES_ALLOW_LOCAL_IP: z
+  WEBSITE_IMAGES_UNOPTIMIZED: z
     .enum(["true", "false"])
     .default("false")
     .transform((value) => value === "true"),
 });
 
 const parsed = buildEnvSchema.safeParse({
-  WEBSITE_IMAGES_ALLOW_LOCAL_IP: process.env.WEBSITE_IMAGES_ALLOW_LOCAL_IP,
+  WEBSITE_IMAGES_UNOPTIMIZED: process.env.WEBSITE_IMAGES_UNOPTIMIZED,
 });
 
 if (!parsed.success) {

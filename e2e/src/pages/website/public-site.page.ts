@@ -24,4 +24,41 @@ export class PublicSitePage extends BasePage {
   get notFound(): Locator {
     return this.page.getByRole("heading", { name: "Page not found" });
   }
+
+  /** A section's heading (`h2`): the about and contact sections title themselves with one. */
+  sectionHeading(name: string): Locator {
+    return this.page.getByRole("heading", { level: 2, name, exact: true });
+  }
+
+  /** The contact form section's fields (`PublicEnquiryForm`). */
+  get contactName(): Locator {
+    return this.page.getByLabel("Your name", { exact: true });
+  }
+
+  get contactEmail(): Locator {
+    return this.page.getByLabel("Email", { exact: true });
+  }
+
+  get contactMessage(): Locator {
+    return this.page.getByLabel("Message", { exact: true });
+  }
+
+  get sendMessage(): Locator {
+    return this.page.getByRole("button", { name: "Send message", exact: true });
+  }
+
+  /** Shown only once the API has accepted the submission (`response.ok`). */
+  get contactSent(): Locator {
+    return this.page.getByText("Thank you — we have received your message and will be in touch.");
+  }
+
+  /** A link in the page's content, by its exact text (a news list item, say). */
+  link(name: string): Locator {
+    return this.page.getByRole("link", { name, exact: true });
+  }
+
+  /** An image, by its exact alt text. */
+  image(name: string): Locator {
+    return this.page.getByRole("img", { name, exact: true });
+  }
 }

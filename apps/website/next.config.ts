@@ -40,7 +40,7 @@ const nextConfig: NextConfig = {
   // Only the public API's file route, which 302s to presigned storage (src/lib/image-config.ts).
   images: imagesConfig({
     apiOrigin: buildEnv.NEXT_PUBLIC_API_ORIGIN,
-    allowLocalIP: buildEnv.WEBSITE_IMAGES_ALLOW_LOCAL_IP,
+    unoptimized: buildEnv.WEBSITE_IMAGES_UNOPTIMIZED,
   }),
   headers() {
     return [

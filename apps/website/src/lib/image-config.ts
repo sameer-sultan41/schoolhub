@@ -23,20 +23,22 @@ export const IMAGE_CACHE_SECONDS = 300;
  *   `maximumRedirects` (default 3) hops without re-checking `remotePatterns`, so the single hop
  *   needs neither a storage pattern nor a raised limit (Next 16 `images` docs, `image-optimizer.js`).
  *   The private-IP check does apply to every hop.
- * - **Local IPs.** `dangerouslyAllowLocalIP` only when explicitly enabled (compose, the live lane).
+ * - **Local stacks.** `unoptimized` only when explicitly enabled (compose, the E2E lanes): their API is
+ *   on a local address, which the optimiser refuses, so the browser loads the public URL itself.
+ *   The optimiser is never allowed to fetch from local addresses (`dangerouslyAllowLocalIP`).
  * - **Lifetime.** `minimumCacheTTL` is `IMAGE_CACHE_SECONDS`, not Next's 4 h default.
  */
 export function imagesConfig({
   apiOrigin,
-  allowLocalIP,
+  unoptimized,
 }: {
   apiOrigin: string;
-  allowLocalIP: boolean;
+  unoptimized: boolean;
 }): ImagesConfig {
   return {
     remotePatterns: apiOrigin ? [publicFilesPattern(apiOrigin)] : [],
     minimumCacheTTL: IMAGE_CACHE_SECONDS,
-    ...(allowLocalIP ? { dangerouslyAllowLocalIP: true } : {}),
+    ...(unoptimized ? { unoptimized: true } : {}),
   };
 }
 

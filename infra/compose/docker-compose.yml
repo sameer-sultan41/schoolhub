@@ -50,7 +50,8 @@ x-api-env: &api-env
   AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
   PLATFORM_DOMAIN: ${PLATFORM_DOMAIN:-localhost}
   # Renderer cache invalidation (website_cms): the renderer's internal origin and its shared secret.
-  WEBSITE_REVALIDATE_URL: http://website:3001/api/revalidate
+  # e2e-live overrides the URL: its renderer runs on the runner, reached through host-gateway.
+  WEBSITE_REVALIDATE_URL: ${WEBSITE_REVALIDATE_URL:-http://website:3001/api/revalidate}
   WEBSITE_REVALIDATE_SECRET: ${REVALIDATE_SECRET:-}
   # The renderer's machine token (core.rbac.machine), the same value the website service reads.
   WEBSITE_MACHINE_TOKENS: ${PUBLIC_CONTENT_TOKEN:-}
@@ -222,6 +223,10 @@ services:
       pgbouncer:
         condition: service_started
     environment: *api-env
+    # The worker sends the renderer's revalidation webhook. Where the renderer runs on the host
+    # (e2e-live serves it from the runner), `host.docker.internal` reaches it on Linux too.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ${API_REPO_PATH:-../../apps/api}:/app
     command: ["celery", "-A", "config.celery", "worker", "-l", "info", "-Q", "emergency,transactional,bulk,default", "--concurrency", "2"]
@@ -325,9 +330,11 @@ services:
       API_BASE_URL: http://api:8000/api/v1
       NEXT_PUBLIC_PLATFORM_DOMAIN: ${PLATFORM_DOMAIN:-localhost}
       # The public API origin (the API's API_PUBLIC_URL): contact forms post to it, and it is the
-      # only origin next/image optimises. Local addresses need the opt-in below; never in prod.
+      # only origin next/image optimises in production.
       NEXT_PUBLIC_API_ORIGIN: ${NEXT_PUBLIC_API_ORIGIN:-http://api.localhost:8000}
-      WEBSITE_IMAGES_ALLOW_LOCAL_IP: "true"
+      # The browser loads images from api.localhost itself: inside this container that name is the
+      # container, and the optimiser refuses local addresses anyway. Never set in production.
+      WEBSITE_IMAGES_UNOPTIMIZED: "true"
       # The app's names, mapped from the compose .env's (PUBLIC_CONTENT_TOKEN,
       # REVALIDATE_SECRET) so existing .env files keep working.
       WEBSITE_MACHINE_TOKEN: ${PUBLIC_CONTENT_TOKEN}

@@ -15,7 +15,8 @@
         "API_BASE_URL",
         "WEBSITE_MACHINE_TOKEN",
         "REVALIDATE_WEBHOOK_SECRET",
-        "CONTENT_REVALIDATE_SECONDS"
+        "CONTENT_REVALIDATE_SECONDS",
+        "WEBSITE_IMAGES_UNOPTIMIZED"
       ],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },

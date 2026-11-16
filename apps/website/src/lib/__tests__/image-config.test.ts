@@ -2,7 +2,7 @@ import { IMAGE_CACHE_SECONDS, PUBLIC_FILES_PATHNAME, imagesConfig } from "../ima
 
 describe("imagesConfig", () => {
   it("allows only the public API origin's file route", () => {
-    expect(imagesConfig({ apiOrigin: "https://api.schoolhub.pk", allowLocalIP: false })).toEqual({
+    expect(imagesConfig({ apiOrigin: "https://api.schoolhub.pk", unoptimized: false })).toEqual({
       remotePatterns: [
         {
           protocol: "https",
@@ -17,27 +17,38 @@ describe("imagesConfig", () => {
   });
 
   it("keeps an http origin's port (compose, the live lane)", () => {
-    const config = imagesConfig({ apiOrigin: "http://api.localhost:8000", allowLocalIP: true });
+    const config = imagesConfig({ apiOrigin: "http://api.localhost:8000", unoptimized: true });
     expect(config.remotePatterns).toEqual([
       expect.objectContaining({ protocol: "http", hostname: "api.localhost", port: "8000" }),
     ]);
-    expect(config.dangerouslyAllowLocalIP).toBe(true);
   });
 
-  it("never allows local IPs unless asked", () => {
-    const config = imagesConfig({ apiOrigin: "https://api.schoolhub.pk", allowLocalIP: false });
-    expect(config).not.toHaveProperty("dangerouslyAllowLocalIP");
+  it("turns the optimiser off only when asked (compose, the E2E lanes)", () => {
+    expect(
+      imagesConfig({ apiOrigin: "http://api.localhost:8000", unoptimized: true }).unoptimized,
+    ).toBe(true);
+    expect(
+      imagesConfig({ apiOrigin: "https://api.schoolhub.pk", unoptimized: false }),
+    ).not.toHaveProperty("unoptimized");
+  });
+
+  it("never lets the optimiser fetch from a local address", () => {
+    for (const unoptimized of [true, false]) {
+      expect(
+        imagesConfig({ apiOrigin: "http://api.localhost:8000", unoptimized }),
+      ).not.toHaveProperty("dangerouslyAllowLocalIP");
+    }
   });
 
   it("allows no remote image without an API origin", () => {
-    expect(imagesConfig({ apiOrigin: "", allowLocalIP: false })).toMatchObject({
+    expect(imagesConfig({ apiOrigin: "", unoptimized: false })).toMatchObject({
       remotePatterns: [],
     });
   });
 
   it("keeps the default redirect limit, which covers the file route's single 302", () => {
     expect(
-      imagesConfig({ apiOrigin: "https://api.schoolhub.pk", allowLocalIP: false }),
+      imagesConfig({ apiOrigin: "https://api.schoolhub.pk", unoptimized: false }),
     ).not.toHaveProperty("maximumRedirects");
   });
 
@@ -45,13 +56,13 @@ describe("imagesConfig", () => {
     // Next's default (14400 s) would keep an unpublished image for 4 hours.
     expect(IMAGE_CACHE_SECONDS).toBe(300);
     expect(
-      imagesConfig({ apiOrigin: "https://api.schoolhub.pk", allowLocalIP: false }).minimumCacheTTL,
+      imagesConfig({ apiOrigin: "https://api.schoolhub.pk", unoptimized: false }).minimumCacheTTL,
     ).toBe(IMAGE_CACHE_SECONDS);
-    expect(imagesConfig({ apiOrigin: "", allowLocalIP: false }).minimumCacheTTL).toBe(300);
+    expect(imagesConfig({ apiOrigin: "", unoptimized: false }).minimumCacheTTL).toBe(300);
   });
 
   it("refuses an origin that is not http(s)", () => {
-    expect(() => imagesConfig({ apiOrigin: "ftp://files.example", allowLocalIP: false })).toThrow(
+    expect(() => imagesConfig({ apiOrigin: "ftp://files.example", unoptimized: false })).toThrow(
       /http\(s\) origin/,
     );
   });

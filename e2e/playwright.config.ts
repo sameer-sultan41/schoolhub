@@ -24,14 +24,23 @@ const isCI = Boolean(process.env.CI);
 /** Workers a CI runner takes, for every project. */
 const CI_WORKERS = 2;
 
-/** Public config the apps need at build and run time. */
+/**
+ * Config the apps need at build and run time. `serve-app.sh` builds with it, so the
+ * `NEXT_PUBLIC_*` values and the website's image flag are inlined into that build.
+ */
 const appEnv = {
   NEXT_PUBLIC_API_BASE_URL: env.API_BASE_URL,
   NEXT_PUBLIC_APP_URL: env.DASHBOARD_URL,
   NEXT_PUBLIC_PLATFORM_DOMAIN: env.PLATFORM_DOMAIN,
+  // The browser posts the website's contact form here; empty would post it to the renderer.
+  NEXT_PUBLIC_API_ORIGIN: new URL(env.API_BASE_URL).origin,
   API_BASE_URL: env.API_BASE_URL,
-  WEBSITE_MACHINE_TOKEN: "e2e-machine-token",
-  REVALIDATE_WEBHOOK_SECRET: "e2e-revalidate-secret",
+  // The API accepts the renderer only with the token it was configured with (`WEBSITE_MACHINE_TOKENS`).
+  WEBSITE_MACHINE_TOKEN: env.WEBSITE_MACHINE_TOKEN,
+  // The secret the API signs revalidation webhooks with (`WEBSITE_REVALIDATE_SECRET`).
+  REVALIDATE_WEBHOOK_SECRET: env.REVALIDATE_SECRET,
+  // The API's image URLs are local addresses the optimiser refuses; the browser loads them.
+  WEBSITE_IMAGES_UNOPTIMIZED: "true",
   NEXT_TELEMETRY_DISABLED: "1",
 };
 
