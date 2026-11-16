@@ -99,6 +99,42 @@ describe("PublishActions", () => {
       expect(toast.error).toHaveBeenCalledWith("Add a visible section before publishing.");
     });
   });
+
+  it("translates a reasoned refusal keyed to a field it has no input for", async () => {
+    const user = userEvent.setup();
+    const calls = actions();
+    calls.publish.mockRejectedValue(
+      new ApiError({
+        code: "domain_rule_violation",
+        message: "Invalid.",
+        status: 422,
+        url: "/website-pages/p1:publish",
+        details: [
+          {
+            field: "sections",
+            issue: "no_visible_sections: add at least one visible section before publishing.",
+          },
+        ],
+        meta: { reason: "no_visible_sections" },
+      }),
+    );
+    renderWithClient(<PublishActions status="draft" canPublish {...calls} />);
+
+    await user.click(screen.getByRole("button", { name: "Publish" }));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(
+        "Add at least one visible section, and save it, before publishing.",
+      );
+    });
+  });
+
+  it("holds only Publish when told to", () => {
+    renderWithClient(<PublishActions status="draft" canPublish publishDisabled {...actions()} />);
+
+    expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Archive" })).toBeEnabled();
+  });
 });
 
 describe("ContentStatusBadge", () => {

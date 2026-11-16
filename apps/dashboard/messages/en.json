@@ -4481,6 +4481,145 @@
       },
       "failed": "That didn't work. Please try again."
     },
+    "pages": {
+      "title": "Pages",
+      "summary": "The pages of the school's public website. Open a page to arrange its sections.",
+      "list": {
+        "caption": "Website pages",
+        "searchPlaceholder": "Search by title or address",
+        "emptyTitle": "No pages yet",
+        "emptyDescription": "Create a page to add it to the website.",
+        "noMatches": "No pages match",
+        "noMatchesDescription": "Try another search or filter.",
+        "loadError": "The pages couldn't be loaded."
+      },
+      "filters": {
+        "search": "Search pages",
+        "clearSearch": "Clear search",
+        "status": "Status",
+        "type": "Page type",
+        "all": "All"
+      },
+      "columns": {
+        "title": "Title",
+        "path": "Address",
+        "type": "Type",
+        "status": "Status",
+        "updated": "Updated"
+      },
+      "types": {
+        "home": "Home page",
+        "about": "About",
+        "principal_message": "Principal's message",
+        "departments": "Departments",
+        "teachers": "Teachers",
+        "classes": "Classes",
+        "admissions": "Admissions",
+        "contact": "Contact",
+        "standard": "Standard page"
+      },
+      "actions": {
+        "create": "New page",
+        "editDetails": "Edit details",
+        "preview": "Preview",
+        "delete": "Delete page",
+        "deleteRow": "Delete {title}",
+        "backToList": "All pages"
+      },
+      "form": {
+        "createTitle": "New page",
+        "editTitle": "Page details",
+        "intro": "The title and address visitors see. You add the content in the page editor.",
+        "title": "Title",
+        "slug": "Address",
+        "slugHint": "Lowercase letters, numbers and hyphens; use / for a page under another, e.g. about/history.",
+        "slugInvalid": "Use lowercase letters, numbers and single hyphens, with / between parts.",
+        "homeAddress": "This is the home page: it is always at the site's main address (/).",
+        "type": "Page type",
+        "showInSearch": "Let search engines list this page"
+      },
+      "created": "Page created.",
+      "saved": "Page details saved.",
+      "deleted": "Page deleted.",
+      "delete": {
+        "title": "Delete {title}?",
+        "description": "The page and its sections are removed from the website's editor. This can't be undone."
+      },
+      "detail": {
+        "notFoundTitle": "Page not found",
+        "notFoundDescription": "It may have been deleted, or the link is wrong.",
+        "loadError": "This page couldn't be loaded.",
+        "themeLoadError": "The website's theme couldn't be loaded.",
+        "themeMissing": "The website's theme is no longer available, so its sections can't be edited."
+      },
+      "preview": {
+        "opening": "Opening the preview…",
+        "failed": "The preview couldn't be opened."
+      },
+      "editor": {
+        "summary": "{path} · {type}",
+        "sectionsHeading": "Sections",
+        "empty": "This page has no sections yet. Add one to start.",
+        "add": "Add section",
+        "limit": "A page holds at most {max} sections.",
+        "noSelection": "Choose a section to edit it.",
+        "readOnly": "You can view this page's sections but not change them.",
+        "visible": "Show this section on the page",
+        "hidden": "Hidden",
+        "needsAttention": "Needs attention",
+        "sectionName": "{index}. {type}",
+        "sectionLabel": "Section {index}: {type}",
+        "moveUp": "Move section {index} up",
+        "moveDown": "Move section {index} down",
+        "remove": "Remove section {index}",
+        "dragHandle": "Drag section {index} to reorder",
+        "dragInstructions": "To reorder, press space or enter on the handle, move with the arrow keys, then press space or enter to drop, or escape to cancel.",
+        "dragStart": "Picked up section {index}.",
+        "dragOver": "Section {index} is over position {position}.",
+        "dragEnd": "Section {index} dropped at position {position}.",
+        "dragCancel": "Reordering cancelled.",
+        "unsupported": {
+          "title": "This section type isn't in the website's theme",
+          "description": "It can't be edited here. It is kept as it is when you save; remove it if you no longer want it."
+        },
+        "save": "Save sections",
+        "saving": "Saving sections…",
+        "discard": "Discard changes",
+        "unsaved": "You have unsaved changes.",
+        "saved": "Sections saved.",
+        "saveFailed": "The sections couldn't be saved. Please try again.",
+        "fixSections": "Some sections need attention; they are marked in the list.",
+        "publishNeedsSave": "Save your changes before publishing.",
+        "publishNeedsVisible": "Add a visible section and save it before publishing."
+      },
+      "sectionTypes": {
+        "hero": "Hero",
+        "about_school": "About the school",
+        "principal_message": "Principal's message",
+        "departments_grid": "Departments",
+        "teachers_grid": "Teachers",
+        "classes_list": "Classes",
+        "admissions_cta": "Admissions call to action",
+        "events_list": "Events",
+        "news_list": "News",
+        "notice_board": "Notice board",
+        "gallery": "Gallery",
+        "contact_form": "Contact form",
+        "rich_text": "Rich text",
+        "faq": "FAQ"
+      }
+    },
+    "reasons": {
+      "no_visible_sections": "Add at least one visible section, and save it, before publishing.",
+      "page_in_use": "This page can't be removed: it is the home page, or a menu links to it. Take it out of the menus first.",
+      "unpublish_first": "Unpublish this first, then delete it.",
+      "reserved_slug": "This address is reserved for the website. Choose another.",
+      "slug_taken": "Another page already uses this address.",
+      "invalid_slug": "Use lowercase letters, numbers and single hyphens, with / between parts.",
+      "home_exists": "The website already has a home page.",
+      "too_many_sections": "This page has more sections than a page may hold. Remove some, then save.",
+      "invalid_section_id": "The page changed since you opened it. Reload it and try again."
+    },
     "imageField": {
       "uploading": "Uploading…",
       "onFile": "An image is on file.",

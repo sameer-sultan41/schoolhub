@@ -6,9 +6,10 @@ import { toast } from "sonner";
 import { Button } from "@schoolhub/ui";
 
 import { useInvalidateModule } from "@/hooks/use-invalidate-module";
-import { resolveErrorMessage } from "@/lib/error-message";
+import { foldUnknownFieldErrors, NON_FIELD, resolveErrorMessage } from "@/lib/error-message";
 import { WEBSITE_QUERY_MODULE } from "@/services/shared/website-content";
 import type { WebsiteContentStatus } from "@/services";
+import { withReasonText } from "./reason-message";
 
 type PublishAction = "publish" | "unpublish" | "archive";
 
@@ -29,13 +30,15 @@ export interface PublishActionsProps {
   onDone?: () => void;
   /** Holds every action, e.g. while the caller has unsaved edits. */
   disabled?: boolean;
+  /** Holds only Publish, e.g. a page with no visible section; the caller says why beside it. */
+  publishDisabled?: boolean;
 }
 
 /**
  * Publish, unpublish and archive for one website record, offered by its status: Publish
  * unless published, Unpublish when published, Archive unless archived. Hidden without the
  * publish key; the API enforces it, and refuses a transition it can't make (a page with no
- * visible section) with a sentence shown as it came.
+ * visible section) with its reason, translated when `website.reasons` knows it.
  */
 export function PublishActions({
   status,
@@ -45,9 +48,11 @@ export function PublishActions({
   archive,
   onDone,
   disabled,
+  publishDisabled,
 }: PublishActionsProps) {
   const t = useTranslations("website.publishActions");
   const tErrors = useTranslations("errors");
+  const tReasons = useTranslations("website.reasons");
   const invalidateWebsite = useInvalidateModule(WEBSITE_QUERY_MODULE);
 
   const mutation = useMutation({
@@ -58,7 +63,9 @@ export function PublishActions({
       onDone?.();
     },
     onError: (error) => {
-      toast.error(resolveErrorMessage(error, tErrors, t("failed"), "non_field"));
+      // A refusal names a field (`sections`, `page`), never an input here: shown as one sentence.
+      const refusal = foldUnknownFieldErrors(withReasonText(error, tReasons));
+      toast.error(resolveErrorMessage(refusal, tErrors, t("failed"), NON_FIELD));
     },
   });
 
@@ -76,7 +83,11 @@ export function PublishActions({
         <Button
           key={transition.action}
           variant={transition.action === "publish" ? "primary" : "outline"}
-          disabled={disabled || mutation.isPending}
+          disabled={
+            disabled ||
+            mutation.isPending ||
+            (transition.action === "publish" && publishDisabled === true)
+          }
           onClick={() => {
             mutation.mutate(transition);
           }}

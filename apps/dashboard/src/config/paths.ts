@@ -91,6 +91,9 @@ export const examPath = (examId: string) => `${Paths.EXAMS}/${examId}`;
 /** One question bank's page, under the banks list. */
 export const questionBankPath = (bankId: string) => `${Paths.EXAMS_QUESTION_BANKS}/${bankId}`;
 
+/** One website page's editor, under the pages list. */
+export const websitePagePath = (pageId: string) => `${Paths.WEBSITE_PAGES}/${pageId}`;
+
 /** One invoice's page, under the invoices list. */
 export const feeInvoicePath = (invoiceId: string) => `${Paths.FEES_INVOICES}/${invoiceId}`;
 

@@ -20,4 +20,7 @@ export const Regex = {
   POSITIVE_INTEGER: /^[1-9]\d*$/,
   /** A calendar date as the API and a date input write it, `YYYY-MM-DD`. */
   ISO_DATE: /^\d{4}-\d{2}-\d{2}$/,
+  /** A website page's address: lowercase segments of letters, digits and single hyphens, joined
+   * by `/` (mirrors `PAGE_SLUG_PATTERN`, `apps/api/apps/website_cms/constants.py`). */
+  WEBSITE_PAGE_SLUG: /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*$/,
 } as const;
