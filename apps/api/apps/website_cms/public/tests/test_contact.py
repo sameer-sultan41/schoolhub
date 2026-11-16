@@ -253,6 +253,7 @@ class ContactPostTests(ContactPostCase):
         self.post(origin=f"https://other.{PLATFORM}")  # Origin of another school: 404
         self.post(origin="https://evil.example")  # unknown Origin: 404
         self.post(self.body(source_page_id=str(uuid.uuid4())))  # unknown page: 422
+        self.post(self.body(email="", phone=""))  # service rule: no way to reach them, 422
         self.post({"name": "Amina"} | {"message": "x" * (CONTACT_BODY_MAX_BYTES + 1)})  # 413
         self.post(self.body(company_website="spam"))  # honeypot
 
@@ -272,6 +273,21 @@ class ContactPostTests(ContactPostCase):
             statuses = [self.post(REMOTE_ADDR=f"10.0.0.{n}").status_code for n in range(3)]
 
         self.assertEqual(statuses, [201, 201, 429])
+
+    def test_a_refused_request_stores_and_notifies_nothing(self) -> None:
+        with (
+            mock.patch(
+                "core.api.throttling.PublicFormTenantThrottle.get_rate", return_value="1/hour"
+            ),
+            mock.patch(NOTIFY) as notify,
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            self.post(REMOTE_ADDR="10.0.0.1")
+            refused = self.post(REMOTE_ADDR="10.0.0.2")
+
+        self.assertEqual(refused.status_code, 429)
+        self.assertEqual(self.stored(), 1)
+        notify.delay.assert_called_once()
 
     def test_tenant_throttle_refusal_carries_retry_after(self) -> None:
         with mock.patch(

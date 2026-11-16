@@ -157,12 +157,12 @@ class PublicContactSubmissionView(APIView):
                         raise violation(
                             "source_page", "invalid_source_page", "the page is not published."
                         )
-                # Only a request that would store a message spends the school's hourly budget:
-                # a replay never reaches this point.
+                create_contact_submission(tenant, data, ip, page)
+                # After the insert, so a rule failure never spends the school's budget; a refusal
+                # rolls the insert and its notification back. A replay never reaches this point.
                 tenant_throttle = PublicFormTenantThrottle()
                 if not tenant_throttle.allow_request(request, self):
                     raise Throttled(wait=tenant_throttle.wait())
-                create_contact_submission(tenant, data, ip, page)
                 return Response(RECEIVED, status=201)
 
             return replay_or_execute(
