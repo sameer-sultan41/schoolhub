@@ -2,7 +2,16 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Page } from "@schoolhub/types";
 
-import { ApiError, Services, type WebsiteContentQuery } from "@/services";
+import {
+  ApiError,
+  Services,
+  type GalleryAlbumRecord,
+  type NewsPostRecord,
+  type SchoolEventRecord,
+  type WebsiteContentQuery,
+  type WebsiteContentStatus,
+  type WebsitePageRecord,
+} from "@/services";
 import { mocked } from "@/test-fixtures/list-screen";
 import { buildUser, renderWithProviders, setUrl } from "@/test-utils";
 
@@ -31,19 +40,51 @@ jest.mock("@/services", () =>
 
 const DAY = 24 * 60 * 60 * 1000;
 const daysAgo = (days: number) => new Date(Date.now() - days * DAY).toISOString();
+const CREATED = "2024-01-01T00:00:00Z";
 
-interface Row {
-  id: string;
-  title: string;
-  status: "draft" | "published" | "archived";
-  updated_at: string;
+type Status = WebsiteContentStatus;
+
+function pageRow(id: string, title: string, status: Status, updatedAt: string): WebsitePageRecord {
+  return {
+    id,
+    title,
+    slug: id,
+    page_type: "standard",
+    status,
+    published_at: status === "published" ? CREATED : null,
+    locale: "en",
+    show_in_search: true,
+    created_at: CREATED,
+    updated_at: updatedAt,
+  };
 }
 
-/** A content list stub: per-status totals for the count reads, `rows` (oldest first) for the
- * stale read. */
-function listStub(totals: Record<string, number>, rows: Row[] = []) {
-  return (query: WebsiteContentQuery = {}): Promise<Page<Row>> => {
-    if (query.status) {
+function newsRow(id: string, title: string, status: Status, updatedAt: string): NewsPostRecord {
+  return {
+    id,
+    title,
+    slug: id,
+    excerpt: "",
+    cover_image_file_id: null,
+    status,
+    published_at: status === "published" ? CREATED : null,
+    locale: "en",
+    created_at: CREATED,
+    updated_at: updatedAt,
+  };
+}
+
+/**
+ * A content list stub that honours the filters the inventory sends, as the API does: a
+ * status-filtered `page_size=1` read answers that status's total, any other read answers
+ * `rows` (oldest first) narrowed to the status and cut to the page size.
+ */
+function listStub<T extends { status: Status }>(
+  totals: Partial<Record<Status, number>>,
+  rows: T[] = [],
+) {
+  return (query: WebsiteContentQuery = {}): Promise<Page<T>> => {
+    if (query.status && query.pageSize === 1) {
       return Promise.resolve({
         items: [],
         pagination: {
@@ -54,7 +95,8 @@ function listStub(totals: Record<string, number>, rows: Row[] = []) {
         },
       });
     }
-    return Promise.resolve({ items: rows });
+    const matching = rows.filter((row) => !query.status || row.status === query.status);
+    return Promise.resolve({ items: matching.slice(0, query.pageSize ?? matching.length) });
   };
 }
 
@@ -65,22 +107,21 @@ function card(heading: HTMLElement): HTMLElement {
 function stubAll() {
   mocked(Services.websitePages.fetchWebsitePagePage).mockImplementation(
     listStub({ draft: 3, published: 5, archived: 1 }, [
-      { id: "p1", title: "Old about page", status: "published", updated_at: daysAgo(400) },
-      { id: "p2", title: "Fresh home", status: "published", updated_at: daysAgo(3) },
-    ]) as never,
+      pageRow("p1", "Old about page", "published", daysAgo(400)),
+      pageRow("p2", "Fresh home", "published", daysAgo(3)),
+    ]),
   );
   mocked(Services.newsPosts.fetchNewsPostPage).mockImplementation(
-    listStub({ draft: 0, published: 12, archived: 4 }, [
-      {
-        id: "n1",
-        title: "Sports day 2025",
-        status: "archived",
-        updated_at: daysAgo(STALE_AFTER_DAYS + 1),
-      },
-    ]) as never,
+    listStub({ published: 12, archived: 4 }, [
+      newsRow("n1", "Sports day 2025", "published", daysAgo(STALE_AFTER_DAYS + 1)),
+    ]),
   );
-  mocked(Services.schoolEvents.fetchSchoolEventPage).mockImplementation(listStub({}) as never);
-  mocked(Services.galleryAlbums.fetchGalleryAlbumPage).mockImplementation(listStub({}) as never);
+  mocked(Services.schoolEvents.fetchSchoolEventPage).mockImplementation(
+    listStub<SchoolEventRecord>({}),
+  );
+  mocked(Services.galleryAlbums.fetchGalleryAlbumPage).mockImplementation(
+    listStub<GalleryAlbumRecord>({}),
+  );
 }
 
 describe("WebsiteLanding", () => {
@@ -119,9 +160,29 @@ describe("WebsiteLanding", () => {
     expect(rows[1]).toHaveTextContent("Sports day 2025");
     expect(within(stale).queryByText("Fresh home")).not.toBeInTheDocument();
     expect(mocked(Services.newsPosts.fetchNewsPostPage)).toHaveBeenCalledWith({
+      status: "published",
       ordering: "updated_at",
       pageSize: 10,
     });
+  });
+
+  it("never lets old archived rows crowd an old published one out of the sample", async () => {
+    mocked(Services.auth.fetchCurrentUser).mockResolvedValue(buildUser(["website.page.view"]));
+    stubAll();
+    const archived = Array.from({ length: 12 }, (_, index) =>
+      pageRow(`a${index}`, `Archived ${index}`, "archived", daysAgo(900 - index)),
+    );
+    mocked(Services.websitePages.fetchWebsitePagePage).mockImplementation(
+      listStub({ archived: 12 }, [
+        ...archived,
+        pageRow("p9", "Old admissions page", "published", daysAgo(300)),
+      ]),
+    );
+    renderWithProviders(<WebsiteLanding />);
+
+    const stale = card(await screen.findByRole("heading", { name: "Stale content" }));
+    expect(await within(stale).findByText("Old admissions page")).toBeInTheDocument();
+    expect(within(stale).queryByText("Archived 0")).not.toBeInTheDocument();
   });
 
   it("shows the server's own reason when the website module is off", async () => {
@@ -140,7 +201,7 @@ describe("WebsiteLanding", () => {
     const messages = await screen.findAllByText("This feature is not enabled for your school.");
     expect(messages.length).toBeGreaterThan(0);
     mocked(Services.websitePages.fetchWebsitePagePage).mockImplementation(
-      listStub({ draft: 2, published: 0, archived: 0 }) as never,
+      listStub<WebsitePageRecord>({ draft: 2 }),
     );
     await user.click(screen.getAllByRole("button", { name: "Try again" })[0] as HTMLElement);
     expect(await screen.findByText("2")).toBeInTheDocument();

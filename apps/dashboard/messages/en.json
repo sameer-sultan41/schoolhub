@@ -4463,10 +4463,10 @@
       "unavailable": "These counts couldn't be loaded.",
       "stale": {
         "title": "Stale content",
-        "description": "Not updated in more than {days} days, oldest first.",
+        "description": "Published content not updated in more than {days} days, oldest first.",
         "empty": "Nothing is stale.",
         "lastUpdated": "Updated {when}",
-        "more": "Only the oldest items of each kind are shown; there may be more.",
+        "more": "Only the oldest published items of each kind are shown; there may be more.",
         "unavailable": "Stale content couldn't be loaded."
       }
     },
@@ -4515,7 +4515,11 @@
       "dragStart": "Picked up block {index}.",
       "dragOver": "Block {index} is over position {position}.",
       "dragEnd": "Block {index} dropped at position {position}.",
-      "dragCancel": "Reordering cancelled."
+      "dragCancel": "Reordering cancelled.",
+      "unsupported": {
+        "label": "Unsupported block ({type})",
+        "description": "This block can't be edited here. It is kept as it is when you save; remove it if you no longer want it."
+      }
     },
     "schemaFields": {
       "labels": {

@@ -12,8 +12,10 @@ import { WEBSITE_PAGES_RESOURCE } from "@/services/modules/website/website-pages
 import { WEBSITE_CONTENT_STATUSES, WEBSITE_QUERY_MODULE } from "@/services/shared/website-content";
 import {
   INVENTORY_KINDS,
+  INVENTORY_RESOURCE_SUFFIX,
   STALE_AFTER_MS,
   STALE_SAMPLE_SIZE,
+  STALE_STATUS,
   type InventoryKind,
 } from "./inventory-constants";
 
@@ -26,25 +28,28 @@ export interface InventoryItem {
 }
 
 interface KindSource {
+  /** The inventory's own key segment (`pages-inventory`): its reads are derived (a count, a
+   * filtered sample), so they never share a cache entry with a list screen's page of the same
+   * resource. Still under `WEBSITE_QUERY_MODULE`, so every website write refreshes them. */
   resource: string;
   fetchPage: (query: WebsiteContentQuery) => Promise<Page<InventoryItem>>;
 }
 
 const SOURCES: Record<InventoryKind, KindSource> = {
   pages: {
-    resource: WEBSITE_PAGES_RESOURCE,
+    resource: `${WEBSITE_PAGES_RESOURCE}${INVENTORY_RESOURCE_SUFFIX}`,
     fetchPage: (query) => Services.websitePages.fetchWebsitePagePage(query),
   },
   newsPosts: {
-    resource: NEWS_POSTS_RESOURCE,
+    resource: `${NEWS_POSTS_RESOURCE}${INVENTORY_RESOURCE_SUFFIX}`,
     fetchPage: (query) => Services.newsPosts.fetchNewsPostPage(query),
   },
   schoolEvents: {
-    resource: SCHOOL_EVENTS_RESOURCE,
+    resource: `${SCHOOL_EVENTS_RESOURCE}${INVENTORY_RESOURCE_SUFFIX}`,
     fetchPage: (query) => Services.schoolEvents.fetchSchoolEventPage(query),
   },
   galleryAlbums: {
-    resource: GALLERY_ALBUMS_RESOURCE,
+    resource: `${GALLERY_ALBUMS_RESOURCE}${INVENTORY_RESOURCE_SUFFIX}`,
     fetchPage: (query) => Services.galleryAlbums.fetchGalleryAlbumPage(query),
   },
 };
@@ -87,21 +92,18 @@ export interface StaleItem extends InventoryItem {
 }
 
 /**
- * Every kind's oldest items, kept when not updated in more than `STALE_AFTER_DAYS`. A kind
- * whose whole sample is stale may have more (`hasMore`).
+ * Every kind's oldest **published** items, kept when not updated in more than
+ * `STALE_AFTER_DAYS`: what the public still sees. Archived rows are never edited again and
+ * drafts are already counted by status, so neither may crowd a live item out of the sample. A
+ * kind whose whole sample is stale may have more (`hasMore`).
  */
 export function useStaleContent() {
+  const query = { status: STALE_STATUS, ordering: "updated_at", pageSize: STALE_SAMPLE_SIZE };
   const results = useQueries({
     queries: INVENTORY_KINDS.map((kind) => ({
-      queryKey: queryKeys.list(WEBSITE_QUERY_MODULE, SOURCES[kind].resource, {
-        ordering: "updated_at",
-        pageSize: STALE_SAMPLE_SIZE,
-      }),
+      queryKey: queryKeys.list(WEBSITE_QUERY_MODULE, SOURCES[kind].resource, query),
       queryFn: async () => {
-        const page = await SOURCES[kind].fetchPage({
-          ordering: "updated_at",
-          pageSize: STALE_SAMPLE_SIZE,
-        });
+        const page = await SOURCES[kind].fetchPage(query);
         // The cutoff is taken when the read lands, never during render.
         const cutoff = Date.now() - STALE_AFTER_MS;
         const items = page.items.filter((item) => Date.parse(item.updated_at) < cutoff);
