@@ -36,7 +36,7 @@ either this file or `project-status.md`.
   - **Renderer i18n.** `apps/website` has no i18n today. New visible strings live in one `src/themes/default/copy.ts` constant map (English), so a later pass has one source.
   - **Contact-notification email batching.** One email per submission in v1.
   - **`provision_tenant` calling `ensure_default_site`.** Until platform-admin ships it, the default site is created on the first CMS write.
-  - **Editable SEO `structured_data` (JSON-LD).** Read-only through the API until the renderer task defines its shape. Making it writable needs a JSON Schema for the allowed JSON-LD types and, in the renderer, escaping of `<`, `>` and `&` when it is emitted inside `<script type="application/ld+json">`; free JSON there is stored XSS.
+  - **Editable SEO `structured_data` (JSON-LD).** Read-only through the API, and the renderer does not emit it. The renderer's escaping exists since PR E (`apps/website/src/lib/json-ld.ts` escapes `<`, `>`, `&`, U+2028 and U+2029, used for the news and event JSON-LD); making the field writable still needs a JSON Schema for the allowed JSON-LD types, since free JSON is stored content no school should hand-write.
   - **PR A follow-ups** (minor review findings, each left for the PR that next touches its file):
     - The `post_migrate` theme sync is not guarded for `migrate website_cms zero`, where the `themes` table no longer exists when the signal fires. Harmless until someone reverses the app.
     - `tests/test_registry.py` repeats constants it should import (`"safe-url"` instead of `SAFE_URL_FORMAT`, a third copy of the 14 section types instead of `SectionType.values`). Test-only duplication.
@@ -85,7 +85,16 @@ either this file or `project-status.md`.
   - **Platform-admin creating a tenant should lowercase and validate the slug.** `resolve_host` lowercases the host, so a tenant slug with capitals would never match; the slug validator applies to the tenant endpoints but the platform-admin create path must use the same lowercase rule.
   - `CONTACT_BODY_MAX_BYTES` (32 KB) could clip a 5000-character message written in a script of four-byte characters; raise it if a school reports one.
   - The contact tenant throttle keys on the raw `X-Tenant-Slug` before the school is resolved; bogus slugs only fill their own buckets, but a shape-valid flood costs a cache key each.
-  - The renderer must send an empty slug for `/` (not `home`), a random `Idempotency-Key` and the preview header; these land with PR E.
+
+- **Website & CMS, PR E follow-ups** (the renderer on the public contract; plan `docs/superpowers/plans/2026-11-15-website-cms.md`):
+  - **Video embeds.** An album's video item is a link to YouTube or Vimeo, not an `<iframe>`: an embed needs a CSP `frame-src` decision and a sandboxed iframe (the API checks only the host).
+  - **Preview shows only the token's page.** With a preview token the API answers that page alone (ADR-0039), so a link to another page 404s during preview. The preview cookie is `Secure`, so a preview over plain `http` on a hostname other than `localhost` does not keep its token.
+  - **External-host logos load unoptimised.** `branding.logo_url` may be any https host, so the navigation logo bypasses `next/image`'s optimiser instead of widening its allow-list. Serving logos through the API's file route would let them be optimised.
+  - **Image config is fixed at build time.** `images.remotePatterns` (from `NEXT_PUBLIC_API_ORIGIN`) and `WEBSITE_IMAGES_UNOPTIMIZED` are read when `next build` loads `next.config.ts`. `apps/website/Dockerfile` sets no build args, so an image built without `NEXT_PUBLIC_API_ORIGIN` allows no remote image and posts the contact form to its own origin. The deploy pipeline must pass it at build; the Terraform wiring note below should carry it.
+  - **The custom-domain redirect is a 308**, not a 301 (`permanentRedirect` in the root layout; a layout cannot return a 301). Both are permanent; a literal 301 needs a route-level response.
+  - **`header_config` and `footer_config` are not rendered.** They have no schema yet (PR A); the renderer reads menus and social links only.
+  - **Duplicate menu items warn in React.** Navigation keys are `href` plus label; two identical items in one menu are not unique.
+  - **The live lane does not assert a draft page's HTTP status.** The renderer streams the shell before the page's `notFound()` (there is a root `loading.tsx`), so the status may be 200; `website-content.spec.ts` asserts the not-found page and the missing content instead.
 
 - **`NUM_PROXIES` is now required, and operators must set the real hop count.** Production
   refuses to boot without `NUM_PROXIES` (`0` means no proxy), and the production and staging
@@ -107,7 +116,8 @@ either this file or `project-status.md`.
 - **Terraform wiring for the public website is missing.** The API container needs
   `WEBSITE_MACHINE_TOKENS`, `WEBSITE_REVALIDATE_URL` (the renderer's internal origin) and
   `WEBSITE_REVALIDATE_SECRET` (both secrets as `api_secrets` ARNs) and `WEBSITE_CNAME_TARGET`;
-  the renderer task needs `WEBSITE_MACHINE_TOKEN` and the same revalidate secret. Until wired,
+  the renderer task needs `WEBSITE_MACHINE_TOKEN` and the same revalidate secret, and its image
+  build needs `NEXT_PUBLIC_API_ORIGIN` as a build argument (it is inlined). Until wired,
   staging and production sites are dark (the renderer's reads get 401 and fail closed) and
   revalidation is a no-op.
 
