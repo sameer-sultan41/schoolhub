@@ -154,7 +154,7 @@ describe("ImageFileField", () => {
     }
     const user = userEvent.setup();
     const upload = pendingUpload();
-    renderWithProviders(<MovingHost />);
+    const { unmount } = renderWithProviders(<MovingHost />);
 
     await user.upload(screen.getByLabelText("Image"), PICKED);
     await user.click(screen.getByRole("button", { name: "Move" }));
@@ -165,6 +165,8 @@ describe("ImageFileField", () => {
     await user.click(screen.getByRole("button", { name: "Read" }));
 
     expect(read).toHaveBeenCalledWith({ blocks: [{ file_id: "" }, { file_id: FILE_ID }] });
+    // Unmounted before `afterEach` restores the URL stubs: the field revokes its preview.
+    unmount();
   });
 
   it("holds moving and removing list items while an item's image uploads", async () => {
@@ -186,7 +188,7 @@ describe("ImageFileField", () => {
     const user = userEvent.setup();
     const upload = pendingUpload();
     const onSave = jest.fn().mockResolvedValue(undefined);
-    renderWithProviders(
+    const { unmount } = renderWithProviders(
       <SchemaHost
         schema={SLIDES}
         content={{ items: [{ caption: "First" }, { caption: "Second" }] }}
@@ -213,6 +215,7 @@ describe("ImageFileField", () => {
         items: [{ photo_file_id: FILE_ID, caption: "First" }, { caption: "Second" }],
       });
     });
+    unmount();
   });
 
   it("refuses to render outside an UploadTrackerProvider", () => {

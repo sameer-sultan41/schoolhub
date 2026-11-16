@@ -176,7 +176,7 @@ describe("RichTextBlocksField", () => {
     );
     const user = userEvent.setup();
     const onSave = jest.fn();
-    renderWithProviders(
+    const { unmount } = renderWithProviders(
       <Host
         initial={{
           blocks: [
@@ -211,6 +211,8 @@ describe("RichTextBlocksField", () => {
         ],
       });
     });
+    // Unmounted first: the field revokes its preview URL on unmount, through the stub.
+    unmount();
     restoreUrls();
   });
 

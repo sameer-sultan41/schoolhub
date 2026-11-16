@@ -11,6 +11,16 @@ import { PublishActions } from "../publish-actions";
 
 jest.mock("sonner", () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 
+// `PublishActions` reads `ApiError` through `@/services` (reason-message.ts): the real barrel
+// would build the API client, which needs a `fetch` jsdom lacks.
+jest.mock("@/services", () =>
+  jest
+    .requireActual<{
+      servicesMock: (domains: Record<string, readonly string[]>) => unknown;
+    }>("@/test-fixtures/services-mock")
+    .servicesMock({}),
+);
+
 function actions() {
   return {
     publish: jest.fn().mockResolvedValue({}),

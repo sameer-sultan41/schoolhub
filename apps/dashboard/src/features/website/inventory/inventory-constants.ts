@@ -1,3 +1,5 @@
+import type { WebsiteContentStatus } from "@/services/shared/website-content";
+
 /**
  * The content inventory's policy (module doc §13): what counts as stale, and how much of it
  * the landing lists. Declared once here.
@@ -10,7 +12,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export const STALE_AFTER_MS = STALE_AFTER_DAYS * DAY_MS;
 
 /** Only live content is flagged stale: what the public still sees. */
-export const STALE_STATUS = "published";
+export const STALE_STATUS: WebsiteContentStatus = "published";
 
 /** How many of each kind's oldest published items the landing reads to find the stale ones. */
 export const STALE_SAMPLE_SIZE = 10;
