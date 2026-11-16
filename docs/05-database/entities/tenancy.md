@@ -131,10 +131,11 @@ with RLS.
 | verification_token | varchar(64) | no | — | Random token the school publishes as TXT `_schoolhub-verify.<domain>` |
 | verified_at | timestamptz | yes | — | Set on activation |
 | tls_status | varchar(20) | no | `'pending'` | Enum: `pending` `issued` `failed` (edge-automated; v1 has no provider, so `pending`) |
-| is_primary | boolean | no | `false` | At most one live primary per tenant; only an `active` domain may be primary (CHECK) |
+| is_primary | boolean | no | `false` | At most one live primary per tenant; only an `active` domain may be primary (CHECK), and the service also requires `tls_status = 'issued'` |
 | last_error | varchar(300) | no | `''` | Why the last check failed, shown to the school |
+| last_error_code | varchar(30) | no | `''` | Enum: `txt_missing` `txt_mismatch` `cname_missing` `cname_mismatch` `lookup_timeout` `lookup_failed` `domain_taken` `target_unconfigured`, or empty |
 | failure_notified_at | timestamptz | yes | — | When `website.domain-failed` was sent, so it is sent once |
-| consecutive_failures | smallint | no | `0` | Failed daily re-checks of an active domain in a row; three lapse it to `failed` |
+| consecutive_failures | smallint | no | `0` | Definite failures of an active domain's daily re-check in a row (an inconclusive lookup is not counted); three lapse it to `failed` |
 
 Indexes: partial unique `(tenant_id, domain)` and `(tenant_id) WHERE is_primary` among live rows;
 unique `(id, tenant_id)` (the route table's foreign-key target). Checks: `domain` is lowercase;
@@ -145,7 +146,8 @@ Relationships: N:1 `tenants`; 1:0..1 `custom_domain_routes`.
 Active custom domain → tenant, read by host resolution before any tenant is known. **Platform
 scope:** no RLS (the lookup has no tenant to bind), owned by `website_cms`. Holds only active
 domains; services insert a row on activation and hard-delete it on failure or delete, in the
-same transaction as the status change.
+same transaction as the status change. A soft-deleted tenant's route is deleted when another
+school's activation needs its domain.
 
 | Column | Type | Null | Default | Notes |
 | ------ | ---- | ---- | ------- | ----- |
