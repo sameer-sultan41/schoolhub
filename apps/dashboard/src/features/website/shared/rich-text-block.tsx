@@ -90,6 +90,7 @@ export function RichTextBlock<TFieldValues extends FieldValues>({
   const t = useTranslations("website.richText");
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
+    attributes: { roleDescription: t("sortableRole") },
   });
   const position = index + 1;
   const typeLabel = isKnownBlockType(type) ? t(`types.${type}`) : t("unsupported.label", { type });

@@ -43,7 +43,10 @@ export function boundedText(messages: ContentFieldMessages, max: number, require
 export function contentFieldSchemas(messages: ContentFieldMessages) {
   return {
     title: boundedText(messages, CONTENT_TITLE_MAX, true),
-    slug: boundedText(messages, CONTENT_SLUG_MAX, true).regex(Regex.CONTENT_SLUG, messages.slug),
+    slug: boundedText(messages, CONTENT_SLUG_MAX, true).regex(
+      Regex.WEBSITE_CONTENT_SLUG,
+      messages.slug,
+    ),
     richText: richTextSchema(messages),
   };
 }

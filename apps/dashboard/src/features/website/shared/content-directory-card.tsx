@@ -29,7 +29,7 @@ import { enumLabel } from "@/lib/enum-label";
 import { FILTER_ALL } from "@/lib/constants";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { WEBSITE_CONTENT_STATUSES } from "@/services/shared/website-content";
-import { STATUS_LABEL_KEY } from "./content-status-badge";
+import { CONTENT_STATUS_LABEL_KEY } from "./content-status-badge";
 import type { ContentDirectory } from "./use-content-directory";
 
 /** What one kind of content says in its directory; the search box, status filter and the
@@ -112,7 +112,7 @@ export function ContentDirectoryCard<T extends { id: string }>({
                   onChange={directory.setStatus}
                   options={WEBSITE_CONTENT_STATUSES.map((status) => ({
                     id: status,
-                    name: enumLabel(t, STATUS_LABEL_KEY, status),
+                    name: enumLabel(t, CONTENT_STATUS_LABEL_KEY, status),
                   }))}
                 />
               </div>
