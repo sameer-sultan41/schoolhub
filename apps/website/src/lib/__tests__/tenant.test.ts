@@ -21,7 +21,10 @@ jest.mock("react", () => ({
 }));
 
 jest.mock("next/headers", () => ({ headers: jest.fn() }));
-jest.mock("../api", () => ({ readJson: jest.fn() }));
+jest.mock("../api", () => ({
+  readJson: jest.fn(),
+  hostTag: (host: string) => `tenant-host:${host}`,
+}));
 
 const mockHeaders = headers as jest.MockedFunction<typeof headers>;
 const mockReadJson = readJson as jest.MockedFunction<typeof readJson>;
@@ -74,6 +77,14 @@ describe("classifyTenant", () => {
     expect(classifyTenant(makeTenant({ website_status: "maintenance" }), { draft: true })).toBe(
       "active",
     );
+  });
+
+  it("fails closed on a status this build does not know", () => {
+    type Tenant = ReturnType<typeof makeTenant>;
+    const futureStatus = "archived" as Tenant["status"];
+    const futureSite = "scheduled" as Tenant["website_status"];
+    expect(classifyTenant(makeTenant({ status: futureStatus }))).toBe("unknown");
+    expect(classifyTenant(makeTenant({ website_status: futureSite }))).toBe("unknown");
   });
 
   it("never renders a suspended school, even in draft mode", () => {

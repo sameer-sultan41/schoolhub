@@ -22,6 +22,7 @@ jest.mock("react", () => ({
 jest.mock("../api", () => ({
   readJson: jest.fn(),
   tenantTag: (id: string) => `tenant:${id}`,
+  hostTag: (host: string) => `tenant-host:${host}`,
   pageTag: (id: string, path: string) => `tenant:${id}:page:${path || "/"}`,
 }));
 
@@ -48,7 +49,7 @@ describe("toPageSlug", () => {
 });
 
 // Every machine read names the host and the final path of website-cms §16, and is tagged
-// with the tenant so the publish webhook can drop it.
+// with the tenant (publish webhook) and the host (domain-change webhook) so either evicts it.
 describe("every read sends the host to its contract path", () => {
   it.each([
     ["getPage", () => getPage("t1", HOST, "about"), "/public/pages"],
@@ -67,7 +68,10 @@ describe("every read sends the host to its contract path", () => {
     expect(mockReadJson).toHaveBeenCalledTimes(1);
     expect(mockReadJson).toHaveBeenCalledWith(
       path,
-      expect.objectContaining({ host: HOST, tags: expect.arrayContaining(["tenant:t1"]) }),
+      expect.objectContaining({
+        host: HOST,
+        tags: expect.arrayContaining(["tenant:t1", `tenant-host:${HOST}`]),
+      }),
     );
   });
 });
@@ -89,7 +93,7 @@ describe("getPage", () => {
       "/public/pages",
       expect.objectContaining({
         query: { slug: "about/history" },
-        tags: ["tenant:t1", "tenant:t1:page:about/history"],
+        tags: ["tenant:t1", `tenant-host:${HOST}`, "tenant:t1:page:about/history"],
       }),
     );
   });

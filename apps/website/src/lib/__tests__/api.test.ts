@@ -1,4 +1,4 @@
-import { ContentFetchError, pageTag, readJson, tenantTag } from "../api";
+import { ContentFetchError, hostTag, pageTag, readJson, tenantTag } from "../api";
 
 const mockFetch = jest.fn();
 const HOST = "cityschool.schoolhub.pk";
@@ -74,6 +74,12 @@ describe("readJson", () => {
 describe("tenantTag", () => {
   it("namespaces a tenant id", () => {
     expect(tenantTag("t1")).toBe("tenant:t1");
+  });
+});
+
+describe("hostTag", () => {
+  it("namespaces a host the way the API's domain-change webhook names it", () => {
+    expect(hostTag("www.cityschool.edu.pk")).toBe("tenant-host:www.cityschool.edu.pk");
   });
 });
 

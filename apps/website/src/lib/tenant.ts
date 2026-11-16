@@ -1,7 +1,7 @@
 import type { ApiSchemas } from "@schoolhub/api-client";
 import { headers } from "next/headers";
 import { cache } from "react";
-import { readJson } from "./api";
+import { hostTag, readJson } from "./api";
 import { TENANT_HOST_HEADER, TENANT_KIND_HEADER, TENANT_PATH_HEADER } from "./host";
 
 /**
@@ -27,15 +27,51 @@ export type TenantResolution =
   | { status: "unavailable"; tenant: PublicTenant; host: string }
   | { status: "unknown" };
 
+type ResolutionStatus = TenantResolution["status"];
+
+/** `never` makes a missed enum member a compile error; at runtime an unexpected value fails closed. */
+function unhandledStatus(_status: never): ResolutionStatus {
+  return "unknown";
+}
+
+/** The school's lifecycle alone; a new `TenantStatusEnum` member fails `tsc` here. */
+function statusOfSchool(status: PublicTenant["status"]): ResolutionStatus {
+  switch (status) {
+    case "deprovisioned":
+    case "provisioning":
+      return "unknown";
+    case "suspended":
+      return "unavailable";
+    case "trial":
+    case "active":
+    case "past_due":
+      return "active";
+    default:
+      return unhandledStatus(status);
+  }
+}
+
+/** The site's own state; a new `WebsiteStatusEnum` member fails `tsc` here. */
+function statusOfSite(status: PublicTenant["website_status"], draft: boolean): ResolutionStatus {
+  switch (status) {
+    case "live":
+      return "active";
+    case "maintenance":
+    case "unpublished":
+      return draft ? "active" : "unavailable";
+    default:
+      return unhandledStatus(status);
+  }
+}
+
 /** How a resolved school's site is shown. Draft mode (preview) still renders a site that is not live. */
 export function classifyTenant(
   tenant: PublicTenant,
   options: { draft: boolean } = { draft: false },
-): TenantResolution["status"] {
-  if (tenant.status === "deprovisioned" || tenant.status === "provisioning") return "unknown";
-  if (tenant.status === "suspended") return "unavailable";
-  if (tenant.website_status !== "live" && !options.draft) return "unavailable";
-  return "active";
+): ResolutionStatus {
+  const school = statusOfSchool(tenant.status);
+  if (school !== "active") return school;
+  return statusOfSite(tenant.website_status, options.draft);
 }
 
 /** The host the proxy resolved for this request. */
@@ -53,7 +89,7 @@ export const resolveTenant = cache(async (): Promise<TenantResolution> => {
     host,
     // Host→tenant mappings change rarely; settings and domain changes invalidate these tags.
     revalidate: 300,
-    tags: ["tenant-hosts", `tenant-host:${host}`],
+    tags: ["tenant-hosts", hostTag(host)],
   });
 
   if (!tenant) return { status: "unknown" };

@@ -1,3 +1,5 @@
+// Carries the machine token: a client-component import must fail the build, not leak it.
+import "server-only";
 import type { ApiSuccessEnvelope } from "@schoolhub/types";
 import { env } from "./env";
 import { TRAILING_SLASH_PATTERN } from "./regex";
@@ -79,6 +81,15 @@ export async function readJson<TData>(path: string, options: ReadOptions): Promi
 /** Per-tenant cache tag, so a publish event can invalidate exactly one school's pages. */
 export function tenantTag(tenantId: string): string {
   return `tenant:${tenantId}`;
+}
+
+/**
+ * Per-host cache tag. Every read made for a host carries it, so the API's domain-change
+ * revalidation (`tenant-host:<h>`) also evicts content cached under a host that has since
+ * moved to another school or stopped resolving.
+ */
+export function hostTag(host: string): string {
+  return `tenant-host:${host}`;
 }
 
 /** Per-path cache tag within a tenant. */

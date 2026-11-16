@@ -1,6 +1,6 @@
 import type { ApiSchemas } from "@schoolhub/api-client";
 import { cache } from "react";
-import { pageTag, readJson, tenantTag } from "./api";
+import { hostTag, pageTag, readJson, tenantTag } from "./api";
 
 /**
  * Public content reads. **Every export in this file is a read.**
@@ -11,7 +11,8 @@ import { pageTag, readJson, tenantTag } from "./api";
  * it belongs in a browser → `/api/v1/public/...` submission instead.
  *
  * Every read sends the request's host (website-cms §16); the API resolves the school from it
- * and answers only published, opted-in content. `tenantId` is used for cache tags only.
+ * and answers only published, opted-in content. `tenantId` is used for cache tags only; every
+ * read is also tagged with its host, so a host that moves to another school is evicted too.
  * Arguments stay primitive so React's `cache()` dedupes repeat calls within a render.
  */
 
@@ -46,14 +47,14 @@ export const getPage = cache(
     readJson<PublicPage>("/public/pages", {
       host,
       query: { slug: slug || undefined },
-      tags: [tenantTag(tenantId), pageTag(tenantId, slug)],
+      tags: [tenantTag(tenantId), hostTag(host), pageTag(tenantId, slug)],
     }),
 );
 
 export const getSite = cache(async (tenantId: string, host: string): Promise<PublicSite | null> =>
   readJson<PublicSite>("/public/site", {
     host,
-    tags: [tenantTag(tenantId), `tenant:${tenantId}:site`],
+    tags: [tenantTag(tenantId), hostTag(host), `tenant:${tenantId}:site`],
   }),
 );
 
@@ -61,7 +62,7 @@ export const getPublishedPaths = cache(
   async (tenantId: string, host: string): Promise<PublicSitemapEntry[]> =>
     (await readJson<PublicSitemapEntry[]>("/public/sitemap", {
       host,
-      tags: [tenantTag(tenantId), `tenant:${tenantId}:sitemap`],
+      tags: [tenantTag(tenantId), hostTag(host), `tenant:${tenantId}:sitemap`],
     })) ?? [],
 );
 
@@ -76,7 +77,7 @@ export const getTeachers = cache(
     (await readJson<PublicTeacher[]>("/public/teachers", {
       host,
       query: { page_size: pageSize(limit) },
-      tags: [tenantTag(tenantId), `tenant:${tenantId}:teachers`],
+      tags: [tenantTag(tenantId), hostTag(host), `tenant:${tenantId}:teachers`],
     })) ?? [],
 );
 
@@ -84,7 +85,7 @@ export const getDepartments = cache(
   async (tenantId: string, host: string): Promise<PublicDepartment[]> =>
     (await readJson<PublicDepartment[]>("/public/departments", {
       host,
-      tags: [tenantTag(tenantId), `tenant:${tenantId}:departments`],
+      tags: [tenantTag(tenantId), hostTag(host), `tenant:${tenantId}:departments`],
     })) ?? [],
 );
 
@@ -92,7 +93,7 @@ export const getClasses = cache(
   async (tenantId: string, host: string): Promise<PublicClass[]> =>
     (await readJson<PublicClass[]>("/public/classes", {
       host,
-      tags: [tenantTag(tenantId), `tenant:${tenantId}:classes`],
+      tags: [tenantTag(tenantId), hostTag(host), `tenant:${tenantId}:classes`],
     })) ?? [],
 );
 
@@ -106,7 +107,7 @@ export const getEvents = cache(
     (await readJson<PublicSchoolEvent[]>("/public/school-events", {
       host,
       query: { scope, page_size: pageSize(limit) },
-      tags: [tenantTag(tenantId), `tenant:${tenantId}:events`],
+      tags: [tenantTag(tenantId), hostTag(host), `tenant:${tenantId}:events`],
     })) ?? [],
 );
 
@@ -115,7 +116,7 @@ export const getNews = cache(
     (await readJson<PublicNewsPost[]>("/public/news-posts", {
       host,
       query: { page_size: pageSize(limit) },
-      tags: [tenantTag(tenantId), `tenant:${tenantId}:news`],
+      tags: [tenantTag(tenantId), hostTag(host), `tenant:${tenantId}:news`],
     })) ?? [],
 );
 
@@ -124,7 +125,7 @@ export const getNotices = cache(
     (await readJson<PublicNotice[]>("/public/notices", {
       host,
       query: { page_size: pageSize(limit) },
-      tags: [tenantTag(tenantId), `tenant:${tenantId}:notices`],
+      tags: [tenantTag(tenantId), hostTag(host), `tenant:${tenantId}:notices`],
     })) ?? [],
 );
 
@@ -134,6 +135,6 @@ export const getGallery = cache(
     (await readJson<PublicGalleryImage[]>("/public/gallery-items", {
       host,
       query: { page_size: pageSize(limit) },
-      tags: [tenantTag(tenantId), `tenant:${tenantId}:gallery`],
+      tags: [tenantTag(tenantId), hostTag(host), `tenant:${tenantId}:gallery`],
     })) ?? [],
 );
