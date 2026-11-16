@@ -3,12 +3,12 @@ import userEvent from "@testing-library/user-event";
 import type { PermissionKey } from "@schoolhub/types";
 import { toast } from "sonner";
 
-import { Services, type ContactSubmissionRecord } from "@/services";
+import { ApiError, Services, type ContactSubmissionRecord } from "@/services";
 import { mocked, rowOf, urlParam } from "@/test-fixtures/list-screen";
 import { USER_LOADED, UserLoaded } from "@/test-fixtures/user-loaded";
 import { buildUser, renderWithProviders, setUrl } from "@/test-utils";
 
-import { pageOf, STAMP, violation } from "@/features/website/shared/__tests__/content-fixtures";
+import { pageOf, STAMP } from "@/features/website/shared/__tests__/content-fixtures";
 import { ContactInbox } from "../contact-inbox";
 
 jest.mock("next/navigation", () =>
@@ -170,8 +170,14 @@ describe("contact inbox", () => {
   });
 
   it("shows a refused status change in the sheet", async () => {
+    // The viewer's role lost `website.contact-submission.update` after sign-in.
     setStatus.mockRejectedValue(
-      violation("status", "invalid_status", "that status is not allowed."),
+      new ApiError({
+        code: "permission_denied",
+        message: "You do not have permission to perform this action.",
+        status: 403,
+        url: "/api/v1/contact-submissions",
+      }),
     );
     const user = await renderInbox();
 
@@ -181,7 +187,9 @@ describe("contact inbox", () => {
     const sheet = await screen.findByRole("dialog", { name: "Ayesha Khan" });
     await user.click(await within(sheet).findByRole("button", { name: "Mark as spam" }));
 
-    expect(await within(sheet).findByText("That status is not allowed.")).toBeInTheDocument();
+    expect(
+      await within(sheet).findByText("You do not have permission to do that."),
+    ).toBeInTheDocument();
     expect(within(sheet).getByText("New")).toBeInTheDocument();
   });
 
