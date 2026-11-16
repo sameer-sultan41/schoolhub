@@ -200,6 +200,26 @@ describe("contact inbox", () => {
     expect(within(sheet).getByText("New")).toBeInTheDocument();
   });
 
+  it("keeps the open message when the list fails to refresh behind it", async () => {
+    const user = await renderInbox();
+    await user.click(
+      await screen.findByRole("button", { name: "Open the message from Ayesha Khan" }),
+    );
+    const sheet = await screen.findByRole("dialog", { name: "Ayesha Khan" });
+    fetchPage.mockRejectedValue(
+      new ApiError({ code: "server_error", message: "Boom.", status: 500, url: "/api/v1/x" }),
+    );
+
+    // Triage invalidates the website queries, so the list reads again and fails.
+    await user.click(await within(sheet).findByRole("button", { name: "Mark read" }));
+
+    expect(await screen.findByText(/Something went wrong on our side/)).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Ayesha Khan" })).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("dialog", { name: "Ayesha Khan" })).getByText("Read"),
+    ).toBeInTheDocument();
+  });
+
   it("offers no triage to a viewer with only the read key", async () => {
     const user = await renderInbox(["website.contact-submission.view"]);
 

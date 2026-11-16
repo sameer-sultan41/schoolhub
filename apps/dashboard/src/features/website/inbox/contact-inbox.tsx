@@ -59,14 +59,29 @@ export function ContactInbox() {
   const inbox = useContactInbox(columns);
   const { table, query, totalCount, isStalePage, hasActiveFilter, filters } = inbox;
 
-  if (query.isError && !isStalePage) {
-    return (
-      <LoadErrorCard
-        message={resolveErrorMessage(query.error, tErrors, t("list.loadError"))}
-        onRetry={() => {
-          void query.refetch();
+  const sheet =
+    openId === null ? null : (
+      <ContactDetailSheet
+        submissionId={openId}
+        canUpdate={canUpdate}
+        onOpenChange={(open) => {
+          if (!open) setOpenId(null);
         }}
       />
+    );
+
+  if (query.isError && !isStalePage) {
+    // The sheet stays mounted: a list refetch failing behind an open message must not close it.
+    return (
+      <>
+        <LoadErrorCard
+          message={resolveErrorMessage(query.error, tErrors, t("list.loadError"))}
+          onRetry={() => {
+            void query.refetch();
+          }}
+        />
+        {sheet}
+      </>
     );
   }
 
@@ -138,15 +153,7 @@ export function ContactInbox() {
           </CardFooter>
         </Card>
       </DataGrid>
-      {openId && (
-        <ContactDetailSheet
-          submissionId={openId}
-          canUpdate={canUpdate}
-          onOpenChange={(open) => {
-            if (!open) setOpenId(null);
-          }}
-        />
-      )}
+      {sheet}
     </>
   );
 }
