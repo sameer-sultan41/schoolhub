@@ -4445,7 +4445,8 @@
       "label": "Website sections",
       "overview": "Overview",
       "pages": "Pages",
-      "news": "News"
+      "news": "News",
+      "events": "Events"
     },
     "status": {
       "draft": "Draft",
@@ -4533,6 +4534,50 @@
         "title": "Delete “{title}”?",
         "description": "The post is removed from the dashboard. This can't be undone."
       }
+    },
+    "events": {
+      "title": "Events",
+      "summary": "Events for the school's public website, with their dates and place.",
+      "actions": {
+        "create": "New event",
+        "edit": "Edit",
+        "editRow": "Edit {title}"
+      },
+      "columns": {
+        "title": "Title",
+        "status": "Status",
+        "startsAt": "Starts",
+        "location": "Location",
+        "updatedAt": "Last updated"
+      },
+      "list": {
+        "caption": "Events",
+        "searchPlaceholder": "Search by title, address or location",
+        "loadError": "The events couldn't be loaded.",
+        "emptyTitle": "No events yet",
+        "emptyDescription": "Add the first event; it stays a draft until you publish it."
+      },
+      "form": {
+        "createTitle": "New event",
+        "editTitle": "Edit event",
+        "intro": "Events can't be deleted: archive one to take it off the website for good.",
+        "allDay": "All day",
+        "startsAt": "Starts",
+        "endsAt": "Ends",
+        "endsAtHint": "Optional.",
+        "location": "Location",
+        "description": "Description"
+      },
+      "validation": {
+        "startRequired": "Enter when the event starts."
+      },
+      "when": {
+        "allDay": "{start} (all day)",
+        "allDayRange": "{start} to {end} (all day)",
+        "range": "{start} to {end}"
+      },
+      "created": "Event saved as a draft.",
+      "saved": "Event saved."
     },
     "inventory": {
       "title": "Website",

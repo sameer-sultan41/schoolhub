@@ -3,12 +3,17 @@
 import { useMemo } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Button, DataGridColumnHeader, Skeleton } from "@schoolhub/ui";
+import { DataGridColumnHeader, Skeleton } from "@schoolhub/ui";
 
+import {
+  editColumn,
+  statusColumn,
+  titleColumn,
+  updatedColumn,
+} from "@/features/website/shared/content-columns";
 import { EMPTY_VALUE } from "@/lib/constants";
-import { formatDate, formatLastUpdated } from "@/lib/helpers";
+import { formatDate } from "@/lib/helpers";
 import type { NewsPostRecord } from "@/services";
-import { ContentStatusBadge } from "@/features/website/shared/content-status-badge";
 
 export interface NewsColumnsOptions {
   /** `website.news-post.update`: the row's Edit. */
@@ -31,36 +36,8 @@ export function useNewsColumns({
 
   return useMemo<ColumnDef<NewsPostRecord>[]>(
     () => [
-      {
-        id: "title",
-        accessorKey: "title",
-        enableHiding: false,
-        header: ({ column }) => <DataGridColumnHeader column={column} title={t("columns.title")} />,
-        cell: ({ row }) => (
-          <Button
-            mode="link"
-            className="max-w-xs text-start font-medium whitespace-normal"
-            onClick={() => {
-              onOpen(row.original);
-            }}
-          >
-            {row.original.title}
-          </Button>
-        ),
-        meta: { headerTitle: t("columns.title"), skeleton: <Skeleton className="h-4 w-40" /> },
-      },
-      {
-        id: "status",
-        accessorKey: "status",
-        header: ({ column }) => (
-          <DataGridColumnHeader column={column} title={t("columns.status")} />
-        ),
-        cell: ({ row }) => <ContentStatusBadge status={row.original.status} />,
-        meta: {
-          headerTitle: t("columns.status"),
-          skeleton: <Skeleton className="h-5 w-16 rounded-full" />,
-        },
-      },
+      titleColumn(t("columns.title"), onOpen),
+      statusColumn(t("columns.status")),
       {
         id: "published_at",
         accessorKey: "published_at",
@@ -74,38 +51,13 @@ export function useNewsColumns({
           skeleton: <Skeleton className="h-4 w-24" />,
         },
       },
-      {
-        id: "updated_at",
-        accessorKey: "updated_at",
-        header: ({ column }) => (
-          <DataGridColumnHeader column={column} title={t("columns.updatedAt")} />
-        ),
-        cell: ({ row }) => formatLastUpdated(row.original.updated_at),
-        meta: { headerTitle: t("columns.updatedAt"), skeleton: <Skeleton className="h-4 w-24" /> },
-      },
-      {
-        id: "actions",
-        enableSorting: false,
-        enableHiding: false,
-        header: () => null,
-        cell: ({ row }) =>
-          canUpdate ? (
-            <div className="flex justify-end">
-              <Button
-                variant="secondary"
-                appearance="light"
-                size="sm"
-                aria-label={t("actions.editRow", { title: row.original.title })}
-                onClick={() => {
-                  onEdit(row.original);
-                }}
-              >
-                {t("actions.edit")}
-              </Button>
-            </div>
-          ) : null,
-        meta: { skeleton: <Skeleton className="h-7 w-16" /> },
-      },
+      updatedColumn(t("columns.updatedAt")),
+      editColumn({
+        canUpdate,
+        label: t("actions.edit"),
+        rowLabel: (post) => t("actions.editRow", { title: post.title }),
+        onEdit,
+      }),
     ],
     [t, locale, canUpdate, onOpen, onEdit],
   );

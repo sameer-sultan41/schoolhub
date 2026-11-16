@@ -26,4 +26,10 @@ export const WEBSITE_SECTIONS = [
     menuTitle: "News",
     permission: "website.page.view",
   },
+  {
+    href: Paths.WEBSITE_EVENTS,
+    labelKey: "nav.events",
+    menuTitle: "Events",
+    permission: "website.page.view",
+  },
 ] as const satisfies readonly ModuleSection[];
