@@ -175,6 +175,27 @@ describe("site settings: status", () => {
     expect(screen.getByRole("switch", { name: "Maintenance mode" })).toBeChecked();
   });
 
+  it("reads an unpublished site as offline, whatever maintenance mode says", async () => {
+    // The server's order (`hosts.py::website_status`): unpublished first, then maintenance.
+    current = settingsRecord({ is_published: false, maintenance_mode: true });
+    const user = await renderScreen();
+
+    expect(screen.getByText("Offline")).toBeVisible();
+    expect(screen.queryByText("Maintenance")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("switch", { name: "Maintenance mode" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Turn off maintenance mode?" });
+    expect(
+      within(dialog).getByText(/no visible effect while the website is unpublished/),
+    ).toBeVisible();
+    await user.click(within(dialog).getByRole("button", { name: "Turn off" }));
+
+    await waitFor(() => {
+      expect(updateSettings).toHaveBeenCalledWith({ maintenance_mode: false });
+    });
+    expect(screen.getByText("Offline")).toBeVisible();
+  });
+
   it("asks before taking the site offline", async () => {
     const user = await renderScreen();
 

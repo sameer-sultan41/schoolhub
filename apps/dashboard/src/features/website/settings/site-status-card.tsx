@@ -29,10 +29,11 @@ interface PendingChange {
   value: boolean;
 }
 
-/** The site's state as visitors meet it: maintenance wins over published. */
+/** The site's state as visitors meet it, in the server's order (`hosts.py::website_status`): an
+ * unpublished site is offline whatever maintenance mode says. */
 function siteState(settings: WebsiteSettingsRecord): "live" | "maintenance" | "offline" {
-  if (settings.maintenance_mode) return "maintenance";
-  return settings.is_published ? "live" : "offline";
+  if (!settings.is_published) return "offline";
+  return settings.maintenance_mode ? "maintenance" : "live";
 }
 
 const STATE_BADGE = { live: "success", maintenance: "warning", offline: "secondary" } as const;
@@ -91,6 +92,7 @@ export function SiteStatusCard({ settings, canUpdate }: SiteStatusCardProps) {
       {pending && (
         <StatusConfirmDialog
           change={pending}
+          isPublished={settings.is_published ?? false}
           onOpenChange={(open) => {
             if (!open) setPending(null);
           }}
@@ -171,9 +173,12 @@ function Homepage({ settings }: { settings: WebsiteSettingsRecord }) {
  */
 function StatusConfirmDialog({
   change,
+  isPublished,
   onOpenChange,
 }: {
   change: PendingChange;
+  /** Maintenance mode changes nothing visitors see while the site is unpublished. */
+  isPublished: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const t = useTranslations("website.settings.confirm");
@@ -182,8 +187,10 @@ function StatusConfirmDialog({
   const queryClient = useQueryClient();
   const invalidateWebsite = useInvalidateModule(WEBSITE_QUERY_MODULE);
   const copy = `${change.field === "is_published" ? "publish" : "maintenance"}.${change.value ? "on" : "off"}`;
-  // Unpublishing or entering maintenance takes the site away from visitors.
-  const takesOffline = change.field === "maintenance_mode" ? change.value : !change.value;
+  const maintenanceHidden = change.field === "maintenance_mode" && !isPublished;
+  // Unpublishing, or entering maintenance on a published site, takes it away from visitors.
+  const takesOffline =
+    change.field === "maintenance_mode" ? change.value && isPublished : !change.value;
 
   const { error, isPending, confirm } = useConfirmAction({
     mutationFn: async () => {
@@ -212,7 +219,7 @@ function StatusConfirmDialog({
       open
       onOpenChange={onOpenChange}
       title={t(`${copy}.title`)}
-      description={t(`${copy}.description`)}
+      description={maintenanceHidden ? t("maintenanceWhileUnpublished") : t(`${copy}.description`)}
       confirmLabel={t(`${copy}.confirm`)}
       variant={takesOffline ? "destructive" : undefined}
       isPending={isPending}

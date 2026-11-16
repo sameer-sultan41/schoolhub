@@ -5051,7 +5051,8 @@
             "confirm": "Turn off",
             "done": "Maintenance mode is off."
           }
-        }
+        },
+        "maintenanceWhileUnpublished": "This has no visible effect while the website is unpublished: visitors see nothing either way. It applies once the website is published."
       }
     },
     "navigation": {
