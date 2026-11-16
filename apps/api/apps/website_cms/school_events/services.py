@@ -13,6 +13,7 @@ from uuid import UUID
 from django.db import IntegrityError, transaction
 
 from apps.website_cms.content import (
+    assert_may_edit,
     locked,
     seo_image_ids,
     slug_in_use,
@@ -22,6 +23,7 @@ from apps.website_cms.content import (
 )
 from apps.website_cms.errors import violation
 from apps.website_cms.models import ContentStatus, SchoolEvent, SeoTargetType
+from apps.website_cms.permissions import EVENT_PUBLISH_KEY
 from apps.website_cms.revalidation import queue_revalidation
 from apps.website_cms.validation import assert_files_usable, rich_text_file_ids, validate_rich_text
 from core.files.visibility import sync_file_visibility
@@ -68,15 +70,14 @@ def create_school_event(tenant: Tenant, data: dict[str, Any], actor_id: UUID | N
         raise slug_taken() from exc
 
 
-def update_school_event(
-    event: SchoolEvent, data: dict[str, Any], actor_id: UUID | None
-) -> SchoolEvent:
+def update_school_event(event: SchoolEvent, data: dict[str, Any], user: Any) -> SchoolEvent:
     if "slug" in data and data["slug"] != event.slug:
         validate_content_slug(data["slug"])
     _validate_content(data)
     try:
         with transaction.atomic():
             event = locked(SchoolEvent, event.pk)
+            assert_may_edit(event.status, user, EVENT_PUBLISH_KEY)
             _validate_range(
                 data.get("starts_at", event.starts_at), data.get("ends_at", event.ends_at)
             )
@@ -86,7 +87,7 @@ def update_school_event(
             old_ids = event_file_ids(event)
             for name, value in data.items():
                 setattr(event, name, value)
-            event.updated_by = actor_id
+            event.updated_by = user.pk
             event.save()
             if event.status == ContentStatus.PUBLISHED:
                 sync_file_visibility(old_ids | event_file_ids(event))

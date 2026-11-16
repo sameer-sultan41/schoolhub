@@ -4788,7 +4788,10 @@
         "publishNeedsSave": "Save your changes before publishing.",
         "publishNeedsVisible": "Add a visible section and save it before publishing.",
         "sortableRole": "sortable section",
-        "previewSavedOnly": "Preview shows the last saved version."
+        "previewSavedOnly": "Preview shows the last saved version.",
+        "publisherOnly": "This page is live — only a publisher can change it. Ask a publisher, or unpublish it first.",
+        "liveHint": "Saving updates the live site.",
+        "liveNeedsVisible": "A published page needs at least one visible section. Show a section before saving."
       },
       "sectionTypes": {
         "hero": "Hero",
@@ -4808,7 +4811,7 @@
       }
     },
     "reasons": {
-      "no_visible_sections": "Add at least one visible section, and save it, before publishing.",
+      "no_visible_sections": "A published page needs at least one visible section.",
       "page_in_use": "This page can't be removed: it is the home page, or a menu links to it. Take it out of the menus first.",
       "unpublish_first": "Unpublish this first, then delete it.",
       "reserved_slug": "This address is reserved for the website. Choose another.",
@@ -4817,6 +4820,7 @@
       "home_exists": "The website already has a home page.",
       "too_many_sections": "This page has more sections than a page may hold. Remove some, then save.",
       "invalid_section_id": "The page changed since you opened it. Reload it and try again.",
+      "publish_required": "This page is live — only a publisher can change it. Ask a publisher, or unpublish it first.",
       "empty_album": "Add at least one photo or video before publishing this album.",
       "end_before_start": "The event can't end before it starts.",
       "invalid_url": "Use an https:// link of at most 500 characters.",

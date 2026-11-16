@@ -338,6 +338,58 @@ describe("page editor", () => {
     open.mockRestore();
   });
 
+  it("is read-only on a live page for an editor without the publish key", async () => {
+    asUser("website.page.update", "website.page.delete");
+    fetchPage.mockResolvedValue(pageDetail({ status: "published" }));
+    await renderEditor();
+
+    expect(
+      screen.getByText(
+        "This page is live — only a publisher can change it. Ask a publisher, or unpublish it first.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save sections" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit details" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Heading")).toBeDisabled();
+  });
+
+  it("warns a publisher that a save goes live, and holds a live page with nothing visible", async () => {
+    fetchPage.mockResolvedValue(pageDetail({ status: "published", sections: [sectionRecord()] }));
+    const user = await renderEditor();
+    expect(screen.getByText("Saving updates the live site.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("switch", { name: "Show this section on the page" }));
+
+    expect(
+      screen.getByText(
+        "A published page needs at least one visible section. Show a section before saving.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save sections" })).toBeDisabled();
+    expect(replaceSections).not.toHaveBeenCalled();
+  });
+
+  it("translates a publish_required refusal from the save", async () => {
+    replaceSections.mockRejectedValue(
+      refusal([
+        {
+          field: "non_field",
+          issue:
+            "publish_required: Only a publisher can edit published content — ask a publisher to edit it or unpublish it.",
+        },
+      ]),
+    );
+    const user = await renderEditor();
+
+    await user.click(screen.getByRole("button", { name: "Save sections" }));
+
+    expect(
+      await screen.findByText(
+        "This page is live — only a publisher can change it. Ask a publisher, or unpublish it first.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("is read-only for a viewer without the update key", async () => {
     asUser();
     await renderEditor();

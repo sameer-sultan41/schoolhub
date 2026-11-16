@@ -26,17 +26,27 @@ export interface SectionsPanelProps {
   editor: ReturnType<typeof useSectionsForm>;
   types: SectionTypes;
   labelOf: (type: string) => string;
-  canUpdate: boolean;
+  /** Why the viewer can't change the sections (shown above them), or `null` when they can. */
+  readOnlyNotice: string | null;
+  /** The page is live and the viewer may edit it: a save changes the public site. */
+  isLive: boolean;
 }
 
 /** The page's sections: the ordered list with "Add section" beside the selected section's
- * editor, and Save / Discard under both. Save is held while an upload runs. */
-export function SectionsPanel({ editor, types, labelOf, canUpdate }: SectionsPanelProps) {
+ * editor, and Save / Discard under both. Save is held while an upload runs, and on a live page
+ * while no section is visible (the API refuses that, `no_visible_sections`). */
+export function SectionsPanel({
+  editor,
+  types,
+  labelOf,
+  readOnlyNotice,
+  isLive,
+}: SectionsPanelProps) {
   const t = useTranslations("website.pages.editor");
   const { form, sections, selectedIndex, selectedKey } = editor;
   const selected = sections[selectedIndex];
   const offered = Object.keys(types).filter(isSectionType);
-  const readOnly = !canUpdate;
+  const readOnly = readOnlyNotice !== null;
 
   return (
     <UploadTrackerProvider value={editor.tracker}>
@@ -47,9 +57,9 @@ export function SectionsPanel({ editor, types, labelOf, canUpdate }: SectionsPan
               <AlertDescription>{editor.formError}</AlertDescription>
             </Alert>
           ) : null}
-          {readOnly ? (
+          {readOnlyNotice ? (
             <Alert variant="info">
-              <AlertDescription>{t("readOnly")}</AlertDescription>
+              <AlertDescription>{readOnlyNotice}</AlertDescription>
             </Alert>
           ) : null}
           <div className="grid gap-5 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
@@ -108,11 +118,13 @@ export function SectionsPanel({ editor, types, labelOf, canUpdate }: SectionsPan
           </div>
           {readOnly ? null : (
             <div className="flex flex-wrap items-center justify-end gap-2.5">
-              {editor.isDirty ? (
-                <p className="me-auto text-sm text-muted-foreground" aria-live="polite">
-                  {t("unsaved")}
-                </p>
-              ) : null}
+              <div className="me-auto space-y-1 text-sm" aria-live="polite">
+                {editor.needsVisibleSection ? (
+                  <p className="text-destructive">{t("liveNeedsVisible")}</p>
+                ) : null}
+                {editor.isDirty ? <p className="text-muted-foreground">{t("unsaved")}</p> : null}
+                {isLive ? <p className="text-muted-foreground">{t("liveHint")}</p> : null}
+              </div>
               <Button
                 variant="outline"
                 disabled={!editor.isDirty || editor.isLocked}
@@ -122,7 +134,7 @@ export function SectionsPanel({ editor, types, labelOf, canUpdate }: SectionsPan
               </Button>
               <Button
                 type="submit"
-                disabled={editor.isLocked}
+                disabled={editor.isLocked || editor.needsVisibleSection}
                 isLoading={editor.isSaving}
                 loadingLabel={t("saving")}
               >

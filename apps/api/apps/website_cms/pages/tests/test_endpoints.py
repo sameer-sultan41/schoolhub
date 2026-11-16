@@ -488,6 +488,7 @@ class ReplaceSectionsTests(WebsiteAPITestCase):
             self.assertEqual(File.objects.get(id=file.id).visibility, FileVisibility.PRIVATE)
 
     def test_replacing_sections_of_a_published_page_queues_revalidation(self) -> None:
+        self.allow("website.page.publish")
         page = self.make_page(slug="live", status=ContentStatus.PUBLISHED)
         with (
             mock.patch("apps.website_cms.revalidation.revalidate_website") as task,
@@ -495,3 +496,71 @@ class ReplaceSectionsTests(WebsiteAPITestCase):
         ):
             self._put([hero()], page=page)
         task.delay.assert_called_once()
+
+
+class PublishedPageEditGateTests(WebsiteAPITestCase):
+    """§7.1: editing a published page needs the publish key; drafts and publishers are free."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.allow("website.page.view", "website.page.update")
+        self.page = self.make_page(slug="live", title="Live", status=ContentStatus.PUBLISHED)
+        self.make_section(self.page, position=0)
+
+    def _put(self, sections: list[dict], page=None):
+        return self.client.patch(
+            f"{detail(page or self.page)}/page-sections", {"sections": sections}, format="json"
+        )
+
+    def _refused(self, response) -> None:
+        self.assertEqual(response.status_code, 422, response.content)
+        error = response.json()["error"]
+        self.assertEqual(error["code"], "domain_rule_violation")
+        self.assertIn("publish_required", error["message"])
+
+    def test_update_only_user_cannot_replace_sections_of_a_published_page(self) -> None:
+        with (
+            mock.patch("apps.website_cms.revalidation.revalidate_website") as task,
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            self._refused(self._put([hero("Changed")]))
+        task.delay.assert_not_called()
+        with tenant_context(self.tenant.id):
+            heading = PageSection.objects.alive().get(website_page=self.page).content["heading"]
+        self.assertNotEqual(heading, "Changed")
+
+    def test_update_only_user_cannot_patch_a_published_page(self) -> None:
+        with (
+            mock.patch("apps.website_cms.revalidation.revalidate_website") as task,
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            self._refused(self.client.patch(detail(self.page), {"title": "New"}, format="json"))
+        task.delay.assert_not_called()
+        self.page.refresh_from_db()
+        self.assertEqual(self.page.title, "Live")
+
+    def test_update_only_user_edits_a_draft_page(self) -> None:
+        draft = self.make_page(slug="draft")
+        self.assertEqual(self._put([hero()], page=draft).status_code, 200)
+        response = self.client.patch(detail(draft), {"title": "New"}, format="json")
+        self.assertEqual(response.status_code, 200)
+
+    def test_publisher_edits_a_published_page(self) -> None:
+        self.allow("website.page.publish")
+        self.assertEqual(self._put([hero("Changed")]).status_code, 200)
+        response = self.client.patch(detail(self.page), {"title": "New"}, format="json")
+        self.assertEqual(response.status_code, 200)
+
+    def test_published_page_cannot_be_saved_with_zero_visible_sections(self) -> None:
+        self.allow("website.page.publish")
+        for sections in ([], [{**hero(), "is_visible": False}]):
+            with self.subTest(sections=len(sections)):
+                response = self._put(sections)
+                self.assertEqual(response.status_code, 422, response.content)
+                self.assertIn("no_visible_sections", response.json()["error"]["message"])
+        with tenant_context(self.tenant.id):
+            self.assertEqual(PageSection.objects.alive().filter(website_page=self.page).count(), 1)
+
+    def test_draft_page_may_be_saved_with_zero_visible_sections(self) -> None:
+        draft = self.make_page(slug="draft")
+        self.assertEqual(self._put([], page=draft).status_code, 200)

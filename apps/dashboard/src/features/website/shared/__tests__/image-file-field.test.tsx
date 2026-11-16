@@ -1,14 +1,16 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Form } from "@schoolhub/ui";
 
-import { ApiError, Services } from "@/services";
+import { ApiError, Services, type JsonSchema } from "@/services";
 import { FileUploadError } from "@/services/modules/files";
 import { mocked } from "@/test-fixtures/list-screen";
 import { renderWithProviders, stubObjectUrls } from "@/test-utils";
 
 import { ImageFileField } from "../image-file-field";
+import { UploadTrackerProvider, useUploadTracker } from "../upload-tracker";
 import { FILE_ID, HERO, SchemaHost } from "./schema-test-support";
 
 jest.mock("@/services", () =>
@@ -119,6 +121,108 @@ describe("ImageFileField", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledWith({ heading: "Hi" });
+    });
+    unmount();
+  });
+
+  it("writes a late upload to the field's current path, not the one it was picked at", async () => {
+    interface Values {
+      blocks: { file_id: string }[];
+    }
+    const read = jest.fn<undefined, [Values]>();
+    // The field's block moves from index 0 to 1 while its upload runs, as a reorder would.
+    function MovingHost() {
+      const form = useForm<Values>({
+        defaultValues: { blocks: [{ file_id: "" }, { file_id: "" }] },
+      });
+      const tracker = useUploadTracker();
+      const [index, setIndex] = useState(0);
+      return (
+        <UploadTrackerProvider value={tracker}>
+          <Form {...form}>
+            <ImageFileField form={form} name={`blocks.${index}.file_id`} label="Image" />
+            <button
+              type="button"
+              onClick={() => {
+                setIndex(1);
+              }}
+            >
+              Move
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                read(form.getValues());
+              }}
+            >
+              Read
+            </button>
+          </Form>
+        </UploadTrackerProvider>
+      );
+    }
+    const user = userEvent.setup();
+    const upload = pendingUpload();
+    const { unmount } = renderWithProviders(<MovingHost />);
+
+    await user.upload(screen.getByLabelText("Image"), PICKED);
+    await user.click(screen.getByRole("button", { name: "Move" }));
+    upload.finish(FILE_ID);
+    await waitFor(() => {
+      expect(screen.getByText("An image is on file.")).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: "Read" }));
+
+    expect(read).toHaveBeenCalledWith({ blocks: [{ file_id: "" }, { file_id: FILE_ID }] });
+    // Unmounted before `afterEach` restores the URL stubs: the field revokes its preview.
+    unmount();
+  });
+
+  it("holds moving and removing list items while an item's image uploads", async () => {
+    const SLIDES = {
+      type: "object",
+      properties: {
+        items: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              photo_file_id: { type: "string", minLength: 36, maxLength: 36, "x-widget": "image" },
+              caption: { type: "string", maxLength: 100, "x-widget": "text" },
+            },
+          },
+        },
+      },
+    } as JsonSchema;
+    const user = userEvent.setup();
+    const upload = pendingUpload();
+    const onSave = jest.fn().mockResolvedValue(undefined);
+    const { unmount } = renderWithProviders(
+      <SchemaHost
+        schema={SLIDES}
+        content={{ items: [{ caption: "First" }, { caption: "Second" }] }}
+        onSave={onSave}
+      />,
+    );
+
+    const [firstPhoto] = screen.getAllByLabelText("Photo");
+    if (!firstPhoto) throw new Error("no photo field");
+    await user.upload(firstPhoto, PICKED);
+    expect(screen.getByRole("button", { name: "Move item 1 down" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Move item 2 up" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Remove item 1" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Remove item 2" })).toBeDisabled();
+
+    upload.finish(FILE_ID);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Move item 1 down" })).toBeEnabled();
+    });
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith({
+        items: [{ photo_file_id: FILE_ID, caption: "First" }, { caption: "Second" }],
+      });
     });
     unmount();
   });

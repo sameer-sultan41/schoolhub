@@ -109,5 +109,7 @@ export function schemaToZod(schema: JsonSchema, messages: SchemaMessages) {
   for (const [key, prop] of Object.entries(schema.properties ?? {})) {
     shape[key] = propertyZod(prop, required.has(key), messages);
   }
-  return z.object(shape);
+  // Loose: a stored key the schema doesn't declare passes through, so a host whose resolver
+  // returns the parsed values still sends it back (`fromSchemaFormValues`).
+  return z.looseObject(shape);
 }
