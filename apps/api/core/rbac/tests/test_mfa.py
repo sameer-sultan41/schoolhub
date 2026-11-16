@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import io
 import time
+from datetime import timedelta
 from types import SimpleNamespace
 from unittest import mock
 
@@ -20,6 +21,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import connection
 from django.test import override_settings
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
@@ -234,7 +236,7 @@ class SecondFactorLoginTests(MfaTestCase):
     def test_challenge_dies_after_too_many_wrong_codes(self) -> None:
         totp = enable_mfa(self.user)
         token = self.challenge()
-        for _ in range(mfa.MAX_CHALLENGE_ATTEMPTS):
+        for _ in range(settings.MFA_CHALLENGE_MAX_ATTEMPTS):
             self.assert_error(
                 self.verify(token, code=wrong_code(totp)),
                 status.HTTP_400_BAD_REQUEST,
@@ -244,6 +246,25 @@ class SecondFactorLoginTests(MfaTestCase):
         response = self.verify(token, code=totp.now())
 
         self.assert_error(response, status.HTTP_400_BAD_REQUEST, "mfa_challenge_invalid")
+
+    def test_challenge_counts_each_redemption_before_the_code_is_checked(self) -> None:
+        """Increment-first: parallel requests on one challenge can't all pass a read of it."""
+        enable_mfa(self.user)
+        token = mfa.issue_challenge(self.user)
+        for _ in range(settings.MFA_CHALLENGE_MAX_ATTEMPTS):
+            mfa.redeem_challenge(token)
+
+        with self.assertRaises(mfa.MfaChallengeInvalid):
+            mfa.redeem_challenge(token)
+
+    def test_an_older_step_is_refused_after_a_newer_one(self) -> None:
+        """Replay inside the ±1 window: accept step T+1, then a code for step T is refused."""
+        totp = enable_mfa(self.user)
+        now = time.time()
+
+        self.assertTrue(mfa.verify(self.user, totp.at(now + totp.interval)))
+
+        self.assertFalse(mfa.verify(self.user, totp.at(now)))
 
     def test_challenge_of_a_deactivated_user_is_refused(self) -> None:
         totp = enable_mfa(self.user)
@@ -345,6 +366,38 @@ class EnrolmentTests(MfaTestCase):
 
         self.assert_error(response, status.HTTP_409_CONFLICT, "mfa_already_enabled")
 
+    def test_enroll_on_a_stale_user_never_replaces_an_enrolled_factor(self) -> None:
+        """The enroll/confirm race: `request.user` was loaded before a confirm committed."""
+        stale = User.objects.get(pk=self.user.pk)
+        totp = enable_mfa(self.user)
+        before = bytes(User.objects.get(pk=self.user.pk).mfa_secret)
+
+        with self.assertRaises(mfa.MfaAlreadyEnabled):
+            mfa.begin_enrolment(stale)
+
+        self.assertEqual(bytes(User.objects.get(pk=self.user.pk).mfa_secret), before)
+        self.assertTrue(mfa.verify(self.user, totp.now()))
+
+    def test_a_second_confirm_keeps_the_first_recovery_codes(self) -> None:
+        """Two racing confirms: the loser is refused and the codes already shown stay valid."""
+        secret = self.client.post(ENROLL).json()["data"]["secret"]
+        stale = User.objects.get(pk=self.user.pk)
+        totp = pyotp.TOTP(secret)
+        now = time.time()
+        first = self.client.post(CONFIRM, {"code": totp.at(now)}, format="json")
+        self.assertEqual(first.status_code, status.HTTP_200_OK, first.content)
+        shown = set(
+            MfaRecoveryCode.objects.filter(user=self.user).values_list("code_hash", flat=True)
+        )
+
+        with self.assertRaises(mfa.MfaAlreadyEnabled):
+            mfa.confirm_enrolment(stale, totp.at(now + totp.interval))
+
+        kept = set(
+            MfaRecoveryCode.objects.filter(user=self.user).values_list("code_hash", flat=True)
+        )
+        self.assertEqual(kept, shown)
+
     def test_tenant_user_cannot_enroll(self) -> None:
         """Tenant MFA is out of scope in v1 (deferred-work.md); the routes are platform-only."""
         tenant_user = UserFactory(tenant=TenantFactory())
@@ -388,11 +441,80 @@ class ThrottleTests(MfaTestCase):
         self.assertEqual(throttled.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
 
 
+@override_settings(MFA_MAX_FAILED_ATTEMPTS=3, MFA_LOCKOUT_SECONDS=900)
+class SecondFactorLockoutTests(MfaTestCase):
+    """Per-account limit on second-factor guesses (NIST SP 800-63B §5.2.2).
+
+    A password holder mints a fresh challenge with every login, so the per-challenge cap alone
+    bounds nothing; the per-IP throttle can be rotated.
+    """
+
+    def test_wrong_codes_across_fresh_challenges_lock_the_account(self) -> None:
+        totp = enable_mfa(self.user)
+        for _ in range(3):
+            self.assert_error(
+                self.verify(self.challenge(), code=wrong_code(totp)),
+                status.HTTP_400_BAD_REQUEST,
+                "invalid_mfa_code",
+            )
+
+        locked = self.verify(self.challenge(), code=totp.now())
+
+        self.assert_error(locked, status.HTTP_429_TOO_MANY_REQUESTS, "mfa_locked")
+        self.assertNotIn(REFRESH_COOKIE_NAME, locked.cookies)
+
+    def test_a_correct_code_is_refused_until_the_lockout_expires(self) -> None:
+        totp = enable_mfa(self.user)
+        codes = mfa.generate_recovery_codes(self.user)
+        for _ in range(3):
+            self.assertFalse(mfa.verify(self.user, wrong_code(totp)))
+
+        with self.assertRaises(mfa.MfaLockedOut):
+            mfa.verify(self.user, totp.now())
+        with self.assertRaises(mfa.MfaLockedOut):
+            mfa.use_recovery_code(self.user, codes[0])
+
+        User.objects.filter(pk=self.user.pk).update(
+            mfa_locked_until=timezone.now() - timedelta(seconds=1)
+        )
+        self.assertTrue(mfa.verify(self.user, totp.now()))
+
+    def test_a_success_resets_the_count(self) -> None:
+        totp = enable_mfa(self.user)
+        now = time.time()
+        self.assertFalse(mfa.verify(self.user, wrong_code(totp)))
+        self.assertFalse(mfa.verify(self.user, wrong_code(totp)))
+        self.assertTrue(mfa.verify(self.user, totp.at(now)))
+
+        self.assertFalse(mfa.verify(self.user, wrong_code(totp)))
+        self.assertFalse(mfa.verify(self.user, wrong_code(totp)))
+
+        # Four failures in all, but never three in a row: not locked.
+        self.assertTrue(mfa.verify(self.user, totp.at(now + totp.interval)))
+
+    def test_a_locked_account_is_refused_on_confirm_too(self) -> None:
+        secret, _ = mfa.begin_enrolment(self.user)
+        totp = pyotp.TOTP(secret)
+        User.objects.filter(pk=self.user.pk).update(
+            mfa_locked_until=timezone.now() + timedelta(minutes=5)
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=bearer(self.user, amr=["pwd"]))
+
+        response = self.client.post(CONFIRM, {"code": totp.now()}, format="json")
+
+        self.assert_error(response, status.HTTP_429_TOO_MANY_REQUESTS, "mfa_locked")
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.mfa_enabled)
+
+
 class ResetMfaCommandTests(MfaTestCase):
     def test_reset_mfa_clears_the_factor_and_ends_sessions(self) -> None:
         enable_mfa(self.user)
         mfa.generate_recovery_codes(self.user)
         RefreshToken.for_user(self.user)
+        User.objects.filter(pk=self.user.pk).update(
+            mfa_failed_attempts=2, mfa_locked_until=timezone.now() + timedelta(minutes=5)
+        )
 
         call_command(
             "create_platform_admin",
@@ -405,6 +527,8 @@ class ResetMfaCommandTests(MfaTestCase):
         self.assertFalse(self.user.mfa_enabled)
         self.assertIsNone(self.user.mfa_secret)
         self.assertIsNone(self.user.mfa_last_timecode)
+        self.assertEqual(self.user.mfa_failed_attempts, 0)
+        self.assertIsNone(self.user.mfa_locked_until)
         self.assertFalse(MfaRecoveryCode.objects.filter(user=self.user).exists())
         live = OutstandingToken.objects.filter(user=self.user, blacklistedtoken__isnull=True)
         self.assertFalse(live.exists())
