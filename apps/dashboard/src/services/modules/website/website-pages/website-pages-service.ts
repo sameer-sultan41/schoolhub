@@ -1,4 +1,4 @@
-import { fetchPage } from "@schoolhub/api-client";
+import { fetchPage, MAX_PAGE_SIZE } from "@schoolhub/api-client";
 import type { Page } from "@schoolhub/types";
 
 import { apiClient } from "@/lib/auth";
@@ -25,6 +25,17 @@ export async function fetchWebsitePagePage(
   return fetchPage<WebsitePageRecord>(apiClient, paths.list, {
     query: toWebsitePageQueryParams(query),
   });
+}
+
+/** Every published page, by title: what a menu may link to. One `MAX_PAGE_SIZE` page holds a
+ * school's site (a menu takes at most 50 items, `NAV_MAX_ITEMS`). */
+export async function fetchPublishedWebsitePages(): Promise<WebsitePageRecord[]> {
+  const { items } = await fetchWebsitePagePage({
+    status: "published",
+    ordering: "title",
+    pageSize: MAX_PAGE_SIZE,
+  });
+  return items;
 }
 
 export async function fetchWebsitePage(id: string): Promise<WebsitePageDetail> {

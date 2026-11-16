@@ -1,5 +1,5 @@
 import type * as ApiClientModule from "@schoolhub/api-client";
-import type { ApiClientConfig } from "@schoolhub/api-client";
+import { MAX_PAGE_SIZE, type ApiClientConfig } from "@schoolhub/api-client";
 
 const mockGet = jest.fn();
 const mockPost = jest.fn();
@@ -49,6 +49,21 @@ describe("website-pages-service", () => {
       }),
     );
     expect(page.pagination).toEqual(PAGE_META.pagination);
+  });
+
+  it("reads every published page by title in one page, for the menu's page picker", async () => {
+    const { fetchPublishedWebsitePages } = await import("../website-pages-service");
+    mockGet.mockResolvedValue({ data: [{ id: "p1" }], meta: PAGE_META });
+
+    const pages = await fetchPublishedWebsitePages();
+
+    expect(mockGet).toHaveBeenCalledWith(
+      "/website-pages",
+      expect.objectContaining({
+        query: { page_size: MAX_PAGE_SIZE, ordering: "title", status: "published" },
+      }),
+    );
+    expect(pages).toEqual([{ id: "p1" }]);
   });
 
   it("creates, reads, updates and deletes a page", async () => {

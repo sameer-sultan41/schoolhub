@@ -11,7 +11,7 @@ function websiteGroup(menu: MenuConfig) {
 }
 
 describe("MENU_SIDEBAR's Website group", () => {
-  it("shows every content section to a user who can read website content", () => {
+  it("shows every content section, and no site section, to a content reader", () => {
     const group = websiteGroup(filterMenuByAccess(MENU_SIDEBAR, buildUser(["website.page.view"])));
 
     expect(group?.children?.map((child) => [child.title, child.path])).toEqual([
@@ -21,6 +21,28 @@ describe("MENU_SIDEBAR's Website group", () => {
       ["Events", Paths.WEBSITE_EVENTS],
       ["Gallery", Paths.WEBSITE_GALLERY],
     ]);
+  });
+
+  it("shows a site admin's sections, each on its own key, to an it_admin-like user", () => {
+    // Settings, navigation and SEO only: no `website.page.view`, so no content section.
+    const user = buildUser([
+      "website.settings.update",
+      "website.navigation.update",
+      "website.seo.update",
+    ]);
+    const group = websiteGroup(filterMenuByAccess(MENU_SIDEBAR, user));
+
+    expect(group?.children?.map((child) => [child.title, child.path])).toEqual([
+      ["Navigation", Paths.WEBSITE_NAVIGATION],
+      ["Settings", Paths.WEBSITE_SETTINGS],
+      ["SEO", Paths.WEBSITE_SEO],
+    ]);
+  });
+
+  it("shows only the section a single site key opens", () => {
+    const group = websiteGroup(filterMenuByAccess(MENU_SIDEBAR, buildUser(["website.seo.update"])));
+
+    expect(group?.children?.map((child) => child.title)).toEqual(["SEO"]);
   });
 
   it("shows no Website group to a user with no website key", () => {

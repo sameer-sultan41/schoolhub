@@ -4447,7 +4447,10 @@
       "pages": "صفحات",
       "news": "خبریں",
       "events": "تقریبات",
-      "gallery": "گیلری"
+      "gallery": "گیلری",
+      "navigation": "نیویگیشن",
+      "settings": "ترتیبات",
+      "seo": "ایس ای او"
     },
     "status": {
       "draft": "مسودہ",

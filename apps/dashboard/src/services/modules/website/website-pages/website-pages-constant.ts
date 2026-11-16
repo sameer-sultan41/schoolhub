@@ -9,6 +9,8 @@ import type { SectionType, WebsitePageType } from "./website-pages-type";
 export const WEBSITE_PAGES_RESOURCE = "pages";
 /** One page's detail (its sections included), under the same module. */
 export const WEBSITE_PAGE_DETAIL_RESOURCE = "page";
+/** Every published page as one list (a menu's page picker), under the same module. */
+export const WEBSITE_PUBLISHED_PAGES_RESOURCE = "published-pages";
 
 /** Every page type, keyed so the compiler checks the set against the generated enum. */
 const PAGE_TYPE_SET: Record<WebsitePageType, true> = {

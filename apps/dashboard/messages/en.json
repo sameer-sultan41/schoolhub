@@ -4447,7 +4447,10 @@
       "pages": "Pages",
       "news": "News",
       "events": "Events",
-      "gallery": "Gallery"
+      "gallery": "Gallery",
+      "navigation": "Navigation",
+      "settings": "Settings",
+      "seo": "SEO"
     },
     "status": {
       "draft": "Draft",
