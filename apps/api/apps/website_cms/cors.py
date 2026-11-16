@@ -20,7 +20,8 @@ from apps.website_cms.hosts import resolve_host
 
 logger = logging.getLogger(__name__)
 
-PUBLIC_API_PREFIX = "/api/v1/public/"
+#: The one public route a browser calls cross-origin: the visitor's contact form.
+CONTACT_PATH = "/api/v1/public/contact-submissions"
 
 
 def origin_host(origin: str) -> str | None:
@@ -37,12 +38,12 @@ def origin_host(origin: str) -> str | None:
 
 
 def allow_tenant_origin(sender: object, request: HttpRequest, **kwargs: Any) -> bool:
-    """True for a public-API path whose `Origin` host serves an operational school.
+    """True for the contact-form route when the `Origin` host serves an operational school.
 
     Fails closed on any database or cache error. The answer is cached for a short time so a
     stream of preflights costs no query each.
     """
-    if not request.path.startswith(PUBLIC_API_PREFIX):
+    if request.path != CONTACT_PATH:
         return False
     host = origin_host(request.headers.get("Origin", ""))
     if host is None:

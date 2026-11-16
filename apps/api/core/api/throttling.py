@@ -70,9 +70,9 @@ class PublicFormThrottle(SimpleRateThrottle):
 class PublicFormTenantThrottle(SimpleRateThrottle):
     """The public contact form, per school (the `X-Tenant-Slug` it names).
 
-    Stacked after `PublicFormThrottle`: the IP bucket stops one sender, this one caps what
-    many addresses can push at one school's inbox. Keyed on the header so it runs before the
-    view resolves the school; a made-up slug only fills its own bucket and answers 404.
+    Not a `throttle_classes` entry: DRF would count every request, including ones the IP
+    bucket refused and 404s and 422s, letting one address burn a school's budget. The view
+    calls `allow_request` itself, once the request is valid and would store a message.
     """
 
     scope = "public_form_tenant"

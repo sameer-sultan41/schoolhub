@@ -12,9 +12,10 @@ from rest_framework.test import APIClient, APIRequestFactory, APITestCase
 
 from apps.website_cms.constants import CONTACT_BODY_MAX_BYTES, CONTACT_MESSAGE_MAX
 from apps.website_cms.hosts import resolve_host
-from apps.website_cms.models import ContactSubmission, CustomDomainStatus
+from apps.website_cms.models import ContactSubmission, ContentStatus, CustomDomainStatus
 from apps.website_cms.tests.factories import (
     TenantFactory,
+    WebsitePageFactory,
     WebsiteSettingsFactory,
     enable_feature,
     make_custom_domain,
@@ -139,7 +140,25 @@ class ContactPostTests(ContactPostCase):
         self.assertEqual(response.status_code, 422)
         self.assertIn("message", fields(response))
 
-    def test_unpublished_source_page_is_422(self) -> None:
+    def test_draft_source_page_is_422(self) -> None:
+        with tenant_context(self.tenant.id):
+            draft = WebsitePageFactory(tenant=self.tenant, status=ContentStatus.DRAFT)
+
+        response = self.post(self.body(source_page_id=str(draft.id)))
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("source_page", fields(response))
+        self.assertEqual(self.stored(), 0)
+
+    def test_published_source_page_is_stored(self) -> None:
+        with tenant_context(self.tenant.id):
+            page = WebsitePageFactory(tenant=self.tenant, status=ContentStatus.PUBLISHED)
+
+        self.assertEqual(self.post(self.body(source_page_id=str(page.id))).status_code, 201)
+        with tenant_context(self.tenant.id):
+            self.assertEqual(ContactSubmission.objects.get().source_page_id, page.id)
+
+    def test_unknown_source_page_is_422(self) -> None:
         response = self.post(self.body(source_page_id="6f1c1f0e-8d6e-4b8e-9d57-0c1b6c1d2e3f"))
 
         self.assertEqual(response.status_code, 422)
@@ -219,6 +238,25 @@ class ContactPostTests(ContactPostCase):
                 key = throttle.get_cache_key(request, None)
                 self.assertTrue(key.endswith(f"_{ident}"), key)
 
+    def tenant_history(self) -> list[float]:
+        return cache.get("throttle_public_form_tenant_greenfield") or []
+
+    def test_tenant_bucket_counts_only_requests_the_ip_throttle_let_through(self) -> None:
+        statuses = [self.post().status_code for _ in range(7)]
+
+        self.assertEqual(statuses, [201] * 5 + [429] * 2)
+        self.assertEqual(len(self.tenant_history()), 5)
+
+    def test_refused_and_invalid_requests_do_not_spend_the_tenant_bucket(self) -> None:
+        self.make_live_tenant("other")
+        self.post(origin=f"https://other.{PLATFORM}")  # Origin of another school: 404
+        self.post(origin="https://evil.example")  # unknown Origin: 404
+        self.post(self.body(email="", phone=""))  # service 422
+        self.post({"name": "Amina"} | {"message": "x" * (CONTACT_BODY_MAX_BYTES + 1)})  # 413
+        self.post(self.body(company_website="spam"))  # honeypot
+
+        self.assertEqual(self.tenant_history(), [])
+
     def test_tenant_throttle_429(self) -> None:
         with mock.patch(
             "core.api.throttling.PublicFormTenantThrottle.get_rate", return_value="2/hour"
@@ -296,7 +334,7 @@ class PublicCorsTests(ContactPostCase):
 
         self.assertNotIn("Access-Control-Allow-Origin", self.preflight(self.origin))
 
-    def test_cms_paths_are_unaffected(self) -> None:
-        response = self.preflight(self.origin, "/api/v1/contact-submissions")
-
-        self.assertNotIn("Access-Control-Allow-Origin", response)
+    def test_cms_and_other_public_paths_are_unaffected(self) -> None:
+        for path in ("/api/v1/contact-submissions", "/api/v1/public/site"):
+            with self.subTest(path=path):
+                self.assertNotIn("Access-Control-Allow-Origin", self.preflight(self.origin, path))

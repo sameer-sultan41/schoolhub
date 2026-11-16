@@ -12,7 +12,13 @@ import io
 from uuid import UUID
 
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
-from rest_framework.exceptions import APIException, NotFound, ParseError, UnsupportedMediaType
+from rest_framework.exceptions import (
+    APIException,
+    NotFound,
+    ParseError,
+    Throttled,
+    UnsupportedMediaType,
+)
 from rest_framework.parsers import JSONParser
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
@@ -88,7 +94,8 @@ class PublicContactSubmissionView(APIView):
     authentication_classes: list = []
     permission_classes = [AllowAny]
     parser_classes = [JSONParser]
-    throttle_classes = [PublicFormThrottle, PublicFormTenantThrottle]
+    # The per-school bucket is checked in `post()`, after validation (see its docstring).
+    throttle_classes = [PublicFormThrottle]
 
     @extend_schema(
         operation_id="public_contact_submissions_create",
@@ -139,6 +146,10 @@ class PublicContactSubmissionView(APIView):
             if data.pop("company_website", ""):
                 # Honeypot: a bot filled the hidden field; look like success, store nothing.
                 return Response(RECEIVED, status=201)
+            # Only a request that would store a message spends the school's hourly budget.
+            tenant_throttle = PublicFormTenantThrottle()
+            if not tenant_throttle.allow_request(request, self):
+                raise Throttled(wait=tenant_throttle.wait())
             source_page_id: UUID | None = data.pop("source_page_id", None)
             ip = client_ip(request)
 
