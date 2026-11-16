@@ -53,7 +53,7 @@ the contract is in [website-cms.md](../03-modules/website-cms.md) §16.
 5. **Anonymous routes are an explicit allowlist.** The payment callback, the file redirect and
    the contact `POST` carry no authentication classes and their own throttles.
    `PublicEndpointContractTests` fails on any other public route that is not machine-guarded.
-6. **Client IPs and `NUM_PROXIES`.** `core.rbac.machine.client_ip` is the single derivation of
+6. **Client IPs and `NUM_PROXIES`.** `core.api.client_ip.client_ip` is the single derivation of
    a client IP: with `NUM_PROXIES` set it takes the N-th address from the right of
    `X-Forwarded-For`, otherwise `REMOTE_ADDR`, and returns `None` for anything that is not an
    IP. DRF's own `NUM_PROXIES` setting is wired to the same value for its throttles. Production

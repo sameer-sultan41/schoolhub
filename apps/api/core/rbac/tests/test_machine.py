@@ -17,6 +17,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import AccessToken
 
 from apps.school_organization.tests.factories import TenantFactory, UserFactory
+from core.api.client_ip import client_ip
 from core.api.throttling import PublicFormThrottle
 from core.rbac.machine import (
     MACHINE_SCOPES,
@@ -24,7 +25,6 @@ from core.rbac.machine import (
     MachineClientThrottle,
     MachinePrincipal,
     MachineTokenAuthentication,
-    client_ip,
 )
 
 SCOPE = "website.public-content.view"
@@ -214,6 +214,25 @@ class ClientIpTests(SimpleTestCase):
     @override_settings(REST_FRAMEWORK={**settings.REST_FRAMEWORK, "NUM_PROXIES": 1})
     def test_no_header_falls_back_to_the_peer(self) -> None:
         self.assertEqual(client_ip(self._request()), "10.0.0.9")
+
+
+@override_settings(REST_FRAMEWORK={**settings.REST_FRAMEWORK, "NUM_PROXIES": 1})
+class UnsetNumProxiesThrottleTests(SimpleTestCase):
+    """`NUM_PROXIES` unset: `get_ident` would key on the whole header, and rotating it escape."""
+
+    def setUp(self) -> None:
+        cache.clear()
+
+    def test_rotating_xff_does_not_reset_public_form_throttle(self) -> None:
+        self.assertIsNone(settings.NUM_PROXIES)
+        limit = PublicFormThrottle().num_requests
+        allowed = []
+        for n in range(limit + 1):
+            request = APIRequestFactory().get(
+                "/", HTTP_X_FORWARDED_FOR=f"192.0.2.{n}", REMOTE_ADDR="10.0.0.1"
+            )
+            allowed.append(PublicFormThrottle().allow_request(request, None))
+        self.assertEqual(allowed, [True] * limit + [False])
 
 
 @override_settings(REST_FRAMEWORK={**settings.REST_FRAMEWORK, "NUM_PROXIES": 1})

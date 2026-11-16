@@ -30,10 +30,10 @@ from apps.website_cms.public.serializers import (
     PublicContactSubmissionSerializer,
 )
 from apps.website_cms.public.views import bound_website_tenant
+from core.api.client_ip import client_ip
 from core.api.throttling import PublicFormTenantThrottle, PublicFormThrottle
 from core.idempotency.models import IdempotencyRecord
 from core.idempotency.services import replay_or_execute
-from core.rbac.machine import client_ip
 from core.tenancy.models import Tenant
 
 TENANT_SLUG_HEADER = "X-Tenant-Slug"

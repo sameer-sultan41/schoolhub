@@ -14,8 +14,8 @@ from typing import Any
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction
 
+from core.api.client_ip import client_ip
 from core.audit.models import AuditLog
-from core.rbac.machine import client_ip
 
 logger = logging.getLogger(__name__)
 

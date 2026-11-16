@@ -11,6 +11,8 @@ import re
 
 from rest_framework.throttling import SimpleRateThrottle
 
+from core.api.client_ip import client_ip
+
 _SLUG_RE = re.compile(r"[a-z0-9_-]{1,63}")
 
 
@@ -62,8 +64,6 @@ class PublicFormThrottle(SimpleRateThrottle):
     scope = "public_form"
 
     def get_cache_key(self, request, view):
-        from core.rbac.machine import client_ip
-
         return self.cache_format % {"scope": self.scope, "ident": client_ip(request) or "unknown"}
 
 
@@ -105,8 +105,6 @@ class PublicFileThrottle(SimpleRateThrottle):
     scope = "public_file"
 
     def get_cache_key(self, request, view):
-        from core.rbac.machine import client_ip
-
         kwargs = getattr(view, "kwargs", None) or {}
         ident = f"{client_ip(request) or 'unknown'}:{kwargs.get('file_id', '')}"
         return self.cache_format % {"scope": self.scope, "ident": ident}

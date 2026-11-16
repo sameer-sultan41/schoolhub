@@ -78,7 +78,7 @@ either this file or `project-status.md`.
 - **`NUM_PROXIES` is now required, and operators must set the real hop count.** Production
   refuses to boot without `NUM_PROXIES` (`0` means no proxy), and the production and staging
   Terraform take a required `num_proxies` input with no default. DRF's throttles and
-  `core.rbac.machine.client_ip` (the stored `contact_submissions.ip` and the audit log, which used to take the spoofable left-most entry) both honour it. What remains is operational: the example
+  `core.api.client_ip.client_ip` (the stored `contact_submissions.ip` and the audit log, which used to take the spoofable left-most entry) both honour it. What remains is operational: the example
   `num_proxies = 2` assumes CloudFront then the ALB, and each environment must confirm its real
   chain. A wrong value is not detected by the boot check (too small records a proxy's address,
   too large trusts a client-supplied `X-Forwarded-For` entry). It blocks launching the public

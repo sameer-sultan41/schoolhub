@@ -35,7 +35,7 @@
   - `MACHINE_SCOPES` (`core/rbac/machine.py`) is the closed set of scopes a machine client can hold. They are not in the role registry, so no `Permission` row is grantable and a person can never hold one.
   - Authentication is set **per view** (`MachineTokenAuthentication`, `HasMachineScope` reading `required_machine_scope`, `MachineClientThrottle`), never in `DEFAULT_AUTHENTICATION_CLASSES`: a machine token opens no CMS route, and a staff JWT opens no machine route (401). Tokens are compared in constant time and an empty setting rejects everything.
   - The throttle `machine_client` is 1200/min per normalised `?host=` (not per principal, which has no id). A contract test (`PublicEndpointContractTests`) requires every `/api/v1/public/` route to be either machine-guarded with a registered scope or on a short allowlist of anonymous routes (the payment callback, the file redirect, the contact `POST`) that carry their own throttles and no authentication classes.
-- Per-IP throttles and stored client IPs use DRF's `NUM_PROXIES` setting (production requires it) through `core.rbac.machine.client_ip`.
+- Per-IP throttles and stored client IPs use DRF's `NUM_PROXIES` setting (production requires it) through `core.api.client_ip.client_ip`.
 
 ### 2.3 Response Envelope & Errors
 ```json
