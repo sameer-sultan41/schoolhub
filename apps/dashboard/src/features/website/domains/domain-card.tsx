@@ -105,6 +105,10 @@ export function DomainCard({
   const lastError = domain.last_error_code
     ? enumLabel(t, DOMAIN_ERROR_KEY, domain.last_error_code)
     : domain.last_error;
+  // A 409 `domain_taken` is also stored as the last check's code: say it once.
+  const actionErrors = [verify.error, makePrimary.error].filter(
+    (message): message is string => message !== null && message !== lastError,
+  );
   const busy = verify.isPending || makePrimary.isPending;
 
   return (
@@ -138,13 +142,11 @@ export function DomainCard({
             </AlertContent>
           </Alert>
         ) : null}
-        {[verify.error, makePrimary.error].map((message) =>
-          message ? (
-            <Alert key={message} variant="destructive">
-              <AlertDescription>{message}</AlertDescription>
-            </Alert>
-          ) : null,
-        )}
+        {actionErrors.map((message) => (
+          <Alert key={message} variant="destructive">
+            <AlertDescription>{message}</AlertDescription>
+          </Alert>
+        ))}
         {domain.dns_records.length > 0 ? <DnsRecords records={domain.dns_records} /> : null}
         <div className="flex flex-wrap items-center gap-2">
           {permissions.canUpdate && isVerifiable(domain) ? (

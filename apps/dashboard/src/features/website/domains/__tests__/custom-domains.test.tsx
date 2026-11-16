@@ -160,24 +160,29 @@ describe("custom domains: verify", () => {
     expect(toast.warning).toHaveBeenCalled();
   });
 
-  it("shows a 409 domain_taken from meta.reason on the card", async () => {
-    verifyDomain.mockRejectedValue(
-      new ApiError({
-        code: "conflict",
-        message: "domain_taken: this domain is in use by another school.",
-        status: 409,
-        url: "/api/v1/custom-domains",
-        details: [
-          { field: "domain", issue: "domain_taken: this domain is in use by another school." },
-        ],
-        meta: { reason: "domain_taken" },
-      }),
-    );
+  it("shows a 409 domain_taken on the card once, though the claim also stores it", async () => {
+    const issue = "domain_taken: this domain is in use by another school.";
+    verifyDomain.mockImplementation(() => {
+      // The server stores the claim `failed` with the code before it answers 409.
+      serve(domainRecord({ status: "failed", last_error_code: "domain_taken", last_error: issue }));
+      return Promise.reject(
+        new ApiError({
+          code: "conflict",
+          message: issue,
+          status: 409,
+          url: "/api/v1/custom-domains",
+          details: [{ field: "domain", issue }],
+          meta: { reason: "domain_taken" },
+        }),
+      );
+    });
     const user = await renderScreen();
 
     await user.click(await screen.findByRole("button", { name: "Check DNS" }));
 
-    expect(await card().findByText("Another school already uses this domain.")).toBeInTheDocument();
+    expect(await card().findByText("Failed")).toBeInTheDocument();
+    // `getByText` throws on two matches: the refusal and the stored code read as one message.
+    expect(card().getByText("Another school already uses this domain.")).toBeInTheDocument();
   });
 
   it("offers no check on an active domain", async () => {
