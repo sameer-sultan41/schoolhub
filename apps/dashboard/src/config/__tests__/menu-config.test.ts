@@ -23,19 +23,29 @@ describe("MENU_SIDEBAR's Website group", () => {
     ]);
   });
 
-  it("shows a site admin's sections, each on its own key, to an it_admin-like user", () => {
-    // Settings, navigation and SEO only: no `website.page.view`, so no content section.
+  it("shows it_admin every section its seeded keys open", () => {
+    // `it_admin`: `PAGE_READERS`, `SITE_ADMINS` and `DOMAIN_ADMINS` (`website_cms/permissions.py`).
     const user = buildUser([
-      "website.settings.update",
+      "website.page.view",
       "website.navigation.update",
+      "website.settings.update",
       "website.seo.update",
+      "website.custom-domain.create",
+      "website.custom-domain.update",
+      "website.custom-domain.delete",
     ]);
     const group = websiteGroup(filterMenuByAccess(MENU_SIDEBAR, user));
 
     expect(group?.children?.map((child) => [child.title, child.path])).toEqual([
+      ["Overview", Paths.WEBSITE],
+      ["Pages", Paths.WEBSITE_PAGES],
+      ["News", Paths.WEBSITE_NEWS],
+      ["Events", Paths.WEBSITE_EVENTS],
+      ["Gallery", Paths.WEBSITE_GALLERY],
       ["Navigation", Paths.WEBSITE_NAVIGATION],
       ["Settings", Paths.WEBSITE_SETTINGS],
       ["SEO", Paths.WEBSITE_SEO],
+      ["Domains", Paths.WEBSITE_DOMAINS],
     ]);
   });
 

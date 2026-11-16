@@ -5265,6 +5265,10 @@
           "spam": "Marked as spam."
         }
       }
+    },
+    "readGate": {
+      "title": "This section needs permission to view the website",
+      "description": "Its settings are read with permission to view the website's content, which your role doesn't include. Ask an administrator to add it."
     }
   },
   "reports": {
