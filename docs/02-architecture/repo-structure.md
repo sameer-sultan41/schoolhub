@@ -91,6 +91,7 @@ schoolhub/
 | Rule | Enforced by |
 | ---- | ----------- |
 | Backend apps may import other apps' `models`; writes and business rules go through the owning app's `services`; no app imports another's `views`/`view`/`viewset`/`viewsets`/`urls`/`reports`/`tasks` | `apps/api/tests/test_import_boundaries.py` (imports); review (writes via services) — [ADR-0013](../decisions/0013-cross-app-dependencies.md) |
+| A read another app needs and `services` does not fit goes in the owning app's read-only `public.py` (tenant-bound, frozen dataclasses, constant queries, no import of the consumer) | `public.py` tests in the owning apps; review (read-only) — [ADR-0039](../decisions/0039-public-content-api.md) |
 | `core/` imports no app | `apps/api/tests/test_import_boundaries.py` — [ADR-0013](../decisions/0013-cross-app-dependencies.md) |
 | UI layers (`src/app`, `src/features`, `src/components`, `src/hooks`) never import `@schoolhub/api-client`; only the transport layer (`src/services/**`, `src/lib/**`) does | ESLint `no-restricted-imports` — [ADR-0011](../decisions/0011-dashboard-services-layer.md) |
 | No `../` parent-relative imports; use the `@/` alias | ESLint `no-restricted-imports` in `apps/dashboard` and `apps/website` (`PARENT_RELATIVE` in `packages/config/eslint.boundaries.mjs`); tests exempt |
