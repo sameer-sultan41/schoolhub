@@ -24,6 +24,7 @@ import {
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 
 import { textValue } from "./schema-model";
+import { useIsUploading } from "./upload-tracker";
 
 interface ArrayFieldProps<TFieldValues extends FieldValues> {
   form: UseFormReturn<TFieldValues>;
@@ -44,6 +45,8 @@ function ItemButtons({
   onRemove: (index: number) => void;
 }) {
   const t = useTranslations("website.schemaFields");
+  // An upload in an item writes to its path when it lands; moving items under it is held.
+  const isUploading = useIsUploading();
   const position = index + 1;
   return (
     <div className="flex items-center gap-1">
@@ -51,7 +54,7 @@ function ItemButtons({
         variant="ghost"
         mode="icon"
         size="sm"
-        disabled={index === 0}
+        disabled={isUploading || index === 0}
         aria-label={t("moveUp", { index: position })}
         onClick={() => {
           onMove(index, index - 1);
@@ -63,7 +66,7 @@ function ItemButtons({
         variant="ghost"
         mode="icon"
         size="sm"
-        disabled={index === count - 1}
+        disabled={isUploading || index === count - 1}
         aria-label={t("moveDown", { index: position })}
         onClick={() => {
           onMove(index, index + 1);
@@ -75,6 +78,7 @@ function ItemButtons({
         variant="ghost"
         mode="icon"
         size="sm"
+        disabled={isUploading}
         aria-label={t("removeItem", { index: position })}
         onClick={() => {
           onRemove(index);

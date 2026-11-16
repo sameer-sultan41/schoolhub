@@ -17,9 +17,10 @@ import {
  * menu's target. Whether the server really does is the live lane's.
  */
 
-/** A `school_owner`'s page keys (website-cms.md §4). */
+/** A `school_admin`'s page keys: it is in `CONTENT_EDITORS` (view, create, update, delete) and
+ * `PUBLISHERS` (publish) in `apps/api/apps/website_cms/permissions.py` (L5). */
 const editor = buildUser({
-  roles: [buildRole({ slug: "school_owner", name: "School Owner" })],
+  roles: [buildRole({ slug: "school_admin", name: "School Admin" })],
   permissions: [
     "website.page.view",
     "website.page.create",
@@ -41,7 +42,7 @@ interface World {
 
 /** The home page (published), "About us" (a draft a menu links to) and "Admissions" (a draft
  * with a hero and a news list), built per test: a test's writes change them. */
-function stubWebsite(mockApi: MockApi): World {
+function stubWebsite(mockApi: MockApi, canPublish = true): World {
   const home = buildWebsitePage({
     title: "Home",
     slug: "home",
@@ -64,7 +65,7 @@ function stubWebsite(mockApi: MockApi): World {
     ],
   });
   const pages = [home, about, admissions];
-  mockApi.use(websitePagesModule({ pages, menuTargets: [about.id] }));
+  mockApi.use(websitePagesModule({ pages, menuTargets: [about.id], canPublish }));
   return { pages, home, about, admissions };
 }
 
@@ -170,6 +171,29 @@ test.describe("the website pages", () => {
     expect(created?.status).toBe("published");
   });
 
+  test("reorders sections by keyboard and saves the new order", async ({
+    page,
+    mockApi,
+    websitePagesPage,
+    signedIn: _signedIn,
+  }) => {
+    const { admissions } = stubWebsite(mockApi);
+    await websitePagesPage.gotoPage(admissions.id);
+    await expect(websitePagesPage.sectionRows).toHaveCount(2);
+
+    await websitePagesPage.keyboardMoveSection(1, [{ key: "ArrowDown", overPosition: 2 }]);
+    await expect(websitePagesPage.sectionRows.first()).toHaveAccessibleName("Section 1: News");
+
+    const saved = page.waitForResponse((response) =>
+      isApiCall(response.request(), "PATCH", SECTIONS_PATH),
+    );
+    await websitePagesPage.saveSectionsButton.click();
+    const body = (await saved).request().postDataJSON() as {
+      sections: { section_type: string }[];
+    };
+    expect(body.sections.map((section) => section.section_type)).toEqual(["news_list", "hero"]);
+  });
+
   test("explains why a page a menu links to can't be deleted", async ({
     mockApi,
     websitePagesPage,
@@ -227,5 +251,34 @@ test.describe("the website pages", () => {
     await preview.waitForURL(url);
     expect(preview.url()).toBe(url);
     expect(await preview.evaluate(() => window.opener === null)).toBe(true);
+  });
+});
+
+/** An editor without the publish key: a custom role holding only the page edit keys (the seeded
+ * roles that edit pages, `school_admin`, also publish). */
+const updater = buildUser({
+  roles: [buildRole({ slug: "web_editor", name: "Web Editor" })],
+  permissions: ["website.page.view", "website.page.update"],
+});
+
+test.describe("an editor without the publish key", () => {
+  test.use({ authUser: updater });
+
+  test("sees a live page read-only, and why", async ({
+    page,
+    mockApi,
+    websitePagesPage,
+    signedIn: _signedIn,
+  }) => {
+    const { home } = stubWebsite(mockApi, false);
+    await websitePagesPage.gotoPage(home.id);
+
+    await expect(
+      page.getByText(
+        "This page is live — only a publisher can change it. Ask a publisher, or unpublish it first.",
+      ),
+    ).toBeVisible();
+    await expect(websitePagesPage.saveSectionsButton).toHaveCount(0);
+    await expect(page.getByLabel("Heading")).toBeDisabled();
   });
 });

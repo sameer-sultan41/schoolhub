@@ -24,6 +24,7 @@ import { ArrowDown, ArrowUp, GripVertical, Trash2 } from "lucide-react";
 
 import { ImageFileField } from "./image-file-field";
 import { textValue } from "./schema-model";
+import { useIsUploading } from "./upload-tracker";
 import { HEADING_LEVELS, isKnownBlockType, RICH_TEXT_LIMITS } from "./rich-text";
 
 export interface RichTextBlockProps<TFieldValues extends FieldValues> {
@@ -88,8 +89,11 @@ export function RichTextBlock<TFieldValues extends FieldValues>({
   onRemove,
 }: RichTextBlockProps<TFieldValues>) {
   const t = useTranslations("website.richText");
+  // An image block's upload writes to its path when it lands: reordering is held meanwhile.
+  const isUploading = useIsUploading();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
+    disabled: isUploading,
     attributes: { roleDescription: t("sortableRole") },
   });
   const position = index + 1;
@@ -115,6 +119,7 @@ export function RichTextBlock<TFieldValues extends FieldValues>({
           size="sm"
           {...attributes}
           {...listeners}
+          disabled={isUploading}
           aria-label={t("dragHandle", { index: position })}
         >
           <GripVertical aria-hidden="true" />
@@ -124,7 +129,7 @@ export function RichTextBlock<TFieldValues extends FieldValues>({
           variant="ghost"
           mode="icon"
           size="sm"
-          disabled={index === 0}
+          disabled={isUploading || index === 0}
           aria-label={t("moveUp", { index: position })}
           onClick={() => {
             onMove(index, index - 1);
@@ -136,7 +141,7 @@ export function RichTextBlock<TFieldValues extends FieldValues>({
           variant="ghost"
           mode="icon"
           size="sm"
-          disabled={index === count - 1}
+          disabled={isUploading || index === count - 1}
           aria-label={t("moveDown", { index: position })}
           onClick={() => {
             onMove(index, index + 1);
@@ -148,6 +153,7 @@ export function RichTextBlock<TFieldValues extends FieldValues>({
           variant="ghost"
           mode="icon"
           size="sm"
+          disabled={isUploading}
           aria-label={t("remove", { index: position })}
           onClick={() => {
             onRemove(index);

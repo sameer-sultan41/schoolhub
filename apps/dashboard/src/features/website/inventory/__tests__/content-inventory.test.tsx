@@ -183,6 +183,11 @@ describe("WebsiteLanding", () => {
     const stale = card(await screen.findByRole("heading", { name: "Stale content" }));
     expect(await within(stale).findByText("Old admissions page")).toBeInTheDocument();
     expect(within(stale).queryByText("Archived 0")).not.toBeInTheDocument();
+    // A stale page opens in its editor.
+    expect(within(stale).getByRole("link", { name: "Old admissions page" })).toHaveAttribute(
+      "href",
+      "/website/pages/p9",
+    );
   });
 
   it("shows the server's own reason when the website module is off", async () => {

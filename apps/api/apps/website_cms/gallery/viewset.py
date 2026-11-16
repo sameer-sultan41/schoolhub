@@ -69,7 +69,7 @@ class GalleryAlbumViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         serializer = GalleryAlbumWriteSerializer(album, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         before = GalleryAlbumSerializer(album).data
-        album = services.update_gallery_album(album, serializer.validated_data, request.user.pk)
+        album = services.update_gallery_album(album, serializer.validated_data, request.user)
         data = GalleryAlbumSerializer(album).data
         record_audit(request, "update", album, before=before, after=data)
         return ActionResponse.ok(data, message="Album updated.")

@@ -57,6 +57,41 @@ export class WebsitePagesPage extends BasePage {
     return this.page.getByRole("button", { name: `Move section ${position} down`, exact: true });
   }
 
+  /**
+   * Moves a section by keyboard: Space on its handle, one arrow key per step, Space to drop.
+   * `overPositions` names the position each step lands on.
+   *
+   * Waits for each step's live-region announcement before the next key. dnd-kit's
+   * `KeyboardSensor` renders the drag (`aria-pressed`) and adds its keydown listener in a
+   * `setTimeout`, which Chrome runs after a queued key; a `setTimeout(0)` of our own, queued
+   * behind it, fires only once the listener is in place (lesson L14, `WeekGridPage`).
+   */
+  async keyboardMoveSection(
+    position: number,
+    steps: readonly { key: "ArrowUp" | "ArrowDown"; overPosition: number }[],
+  ): Promise<void> {
+    await this.page
+      .getByRole("button", { name: `Drag section ${position} to reorder`, exact: true })
+      .focus();
+    await this.page.keyboard.press("Space");
+    await this.page
+      .locator('[aria-roledescription="sortable section"][aria-pressed="true"]')
+      .waitFor();
+    await this.page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          setTimeout(resolve, 0);
+        }),
+    );
+    for (const step of steps) {
+      await this.page.keyboard.press(step.key);
+      await this.page
+        .getByText(`Section ${position} is over position ${step.overPosition}.`, { exact: true })
+        .waitFor({ state: "attached" });
+    }
+    await this.page.keyboard.press("Space");
+  }
+
   get saveSectionsButton(): Locator {
     return this.page.getByRole("button", { name: "Save sections", exact: true });
   }

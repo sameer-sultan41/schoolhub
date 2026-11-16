@@ -436,3 +436,66 @@ class GalleryBearerAndOrderTests(WebsiteAPITestCase):
             params={"ordering": "created_at"},
             created_at=timezone.now(),
         )
+
+
+class PublishedAlbumEditGateTests(WebsiteAPITestCase):
+    """§7.1: editing a published album or its items needs the publish key."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.allow("website.page.view", "website.gallery-album.update")
+        self.live = self.make_album(slug="live", title="Live", status=ContentStatus.PUBLISHED)
+        self.live_item = self.make_item(self.live, position=0)
+        self.live_item2 = self.make_item(self.live, position=1)
+        self.draft = self.make_album(slug="draft")
+        self.draft_item = self.make_item(self.draft, position=0)
+
+    def _writes(self, album, item):
+        url = items_url(album)
+        return {
+            "album": lambda: self.client.patch(detail(album), {"title": "T"}, format="json"),
+            "add": lambda: self.client.post(
+                url,
+                {"media_type": "video_embed", "embed_url": "https://www.youtube.com/watch?v=a"},
+                format="json",
+            ),
+            "edit": lambda: self.client.patch(f"{url}/{item.id}", {"caption": "C"}, format="json"),
+            "reorder": lambda: self.client.patch(
+                f"{url}:reorder", {"ids": self._reversed_ids(album)}, format="json"
+            ),
+            "delete": lambda: self.client.delete(f"{url}/{item.id}"),
+        }
+
+    def _items(self, album):
+        with tenant_context(self.tenant.id):
+            rows = GalleryItem.objects.alive().filter(gallery_album=album)
+            return list(rows.order_by("position"))
+
+    def _reversed_ids(self, album) -> list[str]:
+        return [str(i.id) for i in self._items(album)][::-1]
+
+    def test_update_only_user_cannot_edit_a_published_album_or_its_items(self) -> None:
+        for name, call in self._writes(self.live, self.live_item).items():
+            with (
+                self.subTest(write=name),
+                mock.patch("apps.website_cms.revalidation.revalidate_website") as task,
+                self.captureOnCommitCallbacks(execute=True),
+            ):
+                response = call()
+                self.assertEqual(response.status_code, 422, response.content)
+                self.assertIn("publish_required", response.json()["error"]["message"])
+                task.delay.assert_not_called()
+        self.live.refresh_from_db()
+        self.assertEqual(self.live.title, "Live")
+        self.assertEqual(len(self._items(self.live)), 2)
+
+    def test_update_only_user_edits_a_draft_album_and_its_items(self) -> None:
+        for name, call in self._writes(self.draft, self.draft_item).items():
+            with self.subTest(write=name):
+                self.assertLess(call().status_code, 300)
+
+    def test_publisher_edits_a_published_album_and_its_items(self) -> None:
+        self.allow("website.gallery-album.publish")
+        for name, call in self._writes(self.live, self.live_item2).items():
+            with self.subTest(write=name):
+                self.assertLess(call().status_code, 300)

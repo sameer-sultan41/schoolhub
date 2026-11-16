@@ -6,7 +6,9 @@ import { useForm, type Resolver } from "react-hook-form";
 import { z } from "zod";
 import { Button, Form } from "@schoolhub/ui";
 
-import { renderWithProviders } from "@/test-utils";
+import { Services } from "@/services";
+import { mocked } from "@/test-fixtures/list-screen";
+import { renderWithProviders, stubObjectUrls } from "@/test-utils";
 
 import {
   emptyRichText,
@@ -24,6 +26,8 @@ jest.mock("@/services", () =>
     }>("@/test-fixtures/services-mock")
     .servicesMock({ files: ["uploadFile"] }),
 );
+
+const IMAGE_ID = "2e6d4b8f-9a0c-4d1e-8f3a-4b5c6d7e8f90";
 
 interface HostValues {
   body: RichTextDocument;
@@ -160,6 +164,56 @@ describe("RichTextBlocksField", () => {
 
     expect(await screen.findByText("Choose an image.")).toBeInTheDocument();
     expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("holds reordering while an image uploads, and saves the id on its own block", async () => {
+    const restoreUrls = stubObjectUrls("blob:block");
+    let finish: (id: string) => void = () => undefined;
+    mocked(Services.files.uploadFile).mockReturnValue(
+      new Promise<string>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+    const onSave = jest.fn();
+    const { unmount } = renderWithProviders(
+      <Host
+        initial={{
+          blocks: [
+            { type: "paragraph", text: "Intro" },
+            { type: "image", file_id: "", alt: "" },
+          ],
+        }}
+        onSave={onSave}
+      />,
+    );
+
+    await user.upload(
+      screen.getByLabelText("Image"),
+      new File(["x"], "block.png", { type: "image/png" }),
+    );
+    expect(screen.getByRole("button", { name: "Move block 2 up" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Move block 1 down" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Remove block 1" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Drag block 2 to reorder" })).toBeDisabled();
+
+    finish(IMAGE_ID);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Move block 2 up" })).toBeEnabled();
+    });
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith({
+        blocks: [
+          { type: "paragraph", text: "Intro" },
+          { type: "image", file_id: IMAGE_ID },
+        ],
+      });
+    });
+    // Unmounted first: the field revokes its preview URL on unmount, through the stub.
+    unmount();
+    restoreUrls();
   });
 
   it("shows an over-long list line under the list's own field", async () => {

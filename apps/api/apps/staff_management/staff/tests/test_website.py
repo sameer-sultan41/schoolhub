@@ -134,7 +134,7 @@ class PhotoVisibilityTests(WebsiteTestBase):
         self.assertEqual(len(queries), 1)
         sql = queries.captured_queries[0]["sql"]
         # The candidate id is in the WHERE clause: the rows are narrowed in SQL, not after loading.
-        self.assertIn(str(used.pk), sql)
+        self.assertIn(used.pk.hex, sql)
         self.assertIn("photo_file_id", sql.split("WHERE", 1)[1])
         with tenant_context(self.tenant.id), self.assertNumQueries(0):
             self.assertEqual(staff_photo_files(set()), set())

@@ -16,9 +16,10 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
 from apps.website_cms.constants import EMBED_HOSTS, EMBED_URL_MAX_LENGTH
-from apps.website_cms.content import locked
+from apps.website_cms.content import assert_may_edit, locked
 from apps.website_cms.errors import violation
 from apps.website_cms.models import ContentStatus, GalleryAlbum, GalleryItem, MediaType
+from apps.website_cms.permissions import ALBUM_PUBLISH_KEY
 from apps.website_cms.revalidation import queue_revalidation
 from apps.website_cms.validation import assert_files_usable, is_safe_url
 from core.files.visibility import sync_file_visibility
@@ -60,17 +61,18 @@ def _sync(album: GalleryAlbum, file_ids: set[UUID | None]) -> None:
 
 
 def create_gallery_item(
-    tenant: Tenant, album: GalleryAlbum, data: dict[str, Any], actor_id: UUID | None
+    tenant: Tenant, album: GalleryAlbum, data: dict[str, Any], user: Any
 ) -> GalleryItem:
     with transaction.atomic():
         album = locked(GalleryAlbum, album.pk)
+        assert_may_edit(album.status, user, ALBUM_PUBLISH_KEY)
         top = GalleryItem.objects.alive().filter(gallery_album=album).aggregate(top=Max("position"))
         item = GalleryItem(
             tenant=tenant,
             gallery_album=album,
             position=0 if top["top"] is None else top["top"] + 1,
-            created_by=actor_id,
-            updated_by=actor_id,
+            created_by=user.pk,
+            updated_by=user.pk,
             **data,
         )
         _normalise(item)
@@ -91,38 +93,39 @@ def _locked_item(album: GalleryAlbum, item_id: UUID) -> GalleryItem:
 
 
 def update_gallery_item(
-    album: GalleryAlbum, item: GalleryItem, data: dict[str, Any], actor_id: UUID | None
+    album: GalleryAlbum, item: GalleryItem, data: dict[str, Any], user: Any
 ) -> GalleryItem:
     with transaction.atomic():
         album = locked(GalleryAlbum, album.pk)
+        assert_may_edit(album.status, user, ALBUM_PUBLISH_KEY)
         item = _locked_item(album, item.pk)
         old_file = item.file_id
         for name, value in data.items():
             setattr(item, name, value)
         _normalise(item)
         _validate_item(item)
-        item.updated_by = actor_id
+        item.updated_by = user.pk
         item.save()
         _sync(album, {old_file, item.file_id})
     return item
 
 
-def delete_gallery_item(album: GalleryAlbum, item: GalleryItem, actor_id: UUID | None) -> None:
+def delete_gallery_item(album: GalleryAlbum, item: GalleryItem, user: Any) -> None:
     with transaction.atomic():
         album = locked(GalleryAlbum, album.pk)
+        assert_may_edit(album.status, user, ALBUM_PUBLISH_KEY)
         item = _locked_item(album, item.pk)
         item.deleted_at = timezone.now()
-        item.updated_by = actor_id
+        item.updated_by = user.pk
         item.save(update_fields=["deleted_at", "updated_by", "updated_at"])
         _sync(album, {item.file_id})
 
 
-def reorder_gallery_items(
-    album: GalleryAlbum, ids: list[UUID], actor_id: UUID | None
-) -> list[GalleryItem]:
+def reorder_gallery_items(album: GalleryAlbum, ids: list[UUID], user: Any) -> list[GalleryItem]:
     """Make the album's items exactly `ids`, in order; two passes avoid unique collisions."""
     with transaction.atomic():
         album = locked(GalleryAlbum, album.pk)
+        assert_may_edit(album.status, user, ALBUM_PUBLISH_KEY)
         live = {
             item.id: item
             for item in GalleryItem.objects.alive().select_for_update().filter(gallery_album=album)
@@ -138,7 +141,7 @@ def reorder_gallery_items(
         now = timezone.now()
         for position, item in enumerate(ordered):
             item.position = position
-            item.updated_by = actor_id
+            item.updated_by = user.pk
             item.updated_at = now
         GalleryItem.objects.bulk_update(ordered, ["position", "updated_by", "updated_at"])
         if album.status == ContentStatus.PUBLISHED:

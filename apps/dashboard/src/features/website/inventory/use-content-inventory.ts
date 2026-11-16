@@ -98,7 +98,11 @@ export interface StaleItem extends InventoryItem {
  * kind whose whole sample is stale may have more (`hasMore`).
  */
 export function useStaleContent() {
-  const query = { status: STALE_STATUS, ordering: "updated_at", pageSize: STALE_SAMPLE_SIZE };
+  const query: WebsiteContentQuery = {
+    status: STALE_STATUS,
+    ordering: "updated_at",
+    pageSize: STALE_SAMPLE_SIZE,
+  };
   const results = useQueries({
     queries: INVENTORY_KINDS.map((kind) => ({
       queryKey: queryKeys.list(WEBSITE_QUERY_MODULE, SOURCES[kind].resource, query),
