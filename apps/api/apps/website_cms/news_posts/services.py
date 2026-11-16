@@ -14,6 +14,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from apps.website_cms.content import (
+    assert_may_edit,
     locked,
     seo_image_ids,
     slug_in_use,
@@ -62,20 +63,21 @@ def create_news_post(tenant: Tenant, data: dict[str, Any], actor_id: UUID | None
         raise slug_taken() from exc
 
 
-def update_news_post(post: NewsPost, data: dict[str, Any], actor_id: UUID | None) -> NewsPost:
+def update_news_post(post: NewsPost, data: dict[str, Any], user: Any) -> NewsPost:
     if "slug" in data and data["slug"] != post.slug:
         validate_content_slug(data["slug"])
     _validate_content(data)
     try:
         with transaction.atomic():
             post = locked(NewsPost, post.pk)
+            assert_may_edit(post.status, user, "website.news-post.publish")
             renamed = "slug" in data and data["slug"] != post.slug
             if renamed and slug_in_use(NewsPost, data["slug"], exclude_id=post.id):
                 raise slug_taken()
             old_ids = news_file_ids(post)
             for name, value in data.items():
                 setattr(post, name, value)
-            post.updated_by = actor_id
+            post.updated_by = user.pk
             post.save()
             if post.status == ContentStatus.PUBLISHED:
                 sync_file_visibility(old_ids | news_file_ids(post))

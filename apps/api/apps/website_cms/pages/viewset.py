@@ -107,7 +107,7 @@ class WebsitePageViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         serializer = WebsitePageUpdateSerializer(page, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         before = WebsitePageDetailSerializer(page).data
-        page = services.update_page(page, serializer.validated_data, request.user.pk)
+        page = services.update_page(page, serializer.validated_data, request.user)
         data = self._detail(page)
         record_audit(request, "update", page, before=before, after=data)
         return ActionResponse.ok(data, message="Page updated.")

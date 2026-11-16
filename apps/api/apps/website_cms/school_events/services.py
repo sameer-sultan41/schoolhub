@@ -13,6 +13,7 @@ from uuid import UUID
 from django.db import IntegrityError, transaction
 
 from apps.website_cms.content import (
+    assert_may_edit,
     locked,
     seo_image_ids,
     slug_in_use,
@@ -68,15 +69,14 @@ def create_school_event(tenant: Tenant, data: dict[str, Any], actor_id: UUID | N
         raise slug_taken() from exc
 
 
-def update_school_event(
-    event: SchoolEvent, data: dict[str, Any], actor_id: UUID | None
-) -> SchoolEvent:
+def update_school_event(event: SchoolEvent, data: dict[str, Any], user: Any) -> SchoolEvent:
     if "slug" in data and data["slug"] != event.slug:
         validate_content_slug(data["slug"])
     _validate_content(data)
     try:
         with transaction.atomic():
             event = locked(SchoolEvent, event.pk)
+            assert_may_edit(event.status, user, "website.school-event.publish")
             _validate_range(
                 data.get("starts_at", event.starts_at), data.get("ends_at", event.ends_at)
             )
@@ -86,7 +86,7 @@ def update_school_event(
             old_ids = event_file_ids(event)
             for name, value in data.items():
                 setattr(event, name, value)
-            event.updated_by = actor_id
+            event.updated_by = user.pk
             event.save()
             if event.status == ContentStatus.PUBLISHED:
                 sync_file_visibility(old_ids | event_file_ids(event))

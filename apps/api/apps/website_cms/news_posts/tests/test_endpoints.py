@@ -288,3 +288,35 @@ class NewsBearerAndOrderTests(WebsiteAPITestCase):
         self.assert_ties_page_apart(
             LIST, NewsPost, rows, created_at=timezone.now(), published_at=None
         )
+
+
+class PublishedNewsEditGateTests(WebsiteAPITestCase):
+    """§7.1: editing a published post needs the publish key; drafts and publishers are free."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.allow("website.page.view", "website.news-post.update")
+
+    def _patch(self, post):
+        return self.client.patch(detail(post), {"title": "Changed"}, format="json")
+
+    def test_update_only_user_cannot_edit_a_published_post(self) -> None:
+        post = self.make_news(title="Live", status=ContentStatus.PUBLISHED)
+        with (
+            mock.patch("apps.website_cms.revalidation.revalidate_website") as task,
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            response = self._patch(post)
+        self.assertEqual(response.status_code, 422, response.content)
+        self.assertIn("publish_required", response.json()["error"]["message"])
+        task.delay.assert_not_called()
+        post.refresh_from_db()
+        self.assertEqual(post.title, "Live")
+
+    def test_update_only_user_edits_a_draft_post(self) -> None:
+        self.assertEqual(self._patch(self.make_news()).status_code, 200)
+
+    def test_publisher_edits_a_published_post(self) -> None:
+        self.allow("website.news-post.publish")
+        post = self.make_news(status=ContentStatus.PUBLISHED)
+        self.assertEqual(self._patch(post).status_code, 200)
