@@ -3,6 +3,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { Services } from "@/services";
+import type { SubjectRecord } from "@/services";
 import {
   DEPARTMENT_ID,
   structurePage,
@@ -86,6 +87,20 @@ describe("subjects section", () => {
     const artRow = screen.getByRole("row", { name: /Art/ });
     expect(within(artRow).getByText("Co-curricular")).toBeInTheDocument();
     expect(within(artRow).getByText("No department")).toBeInTheDocument();
+  });
+
+  it("shows an unknown subject type humanised, never as a message key", async () => {
+    so.fetchSubjectPage.mockResolvedValue(
+      structurePage([
+        subjectRecord({ subject_type: "lab_work" as unknown as SubjectRecord["subject_type"] }),
+      ]),
+    );
+
+    renderSection();
+
+    const row = await screen.findByRole("row", { name: /Mathematics/ });
+    expect(within(row).getByText("Lab work")).toBeInTheDocument();
+    expect(within(row).queryByText(/subjects\.types/)).not.toBeInTheDocument();
   });
 
   it("sends the department, type and status filters from the URL", async () => {

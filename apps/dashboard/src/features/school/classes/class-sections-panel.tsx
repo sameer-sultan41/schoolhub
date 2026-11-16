@@ -70,8 +70,11 @@ export function ClassSectionsPanel({
   const showActions = showEdit || permissions.canDelete;
   const sections = sectionsQuery.data ?? [];
 
-  const campusName = (campusId: string) =>
-    campusesQuery.data?.find((campus) => campus.id === campusId)?.name ?? t("unknownCampus");
+  // Blank until the campuses load, so a pending list never reads as an unknown campus.
+  const campusName = (campusId: string) => {
+    if (!campusesQuery.data) return "";
+    return campusesQuery.data.find((campus) => campus.id === campusId)?.name ?? t("unknownCampus");
+  };
 
   if (sectionsQuery.isError) {
     return (

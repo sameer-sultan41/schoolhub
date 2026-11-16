@@ -400,6 +400,28 @@ describe("classes section", () => {
     expect(screen.getByRole("option", { name: "Old Campus (inactive)" })).toBeInTheDocument();
   });
 
+  it("shows the server's refusal of an inactive campus under the campus field", async () => {
+    const CAMPUS_INACTIVE = "Campus is inactive.";
+    so.updateSection.mockRejectedValue(
+      new ApiError({
+        code: "validation_error",
+        message: CAMPUS_INACTIVE,
+        status: 400,
+        url: "/sections",
+        details: [{ field: "campus_id", issue: CAMPUS_INACTIVE }],
+      }),
+    );
+    const user = renderSection();
+
+    await user.click(await screen.findByRole("button", { name: "Show sections for Grade 1" }));
+    await user.click(await screen.findByRole("button", { name: "Edit A" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    expect(await within(dialog).findByText(CAMPUS_INACTIVE)).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
   it("shows the classes and sections only, to a viewer without the write keys", async () => {
     mockFetchCurrentUser.mockResolvedValue(buildUser(["school.class.view", "school.section.view"]));
     const user = renderSection();

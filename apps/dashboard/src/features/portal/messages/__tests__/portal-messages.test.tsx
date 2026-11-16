@@ -3,8 +3,7 @@ import userEvent from "@testing-library/user-event";
 
 import { Services } from "@/services";
 import { messageRecord, THREAD_ID, threadRecord } from "@/test-fixtures/communication";
-import { cursorPage } from "@/test-fixtures/list-screen";
-import { mocked } from "@/test-fixtures/list-screen";
+import { cursorPage, mocked } from "@/test-fixtures/list-screen";
 import { portalDashboard } from "@/test-fixtures/portal";
 import { USER_LOADED, UserLoaded } from "@/test-fixtures/user-loaded";
 import { buildUser, renderWithClient, setUrl } from "@/test-utils";

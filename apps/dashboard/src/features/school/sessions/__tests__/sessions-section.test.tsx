@@ -4,6 +4,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { Services } from "@/services";
+import type { AcademicSessionRecord } from "@/services";
 import { sessionRecord } from "@/services/modules/school-organization/__tests__/structure-fixtures";
 import {
   CLOSED_SESSION_ID,
@@ -139,6 +140,22 @@ describe("sessions section", () => {
       ordering: "-start_date",
       status: undefined,
     });
+  });
+
+  it("shows an unknown session status humanised, never as a message key", async () => {
+    so.fetchSessionPage.mockResolvedValue(
+      cursorPage([
+        sessionRecord({
+          status: "suspended" as unknown as AcademicSessionRecord["status"],
+          is_current: false,
+        }),
+      ]),
+    );
+
+    renderSection();
+
+    expect(await screen.findByText("Suspended")).toBeInTheDocument();
+    expect(screen.queryByText(/sessions\.status/)).not.toBeInTheDocument();
   });
 
   it("offers Activate on a planned session and Close on the active one only", async () => {

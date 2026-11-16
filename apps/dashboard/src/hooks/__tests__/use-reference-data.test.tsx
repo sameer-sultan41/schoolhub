@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
+import { SCHOOL_ORGANIZATION_QUERY_MODULE } from "@/services/modules/school-organization/school-organization-constant";
 
 import {
   useAcademicSessions,
@@ -63,7 +64,9 @@ function setup() {
 
 /** What the cache holds under the key a reference list is read with. */
 function cached(queryClient: QueryClient, resource: string, params?: Record<string, unknown>) {
-  return queryClient.getQueryData(queryKeys.list("school-organization", resource, params));
+  return queryClient.getQueryData(
+    queryKeys.list(SCHOOL_ORGANIZATION_QUERY_MODULE, resource, params),
+  );
 }
 
 describe("use-reference-data", () => {

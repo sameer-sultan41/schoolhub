@@ -47,18 +47,21 @@ function overlaps(
   return a.start_date <= b.end_date && b.start_date <= a.end_date;
 }
 
-/** `assert_no_session_overlap`: two live school years would make enrollment ambiguous. */
+const END_BEFORE_START = "end_date must be after start_date.";
+
+/** `assert_no_session_overlap`: the date order first, then two live school years overlapping. */
 function sessionOverlap(
   sessions: AcademicSession[],
   candidate: AcademicSession,
 ): MockResponse | undefined {
+  if (candidate.end_date <= candidate.start_date) return domainRule(END_BEFORE_START);
   const clash = sessions.find((row) => row.id !== candidate.id && overlaps(row, candidate));
   return clash
     ? domainRule(`Dates overlap academic session '${clash.name}' ${dateRange(clash)}.`)
     : undefined;
 }
 
-/** `assert_term_window`: inside the session, off its siblings. */
+/** `assert_term_window`: a valid order, inside the session, off its siblings. */
 function termWindow(
   { academicSessions, terms }: SchoolStructureState,
   candidate: Term,
@@ -68,6 +71,7 @@ function termWindow(
     const issue = `Invalid pk "${candidate.academic_session_id}" - object does not exist.`;
     return validation("academic_session_id", issue);
   }
+  if (candidate.end_date <= candidate.start_date) return domainRule(END_BEFORE_START);
   if (candidate.start_date < session.start_date || candidate.end_date > session.end_date) {
     return domainRule(`Term dates must fall inside the session window ${dateRange(session)}.`);
   }
@@ -316,7 +320,10 @@ function registerSubjectWrites(api: MockApi, { subjects }: SchoolStructureState)
   api.patch("/subjects/:rowId", (request) => {
     const match = subjects.find((row) => row.id === request.params["rowId"]);
     if (!match) return fail(404, "Not found.");
-    Object.assign(match, request.json() as Partial<Subject>, { id: match.id });
+    const body = request.json() as Partial<Subject>;
+    const refusal = "name" in body ? requireName(body) : undefined;
+    if (refusal) return refusal;
+    Object.assign(match, body, { id: match.id });
     return ok(match);
   });
 

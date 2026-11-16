@@ -51,7 +51,10 @@ export function useClassColumns(
             onClick={row.getToggleExpandedHandler()}
           >
             <ChevronRight
-              className={cn("size-4 transition-transform", row.getIsExpanded() && "rotate-90")}
+              className={cn(
+                "size-4 transition-transform",
+                row.getIsExpanded() ? "rotate-90" : "rtl:rotate-180",
+              )}
               aria-hidden="true"
             />
           </Button>

@@ -6,7 +6,9 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { DataGridColumnHeader, Skeleton } from "@schoolhub/ui";
 
 import { RowEditRemoveActions } from "@/components/row-edit-remove-actions";
+import { SUBJECT_TYPE_LABEL_KEY } from "@/features/school/shared/structure-enum-labels";
 import { StructureStatusBadge } from "@/features/school/shared/structure-status";
+import { enumLabel } from "@/lib/enum-label";
 import type { SchoolOrganizationOption, SubjectRecord } from "@/services";
 import {
   DEFAULT_SUBJECT_TYPE,
@@ -45,7 +47,8 @@ export function useSubjectColumns(
         accessorKey: "subject_type",
         enableSorting: false,
         header: () => t("subjects.fields.type"),
-        cell: ({ row }) => t(`subjects.types.${row.original.subject_type ?? DEFAULT_SUBJECT_TYPE}`),
+        cell: ({ row }) =>
+          enumLabel(t, SUBJECT_TYPE_LABEL_KEY, row.original.subject_type ?? DEFAULT_SUBJECT_TYPE),
         meta: {
           headerTitle: t("subjects.fields.type"),
           skeleton: <Skeleton className="h-4 w-20" />,

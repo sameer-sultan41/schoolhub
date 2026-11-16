@@ -7,7 +7,9 @@ import { Badge, BadgeDot, Button, cn, DataGridColumnHeader, Skeleton } from "@sc
 import { ChevronRight } from "lucide-react";
 
 import { RowEditRemoveActions } from "@/components/row-edit-remove-actions";
+import { enumBadge, enumLabel } from "@/lib/enum-label";
 import { formatDate } from "@/lib/helpers";
+import { SESSION_STATUS_LABEL_KEY } from "@/features/school/shared/structure-enum-labels";
 import type { AcademicSessionRecord, AcademicSessionStatus } from "@/services";
 import {
   LOCKED_SESSION_STATUSES,
@@ -29,9 +31,9 @@ function SessionStatusBadges({ session }: { session: AcademicSessionRecord }) {
   const t = useTranslations("school");
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5">
-      <Badge variant={STATUS_VARIANT[session.status]} appearance="light">
+      <Badge variant={enumBadge(STATUS_VARIANT, session.status, "secondary")} appearance="light">
         <BadgeDot />
-        {t(`sessions.status.${session.status}`)}
+        {enumLabel(t, SESSION_STATUS_LABEL_KEY, session.status)}
       </Badge>
       {session.is_current && (
         <Badge variant="primary" appearance="outline">
@@ -87,7 +89,10 @@ export function useSessionColumns(
             onClick={row.getToggleExpandedHandler()}
           >
             <ChevronRight
-              className={cn("size-4 transition-transform", row.getIsExpanded() && "rotate-90")}
+              className={cn(
+                "size-4 transition-transform",
+                row.getIsExpanded() ? "rotate-90" : "rtl:rotate-180",
+              )}
               aria-hidden="true"
             />
           </Button>
