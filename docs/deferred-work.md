@@ -41,7 +41,8 @@ either this file or `project-status.md`.
   - **PR F follow-ups** (the dashboard Website shell and Pages screen, minor review findings):
     - The content inventory's `updated_at` ordering has no `id` tiebreak, because the API's `ordering_fields` lack `id`; rows with an equal timestamp may swap between pages.
     - The Website landing makes 16 requests per load (a count per status for four kinds, plus the stale samples). A server aggregate for the §13 inventory would replace them.
-    - Keyboard drag-and-drop (sections and rich-text blocks) is covered only by the mocked e2e; Jest cannot drive `@dnd-kit`'s keyboard sensor reliably.
+    - Keyboard drag of rich-text blocks and FAQ items has no e2e (sections have one in `website-pages.spec.ts`); Jest drives only their move buttons, as it cannot drive `@dnd-kit`'s keyboard sensor reliably.
+    - No optimistic concurrency on `PATCH /website-pages/{id}/page-sections`: two editors saving the same page's sections, the last save wins. An `If-Match` / `expected_updated_at` check would refuse the stale one with 409.
     - Image previews in the CMS. The CMS serializers return file ids only, so a saved image shows "on file". Add a display URL to the CMS serializers, then show it in `ImageFileField` and the gallery tiles.
     - An unsaved-changes warning when leaving the page editor (route change, tab close).
     - `isLeaving` in the page editor is never reset if `router.push` fails after a delete, so the skeleton would stay.
