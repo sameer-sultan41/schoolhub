@@ -379,3 +379,4 @@ reverify
 strae
 straße
 myschoolhub
+yourschool
