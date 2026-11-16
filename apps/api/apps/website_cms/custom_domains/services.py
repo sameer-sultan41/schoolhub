@@ -96,6 +96,7 @@ class Outcome(enum.StrEnum):
     ACTIVATED = "activated"
     FAILED = "failed"
     TAKEN = "taken"
+    INCONCLUSIVE = "inconclusive"
     DISCARDED = "discarded"
 
 
@@ -199,7 +200,8 @@ def verify_custom_domain(tenant: Tenant, pk: UUID, actor_id: UUID | None) -> Cus
     """`:verify`. Must run with no transaction open: DNS sits between two short transactions.
 
     An active domain is returned as it is. A failed check stores `failed` and the reason; a
-    domain another school holds stores `failed` and answers 409 `domain_taken`.
+    domain another school holds stores `failed` and answers 409 `domain_taken`. An
+    inconclusive lookup returns the claim to its earlier status with the code recorded.
     """
     with tenant_atomic(tenant.pk):
         row = get_object_or_404(CustomDomain.objects.alive(), pk=pk)
@@ -320,6 +322,8 @@ def _apply_check(
         advisory_xact_lock(AdvisoryLockNamespace.CUSTOM_DOMAINS, tenant.pk)
         if check.ok:
             outcome = _activate(tenant, row, expected, actor_id)
+        elif check.inconclusive:
+            outcome = _record_inconclusive(row, expected, check, actor_id)
         else:
             outcome = _fail(tenant, row, expected, check, actor_id, keep_status=keep_status)
     if outcome is Outcome.ACTIVATED:
@@ -381,16 +385,31 @@ def _insert_route(tenant: Tenant, row: CustomDomain) -> bool:
 
 
 def _evict_deleted_tenants_route(domain: str) -> bool:
-    """Delete `domain`'s route if a soft-deleted school holds it; True when one was."""
-    holder = (
-        CustomDomainRoute.objects.filter(domain=domain, tenant__deleted_at__isnull=False)
-        .values_list("tenant_id", flat=True)
-        .first()
+    """Delete `domain`'s route if a soft-deleted school holds it; True when one was.
+
+    One statement (`DELETE ... WHERE id IN (SELECT ... JOIN tenants ... deleted_at IS NOT
+    NULL)`: the model has no delete signals or reverse relations, so Django fast-deletes),
+    so the tenant's state is read and acted on together, never checked first.
+    """
+    deleted, _ = CustomDomainRoute.objects.filter(
+        domain=domain, tenant__deleted_at__isnull=False
+    ).delete()
+    return deleted > 0
+
+
+def _record_inconclusive(
+    row: CustomDomain, expected: tuple[str, ...], check: DnsCheck, actor_id: UUID | None
+) -> Outcome:
+    """The lookup could not answer: keep the status the claim had before this check (a
+    `:verify` moves it back from `verifying`), record why, never fail it or notify."""
+    moved = _claim(row, expected).update(
+        status=row.status,
+        last_error=check.reason[:DOMAIN_ERROR_MAX_LENGTH],
+        last_error_code=check.code,
+        updated_by=actor_id,
+        updated_at=timezone.now(),
     )
-    if holder is None:
-        return False
-    CustomDomainRoute.objects.filter(domain=domain, tenant_id=holder).delete()
-    return True
+    return Outcome.INCONCLUSIVE if moved else Outcome.DISCARDED
 
 
 def _fail(

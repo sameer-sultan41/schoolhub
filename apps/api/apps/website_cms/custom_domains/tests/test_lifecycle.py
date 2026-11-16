@@ -150,6 +150,22 @@ class ReverifyClaimsTests(SweepTestCase):
         self.assertEqual(self.stored(row).status, CustomDomainStatus.VERIFYING)
         self.assertEqual(self.stored(row).last_error, "")
 
+    def test_an_inconclusive_sweep_keeps_status_and_sends_nothing(self) -> None:
+        # A resolver outage says nothing about the school's records.
+        old = self.claim("old.example", CustomDomainStatus.FAILED, age_hours=25)
+        pending = self.claim("pending.example", CustomDomainStatus.PENDING_DNS, age_hours=25)
+        outage = inconclusive(DomainErrorCode.LOOKUP_TIMEOUT, "The DNS lookup timed out.")
+        with mock.patch(f"{SERVICES}.get_dns_verifier", return_value=StubVerifier(outage)):
+            reverify_tenant_domains(self.tenant.id)
+        expected = ((old, CustomDomainStatus.FAILED), (pending, CustomDomainStatus.PENDING_DNS))
+        for row, status in expected:
+            with self.subTest(domain=row.domain):
+                stored = self.stored(row)
+                self.assertEqual(stored.status, status)
+                self.assertEqual(stored.last_error_code, DomainErrorCode.LOOKUP_TIMEOUT)
+                self.assertIsNone(stored.failure_notified_at)
+                self.assertEqual(self.sent(DOMAIN_FAILED, row), 0)
+
     def test_a_claim_a_user_is_verifying_right_now_is_skipped(self) -> None:
         # A fresh `verifying` row belongs to an in-flight `:verify`; an older one is stuck.
         busy = self.claim("busy.example", CustomDomainStatus.VERIFYING)

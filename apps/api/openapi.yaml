@@ -18767,6 +18767,7 @@ components:
         last_error_code:
           allOf:
           - $ref: '#/components/schemas/CustomDomainErrorCodeEnum'
+          nullable: true
           readOnly: true
         dns_records:
           type: array

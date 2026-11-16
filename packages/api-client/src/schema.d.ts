@@ -8357,7 +8357,7 @@ export interface components {
             /** Format: date-time */
             readonly verified_at: string | null;
             readonly last_error: string;
-            readonly last_error_code: components["schemas"]["CustomDomainErrorCodeEnum"];
+            readonly last_error_code: components["schemas"]["CustomDomainErrorCodeEnum"] | null;
             readonly dns_records: components["schemas"]["DnsRecord"][];
             /** Format: date-time */
             readonly created_at: string;

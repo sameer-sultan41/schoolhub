@@ -5,15 +5,20 @@ from __future__ import annotations
 from datetime import timedelta
 from unittest import mock
 
+from django.db import connection
 from django.test import override_settings
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken
 
 from apps.school_organization.tests.factories import grant_default_role
 from apps.website_cms.constants import DOMAIN_INPUT_MAX_LENGTH, MAX_CUSTOM_DOMAINS
-from apps.website_cms.custom_domains.adapters import DnsCheck
-from apps.website_cms.custom_domains.services import DOMAIN_TAKEN_REASON
+from apps.website_cms.custom_domains.adapters import DnsCheck, inconclusive
+from apps.website_cms.custom_domains.services import (
+    DOMAIN_TAKEN_REASON,
+    _evict_deleted_tenants_route,
+)
 from apps.website_cms.hosts import resolve_host
 from apps.website_cms.models import (
     CustomDomain,
@@ -248,6 +253,7 @@ class VerifyDomainTests(DomainTestCase):
         self.assertEqual(data["status"], CustomDomainStatus.ACTIVE)
         self.assertIsNotNone(data["verified_at"])
         self.assertEqual(data["last_error"], "")
+        self.assertIsNone(data["last_error_code"])
         route = CustomDomainRoute.objects.get(domain="www.greenfield.test")
         self.assertEqual((route.tenant_id, route.custom_domain_id), (self.tenant.id, row.id))
         self.assertEqual(resolve_host("www.greenfield.test"), self.tenant)
@@ -271,6 +277,17 @@ class VerifyDomainTests(DomainTestCase):
         self.assertFalse(CustomDomainRoute.objects.filter(custom_domain_id=row.id).exists())
         # A first failure is not yet a day old: no failure notification.
         self.assertEqual(self.notifications("website.domain-failed", row), [])
+
+    def test_an_inconclusive_verify_does_not_fail_the_claim(self) -> None:
+        row = self.claim("www.greenfield.example")
+        outage = inconclusive(DomainErrorCode.LOOKUP_FAILED, "The DNS lookup failed.")
+        with self.stub(StubVerifier(outage)):
+            response = self.client.post(verify_url(row))
+        self.assertEqual(response.status_code, 200)
+        data = response.json()["data"]
+        self.assertEqual(data["status"], CustomDomainStatus.PENDING_DNS)
+        self.assertEqual(data["last_error_code"], DomainErrorCode.LOOKUP_FAILED)
+        self.assertFalse(CustomDomainRoute.objects.filter(custom_domain_id=row.id).exists())
 
     def test_a_failed_domain_can_be_verified_again(self) -> None:
         row = self.claim("www.greenfield.test", CustomDomainStatus.FAILED)
@@ -335,6 +352,18 @@ class VerifyDomainTests(DomainTestCase):
         self.assertEqual(response.json()["data"]["status"], CustomDomainStatus.ACTIVE)
         route = CustomDomainRoute.objects.get(domain="reused.test")
         self.assertEqual((route.tenant_id, route.custom_domain_id), (self.tenant.id, mine.id))
+
+    def test_eviction_is_one_statement(self) -> None:
+        # The deleted-tenant test and the delete happen together; a school restored
+        # mid-flight is never read as deleted and then lose its route.
+        gone = self.make_other_tenant()
+        self.claim("reused.test", CustomDomainStatus.ACTIVE, tenant=gone)
+        Tenant.objects.filter(pk=gone.pk).update(deleted_at=timezone.now())
+        with CaptureQueriesContext(connection) as queries:
+            self.assertTrue(_evict_deleted_tenants_route("reused.test"))
+        self.assertEqual(len(queries), 1)
+        self.assertTrue(queries[0]["sql"].lstrip().upper().startswith("DELETE"))
+        self.assertFalse(_evict_deleted_tenants_route("reused.test"))
 
     def test_a_live_schools_route_is_never_evicted(self) -> None:
         other = self.make_other_tenant()

@@ -8,7 +8,7 @@ from rest_framework import serializers
 
 from apps.website_cms.constants import DOMAIN_INPUT_MAX_LENGTH
 from apps.website_cms.custom_domains.adapters import txt_record_name
-from apps.website_cms.models import CustomDomain
+from apps.website_cms.models import CustomDomain, DomainErrorCode
 
 
 class DnsRecordSerializer(serializers.Serializer):
@@ -27,6 +27,10 @@ class DnsRecordSerializer(serializers.Serializer):
 
 
 class CustomDomainSerializer(serializers.ModelSerializer):
+    # `null` when the last check passed. The column stores "", but this repo's schema
+    # settings drop a blank enum member (ENUM_ADD_EXPLICIT_BLANK_NULL_CHOICE is off), so the
+    # contract could not say "" while a nullable enum it can.
+    last_error_code = serializers.SerializerMethodField()
     dns_records = serializers.SerializerMethodField()
 
     class Meta:
@@ -45,6 +49,10 @@ class CustomDomainSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = fields
+
+    @extend_schema_field(serializers.ChoiceField(choices=DomainErrorCode.choices, allow_null=True))
+    def get_last_error_code(self, obj: CustomDomain) -> str | None:
+        return obj.last_error_code or None
 
     @extend_schema_field(DnsRecordSerializer(many=True))
     def get_dns_records(self, obj: CustomDomain) -> list[dict[str, str | bool]]:
