@@ -38,6 +38,7 @@ describe("Services", () => {
       "auth",
       "broadcasts",
       "budgets",
+      "contactSubmissions",
       "curriculum",
       "dashboard",
       "discounts",
@@ -55,6 +56,7 @@ describe("Services", () => {
       "files",
       "financeReports",
       "fines",
+      "galleryAlbums",
       "gradingScales",
       "guardians",
       "jobs",
@@ -63,6 +65,8 @@ describe("Services", () => {
       "ledgerEntries",
       "marks",
       "messageThreads",
+      "navigationMenus",
+      "newsPosts",
       "notices",
       "notificationPreferences",
       "notifications",
@@ -77,7 +81,9 @@ describe("Services", () => {
       "results",
       "rooms",
       "scholarships",
+      "schoolEvents",
       "schoolOrganization",
+      "seoSettings",
       "settlementImports",
       "staff",
       "staffAttendance",
@@ -87,9 +93,12 @@ describe("Services", () => {
       "teacherAllocations",
       "teacherSubstitutions",
       "tenant",
+      "themes",
       "threadOversight",
       "timetableSlots",
       "vouchers",
+      "websitePages",
+      "websiteSettings",
     ]);
 
     expect(typeof Services.auth.login).toBe("function");
@@ -384,5 +393,16 @@ describe("Services", () => {
     expect(typeof Services.promotions.updateDecision).toBe("function");
     expect(typeof Services.promotions.transitionBatch).toBe("function");
     expect(typeof Services.promotions.executeBatch).toBe("function");
+
+    expect(typeof Services.websiteSettings.updateWebsiteSettings).toBe("function");
+    expect(typeof Services.themes.fetchThemes).toBe("function");
+    expect(typeof Services.websitePages.replacePageSections).toBe("function");
+    expect(typeof Services.websitePages.previewWebsitePage).toBe("function");
+    expect(typeof Services.navigationMenus.updateNavigationMenu).toBe("function");
+    expect(typeof Services.seoSettings.updateSeoSetting).toBe("function");
+    expect(typeof Services.newsPosts.archiveNewsPost).toBe("function");
+    expect(typeof Services.schoolEvents.publishSchoolEvent).toBe("function");
+    expect(typeof Services.galleryAlbums.reorderGalleryItems).toBe("function");
+    expect(typeof Services.contactSubmissions.setContactSubmissionStatus).toBe("function");
   });
 });

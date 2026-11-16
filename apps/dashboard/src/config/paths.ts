@@ -74,6 +74,8 @@ export const Paths = {
   EXAMS_GRADING_SCALES: "/exams/grading-scales",
   EXAMS_REPORTS: "/exams/reports",
   EXAMS_QUESTION_BANKS: "/exams/question-banks",
+  WEBSITE: "/website",
+  WEBSITE_PAGES: "/website/pages",
   LOGIN: "/login",
   FORGOT_PASSWORD: "/forgot-password",
   RESET_PASSWORD: "/reset-password",
@@ -88,6 +90,9 @@ export const examPath = (examId: string) => `${Paths.EXAMS}/${examId}`;
 
 /** One question bank's page, under the banks list. */
 export const questionBankPath = (bankId: string) => `${Paths.EXAMS_QUESTION_BANKS}/${bankId}`;
+
+/** One website page's editor, under the pages list. */
+export const websitePagePath = (pageId: string) => `${Paths.WEBSITE_PAGES}/${pageId}`;
 
 /** One invoice's page, under the invoices list. */
 export const feeInvoicePath = (invoiceId: string) => `${Paths.FEES_INVOICES}/${invoiceId}`;

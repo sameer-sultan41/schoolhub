@@ -4,6 +4,7 @@ import {
   CalendarClock,
   ClipboardCheck,
   FileText,
+  Globe,
   GraduationCap,
   IdCard,
   LayoutGrid,
@@ -28,6 +29,7 @@ import { COMMUNICATION_SECTIONS } from "@/features/communication/communication-s
 import { EXAMS_SECTIONS } from "@/features/exams/exams-sections";
 import { FEES_SECTIONS } from "@/features/fees/fees-sections";
 import { TIMETABLE_SECTIONS } from "@/features/timetable/timetable-sections";
+import { WEBSITE_SECTIONS } from "@/features/website/website-sections";
 
 import { Paths } from "./paths";
 
@@ -101,6 +103,14 @@ export const MENU_SIDEBAR: MenuConfig = [
     module: "fees",
     // Shared with the Fees tabs and landing, gated the same way.
     children: sectionMenuItems(FEES_SECTIONS),
+  },
+  {
+    title: "Website",
+    icon: Globe,
+    // `module` hides the group from a user with no `website.*` key; each section is gated on its
+    // own key (`website-sections.ts`), the same way as the Website tabs and landing.
+    module: "website",
+    children: sectionMenuItems(WEBSITE_SECTIONS),
   },
   { heading: "User" },
   {

@@ -38,6 +38,14 @@ either this file or `project-status.md`.
     - The first write of a navigation menu is audited as `update`, not `create`. Cosmetic in the audit log.
     - SEO text-length limits answer 400 (serializer) while other rules answer 422 (service). Accepted: a length is input shape.
     - Issuing a `:preview` token is not audited. A preview exposes a draft to whoever holds the link for 600 s; record it once the audit catalogue has a `preview` action.
+  - **PR F follow-ups** (the dashboard Website shell and Pages screen, minor review findings):
+    - The content inventory's `updated_at` ordering has no `id` tiebreak, because the API's `ordering_fields` lack `id`; rows with an equal timestamp may swap between pages.
+    - The Website landing makes 16 requests per load (a count per status for four kinds, plus the stale samples). A server aggregate for the §13 inventory would replace them.
+    - Keyboard drag of rich-text blocks and FAQ items has no e2e (sections have one in `website-pages.spec.ts`); Jest drives only their move buttons, as it cannot drive `@dnd-kit`'s keyboard sensor reliably.
+    - No optimistic concurrency on `PATCH /website-pages/{id}/page-sections`: two editors saving the same page's sections, the last save wins. An `If-Match` / `expected_updated_at` check would refuse the stale one with 409.
+    - Image previews in the CMS. The CMS serializers return file ids only, so a saved image shows "on file". Add a display URL to the CMS serializers, then show it in `ImageFileField` and the gallery tiles.
+    - An unsaved-changes warning when leaving the page editor (route change, tab close).
+    - `isLeaving` in the page editor is never reset if `router.push` fails after a delete, so the skeleton would stay.
   - **PR B follow-ups** (minor review findings from news, events, gallery, contact and the opt-in flags, each left for the PR that next touches its file):
     - `content.seo_image_ids` and `content.locked` duplicate the equivalent helpers in `pages/`. One shared helper, once a third resource needs it; today the two copies are small and tested separately.
     - Gallery item `partial_update` and `destroy` fetch the album twice (once to lock, once to authorise). A redundant read, harmless at the album sizes a school has.
