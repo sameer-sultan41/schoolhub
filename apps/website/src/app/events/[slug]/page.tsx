@@ -7,6 +7,7 @@ import {
   UNAVAILABLE_METADATA,
   UnavailableNotice,
   missingContentMetadata,
+  robotsFor,
 } from "@/app/site-shell";
 import { JsonLd } from "@/components/json-ld";
 import { getEvent, getSite } from "@/lib/content";
@@ -40,13 +41,18 @@ export async function generateMetadata({ params }: RouteParams): Promise<Metadat
   if (resolution.status !== "active") return UNAVAILABLE_METADATA;
 
   const { tenant, host } = resolution;
-  const event = await getEvent(tenant.id, host, slug);
+  const [event, site] = await Promise.all([
+    getEvent(tenant.id, host, slug),
+    getSite(tenant.id, host),
+  ]);
   if (!event) return missingContentMetadata(tenant);
 
   const url = `${canonicalOrigin(tenant, host)}/events/${event.slug}`;
   return {
     title: event.title,
     alternates: { canonical: url },
+    // A site-wide noindex covers every detail page too.
+    robots: robotsFor(site?.seo),
     openGraph: {
       type: "website",
       siteName: tenant.name,

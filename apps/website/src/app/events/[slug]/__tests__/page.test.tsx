@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { notFound } from "next/navigation";
 import { getEvent, getSite } from "@/lib/content";
 import { resolveTenant } from "@/lib/tenant";
-import { makeEventDetail, makeTenant } from "@/test-utils";
+import { makeEventDetail, makeSite, makeTenant } from "@/test-utils";
 import EventPage, { generateMetadata } from "../page";
 
 jest.mock("next/navigation", () => ({
@@ -98,6 +98,22 @@ describe("EventPage", () => {
 });
 
 describe("generateMetadata", () => {
+  it("follows a site-wide noindex", async () => {
+    mockGetEvent.mockResolvedValue(makeEventDetail());
+    mockGetSite.mockResolvedValue(makeSite({ seo: { ...makeSite().seo, noindex: true } }));
+
+    const metadata = await generateMetadata(params());
+
+    expect(metadata.robots).toEqual({ index: false, follow: false });
+  });
+
+  it("is indexable on a live site with no site-wide noindex", async () => {
+    mockGetEvent.mockResolvedValue(makeEventDetail());
+    await expect(generateMetadata(params())).resolves.toMatchObject({
+      robots: { index: true, follow: true },
+    });
+  });
+
   it("titles the event on its canonical URL", async () => {
     mockGetEvent.mockResolvedValue(makeEventDetail({ cover_image_url: "https://x.test/c" }));
     const metadata = await generateMetadata(params());

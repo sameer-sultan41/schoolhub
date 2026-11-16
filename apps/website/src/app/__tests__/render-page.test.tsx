@@ -5,7 +5,8 @@ import { resolveTenant } from "@/lib/tenant";
 import { makePage, makeSite, makeTenant } from "@/test-utils";
 import { getTheme } from "@/themes";
 import type { SectionProps, Theme } from "@/themes";
-import { RenderPage, renderPageMetadata, robotsFor } from "../render-page";
+import { RenderPage, renderPageMetadata } from "../render-page";
+import { robotsFor } from "../site-shell";
 
 // The real notFound() never returns (type "never") — control flow after it assumes that.
 // A no-op mock would fall through into code that assumes a tenant is present.
@@ -184,6 +185,29 @@ describe("robotsFor", () => {
     ["index, follow", true, { index: false, follow: false }],
   ])("robots %p with noindex=%p", (robots, noindex, expected) => {
     expect(robotsFor({ ...seo, robots, noindex })).toEqual(expected);
+  });
+
+  it("narrows across sources: the site's noindex and a page's nofollow both apply", () => {
+    expect(robotsFor({ ...seo, noindex: true }, seo)).toEqual({ index: false, follow: false });
+    expect(robotsFor(seo, { ...seo, robots: "nofollow" })).toEqual({ index: true, follow: false });
+  });
+
+  it("allows when a source is missing (no site row yet)", () => {
+    expect(robotsFor(null, seo)).toEqual({ index: true, follow: true });
+    expect(robotsFor()).toEqual({ index: true, follow: true });
+  });
+});
+
+describe("renderPageMetadata site-wide robots", () => {
+  it("keeps every page out of the index when the site says noindex", async () => {
+    mockResolveTenant.mockResolvedValue(active());
+    mockGetPage.mockResolvedValue(makePage());
+    mockGetSite.mockResolvedValue(makeSite({ seo: { ...makeSite().seo, noindex: true } }));
+
+    const metadata = await renderPageMetadata([]);
+
+    expect(metadata.robots).toEqual({ index: false, follow: false });
+    expect(mockGetSite).toHaveBeenCalledWith("t1", HOST);
   });
 });
 

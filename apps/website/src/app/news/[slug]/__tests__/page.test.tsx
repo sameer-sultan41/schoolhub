@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { notFound } from "next/navigation";
 import { getNewsPost, getSite } from "@/lib/content";
 import { resolveTenant } from "@/lib/tenant";
-import { makeNewsPostDetail, makeTenant } from "@/test-utils";
+import { makeNewsPostDetail, makeSite, makeTenant } from "@/test-utils";
 import NewsPostPage, { generateMetadata } from "../page";
 
 jest.mock("next/navigation", () => ({
@@ -101,6 +101,22 @@ describe("NewsPostPage", () => {
 });
 
 describe("generateMetadata", () => {
+  it("follows a site-wide noindex", async () => {
+    mockGetNewsPost.mockResolvedValue(makeNewsPostDetail());
+    mockGetSite.mockResolvedValue(makeSite({ seo: { ...makeSite().seo, noindex: true } }));
+
+    const metadata = await generateMetadata(params());
+
+    expect(metadata.robots).toEqual({ index: false, follow: false });
+  });
+
+  it("is indexable on a live site with no site-wide noindex", async () => {
+    mockGetNewsPost.mockResolvedValue(makeNewsPostDetail());
+    await expect(generateMetadata(params())).resolves.toMatchObject({
+      robots: { index: true, follow: true },
+    });
+  });
+
   it("builds article metadata on the canonical origin", async () => {
     mockResolveTenant.mockResolvedValue({
       status: "active",

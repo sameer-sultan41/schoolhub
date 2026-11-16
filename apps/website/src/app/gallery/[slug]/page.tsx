@@ -7,6 +7,7 @@ import {
   UNAVAILABLE_METADATA,
   UnavailableNotice,
   missingContentMetadata,
+  robotsFor,
 } from "@/app/site-shell";
 import { getAlbum, getSite } from "@/lib/content";
 import { canonicalOrigin, resolveTenant } from "@/lib/tenant";
@@ -28,7 +29,10 @@ export async function generateMetadata({ params }: RouteParams): Promise<Metadat
   if (resolution.status !== "active") return UNAVAILABLE_METADATA;
 
   const { tenant, host } = resolution;
-  const album = await getAlbum(tenant.id, host, slug);
+  const [album, site] = await Promise.all([
+    getAlbum(tenant.id, host, slug),
+    getSite(tenant.id, host),
+  ]);
   if (!album) return missingContentMetadata(tenant);
 
   const url = `${canonicalOrigin(tenant, host)}/gallery/${album.slug}`;
@@ -37,6 +41,8 @@ export async function generateMetadata({ params }: RouteParams): Promise<Metadat
     title: album.title,
     ...(description ? { description } : {}),
     alternates: { canonical: url },
+    // A site-wide noindex covers every detail page too.
+    robots: robotsFor(site?.seo),
     openGraph: {
       type: "website",
       siteName: tenant.name,
@@ -57,6 +63,8 @@ function AlbumItem({ item }: { item: GalleryItem }) {
           alt={item.alt_text || item.caption}
           width={400}
           height={400}
+          // The grid: 2 columns, 3 from sm, 4 from lg, inside a max-w-5xl (64rem) container.
+          sizes="(min-width: 1024px) 16rem, (min-width: 640px) 33vw, 50vw"
           className="aspect-square w-full rounded-[var(--sh-radius)] object-cover"
         />
         {item.caption ? (

@@ -9,6 +9,7 @@ import {
   UNAVAILABLE_METADATA,
   UnavailableNotice,
   missingContentMetadata,
+  robotsFor,
 } from "./site-shell";
 
 /**
@@ -18,24 +19,6 @@ import {
  * components → HTML, cached by ISR under (tenant, path) and invalidated by the publish
  * webhook through the per-tenant cache tags set in `lib/content.ts`.
  */
-
-/**
- * `noindex` plus the free-text `robots` directives (`noindex`, `nofollow`, `none`; others are
- * ignored). Either source can only narrow indexing, never widen it.
- */
-export function robotsFor(seo: ApiSchemas["PublicSeo"]): { index: boolean; follow: boolean } {
-  const directives = new Set(
-    (seo.robots ?? "")
-      .toLowerCase()
-      .split(",")
-      .map((directive) => directive.trim()),
-  );
-  const none = directives.has("none");
-  return {
-    index: !seo.noindex && !none && !directives.has("noindex"),
-    follow: !seo.noindex && !none && !directives.has("nofollow"),
-  };
-}
 
 /** A `/`-relative canonical (the API's safe-url allows one) is made absolute on the school's origin. */
 function canonicalUrl(seo: ApiSchemas["PublicSeo"], origin: string, path: string): string {
@@ -51,7 +34,10 @@ export async function renderPageMetadata(segments: string[] | undefined): Promis
 
   const { tenant, host } = resolution;
   const slug = toPageSlug(segments);
-  const page = await getPage(tenant.id, host, slug);
+  const [page, site] = await Promise.all([
+    getPage(tenant.id, host, slug),
+    getSite(tenant.id, host),
+  ]);
   if (!page) return missingContentMetadata(tenant);
 
   const origin = canonicalOrigin(tenant, host);
@@ -63,7 +49,8 @@ export async function renderPageMetadata(segments: string[] | undefined): Promis
     title,
     ...(description ? { description } : {}),
     alternates: { canonical: canonicalUrl(page.seo, origin, page.path) },
-    robots: robotsFor(page.seo),
+    // A site-wide noindex covers every page.
+    robots: robotsFor(site?.seo, page.seo),
     openGraph: {
       type: "website",
       siteName: tenant.name,

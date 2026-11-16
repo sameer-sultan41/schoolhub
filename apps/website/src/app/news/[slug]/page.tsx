@@ -6,6 +6,7 @@ import {
   UNAVAILABLE_METADATA,
   UnavailableNotice,
   missingContentMetadata,
+  robotsFor,
 } from "@/app/site-shell";
 import { JsonLd } from "@/components/json-ld";
 import { getNewsPost, getSite } from "@/lib/content";
@@ -27,7 +28,10 @@ export async function generateMetadata({ params }: RouteParams): Promise<Metadat
   if (resolution.status !== "active") return UNAVAILABLE_METADATA;
 
   const { tenant, host } = resolution;
-  const post = await getNewsPost(tenant.id, host, slug);
+  const [post, site] = await Promise.all([
+    getNewsPost(tenant.id, host, slug),
+    getSite(tenant.id, host),
+  ]);
   if (!post) return missingContentMetadata(tenant);
 
   const url = `${canonicalOrigin(tenant, host)}/news/${post.slug}`;
@@ -36,6 +40,8 @@ export async function generateMetadata({ params }: RouteParams): Promise<Metadat
     title: post.title,
     ...(description ? { description } : {}),
     alternates: { canonical: url },
+    // A site-wide noindex covers every detail page too.
+    robots: robotsFor(site?.seo),
     openGraph: {
       type: "article",
       siteName: tenant.name,

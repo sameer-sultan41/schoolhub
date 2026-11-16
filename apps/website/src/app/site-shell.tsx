@@ -1,3 +1,4 @@
+import type { ApiSchemas } from "@schoolhub/api-client";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { type PublicSite, type PublicTenant, getTheme } from "@/themes";
@@ -13,6 +14,41 @@ export const UNAVAILABLE_METADATA: Metadata = {
   title: COPY.unavailable.metadataTitle,
   robots: { index: false, follow: false },
 };
+
+type PublicSeo = ApiSchemas["PublicSeo"];
+
+function allows(seo: PublicSeo): { index: boolean; follow: boolean } {
+  const directives = new Set(
+    (seo.robots ?? "")
+      .toLowerCase()
+      .split(",")
+      .map((directive) => directive.trim()),
+  );
+  const none = directives.has("none");
+  return {
+    index: !seo.noindex && !none && !directives.has("noindex"),
+    follow: !seo.noindex && !none && !directives.has("nofollow"),
+  };
+}
+
+/**
+ * `noindex` plus the free-text `robots` directives (`noindex`, `nofollow`, `none`; others are
+ * ignored), across every SEO source given (the site's and the page's). Any source can only narrow
+ * indexing, never widen it; a missing source (no site row) allows.
+ */
+export function robotsFor(...sources: (PublicSeo | null | undefined)[]): {
+  index: boolean;
+  follow: boolean;
+} {
+  return sources.reduce<{ index: boolean; follow: boolean }>(
+    (robots, seo) => {
+      if (!seo) return robots;
+      const own = allows(seo);
+      return { index: robots.index && own.index, follow: robots.follow && own.follow };
+    },
+    { index: true, follow: true },
+  );
+}
 
 /** A route whose content the API does not answer: titled for the school, never indexed. */
 export function missingContentMetadata(tenant: PublicTenant): Metadata {

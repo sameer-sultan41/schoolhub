@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { notFound } from "next/navigation";
 import { getAlbum, getSite } from "@/lib/content";
 import { resolveTenant } from "@/lib/tenant";
-import { makeAlbumDetail, makeGalleryItem, makeTenant } from "@/test-utils";
+import { makeAlbumDetail, makeGalleryItem, makeSite, makeTenant } from "@/test-utils";
 import AlbumPage, { generateMetadata } from "../page";
 
 jest.mock("next/navigation", () => ({
@@ -111,6 +111,22 @@ describe("AlbumPage", () => {
 });
 
 describe("generateMetadata", () => {
+  it("follows a site-wide noindex", async () => {
+    mockGetAlbum.mockResolvedValue(makeAlbumDetail());
+    mockGetSite.mockResolvedValue(makeSite({ seo: { ...makeSite().seo, noindex: true } }));
+
+    const metadata = await generateMetadata(params());
+
+    expect(metadata.robots).toEqual({ index: false, follow: false });
+  });
+
+  it("is indexable on a live site with no site-wide noindex", async () => {
+    mockGetAlbum.mockResolvedValue(makeAlbumDetail());
+    await expect(generateMetadata(params())).resolves.toMatchObject({
+      robots: { index: true, follow: true },
+    });
+  });
+
   it("titles the album on its canonical URL", async () => {
     mockGetAlbum.mockResolvedValue(makeAlbumDetail({ description: "Projects and prizes." }));
     const metadata = await generateMetadata(params());
