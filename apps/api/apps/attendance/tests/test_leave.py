@@ -13,7 +13,7 @@ from decimal import Decimal
 from django.test import TestCase
 from django.utils import timezone
 
-from apps.attendance import services
+from apps.attendance import notifications, services
 from apps.attendance.models import (
     ApprovalDecision,
     AttendanceStatus,
@@ -42,6 +42,7 @@ from apps.attendance.tests.factories import (
     open_all_week,
 )
 from core.api.exceptions import Conflict, DomainRuleViolation
+from core.notifications.models import Notification
 from core.rbac.models import RecordScope
 from core.tenancy.context import tenant_context
 
@@ -659,3 +660,26 @@ class EscalationScopeTests(LeaveTestCase):
             )
 
         self.assertEqual(decided.status, LeaveStatus.APPROVED)
+
+
+class ApproverNotificationTests(LeaveTestCase):
+    """§12's leave-submitted notice goes to approvers in the request's own school only.
+
+    `users`, `roles` and `user_roles` have no RLS, so the database does not keep a
+    holder lookup inside the tenant: the lookup has to filter by tenant itself.
+    """
+
+    def test_an_approver_in_another_school_is_not_notified(self) -> None:
+        other = TenantFactory()
+        foreign_approver = UserFactory(tenant=other)
+        grant(foreign_approver, services.STUDENT_LEAVE_APPROVE, scope=RecordScope.ALL)
+
+        with tenant_context(self.tenant.id):
+            request = self.submit()
+            notified = set(
+                Notification.objects.filter(
+                    event_key=notifications.LEAVE_SUBMITTED, source_id=request.pk
+                ).values_list("user_id", flat=True)
+            )
+
+        self.assertEqual(notified, {self.second_approver.pk})
