@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import {
   Button,
@@ -13,6 +14,7 @@ import {
 
 import { Toolbar, ToolbarHeading } from "@/app/(app)/shell/toolbar";
 import { LoadErrorCard } from "@/components/load-error-card";
+import { websitePagePath } from "@/config/paths";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { formatLastUpdated } from "@/lib/helpers";
 import { WEBSITE_CONTENT_STATUSES } from "@/services/shared/website-content";
@@ -98,7 +100,17 @@ function StaleContent() {
                 key={`${item.kind}:${item.id}`}
                 className="flex flex-wrap items-center gap-3 py-2"
               >
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">{item.title}</span>
+                {/* A page opens in its editor; the other kinds' screens arrive in PR G. */}
+                {item.kind === "pages" ? (
+                  <Link
+                    href={websitePagePath(item.id)}
+                    className="min-w-0 flex-1 truncate text-sm font-medium text-foreground hover:text-primary hover:underline"
+                  >
+                    {item.title}
+                  </Link>
+                ) : (
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium">{item.title}</span>
+                )}
                 <span className="text-xs text-muted-foreground">
                   {t(`inventory.kinds.${item.kind}`)}
                 </span>
