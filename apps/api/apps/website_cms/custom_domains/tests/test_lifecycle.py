@@ -99,6 +99,10 @@ class ReverifyClaimsTests(SweepTestCase):
 
     def test_a_stuck_verifying_claim_becomes_failed(self) -> None:
         row = self.claim("www.greenfield.example", CustomDomainStatus.VERIFYING)
+        # Stuck, not in flight: last touched before the window a user's `:verify` owns.
+        stale = timezone.now() - timedelta(seconds=VERIFY_IN_FLIGHT_SECONDS + 1)
+        with tenant_context(self.tenant.id):
+            CustomDomain.objects.filter(pk=row.pk).update(updated_at=stale)
         reverify_tenant_domains(self.tenant.id)
         self.assertEqual(self.stored(row).status, CustomDomainStatus.FAILED)
 
