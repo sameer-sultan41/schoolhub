@@ -1,4 +1,4 @@
-import { PUBLIC_FILES_PATHNAME, imagesConfig } from "../image-config";
+import { IMAGE_CACHE_SECONDS, PUBLIC_FILES_PATHNAME, imagesConfig } from "../image-config";
 
 describe("imagesConfig", () => {
   it("allows only the public API origin's file route", () => {
@@ -12,6 +12,7 @@ describe("imagesConfig", () => {
           search: "",
         },
       ],
+      minimumCacheTTL: IMAGE_CACHE_SECONDS,
     });
   });
 
@@ -29,13 +30,24 @@ describe("imagesConfig", () => {
   });
 
   it("allows no remote image without an API origin", () => {
-    expect(imagesConfig({ apiOrigin: "", allowLocalIP: false })).toEqual({ remotePatterns: [] });
+    expect(imagesConfig({ apiOrigin: "", allowLocalIP: false })).toMatchObject({
+      remotePatterns: [],
+    });
   });
 
   it("keeps the default redirect limit, which covers the file route's single 302", () => {
     expect(
       imagesConfig({ apiOrigin: "https://api.schoolhub.pk", allowLocalIP: false }),
     ).not.toHaveProperty("maximumRedirects");
+  });
+
+  it("keeps optimised images no longer than the API's public file cache (300 s)", () => {
+    // Next's default (14400 s) would keep an unpublished image for 4 hours.
+    expect(IMAGE_CACHE_SECONDS).toBe(300);
+    expect(
+      imagesConfig({ apiOrigin: "https://api.schoolhub.pk", allowLocalIP: false }).minimumCacheTTL,
+    ).toBe(IMAGE_CACHE_SECONDS);
+    expect(imagesConfig({ apiOrigin: "", allowLocalIP: false }).minimumCacheTTL).toBe(300);
   });
 
   it("refuses an origin that is not http(s)", () => {
