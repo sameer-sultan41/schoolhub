@@ -10,6 +10,7 @@ import {
   structurePage,
 } from "@/services/modules/school-organization/__tests__/structure-fixtures";
 import { cursorPage } from "@/test-fixtures/list-screen";
+import type { OnboardingRecord } from "@/services";
 import { onboardingRecord } from "@/test-fixtures/onboarding";
 import { buildUser, renderWithClient, renderWithProviders, setUrl } from "@/test-utils";
 
@@ -79,6 +80,17 @@ function renderWizard(url: string) {
   return userEvent.setup();
 }
 
+/** The server's checklist across a write: every read after the `PATCH` answers `after`, as the
+ * real one would (the wizard re-reads it after each mutation). */
+function serveChecklist(before: OnboardingRecord, after: OnboardingRecord) {
+  let current = before;
+  onboarding.fetchOnboarding.mockImplementation(() => Promise.resolve(current));
+  onboarding.updateOnboarding.mockImplementation(() => {
+    current = after;
+    return Promise.resolve(after);
+  });
+}
+
 function stepButton(title: string) {
   const nav = screen.getByRole("navigation", { name: "Setup steps" });
   return within(nav).getByRole("button", { name: new RegExp(`^${title}`) });
@@ -143,7 +155,8 @@ describe("setup wizard", () => {
   });
 
   it("offers Skip only on a skippable step, and sends it", async () => {
-    onboarding.updateOnboarding.mockResolvedValue(
+    serveChecklist(
+      onboardingRecord({ done: ["profile"] }),
       onboardingRecord({ done: ["profile"], skipped: ["students"] }),
     );
     const user = renderWizard("/setup?step=campuses");
@@ -165,8 +178,7 @@ describe("setup wizard", () => {
   });
 
   it("confirms the profile", async () => {
-    onboarding.fetchOnboarding.mockResolvedValue(onboardingRecord());
-    onboarding.updateOnboarding.mockResolvedValue(onboardingRecord({ done: ["profile"] }));
+    serveChecklist(onboardingRecord(), onboardingRecord({ done: ["profile"] }));
     const user = renderWizard("/setup?step=profile");
 
     await user.click(await screen.findByRole("button", { name: "Confirm profile" }));
