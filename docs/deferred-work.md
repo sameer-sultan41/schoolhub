@@ -53,6 +53,10 @@ either this file or `project-status.md`.
     - Image previews in the CMS. The CMS serializers return file ids only, so a saved image shows "on file". Add a display URL to the CMS serializers, then show it in `ImageFileField` and the gallery tiles.
     - An unsaved-changes warning when leaving the page editor (route change, tab close).
     - `isLeaving` in the page editor is never reset if `router.push` fails after a delete, so the skeleton would stay.
+  - **PR H follow-ups** (the dashboard's site settings, navigation and SEO screens):
+    - No editor for `header_config` / `footer_config`. The renderer reads neither yet and the menus carry the header and footer links; the editor waits for the theme's chrome to decide their shape. Every settings PATCH leaves them untouched.
+    - Some settings 422s carry no `<reason>:` prefix (`Unknown or inactive theme.`, `A site must keep a home page.`, the social and header/footer link messages), so the dashboard shows the server's English sentence to an Urdu viewer. The same inconsistency as the PR A item on `meta.reason` above: route them through `errors.violation` with a reason, then add `website.reasons.*` copy.
+    - `GET /website-settings`, `/navigation-menus` and `/seo-settings` require `website.page.view`. Every seeded role holding a settings, navigation or SEO update key also holds it, but a custom role given only an update key sees the section in the menu and its read answers 403 (shown as the server's reason). Either grant reads to the update keys (`AnyOf`) or keep the section behind both keys.
   - **PR B follow-ups** (minor review findings from news, events, gallery, contact and the opt-in flags, each left for the PR that next touches its file):
     - `content.seo_image_ids` and `content.locked` duplicate the equivalent helpers in `pages/`. One shared helper, once a third resource needs it; today the two copies are small and tested separately.
     - Gallery item `partial_update` and `destroy` fetch the album twice (once to lock, once to authorise). A redundant read, harmless at the album sizes a school has.
