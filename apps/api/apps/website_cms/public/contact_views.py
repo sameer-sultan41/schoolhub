@@ -45,7 +45,9 @@ from core.tenancy.models import Tenant
 TENANT_SLUG_HEADER = "X-Tenant-Slug"
 RECEIVED = {"status": "received"}
 TOO_LARGE = f"The body is over {CONTACT_BODY_MAX_BYTES // 1024} KB."
-IDEMPOTENCY_KEY_MAX = IdempotencyRecord._meta.get_field("key").max_length
+_KEY_MAX = IdempotencyRecord._meta.get_field("key").max_length
+assert _KEY_MAX is not None  # a CharField always has one
+IDEMPOTENCY_KEY_MAX: int = _KEY_MAX
 
 
 class PayloadTooLarge(APIException):

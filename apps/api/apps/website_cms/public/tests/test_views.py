@@ -724,7 +724,9 @@ class SitemapTests(PublicAPITestCase):
         )
         self.assertTrue(all(entry["updated_at"] for entry in entries))
         self.assertTrue(all(set(entry) == {"path", "updated_at"} for entry in entries))
-        self.assertNotIn("meta", response.json())
+        # A bare list in the envelope: no pagination keys beside the request id.
+        self.assertEqual(set(response.json()), {"data", "meta"})
+        self.assertEqual(set(response.json()["meta"]), {"request_id"})
 
     def test_sitemap_excludes_robots_noindex(self) -> None:
         """One rule (`is_indexable`) decides the sitemap and a page's own `seo.noindex`."""
