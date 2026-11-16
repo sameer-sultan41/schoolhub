@@ -12,10 +12,17 @@ import {
 import { websitePagePath } from "@/config/paths";
 import { mocked } from "@/test-fixtures/list-screen";
 import { USER_LOADED, UserLoaded } from "@/test-fixtures/user-loaded";
-import { buildUser, renderWithProviders } from "@/test-utils";
+import { buildUser, renderWithProviders, setUrl } from "@/test-utils";
 
 import { STAMP, violation } from "@/features/website/shared/__tests__/content-fixtures";
 import { SiteSettings } from "../site-settings";
+
+// The screen renders the shell toolbar, which reads the path (`usePathname`).
+jest.mock("next/navigation", () =>
+  jest
+    .requireActual<{ createNavigationMock: () => unknown }>("@/test-utils")
+    .createNavigationMock(),
+);
 
 jest.mock("sonner", () => ({
   toast: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
@@ -137,6 +144,7 @@ let current: WebsiteSettingsRecord;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  setUrl("/website/settings");
   asUser();
   current = settingsRecord();
   fetchSettings.mockImplementation(() => Promise.resolve(current));

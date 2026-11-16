@@ -3,10 +3,17 @@ import type { PermissionKey } from "@schoolhub/types";
 
 import { Services } from "@/services";
 import { mocked } from "@/test-fixtures/list-screen";
-import { buildUser, renderWithProviders } from "@/test-utils";
+import { buildUser, renderWithProviders, setUrl } from "@/test-utils";
 
 import { NavigationEditor } from "@/features/website/navigation/navigation-editor";
 import { WebsiteReadGate } from "../website-read-gate";
+
+// The screen renders the shell toolbar, which reads the path (`usePathname`).
+jest.mock("next/navigation", () =>
+  jest
+    .requireActual<{ createNavigationMock: () => unknown }>("@/test-utils")
+    .createNavigationMock(),
+);
 
 jest.mock("@/services", () =>
   jest
@@ -27,6 +34,7 @@ function renderGated(keys: PermissionKey[]) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  setUrl("/website/navigation");
 });
 
 describe("website read gate", () => {

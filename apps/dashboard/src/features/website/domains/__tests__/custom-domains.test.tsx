@@ -6,10 +6,17 @@ import { toast } from "sonner";
 import { ApiError, Services, type CustomDomainRecord } from "@/services";
 import { mocked } from "@/test-fixtures/list-screen";
 import { USER_LOADED, UserLoaded } from "@/test-fixtures/user-loaded";
-import { buildUser, renderWithProviders } from "@/test-utils";
+import { buildUser, renderWithProviders, setUrl } from "@/test-utils";
 
 import { STAMP, violation } from "@/features/website/shared/__tests__/content-fixtures";
 import { CustomDomains } from "../custom-domains";
+
+// The screen renders the shell toolbar, which reads the path (`usePathname`).
+jest.mock("next/navigation", () =>
+  jest
+    .requireActual<{ createNavigationMock: () => unknown }>("@/test-utils")
+    .createNavigationMock(),
+);
 
 jest.mock("sonner", () => ({
   toast: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
@@ -94,6 +101,7 @@ function answer(saved: CustomDomainRecord): Promise<CustomDomainRecord> {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  setUrl("/website/domains");
   serve(domainRecord());
   fetchDomains.mockImplementation(() => Promise.resolve(current));
 });

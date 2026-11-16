@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 
 import { Services, type NavigationMenuRecord, type NavItem } from "@/services";
 import { mocked } from "@/test-fixtures/list-screen";
-import { buildUser, renderWithProviders } from "@/test-utils";
+import { buildUser, renderWithProviders, setUrl } from "@/test-utils";
 
 import { STAMP } from "@/features/website/shared/__tests__/content-fixtures";
 import { NavigationEditor } from "../navigation-editor";
@@ -13,6 +13,13 @@ import { NavigationEditor } from "../navigation-editor";
  * move and remove the top-level links around them, then save: the payload must keep every
  * sub-link with its own parent.
  */
+
+// The screen renders the shell toolbar, which reads the path (`usePathname`).
+jest.mock("next/navigation", () =>
+  jest
+    .requireActual<{ createNavigationMock: () => unknown }>("@/test-utils")
+    .createNavigationMock(),
+);
 
 jest.mock("sonner", () => ({
   toast: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
@@ -83,6 +90,7 @@ async function save(user: ReturnType<typeof userEvent.setup>) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  setUrl("/website/navigation");
   mocked(Services.auth.fetchCurrentUser).mockResolvedValue(
     buildUser(["website.page.view", "website.navigation.update"]),
   );

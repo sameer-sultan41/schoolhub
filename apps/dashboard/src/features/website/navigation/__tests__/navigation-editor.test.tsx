@@ -11,10 +11,17 @@ import {
   type WebsitePageRecord,
 } from "@/services";
 import { mocked } from "@/test-fixtures/list-screen";
-import { buildUser, renderWithProviders } from "@/test-utils";
+import { buildUser, renderWithProviders, setUrl } from "@/test-utils";
 
 import { STAMP, violation } from "@/features/website/shared/__tests__/content-fixtures";
 import { NavigationEditor } from "../navigation-editor";
+
+// The screen renders the shell toolbar, which reads the path (`usePathname`).
+jest.mock("next/navigation", () =>
+  jest
+    .requireActual<{ createNavigationMock: () => unknown }>("@/test-utils")
+    .createNavigationMock(),
+);
 
 jest.mock("sonner", () => ({
   toast: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
@@ -97,6 +104,7 @@ function formItemOf(input: HTMLElement) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  setUrl("/website/navigation");
   asUser("website.page.view", "website.navigation.update");
   fetchPublished.mockResolvedValue([
     publishedPage(ABOUT_ID, "About us"),
