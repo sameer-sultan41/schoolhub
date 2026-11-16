@@ -4404,12 +4404,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * @description Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
-         *
-         *     The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
-         *     on a principal with no `pk`.
-         */
+        /** @description Classes that opted in to the website. */
         get: operations["public_classes"];
         put?: never;
         post?: never;
@@ -4443,12 +4438,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * @description Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
-         *
-         *     The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
-         *     on a principal with no `pk`.
-         */
+        /** @description Departments that opted in to the website. */
         get: operations["public_departments"];
         put?: never;
         post?: never;
@@ -4487,12 +4477,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * @description Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
-         *
-         *     The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
-         *     on a principal with no `pk`.
-         */
+        /** @description Published gallery albums with their item counts. */
         get: operations["public_gallery_albums"];
         put?: never;
         post?: never;
@@ -4509,12 +4494,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * @description Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
-         *
-         *     The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
-         *     on a principal with no `pk`.
-         */
+        /** @description One published album by slug, with its items (at most 200). */
         get: operations["public_gallery_album"];
         put?: never;
         post?: never;
@@ -4531,12 +4511,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * @description Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
-         *
-         *     The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
-         *     on a principal with no `pk`.
-         */
+        /** @description The latest images across published albums. */
         get: operations["public_gallery_items"];
         put?: never;
         post?: never;
@@ -4553,12 +4528,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * @description Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
-         *
-         *     The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
-         *     on a principal with no `pk`.
-         */
+        /** @description Published news posts, newest first. */
         get: operations["public_news_posts"];
         put?: never;
         post?: never;
@@ -4575,12 +4545,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * @description Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
-         *
-         *     The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
-         *     on a principal with no `pk`.
-         */
+        /** @description One published news post by slug. */
         get: operations["public_news_post"];
         put?: never;
         post?: never;
@@ -4597,12 +4562,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * @description Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
-         *
-         *     The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
-         *     on a principal with no `pk`.
-         */
+        /** @description Published school notices, newest first. */
         get: operations["public_notices"];
         put?: never;
         post?: never;
@@ -4684,12 +4644,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * @description Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
-         *
-         *     The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
-         *     on a principal with no `pk`.
-         */
+        /** @description Published events by `scope`: upcoming (soonest first, the default) or past. */
         get: operations["public_school_events"];
         put?: never;
         post?: never;
@@ -4706,12 +4661,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * @description Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
-         *
-         *     The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
-         *     on a principal with no `pk`.
-         */
+        /** @description One published event by slug. */
         get: operations["public_school_event"];
         put?: never;
         post?: never;
@@ -4766,12 +4716,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * @description Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
-         *
-         *     The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
-         *     on a principal with no `pk`.
-         */
+        /** @description Staff who opted in to the website, as public teacher cards. */
         get: operations["public_teachers"];
         put?: never;
         post?: never;

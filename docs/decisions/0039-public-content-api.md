@@ -31,7 +31,7 @@ the contract is in [website-cms.md](../03-modules/website-cms.md) §16.
 2. **The tenant comes from `?host=`.** `website_cms.hosts.resolve_host` normalises the host
    (`core/tenancy/hosts.py::normalise_host`: lowercase, no port or trailing dot, IDNA, LDH
    labels, 253 characters) and matches exactly one label under `PLATFORM_DOMAIN` by slug, or an
-   active `custom_domain_routes` row of a live tenant. Reads then bind `tenant_atomic`, so RLS
+   active `custom_domain_routes` row of a non-deleted tenant (its status is judged per read). Reads then bind `tenant_atomic`, so RLS
    applies as it does everywhere. Every read answers one 404 for an unknown host, a school that
    is not operational, `module.website` off, or a site that is unpublished or in maintenance;
    `tenants/by-host` reports the status instead and withholds contact, domain and modules
@@ -111,6 +111,12 @@ the contract is in [website-cms.md](../03-modules/website-cms.md) §16.
 - Unpublishing content does not recall a file link already handed out (about 65 minutes), and
   a change of a feature flag's platform default does not revalidate the renderer's cache
   (the 300 s TTL bounds it); both are in [deferred-work.md](../deferred-work.md).
+- `num_proxies = 2` is safe only once the ALB accepts traffic from CloudFront alone (the
+  origin-facing managed prefix list on the ALB security group, or a CloudFront custom origin
+  header checked by an ALB listener rule). Until then anyone who connects to the ALB directly
+  controls `X-Forwarded-For`, so the per-IP limits (public form, login, password reset,
+  invitations, payment-callback failures) and the stored audit and contact IPs are spoofable.
+  This is a launch blocker in [deferred-work.md](../deferred-work.md).
 - `CORS_ALLOW_CREDENTIALS` is global, so an allowed tenant origin also receives it; the
   affected routes are anonymous and use no cookies.
 - Custom-domain endpoints, the verification beat and the TLS provisioner arrive in PR D on top

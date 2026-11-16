@@ -84,6 +84,21 @@ either this file or `project-status.md`.
   too large trusts a client-supplied `X-Forwarded-For` entry). It blocks launching the public
   site until set. An unset value in dev and test keeps keying on the raw header.
 
+- **LAUNCH BLOCKER: restrict the ALB to CloudFront before trusting `num_proxies = 2`.** The
+  value is safe only once the ALB accepts traffic from CloudFront alone: the origin-facing
+  managed prefix list on the ALB security group, or a CloudFront custom origin header checked by
+  an ALB listener rule. Until then anyone connecting to the ALB directly controls
+  `X-Forwarded-For`, so the per-IP limits (public form, login, password reset, invitations,
+  payment-callback failures) and the stored audit and contact IPs are spoofable.
+  ([ADR-0039](decisions/0039-public-content-api.md) Consequences.)
+
+- **Terraform wiring for the public website is missing.** The API container needs
+  `WEBSITE_MACHINE_TOKENS`, `WEBSITE_REVALIDATE_URL` (the renderer's internal origin) and
+  `WEBSITE_REVALIDATE_SECRET` (both secrets as `api_secrets` ARNs) and `WEBSITE_CNAME_TARGET`;
+  the renderer task needs `WEBSITE_MACHINE_TOKEN` and the same revalidate secret. Until wired,
+  staging and production sites are dark (the renderer's reads get 401 and fail closed) and
+  revalidation is a no-op.
+
 - **AI gateway and AI-FEE-02 follow-ups** (`feat/ai-gateway`, plan
   `docs/superpowers/plans/2026-11-07-ai-gateway.md`, [ADR-0035](decisions/0035-ai-gateway-shape.md)).
   The gateway and the on-demand finance report summary shipped backend only. Left out on purpose:

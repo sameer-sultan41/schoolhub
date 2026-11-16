@@ -59,6 +59,8 @@ class _FeedView(PublicContentView):
 
 
 class PublicNewsPostListView(_FeedView):
+    """Published news posts, newest first."""
+
     @extend_schema(
         operation_id="public_news_posts",
         parameters=LIST_PARAMETERS,
@@ -70,6 +72,8 @@ class PublicNewsPostListView(_FeedView):
 
 
 class PublicNewsPostView(_FeedView):
+    """One published news post by slug."""
+
     @extend_schema(
         operation_id="public_news_post",
         parameters=[HOST_PARAMETER, SLUG_PARAMETER],
@@ -81,6 +85,8 @@ class PublicNewsPostView(_FeedView):
 
 
 class PublicSchoolEventListView(_FeedView):
+    """Published events by `scope`: upcoming (soonest first, the default) or past."""
+
     @extend_schema(
         operation_id="public_school_events",
         parameters=[*LIST_PARAMETERS, SCOPE_PARAMETER],
@@ -95,6 +101,8 @@ class PublicSchoolEventListView(_FeedView):
 
 
 class PublicSchoolEventView(_FeedView):
+    """One published event by slug."""
+
     @extend_schema(
         operation_id="public_school_event",
         parameters=[HOST_PARAMETER, SLUG_PARAMETER],
@@ -106,6 +114,8 @@ class PublicSchoolEventView(_FeedView):
 
 
 class PublicGalleryAlbumListView(_FeedView):
+    """Published gallery albums with their item counts."""
+
     @extend_schema(
         operation_id="public_gallery_albums",
         parameters=LIST_PARAMETERS,
@@ -117,6 +127,8 @@ class PublicGalleryAlbumListView(_FeedView):
 
 
 class PublicGalleryAlbumView(_FeedView):
+    """One published album by slug, with its items (at most 200)."""
+
     @extend_schema(
         operation_id="public_gallery_album",
         parameters=[HOST_PARAMETER, SLUG_PARAMETER],
@@ -128,6 +140,8 @@ class PublicGalleryAlbumView(_FeedView):
 
 
 class PublicGalleryImageListView(_FeedView):
+    """The latest images across published albums."""
+
     @extend_schema(
         operation_id="public_gallery_items",
         parameters=LIST_PARAMETERS,
@@ -139,6 +153,8 @@ class PublicGalleryImageListView(_FeedView):
 
 
 class PublicTeacherListView(_FeedView):
+    """Staff who opted in to the website, as public teacher cards."""
+
     @extend_schema(
         operation_id="public_teachers",
         parameters=LIST_PARAMETERS,
@@ -150,6 +166,8 @@ class PublicTeacherListView(_FeedView):
 
 
 class PublicDepartmentListView(_FeedView):
+    """Departments that opted in to the website."""
+
     @extend_schema(
         operation_id="public_departments",
         parameters=LIST_PARAMETERS,
@@ -161,6 +179,8 @@ class PublicDepartmentListView(_FeedView):
 
 
 class PublicClassListView(_FeedView):
+    """Classes that opted in to the website."""
+
     @extend_schema(
         operation_id="public_classes",
         parameters=LIST_PARAMETERS,
@@ -172,6 +192,8 @@ class PublicClassListView(_FeedView):
 
 
 class PublicNoticeListView(_FeedView):
+    """Published school notices, newest first."""
+
     @extend_schema(
         operation_id="public_notices",
         parameters=LIST_PARAMETERS,

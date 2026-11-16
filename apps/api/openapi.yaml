@@ -9851,11 +9851,7 @@ paths:
   /api/v1/public/classes:
     get:
       operationId: public_classes
-      description: |-
-        Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
-
-        The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
-        on a principal with no `pk`.
+      description: Classes that opted in to the website.
       parameters:
       - in: query
         name: host
@@ -9927,11 +9923,7 @@ paths:
   /api/v1/public/departments:
     get:
       operationId: public_departments
-      description: |-
-        Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
-
-        The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
-        on a principal with no `pk`.
+      description: Departments that opted in to the website.
       parameters:
       - in: query
         name: host
@@ -9990,11 +9982,7 @@ paths:
   /api/v1/public/gallery-albums:
     get:
       operationId: public_gallery_albums
-      description: |-
-        Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
-
-        The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
-        on a principal with no `pk`.
+      description: Published gallery albums with their item counts.
       parameters:
       - in: query
         name: host
@@ -10025,11 +10013,7 @@ paths:
   /api/v1/public/gallery-albums/{slug}:
     get:
       operationId: public_gallery_album
-      description: |-
-        Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
-
-        The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
-        on a principal with no `pk`.
+      description: One published album by slug, with its items (at most 200).
       parameters:
       - in: query
         name: host
@@ -10059,11 +10043,7 @@ paths:
   /api/v1/public/gallery-items:
     get:
       operationId: public_gallery_items
-      description: |-
-        Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
-
-        The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
-        on a principal with no `pk`.
+      description: The latest images across published albums.
       parameters:
       - in: query
         name: host
@@ -10094,11 +10074,7 @@ paths:
   /api/v1/public/news-posts:
     get:
       operationId: public_news_posts
-      description: |-
-        Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
-
-        The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
-        on a principal with no `pk`.
+      description: Published news posts, newest first.
       parameters:
       - in: query
         name: host
@@ -10129,11 +10105,7 @@ paths:
   /api/v1/public/news-posts/{slug}:
     get:
       operationId: public_news_post
-      description: |-
-        Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
-
-        The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
-        on a principal with no `pk`.
+      description: One published news post by slug.
       parameters:
       - in: query
         name: host
@@ -10163,11 +10135,7 @@ paths:
   /api/v1/public/notices:
     get:
       operationId: public_notices
-      description: |-
-        Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
-
-        The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
-        on a principal with no `pk`.
+      description: Published school notices, newest first.
       parameters:
       - in: query
         name: host
@@ -10283,11 +10251,8 @@ paths:
   /api/v1/public/school-events:
     get:
       operationId: public_school_events
-      description: |-
-        Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
-
-        The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
-        on a principal with no `pk`.
+      description: 'Published events by `scope`: upcoming (soonest first, the default)
+        or past.'
       parameters:
       - in: query
         name: host
@@ -10326,11 +10291,7 @@ paths:
   /api/v1/public/school-events/{slug}:
     get:
       operationId: public_school_event
-      description: |-
-        Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
-
-        The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
-        on a principal with no `pk`.
+      description: One published event by slug.
       parameters:
       - in: query
         name: host
@@ -10420,11 +10381,7 @@ paths:
   /api/v1/public/teachers:
     get:
       operationId: public_teachers
-      description: |-
-        Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
-
-        The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
-        on a principal with no `pk`.
+      description: Staff who opted in to the website, as public teacher cards.
       parameters:
       - in: query
         name: host

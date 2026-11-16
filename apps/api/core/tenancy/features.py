@@ -238,6 +238,7 @@ def enabled_feature_keys(*, tenant_id: uuid.UUID, prefix: str = "") -> list[str]
     keys = sorted(spec.key for spec in registry.all() if spec.key.startswith(prefix))
     flags = list(FeatureFlag.objects.filter(key__in=keys).order_by("key"))
     latest: dict[uuid.UUID, TenantFeatureOverride] = {}
+    # `all_tenants`, as `_resolve_feature` reads it, filtered to this one tenant explicitly.
     overrides = TenantFeatureOverride.all_tenants.filter(
         tenant_id=tenant_id, feature_flag__in=flags, deleted_at__isnull=True
     ).order_by("feature_flag_id", "-created_at")
