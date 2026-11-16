@@ -124,7 +124,7 @@ describe("PublishActions", () => {
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith(
-        "Add at least one visible section, and save it, before publishing.",
+        "A published page needs at least one visible section.",
       );
     });
   });

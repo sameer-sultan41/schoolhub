@@ -169,6 +169,9 @@ export interface WebsitePagesOptions {
   settings?: WebsiteSettings;
   /** Page ids a navigation menu links to (`page_in_use` on delete or archive). */
   menuTargets?: string[];
+  /** Whether the viewer holds `website.page.publish` (default true). Without it, an edit to a
+   * published page is `publish_required` (`content.assert_may_edit`). */
+  canPublish?: boolean;
 }
 
 /**
@@ -180,6 +183,9 @@ export interface WebsitePagesOptions {
  * - publishing needs a visible section (`no_visible_sections`);
  * - deleting a published page is `unpublish_first`; deleting or archiving the home page or a
  *   menu's target is `page_in_use`;
+ * - an edit (details or sections) to a published page needs the publish key
+ *   (`publish_required`, `non_field`), and a published page keeps a visible section
+ *   (`no_visible_sections`);
  * - `PATCH …/page-sections` replaces the list, keeping given ids and positions in order, and
  *   refuses a type the theme lacks under `sections.<i>.section_type`.
  *
@@ -191,6 +197,15 @@ export function websitePagesModule(options: WebsitePagesOptions = {}): MockModul
     const theme = options.theme ?? buildWebsiteTheme();
     const settings = options.settings ?? buildWebsiteSettings();
     const menuTargets = options.menuTargets ?? [];
+    const canPublish = options.canPublish ?? true;
+    const publishRequired = (page: WebsitePage) =>
+      page.status === "published" && !canPublish
+        ? refuse(
+            "non_field",
+            "publish_required",
+            "Only a publisher can edit published content — ask a publisher to edit it or unpublish it.",
+          )
+        : undefined;
     const sectionTypes = (theme.section_types ?? {}) as Record<string, unknown>;
 
     const find = (pageId: string | undefined) => pages.find((page) => page.id === pageId);
@@ -263,6 +278,8 @@ export function websitePagesModule(options: WebsitePagesOptions = {}): MockModul
     api.patch("/website-pages/:pageId", (request) => {
       const page = find(request.params["pageId"]);
       if (!page) return fail(404, "Not found.");
+      const refused = publishRequired(page);
+      if (refused) return refused;
       Object.assign(page, (request.json() as Partial<PageWrite> | null) ?? {}, {
         updated_at: ACTED_AT,
       });
@@ -286,8 +303,17 @@ export function websitePagesModule(options: WebsitePagesOptions = {}): MockModul
     api.patch("/website-pages/:pageId/page-sections", (request) => {
       const page = find(request.params["pageId"]);
       if (!page) return fail(404, "Not found.");
+      const refused = publishRequired(page);
+      if (refused) return refused;
       const body = request.json() as { sections?: SectionInput[] } | null;
       const sections = body?.sections ?? [];
+      if (page.status === "published" && !sections.some((section) => section.is_visible)) {
+        return refuse(
+          "sections",
+          "no_visible_sections",
+          "a published page needs at least one visible section.",
+        );
+      }
       const unknown = sections.findIndex((section) => !(section.section_type in sectionTypes));
       if (unknown >= 0) {
         const type = sections[unknown]?.section_type ?? "";

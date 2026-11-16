@@ -142,14 +142,20 @@ function PageEditorBody({ page, types, user, onLeave }: PageEditorBodyProps) {
   const closeDialog = (open: boolean) => {
     if (!open) setDialog(null);
   };
+  const t = useTranslations("website.pages.editor");
   const canUpdate = hasPermission(user, "website.page.update");
+  const canPublish = hasPermission(user, "website.page.publish");
+  const isPublished = page.status === "published";
+  // The API refuses an edit to a published page without the publish key (`publish_required`).
+  const canEdit = canUpdate && (!isPublished || canPublish);
+  const readOnlyNotice = canEdit ? null : canUpdate ? t("publisherOnly") : t("readOnly");
 
   return (
     <div className="space-y-5">
       <PageEditorHeader
         page={page}
-        canUpdate={canUpdate}
-        canPublish={hasPermission(user, "website.page.publish")}
+        canUpdate={canEdit}
+        canPublish={canPublish}
         canDelete={hasPermission(user, "website.page.delete")}
         isDirty={editor.isDirty}
         onEditDetails={() => {
@@ -159,7 +165,13 @@ function PageEditorBody({ page, types, user, onLeave }: PageEditorBodyProps) {
           setDialog("delete");
         }}
       />
-      <SectionsPanel editor={editor} types={types} labelOf={labelOf} canUpdate={canUpdate} />
+      <SectionsPanel
+        editor={editor}
+        types={types}
+        labelOf={labelOf}
+        readOnlyNotice={readOnlyNotice}
+        isLive={canEdit && isPublished}
+      />
       {dialog === "details" && <PageFormDialog open onOpenChange={closeDialog} page={page} />}
       {dialog === "delete" && (
         <DeletePageDialog

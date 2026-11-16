@@ -67,6 +67,9 @@ export function useSectionsForm(page: WebsitePageDetail, types: SectionTypes) {
 
   const selectedIndex = sections.findIndex((section) => section.key === selectedKey);
   const isLocked = tracker.isUploading || mutation.isPending;
+  // A live page must keep a visible section; the API refuses a save without one.
+  const needsVisibleSection =
+    page.status === "published" && !sections.some((section) => section.is_visible);
   // Read here so the editor re-renders as they change (react-hook-form's proxy subscription).
   const { errors, isDirty } = form.formState;
   const errorKeys = new Set([
@@ -135,6 +138,11 @@ export function useSectionsForm(page: WebsitePageDetail, types: SectionTypes) {
     event.preventDefault();
     setFormError(null);
     setSectionMessages({});
+    if (needsVisibleSection) {
+      // Enter in a field gets past the held Save; the rule still holds.
+      setFormError(t("liveNeedsVisible"));
+      return;
+    }
     void submitGuard.guard(async () => {
       // A submit that got past the held Save (Enter in a field) still waits for its uploads.
       await tracker.settled();
@@ -185,6 +193,7 @@ export function useSectionsForm(page: WebsitePageDetail, types: SectionTypes) {
     formError,
     isDirty,
     isLocked,
+    needsVisibleSection,
     isSaving: mutation.isPending,
     submit,
     discard,
