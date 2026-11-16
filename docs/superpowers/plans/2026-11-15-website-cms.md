@@ -393,7 +393,7 @@ Ships the app skeleton, themes, site settings, pages with sections, navigation, 
 **Files:** the `contact_submissions/` package and `website_cms/notifications.py`.
 
 **Endpoints:**
-- `GET /contact-submissions` (filters: `status`, `created_at__gte`, `created_at__lte`, `search`);
+- `GET /contact-submissions` (filters: `status`, `created_at__gte`, `created_at__lte`, `created_at__lt` (exclusive; the dashboard sends next local midnight), `search`);
 - `GET /contact-submissions/{id}`;
 - `PATCH /contact-submissions/{id}`: only `status`; it sets `handled_by=request.user`.
 
