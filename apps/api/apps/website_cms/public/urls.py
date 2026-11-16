@@ -5,6 +5,7 @@
 
 from django.urls import URLPattern, path
 
+from apps.website_cms.media import PUBLIC_FILE_PATH
 from apps.website_cms.public.content_views import (
     PublicClassListView,
     PublicDepartmentListView,
@@ -18,11 +19,17 @@ from apps.website_cms.public.content_views import (
     PublicSchoolEventView,
     PublicTeacherListView,
 )
+from apps.website_cms.public.file_views import PublicFileView
 from apps.website_cms.public.views import (
     PublicPageView,
     PublicSitemapView,
     PublicSiteView,
     PublicTenantByHostView,
+)
+
+#: The redirect's route, cut from the one `PUBLIC_FILE_PATH` declaration `public_file_url` fills.
+FILE_ROUTE = PUBLIC_FILE_PATH.removeprefix("/api/v1/public/").format(
+    tenant_id="<uuid:tenant_id>", file_id="<uuid:file_id>"
 )
 
 urlpatterns: list[URLPattern] = [
@@ -45,4 +52,5 @@ urlpatterns: list[URLPattern] = [
     path("departments", PublicDepartmentListView.as_view(), name="public-departments"),
     path("classes", PublicClassListView.as_view(), name="public-classes"),
     path("notices", PublicNoticeListView.as_view(), name="public-notices"),
+    path(FILE_ROUTE, PublicFileView.as_view(), name="public-file"),
 ]

@@ -4441,6 +4441,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/files/{tenant_id}/{file_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Redirect to a `ready`, `public`, live file of an operational school; 404 otherwise.
+         *
+         *     Every miss (unknown or suspended school, other school's file, private, pending, deleted)
+         *     answers the same 404, so a caller learns nothing about which check failed.
+         */
+        get: operations["public_files_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/gallery-albums": {
         parameters: {
             query?: never;
@@ -22865,6 +22887,34 @@ export interface operations {
                 };
             };
             /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_files_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_id: string;
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such public file (the same for every miss). */
             404: {
                 headers: {
                     [name: string]: unknown;

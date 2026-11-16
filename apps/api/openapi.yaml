@@ -9918,6 +9918,34 @@ paths:
           description: ''
         '404':
           description: No live site, page or tenant answers on this host.
+  /api/v1/public/files/{tenant_id}/{file_id}:
+    get:
+      operationId: public_files_retrieve
+      description: |-
+        Redirect to a `ready`, `public`, live file of an operational school; 404 otherwise.
+
+        Every miss (unknown or suspended school, other school's file, private, pending, deleted)
+        answers the same 404, so a caller learns nothing about which check failed.
+      parameters:
+      - in: path
+        name: file_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: tenant_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - public
+      responses:
+        '302':
+          description: No response body
+        '404':
+          description: No such public file (the same for every miss).
   /api/v1/public/gallery-albums:
     get:
       operationId: public_gallery_albums

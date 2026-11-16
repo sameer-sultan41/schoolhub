@@ -674,6 +674,9 @@ PUBLIC_ANONYMOUS_ROUTES = {
     "api/v1/public/payment-callbacks/<slug:tenant_slug>/<str:callback_token>": (
         "the payment provider's callback; trusted by its signature, not a token"
     ),
+    "api/v1/public/files/<uuid:tenant_id>/<uuid:file_id>": (
+        "the anonymous redirect to a public file; throttled per (IP, file)"
+    ),
 }
 
 

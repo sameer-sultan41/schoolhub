@@ -69,6 +69,23 @@ class AIRequestThrottle(UserRateThrottle):
     scope = "ai"
 
 
+class PublicFileThrottle(SimpleRateThrottle):
+    """The anonymous public file redirect, per (client IP, file).
+
+    Not per IP alone: an image optimiser fetches many distinct files from one address, which
+    one bucket would starve. Per file, a hot-linker hammering one image is still slowed.
+    """
+
+    scope = "public_file"
+
+    def get_cache_key(self, request, view):
+        from core.rbac.machine import client_ip
+
+        kwargs = getattr(view, "kwargs", None) or {}
+        ident = f"{client_ip(request) or 'unknown'}:{kwargs.get('file_id', '')}"
+        return self.cache_format % {"scope": self.scope, "ident": ident}
+
+
 class PaymentCallbackThrottle(SimpleRateThrottle):
     """The public payment callback, per (school slug, callback token).
 

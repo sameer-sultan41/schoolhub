@@ -260,6 +260,8 @@ THROTTLE_RATES: dict[str, str] = {
     # Machine-client reads (core.rbac.machine.MachineClientThrottle), per (client, host):
     # about 8 reads per page render, ISR misses only (plan decision 2a).
     "machine_client": "1200/min",
+    # The anonymous public file redirect, per (client IP, file).
+    "public_file": "120/min",
 }
 
 REST_FRAMEWORK = {

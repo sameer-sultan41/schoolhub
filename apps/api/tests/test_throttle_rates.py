@@ -19,6 +19,7 @@ from core.api.throttling import (
     PasswordResetIPThrottle,
     PaymentCallbackFailureThrottle,
     PaymentCallbackThrottle,
+    PublicFileThrottle,
     PublicFormThrottle,
     TenantRateThrottle,
     UserRateThrottle,
@@ -38,6 +39,7 @@ DEFAULT_RATES = {
     "password_reset_ip": "20/hour",
     "invitation_ip": "60/hour",
     "machine_client": "1200/min",
+    "public_file": "120/min",
 }
 
 
@@ -58,6 +60,7 @@ class ThrottleRateTests(SimpleTestCase):
             PasswordResetIPThrottle,
             InvitationIPThrottle,
             MachineClientThrottle,
+            PublicFileThrottle,
         ):
             with self.subTest(throttle=throttle.__name__):
                 self.assertNotIn("rate", vars(throttle))
