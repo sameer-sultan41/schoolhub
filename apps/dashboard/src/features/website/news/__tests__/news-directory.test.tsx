@@ -256,6 +256,20 @@ describe("news directory", () => {
     ).toBeVisible();
   });
 
+  it("keeps the open sheet when the list fails to refresh behind it", async () => {
+    asUser(...EDITOR_KEYS);
+    publishPost.mockResolvedValue(newsPost({ status: "published" }));
+    const user = await renderScreen();
+
+    await user.click(await screen.findByRole("button", { name: "Sports day results" }));
+    const sheet = await screen.findByRole("dialog", { name: "Sports day results" });
+    fetchPage.mockRejectedValue(new Error("offline"));
+    await user.click(await within(sheet).findByRole("button", { name: "Publish" }));
+
+    expect(await screen.findByText("The news posts couldn't be loaded.")).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "Sports day results" })).toBeInTheDocument();
+  });
+
   it("shows the server's refusal to delete a post published meanwhile", async () => {
     asUser(...EDITOR_KEYS);
     deletePost.mockRejectedValue(

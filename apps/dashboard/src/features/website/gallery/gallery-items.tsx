@@ -94,10 +94,15 @@ export function GalleryItems({ albumId, canUpdate }: { albumId: string; canUpdat
         </div>
         {canUpdate ? (
           <div className="flex flex-wrap items-start gap-2">
-            <GalleryUpload albumId={albumId} onBusyChange={setIsUploading} />
+            <GalleryUpload
+              albumId={albumId}
+              onBusyChange={setIsUploading}
+              disabled={isReordering}
+            />
             <Button
               type="button"
               variant="outline"
+              disabled={isReordering}
               onClick={() => {
                 setTarget({ action: "addVideo" });
               }}
@@ -179,6 +184,8 @@ export function GalleryItems({ albumId, canUpdate }: { albumId: string; canUpdat
           onOpenChange={close}
           title={t("removeTitle", { index: target.index + 1 })}
           description={t("removeDescription")}
+          confirmLabel={t("removeConfirm")}
+          deletedMessage={t("removed")}
           remove={() => Services.galleryAlbums.deleteGalleryItem(albumId, target.item.id)}
           reasonScope={CONTENT_REASON_SCOPE}
         />

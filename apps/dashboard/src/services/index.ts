@@ -77,6 +77,9 @@ import { WebsiteSettingsService } from "./modules/website/website-settings";
  */
 export { ApiError } from "@schoolhub/api-client";
 
+/** A failed upload, by the step that failed, for the same `instanceof` checks. */
+export { FileUploadError } from "./modules/files/files-errors";
+
 /** Every module's public types live in `./types` (this file stays under the 400-line cap). */
 export * from "./types";
 

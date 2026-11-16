@@ -73,6 +73,7 @@ export function AlbumPage({ albumId }: { albumId: string }) {
       <EmptyState
         icon={Images}
         title={t("notFound")}
+        description={t("notFoundDescription")}
         action={
           <Button variant="outline" asChild>
             <Link href={Paths.WEBSITE_GALLERY}>{t("actions.back")}</Link>

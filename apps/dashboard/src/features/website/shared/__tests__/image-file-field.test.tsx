@@ -4,8 +4,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Form } from "@schoolhub/ui";
 
-import { ApiError, Services, type JsonSchema } from "@/services";
-import { FileUploadError } from "@/services/modules/files";
+import { ApiError, FileUploadError, Services, type JsonSchema } from "@/services";
 import { mocked } from "@/test-fixtures/list-screen";
 import { renderWithProviders, stubObjectUrls } from "@/test-utils";
 

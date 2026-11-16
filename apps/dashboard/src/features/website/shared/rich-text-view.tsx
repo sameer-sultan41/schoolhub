@@ -3,9 +3,17 @@
 import { useTranslations } from "next-intl";
 import { ImageIcon } from "lucide-react";
 
-import { isKnownBlockType, toRichText, type RichTextBlock } from "./rich-text";
+import { isKnownBlockType, toRichText, type HeadingLevel, type RichTextBlock } from "./rich-text";
 
 const HEADING_CLASS = "font-semibold text-foreground";
+
+/** A block's level (2–4, as the site renders it) inside the sheet, whose own section heading is
+ * an `h3`: each sits below it, so the page's outline stays in order. */
+const HEADING_TAG: Readonly<Record<HeadingLevel, "h4" | "h5" | "h6">> = {
+  2: "h4",
+  3: "h5",
+  4: "h6",
+};
 
 function Block({ block }: { block: RichTextBlock }) {
   const t = useTranslations("website.content.richText");
@@ -13,7 +21,7 @@ function Block({ block }: { block: RichTextBlock }) {
     case "paragraph":
       return <p className="whitespace-pre-wrap">{block.text}</p>;
     case "heading": {
-      const Heading = block.level === 2 ? "h3" : block.level === 3 ? "h4" : "h5";
+      const Heading = HEADING_TAG[block.level];
       return <Heading className={HEADING_CLASS}>{block.text}</Heading>;
     }
     case "list": {

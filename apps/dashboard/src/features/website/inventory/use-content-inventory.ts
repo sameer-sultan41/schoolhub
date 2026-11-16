@@ -98,11 +98,13 @@ export interface StaleItem extends InventoryItem {
  * kind whose whole sample is stale may have more (`hasMore`).
  */
 export function useStaleContent() {
-  const query: WebsiteContentQuery = {
+  // `satisfies`, not an annotation: the query is checked against the service's type but keeps
+  // its own object type, which (unlike the interface) also fits the key's params record.
+  const query = {
     status: STALE_STATUS,
     ordering: "updated_at",
     pageSize: STALE_SAMPLE_SIZE,
-  };
+  } satisfies WebsiteContentQuery;
   const results = useQueries({
     queries: INVENTORY_KINDS.map((kind) => ({
       queryKey: queryKeys.list(WEBSITE_QUERY_MODULE, SOURCES[kind].resource, query),

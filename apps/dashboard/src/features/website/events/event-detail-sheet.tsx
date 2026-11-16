@@ -9,6 +9,7 @@ import { PublishActions } from "@/features/website/shared/publish-actions";
 import { SeoButton } from "@/features/website/seo/seo-button";
 import { EMPTY_VALUE } from "@/lib/constants";
 import { Services } from "@/services";
+import { EVENTS_PATH_PREFIX } from "@/services/modules/website/school-events/school-events-constant";
 import { useSchoolEventDetail } from "./event-form-dialog";
 import { useEventWhen } from "./use-event-when";
 
@@ -71,7 +72,7 @@ export function EventDetailSheet({
             </ContentFact>
             <ContentFact label={t("form.location")}>{event.location || EMPTY_VALUE}</ContentFact>
             <ContentFact label={tContent("fields.slug")}>
-              <span dir="ltr">{`/events/${event.slug}`}</span>
+              <span dir="ltr">{`${EVENTS_PATH_PREFIX}${event.slug}`}</span>
             </ContentFact>
             <ContentFact label={tContent("fields.coverImage")}>
               {event.cover_image_file_id ? tContent("imageOnFile") : EMPTY_VALUE}

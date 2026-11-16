@@ -14,6 +14,7 @@ import { queryKeys } from "@/lib/query-client";
 import { Services, type NewsPostDetail } from "@/services";
 import {
   NEWS_EXCERPT_MAX,
+  NEWS_PATH_PREFIX,
   NEWS_POSTS_RESOURCE,
 } from "@/services/modules/website/news-posts/news-posts-constant";
 import { WEBSITE_QUERY_MODULE } from "@/services/shared/website-content";
@@ -36,9 +37,6 @@ import {
   newsFormSchema,
   type NewsFormValues,
 } from "./news-form-schema";
-
-/** The public path a post's slug sits under. */
-const NEWS_PATH_PREFIX = "/news/";
 
 export interface NewsFormDialogProps {
   open: boolean;

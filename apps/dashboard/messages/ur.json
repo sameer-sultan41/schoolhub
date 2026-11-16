@@ -4602,6 +4602,7 @@
       "created": "البم بن گیا۔",
       "saved": "البم محفوظ ہو گیا۔",
       "notFound": "یہ البم نہیں ملا۔",
+      "notFoundDescription": "ہو سکتا ہے یہ حذف ہو چکا ہو، یا لنک درست نہ ہو۔",
       "loadError": "یہ البم لوڈ نہیں ہو سکا۔",
       "publishHint": "البم شائع کیے جاتے ہیں یا ان کی اشاعت واپس لی جاتی ہے؛ انہیں محفوظ (آرکائیو) نہیں کیا جاتا۔",
       "delete": {
@@ -4618,6 +4619,7 @@
         "uploading": "{total} میں سے {done} اپ لوڈ ہو رہی ہیں…",
         "uploadFailed": "{name}: {reason}",
         "uploadDone": "{count, plural, one {# تصویر شامل ہو گئی۔} other {# تصاویر شامل ہو گئیں۔}}",
+        "uploadFailedAfterLeave": "البم چھوڑنے کے بعد {count, plural, one {# تصویر شامل نہیں ہو سکی} other {# تصاویر شامل نہیں ہو سکیں}}: {names}۔",
         "addVideo": "ویڈیو شامل کریں",
         "image": "تصویر",
         "video": "ویڈیو",
@@ -4637,6 +4639,7 @@
         "dragCancel": "ترتیب بدلنا منسوخ ہو گیا۔",
         "removeTitle": "آئٹم {index} ہٹائیں؟",
         "removeDescription": "یہ البم سے نکال دیا جائے گا۔ یہ عمل واپس نہیں ہو سکتا۔",
+        "removeConfirm": "ہٹائیں",
         "removed": "آئٹم ہٹا دیا گیا۔",
         "form": {
           "editTitle": "آئٹم میں ترمیم",

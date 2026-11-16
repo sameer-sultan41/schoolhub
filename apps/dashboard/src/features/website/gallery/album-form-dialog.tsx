@@ -19,6 +19,7 @@ import {
 import { useContentFormSubmit } from "@/features/website/shared/use-content-form-submit";
 import { useInvalidateModule } from "@/hooks/use-invalidate-module";
 import { Services, type GalleryAlbumRecord } from "@/services";
+import { GALLERY_PATH_PREFIX } from "@/services/modules/website/gallery-albums/gallery-albums-constant";
 import { WEBSITE_QUERY_MODULE } from "@/services/shared/website-content";
 import {
   ALBUM_FORM_FIELDS,
@@ -28,9 +29,6 @@ import {
   buildAlbumInput,
   type AlbumFormValues,
 } from "./album-form-schema";
-
-/** The public path an album's slug sits under. */
-const GALLERY_PATH_PREFIX = "/gallery/";
 
 export interface AlbumFormDialogProps {
   open: boolean;

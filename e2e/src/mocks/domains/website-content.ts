@@ -5,8 +5,7 @@ import { pageOf } from "../list";
 import type { MockModule, MockRequest } from "../router";
 import { refuse } from "./website";
 
-/** The generated schema marks server-set fields `readonly`; a stub is the server, so it writes
- * them (a status, a position). */
+/** A stub is the server, so it writes the fields the schema marks `readonly`. */
 type Writable<T> = { -readonly [K in keyof T]: T[K] };
 
 /** The generated wire shapes: a contract change breaks these stubs at compile time (L41). */
@@ -173,14 +172,12 @@ function publishRequired(status: string, canPublish: boolean): MockResponse | un
 }
 
 /**
- * `/news-posts`, `/school-events`, `/gallery-albums` and an album's `/gallery-items`, with
- * their colon actions, in the shapes the server sends. Mirrors the rules the screens surface
- * (L5), in the server's words: slug format and uniqueness, `end_before_start`, a video's link
- * rules, `empty_album` on publishing an album with no items, `unpublish_first` on deleting a
- * published post or album, `publish_required` on any write to a published record (or a published
- * album's items) without its kind's publish key, events with no DELETE, and a reorder that must list every item of
- * the album exactly once (`invalid_item_ids`). Whether the server enforces them is the backend
- * suite's (the `apps/api/apps/website_cms` tests).
+ * `/news-posts`, `/school-events`, `/gallery-albums` (create, read, edit, delete, colon actions)
+ * and an album's `/gallery-items`, in the server's shapes and words (L5): slug rules,
+ * `end_before_start`, a video link's rules, `empty_album`, `unpublish_first`, `publish_required`
+ * on a write to a live record (or its album's items) without the kind's publish key, no event
+ * DELETE, and a reorder listing every item once (`invalid_item_ids`). The backend suite proves
+ * the server enforces them.
  */
 export function websiteContentModule(options: WebsiteContentOptions = {}): MockModule {
   return (api) => {
@@ -284,6 +281,27 @@ export function websiteContentModule(options: WebsiteContentOptions = {}): MockM
     api.get("/gallery-albums/:albumId", (request) => {
       const album = albums.find((row) => row.id === request.params["albumId"]);
       return album ? ok(album) : notFound();
+    });
+    api.post("/gallery-albums", (request) => {
+      const input = body(request) as Partial<GalleryAlbum>;
+      const refusal = slugRefusal(
+        input.slug,
+        albums.some((row) => row.slug === input.slug),
+      );
+      if (refusal) return refusal;
+      const album = buildGalleryAlbum({ ...input, id: uuid(), status: "draft" });
+      albums.unshift(album);
+      return ok(album, { status: 201 });
+    });
+    api.delete("/gallery-albums/:albumId", (request) => {
+      const album = albumOf(request.params["albumId"] ?? "");
+      if (!album) return notFound();
+      if (album.status === "published") {
+        return refuse("status", "unpublish_first", "unpublish this album before deleting it.");
+      }
+      albums.splice(albums.indexOf(album), 1); // `delete_gallery_album` takes its items too
+      for (const item of itemsOf(album.id)) items.splice(items.indexOf(item), 1);
+      return noContent();
     });
     api.patch("/gallery-albums/:albumId", (request) => {
       const album = albumOf(request.params["albumId"] ?? "");

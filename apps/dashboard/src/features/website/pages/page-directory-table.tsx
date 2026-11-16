@@ -145,14 +145,28 @@ export function PageDirectoryTable() {
     getCoreRowModel: getCoreRowModel(),
   });
 
+  // Mounted in either branch: a refetch failing behind an open dialog must not close it.
+  const deleteDialog = deleteTarget && (
+    <DeletePageDialog
+      open
+      onOpenChange={(open) => {
+        if (!open) setDeleteTarget(null);
+      }}
+      page={deleteTarget}
+    />
+  );
+
   if (query.isError && !isStalePage) {
     return (
-      <LoadErrorCard
-        message={resolveErrorMessage(query.error, tErrors, t("list.loadError"))}
-        onRetry={() => {
-          void query.refetch();
-        }}
-      />
+      <>
+        <LoadErrorCard
+          message={resolveErrorMessage(query.error, tErrors, t("list.loadError"))}
+          onRetry={() => {
+            void query.refetch();
+          }}
+        />
+        {deleteDialog}
+      </>
     );
   }
 
@@ -202,15 +216,7 @@ export function PageDirectoryTable() {
           </CardFooter>
         </Card>
       </DataGrid>
-      {deleteTarget && (
-        <DeletePageDialog
-          open
-          onOpenChange={(open) => {
-            if (!open) setDeleteTarget(null);
-          }}
-          page={deleteTarget}
-        />
-      )}
+      {deleteDialog}
     </>
   );
 }

@@ -6,6 +6,7 @@ import { Button } from "@schoolhub/ui";
 import { EMPTY_VALUE } from "@/lib/constants";
 import { formatDate } from "@/lib/helpers";
 import { Services } from "@/services";
+import { NEWS_PATH_PREFIX } from "@/services/modules/website/news-posts/news-posts-constant";
 import { ContentDetailSheet, ContentFact } from "@/features/website/shared/content-detail-sheet";
 import { canEditContent, isPublisherOnly } from "@/features/website/shared/content-permissions";
 import { PublishActions } from "@/features/website/shared/publish-actions";
@@ -71,7 +72,7 @@ export function NewsDetailSheet({
         post && (
           <>
             <ContentFact label={tContent("fields.slug")}>
-              <span dir="ltr">{`/news/${post.slug}`}</span>
+              <span dir="ltr">{`${NEWS_PATH_PREFIX}${post.slug}`}</span>
             </ContentFact>
             <ContentFact label={t("columns.publishedAt")}>
               {post.published_at ? formatDate(post.published_at, locale) : EMPTY_VALUE}

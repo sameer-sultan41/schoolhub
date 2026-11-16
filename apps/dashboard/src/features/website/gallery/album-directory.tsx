@@ -11,6 +11,7 @@ import { hasPermission } from "@/lib/permissions";
 import { Services, type GalleryAlbumRecord } from "@/services";
 import {
   ALBUM_SORT_FIELD,
+  ALBUM_STATUSES,
   GALLERY_ALBUMS_RESOURCE,
 } from "@/services/modules/website/gallery-albums/gallery-albums-constant";
 import { useAlbumColumns } from "./album-columns";
@@ -38,6 +39,7 @@ export function AlbumDirectory() {
     resource: GALLERY_ALBUMS_RESOURCE,
     sortField: ALBUM_SORT_FIELD,
     fetchPage: Services.galleryAlbums.fetchGalleryAlbumPage,
+    statuses: ALBUM_STATUSES,
   });
 
   return (

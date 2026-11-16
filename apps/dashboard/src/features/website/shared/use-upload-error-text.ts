@@ -3,8 +3,7 @@
 import { useCallback } from "react";
 import { useTranslations } from "next-intl";
 
-import { ApiError } from "@/services";
-import { FileUploadError } from "@/services/modules/files";
+import { ApiError, FileUploadError } from "@/services";
 
 /**
  * A failed website upload in the viewer's language, by the step that failed
