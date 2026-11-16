@@ -31,6 +31,7 @@ either this file or `project-status.md`.
     - **A photo's description is required only by the dashboard.** `gallery/item_services.py::_validate_item` accepts an empty `alt_text`; a server rule (422) would hold every client to it.
     - **An album's items are read as one `MAX_PAGE_SIZE` page.** A larger album could not be reordered (the reorder must list every item, else `invalid_item_ids`). Cap album size or read every page.
     - **Linking an album to an event** (`school_event_id`) is not offered in the album form; the API supports it (`invalid_event`).
+    - **No image previews in the CMS.** The CMS API returns only file ids, so gallery tiles and cover fields show an icon, not a thumbnail. Needs a preview URL (or a signed read) on the CMS payloads.
   - **PR A follow-ups** (minor review findings, each left for the PR that next touches its file):
     - The `post_migrate` theme sync is not guarded for `migrate website_cms zero`, where the `themes` table no longer exists when the signal fires. Harmless until someone reverses the app.
     - `tests/test_registry.py` repeats constants it should import (`"safe-url"` instead of `SAFE_URL_FORMAT`, a third copy of the 14 section types instead of `SectionType.values`). Test-only duplication.
