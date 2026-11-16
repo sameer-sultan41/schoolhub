@@ -61,6 +61,23 @@ either this file or `project-status.md`.
     `platform.tenant-suspended`/`-reinstated` reach the school's owners only; §12's copy to
     platform ops waits for the platform-ops channel (PR B).
 
+- **The onboarding wizard, what platform-admin PR H leaves out** (`apps/platform_admin/onboarding/`,
+  `apps/dashboard/src/features/onboarding/`, platform-admin §5.6, §20).
+  - **`AI-PLA-03`, the onboarding assistant** (platform-admin §14, a *recommendation*): a
+    conversational helper that turns a school's description into a draft structure for review.
+    It needs the AI gateway's draft-and-approve flow (invariant 5) wired to the School module's
+    writes, and its own plan.
+  - **The school's contact details and address on the profile step** (school-organization §5.1,
+    §6: "multiple contact points", address). Nothing stores them yet: the `tenants.contact_*`
+    columns are the platform's commercial contact, edited in the console, not the school's public
+    ones. Going live does not need them, so the profile step confirms the name, logo, colour,
+    timezone, locale and currency only. They land with their own columns or table, an entity-spec
+    entry and a part of the School module's profile form.
+  - **The uploaded logo on the public website.** Still the School module entry below: the
+    website reads `branding.logo_url`, and the API has no `/public/tenants/by-host` route to serve
+    a public logo from. The wizard's profile step uploads the logo, so a school that finishes
+    setup still shows no logo publicly until that route lands.
+
 - **AI gateway and AI-FEE-02 follow-ups** (`feat/ai-gateway`, plan
   `docs/superpowers/plans/2026-11-07-ai-gateway.md`, [ADR-0035](decisions/0035-ai-gateway-shape.md)).
   The gateway and the on-demand finance report summary shipped backend only. Left out on purpose:

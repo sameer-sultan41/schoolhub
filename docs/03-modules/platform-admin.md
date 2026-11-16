@@ -56,7 +56,7 @@ Every operator signs in with password **and** TOTP ([auth-and-rbac §1](../02-ar
 3. **Billing of schools** — invoicing tenants for their subscription via a billing provider; dunning on failed payment → `past_due` → grace → suspension. (This bills *schools*; student fee billing is the tenant-side fees-finance module.)
 4. **Feature flags** — platform flag registry with per-plan defaults and per-tenant overrides, kill-switch capable; every tenant module checks its flag server-side (multi-tenancy §5).
 5. **Usage tracking & quotas** — metered counters per tenant (active students, staff, storage GB, SMS credits, AI tokens, API rate) vs. plan limits; soft-warn then hard-enforce.
-6. **Onboarding wizard** — guided tenant setup: school profile → campuses → academic session → classes/sections → fee structures → staff invites → student import; resumable, with progress tracking.
+6. **Onboarding wizard** — guided tenant setup: school profile → campuses → academic session → classes/sections → fee structures → staff invites → student import; resumable, with progress tracking. *Built (PR H):* nine steps (profile, campuses, session and terms, classes and sections, subjects, fee structures, staff invitations, students, go live), each computed from the school's own rows, at `/setup` with a "Finish setting up" card on the home page (§16, §20).
 7. **Data migration / legacy import** — Excel/CSV import pipelines (students, guardians, staff, fee balances, marks history) with mapping templates, dry-run validation, error reports, and rollback of a failed batch.
 8. **Platform-level reporting** — aggregates only: tenant counts by state, MRR/ARR, usage/adoption per module, churn, support-load; never row-level school data.
 9. **Impersonation with audit** — elevation grant (≤ 1 h, reason required, banner shown); every action tagged `impersonated_by` in `audit_logs` (RBAC §1).
@@ -207,7 +207,23 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - `GET/POST/PATCH /api/v1/platform/feature-flags` · `GET/POST/DELETE /api/v1/platform/tenants/{id}/feature-overrides`
 - `GET /api/v1/platform/tenants/{id}/usage` · `GET /api/v1/platform/reports/{key}` (aggregate read path)
 - `POST /api/v1/platform/tenants/{id}/imports` (`202` + job, dry-run flag) · `GET /api/v1/platform/imports/{id}`
-- Tenant-facing: `GET /api/v1/subscription` (own billing state, `school_owner`) · `GET/PATCH /api/v1/onboarding` (wizard progress).
+- Tenant-facing: `GET /api/v1/subscription` (own billing state, `school_owner`) · `GET/PATCH /api/v1/onboarding` (wizard progress). Both mount through `apps.platform_admin.tenant_urls` (`/subscription` lands with PR B), a separate include in `config/api_v1.py`, never under `/platform/`: the school's own staff call them with tenant RBAC. *Built:*
+  - `GET /onboarding` (`school.settings.view`, `module.school`): `{steps: [{key, done, skipped, skippable, count?}], completed, completed_at}`. The steps, in order, and when each is done:
+
+    | Step | Done when | Skippable | Omitted when |
+    | ---- | --------- | --------- | ------------ |
+    | `profile` | The profile was confirmed (`PATCH {"confirm": "profile"}`) | No | — |
+    | `campuses` | An active campus exists | No | — |
+    | `academic_session` | A planned or active session has terms covering it (`term_coverage_errors` is empty), with or without classes | No | — |
+    | `classes` | An active class has an active section | No | — |
+    | `subjects` | An active subject exists | No | — |
+    | `fee_structures` | An active fee structure exists | Yes | `module.fees_finance` is off |
+    | `staff_invites` | A **staff** invitation was accepted, or sent and neither revoked nor failed; the owner's own invitation never counts | Yes | `module.staff` is off |
+    | `students` | A non-deleted student exists | Yes | `module.students` is off |
+    | `go_live` | A session is active | No | — |
+
+    `count` is the number of rows meeting the step's rule; `profile` and `go_live` have none. `completed` holds when every step present is done or skipped; the first read that finds it so stamps `completed_at`, once.
+  - `PATCH /onboarding` (`school.settings.update`): exactly one of `{"confirm": "profile"}`, `{"skip": key}` or `{"unskip": key}` (else 400). Confirming any other step, or skipping a step that is not skippable or undoing its skip, is a 422. Answers the updated checklist; audited as an `update` of the settings row.
 - Operator sign-in (built, `core/rbac`, under `/api/v1/auth/`, §4): `POST /auth/login` → `{mfa_required, mfa_token}` · `POST /auth/mfa:verify` · `POST /auth/mfa:enroll` · `POST /auth/mfa:confirm` · `POST /auth/mfa:disable` (always 403 for an operator).
 
 ## 17. Integration Requirements
@@ -246,4 +262,17 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - **Constants** (`apps/platform_admin/constants.py`): `SLUG_PATTERN`, `RESERVED_SLUGS` (pinned to `apps/website/src/lib/host.ts` by `test_reserved_labels_match_website`) and `TENANT_EXPORT_JOB_TYPE = "tenant_export"`, the job a later PR's `:export` creates.
 - **Tests:** `apps/platform_admin/tests/test_lifecycle.py` (every status pair, timestamps, system audit, notices) and `test_tenants_api.py` (create, edit, provision, the lifecycle actions, gates); the live lane's `e2e/tests/live/api/platform-tenants.spec.ts` signs in as the seeded TOTP operator (`seed_e2e_data`) and runs create → provision → suspend → reinstate.
 
-**Not yet built:** plans, subscriptions and billing (PR B); usage, quotas, reports and `:export` (PR C); the console screens (PR D); impersonation (PR E); the onboarding wizard (PR H). Deferred items are in [`deferred-work.md`](../deferred-work.md).
+**Built (PR H — the onboarding wizard, `feat/onboarding-wizard`):**
+
+- **Backend** (`apps/platform_admin/onboarding/`: `services.py`, `serializers.py`, `view.py`; routed by `apps/platform_admin/tenant_urls.py`): `GET/PATCH /onboarding` (§16). It reads the other modules' models directly (ADR-0013 allows reads) and reuses the activation check's term rule through `apps.school_organization.services.term_coverage_errors`.
+- **Progress is computed, not stored.** Each step is worked out from the school's rows under its own tenant binding (RLS) on every read, so a campus deleted after its step was done makes the step undone again, and the wizard resumes from whatever the data says. A stored per-step record was rejected: it drifts from the data. Only what no row records is kept, on `tenant_settings.onboarding` (`core/tenancy` migration `0011`): `profile_confirmed_at`, `skipped` (step keys) and `completed_at`.
+- **Concurrency.** `PATCH` takes the settings row lock (`lock_settings_row`, the one every `tenant_settings` JSON writer takes) and merges into the stored document. `completed_at` is written only by a conditional `UPDATE … SET onboarding = onboarding || {completed_at} WHERE onboarding->>'completed_at' IS NULL`, so two reads that both find the checklist complete keep the first stamp (`tests/test_concurrency.py`).
+- **The wizard embeds the School module's own sections** (`apps/dashboard/src/features/onboarding/`, route `/setup`): profile, campuses, sessions and terms, classes and sections, and subjects are the same table, toolbar and dialog units as `/school`, so the wizard has no forms or validation of its own; a wizard with its own forms was rejected because it would duplicate PR F/G's validation and error handling. Fee structures, staff invitations and students link out (`/fees/structures`, `/staff`, `/students?import=1`, whose toolbar opens the import dialog for an import-key holder and drops the key from the URL). Go live lists the planned sessions and activates one through the School module's activation dialog (`:activate`).
+- **Two seams the embedded units needed, both kept out of the units.** The step is in the URL (`?step=`), and the units keep their list state (search, sort, page, filters) in the same query string under unprefixed keys, so opening another step writes `?step=` alone and drops every other key. The units have no "saved" callback, so while the wizard is mounted a TanStack `MutationCache` subscription refreshes the checklist after every successful mutation; the wizard and the card also read it afresh on mount, since the linked steps change it on other screens.
+- **Who sees what.** Each step's action shows only to holders of that step's own key (`school.settings.update`, `school.campus.create`, `school.academic-session.create`, `school.class.create`/`school.section.create`, `school.subject.create`, `fees.fee-structure.create`, `staff.staff.update`, `students.student.import`, `school.academic-session.activate`); Skip needs `school.settings.update`. The wizard and the card appear only for someone who can act on at least one remaining step.
+- **The "Finish setting up" card** sits first in the home page's widget grid (`shell/dashboard/dashboard-page-content.tsx`), with a progress bar and a link to the first step the viewer can act on. A rebuilt home page must keep it. It disappears once `completed_at` is stamped, even if a step later comes undone.
+- **Tests:** `apps/platform_admin/onboarding/tests/` (each step's rule, module omission, the owner invitation, skips, the 422s, another school's rows, `school.settings.update` on `PATCH`, and the two-thread `completed_at` race); Jest for the card, the wizard and `?import=1`; the mocked `e2e/tests/dashboard/onboarding-wizard.spec.ts`; and the live `e2e/tests/live/onboarding-journey.spec.ts`, which walks a seeded empty school (`fresh-school`) from nothing to live and needs a fresh database, since going live is permanent.
+
+These decisions are this module's own, so they are recorded here rather than in an ADR.
+
+**Not yet built:** plans, subscriptions and billing (PR B); usage, quotas, reports and `:export` (PR C); the console screens (PR D); impersonation (PR E). Deferred items are in [`deferred-work.md`](../deferred-work.md).
