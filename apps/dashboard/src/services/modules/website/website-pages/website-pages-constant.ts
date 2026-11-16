@@ -11,6 +11,11 @@ export const WEBSITE_PAGES_RESOURCE = "pages";
 export const WEBSITE_PAGE_DETAIL_RESOURCE = "page";
 /** Every published page as one list (a menu's page picker), under the same module. */
 export const WEBSITE_PUBLISHED_PAGES_RESOURCE = "published-pages";
+/** The published-page list's order: by title, its ties broken by the unique slug. */
+export const PUBLISHED_PAGES_ORDERING = "title,slug";
+/** The most pages `fetchPublishedWebsitePages` reads (1,000 published pages at `MAX_PAGE_SIZE`):
+ * a bound against a runaway loop, far past any school's site, not a target. */
+export const PUBLISHED_PAGES_MAX_PAGES = 10;
 
 /** Every page type, keyed so the compiler checks the set against the generated enum. */
 const PAGE_TYPE_SET: Record<WebsitePageType, true> = {

@@ -1,8 +1,9 @@
 import { fetchPage, MAX_PAGE_SIZE } from "@schoolhub/api-client";
-import type { Page } from "@schoolhub/types";
+import { isOffsetPagination, type Page } from "@schoolhub/types";
 
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
+import { PUBLISHED_PAGES_MAX_PAGES, PUBLISHED_PAGES_ORDERING } from "./website-pages-constant";
 import { toWebsitePageQueryParams } from "./website-pages-helper";
 import type {
   PagePreview,
@@ -27,15 +28,25 @@ export async function fetchWebsitePagePage(
   });
 }
 
-/** Every published page, by title: what a menu may link to. One `MAX_PAGE_SIZE` page holds a
- * school's site (a menu takes at most 50 items, `NAV_MAX_ITEMS`). */
+/**
+ * Every published page, by title: what a menu may link to. `/website-pages` is page-number
+ * paginated (which `collectPages` does not follow), so this walks the pages by number to the last
+ * one the server reports, bounded by `PUBLISHED_PAGES_MAX_PAGES`. `slug` breaks title ties: it is
+ * unique on the site (`id` is not an ordering field there, and DRF drops a field it doesn't allow).
+ */
 export async function fetchPublishedWebsitePages(): Promise<WebsitePageRecord[]> {
-  const { items } = await fetchWebsitePagePage({
-    status: "published",
-    ordering: "title",
-    pageSize: MAX_PAGE_SIZE,
-  });
-  return items;
+  const pages: WebsitePageRecord[] = [];
+  for (let page = 1; page <= PUBLISHED_PAGES_MAX_PAGES; page += 1) {
+    const { items, pagination } = await fetchWebsitePagePage({
+      status: "published",
+      ordering: PUBLISHED_PAGES_ORDERING,
+      pageSize: MAX_PAGE_SIZE,
+      page,
+    });
+    pages.push(...items);
+    if (!pagination || !isOffsetPagination(pagination) || page >= pagination.total_pages) break;
+  }
+  return pages;
 }
 
 export async function fetchWebsitePage(id: string): Promise<WebsitePageDetail> {
