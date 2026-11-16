@@ -4948,6 +4948,81 @@
         "canonical_url": "Only when this content's main address is elsewhere: an https:// link, or a path on this site starting with /.",
         "robots": "An instruction for search engines, such as noindex. Leave it empty for the default."
       }
+    },
+    "settings": {
+      "title": "Site settings",
+      "summary": "Whether visitors see the website, its theme, and the links and details it carries.",
+      "loadError": "The site settings couldn't be loaded.",
+      "theme": "Theme",
+      "themePlaceholder": "Choose a theme",
+      "themeOption": "{name} ({version})",
+      "themeConfig": "Theme settings",
+      "noThemeConfig": "This theme has no settings of its own.",
+      "analyticsId": "Analytics ID",
+      "analyticsHint": "Kept with the site's settings; it isn't added to the website's pages yet.",
+      "saved": "Site settings saved.",
+      "created": "The website was created, with its standard pages as drafts.",
+      "createSite": "Create the website",
+      "social": {
+        "title": "Social links",
+        "hint": "The school's pages on social media, each with its full https:// address.",
+        "empty": "No social links yet.",
+        "row": "Social link {index}",
+        "platform": "Platform",
+        "platformPlaceholder": "Facebook",
+        "url": "Link",
+        "remove": "Remove social link {index}",
+        "add": "Add a social link"
+      },
+      "status": {
+        "title": "Website status",
+        "state": {
+          "live": "Live",
+          "maintenance": "Maintenance",
+          "offline": "Offline"
+        },
+        "notCreated": "The website hasn't been created yet. Saving these settings, or switching it on, creates it with its standard pages as drafts.",
+        "published": "Published",
+        "publishedHint": "Visitors can see the website's published pages at the school's address.",
+        "maintenance": "Maintenance mode",
+        "maintenanceHint": "Visitors see a maintenance notice instead of the website, even while it is published."
+      },
+      "homepage": {
+        "label": "Home page",
+        "hint": "The website always opens on its home page.",
+        "none": "Created with the website.",
+        "unavailable": "The home page couldn't be loaded."
+      },
+      "confirm": {
+        "publish": {
+          "on": {
+            "title": "Publish the website?",
+            "description": "Visitors will be able to see its published pages at the school's address.",
+            "confirm": "Publish",
+            "done": "The website is published."
+          },
+          "off": {
+            "title": "Take the website offline?",
+            "description": "Visitors will no longer see it. Its pages and settings are kept.",
+            "confirm": "Take offline",
+            "done": "The website is offline."
+          }
+        },
+        "maintenance": {
+          "on": {
+            "title": "Turn on maintenance mode?",
+            "description": "Visitors will see a maintenance notice instead of the website until you turn it off.",
+            "confirm": "Turn on",
+            "done": "Maintenance mode is on."
+          },
+          "off": {
+            "title": "Turn off maintenance mode?",
+            "description": "Visitors will see the website again, if it is published.",
+            "confirm": "Turn off",
+            "done": "Maintenance mode is off."
+          }
+        }
+      }
     }
   },
   "reports": {
