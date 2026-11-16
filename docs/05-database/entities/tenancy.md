@@ -81,6 +81,8 @@ refuses the key.
 Indexes: unique(code); (is_active).
 Relationships: 1:N `subscriptions`.
 
+As built (`apps/platform_admin/models.py`): `description` is stored blank, not null. Deleting a plan soft-deletes it (`deleted_at`, `is_active=false`) and keeps its `code` reserved, since `tenants.current_plan` may name it; it is refused while any school is on the plan. `code` cannot change once created. `trial_days` defaults to `PLATFORM_DEFAULT_TRIAL_DAYS`. `enabled_modules` holds registered `module.*` flag keys; `limits` keys come from `QUOTA_METRICS` (`students`, `staff`, `storage_gb`, `sms_credits`, `ai_tokens`), each a non-negative integer or null (unlimited).
+
 ### subscriptions
 A tenant's subscription to a plan; billing state drives the tenant lifecycle.
 
@@ -97,6 +99,8 @@ A tenant's subscription to a plan; billing state drives the tenant lifecycle.
 
 Indexes: (tenant_id, status); unique(tenant_id) where status in (`trialing`,`active`,`past_due`) — one live subscription per tenant.
 Relationships: N:1 `tenants`, `plans`.
+
+As built: `billing_provider` and `billing_provider_ref` are stored blank, not null; the reference is mirrored onto `tenants.billing_provider_ref`, which is unique when set. The one-live index also requires `deleted_at IS NULL` (`subscriptions_one_live_per_tenant`). `plan_id` is `ON DELETE PROTECT`; plans are only ever soft-deleted.
 
 ### feature_flags
 **Platform scope — no `tenant_id`.** Registry of feature flags with per-plan defaults; kill-switch capable.

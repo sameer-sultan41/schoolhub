@@ -9121,6 +9121,166 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/platform/plans:
+    get:
+      operationId: platform_plans_list
+      description: '`GET/POST /platform/plans` and `GET/PATCH/DELETE /platform/plans/{id}`.'
+      parameters:
+      - in: query
+        name: billing_period
+        schema:
+          type: string
+          enum:
+          - annual
+          - monthly
+        description: |-
+          * `monthly` - Monthly
+          * `annual` - Annual
+      - in: query
+        name: currency
+        schema:
+          type: string
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - platform
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPlanList'
+          description: ''
+    post:
+      operationId: platform_plans_create
+      description: '`GET/POST /platform/plans` and `GET/PATCH/DELETE /platform/plans/{id}`.'
+      summary: Add a plan to the catalog
+      tags:
+      - platform
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanWrite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PlanWrite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PlanWrite'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+          description: ''
+  /api/v1/platform/plans/{id}:
+    get:
+      operationId: platform_plans_retrieve
+      description: '`GET/POST /platform/plans` and `GET/PATCH/DELETE /platform/plans/{id}`.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+          description: ''
+    patch:
+      operationId: platform_plans_partial_update
+      description: '`GET/POST /platform/plans` and `GET/PATCH/DELETE /platform/plans/{id}`.'
+      summary: Edit a plan (its code is fixed); module access follows at once
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPlanWrite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPlanWrite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPlanWrite'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+          description: ''
+    delete:
+      operationId: platform_plans_destroy
+      description: '`GET/POST /platform/plans` and `GET/PATCH/DELETE /platform/plans/{id}`.'
+      summary: Retire a plan (soft delete)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '409':
+          description: 'plan_in_use: a school is on this plan.'
   /api/v1/platform/tenants:
     get:
       operationId: platform_tenants_list
@@ -9269,6 +9429,224 @@ paths:
               schema:
                 $ref: '#/components/schemas/Tenant'
           description: ''
+  /api/v1/platform/tenants/{tenant_pk}/subscription:
+    get:
+      operationId: platform_tenants_subscription_retrieve
+      description: |-
+        `GET/PATCH .../subscription` and `:activate`, `:record-payment`,
+        `:mark-payment-failed`, `:change-plan`.
+      summary: 'A school''s billing state: its live subscription and its limits'
+      parameters:
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionState'
+          description: ''
+    patch:
+      operationId: platform_tenants_subscription_partial_update
+      description: |-
+        `GET/PATCH .../subscription` and `:activate`, `:record-payment`,
+        `:mark-payment-failed`, `:change-plan`.
+      summary: Set the billing provider, its reference or negotiated limits
+      parameters:
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSubscriptionUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSubscriptionUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSubscriptionUpdate'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionState'
+          description: ''
+        '409':
+          description: 'invalid_transition: the subscription''s status does not allow
+            this move; no_live_subscription: the school has none.'
+  /api/v1/platform/tenants/{tenant_pk}/subscription:activate:
+    post:
+      operationId: platform_tenants_subscription:activate_create
+      description: |-
+        `GET/PATCH .../subscription` and `:activate`, `:record-payment`,
+        `:mark-payment-failed`, `:change-plan`.
+      summary: 'Activate: a trial converts, or a school with none starts paying for
+        a plan'
+      parameters:
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionActivate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SubscriptionActivate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SubscriptionActivate'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionState'
+          description: ''
+        '409':
+          description: 'invalid_transition: the subscription''s status does not allow
+            this move; no_live_subscription: the school has none.'
+        '422':
+          description: No active plan has this code.
+  /api/v1/platform/tenants/{tenant_pk}/subscription:change-plan:
+    post:
+      operationId: platform_tenants_subscription:change_plan_create
+      description: |-
+        `GET/PATCH .../subscription` and `:activate`, `:record-payment`,
+        `:mark-payment-failed`, `:change-plan`.
+      summary: Move the live subscription to another plan; module access follows at
+        once
+      parameters:
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionChangePlan'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SubscriptionChangePlan'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SubscriptionChangePlan'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionState'
+          description: ''
+        '409':
+          description: 'invalid_transition: the subscription''s status does not allow
+            this move; no_live_subscription: the school has none.'
+        '422':
+          description: No active plan has this code, or it is the same.
+  /api/v1/platform/tenants/{tenant_pk}/subscription:mark-payment-failed:
+    post:
+      operationId: platform_tenants_subscription:mark_payment_failed_create
+      description: |-
+        `GET/PATCH .../subscription` and `:activate`, `:record-payment`,
+        `:mark-payment-failed`, `:change-plan`.
+      summary: 'Mark a payment failed: the subscription and the school become past
+        due'
+      parameters:
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionState'
+          description: ''
+        '409':
+          description: 'invalid_transition: the subscription''s status does not allow
+            this move; no_live_subscription: the school has none.'
+  /api/v1/platform/tenants/{tenant_pk}/subscription:record-payment:
+    post:
+      operationId: platform_tenants_subscription:record_payment_create
+      description: |-
+        `GET/PATCH .../subscription` and `:activate`, `:record-payment`,
+        `:mark-payment-failed`, `:change-plan`.
+      summary: 'Record a payment: the paid period runs on, and a past-due school recovers'
+      parameters:
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionPayment'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SubscriptionPayment'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SubscriptionPayment'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionState'
+          description: ''
+        '409':
+          description: 'invalid_transition: the subscription''s status does not allow
+            this move; no_live_subscription: the school has none.'
   /api/v1/platform/tenants/{tenant_pk}:delete:
     post:
       operationId: platform_tenants_:delete_create
@@ -9344,7 +9722,7 @@ paths:
           description: 'invalid_transition: the tenant''s status does not allow this
             action.'
         '422':
-          description: A plan_code before plans exist, or no contact
+          description: An unknown or inactive plan_code, or no contact
   /api/v1/platform/tenants/{tenant_pk}:reinstate:
     post:
       operationId: platform_tenants_:reinstate_create
@@ -14618,6 +14996,26 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/subscription:
+    get:
+      operationId: subscription_retrieve
+      description: |-
+        The school's plan, subscription status, trial end and limits.
+
+        Mixes in ``TenantScopedViewSetMixin`` for its tenant binding only, as
+        `SchoolSettingsView` does: it sets ``request.tenant`` from the caller's token.
+      summary: This school's own subscription and limits
+      tags:
+      - subscription
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionState'
+          description: ''
   /api/v1/teacher-subject-allocations:
     get:
       operationId: teacher_subject_allocations_list
@@ -16688,6 +17086,14 @@ components:
         * `running` - Running
         * `succeeded` - Succeeded
         * `failed` - Failed
+    BillingPeriodEnum:
+      enum:
+      - monthly
+      - annual
+      type: string
+      description: |-
+        * `monthly` - Monthly
+        * `annual` - Annual
     BroadcastAudienceFilter:
       type: object
       description: The `audience_filter` keys `audience.resolve_audience` reads.
@@ -22789,6 +23195,27 @@ components:
                   type: integer
                 total_pages:
                   type: integer
+    PaginatedPlanList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Plan'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                page:
+                  type: integer
+                page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
+                  type: integer
     PaginatedPromotionBatchList:
       type: object
       properties:
@@ -24970,6 +25397,53 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedPlanWrite:
+      type: object
+      description: '`POST` (every field but the optional ones) and `PATCH` (any subset;
+        ``code`` fixed).'
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        code:
+          type: string
+          description: Stable key; immutable.
+          maxLength: 50
+        description:
+          type: string
+        price_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        currency:
+          type: string
+          description: ISO 4217; per plan, none assumed.
+          maxLength: 3
+        billing_period:
+          $ref: '#/components/schemas/BillingPeriodEnum'
+        trial_days:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        enabled_modules:
+          type: array
+          items:
+            type: string
+            maxLength: 100
+        limits:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 0
+            nullable: true
+        is_active:
+          type: boolean
+          description: Inactive plans take no new subscriber.
+        acknowledge_over_usage:
+          type: boolean
+          writeOnly: true
+          description: Lower a limit below a school's current usage anyway (checked
+            from PR C).
     PatchedPromotionDecision:
       type: object
       description: |-
@@ -25798,6 +26272,24 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedSubscriptionUpdate:
+      type: object
+      description: '`PATCH`: any subset. The billing reference is mirrored on the
+        tenant, unique when set.'
+      properties:
+        billing_provider:
+          type: string
+          maxLength: 30
+        billing_provider_ref:
+          type: string
+          maxLength: 120
+        limits_override:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 0
+            nullable: true
+          nullable: true
     PatchedTeacherAllocation:
       type: object
       properties:
@@ -26218,6 +26710,173 @@ components:
       - sequence
       - start_time
       - updated_at
+    Plan:
+      type: object
+      description: A plan as the catalog shows it.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+          description: Stable key; immutable.
+        description:
+          type: string
+          readOnly: true
+        price_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          description: Per billing period.
+        currency:
+          type: string
+          readOnly: true
+          description: ISO 4217; per plan, none assumed.
+        billing_period:
+          allOf:
+          - $ref: '#/components/schemas/BillingPeriodEnum'
+          readOnly: true
+        trial_days:
+          type: integer
+          readOnly: true
+        enabled_modules:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        limits:
+          type: object
+          additionalProperties:
+            type: integer
+            nullable: true
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+          description: Inactive plans take no new subscriber.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - billing_period
+      - code
+      - created_at
+      - currency
+      - description
+      - enabled_modules
+      - id
+      - is_active
+      - limits
+      - name
+      - price_amount
+      - trial_days
+      - updated_at
+    PlanSummary:
+      type: object
+      description: 'The plan a subscription is on: what it costs and which modules
+        it enables.'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+          description: Stable key; immutable.
+        name:
+          type: string
+          readOnly: true
+        price_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          description: Per billing period.
+        currency:
+          type: string
+          readOnly: true
+          description: ISO 4217; per plan, none assumed.
+        billing_period:
+          allOf:
+          - $ref: '#/components/schemas/BillingPeriodEnum'
+          readOnly: true
+        enabled_modules:
+          type: array
+          items:
+            type: string
+          readOnly: true
+      required:
+      - billing_period
+      - code
+      - currency
+      - enabled_modules
+      - id
+      - name
+      - price_amount
+    PlanWrite:
+      type: object
+      description: '`POST` (every field but the optional ones) and `PATCH` (any subset;
+        ``code`` fixed).'
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        code:
+          type: string
+          description: Stable key; immutable.
+          maxLength: 50
+        description:
+          type: string
+        price_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        currency:
+          type: string
+          description: ISO 4217; per plan, none assumed.
+          maxLength: 3
+        billing_period:
+          $ref: '#/components/schemas/BillingPeriodEnum'
+        trial_days:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        enabled_modules:
+          type: array
+          items:
+            type: string
+            maxLength: 100
+        limits:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 0
+            nullable: true
+        is_active:
+          type: boolean
+          description: Inactive plans take no new subscriber.
+        acknowledge_over_usage:
+          type: boolean
+          writeOnly: true
+          description: Lower a limit below a school's current usage anyway (checked
+            from PR C).
+      required:
+      - code
+      - currency
+      - name
+      - price_amount
     PortalChild:
       type: object
       properties:
@@ -26685,7 +27344,9 @@ components:
         plan_code:
           type: string
           nullable: true
-          description: Refused (422) until plans exist; provision without one.
+          description: 'An active plan''s code: the school trials on it, for the plan''s
+            trial length. Without one it trials with no plan. Unknown or inactive:
+            422.'
     QualificationTypeEnum:
       enum:
       - degree
@@ -29542,6 +30203,152 @@ components:
         * `core` - Core
         * `elective` - Elective
         * `co_curricular` - Co-curricular
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        plan:
+          allOf:
+          - $ref: '#/components/schemas/PlanSummary'
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/SubscriptionStatusEnum'
+          readOnly: true
+        current_period_start:
+          type: string
+          format: date-time
+          readOnly: true
+        current_period_end:
+          type: string
+          format: date-time
+          readOnly: true
+        canceled_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        billing_provider:
+          type: string
+          readOnly: true
+          description: The billing adapter's key.
+        billing_provider_ref:
+          type: string
+          readOnly: true
+          description: The provider's subscription or customer id; mirrored on the
+            tenant.
+        limits_override:
+          type: object
+          additionalProperties:
+            type: integer
+            nullable: true
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - billing_provider
+      - billing_provider_ref
+      - canceled_at
+      - created_at
+      - current_period_end
+      - current_period_start
+      - id
+      - limits_override
+      - plan
+      - status
+      - updated_at
+    SubscriptionActivate:
+      type: object
+      properties:
+        plan_code:
+          type: string
+          nullable: true
+          description: Required when the school has no live subscription (a paid sign-up);
+            refused when it has one (use `:change-plan`).
+          maxLength: 50
+        current_period_start:
+          type: string
+          format: date-time
+        current_period_end:
+          type: string
+          format: date-time
+          description: After the start.
+      required:
+      - current_period_end
+      - current_period_start
+    SubscriptionChangePlan:
+      type: object
+      properties:
+        plan_code:
+          type: string
+          maxLength: 50
+      required:
+      - plan_code
+    SubscriptionPayment:
+      type: object
+      properties:
+        paid_through:
+          type: string
+          format: date-time
+          description: The end of the period this payment covers; after now and the
+            current end.
+      required:
+      - paid_through
+    SubscriptionState:
+      type: object
+      description: 'A school''s billing state: its lifecycle, its live subscription
+        and its limits.'
+      properties:
+        tenant_status:
+          allOf:
+          - $ref: '#/components/schemas/TenantStatusEnum'
+          readOnly: true
+        trial_ends_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        subscription:
+          allOf:
+          - $ref: '#/components/schemas/Subscription'
+          readOnly: true
+          nullable: true
+          description: The live subscription; null without one.
+        limits:
+          type: object
+          additionalProperties:
+            type: integer
+            nullable: true
+          readOnly: true
+          description: 'Every quota metric: the plan''s limit, or the negotiated override;
+            null is unlimited.'
+      required:
+      - limits
+      - subscription
+      - tenant_status
+      - trial_ends_at
+    SubscriptionStatusEnum:
+      enum:
+      - trialing
+      - active
+      - past_due
+      - canceled
+      type: string
+      description: |-
+        * `trialing` - Trialing
+        * `active` - Active
+        * `past_due` - Past due
+        * `canceled` - Canceled
     SubstituteCandidate:
       type: object
       description: A teacher free to cover the slot that day (`services.free_substitutes`).

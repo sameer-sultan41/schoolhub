@@ -48,6 +48,8 @@ CLIENT_KNOWN_SERVER_CODES = {
     "retention_expired",
     "no_live_subscription",
     "export_required",
+    "plan_in_use",
+    "subscription_exists",
 }
 
 
@@ -152,6 +154,8 @@ class OffsetEnvelopeTests(APITestCase):
 class ErrorCodeContractTests(APITestCase):
     def test_the_client_knows_every_code_the_server_can_emit(self):
         from apps.examinations.processing import MarksOutstanding
+        from apps.platform_admin.plans.services import PlanInUse
+        from apps.platform_admin.subscriptions.services import SubscriptionExists
         from apps.platform_admin.tenants.lifecycle import InvalidTransition, RetentionExpired
         from apps.platform_admin.tenants.services import ExportRequired, NoLiveSubscription
         from core.ai.exceptions import AIQuotaExceeded, AIUnavailable
@@ -189,6 +193,9 @@ class ErrorCodeContractTests(APITestCase):
             RetentionExpired.default_code,
             NoLiveSubscription.default_code,
             ExportRequired.default_code,
+            # Plans and subscriptions (platform console).
+            PlanInUse.default_code,
+            SubscriptionExists.default_code,
         }
         self.assertEqual(
             emitted - CLIENT_KNOWN_SERVER_CODES,

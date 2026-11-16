@@ -60,6 +60,29 @@ either this file or `project-status.md`.
   - **Platform-ops copies of the lifecycle notices.** `notify()` is per tenant, so
     `platform.tenant-suspended`/`-reinstated` reach the school's owners only; §12's copy to
     platform ops waits for the platform-ops channel (PR B).
+  - **The owner's billing view now exists** (`GET /api/v1/subscription`, PR B), but the
+    suspended-owner login exception above is still to build.
+
+- **Plans and subscriptions, what platform-admin PR B leaves out** (Task 4,
+  `apps/api/apps/platform_admin/{plans,subscriptions}/`, platform-admin §7.5).
+  - **A real billing provider.** Schools are billed manually from the console (`:activate`,
+    `:record-payment`, `:mark-payment-failed`), with a fake adapter behind the webhook later in
+    this PR. The launch market is Pakistan, where Stripe does not onboard merchants, and §19
+    leaves the provider open; a real adapter needs that commercial decision.
+  - **Proration.** `:change-plan` moves the live subscription to the new plan at once and
+    leaves its period and price untouched; nothing credits or charges the difference (§5,
+    §19 recommendation).
+  - **Plan versioning and grandfathering.** A plan edit reaches every school on it at once
+    (its modules on the next request, its limits and price too); §6 recommends versioned
+    plans that never change existing subscriptions retroactively. That needs a plan-version
+    row the subscription points at, not the plan itself.
+  - **No cancel route, and a deprovisioned school keeps its live subscription.** Nothing sets
+    `canceled` yet, so `plan_in_use` keeps counting a deleted school until a cancel path
+    (with `:delete`, or a console action) blanks its `current_plan`.
+  - **A reinstated trial does not move the trialing subscription's period.** `:reinstate` with
+    a new `trial_ends_at` updates the school's trial end only. `tenants.trial_ends_at` is the
+    trial end of record (the trial-expiry sweep is to read it), so the subscription's
+    `current_period_end` is informational until the two are reconciled.
 
 - **AI gateway and AI-FEE-02 follow-ups** (`feat/ai-gateway`, plan
   `docs/superpowers/plans/2026-11-07-ai-gateway.md`, [ADR-0035](decisions/0035-ai-gateway-shape.md)).

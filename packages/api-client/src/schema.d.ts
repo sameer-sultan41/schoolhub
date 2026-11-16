@@ -4145,6 +4145,52 @@ export interface paths {
         patch: operations["periods_partial_update"];
         trace?: never;
     };
+    "/api/v1/platform/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET/POST /platform/plans` and `GET/PATCH/DELETE /platform/plans/{id}`. */
+        get: operations["platform_plans_list"];
+        put?: never;
+        /**
+         * Add a plan to the catalog
+         * @description `GET/POST /platform/plans` and `GET/PATCH/DELETE /platform/plans/{id}`.
+         */
+        post: operations["platform_plans_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/plans/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET/POST /platform/plans` and `GET/PATCH/DELETE /platform/plans/{id}`. */
+        get: operations["platform_plans_retrieve"];
+        put?: never;
+        post?: never;
+        /**
+         * Retire a plan (soft delete)
+         * @description `GET/POST /platform/plans` and `GET/PATCH/DELETE /platform/plans/{id}`.
+         */
+        delete: operations["platform_plans_destroy"];
+        options?: never;
+        head?: never;
+        /**
+         * Edit a plan (its code is fixed); module access follows at once
+         * @description `GET/POST /platform/plans` and `GET/PATCH/DELETE /platform/plans/{id}`.
+         */
+        patch: operations["platform_plans_partial_update"];
+        trace?: never;
+    };
     "/api/v1/platform/tenants": {
         parameters: {
             query?: never;
@@ -4185,6 +4231,116 @@ export interface paths {
          * @description `GET/PATCH /platform/tenants/{tenant_pk}` and its lifecycle colon-actions.
          */
         patch: operations["platform_tenants_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_pk}/subscription": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A school's billing state: its live subscription and its limits
+         * @description `GET/PATCH .../subscription` and `:activate`, `:record-payment`,
+         *     `:mark-payment-failed`, `:change-plan`.
+         */
+        get: operations["platform_tenants_subscription_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set the billing provider, its reference or negotiated limits
+         * @description `GET/PATCH .../subscription` and `:activate`, `:record-payment`,
+         *     `:mark-payment-failed`, `:change-plan`.
+         */
+        patch: operations["platform_tenants_subscription_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_pk}/subscription:activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activate: a trial converts, or a school with none starts paying for a plan
+         * @description `GET/PATCH .../subscription` and `:activate`, `:record-payment`,
+         *     `:mark-payment-failed`, `:change-plan`.
+         */
+        post: operations["platform_tenants_subscription:activate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_pk}/subscription:change-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move the live subscription to another plan; module access follows at once
+         * @description `GET/PATCH .../subscription` and `:activate`, `:record-payment`,
+         *     `:mark-payment-failed`, `:change-plan`.
+         */
+        post: operations["platform_tenants_subscription:change_plan_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_pk}/subscription:mark-payment-failed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark a payment failed: the subscription and the school become past due
+         * @description `GET/PATCH .../subscription` and `:activate`, `:record-payment`,
+         *     `:mark-payment-failed`, `:change-plan`.
+         */
+        post: operations["platform_tenants_subscription:mark_payment_failed_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_pk}/subscription:record-payment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a payment: the paid period runs on, and a past-due school recovers
+         * @description `GET/PATCH .../subscription` and `:activate`, `:record-payment`,
+         *     `:mark-payment-failed`, `:change-plan`.
+         */
+        post: operations["platform_tenants_subscription:record_payment_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/platform/tenants/{tenant_pk}:delete": {
@@ -6551,6 +6707,29 @@ export interface paths {
         patch: operations["subjects_partial_update"];
         trace?: never;
     };
+    "/api/v1/subscription": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * This school's own subscription and limits
+         * @description The school's plan, subscription status, trial end and limits.
+         *
+         *     Mixes in ``TenantScopedViewSetMixin`` for its tenant binding only, as
+         *     `SchoolSettingsView` does: it sets ``request.tenant`` from the caller's token.
+         */
+        get: operations["subscription_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/teacher-subject-allocations": {
         parameters: {
             query?: never;
@@ -7484,6 +7663,12 @@ export interface components {
          * @enum {string}
          */
         BackgroundJobStatusEnum: "queued" | "running" | "succeeded" | "failed";
+        /**
+         * @description * `monthly` - Monthly
+         *     * `annual` - Annual
+         * @enum {string}
+         */
+        BillingPeriodEnum: "monthly" | "annual";
         /** @description The `audience_filter` keys `audience.resolve_audience` reads. */
         BroadcastAudienceFilter: {
             class_ids?: string[];
@@ -10365,6 +10550,17 @@ export interface components {
                 };
             };
         };
+        PaginatedPlanList: {
+            data?: components["schemas"]["Plan"][];
+            meta?: {
+                pagination?: {
+                    page?: number;
+                    page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
+                };
+            };
+        };
         PaginatedPromotionBatchList: {
             data?: components["schemas"]["PromotionBatch"][];
             meta?: {
@@ -11478,6 +11674,27 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        /** @description `POST` (every field but the optional ones) and `PATCH` (any subset; ``code`` fixed). */
+        PatchedPlanWrite: {
+            name?: string;
+            /** @description Stable key; immutable. */
+            code?: string;
+            description?: string;
+            /** Format: decimal */
+            price_amount?: string;
+            /** @description ISO 4217; per plan, none assumed. */
+            currency?: string;
+            billing_period?: components["schemas"]["BillingPeriodEnum"];
+            trial_days?: number;
+            enabled_modules?: string[];
+            limits?: {
+                [key: string]: number | null;
+            };
+            /** @description Inactive plans take no new subscriber. */
+            is_active?: boolean;
+            /** @description Lower a limit below a school's current usage anyway (checked from PR C). */
+            acknowledge_over_usage?: boolean;
+        };
         /**
          * @description A single student's row inside a batch.
          *
@@ -11886,6 +12103,14 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        /** @description `PATCH`: any subset. The billing reference is mirrored on the tenant, unique when set. */
+        PatchedSubscriptionUpdate: {
+            billing_provider?: string;
+            billing_provider_ref?: string;
+            limits_override?: {
+                [key: string]: number | null;
+            } | null;
+        };
         PatchedTeacherAllocation: {
             /** Format: uuid */
             readonly id?: string;
@@ -12096,6 +12321,72 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /** @description A plan as the catalog shows it. */
+        Plan: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly name: string;
+            /** @description Stable key; immutable. */
+            readonly code: string;
+            readonly description: string;
+            /**
+             * Format: decimal
+             * @description Per billing period.
+             */
+            readonly price_amount: string;
+            /** @description ISO 4217; per plan, none assumed. */
+            readonly currency: string;
+            readonly billing_period: components["schemas"]["BillingPeriodEnum"];
+            readonly trial_days: number;
+            readonly enabled_modules: string[];
+            readonly limits: {
+                [key: string]: number | null;
+            };
+            /** @description Inactive plans take no new subscriber. */
+            readonly is_active: boolean;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /** @description The plan a subscription is on: what it costs and which modules it enables. */
+        PlanSummary: {
+            /** Format: uuid */
+            readonly id: string;
+            /** @description Stable key; immutable. */
+            readonly code: string;
+            readonly name: string;
+            /**
+             * Format: decimal
+             * @description Per billing period.
+             */
+            readonly price_amount: string;
+            /** @description ISO 4217; per plan, none assumed. */
+            readonly currency: string;
+            readonly billing_period: components["schemas"]["BillingPeriodEnum"];
+            readonly enabled_modules: string[];
+        };
+        /** @description `POST` (every field but the optional ones) and `PATCH` (any subset; ``code`` fixed). */
+        PlanWrite: {
+            name: string;
+            /** @description Stable key; immutable. */
+            code: string;
+            description?: string;
+            /** Format: decimal */
+            price_amount: string;
+            /** @description ISO 4217; per plan, none assumed. */
+            currency: string;
+            billing_period?: components["schemas"]["BillingPeriodEnum"];
+            trial_days?: number;
+            enabled_modules?: string[];
+            limits?: {
+                [key: string]: number | null;
+            };
+            /** @description Inactive plans take no new subscriber. */
+            is_active?: boolean;
+            /** @description Lower a limit below a school's current usage anyway (checked from PR C). */
+            acknowledge_over_usage?: boolean;
+        };
         PortalChild: {
             student: components["schemas"]["PortalStudent"];
             attendance: components["schemas"]["AttendanceCard"] | null;
@@ -12305,7 +12596,7 @@ export interface components {
             updated: number;
         };
         Provision: {
-            /** @description Refused (422) until plans exist; provision without one. */
+            /** @description An active plan's code: the school trials on it, for the plan's trial length. Without one it trials with no plan. Unknown or inactive: 422. */
             plan_code?: string | null;
         };
         /**
@@ -13605,6 +13896,70 @@ export interface components {
          * @enum {string}
          */
         SubjectSubjectTypeEnum: "core" | "elective" | "co_curricular";
+        Subscription: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly plan: components["schemas"]["PlanSummary"];
+            readonly status: components["schemas"]["SubscriptionStatusEnum"];
+            /** Format: date-time */
+            readonly current_period_start: string;
+            /** Format: date-time */
+            readonly current_period_end: string;
+            /** Format: date-time */
+            readonly canceled_at: string | null;
+            /** @description The billing adapter's key. */
+            readonly billing_provider: string;
+            /** @description The provider's subscription or customer id; mirrored on the tenant. */
+            readonly billing_provider_ref: string;
+            readonly limits_override: {
+                [key: string]: number | null;
+            } | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        SubscriptionActivate: {
+            /** @description Required when the school has no live subscription (a paid sign-up); refused when it has one (use `:change-plan`). */
+            plan_code?: string | null;
+            /** Format: date-time */
+            current_period_start: string;
+            /**
+             * Format: date-time
+             * @description After the start.
+             */
+            current_period_end: string;
+        };
+        SubscriptionChangePlan: {
+            plan_code: string;
+        };
+        SubscriptionPayment: {
+            /**
+             * Format: date-time
+             * @description The end of the period this payment covers; after now and the current end.
+             */
+            paid_through: string;
+        };
+        /** @description A school's billing state: its lifecycle, its live subscription and its limits. */
+        SubscriptionState: {
+            readonly tenant_status: components["schemas"]["TenantStatusEnum"];
+            /** Format: date-time */
+            readonly trial_ends_at: string | null;
+            /** @description The live subscription; null without one. */
+            readonly subscription: components["schemas"]["Subscription"] | null;
+            /** @description Every quota metric: the plan's limit, or the negotiated override; null is unlimited. */
+            readonly limits: {
+                [key: string]: number | null;
+            };
+        };
+        /**
+         * @description * `trialing` - Trialing
+         *     * `active` - Active
+         *     * `past_due` - Past due
+         *     * `canceled` - Canceled
+         * @enum {string}
+         */
+        SubscriptionStatusEnum: "trialing" | "active" | "past_due" | "canceled";
         /** @description A teacher free to cover the slot that day (`services.free_substitutes`). */
         SubstituteCandidate: {
             /** Format: uuid */
@@ -20817,6 +21172,141 @@ export interface operations {
             };
         };
     };
+    platform_plans_list: {
+        parameters: {
+            query?: {
+                /**
+                 * @description * `monthly` - Monthly
+                 *     * `annual` - Annual
+                 */
+                billing_period?: "annual" | "monthly";
+                currency?: string;
+                is_active?: boolean;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPlanList"];
+                };
+            };
+        };
+    };
+    platform_plans_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanWrite"];
+                "application/x-www-form-urlencoded": components["schemas"]["PlanWrite"];
+                "multipart/form-data": components["schemas"]["PlanWrite"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plan"];
+                };
+            };
+        };
+    };
+    platform_plans_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plan"];
+                };
+            };
+        };
+    };
+    platform_plans_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description plan_in_use: a school is on this plan. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    platform_plans_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedPlanWrite"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedPlanWrite"];
+                "multipart/form-data": components["schemas"]["PatchedPlanWrite"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plan"];
+                };
+            };
+        };
+    };
     platform_tenants_list: {
         parameters: {
             query?: {
@@ -20929,6 +21419,205 @@ export interface operations {
             };
         };
     };
+    platform_tenants_subscription_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionState"];
+                };
+            };
+        };
+    };
+    platform_tenants_subscription_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedSubscriptionUpdate"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedSubscriptionUpdate"];
+                "multipart/form-data": components["schemas"]["PatchedSubscriptionUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionState"];
+                };
+            };
+            /** @description invalid_transition: the subscription's status does not allow this move; no_live_subscription: the school has none. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "platform_tenants_subscription:activate_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubscriptionActivate"];
+                "application/x-www-form-urlencoded": components["schemas"]["SubscriptionActivate"];
+                "multipart/form-data": components["schemas"]["SubscriptionActivate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionState"];
+                };
+            };
+            /** @description invalid_transition: the subscription's status does not allow this move; no_live_subscription: the school has none. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No active plan has this code. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "platform_tenants_subscription:change_plan_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubscriptionChangePlan"];
+                "application/x-www-form-urlencoded": components["schemas"]["SubscriptionChangePlan"];
+                "multipart/form-data": components["schemas"]["SubscriptionChangePlan"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionState"];
+                };
+            };
+            /** @description invalid_transition: the subscription's status does not allow this move; no_live_subscription: the school has none. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No active plan has this code, or it is the same. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "platform_tenants_subscription:mark_payment_failed_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionState"];
+                };
+            };
+            /** @description invalid_transition: the subscription's status does not allow this move; no_live_subscription: the school has none. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "platform_tenants_subscription:record_payment_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubscriptionPayment"];
+                "application/x-www-form-urlencoded": components["schemas"]["SubscriptionPayment"];
+                "multipart/form-data": components["schemas"]["SubscriptionPayment"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionState"];
+                };
+            };
+            /** @description invalid_transition: the subscription's status does not allow this move; no_live_subscription: the school has none. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     "platform_tenants_:delete_create": {
         parameters: {
             query?: never;
@@ -20995,7 +21684,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description A plan_code before plans exist, or no contact */
+            /** @description An unknown or inactive plan_code, or no contact */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24662,6 +25351,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Subject"];
+                };
+            };
+        };
+    };
+    subscription_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionState"];
                 };
             };
         };

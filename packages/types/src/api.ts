@@ -168,6 +168,10 @@ export const API_ERROR_CODES = [
   "retention_expired",
   "no_live_subscription",
   "export_required",
+  // Plans and subscriptions (apps/api/apps/platform_admin): retiring a plan a school is still on,
+  // and starting a second live subscription for a school (both 409).
+  "plan_in_use",
+  "subscription_exists",
   // Synthesised by this client when the request never produced an envelope.
   "network_error",
   "server_error",

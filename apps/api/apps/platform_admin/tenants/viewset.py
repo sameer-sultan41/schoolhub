@@ -114,7 +114,7 @@ class TenantDetailViewSet(PlatformTenantNestedMixin, PlatformViewSet):
         responses={
             200: TenantSerializer,
             409: _CONFLICT,
-            422: OpenApiResponse(description="A plan_code before plans exist, or no contact"),
+            422: OpenApiResponse(description="An unknown or inactive plan_code, or no contact"),
         },
     )
     def provision(self, request: Request, tenant_pk=None) -> Response:

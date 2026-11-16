@@ -15,9 +15,11 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from django.core.cache import cache
+from django.db import transaction
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -47,6 +49,50 @@ def bump_feature_cache_generation() -> None:
         cache.incr(_CACHE_GENERATION_KEY)
     except ValueError:
         cache.set(_CACHE_GENERATION_KEY, 1)
+
+
+def invalidate_feature_cache() -> None:
+    """Bump the generation now, and again once the surrounding transaction commits.
+
+    For a write whose effect on resolution lives in rows this transaction is changing (a
+    plan's modules, a school's subscription). The first bump serves reads later in the same
+    transaction. The second closes the window in which another request resolves a flag from
+    the not-yet-committed old rows and caches that stale answer under the new generation.
+    """
+    bump_feature_cache_generation()
+    transaction.on_commit(bump_feature_cache_generation)
+
+
+# The plan step of resolution (step 3 below). Plans belong to the platform console's app, and
+# `core` imports no app (ADR-0013), so that app registers a resolver from `ready()`. It answers
+# a school's live plan's `enabled_modules`, or None when the school has no live subscription.
+type PlanResolver = Callable[[uuid.UUID], frozenset[str] | None]
+
+# At most one entry, keyed so a test can swap it with `mock.patch.dict`.
+_plan_hooks: dict[str, PlanResolver] = {}
+_PLAN_HOOK = "resolver"
+
+# The keys a plan decides. Any other flag (`ai.*`, a kill switch for a feature) ignores plans.
+_PLAN_KEY_PREFIX = "module."
+
+
+def register_plan_resolver(fn: PlanResolver) -> None:
+    """Register the plan resolver. A second, different one is a bug: two apps would disagree."""
+    existing = _plan_hooks.get(_PLAN_HOOK)
+    if existing is not None and existing is not fn:
+        raise ValueError("A plan resolver is already registered.")
+    _plan_hooks[_PLAN_HOOK] = fn
+
+
+def _plan_enables(key: str, *, tenant_id: uuid.UUID) -> bool | None:
+    """Whether the school's live plan enables ``key``; None when the plan has no say."""
+    resolver = _plan_hooks.get(_PLAN_HOOK)
+    if resolver is None or not key.startswith(_PLAN_KEY_PREFIX):
+        return None
+    modules = resolver(tenant_id)
+    if modules is None:
+        return None
+    return key in modules
 
 
 @dataclass(frozen=True)
@@ -175,9 +221,16 @@ def is_feature_enabled(key: str, *, tenant_id: uuid.UUID) -> bool:
     2. A live, non-expired tenant override -> its value, EXCEPT a kill-switch flag
        ignores an override that tries to turn it on — only the platform default can
        enable a kill switch; an override may still force it off.
-    3. Plan-level enablement -> skipped here, deliberately: `plans`/`subscriptions`
-       arrive with platform-admin (Tier 5). This is the documented insertion point.
+    3. The school's live plan, through the resolver the platform console registers
+       (`register_plan_resolver`): a ``module.*`` key is enabled iff it is in the plan's
+       ``enabled_modules``, so a module the plan lacks is off even if its default is on.
+       A kill switch again stays at its default if the plan would turn it on. Keys outside
+       ``module.*`` skip this step, and so does a school with no live subscription (the
+       resolver answers None) or a deployment with no resolver.
     4. The flag's own default.
+
+    A plan or subscription write calls `invalidate_feature_cache`, so a change reaches every
+    school's next request rather than waiting out the cache TTL.
     """
     cache_key = f"feature:{feature_cache_generation()}:{tenant_id}:{key}"
     cached = cache.get(cache_key)
@@ -214,5 +267,12 @@ def _resolve_feature(key: str, *, tenant_id: uuid.UUID) -> bool:
         if flag.is_kill_switch and override.enabled:
             return flag.default_enabled
         return override.enabled
+
+    planned = _plan_enables(key, tenant_id=tenant_id)
+    if planned is not None:
+        # The same rule as an override: a plan can switch a kill switch off, never on.
+        if flag.is_kill_switch and planned:
+            return flag.default_enabled
+        return planned
 
     return flag.default_enabled

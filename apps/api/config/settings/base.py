@@ -406,6 +406,10 @@ SPECTACULAR_SETTINGS = {
         # A bare `value` would otherwise take the generic `ValueEnum`, which any later
         # `value` choice set anywhere on the platform would collide with.
         "AIFeedbackValueEnum": "core.ai.models.FEEDBACK_VALUES",
+        # The platform console: a school's `status` (the tenant row) and `tenant_status` (its
+        # billing state) are one choice set, and a subscription's `status` is another.
+        "TenantStatusEnum": "core.tenancy.models.TenantStatus",
+        "SubscriptionStatusEnum": "apps.platform_admin.models.SubscriptionStatus",
     },
 }
 

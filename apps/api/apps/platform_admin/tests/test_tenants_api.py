@@ -51,7 +51,7 @@ def create_body(**overrides) -> dict:
 
 
 def resolving_to(state: str):
-    """Stand in for the subscription app's `subscription_state` hook (Task 4 registers it)."""
+    """Stand in for the registered `subscription_state` hook, answering ``state`` for any school."""
     return mock.patch.dict(subscription_state._hooks, {"resolver": lambda _tenant: state})
 
 

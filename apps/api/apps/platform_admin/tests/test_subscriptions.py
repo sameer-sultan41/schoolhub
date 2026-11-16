@@ -73,6 +73,9 @@ def subscriptions_of(tenant: Tenant) -> list[Subscription]:
 
 
 class SubscriptionServiceTests(PlatformAPITestCase):
+    def test_live_states_are_the_subscription_statuses(self) -> None:
+        self.assertEqual(subscription_state.LIVE_STATES, {SUB.TRIALING, SUB.ACTIVE, SUB.PAST_DUE})
+
     def test_one_live_subscription_per_tenant(self) -> None:
         tenant = make_tenant(status=S.TRIAL)
         plan = make_plan()
