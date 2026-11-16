@@ -17,10 +17,11 @@ that app), several functions here are imported directly by other apps:
 - `SECTION_SCOPE` — `SectionViewSet`'s record-scope settings, read by
   `apps/student_management/views.py` for a check on a section row (ADR-0013
   keeps another app out of `sections/viewset.py`)
-- `term_coverage_errors` — defined in `academic_sessions/services/validate.py`
-  beside the activation check that calls it, and re-exported here so the
-  onboarding wizard's session step reads it through this entry point
-  (ADR-0013) rather than reaching into the package
+
+`term_coverage_errors` is not in that list: no app imports it yet. It lives in
+`academic_sessions/services/validate.py` beside the activation check that
+calls it, and is re-exported here for the onboarding wizard (PR H, Task 15) to
+read through this entry point (ADR-0013) rather than the package.
 
 Moving them into a resource package would mean editing import lines in
 other apps for a purely internal reorganization — a bigger, riskier blast

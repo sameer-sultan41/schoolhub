@@ -182,7 +182,7 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md) 
 - `GET/POST /api/v1/campuses` · `GET/PATCH/DELETE /api/v1/campuses/{id}` — filters: `is_active`.
 - `GET/POST /api/v1/departments`, `/api/v1/classes`, `/api/v1/sections`, `/api/v1/subjects`, `/api/v1/houses` + `{id}` detail routes — filters: `is_active` and `search` on each; `campus_id` and `department_type` on departments; `class_id` and `campus_id` on sections; `department_id` and `subject_type` on subjects. Classes are ordered by `level`; a `level` another live class already holds is a 400 on the `level` field naming that class.
 - `GET/POST /api/v1/academic-sessions` (cursor paged; filters `status`, `search`) · `PATCH /api/v1/academic-sessions/{id}` · `POST /api/v1/academic-sessions/{id}:activate` · `POST /api/v1/academic-sessions/{id}:close` · `POST /api/v1/academic-sessions/{id}:clone` (colon-actions, audited). A refused `:activate` is a 422 whose `structure` details list every gap at once.
-- `GET/POST /api/v1/terms` — filter: `academic_session_id`.
+- `GET/POST /api/v1/terms` — filter: `academic_session_id` · `PATCH /api/v1/terms/{id}`.
 - `GET/PUT /api/v1/holiday-calendar` — calendar entries. **Built.** PUT replaces each list it names wholesale (merging entry by entry would leave no way to remove a holiday, which is what a cancelled closure needs); it takes the `school.settings.view`/`.update` keys, which §4 already describes as covering academic configuration. The `campus_id`/`from`/`to` *filters* are not built: the resource is a small singleton document, not a paginated list, so a client filters it client-side.
 - `POST /api/v1/structure-imports` → `202` + job resource (bulk import).
 

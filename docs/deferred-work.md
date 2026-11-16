@@ -222,7 +222,7 @@ either this file or `project-status.md`.
     later save drops the earlier one's change. The calendar is one document with no version to
     check.
 - **The School module's PR G sections (Sessions & terms, Classes & sections, Subjects) leave
-  three things out.**
+  these things out.**
   - A duplicate name is still a generic 409, shown as "That change conflicts with the current
     data. Reload and try again." — the same gap as the campus code above: a second session with a
     name the school already uses, a term repeating a name or order within its session, a class
@@ -238,7 +238,15 @@ either this file or `project-status.md`.
   - The dashboard hides Edit on a closed or archived session, but
     `AcademicSessionSerializer.validate` still accepts a closed session's dates, so a direct API
     call can shrink its window and leave its terms outside it. It needs to refuse any edit to a
-    session in `LOCKED_SESSION_STATUSES`, as the term endpoints already do.
+    session in `LOCKED_SESSION_STATUSES`, as the term endpoints already do. The gap is wider than
+    closed sessions: the serializer lets a session of any status shrink past its terms, and
+    `term_coverage_errors` checks only the two ends, so terms running past a shrunk window still
+    count as covering. The server rule should refuse a window that excludes any live term.
+  - `SectionSerializer.validate` reads `campus` and `school_class` from the instance when the body
+    omits them, so the server refuses any edit, including `PATCH {is_active: false}`, to a section
+    whose campus or class is inactive. The recovery today is to reactivate the campus or class, or
+    to move the section to an active one. Relaxing the rule (for example, letting a deactivation
+    through) is a backend product decision, not a dashboard fix.
 
 - **Staff's wire types are hand-written structs, not generated `ApiSchemas["Staff"]`
   aliases.** `services/modules/staff/staff-type.ts`'s `StaffDirectoryRecord`,

@@ -925,8 +925,9 @@ The Phase 2 exit depends on these PRs. The work was added to this plan after the
 - **Dashboard:**
   - a cursor list (`use-cursor-list`, `CursorDataGridCard`) with create and edit;
   - a terms list inside each session;
-  - `:activate` (a 422 `{structure: [...]}` is shown as a checklist), `:close`, and a `:clone` dialog, all
-    through `useConfirmAction`.
+  - `:activate` (a 422 `{structure: [...]}` is shown as a checklist) and `:close` go through
+    `useConfirmAction`; `:clone` is a form dialog (`FormDialogLayout` + `useFormDialogSubmit`), because it
+    takes a name and dates.
 - **Jest:**
   - `activate_shows_structure_errors_as_list`;
   - `clone_dialog_posts_dates`;
@@ -936,6 +937,8 @@ The Phase 2 exit depends on these PRs. The work was added to this plan after the
 
 - Classes are ordered by `level`, with sections inside each class row. Subjects can be filtered by department
   and type.
+- `ClassSerializer.validate_level` returns a 400 on the `level` field, naming the class that holds it, so
+  `duplicate_level_shows_field_error` has a field error to show.
 - **Jest:**
   - `inactive_class_hidden_from_section_form`;
   - `duplicate_level_shows_field_error`.
@@ -971,6 +974,11 @@ The Phase 2 exit depends on these PRs. The work was added to this plan after the
     subjects;
   - linked steps: fee structures (`/fees/structures`), staff invites (`/staff`), and students
     (`/students?import=1`);
+  - the embedded units write unprefixed URL keys through `useDataGridUrlState` (`q`, `sort`, `page`,
+    `page_size`, `hidden`, `status`, `type`, `department`), so the stepper must clear those keys when the
+    step changes, or `useDataGridUrlState` gains a key prefix;
+  - the units have no `onSaved` seam, so PR H adds an `onSaved` prop, or invalidates `queryKeys.onboarding`
+    from a `MutationCache` subscriber;
   - `go_live` runs `:activate`;
   - every mutation in the wizard invalidates `queryKeys.onboarding`;
   - in `features/students/student-toolbar.tsx`, `?import=1` opens `BulkImportDialog` only for
