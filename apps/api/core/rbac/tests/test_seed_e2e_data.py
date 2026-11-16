@@ -46,6 +46,7 @@ from apps.school_organization.models import (
     Class,
     Section,
     SessionStatus,
+    Subject,
     Term,
 )
 from apps.staff_management.models import EmploymentStatus, Staff, StaffType
@@ -66,6 +67,9 @@ from core.rbac.management.commands.seed_e2e_data import (
     E2E_EXAM_STAFF_EMAIL,
     E2E_FINANCE_OWNER_EMAIL,
     E2E_FINANCE_STAFF_EMAIL,
+    E2E_FRESH_MODULES,
+    E2E_FRESH_OWNER_EMAIL,
+    E2E_FRESH_TENANT_SLUG,
     E2E_GUARDIAN_EMAIL,
     E2E_GUARDIAN_NAME,
     E2E_GUARDIAN_PHONE,
@@ -120,6 +124,32 @@ class SeedE2EDataTests(TestCase):
             list(UserRole.objects.filter(user=operator).values_list("role_id", flat=True)),
             [role.pk],
         )
+
+    def test_seeds_an_empty_fresh_school_with_its_own_owner(self) -> None:
+        """The onboarding journey's school: nothing set up, an owner no other school shares."""
+        call_command("seed_e2e_data")
+        call_command("seed_e2e_data")
+
+        fresh = Tenant.objects.get(slug=E2E_FRESH_TENANT_SLUG)
+        self.assertEqual(fresh.status, TenantStatus.ACTIVE)
+        owners = User.objects.filter(email=E2E_FRESH_OWNER_EMAIL)
+        self.assertEqual([user.tenant_id for user in owners], [fresh.pk])
+        owner = owners.get()
+        self.assertTrue(owner.check_password(E2E_ADMIN_PASSWORD))
+        role = Role.objects.get(tenant=None, slug="school_owner")
+        self.assertTrue(UserRole.objects.filter(user=owner, role=role).exists())
+        with tenant_context(fresh.id):
+            self.assertFalse(Campus.objects.exists())
+            self.assertFalse(AcademicSession.objects.exists())
+            self.assertFalse(Class.objects.exists())
+            self.assertFalse(Subject.objects.exists())
+            self.assertFalse(Student.objects.exists())
+            enabled = set(
+                TenantFeatureOverride.objects.filter(enabled=True).values_list(
+                    "feature_flag__key", flat=True
+                )
+            )
+        self.assertTrue(set(E2E_FRESH_MODULES) <= enabled)
 
     def test_the_school_admin_can_poll_the_jobs_it_starts(self) -> None:
         """It starts promotion execute; a 403 on `GET /jobs/{id}` reads as a failed job."""

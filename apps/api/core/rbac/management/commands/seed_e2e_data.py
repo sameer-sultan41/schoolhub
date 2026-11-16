@@ -67,6 +67,15 @@ from core.tenancy.models import FeatureFlag, Tenant, TenantFeatureOverride, Tena
 
 E2E_TENANT_SLUG = "e2e-school"
 E2E_OTHER_TENANT_SLUG = "e2e-other-school"
+# A third school holding nothing but its owner (and the system ledger accounts provisioning
+# gives it): `e2e/tests/live/onboarding-journey.spec.ts` sets it up from nothing and takes it
+# live. Going live is permanent, so that journey needs a fresh database. The owner's email is
+# used nowhere else, so signing in by email lands in this school.
+E2E_FRESH_TENANT_SLUG = "fresh-school"
+E2E_FRESH_TENANT_NAME = "E2E Fresh School"
+E2E_FRESH_OWNER_EMAIL = "e2e-fresh-owner@schoolhub.test"
+# The modules the journey's optional steps live in, all default off.
+E2E_FRESH_MODULES = ("module.fees_finance", "module.staff", "module.students")
 E2E_ADMIN_EMAIL = "e2e-admin@schoolhub.test"
 # A distinct email, not the same one disambiguated by `school`: the dashboard's login
 # form never sends `school` (it derives it from the subdomain, and the dashboard itself
@@ -803,6 +812,7 @@ class Command(BaseCommand):
         call_command("seed_e2e_fees", stdout=self.stdout)
 
         self._ensure_platform_operator()
+        self._ensure_fresh_school(role)
 
         # TODO(website-cms): no public-content/CMS backend module exists yet
         # (apps/api/config/api_v1.py routes only core.rbac and
@@ -818,10 +828,33 @@ class Command(BaseCommand):
                 f"{E2E_STUDENT_EMAIL}, guardians {E2E_GUARDIAN_EMAIL} and "
                 f"{E2E_COMMS_GUARDIAN_EMAIL}, and class teacher "
                 f"{E2E_COMMS_CLASS_TEACHER_EMAIL}; tenant "
-                f"'{E2E_OTHER_TENANT_SLUG}' with admin {E2E_OTHER_ADMIN_EMAIL}; platform "
+                f"'{E2E_OTHER_TENANT_SLUG}' with admin {E2E_OTHER_ADMIN_EMAIL}; tenant "
+                f"'{E2E_FRESH_TENANT_SLUG}' with owner {E2E_FRESH_OWNER_EMAIL}; platform "
                 f"operator {E2E_PLATFORM_OPERATOR_EMAIL}"
             )
         )
+
+    def _ensure_fresh_school(self, owner_role: Role) -> Tenant:
+        """The onboarding journey's school: an owner, the modules on, no structure at all.
+
+        Only the system ledger accounts are seeded, as `seed_finance_accounts` does for any
+        school starting on fees (fees-finance §6, "seeded at provisioning"): a fee head needs
+        an income account, and no screen creates the system ones.
+        """
+        fresh = ensure_tenant(E2E_FRESH_TENANT_SLUG, E2E_FRESH_TENANT_NAME)
+        ensure_seed_user(
+            fresh,
+            owner_role,
+            email=E2E_FRESH_OWNER_EMAIL,
+            password=E2E_ADMIN_PASSWORD,
+            first_name="E2E",
+            last_name="Fresh Owner",
+        )
+        with tenant_context(fresh.id):
+            for key in E2E_FRESH_MODULES:
+                self._ensure_feature_enabled(fresh, key)
+        call_command("seed_finance_accounts", tenant_slug=fresh.slug, stdout=self.stdout)
+        return fresh
 
     def _ensure_platform_operator(self) -> User:
         """A `platform_super_admin` with TOTP on, whose secret the live lane knows.

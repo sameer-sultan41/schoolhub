@@ -245,3 +245,8 @@ export const E2E_PLATFORM_OPERATOR_EMAIL = "e2e-platform-operator@schoolhub.test
 
 /** Mirrors seed_e2e_data.py's E2E_PLATFORM_TOTP_KEY: RFC 6238's test key, the raw HMAC key. */
 export const E2E_PLATFORM_TOTP_KEY = "12345678901234567890";
+
+/** Mirrors seed_e2e_data.py's E2E_FRESH_OWNER_EMAIL — the owner of `fresh-school`
+ * (E2E_FRESH_TENANT_SLUG), a school seeded with nothing set up, for the onboarding journey. The
+ * email is used by no other school, so signing in by it lands in that school. */
+export const E2E_FRESH_OWNER_EMAIL = "e2e-fresh-owner@schoolhub.test";
