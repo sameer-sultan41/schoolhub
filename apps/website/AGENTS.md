@@ -49,8 +49,9 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 
 | Concern | Where |
 | ------- | ----- |
-| Host → tenant classification (edge) | `src/proxy.ts` + `src/lib/host.ts` (pure, tested) |
-| Authoritative tenant lookup, cached | `src/lib/tenant.ts` |
+| Host → tenant classification (edge) | `src/proxy.ts` + `src/lib/host.ts` (pure, tested; `/api/revalidate` and `/api/preview` pass on any host) |
+| Subdomain → custom-domain 301 | `src/app/layout.tsx`, after the cached `resolveTenant()` (`customDomainRedirectTarget`); never in the proxy, which stays I/O-free |
+| Authoritative tenant lookup, cached | `src/lib/tenant.ts` — `status`/`website_status` → active, unavailable (neutral notice) or unknown |
 | Read-only transport (machine token) | `src/lib/api.ts` — has **no** write method by design |
 | Public content reads | `src/lib/content.ts` — every export is a read |
 | Page rendering (sections → components) | `src/app/render-page.tsx`, `src/app/[...slug]/page.tsx`, `src/app/page.tsx` |
@@ -74,11 +75,20 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 
 ## Adding a Section Type
 
-1. Add the type to `SECTION_TYPES` in `packages/types/src/website.ts`.
-2. Create `src/themes/default/sections/<kebab-name>.tsx`; validate `section.props` with Zod and
-   return `null` when it does not match — a bad payload must not take the page down.
-3. Register it in `src/themes/default/index.ts`. Unregistered types render nothing on purpose.
-4. Live module data goes through a read function in `src/lib/content.ts` with tenant cache tags.
+1. The type is declared by the API's theme (`apps/api/apps/website_cms/themes/default.json`)
+   and reaches this app as the generated `SectionTypeEnum` (`@schoolhub/api-client`). The
+   registry in `src/themes/default/index.ts` is a `Record` over that enum, so a new type fails
+   `tsc` here until it is registered (`null` = declared but not rendered yet).
+2. Create `src/themes/default/sections/<kebab-name>.tsx`; validate `section.props` with Zod
+   against the theme's JSON schema (image ids arrive as `<name>_url`) and return `null` when it
+   does not match — a bad payload must not take the page down.
+3. Register it in `src/themes/default/index.ts` in place of its `null`.
+4. Live module data goes through a read function in `src/lib/content.ts` that sends the
+   request's `host` and carries tenant cache tags.
+
+Wire types come from `ApiSchemas` (`@schoolhub/api-client`, ADR-0005/0017), never hand-written:
+`PublicTenant`, `PublicPage`, `PublicSite` and the list item types. `TenantBranding`
+(`@schoolhub/types`) stays only as the token contract's input.
 
 Tests: Jest + React Testing Library, co-located in a sibling `__tests__/` folder (`__tests__/*.test.ts(x)`), not `*.test.ts(x)` flat beside the source. Browser-level coverage
 lives in `e2e/` (Playwright). Note the limit: this app renders on the server, so a browser
