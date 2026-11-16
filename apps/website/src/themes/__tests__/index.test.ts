@@ -31,8 +31,16 @@ describe("resolveSection", () => {
     expect(resolveSection(theme, makeSection({}, { type: "hero" }))).toBe(theme.sections.hero);
   });
 
-  it("returns null for a declared type the theme does not render yet", () => {
-    expect(resolveSection(theme, makeSection({}, { type: "faq" }))).toBeNull();
+  it("resolves the rich-text and FAQ sections", () => {
+    expect(resolveSection(theme, makeSection({}, { type: "faq" }))).toBe(theme.sections.faq);
+    expect(resolveSection(theme, makeSection({}, { type: "rich_text" }))).toBe(
+      theme.sections.rich_text,
+    );
+  });
+
+  it("returns null for a declared type a theme does not render", () => {
+    const partial = { ...theme, sections: { ...theme.sections, faq: null } };
+    expect(resolveSection(partial, makeSection({}, { type: "faq" }))).toBeNull();
   });
 
   it("returns null for a type the API added before the renderer knows it", () => {

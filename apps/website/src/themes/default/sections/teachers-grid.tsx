@@ -5,9 +5,8 @@ import type { SectionProps } from "@/themes/types";
 
 const schema = z.object({
   heading: z.string().default("Our teachers"),
-  // 60 mirrors the theme schema the API saved this with: a lower bound would render nothing for
-  // an accepted value. Reads are clamped to the API's list cap of 50 in `lib/content.ts`.
-  limit: z.number().int().min(1).max(60).default(12),
+  // 50 mirrors the theme schema (themes/default.json) and the API's public list cap.
+  limit: z.number().int().min(1).max(50).default(12),
 });
 
 /**

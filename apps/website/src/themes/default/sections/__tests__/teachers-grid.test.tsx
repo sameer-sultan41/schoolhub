@@ -61,8 +61,8 @@ describe("TeachersGrid", () => {
     expect(result).toBeNull();
   });
 
-  it("renders nothing when props fail validation", async () => {
-    const result = await TeachersGrid(sectionProps({ limit: 0 }));
+  it.each([0, 51])("renders nothing for a limit of %i (the theme allows 1-50)", async (limit) => {
+    const result = await TeachersGrid(sectionProps({ limit }));
     expect(result).toBeNull();
     expect(mockGetTeachers).not.toHaveBeenCalled();
   });

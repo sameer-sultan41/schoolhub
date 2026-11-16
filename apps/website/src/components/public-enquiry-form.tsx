@@ -3,6 +3,7 @@
 import { Alert, AlertDescription, Button, Input, Label, Textarea } from "@schoolhub/ui";
 import { useEffect, useRef, useState } from "react";
 import { HONEYPOT_FIELD, type PublicFormKind, submitPublicForm } from "@/lib/public-api";
+import { COPY } from "@/themes/default/copy";
 
 /**
  * Public form submission.
@@ -24,9 +25,6 @@ type Status = "idle" | "submitting" | "sent" | "error";
 const NAME_MAX = 150;
 const EMAIL_MAX = 254;
 const MESSAGE_MAX = 5000;
-
-/** Neutral: a person who reaches the honeypot anyway is told to skip it, not what it is. */
-const HONEYPOT_LABEL = "Leave this field empty";
 
 function textField(form: FormData, name: string): string {
   const value = form.get(name);
@@ -114,7 +112,7 @@ export function PublicEnquiryForm({
 
       {/* Honeypot: hidden from sight, the tab order and assistive technology; people leave it empty. */}
       <div aria-hidden="true" className="sr-only">
-        <label htmlFor="enquiry-company-website">{HONEYPOT_LABEL}</label>
+        <label htmlFor="enquiry-company-website">{COPY.form.honeypotLabel}</label>
         <input
           id="enquiry-company-website"
           name={HONEYPOT_FIELD}

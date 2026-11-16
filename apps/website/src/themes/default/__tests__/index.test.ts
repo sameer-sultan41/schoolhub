@@ -19,13 +19,10 @@ describe("defaultTheme", () => {
         "notice_board",
         "gallery",
         "contact_form",
+        "rich_text",
+        "faq",
       ].sort(),
     );
-  });
-
-  it("declares the API's newer types without rendering them yet", () => {
-    expect(defaultTheme.sections.rich_text).toBeNull();
-    expect(defaultTheme.sections.faq).toBeNull();
   });
 
   it("provides Navigation and Footer chrome", () => {
