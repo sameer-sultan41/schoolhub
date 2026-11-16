@@ -9,7 +9,7 @@ import html
 import re
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 
 from django.db.models import Q
 from django.utils import timezone
@@ -39,20 +39,24 @@ def plain_text(body: str) -> str:
     return _BLANK_RUNS.sub("\n", _SPACES.sub(" ", text)).strip()
 
 
-def public_notices(limit: int) -> list[PublicNoticeRow]:
-    """Published, opted-in, unexpired announcements and notices, newest first; two queries."""
+def public_notices(limit: int, today: date) -> list[PublicNoticeRow]:
+    """Published, opted-in, unexpired announcements and notices, newest first; two queries.
+
+    `today` is the school's own date (`Tenant.local_date()`): a notice stays up through its
+    `valid_until` day locally, whatever the server's UTC clock says.
+    """
     now = timezone.now()
     announcements = (
         Announcement.objects.alive()
         .filter(status=AnnouncementStatus.PUBLISHED, show_on_website=True)
         .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
-        .order_by("-published_at", "-created_at")[:limit]
+        .order_by("-published_at", "-created_at", "id")[:limit]
     )
     notices = (
         Notice.objects.alive()
         .filter(status=NoticeStatus.PUBLISHED, show_on_website=True)
-        .filter(Q(valid_until__isnull=True) | Q(valid_until__gte=timezone.localdate()))
-        .order_by("-published_at", "-created_at")[:limit]
+        .filter(Q(valid_until__isnull=True) | Q(valid_until__gte=today))
+        .order_by("-published_at", "-created_at", "id")[:limit]
     )
     rows = [
         PublicNoticeRow(

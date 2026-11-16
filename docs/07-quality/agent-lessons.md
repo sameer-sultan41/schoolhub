@@ -516,6 +516,16 @@
 - **Mistake.** The first `page_section_files` provider loaded and schema-walked every visible section of every published page on each `sync_file_visibility` call, whichever file was asked about, so one image change cost a walk of the whole site (website CMS A2 review, `6b65e241`).
 - **Check.** A provider for `core.files.visibility` (or any "who still references X" lookup) filters its query on the ids it was handed (`id__in`, or a text pre-filter that is a superset, then an exact confirm) and returns early on an empty set. Test that a row not mentioning a candidate is neither loaded nor walked (`website_cms/tests/test_validation.py`, `SyncVisibilityTests`).
 
+### L72. Overriding a `TenantScopedViewSetMixin` hook must call `super()`, and be tested for what the mixin writes
+
+- **Mistake.** The staff `perform_update` override handled the website photo sync and skipped the mixin's own `perform_update`, so a `PATCH` stopped stamping `updated_by` and writing its audit row (website CMS PR B change review, fixed in `c2b3b954`). Nothing failed: the response was a normal 200.
+- **Check.** An override of `perform_create`, `perform_update` or `perform_destroy` calls `super()` (or reproduces the stamp and audit call on purpose, with a comment). Its test asserts `updated_by` equals the caller and that an `AuditLog` row exists for the record (`staff/tests/test_website.py`, `StaffWriteTests`).
+
+### L73. A user-supplied value bound for a bounded column, a parser that can raise or a header is validated in the service, as a 422
+
+- **Mistake.** Three times in website CMS PR B a value reached something that could not take it: a gallery embed URL over the `varchar(500)` column and one that made `urlsplit` raise (B1, a 500), page rules held only in a serializer so a second caller skipped them (B2), and a contact subject of 200 characters that overflowed `Notification.title` once the notice prefix was added, so the notify task died and nobody was told (change review).
+- **Check.** For every field a caller supplies, name where it ends up (a `max_length` column, `urlsplit`/`UUID`/`json` parsing, an email subject or other header, a title with a prefix) and enforce that limit in the service as a field-keyed `DomainRuleViolation`, so no caller can bypass it. Where text is derived (prefix, truncation), compute the budget from one constant and test the maximum-length input end to end.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.

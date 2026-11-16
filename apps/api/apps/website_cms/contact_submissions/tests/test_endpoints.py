@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 
 from apps.school_organization.tests.factories import grant_default_role
 from apps.website_cms.constants import (
@@ -16,7 +17,9 @@ from apps.website_cms.tasks import notify_contact_received
 from apps.website_cms.tests.base import WebsiteAPITestCase
 from apps.website_cms.tests.factories import UserFactory
 from core.api.exceptions import DomainRuleViolation
+from core.audit.models import AuditLog
 from core.notifications.models import Notification
+from core.rbac.models import User, UserRole
 from core.tenancy.context import tenant_context
 
 LIST = "/api/v1/contact-submissions"
@@ -87,6 +90,14 @@ class ContactTriageTests(WebsiteAPITestCase):
         self.assertEqual(row.handled_by_id, self.user.pk)
         self.assertEqual(response.json()["data"]["handled_by_id"], str(self.user.pk))
 
+    def test_triage_audit_row_holds_only_status_and_handler(self) -> None:
+        self.allow("website.contact-submission.update")
+        self.assertEqual(self._patch({"status": "read"}).status_code, 200)
+        with tenant_context(self.tenant.id):
+            audit = AuditLog.objects.get(action="update", resource_id=self.row.pk)
+        self.assertEqual(audit.before, {"status": "new", "handled_by_id": None})
+        self.assertEqual(audit.after, {"status": "read", "handled_by_id": str(self.user.pk)})
+
     def test_only_status_writable(self) -> None:
         self.allow("website.contact-submission.update")
         extra = {"name": "Hacked", "message": "x", "email": "e@x.org", "ip": "1.1.1.1"}
@@ -111,11 +122,6 @@ class ContactTriageTests(WebsiteAPITestCase):
 
 
 class CreateContactSubmissionTests(WebsiteAPITestCase):
-    def _staff(self, slug: str):
-        user = UserFactory(tenant=self.tenant)
-        grant_default_role(user, slug)
-        return user
-
     def _create(self, **data):
         payload = {"name": "Sara", "email": "sara@example.com", "message": "Hello", **data}
         with tenant_context(self.tenant.id):
@@ -130,9 +136,9 @@ class CreateContactSubmissionTests(WebsiteAPITestCase):
         self.assertEqual(row.subject, "Admissions")
 
     def test_create_notifies_reception_and_admin(self) -> None:
-        reception = self._staff("reception")
-        admin = self._staff("school_admin")
-        outsider = self._staff("it_admin")
+        reception = self.make_staff("reception")
+        admin = self.make_staff("school_admin")
+        outsider = self.make_staff("it_admin")
         with self.captureOnCommitCallbacks(execute=True):
             row = self._create()
         with tenant_context(self.tenant.id):
@@ -143,7 +149,7 @@ class CreateContactSubmissionTests(WebsiteAPITestCase):
             self.assertTrue(all(n.title.startswith("New website message") for n in rows))
 
     def test_nothing_is_sent_before_commit(self) -> None:
-        self._staff("reception")
+        self.make_staff("reception")
         with self.captureOnCommitCallbacks(execute=False):
             row = self._create()
         with tenant_context(self.tenant.id):
@@ -157,6 +163,76 @@ class CreateContactSubmissionTests(WebsiteAPITestCase):
             row = self._create()
         with tenant_context(other.id):
             self.assertFalse(Notification.objects.filter(source_id=row.id).exists())
+
+
+class ContactBearerAndOrderTests(WebsiteAPITestCase):
+    def test_bearer_token_alone_lists_404s_a_foreign_id_and_triages(self) -> None:
+        self.allow("website.contact-submission.view", "website.contact-submission.update")
+        mine = self.make_contact()
+        foreign = self.make_contact(tenant=self.make_other_tenant())
+        client = self.bearer_client()
+        self.assertEqual(client.get(LIST).status_code, 200)
+        self.assertEqual(client.get(detail(foreign)).status_code, 404)
+        response = client.patch(detail(mine), {"status": "read"}, format="json")
+        self.assertEqual(response.status_code, 200, response.content)
+
+    def test_rows_tied_on_created_at_page_apart(self) -> None:
+        self.allow("website.contact-submission.view")
+        rows = [self.make_contact(), self.make_contact()]
+        self.assert_ties_page_apart(LIST, ContactSubmission, rows, created_at=timezone.now())
+
+
+class ContactRecipientTests(WebsiteAPITestCase):
+    def _notified(self, row) -> set:
+        with tenant_context(self.tenant.id):
+            rows = Notification.objects.filter(source_id=row.id)
+            return set(rows.values_list("user_id", flat=True))
+
+    def _run(self, row) -> None:
+        notify_contact_received(tenant_id=str(self.tenant.id), submission_id=str(row.id))
+
+    def test_a_maximum_length_subject_still_notifies_both_recipients(self) -> None:
+        reception = self.make_staff("reception")
+        admin = self.make_staff("school_admin")
+        row = self.make_contact(subject="s" * CONTACT_SUBJECT_MAX)
+        self._run(row)
+        self.assertEqual(self._notified(row), {reception.pk, admin.pk})
+        with tenant_context(self.tenant.id):
+            rows = Notification.objects.filter(source_id=row.id)
+            titles = list(rows.values_list("title", flat=True))
+        self.assertTrue(all(len(title) <= 200 for title in titles), titles)
+
+    def test_a_multiline_subject_becomes_one_line_in_the_title(self) -> None:
+        self.make_staff("reception")
+        row = self.make_contact(subject="Fees\nquery\r\nplease")
+        self._run(row)
+        with tenant_context(self.tenant.id):
+            title = Notification.objects.get(source_id=row.id).title
+        self.assertEqual(title, "New website message: Fees query please")
+
+    def test_inactive_and_deleted_users_get_nothing(self) -> None:
+        active = self.make_staff("reception")
+        inactive = self.make_staff("reception")
+        gone = self.make_staff("school_admin")
+        with tenant_context(self.tenant.id):
+            User.objects.filter(pk=inactive.pk).update(is_active=False)
+            User.objects.filter(pk=gone.pk).update(deleted_at=timezone.now())
+        row = self.make_contact()
+        self._run(row)
+        self.assertEqual(self._notified(row), {active.pk})
+
+    def test_a_revoked_role_gets_nothing(self) -> None:
+        kept = self.make_staff("reception")
+        revoked = self.make_staff("reception")
+        UserRole.objects.filter(user=revoked).update(deleted_at=timezone.now())
+        row = self.make_contact()
+        self._run(row)
+        self.assertEqual(self._notified(row), {kept.pk})
+
+    def test_a_school_with_no_recipients_is_a_quiet_no_op(self) -> None:
+        row = self.make_contact()
+        self._run(row)
+        self.assertEqual(self._notified(row), set())
 
 
 class ContactValidationTests(WebsiteAPITestCase):
@@ -179,6 +255,25 @@ class ContactValidationTests(WebsiteAPITestCase):
 
     def test_invalid_email_is_422(self) -> None:
         self._assert_422("email", email="not-an-email")
+
+    def test_phone_without_a_digit_is_422(self) -> None:
+        for phone in ("(---)", "+-+-+-+-+-", "()()()()()"):
+            with self.subTest(phone=phone):
+                self._assert_422("phone", email="", phone=phone)
+
+    def test_single_line_fields_collapse_whitespace_and_newlines(self) -> None:
+        row = self._create(
+            name="Sara\n  Khan",
+            subject="Fees\r\nquery\t now",
+            email="",
+            phone="+92 300\n1234567",
+        )
+        self.assertEqual(
+            (row.name, row.subject, row.phone), ("Sara Khan", "Fees query now", "+92 300 1234567")
+        )
+
+    def test_message_keeps_its_line_breaks(self) -> None:
+        self.assertEqual(self._create(message="Line one\nLine two").message, "Line one\nLine two")
 
     def test_bad_phone_is_422(self) -> None:
         self._assert_422("phone", email="", phone="call me")

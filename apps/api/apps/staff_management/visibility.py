@@ -12,6 +12,7 @@ from uuid import UUID
 from django.db.models import QuerySet
 
 from apps.staff_management.models import EmploymentStatus, Staff
+from apps.staff_management.uploads import STAFF_PHOTO
 from core.files.visibility import register_public_reference_provider, sync_file_visibility
 
 # Suspended and exited staff drop off the website; leave is still employment.
@@ -28,7 +29,9 @@ def staff_photo_files(candidates: set[UUID]) -> set[UUID]:
     if not candidates:
         return set()
     return set(
-        listed_staff().filter(photo_file_id__in=candidates).values_list("photo_file_id", flat=True)
+        listed_staff()
+        .filter(photo_file_id__in=candidates, photo_file__purpose=STAFF_PHOTO.key)
+        .values_list("photo_file_id", flat=True)
     )
 
 

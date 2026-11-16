@@ -7,9 +7,10 @@ from uuid import uuid4
 
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 
 from apps.website_cms.constants import EMBED_HOSTS, EMBED_URL_MAX_LENGTH
-from apps.website_cms.models import ContentStatus, GalleryItem
+from apps.website_cms.models import ContentStatus, GalleryAlbum, GalleryItem
 from apps.website_cms.tests.base import WebsiteAPITestCase
 from core.files.models import FileVisibility
 from core.tenancy.context import tenant_context
@@ -397,3 +398,41 @@ class ItemTests(WebsiteAPITestCase):
                     if q.startswith(('INSERT INTO "gallery_items"', 'UPDATE "gallery_items"'))
                 )
                 self.assertLess(lock, write)
+
+
+class GalleryBearerAndOrderTests(WebsiteAPITestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        self.allow("website.page.view", "website.gallery-album.update")
+        self.bearer = self.bearer_client()
+        self.album = self.make_album()
+        self.foreign = self.make_album(tenant=self.make_other_tenant())
+
+    def test_bearer_token_alone_lists_404s_a_foreign_album_and_writes(self) -> None:
+        self.assertEqual(self.bearer.get(LIST).status_code, 200)
+        self.assertEqual(self.bearer.get(detail(self.foreign)).status_code, 404)
+        response = self.bearer.patch(detail(self.album), {"title": "Renamed"}, format="json")
+        self.assertEqual(response.status_code, 200, response.content)
+
+    def test_bearer_token_alone_reaches_items_and_a_foreign_album_is_404(self) -> None:
+        item = self.make_item(self.album)
+        self.assertEqual(self.bearer.get(items_url(self.album)).status_code, 200)
+        self.assertEqual(self.bearer.get(items_url(self.foreign)).status_code, 404)
+        response = self.bearer.patch(
+            f"{items_url(self.album)}/{item.id}", {"caption": "Cheers"}, format="json"
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+
+    def test_albums_tied_on_every_sort_key_page_apart(self) -> None:
+        rows = [self.album, self.make_album()]
+        self.assert_ties_page_apart(LIST, GalleryAlbum, rows, created_at=timezone.now())
+
+    def test_items_tied_on_created_at_page_apart(self) -> None:
+        rows = [self.make_item(self.album), self.make_item(self.album)]
+        self.assert_ties_page_apart(
+            items_url(self.album),
+            GalleryItem,
+            rows,
+            params={"ordering": "created_at"},
+            created_at=timezone.now(),
+        )
