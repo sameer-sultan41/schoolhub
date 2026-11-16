@@ -41,6 +41,7 @@ bookmarkable
 Brien
 bursty
 BYPASSRLS
+bytea
 chainguard
 Chandni
 chartable

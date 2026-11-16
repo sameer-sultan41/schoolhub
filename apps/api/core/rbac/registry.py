@@ -6,11 +6,29 @@ A migration seeds the database ``permissions`` table from the registry, so the t
 can never drift — tests/test_permission_registry.py asserts equality.
 
 Key format: ``module.resource.action`` — see docs/02-architecture/auth-and-rbac.md §2.1.
+
+Every key has a scope (ADR-0036): ``tenant`` keys are held by a school's roles, ``platform``
+keys by the platform roles only. The console's keys share the ``platform`` module name with
+tenant-side infrastructure keys (``platform.file.view``), so the scope, not the name, decides
+who may hold a key; `register` refuses a default role of the other scope.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Literal
+
+from django.db import models
+
+from core.rbac.roles import PLATFORM_ROLES
+
+
+class PermissionScope(models.TextChoices):
+    """Who may hold a key: a school's roles, or the platform roles (ADR-0036)."""
+
+    TENANT = "tenant", "Tenant"
+    PLATFORM = "platform", "Platform"
+
 
 # Standard action vocabulary. Module-specific verbs must be declared in the module's
 # own doc §4 and added to EXTRA_ACTIONS so the format check stays meaningful.
@@ -71,6 +89,7 @@ class PermissionSpec:
     key: str
     description: str = ""
     default_roles: tuple[str, ...] = field(default_factory=tuple)
+    scope: str = PermissionScope.TENANT
 
     @property
     def module(self) -> str:
@@ -89,7 +108,14 @@ class PermissionRegistry:
     def __init__(self) -> None:
         self._specs: dict[str, PermissionSpec] = {}
 
-    def register(self, key: str, description: str = "", default_roles=()) -> PermissionSpec:
+    def register(
+        self,
+        key: str,
+        description: str = "",
+        default_roles=(),
+        *,
+        scope: Literal["tenant", "platform"] = "tenant",
+    ) -> PermissionSpec:
         parts = key.split(".")
         if len(parts) != 3:
             raise ValueError(f"Permission key must be module.resource.action, got {key!r}")
@@ -101,20 +127,46 @@ class PermissionRegistry:
             )
         if key in self._specs:
             raise ValueError(f"Duplicate permission key {key!r}")
-        spec = PermissionSpec(key=key, description=description, default_roles=tuple(default_roles))
+        if scope not in PermissionScope.values:
+            raise ValueError(f"Unknown scope {scope!r} for {key!r}: tenant or platform.")
+        crossing = [
+            role for role in default_roles if (role in PLATFORM_ROLES) != (scope == "platform")
+        ]
+        if crossing:
+            raise ValueError(
+                f"{key!r} is a {scope}-scope key, so it cannot default to {crossing}: "
+                "platform keys belong to platform roles only, tenant keys to tenant roles only."
+            )
+        spec = PermissionSpec(
+            key=key,
+            description=description,
+            default_roles=tuple(default_roles),
+            scope=PermissionScope(scope),
+        )
         self._specs[key] = spec
         return spec
 
-    def register_crud(self, module: str, resource: str, *, default_roles=(), actions=None):
+    def register_crud(
+        self,
+        module: str,
+        resource: str,
+        *,
+        default_roles=(),
+        actions=None,
+        scope: Literal["tenant", "platform"] = "tenant",
+    ):
         """Convenience for the common view/create/update/delete set."""
         for action in actions or ("view", "create", "update", "delete"):
-            self.register(f"{module}.{resource}.{action}", default_roles=default_roles)
+            self.register(f"{module}.{resource}.{action}", default_roles=default_roles, scope=scope)
 
     def all(self) -> list[PermissionSpec]:
         return sorted(self._specs.values(), key=lambda s: s.key)
 
     def keys(self) -> set[str]:
         return set(self._specs)
+
+    def get(self, key: str) -> PermissionSpec:
+        return self._specs[key]
 
     def keys_for_role(self, slug: str) -> list[str]:
         """Every key whose `default_roles` names `slug` — what a real role of that slug gets."""

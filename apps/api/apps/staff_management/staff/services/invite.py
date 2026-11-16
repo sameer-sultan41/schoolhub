@@ -142,14 +142,17 @@ def _grantable_roles(
     """The roles ``role_ids`` names, if ``actor`` may hand every one of them out.
 
     A role_id may name either a tenant-custom role or a platform-seeded default role
-    (Role.tenant is null for those); both are valid targets. A student or guardian role is
+    (Role.tenant is null for those); both are valid targets. A platform role (ADR-0036) is
+    never one of the school's, so it is not found. A student or guardian role is
     never a staff role, and a role carrying a key the actor does not hold at scope ``all``
     would let the actor grant more than they have, so either is a 403. Scope ``all`` because
     the new assignment is made at ``all``: a campus-scoped holder of a key cannot hand out
     the whole school's reach of it.
     """
     roles = list(
-        Role.objects.filter(pk__in=role_ids).filter(Q(tenant_id=tenant_id) | Q(tenant__isnull=True))
+        Role.objects.filter(pk__in=role_ids, is_platform=False).filter(
+            Q(tenant_id=tenant_id) | Q(tenant__isnull=True)
+        )
     )
     if len(roles) != len(set(role_ids)):
         raise DomainRuleViolation(

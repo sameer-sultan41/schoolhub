@@ -26,6 +26,7 @@ dependencies = [
     "qrcode[pil]>=8.2",
     # The AI gateway's provider SDK. Imported only by core/ai/providers/anthropic.py.
     "anthropic>=2.6.0",
+    "pyotp>=2.12.0",
 ]
 
 [dependency-groups]
