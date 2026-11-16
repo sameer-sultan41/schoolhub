@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Form } from "@schoolhub/ui";
 
@@ -8,6 +9,7 @@ import { mocked } from "@/test-fixtures/list-screen";
 import { renderWithProviders, stubObjectUrls } from "@/test-utils";
 
 import { ImageFileField } from "../image-file-field";
+import { UploadTrackerProvider, useUploadTracker } from "../upload-tracker";
 import { FILE_ID, HERO, SchemaHost } from "./schema-test-support";
 
 jest.mock("@/services", () =>
@@ -112,6 +114,57 @@ describe("ImageFileField", () => {
       expect(onSave).toHaveBeenCalledWith({ heading: "Hi" });
     });
     unmount();
+  });
+
+  it("writes a late upload to the field's current path, not the one it was picked at", async () => {
+    interface Values {
+      blocks: { file_id: string }[];
+    }
+    const read = jest.fn<undefined, [Values]>();
+    // The field's block moves from index 0 to 1 while its upload runs, as a reorder would.
+    function MovingHost() {
+      const form = useForm<Values>({
+        defaultValues: { blocks: [{ file_id: "" }, { file_id: "" }] },
+      });
+      const tracker = useUploadTracker();
+      const [index, setIndex] = useState(0);
+      return (
+        <UploadTrackerProvider value={tracker}>
+          <Form {...form}>
+            <ImageFileField form={form} name={`blocks.${index}.file_id`} label="Image" />
+            <button
+              type="button"
+              onClick={() => {
+                setIndex(1);
+              }}
+            >
+              Move
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                read(form.getValues());
+              }}
+            >
+              Read
+            </button>
+          </Form>
+        </UploadTrackerProvider>
+      );
+    }
+    const user = userEvent.setup();
+    const upload = pendingUpload();
+    renderWithProviders(<MovingHost />);
+
+    await user.upload(screen.getByLabelText("Image"), PICKED);
+    await user.click(screen.getByRole("button", { name: "Move" }));
+    upload.finish(FILE_ID);
+    await waitFor(() => {
+      expect(screen.getByText("An image is on file.")).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: "Read" }));
+
+    expect(read).toHaveBeenCalledWith({ blocks: [{ file_id: "" }, { file_id: FILE_ID }] });
   });
 
   it("refuses to render outside an UploadTrackerProvider", () => {

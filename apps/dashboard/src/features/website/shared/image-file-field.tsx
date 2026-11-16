@@ -59,6 +59,13 @@ export function ImageFileField<TFieldValues extends FieldValues>({
   const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle");
   const [uploadError, setUploadError] = useState<string | null>(null);
 
+  // The field's path as of the latest render: a block or item moved while the upload ran has
+  // a new index, and the result must land on it, not on whatever now holds the old one.
+  const nameRef = useRef(name);
+  useEffect(() => {
+    nameRef.current = name;
+  }, [name]);
+
   // Set inside the effect, not at init, so React's dev-mode remount restores it.
   const mountedRef = useRef(false);
   useEffect(() => {
@@ -79,7 +86,7 @@ export function ImageFileField<TFieldValues extends FieldValues>({
     try {
       const id = await Services.files.uploadFile(file, WEBSITE_MEDIA_PURPOSE);
       if (!mountedRef.current) return;
-      form.setValue(name, id as PathValue<TFieldValues, Path<TFieldValues>>, {
+      form.setValue(nameRef.current, id as PathValue<TFieldValues, Path<TFieldValues>>, {
         shouldDirty: true,
         shouldValidate: true,
       });

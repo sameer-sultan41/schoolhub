@@ -66,6 +66,12 @@ export function useUploadTrackerContext(): UploadTracker {
   return tracker;
 }
 
+/** Whether the surrounding form has an upload running; `false` outside a tracker, so a list
+ * that may hold no upload field still renders anywhere. Lists hold reordering while it is true. */
+export function useIsUploading(): boolean {
+  return useContext(UploadTrackerContext)?.isUploading ?? false;
+}
+
 /** A form's submit handler that first waits for the tracker's uploads, then runs `handler`. */
 export function submitAfterUploads(
   tracker: UploadTracker,
