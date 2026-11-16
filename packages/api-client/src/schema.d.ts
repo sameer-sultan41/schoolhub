@@ -4397,6 +4397,182 @@ export interface paths {
         patch: operations["periods_partial_update"];
         trace?: never;
     };
+    "/api/v1/public/classes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
+         *
+         *     The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
+         *     on a principal with no `pk`.
+         */
+        get: operations["public_classes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/departments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
+         *
+         *     The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
+         *     on a principal with no `pk`.
+         */
+        get: operations["public_departments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/gallery-albums": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
+         *
+         *     The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
+         *     on a principal with no `pk`.
+         */
+        get: operations["public_gallery_albums"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/gallery-albums/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
+         *
+         *     The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
+         *     on a principal with no `pk`.
+         */
+        get: operations["public_gallery_album"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/gallery-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
+         *
+         *     The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
+         *     on a principal with no `pk`.
+         */
+        get: operations["public_gallery_items"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/news-posts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
+         *
+         *     The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
+         *     on a principal with no `pk`.
+         */
+        get: operations["public_news_posts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/news-posts/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
+         *
+         *     The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
+         *     on a principal with no `pk`.
+         */
+        get: operations["public_news_post"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/notices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
+         *
+         *     The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
+         *     on a principal with no `pk`.
+         */
+        get: operations["public_notices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/pages": {
         parameters: {
             query?: never;
@@ -4462,6 +4638,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/school-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
+         *
+         *     The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
+         *     on a principal with no `pk`.
+         */
+        get: operations["public_school_events"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/school-events/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
+         *
+         *     The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
+         *     on a principal with no `pk`.
+         */
+        get: operations["public_school_event"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/site": {
         parameters: {
             query?: never;
@@ -4492,6 +4712,28 @@ export interface paths {
         };
         /** @description `GET /public/sitemap?host=`: every published, indexable path of the site. */
         get: operations["public_sitemap"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/teachers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
+         *
+         *     The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
+         *     on a principal with no `pk`.
+         */
+        get: operations["public_teachers"];
         put?: never;
         post?: never;
         delete?: never;
@@ -13136,6 +13378,61 @@ export interface components {
             favicon_url: string | null;
             radius: string | null;
         };
+        PublicClass: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            level: number;
+        };
+        PublicDepartment: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description: string;
+        };
+        PublicGalleryAlbum: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            title: string;
+            description: string;
+            cover_image_url: string | null;
+            /** Format: date-time */
+            published_at: string | null;
+            item_count: number;
+        };
+        PublicGalleryAlbumDetail: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            title: string;
+            description: string;
+            cover_image_url: string | null;
+            /** Format: date-time */
+            published_at: string | null;
+            items: components["schemas"]["PublicGalleryItem"][];
+        };
+        PublicGalleryImage: {
+            /** Format: uuid */
+            id: string;
+            image_url: string;
+            caption: string;
+            alt_text: string;
+            album_slug: string;
+            album_title: string;
+        };
+        PublicGalleryItem: {
+            /** Format: uuid */
+            id: string;
+            media_type: components["schemas"]["GalleryMediaTypeEnum"];
+            /** @description Null for a video embed. */
+            image_url: string | null;
+            /** @description Null for an image. */
+            embed_url: string | null;
+            caption: string;
+            alt_text: string;
+            position: number;
+        };
         PublicNavItem: {
             label: string;
             /** @description A site path (`/about`) or an https URL. */
@@ -13151,6 +13448,43 @@ export interface components {
             header: components["schemas"]["PublicNavItem"][];
             footer_primary: components["schemas"]["PublicNavItem"][];
             footer_secondary: components["schemas"]["PublicNavItem"][];
+        };
+        PublicNewsPost: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            title: string;
+            excerpt: string;
+            cover_image_url: string | null;
+            /** Format: date-time */
+            published_at: string | null;
+        };
+        PublicNewsPostDetail: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            title: string;
+            excerpt: string;
+            cover_image_url: string | null;
+            /** Format: date-time */
+            published_at: string | null;
+            /** @description A rich-text block document; image ids become `*_url`. */
+            body: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            updated_at: string;
+        };
+        PublicNotice: {
+            /** Format: uuid */
+            id: string;
+            /** @description `announcement` or `notice`. */
+            kind: string;
+            title: string;
+            /** @description Plain text. */
+            body: string;
+            /** Format: date-time */
+            published_at: string;
         };
         PublicPage: {
             /** Format: uuid */
@@ -13175,6 +13509,38 @@ export interface components {
             updated_at: string;
             sections: components["schemas"]["PublicSection"][];
             seo: components["schemas"]["PublicSeo"];
+        };
+        PublicSchoolEvent: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            title: string;
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string | null;
+            is_all_day: boolean;
+            location: string;
+            cover_image_url: string | null;
+        };
+        PublicSchoolEventDetail: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            title: string;
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string | null;
+            is_all_day: boolean;
+            location: string;
+            cover_image_url: string | null;
+            /** @description A rich-text block document; image ids become `*_url`. */
+            description: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            updated_at: string;
         };
         PublicSection: {
             /** Format: uuid */
@@ -13221,6 +13587,15 @@ export interface components {
         PublicSocialLink: {
             platform: string;
             url: string;
+        };
+        PublicTeacher: {
+            /** Format: uuid */
+            id: string;
+            full_name: string;
+            designation: string;
+            /** @description Null unless the photo is public. */
+            photo_url: string | null;
+            bio: string;
         };
         PublicTenant: {
             /** Format: uuid */
@@ -22434,6 +22809,256 @@ export interface operations {
             };
         };
     };
+    public_classes: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+                /** @description Rows to return, 1 to 50 (the default and the cap). */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicClass"][];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_departments: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+                /** @description Rows to return, 1 to 50 (the default and the cap). */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicDepartment"][];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_gallery_albums: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+                /** @description Rows to return, 1 to 50 (the default and the cap). */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicGalleryAlbum"][];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_gallery_album: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+            };
+            header?: never;
+            path: {
+                /** @description The item's slug. */
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicGalleryAlbumDetail"];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_gallery_items: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+                /** @description Rows to return, 1 to 50 (the default and the cap). */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicGalleryImage"][];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_news_posts: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+                /** @description Rows to return, 1 to 50 (the default and the cap). */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicNewsPost"][];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_news_post: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+            };
+            header?: never;
+            path: {
+                /** @description The item's slug. */
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicNewsPostDetail"];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_notices: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+                /** @description Rows to return, 1 to 50 (the default and the cap). */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicNotice"][];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     public_page: {
         parameters: {
             query: {
@@ -22482,6 +23107,71 @@ export interface operations {
         responses: {
             /** @description No response body */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_school_events: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+                /** @description Rows to return, 1 to 50 (the default and the cap). */
+                page_size?: number;
+                /** @description `upcoming` (default): not over yet. `past`: over. */
+                scope?: "past" | "upcoming";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSchoolEvent"][];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_school_event: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+            };
+            header?: never;
+            path: {
+                /** @description The item's slug. */
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSchoolEventDetail"];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -22539,6 +23229,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicSitemapEntry"][];
+                };
+            };
+            /** @description No live site, page or tenant answers on this host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_teachers: {
+        parameters: {
+            query: {
+                /** @description The site's host, as the visitor's browser sent it. */
+                host: string;
+                /** @description Rows to return, 1 to 50 (the default and the cap). */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicTeacher"][];
                 };
             };
             /** @description No live site, page or tenant answers on this host. */

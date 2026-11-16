@@ -5,6 +5,19 @@
 
 from django.urls import URLPattern, path
 
+from apps.website_cms.public.content_views import (
+    PublicClassListView,
+    PublicDepartmentListView,
+    PublicGalleryAlbumListView,
+    PublicGalleryAlbumView,
+    PublicGalleryImageListView,
+    PublicNewsPostListView,
+    PublicNewsPostView,
+    PublicNoticeListView,
+    PublicSchoolEventListView,
+    PublicSchoolEventView,
+    PublicTeacherListView,
+)
 from apps.website_cms.public.views import (
     PublicPageView,
     PublicSitemapView,
@@ -17,4 +30,19 @@ urlpatterns: list[URLPattern] = [
     path("site", PublicSiteView.as_view(), name="public-site"),
     path("pages", PublicPageView.as_view(), name="public-page"),
     path("sitemap", PublicSitemapView.as_view(), name="public-sitemap"),
+    path("news-posts", PublicNewsPostListView.as_view(), name="public-news-posts"),
+    path("news-posts/<slug:slug>", PublicNewsPostView.as_view(), name="public-news-post"),
+    path("school-events", PublicSchoolEventListView.as_view(), name="public-school-events"),
+    path("school-events/<slug:slug>", PublicSchoolEventView.as_view(), name="public-school-event"),
+    path("gallery-albums", PublicGalleryAlbumListView.as_view(), name="public-gallery-albums"),
+    path(
+        "gallery-albums/<slug:slug>",
+        PublicGalleryAlbumView.as_view(),
+        name="public-gallery-album",
+    ),
+    path("gallery-items", PublicGalleryImageListView.as_view(), name="public-gallery-items"),
+    path("teachers", PublicTeacherListView.as_view(), name="public-teachers"),
+    path("departments", PublicDepartmentListView.as_view(), name="public-departments"),
+    path("classes", PublicClassListView.as_view(), name="public-classes"),
+    path("notices", PublicNoticeListView.as_view(), name="public-notices"),
 ]

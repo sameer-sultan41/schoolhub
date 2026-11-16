@@ -119,6 +119,9 @@ CONTENT_SLUG_MAX_LENGTH = 120
 #: Longest stored embed URL (the column is varchar(500)); the service answers 422 above it.
 EMBED_URL_MAX_LENGTH = 500
 
+#: Most rows a public list returns, and the default when `page_size` is absent (bare arrays).
+PUBLIC_LIST_MAX = 50
+
 
 def empty_rich_text() -> dict[str, list[dict[str, object]]]:
     """The empty block document, the default for news `body` and event `description`."""

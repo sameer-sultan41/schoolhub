@@ -19,7 +19,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.website_cms.constants import WebsiteStatus
+from apps.website_cms.constants import PUBLIC_LIST_MAX, WebsiteStatus
 from apps.website_cms.features import FEATURE
 from apps.website_cms.hosts import resolve_host, website_status
 from apps.website_cms.preview import read_preview_token
@@ -53,6 +53,12 @@ PREVIEW_PARAMETER = OpenApiParameter(
     required=False,
     description="A page preview token for this host's school: reads before the site is live.",
 )
+PAGE_SIZE_PARAMETER = OpenApiParameter(
+    "page_size",
+    int,
+    required=False,
+    description=f"Rows to return, 1 to {PUBLIC_LIST_MAX} (the default and the cap).",
+)
 NOT_FOUND = OpenApiResponse(description="No live site, page or tenant answers on this host.")
 
 
@@ -67,6 +73,15 @@ class PublicContentView(APIView):
     permission_classes = [HasMachineScope]
     throttle_classes = [MachineClientThrottle]
     required_machine_scope = WEBSITE_PUBLIC_CONTENT_SCOPE
+
+    @staticmethod
+    def list_limit(request: Request) -> int:
+        """`?page_size=` bounded to 1..`PUBLIC_LIST_MAX`; absent or not a number is the cap."""
+        try:
+            wanted = int(request.query_params.get("page_size", PUBLIC_LIST_MAX))
+        except TypeError, ValueError:
+            return PUBLIC_LIST_MAX
+        return max(1, min(wanted, PUBLIC_LIST_MAX))
 
     def get_tenant(self, request: Request) -> Tenant:
         """The non-deleted tenant `?host=` names, or 404."""

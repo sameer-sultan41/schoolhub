@@ -9848,6 +9848,284 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/public/classes:
+    get:
+      operationId: public_classes
+      description: |-
+        Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
+
+        The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
+        on a principal with no `pk`.
+      parameters:
+      - in: query
+        name: host
+        schema:
+          type: string
+        description: The site's host, as the visitor's browser sent it.
+        required: true
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Rows to return, 1 to 50 (the default and the cap).
+      tags:
+      - public
+      security:
+      - machineToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublicClass'
+          description: ''
+        '404':
+          description: No live site, page or tenant answers on this host.
+  /api/v1/public/departments:
+    get:
+      operationId: public_departments
+      description: |-
+        Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
+
+        The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
+        on a principal with no `pk`.
+      parameters:
+      - in: query
+        name: host
+        schema:
+          type: string
+        description: The site's host, as the visitor's browser sent it.
+        required: true
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Rows to return, 1 to 50 (the default and the cap).
+      tags:
+      - public
+      security:
+      - machineToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublicDepartment'
+          description: ''
+        '404':
+          description: No live site, page or tenant answers on this host.
+  /api/v1/public/gallery-albums:
+    get:
+      operationId: public_gallery_albums
+      description: |-
+        Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
+
+        The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
+        on a principal with no `pk`.
+      parameters:
+      - in: query
+        name: host
+        schema:
+          type: string
+        description: The site's host, as the visitor's browser sent it.
+        required: true
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Rows to return, 1 to 50 (the default and the cap).
+      tags:
+      - public
+      security:
+      - machineToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublicGalleryAlbum'
+          description: ''
+        '404':
+          description: No live site, page or tenant answers on this host.
+  /api/v1/public/gallery-albums/{slug}:
+    get:
+      operationId: public_gallery_album
+      description: |-
+        Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
+
+        The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
+        on a principal with no `pk`.
+      parameters:
+      - in: query
+        name: host
+        schema:
+          type: string
+        description: The site's host, as the visitor's browser sent it.
+        required: true
+      - in: path
+        name: slug
+        schema:
+          type: string
+        description: The item's slug.
+        required: true
+      tags:
+      - public
+      security:
+      - machineToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicGalleryAlbumDetail'
+          description: ''
+        '404':
+          description: No live site, page or tenant answers on this host.
+  /api/v1/public/gallery-items:
+    get:
+      operationId: public_gallery_items
+      description: |-
+        Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
+
+        The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
+        on a principal with no `pk`.
+      parameters:
+      - in: query
+        name: host
+        schema:
+          type: string
+        description: The site's host, as the visitor's browser sent it.
+        required: true
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Rows to return, 1 to 50 (the default and the cap).
+      tags:
+      - public
+      security:
+      - machineToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublicGalleryImage'
+          description: ''
+        '404':
+          description: No live site, page or tenant answers on this host.
+  /api/v1/public/news-posts:
+    get:
+      operationId: public_news_posts
+      description: |-
+        Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
+
+        The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
+        on a principal with no `pk`.
+      parameters:
+      - in: query
+        name: host
+        schema:
+          type: string
+        description: The site's host, as the visitor's browser sent it.
+        required: true
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Rows to return, 1 to 50 (the default and the cap).
+      tags:
+      - public
+      security:
+      - machineToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublicNewsPost'
+          description: ''
+        '404':
+          description: No live site, page or tenant answers on this host.
+  /api/v1/public/news-posts/{slug}:
+    get:
+      operationId: public_news_post
+      description: |-
+        Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
+
+        The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
+        on a principal with no `pk`.
+      parameters:
+      - in: query
+        name: host
+        schema:
+          type: string
+        description: The site's host, as the visitor's browser sent it.
+        required: true
+      - in: path
+        name: slug
+        schema:
+          type: string
+        description: The item's slug.
+        required: true
+      tags:
+      - public
+      security:
+      - machineToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicNewsPostDetail'
+          description: ''
+        '404':
+          description: No live site, page or tenant answers on this host.
+  /api/v1/public/notices:
+    get:
+      operationId: public_notices
+      description: |-
+        Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
+
+        The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
+        on a principal with no `pk`.
+      parameters:
+      - in: query
+        name: host
+        schema:
+          type: string
+        description: The site's host, as the visitor's browser sent it.
+        required: true
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Rows to return, 1 to 50 (the default and the cap).
+      tags:
+      - public
+      security:
+      - machineToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublicNotice'
+          description: ''
+        '404':
+          description: No live site, page or tenant answers on this host.
   /api/v1/public/pages:
     get:
       operationId: public_page
@@ -9933,6 +10211,83 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/public/school-events:
+    get:
+      operationId: public_school_events
+      description: |-
+        Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
+
+        The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
+        on a principal with no `pk`.
+      parameters:
+      - in: query
+        name: host
+        schema:
+          type: string
+        description: The site's host, as the visitor's browser sent it.
+        required: true
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Rows to return, 1 to 50 (the default and the cap).
+      - in: query
+        name: scope
+        schema:
+          type: string
+          enum:
+          - past
+          - upcoming
+        description: '`upcoming` (default): not over yet. `past`: over.'
+      tags:
+      - public
+      security:
+      - machineToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublicSchoolEvent'
+          description: ''
+        '404':
+          description: No live site, page or tenant answers on this host.
+  /api/v1/public/school-events/{slug}:
+    get:
+      operationId: public_school_event
+      description: |-
+        Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
+
+        The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
+        on a principal with no `pk`.
+      parameters:
+      - in: query
+        name: host
+        schema:
+          type: string
+        description: The site's host, as the visitor's browser sent it.
+        required: true
+      - in: path
+        name: slug
+        schema:
+          type: string
+        description: The item's slug.
+        required: true
+      tags:
+      - public
+      security:
+      - machineToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicSchoolEventDetail'
+          description: ''
+        '404':
+          description: No live site, page or tenant answers on this host.
   /api/v1/public/site:
     get:
       operationId: public_site
@@ -9990,6 +10345,41 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/PublicSitemapEntry'
+          description: ''
+        '404':
+          description: No live site, page or tenant answers on this host.
+  /api/v1/public/teachers:
+    get:
+      operationId: public_teachers
+      description: |-
+        Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
+
+        The throttle replaces the defaults, whose `UserRateThrottle` would key every renderer read
+        on a principal with no `pk`.
+      parameters:
+      - in: query
+        name: host
+        schema:
+          type: string
+        description: The site's host, as the visitor's browser sent it.
+        required: true
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Rows to return, 1 to 50 (the default and the cap).
+      tags:
+      - public
+      security:
+      - machineToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublicTeacher'
           description: ''
         '404':
           description: No live site, page or tenant answers on this host.
@@ -28658,6 +29048,147 @@ components:
       - primary_color
       - radius
       - secondary_color
+    PublicClass:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        level:
+          type: integer
+      required:
+      - id
+      - level
+      - name
+    PublicDepartment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+      required:
+      - description
+      - id
+      - name
+    PublicGalleryAlbum:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        cover_image_url:
+          type: string
+          nullable: true
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+        item_count:
+          type: integer
+      required:
+      - cover_image_url
+      - description
+      - id
+      - item_count
+      - published_at
+      - slug
+      - title
+    PublicGalleryAlbumDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        cover_image_url:
+          type: string
+          nullable: true
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicGalleryItem'
+      required:
+      - cover_image_url
+      - description
+      - id
+      - items
+      - published_at
+      - slug
+      - title
+    PublicGalleryImage:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        image_url:
+          type: string
+        caption:
+          type: string
+        alt_text:
+          type: string
+        album_slug:
+          type: string
+        album_title:
+          type: string
+      required:
+      - album_slug
+      - album_title
+      - alt_text
+      - caption
+      - id
+      - image_url
+    PublicGalleryItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        media_type:
+          $ref: '#/components/schemas/GalleryMediaTypeEnum'
+        image_url:
+          type: string
+          nullable: true
+          description: Null for a video embed.
+        embed_url:
+          type: string
+          nullable: true
+          description: Null for an image.
+        caption:
+          type: string
+        alt_text:
+          type: string
+        position:
+          type: integer
+      required:
+      - alt_text
+      - caption
+      - embed_url
+      - id
+      - image_url
+      - media_type
+      - position
     PublicNavItem:
       type: object
       properties:
@@ -28704,6 +29235,90 @@ components:
       - footer_primary
       - footer_secondary
       - header
+    PublicNewsPost:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        title:
+          type: string
+        excerpt:
+          type: string
+        cover_image_url:
+          type: string
+          nullable: true
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - cover_image_url
+      - excerpt
+      - id
+      - published_at
+      - slug
+      - title
+    PublicNewsPostDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        title:
+          type: string
+        excerpt:
+          type: string
+        cover_image_url:
+          type: string
+          nullable: true
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+        body:
+          type: object
+          additionalProperties: {}
+          description: A rich-text block document; image ids become `*_url`.
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - body
+      - cover_image_url
+      - excerpt
+      - id
+      - published_at
+      - slug
+      - title
+      - updated_at
+    PublicNotice:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          description: '`announcement` or `notice`.'
+        title:
+          type: string
+        body:
+          type: string
+          description: Plain text.
+        published_at:
+          type: string
+          format: date-time
+      required:
+      - body
+      - id
+      - kind
+      - published_at
+      - title
     PublicPage:
       type: object
       properties:
@@ -28753,6 +29368,81 @@ components:
       - seo
       - slug
       - status
+      - title
+      - updated_at
+    PublicSchoolEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        title:
+          type: string
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+          nullable: true
+        is_all_day:
+          type: boolean
+        location:
+          type: string
+        cover_image_url:
+          type: string
+          nullable: true
+      required:
+      - cover_image_url
+      - ends_at
+      - id
+      - is_all_day
+      - location
+      - slug
+      - starts_at
+      - title
+    PublicSchoolEventDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        title:
+          type: string
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+          nullable: true
+        is_all_day:
+          type: boolean
+        location:
+          type: string
+        cover_image_url:
+          type: string
+          nullable: true
+        description:
+          type: object
+          additionalProperties: {}
+          description: A rich-text block document; image ids become `*_url`.
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - cover_image_url
+      - description
+      - ends_at
+      - id
+      - is_all_day
+      - location
+      - slug
+      - starts_at
       - title
       - updated_at
     PublicSection:
@@ -28862,6 +29552,28 @@ components:
       required:
       - platform
       - url
+    PublicTeacher:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        full_name:
+          type: string
+        designation:
+          type: string
+        photo_url:
+          type: string
+          nullable: true
+          description: Null unless the photo is public.
+        bio:
+          type: string
+      required:
+      - bio
+      - designation
+      - full_name
+      - id
+      - photo_url
     PublicTenant:
       type: object
       properties:
