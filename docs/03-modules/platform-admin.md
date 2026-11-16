@@ -47,6 +47,8 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 
 Every key above is **platform-scope** ([ADR-0036](../decisions/0036-platform-scope-and-cross-tenant-access.md)): only the two platform roles hold them, and no school's role ever can. The scope, not the module name, decides it: the tenant-side `platform.file.*`, `platform.job.view` and `platform.notification.view` keys stay tenant-scope. `registry.register(..., scope="platform")` refuses a tenant default role, every grant path filters on `Permission.scope`, and only a platform user may hold a platform role (a trigger on `user_roles`). Both roles are synced as shared `tenant=None` rows on every migrate (`core.rbac.sync.sync_default_roles`), and an operator account is created with `manage.py create_platform_admin --email --first-name [--role]`.
 
+Every operator signs in with password **and** TOTP ([auth-and-rbac §1](../02-architecture/auth-and-rbac.md), SEC-06). A new account starts with MFA off: its first password sign-in gets an `amr=["pwd"]` token, which the console refuses (403 `mfa_required`) but which can call `POST /auth/mfa:enroll` and `:confirm`; confirming returns ten recovery codes and an `amr=["pwd","otp"]` pair. From then on login answers with a challenge that `POST /auth/mfa:verify` completes. An operator cannot turn MFA off (`/auth/mfa:disable` is 403); one who lost their authenticator and recovery codes is reset with `manage.py create_platform_admin --email … --reset-mfa`, which also ends their sessions.
+
 ## 5. Main Features
 
 1. **Tenant lifecycle management** — create, provision (idempotent seed transaction), trial, activate, suspend, reinstate, export, and delete tenants per the state machine in multi-tenancy §7.
@@ -179,6 +181,7 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - `GET /api/v1/platform/tenants/{id}/usage` · `GET /api/v1/platform/reports/{key}` (aggregate read path)
 - `POST /api/v1/platform/tenants/{id}/imports` (`202` + job, dry-run flag) · `GET /api/v1/platform/imports/{id}`
 - Tenant-facing: `GET /api/v1/subscription` (own billing state, `school_owner`) · `GET/PATCH /api/v1/onboarding` (wizard progress).
+- Operator sign-in (built, `core/rbac`, under `/api/v1/auth/`, §4): `POST /auth/login` → `{mfa_required, mfa_token}` · `POST /auth/mfa:verify` · `POST /auth/mfa:enroll` · `POST /auth/mfa:confirm` · `POST /auth/mfa:disable` (always 403 for an operator).
 
 ## 17. Integration Requirements
 

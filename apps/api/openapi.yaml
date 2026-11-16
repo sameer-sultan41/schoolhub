@@ -1108,6 +1108,12 @@ paths:
   /api/v1/auth/login:
     post:
       operationId: auth_login_create
+      description: |-
+        Password sign-in: the first step of the login state machine (auth-and-rbac §1).
+
+        A user with ``mfa_enabled`` gets a challenge (``mfa_required``, ``mfa_token``) and no token
+        or cookie; ``MfaVerifyView`` completes the sign-in. Everyone else gets the token pair with
+        ``amr=["pwd"]``.
       tags:
       - auth
       requestBody:
@@ -1130,7 +1136,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/User'
+                $ref: '#/components/schemas/LoginResponse'
           description: ''
   /api/v1/auth/logout:
     post:
@@ -1157,6 +1163,109 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/User'
+          description: ''
+  /api/v1/auth/mfa:confirm:
+    post:
+      operationId: auth_mfa:confirm_create
+      description: |-
+        ``POST /auth/mfa:confirm``: a first code turns MFA on.
+
+        Returns ten single-use recovery codes, shown this once, and a fresh token pair whose
+        ``amr`` carries ``"otp"``, so the console opens without signing in again.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MfaConfirm'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MfaConfirm'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MfaConfirm'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaConfirmResponse'
+          description: ''
+  /api/v1/auth/mfa:disable:
+    post:
+      operationId: auth_mfa:disable_create
+      description: |-
+        ``POST /auth/mfa:disable``: refused for every platform user (SEC-06).
+
+        The console requires a second factor, so a platform account never turns it off; an operator
+        who lost their authenticator and recovery codes is reset out of band with
+        ``create_platform_admin --reset-mfa``. Tenant principals get 404 until tenant MFA ships
+        (docs/deferred-work.md), which is when this route gains a path that succeeds.
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      responses:
+        '403':
+          description: No response body
+  /api/v1/auth/mfa:enroll:
+    post:
+      operationId: auth_mfa:enroll_create
+      description: |-
+        ``POST /auth/mfa:enroll``: a new TOTP secret, stored encrypted and not yet enabled.
+
+        Platform users only in v1 (a tenant principal gets 404). Refused 409
+        ``mfa_already_enabled`` once MFA is on, so a password-only token can never replace an
+        enrolled factor (ruling A2); an operator who lost theirs is reset with
+        ``create_platform_admin --reset-mfa``.
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaEnrollResponse'
+          description: ''
+  /api/v1/auth/mfa:verify:
+    post:
+      operationId: auth_mfa:verify_create
+      description: |-
+        ``POST /auth/mfa:verify``: the ``second_factor`` step, completing a challenged login.
+
+        Trades login's ``mfa_token`` and either a TOTP ``code`` or a ``recovery_code`` for the token
+        pair with ``amr=["pwd","otp"]``. A wrong code is a 400 ``invalid_mfa_code`` and counts
+        against the challenge (``mfa.MAX_CHALLENGE_ATTEMPTS``); an expired, tampered or used-up
+        challenge is a 400 ``mfa_challenge_invalid``, and the client signs in again.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MfaVerify'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MfaVerify'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MfaVerify'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignedInResponse'
           description: ''
   /api/v1/auth/password-reset:
     post:
@@ -20459,6 +20568,10 @@ components:
       required:
       - identifier
       - password
+    LoginResponse:
+      oneOf:
+      - $ref: '#/components/schemas/SignedInResponse'
+      - $ref: '#/components/schemas/MfaChallengeResponse'
     ManualJournal:
       type: object
       description: '`POST /ledger-entries:post-journal` — §8''s hand-written journal
@@ -20975,6 +21088,72 @@ components:
       description: |-
         * `open` - Open
         * `closed` - Closed
+    MfaChallengeResponse:
+      type: object
+      description: 'Login''s answer for a user with MFA on: no token yet, a challenge
+        to verify; schema only.'
+      properties:
+        mfa_required:
+          type: boolean
+        mfa_token:
+          type: string
+          description: Signed and short-lived; send it to /auth/mfa:verify with a
+            code.
+      required:
+      - mfa_required
+      - mfa_token
+    MfaConfirm:
+      type: object
+      properties:
+        code:
+          type: string
+          pattern: ^\d{6}$
+      required:
+      - code
+    MfaConfirmResponse:
+      type: object
+      description: 'Schema only: MFA is on; the recovery codes are shown this once.'
+      properties:
+        access_token:
+          type: string
+        expires_in:
+          type: integer
+        user:
+          $ref: '#/components/schemas/User'
+        recovery_codes:
+          type: array
+          items:
+            type: string
+      required:
+      - access_token
+      - expires_in
+      - recovery_codes
+      - user
+    MfaEnrollResponse:
+      type: object
+      description: 'Schema only: the new secret, shown once, and the URI an authenticator
+        app scans.'
+      properties:
+        secret:
+          type: string
+        otpauth_uri:
+          type: string
+      required:
+      - otpauth_uri
+      - secret
+    MfaVerify:
+      type: object
+      properties:
+        mfa_token:
+          type: string
+        code:
+          type: string
+          pattern: ^\d{6}$
+        recovery_code:
+          type: string
+          maxLength: 64
+      required:
+      - mfa_token
     MyRegister:
       type: object
       description: One register the caller marks on a date. The period fields are
@@ -27418,6 +27597,21 @@ components:
         * `processing` - Processing
         * `completed` - Completed
         * `failed` - Failed
+    SignedInResponse:
+      type: object
+      description: A completed sign-in (login without MFA, or ``/auth/mfa:verify``);
+        schema only.
+      properties:
+        access_token:
+          type: string
+        expires_in:
+          type: integer
+        user:
+          $ref: '#/components/schemas/User'
+      required:
+      - access_token
+      - expires_in
+      - user
     SlotSubstitution:
       type: object
       description: |-

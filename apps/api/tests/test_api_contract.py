@@ -41,6 +41,9 @@ CLIENT_KNOWN_SERVER_CODES = {
     "ai_quota_exceeded",
     "ai_unavailable",
     "mfa_required",
+    "invalid_mfa_code",
+    "mfa_challenge_invalid",
+    "mfa_already_enabled",
 }
 
 
@@ -154,6 +157,7 @@ class ErrorCodeContractTests(APITestCase):
             TenantNotFound,
             TenantSuspended,
         )
+        from core.rbac.mfa import InvalidMfaCode, MfaAlreadyEnabled, MfaChallengeInvalid
         from core.rbac.permissions import MfaRequired
 
         emitted = set(_CODE_BY_STATUS.values()) | {
@@ -170,6 +174,10 @@ class ErrorCodeContractTests(APITestCase):
             AIUnavailable.default_code,
             # The platform console's second-factor gate.
             MfaRequired.default_code,
+            # TOTP sign-in and enrolment.
+            InvalidMfaCode.default_code,
+            MfaChallengeInvalid.default_code,
+            MfaAlreadyEnabled.default_code,
         }
         self.assertEqual(
             emitted - CLIENT_KNOWN_SERVER_CODES,

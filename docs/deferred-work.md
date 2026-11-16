@@ -27,6 +27,24 @@ either this file or `project-status.md`.
   each environment (the load balancer, plus any CDN), and test that a spoofed header does not
   change the throttle key.
 
+- **TOTP MFA, what platform-admin PR A leaves out** (Task 2, `apps/api/core/rbac/mfa.py`,
+  auth-and-rbac §1). v1 builds the shared TOTP machinery and enforces it for platform users only.
+  - **MFA for tenant owners and admins, and per-tenant enforcement** (SEC-06 asks for both at
+    launch). The login challenge and `:verify` already work for any user with `mfa_enabled`, but
+    `/auth/mfa:enroll`, `:confirm` and `:disable` answer 404 to a tenant principal. Turning it on
+    means: opening enrolment to tenant roles, a `:disable` that re-checks a current code, a
+    per-tenant policy setting and its check at login, and dashboard screens.
+  - **Enrolment trusts the password.** A new operator's first sign-in is password-only, and
+    `:enroll` accepts that token, so whoever holds the password first can enrol. Accounts exist
+    only through `create_platform_admin`, run by an operator who enrols at once; a one-time
+    enrolment link from the command would close the gap.
+  - **The wrong-code counter lives in the cache.** A cache flush resets a challenge's count;
+    `AuthEndpointThrottle` and the five-minute challenge lifetime still bound guessing. There is
+    no per-account lockout yet (auth-and-rbac §1's password-policy line applies to MFA too).
+  - **`packages/types` `LoginResponse` does not model the challenge.** The dashboard's login
+    form expects tokens; no tenant user can have MFA on yet, and the platform console (PR D)
+    handles `mfa_required`.
+
 - **AI gateway and AI-FEE-02 follow-ups** (`feat/ai-gateway`, plan
   `docs/superpowers/plans/2026-11-07-ai-gateway.md`, [ADR-0035](decisions/0035-ai-gateway-shape.md)).
   The gateway and the on-demand finance report summary shipped backend only. Left out on purpose:
@@ -1251,7 +1269,8 @@ period_id)` — a cell in a weekly grid whose times come from the period it
 - **Communication PR C left these out** (`docs/03-modules/communication.md` §20, "Built (PR C)"):
   - **A per-broadcast live delivery board** (§7). The delivery dashboard can filter by
     `notification_id` and date, not by broadcast; the job's result carries only the counts.
-  - **MFA step-up on `:emergency`** (§4's "MFA-recommended"). There is no MFA yet. The digest
+  - **MFA step-up on `:emergency`** (§4's "MFA-recommended"). TOTP exists for platform users
+    only; tenant MFA is deferred (the TOTP MFA entry near the top of this file). The digest
     proves the audience, not that a person read the confirmation (ADR-0029).
   - **Quiet hours.** No quiet-hours setting exists, so there is nothing for the emergency
     category to bypass yet.

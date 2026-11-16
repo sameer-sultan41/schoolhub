@@ -618,6 +618,11 @@ PLATFORM_HANDOFF_CODE_TTL_SECONDS = env.int("PLATFORM_HANDOFF_CODE_TTL_SECONDS",
 # Shared secret of the billing provider's webhook. Empty = the webhook answers 503.
 PLATFORM_BILLING_WEBHOOK_SECRET = env("PLATFORM_BILLING_WEBHOOK_SECRET", default="")
 
+# TOTP MFA (core/rbac/mfa.py, auth-and-rbac §1). Seconds a sign-in's MFA challenge stays valid.
+MFA_CHALLENGE_TTL_SECONDS = env.int("MFA_CHALLENGE_TTL_SECONDS", default=300)
+# The issuer an authenticator app shows beside the account.
+MFA_ISSUER_NAME = env("MFA_ISSUER_NAME", default="SchoolHub")
+
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_I18N = True

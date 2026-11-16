@@ -573,6 +573,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * @description Password sign-in: the first step of the login state machine (auth-and-rbac §1).
+         *
+         *     A user with ``mfa_enabled`` gets a challenge (``mfa_required``, ``mfa_token``) and no token
+         *     or cookie; ``MfaVerifyView`` completes the sign-in. Everyone else gets the token pair with
+         *     ``amr=["pwd"]``.
+         */
         post: operations["auth_login_create"];
         delete?: never;
         options?: never;
@@ -607,6 +614,100 @@ export interface paths {
         get: operations["auth_me_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa:confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``POST /auth/mfa:confirm``: a first code turns MFA on.
+         *
+         *     Returns ten single-use recovery codes, shown this once, and a fresh token pair whose
+         *     ``amr`` carries ``"otp"``, so the console opens without signing in again.
+         */
+        post: operations["auth_mfa:confirm_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa:disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``POST /auth/mfa:disable``: refused for every platform user (SEC-06).
+         *
+         *     The console requires a second factor, so a platform account never turns it off; an operator
+         *     who lost their authenticator and recovery codes is reset out of band with
+         *     ``create_platform_admin --reset-mfa``. Tenant principals get 404 until tenant MFA ships
+         *     (docs/deferred-work.md), which is when this route gains a path that succeeds.
+         */
+        post: operations["auth_mfa:disable_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa:enroll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``POST /auth/mfa:enroll``: a new TOTP secret, stored encrypted and not yet enabled.
+         *
+         *     Platform users only in v1 (a tenant principal gets 404). Refused 409
+         *     ``mfa_already_enabled`` once MFA is on, so a password-only token can never replace an
+         *     enrolled factor (ruling A2); an operator who lost theirs is reset with
+         *     ``create_platform_admin --reset-mfa``.
+         */
+        post: operations["auth_mfa:enroll_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa:verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``POST /auth/mfa:verify``: the ``second_factor`` step, completing a challenged login.
+         *
+         *     Trades login's ``mfa_token`` and either a TOTP ``code`` or a ``recovery_code`` for the token
+         *     pair with ``amr=["pwd","otp"]``. A wrong code is a 400 ``invalid_mfa_code`` and counts
+         *     against the challenge (``mfa.MAX_CHALLENGE_ATTEMPTS``); an expired, tampered or used-up
+         *     challenge is a 400 ``mfa_challenge_invalid``, and the client signs in again.
+         */
+        post: operations["auth_mfa:verify_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9241,6 +9342,7 @@ export interface components {
             /** @description Tenant slug. Required only when the identifier exists at more than one school. */
             school?: string;
         };
+        LoginResponse: components["schemas"]["SignedInResponse"] | components["schemas"]["MfaChallengeResponse"];
         /** @description `POST /ledger-entries:post-journal` — §8's hand-written journal entry. */
         ManualJournal: {
             /** Format: date */
@@ -9483,6 +9585,32 @@ export interface components {
          * @enum {string}
          */
         MessageThreadStatusEnum: "open" | "closed";
+        /** @description Login's answer for a user with MFA on: no token yet, a challenge to verify; schema only. */
+        MfaChallengeResponse: {
+            mfa_required: boolean;
+            /** @description Signed and short-lived; send it to /auth/mfa:verify with a code. */
+            mfa_token: string;
+        };
+        MfaConfirm: {
+            code: string;
+        };
+        /** @description Schema only: MFA is on; the recovery codes are shown this once. */
+        MfaConfirmResponse: {
+            access_token: string;
+            expires_in: number;
+            user: components["schemas"]["User"];
+            recovery_codes: string[];
+        };
+        /** @description Schema only: the new secret, shown once, and the URI an authenticator app scans. */
+        MfaEnrollResponse: {
+            secret: string;
+            otpauth_uri: string;
+        };
+        MfaVerify: {
+            mfa_token: string;
+            code?: string;
+            recovery_code?: string;
+        };
         /** @description One register the caller marks on a date. The period fields are null in daily mode. */
         MyRegister: {
             /** Format: uuid */
@@ -12600,6 +12728,12 @@ export interface components {
          * @enum {string}
          */
         SettlementImportStatusEnum: "processing" | "completed" | "failed";
+        /** @description A completed sign-in (login without MFA, or ``/auth/mfa:verify``); schema only. */
+        SignedInResponse: {
+            access_token: string;
+            expires_in: number;
+            user: components["schemas"]["User"];
+        };
         /**
          * @description The substitution overlay on one cell of `GET /timetables/my`.
          *
@@ -14565,7 +14699,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["User"];
+                    "application/json": components["schemas"]["LoginResponse"];
                 };
             };
         };
@@ -14603,6 +14737,93 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["User"];
+                };
+            };
+        };
+    };
+    "auth_mfa:confirm_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaConfirm"];
+                "application/x-www-form-urlencoded": components["schemas"]["MfaConfirm"];
+                "multipart/form-data": components["schemas"]["MfaConfirm"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaConfirmResponse"];
+                };
+            };
+        };
+    };
+    "auth_mfa:disable_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "auth_mfa:enroll_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaEnrollResponse"];
+                };
+            };
+        };
+    };
+    "auth_mfa:verify_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaVerify"];
+                "application/x-www-form-urlencoded": components["schemas"]["MfaVerify"];
+                "multipart/form-data": components["schemas"]["MfaVerify"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignedInResponse"];
                 };
             };
         };

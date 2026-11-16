@@ -155,6 +155,12 @@ export const API_ERROR_CODES = [
   // A platform console token issued without a second factor (403; apps/api/core/rbac/permissions.py
   // `MfaRequired`, ADR-0036).
   "mfa_required",
+  // TOTP sign-in and enrolment (apps/api/core/rbac/mfa.py): a wrong or reused code (400), a
+  // sign-in challenge that expired or was used up, so sign in again (400), and an enrolment
+  // attempt while MFA is already on (409).
+  "invalid_mfa_code",
+  "mfa_challenge_invalid",
+  "mfa_already_enabled",
   // Synthesised by this client when the request never produced an envelope.
   "network_error",
   "server_error",

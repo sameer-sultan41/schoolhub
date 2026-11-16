@@ -211,8 +211,26 @@ class MfaRequired(CodedAPIException):
     default_code = "mfa_required"
 
 
-# The `amr` value (RFC 8176) a token carries once its holder passed a one-time password.
+# The `amr` values (RFC 8176) a token carries: every token is issued after a password, and
+# `/auth/mfa:verify` or `:confirm` adds the one-time password.
+FIRST_FACTOR_AMR = "pwd"
 OTP_AMR = "otp"
+
+
+class IsPlatformUser(permissions.BasePermission):
+    """A platform user, whatever factors the token carries: the MFA enrolment routes.
+
+    Listed after ``IsAuthenticated``. A tenant principal gets a 404, as on the console: TOTP
+    enrolment is platform-only in v1 (tenant MFA is deferred, docs/deferred-work.md).
+    """
+
+    def has_permission(self, request, view) -> bool:
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
+        if not user.is_platform:
+            raise exceptions.NotFound()
+        return True
 
 
 class IsPlatformPrincipal(permissions.BasePermission):

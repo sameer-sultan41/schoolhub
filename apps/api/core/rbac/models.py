@@ -85,6 +85,11 @@ class User(AbstractBaseUser, PermissionsMixin, TimestampedModel):
         default=False, help_text="Platform-scope principal (no tenant)."
     )
     mfa_enabled = models.BooleanField(default=False)
+    # The TOTP secret, encrypted with core.integrations.crypto (never stored in clear). Set at
+    # enrolment; ``mfa_enabled`` turns on only once a code from it is confirmed.
+    mfa_secret = models.BinaryField(null=True, blank=True, editable=False)
+    # The TOTP time step of the last accepted code; an equal or older one is a replay.
+    mfa_last_timecode = models.BigIntegerField(null=True, blank=True)
     last_login_ip = models.GenericIPAddressField(null=True, blank=True)
 
     objects = UserManager()
@@ -245,6 +250,35 @@ class UserRole(TimestampedModel):
             ),
         ]
         indexes = [models.Index(fields=["user", "tenant"])]
+
+
+class MfaRecoveryCode(models.Model):
+    """A single-use fallback for a lost authenticator, issued ten at a time at enrolment.
+
+    Only the SHA-256 of the code is stored: each code carries 80 random bits, so a fast hash
+    is enough, as for invitation tokens. ``used_at`` is set by a conditional update, so two
+    concurrent sign-ins cannot both spend one code. Not tenant-owned: a platform user has no
+    tenant, and ``users`` itself carries no RLS policy.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="mfa_recovery_codes")
+    code_hash = models.CharField(max_length=64)
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = models.Manager()
+
+    class Meta:
+        db_table = "mfa_recovery_codes"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "code_hash"], name="mfa_recovery_codes_unique_per_user"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"recovery code for {self.user_id}"
 
 
 class InvitationKind(models.TextChoices):
