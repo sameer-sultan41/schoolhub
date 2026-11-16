@@ -19,6 +19,7 @@ describe("MENU_SIDEBAR's Website group", () => {
       ["Pages", Paths.WEBSITE_PAGES],
       ["News", Paths.WEBSITE_NEWS],
       ["Events", Paths.WEBSITE_EVENTS],
+      ["Gallery", Paths.WEBSITE_GALLERY],
     ]);
   });
 

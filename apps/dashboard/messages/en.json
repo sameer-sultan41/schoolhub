@@ -4446,7 +4446,8 @@
       "overview": "Overview",
       "pages": "Pages",
       "news": "News",
-      "events": "Events"
+      "events": "Events",
+      "gallery": "Gallery"
     },
     "status": {
       "draft": "Draft",
@@ -4578,6 +4579,86 @@
       },
       "created": "Event saved as a draft.",
       "saved": "Event saved."
+    },
+    "gallery": {
+      "title": "Gallery",
+      "summary": "Photo and video albums for the school's public website.",
+      "actions": {
+        "create": "New album",
+        "edit": "Edit album",
+        "editRow": "Edit {title}",
+        "back": "All albums"
+      },
+      "columns": {
+        "title": "Title",
+        "status": "Status",
+        "publishedAt": "Published",
+        "updatedAt": "Last updated"
+      },
+      "list": {
+        "caption": "Gallery albums",
+        "searchPlaceholder": "Search by title or address",
+        "loadError": "The albums couldn't be loaded.",
+        "emptyTitle": "No albums yet",
+        "emptyDescription": "Create an album, add photos or videos, then publish it."
+      },
+      "form": {
+        "createTitle": "New album",
+        "editTitle": "Edit album",
+        "intro": "An album needs at least one photo or video before it can be published.",
+        "description": "Description"
+      },
+      "created": "Album created.",
+      "saved": "Album saved.",
+      "notFound": "This album couldn't be found.",
+      "loadError": "This album couldn't be loaded.",
+      "publishHint": "Albums are published or unpublished; there is no archive.",
+      "delete": {
+        "title": "Delete “{title}”?",
+        "description": "The album and all its items are removed. This can't be undone."
+      },
+      "items": {
+        "title": "Photos and videos",
+        "description": "Drag a tile, or use its arrows, to change the order the website shows.",
+        "caption": "Album items",
+        "empty": "No photos or videos yet. Upload photos or add a video to start.",
+        "loadError": "The album's items couldn't be loaded.",
+        "upload": "Upload photos",
+        "uploading": "Uploading {done} of {total}…",
+        "uploadFailed": "{name}: {reason}",
+        "uploadDone": "{count, plural, one {# photo added.} other {# photos added.}}",
+        "addVideo": "Add video",
+        "image": "Photo",
+        "video": "Video",
+        "untitled": "No caption",
+        "needsAlt": "Needs a description",
+        "position": "Item {index}",
+        "moveEarlier": "Move item {index} earlier",
+        "moveLater": "Move item {index} later",
+        "dragHandle": "Drag item {index} to reorder",
+        "edit": "Edit item {index}",
+        "remove": "Remove item {index}",
+        "reordered": "Order saved.",
+        "dragInstructions": "To reorder, press space or enter on the handle, move with the arrow keys, then press space or enter to drop, or escape to cancel.",
+        "dragStart": "Picked up item {index}.",
+        "dragOver": "Item {index} is over position {position}.",
+        "dragEnd": "Item {index} dropped at position {position}.",
+        "dragCancel": "Reordering cancelled.",
+        "removeTitle": "Remove item {index}?",
+        "removeDescription": "It is taken out of the album. This can't be undone.",
+        "removed": "Item removed.",
+        "form": {
+          "editTitle": "Edit item",
+          "videoTitle": "Add a video",
+          "embedUrl": "Video link",
+          "embedUrlHint": "A YouTube or Vimeo link starting with https://.",
+          "caption": "Caption",
+          "altText": "Description for screen readers",
+          "altTextHint": "Say what the photo shows, for visitors who can't see it.",
+          "saved": "Item saved.",
+          "added": "Video added."
+        }
+      }
     },
     "inventory": {
       "title": "Website",
