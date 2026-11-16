@@ -17,6 +17,10 @@ DOMAIN_ADMINS = ("it_admin", "school_owner")
 INBOX_STAFF = ("reception", "school_admin")
 
 PAGE_VIEW_KEY = "website.page.view"
+PAGE_PUBLISH_KEY = "website.page.publish"
+NEWS_PUBLISH_KEY = "website.news-post.publish"
+EVENT_PUBLISH_KEY = "website.school-event.publish"
+ALBUM_PUBLISH_KEY = "website.gallery-album.publish"
 
 registry.register(
     PAGE_VIEW_KEY, "View pages, sections and website content in the CMS.", PAGE_READERS
@@ -24,22 +28,22 @@ registry.register(
 registry.register("website.page.create", "Create pages and sections.", CONTENT_EDITORS)
 registry.register("website.page.update", "Edit pages and sections.", CONTENT_EDITORS)
 registry.register("website.page.delete", "Delete pages and sections.", CONTENT_EDITORS)
-registry.register("website.page.publish", "Publish or unpublish pages.", PUBLISHERS)
+registry.register(PAGE_PUBLISH_KEY, "Publish or unpublish pages.", PUBLISHERS)
 
 registry.register("website.news-post.create", "Create news posts.", CONTENT_EDITORS)
 registry.register("website.news-post.update", "Edit news posts.", CONTENT_EDITORS)
 registry.register("website.news-post.delete", "Delete news posts.", CONTENT_EDITORS)
-registry.register("website.news-post.publish", "Publish or unpublish news.", PUBLISHERS)
+registry.register(NEWS_PUBLISH_KEY, "Publish or unpublish news.", PUBLISHERS)
 
 registry.register("website.school-event.create", "Create website events.", CONTENT_EDITORS)
 registry.register("website.school-event.update", "Edit website events.", CONTENT_EDITORS)
-registry.register("website.school-event.publish", "Publish website events.", CONTENT_EDITORS)
+registry.register(EVENT_PUBLISH_KEY, "Publish website events.", CONTENT_EDITORS)
 
 registry.register("website.gallery-album.create", "Create gallery albums.", CONTENT_EDITORS)
 registry.register(
     "website.gallery-album.update", "Edit gallery albums and their items.", CONTENT_EDITORS
 )
-registry.register("website.gallery-album.publish", "Publish gallery albums.", CONTENT_EDITORS)
+registry.register(ALBUM_PUBLISH_KEY, "Publish gallery albums.", CONTENT_EDITORS)
 registry.register("website.gallery-album.delete", "Delete gallery albums.", CONTENT_EDITORS)
 
 registry.register("website.navigation.update", "Edit the header and footer menus.", SITE_ADMINS)

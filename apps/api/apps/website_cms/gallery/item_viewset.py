@@ -69,7 +69,7 @@ class GalleryItemViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         serializer = GalleryItemWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         item = services.create_gallery_item(
-            request.tenant, album, serializer.validated_data, request.user.pk
+            request.tenant, album, serializer.validated_data, request.user
         )
         data = GalleryItemSerializer(item).data
         record_audit(request, "create", item, after=data)
@@ -82,7 +82,7 @@ class GalleryItemViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         before = GalleryItemSerializer(item).data
         item = services.update_gallery_item(
-            self._album(), item, serializer.validated_data, request.user.pk
+            self._album(), item, serializer.validated_data, request.user
         )
         data = GalleryItemSerializer(item).data
         record_audit(request, "update", item, before=before, after=data)
@@ -92,7 +92,7 @@ class GalleryItemViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
     def destroy(self, request: Request, *args, **kwargs) -> Response:
         item = self.get_object()
         before = GalleryItemSerializer(item).data
-        services.delete_gallery_item(self._album(), item, request.user.pk)
+        services.delete_gallery_item(self._album(), item, request.user)
         record_audit(request, "delete", item, before=before)
         return Response(status=204)
 
@@ -104,7 +104,7 @@ class GalleryItemViewSet(TenantScopedViewSetMixin, viewsets.ModelViewSet):
         serializer = ReorderItemsSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         items = services.reorder_gallery_items(
-            album, serializer.validated_data["ids"], request.user.pk
+            album, serializer.validated_data["ids"], request.user
         )
         data = GalleryItemSerializer(items, many=True).data
         record_audit(request, "update", album, after={"item_order": [str(i.id) for i in items]})
