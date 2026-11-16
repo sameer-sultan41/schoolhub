@@ -4836,6 +4836,16 @@
       "seo": {
         "invalid_url": "Use an https:// link, or a path on this site starting with /.",
         "invalid_target": "This item no longer exists. Close this and reload the page."
+      },
+      "navigation": {
+        "invalid_target": {
+          "page": "Choose a published page.",
+          "url": "Use an https:// link, or a path on this site starting with /.",
+          "other": "This kind of link takes no target."
+        },
+        "invalid_label": "Give the link a name of 1 to 60 characters.",
+        "depth_exceeded": "Menus go two levels deep: a sub-link can't have sub-links of its own.",
+        "too_many_items": "A menu holds at most 50 links. Remove some, then save."
       }
     },
     "imageField": {
@@ -5022,6 +5032,71 @@
             "done": "Maintenance mode is off."
           }
         }
+      }
+    },
+    "navigation": {
+      "title": "Navigation",
+      "summary": "The links in the website's header and footer. Each menu goes two levels deep and holds up to 50 links.",
+      "loadError": "The menus couldn't be loaded.",
+      "locationsLabel": "Menus",
+      "locations": {
+        "header": "Header",
+        "footer_primary": "Footer",
+        "footer_secondary": "Footer, second row"
+      },
+      "targetTypes": {
+        "page": "A page",
+        "url": "A link",
+        "news_index": "News list",
+        "events_index": "Events list",
+        "gallery_index": "Gallery"
+      },
+      "fields": {
+        "label": "Label",
+        "targetType": "Links to",
+        "page": "Page",
+        "url": "Link"
+      },
+      "pagePlaceholder": "Choose a page",
+      "stalePage": "A page that is no longer published",
+      "stalePageHint": "This page isn't published any more. The link is kept as it is until you choose another page.",
+      "noPublishedPages": "No page is published yet. Publish a page to link to it.",
+      "choosePage": "Choose a published page.",
+      "untitled": "Untitled link",
+      "listLabel": "Links",
+      "empty": "This menu has no links yet.",
+      "addItem": "Add a link",
+      "limits": "Up to {max} links, two levels deep.",
+      "full": "This menu holds the most links it can ({max}).",
+      "save": "Save menu",
+      "saved": "Menu saved.",
+      "item": {
+        "label": "Link {index}: {name}",
+        "drag": "Drag link {index}",
+        "moveUp": "Move link {index} up",
+        "moveDown": "Move link {index} down",
+        "nest": "Nest link {index} under the link above",
+        "nestBlocked": "Link {index} has sub-links, so it can't be nested: menus go two levels deep",
+        "remove": "Remove link {index}",
+        "children": "Sub-links of {name}",
+        "addChild": "Add a sub-link to {name}"
+      },
+      "child": {
+        "label": "Sub-link {index} of link {parent}",
+        "title": "Sub-link {index}",
+        "drag": "Drag sub-link {index} of link {parent}",
+        "moveUp": "Move sub-link {index} of link {parent} up",
+        "moveDown": "Move sub-link {index} of link {parent} down",
+        "unnest": "Move sub-link {index} of link {parent} out to the top level",
+        "remove": "Remove sub-link {index} of link {parent}"
+      },
+      "drag": {
+        "role": "sortable link",
+        "instructions": "To pick up a link, press space or enter. Use the arrow keys to move it, then space or enter to drop it, or escape to cancel.",
+        "start": "Picked up link {index}.",
+        "over": "Link {index} is over position {position}.",
+        "end": "Link {index} dropped at position {position}.",
+        "cancel": "Move cancelled."
       }
     }
   },
