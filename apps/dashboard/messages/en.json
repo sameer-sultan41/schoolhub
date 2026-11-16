@@ -4832,7 +4832,8 @@
       "position_conflict": "Someone else added an item at the same time. Please try again.",
       "content": {
         "slug_taken": "Another item already uses this address.",
-        "invalid_slug": "Use lowercase letters, digits and single hyphens."
+        "invalid_slug": "Use lowercase letters, digits and single hyphens.",
+        "publish_required": "This is live: only a publisher can change it. Ask a publisher, or have it unpublished first."
       }
     },
     "imageField": {

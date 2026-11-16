@@ -5,6 +5,7 @@ import { Button, DataGridColumnHeader, Skeleton } from "@schoolhub/ui";
 
 import { formatLastUpdated } from "@/lib/helpers";
 import type { WebsiteContentStatus } from "@/services";
+import { canEditContent } from "./content-permissions";
 import { ContentStatusBadge } from "./content-status-badge";
 
 /** What every news post, event and album row carries. */
@@ -65,15 +66,17 @@ export function updatedColumn<T extends ContentRow>(label: string): ColumnDef<T>
   };
 }
 
-/** The row's Edit, or nothing without the update key. `rowLabel` names the record for a screen
- * reader ("Edit Sports day"). */
+/** The row's Edit, offered only where `canEditContent` allows it (the update key, and the
+ * publish key on a published row). `rowLabel` names the record for a screen reader. */
 export function editColumn<T extends ContentRow>({
   canUpdate,
+  canPublish,
   label,
   rowLabel,
   onEdit,
 }: {
   canUpdate: boolean;
+  canPublish: boolean;
   label: string;
   rowLabel: (row: T) => string;
   onEdit: (row: T) => void;
@@ -84,7 +87,7 @@ export function editColumn<T extends ContentRow>({
     enableHiding: false,
     header: () => null,
     cell: ({ row }) =>
-      canUpdate ? (
+      canEditContent(row.original.status, canUpdate, canPublish) ? (
         <div className="flex justify-end">
           <Button
             variant="secondary"

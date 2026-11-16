@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { Button } from "@schoolhub/ui";
 
 import { ContentDetailSheet, ContentFact } from "@/features/website/shared/content-detail-sheet";
+import { canEditContent, isPublisherOnly } from "@/features/website/shared/content-permissions";
 import { PublishActions } from "@/features/website/shared/publish-actions";
 import { EMPTY_VALUE } from "@/lib/constants";
 import { Services } from "@/services";
@@ -34,6 +35,7 @@ export function EventDetailSheet({
 }: EventDetailSheetProps) {
   const t = useTranslations("website.events");
   const tContent = useTranslations("website.content");
+  const tReasons = useTranslations("website.reasons");
   const when = useEventWhen();
   const query = useSchoolEventDetail(eventId);
   const event = query.data;
@@ -54,6 +56,11 @@ export function EventDetailSheet({
       onRetry={() => {
         void query.refetch();
       }}
+      notice={
+        event && isPublisherOnly(event.status, permissions.canUpdate, permissions.canPublish)
+          ? tReasons("content.publish_required")
+          : null
+      }
       richTextLabel={t("form.description")}
       facts={
         event && (
@@ -74,7 +81,7 @@ export function EventDetailSheet({
       footer={
         event && (
           <>
-            {permissions.canUpdate && (
+            {canEditContent(event.status, permissions.canUpdate, permissions.canPublish) && (
               <Button variant="outline" onClick={onEdit}>
                 {t("actions.edit")}
               </Button>

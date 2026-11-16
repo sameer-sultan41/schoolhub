@@ -305,6 +305,23 @@ describe("gallery items", () => {
     });
   });
 
+  it("keeps a published album and its items read-only, with the reason, without the publish key", async () => {
+    asUser("website.gallery-album.create", "website.gallery-album.update");
+    mocked(gallery.fetchGalleryAlbum).mockResolvedValue(galleryAlbum({ status: "published" }));
+    await renderAlbum();
+
+    expect(
+      screen.getByText(
+        "This is live: only a publisher can change it. Ask a publisher, or have it unpublished first.",
+      ),
+    ).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Edit album" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Upload photos" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add video" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Move item 1 later" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit item 1" })).not.toBeInTheDocument();
+  });
+
   it("offers a viewer with only the read key no change to the items", async () => {
     asUser();
     await renderAlbum();

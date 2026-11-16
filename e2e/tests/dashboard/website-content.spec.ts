@@ -105,6 +105,31 @@ test.describe("the school admin", () => {
     await expect(form.getByText("Another item already uses this address.")).toBeVisible();
   });
 
+  test("is told why a save to a live post is refused once the publish key is withdrawn", async ({
+    page,
+    mockApi,
+    websiteContentPage,
+    signedIn: _signedIn,
+  }) => {
+    // The admin's role lost `website.news-post.publish` after sign-in: the screen still offers
+    // Edit, and the server refuses the write (`publish_required`).
+    const post = buildNewsPost({ title: "Open day", slug: "open-day", status: "published" });
+    mockApi.use(websiteContentModule({ newsPosts: [post], canPublish: { news: false } }));
+    await websiteContentPage.goto();
+
+    await page.getByRole("button", { name: "Edit Open day", exact: true }).click();
+    const form = websiteContentPage.dialog("Edit post");
+    await form.getByLabel("Title").fill("Open day 2026");
+    await form.getByRole("button", { name: "Save", exact: true }).click();
+
+    await expect(
+      form.getByText(
+        "This is live: only a publisher can change it. Ask a publisher, or have it unpublished first.",
+      ),
+    ).toBeVisible();
+    expect(post.title).toBe("Open day");
+  });
+
   test("refuses an event that ends before it starts without a request", async ({
     page,
     mockApi,

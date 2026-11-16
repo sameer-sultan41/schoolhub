@@ -212,6 +212,50 @@ describe("news directory", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("keeps a published post read-only, with the reason, without the publish key", async () => {
+    asUser("website.news-post.create", "website.news-post.update", "website.news-post.delete");
+    fetchPost.mockResolvedValue(published);
+    const user = await renderScreen();
+
+    expect(
+      await screen.findByRole("button", { name: "Edit Sports day results" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Edit New library opens" }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "New library opens" }));
+    const sheet = await screen.findByRole("dialog", { name: "New library opens" });
+    expect(
+      await within(sheet).findByText(
+        "This is live: only a publisher can change it. Ask a publisher, or have it unpublished first.",
+      ),
+    ).toBeVisible();
+    expect(within(sheet).queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+  });
+
+  it("shows the server's publish_required refusal from a save in the viewer's words", async () => {
+    asUser(...EDITOR_KEYS);
+    updatePost.mockRejectedValue(
+      violation(
+        "non_field",
+        "publish_required",
+        "Only a publisher can edit published content — ask a publisher to edit it or unpublish it.",
+      ),
+    );
+    const user = await renderScreen();
+
+    await user.click(await screen.findByRole("button", { name: "Edit Sports day results" }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit post" });
+    await within(dialog).findByDisplayValue("Blue house won.");
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    expect(
+      await within(dialog).findByText(
+        "This is live: only a publisher can change it. Ask a publisher, or have it unpublished first.",
+      ),
+    ).toBeVisible();
+  });
+
   it("shows the server's refusal to delete a post published meanwhile", async () => {
     asUser(...EDITOR_KEYS);
     deletePost.mockRejectedValue(

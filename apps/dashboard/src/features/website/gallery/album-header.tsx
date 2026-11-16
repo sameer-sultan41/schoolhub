@@ -12,6 +12,7 @@ import { Paths } from "@/config/paths";
 import { ContentStatusBadge } from "@/features/website/shared/content-status-badge";
 import { CONTENT_REASON_SCOPE } from "@/features/website/shared/content-fields";
 import { DeleteContentDialog } from "@/features/website/shared/delete-content-dialog";
+import { canEditContent } from "@/features/website/shared/content-permissions";
 import { PublishActions } from "@/features/website/shared/publish-actions";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { hasPermission } from "@/lib/permissions";
@@ -48,7 +49,7 @@ export function AlbumHeader({ album }: { album: GalleryAlbumRecord }) {
         <ToolbarHeading title={album.title} description={album.description || t("publishHint")} />
         <ToolbarActions>
           <ContentStatusBadge status={album.status} />
-          {canUpdate && (
+          {canEditContent(album.status, canUpdate, canPublish) && (
             <Button
               variant="outline"
               onClick={() => {

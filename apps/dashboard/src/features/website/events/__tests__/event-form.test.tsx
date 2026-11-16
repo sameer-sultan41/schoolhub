@@ -149,6 +149,31 @@ describe("event form", () => {
     });
   });
 
+  it("keeps a published event read-only, with the reason, without the publish key", async () => {
+    mocked(Services.auth.fetchCurrentUser).mockResolvedValue(
+      buildUser([
+        "website.page.view",
+        "website.school-event.create",
+        "website.school-event.update",
+      ]),
+    );
+    const live = schoolEvent({ status: "published" });
+    mocked(events.fetchSchoolEventPage).mockResolvedValue(pageOf([live]));
+    mocked(events.fetchSchoolEvent).mockResolvedValue(live);
+    const user = await renderScreen();
+
+    await user.click(await screen.findByRole("button", { name: "Annual prize day" }));
+    const sheet = await screen.findByRole("dialog", { name: "Annual prize day" });
+
+    expect(
+      await within(sheet).findByText(
+        "This is live: only a publisher can change it. Ask a publisher, or have it unpublished first.",
+      ),
+    ).toBeVisible();
+    expect(within(sheet).queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit Annual prize day" })).not.toBeInTheDocument();
+  });
+
   it("offers the lifecycle but no Delete on an event", async () => {
     const user = await renderScreen();
 

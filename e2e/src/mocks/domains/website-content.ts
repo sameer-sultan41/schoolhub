@@ -155,6 +155,21 @@ export interface WebsiteContentOptions {
   events?: SchoolEvent[];
   albums?: GalleryAlbum[];
   items?: GalleryItem[];
+  /** Whether the viewer holds each kind's `.publish` key (default true). Without it, a write to
+   * a published post, event or album (an album's items included) is `publish_required`
+   * (`content.assert_may_edit`). */
+  canPublish?: { news?: boolean; events?: boolean; gallery?: boolean };
+}
+
+/** `content.assert_may_edit`: an empty field, so the envelope keys it `non_field`. */
+function publishRequired(status: string, canPublish: boolean): MockResponse | undefined {
+  return status === "published" && !canPublish
+    ? refuse(
+        "non_field",
+        "publish_required",
+        "Only a publisher can edit published content — ask a publisher to edit it or unpublish it.",
+      )
+    : undefined;
 }
 
 /**
@@ -162,7 +177,8 @@ export interface WebsiteContentOptions {
  * their colon actions, in the shapes the server sends. Mirrors the rules the screens surface
  * (L5), in the server's words: slug format and uniqueness, `end_before_start`, a video's link
  * rules, `empty_album` on publishing an album with no items, `unpublish_first` on deleting a
- * published post or album, events with no DELETE, and a reorder that must list every item of
+ * published post or album, `publish_required` on any write to a published record (or a published
+ * album's items) without its kind's publish key, events with no DELETE, and a reorder that must list every item of
  * the album exactly once (`invalid_item_ids`). Whether the server enforces them is the backend
  * suite's (the `apps/api/apps/website_cms` tests).
  */
@@ -172,6 +188,8 @@ export function websiteContentModule(options: WebsiteContentOptions = {}): MockM
     const events = options.events ?? [];
     const albums = options.albums ?? [];
     const items = options.items ?? [];
+    const canPublish = { news: true, events: true, gallery: true, ...options.canPublish };
+    const albumOf = (albumId: string) => albums.find((row) => row.id === albumId);
     const notFound = () => fail(404, "Not found.");
     const body = (request: MockRequest) => (request.json() as Record<string, unknown> | null) ?? {};
     const itemsOf = (albumId: string) =>
@@ -198,6 +216,8 @@ export function websiteContentModule(options: WebsiteContentOptions = {}): MockM
     api.patch("/news-posts/:postId", (request) => {
       const post = posts.find((row) => row.id === request.params["postId"]);
       if (!post) return notFound();
+      const refused = publishRequired(post.status, canPublish.news);
+      if (refused) return refused;
       Object.assign(post, body(request), { updated_at: ACTED_AT });
       return ok(post);
     });
@@ -238,6 +258,20 @@ export function websiteContentModule(options: WebsiteContentOptions = {}): MockM
       events.unshift(event);
       return ok(event, { status: 201 });
     });
+    api.patch("/school-events/:eventId", (request) => {
+      const event = events.find((row) => row.id === request.params["eventId"]);
+      if (!event) return notFound();
+      const refused = publishRequired(event.status, canPublish.events);
+      if (refused) return refused;
+      const input = body(request) as Partial<SchoolEvent>;
+      const startsAt = input.starts_at ?? event.starts_at;
+      const endsAt = "ends_at" in input ? input.ends_at : event.ends_at;
+      if (endsAt && endsAt < startsAt) {
+        return refuse("ends_at", "end_before_start", "the event cannot end before it starts.");
+      }
+      Object.assign(event, input, { updated_at: ACTED_AT });
+      return ok(event);
+    });
     api.post("/school-events/:eventAction", (request) => {
       const [eventId, action = ""] = (request.params["eventAction"] ?? "").split(":");
       const event = events.find((row) => row.id === eventId);
@@ -250,6 +284,14 @@ export function websiteContentModule(options: WebsiteContentOptions = {}): MockM
     api.get("/gallery-albums/:albumId", (request) => {
       const album = albums.find((row) => row.id === request.params["albumId"]);
       return album ? ok(album) : notFound();
+    });
+    api.patch("/gallery-albums/:albumId", (request) => {
+      const album = albumOf(request.params["albumId"] ?? "");
+      if (!album) return notFound();
+      const refused = publishRequired(album.status, canPublish.gallery);
+      if (refused) return refused;
+      Object.assign(album, body(request), { updated_at: ACTED_AT });
+      return ok(album);
     });
     api.post("/gallery-albums/:albumAction", (request) => {
       const [albumId, action = ""] = (request.params["albumAction"] ?? "").split(":");
@@ -270,7 +312,10 @@ export function websiteContentModule(options: WebsiteContentOptions = {}): MockM
     });
     api.post("/gallery-albums/:albumId/gallery-items", (request) => {
       const albumId = request.params["albumId"] ?? "";
-      if (!albums.some((row) => row.id === albumId)) return notFound();
+      const album = albumOf(albumId);
+      if (!album) return notFound();
+      const refused = publishRequired(album.status, canPublish.gallery);
+      if (refused) return refused;
       const input = body(request) as Partial<GalleryItem>;
       const isVideo = input.media_type === "video_embed";
       const refusal = isVideo
@@ -293,7 +338,10 @@ export function websiteContentModule(options: WebsiteContentOptions = {}): MockM
     // `/gallery-albums/{id}/gallery-items:reorder`: the colon action is one path segment here.
     api.patch("/gallery-albums/:albumId/:itemsAction", (request) => {
       const albumId = request.params["albumId"] ?? "";
-      if (request.params["itemsAction"] !== "gallery-items:reorder") return notFound();
+      const album = albumOf(albumId);
+      if (!album || request.params["itemsAction"] !== "gallery-items:reorder") return notFound();
+      const refused = publishRequired(album.status, canPublish.gallery);
+      if (refused) return refused;
       const live = itemsOf(albumId);
       const ids = (body(request).ids as string[] | undefined) ?? [];
       const same =
@@ -305,6 +353,29 @@ export function websiteContentModule(options: WebsiteContentOptions = {}): MockM
       }
       for (const item of live) item.position = ids.indexOf(item.id);
       return ok(itemsOf(albumId));
+    });
+    api.patch("/gallery-albums/:albumId/gallery-items/:itemId", (request) => {
+      const album = albumOf(request.params["albumId"] ?? "");
+      const item = items.find((row) => row.id === request.params["itemId"]);
+      if (!album || item?.gallery_album_id !== album.id) return notFound();
+      const refused = publishRequired(album.status, canPublish.gallery);
+      if (refused) return refused;
+      const input = body(request) as Partial<GalleryItem>;
+      if ((input.media_type ?? item.media_type) === "video_embed") {
+        const urlRefusal = embedRefusal(input.embed_url ?? item.embed_url);
+        if (urlRefusal) return urlRefusal;
+      }
+      Object.assign(item, input, { updated_at: ACTED_AT });
+      return ok(item);
+    });
+    api.delete("/gallery-albums/:albumId/gallery-items/:itemId", (request) => {
+      const album = albumOf(request.params["albumId"] ?? "");
+      const item = items.find((row) => row.id === request.params["itemId"]);
+      if (!album || item?.gallery_album_id !== album.id) return notFound();
+      const refused = publishRequired(album.status, canPublish.gallery);
+      if (refused) return refused;
+      items.splice(items.indexOf(item), 1);
+      return noContent();
     });
   };
 }
