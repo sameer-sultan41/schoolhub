@@ -15,6 +15,11 @@ aws_region = "us-east-1"
 # custom domains also resolve to this distribution.
 platform_domain = "schoolhub.example"
 
+# Proxies in front of the API that append to X-Forwarded-For (CloudFront + ALB = 2,
+# ALB only = 1, direct = 0). Wrong values make per-IP throttles and stored IPs
+# spoofable or wrong; the API refuses to boot without it.
+num_proxies = 2
+
 # Route 53 hosted zone ID for platform_domain.
 # Source: `aws route53 list-hosted-zones-by-name --dns-name schoolhub.example`
 hosted_zone_id = "Z0123456789ABCDEFGHIJ"

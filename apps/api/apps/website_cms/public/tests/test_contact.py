@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from unittest import mock
 
 from django.core.cache import cache
@@ -206,7 +207,12 @@ class ContactPostTests(ContactPostCase):
 
     def test_tenant_throttle_key_is_slug_shaped_or_a_sentinel(self) -> None:
         throttle = PublicFormTenantThrottle()
-        cases = (("Greenfield", "greenfield"), ("a b/..", "invalid"), ("", "invalid"))
+        cases = (
+            ("Greenfield", "greenfield"),
+            ("my_school", "my_school"),
+            ("a b/..", "invalid"),
+            ("", "invalid"),
+        )
         for header, ident in cases:
             with self.subTest(header=header):
                 request = APIRequestFactory().post(URL, HTTP_X_TENANT_SLUG=header)
@@ -259,6 +265,21 @@ class PublicCorsTests(ContactPostCase):
     def test_database_error_fails_closed(self) -> None:
         with mock.patch("apps.website_cms.cors.resolve_host", side_effect=DatabaseError):
             response = self.preflight(self.origin)
+
+        self.assertNotIn("Access-Control-Allow-Origin", response)
+
+    def test_cache_error_fails_closed(self) -> None:
+        with mock.patch("apps.website_cms.cors.cache.get", side_effect=ConnectionError):
+            response = self.preflight(self.origin)
+
+        self.assertNotIn("Access-Control-Allow-Origin", response)
+
+    def test_a_very_long_host_does_not_break_the_cache_key(self) -> None:
+        host = ".".join(["a" * 60] * 4) + ".example"
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            response = self.preflight(f"https://{host}")
 
         self.assertNotIn("Access-Control-Allow-Origin", response)
 

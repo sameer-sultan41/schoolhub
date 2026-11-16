@@ -121,3 +121,9 @@ class ProductionNumProxiesTests(SimpleTestCase):
 
         self.assertEqual(prod.NUM_PROXIES, 0)
         self.assertEqual(prod.REST_FRAMEWORK["NUM_PROXIES"], 0)
+
+    def test_negative_is_refused(self) -> None:
+        from django.core.exceptions import ImproperlyConfigured
+
+        with self.assertRaises(ImproperlyConfigured):
+            self.load_prod(NUM_PROXIES="-1")

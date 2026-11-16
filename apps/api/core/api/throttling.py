@@ -11,7 +11,7 @@ import re
 
 from rest_framework.throttling import SimpleRateThrottle
 
-_SLUG_RE = re.compile(r"[a-z0-9-]{1,63}")
+_SLUG_RE = re.compile(r"[a-z0-9_-]{1,63}")
 
 
 class TenantRateThrottle(SimpleRateThrottle):

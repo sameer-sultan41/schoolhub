@@ -6,16 +6,19 @@ rejected the origin, so this adds tenant origins without replacing `CORS_ALLOWED
 
 from __future__ import annotations
 
+import hashlib
+import logging
 from typing import Any
 from urllib.parse import urlparse
 
 from django.conf import settings
 from django.core.cache import cache
-from django.db import DatabaseError
 from django.http import HttpRequest
 
 from apps.website_cms.constants import CORS_TENANT_CACHE_SECONDS
 from apps.website_cms.hosts import resolve_host
+
+logger = logging.getLogger(__name__)
 
 PUBLIC_API_PREFIX = "/api/v1/public/"
 
@@ -36,7 +39,7 @@ def origin_host(origin: str) -> str | None:
 def allow_tenant_origin(sender: object, request: HttpRequest, **kwargs: Any) -> bool:
     """True for a public-API path whose `Origin` host serves an operational school.
 
-    Fails closed when the database is unavailable. The answer is cached for a short time so a
+    Fails closed on any database or cache error. The answer is cached for a short time so a
     stream of preflights costs no query each.
     """
     if not request.path.startswith(PUBLIC_API_PREFIX):
@@ -44,14 +47,17 @@ def allow_tenant_origin(sender: object, request: HttpRequest, **kwargs: Any) -> 
     host = origin_host(request.headers.get("Origin", ""))
     if host is None:
         return False
-    key = f"website_cms:cors:{host}"
-    cached = cache.get(key)
-    if cached is not None:
-        return bool(cached)
+    # Hashed: a host can be 253 characters, past the cache key limit.
+    key = f"website_cms:cors:{hashlib.sha256(host.encode()).hexdigest()}"
     try:
+        cached = cache.get(key)
+        if cached is not None:
+            return bool(cached)
         tenant = resolve_host(host)
-    except DatabaseError:
+        allowed = tenant is not None and tenant.is_operational
+        cache.set(key, allowed, CORS_TENANT_CACHE_SECONDS)
+    except Exception:
+        # Database or cache backend (Redis raises its own types): CORS is never granted on error.
+        logger.warning("tenant origin check failed", exc_info=True)
         return False
-    allowed = tenant is not None and tenant.is_operational
-    cache.set(key, allowed, CORS_TENANT_CACHE_SECONDS)
     return allowed

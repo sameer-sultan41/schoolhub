@@ -3,6 +3,8 @@
 Everything here is a hardening decision; see docs/06-security/security.md.
 """
 
+from django.core.exceptions import ImproperlyConfigured
+
 from config.settings.base import *
 from config.settings.base import env
 
@@ -16,6 +18,8 @@ API_PUBLIC_URL = env("API_PUBLIC_URL")
 # Required (0 means the API is reached directly): per-IP throttles and stored IPs trust
 # X-Forwarded-For only as far as this says, so a wrong default would be spoofable or blind.
 NUM_PROXIES = env.int("NUM_PROXIES")
+if NUM_PROXIES < 0:
+    raise ImproperlyConfigured("NUM_PROXIES must be 0 (direct) or the proxy count, not negative.")
 REST_FRAMEWORK = {**REST_FRAMEWORK, "NUM_PROXIES": NUM_PROXIES}
 
 SECURE_SSL_REDIRECT = True
