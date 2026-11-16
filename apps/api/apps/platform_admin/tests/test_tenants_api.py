@@ -17,6 +17,7 @@ from apps.platform_admin.constants import RESERVED_SLUGS, TENANT_EXPORT_JOB_TYPE
 from apps.platform_admin.tests.base import (
     TENANTS_URL,
     PlatformAPITestCase,
+    make_plan,
     make_tenant,
     platform_user,
     tenant_url,
@@ -279,14 +280,16 @@ class ProvisionTests(PlatformAPITestCase):
         self.assert_error(response, status.HTTP_409_CONFLICT, "invalid_transition")
         self.assertEqual(self.seeded(tenant), (1, 1, 1))
 
-    def test_provision_refuses_a_plan_until_plans_exist(self) -> None:
+    def test_provision_refuses_an_unknown_or_inactive_plan(self) -> None:
+        make_plan(code="legacy", is_active=False)
         tenant = make_tenant()
 
-        response = self.client.post(
-            tenant_url(tenant, ":provision"), {"plan_code": "standard"}, format="json"
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        for code in ("no-such-plan", "legacy"):
+            with self.subTest(code=code):
+                response = self.client.post(
+                    tenant_url(tenant, ":provision"), {"plan_code": code}, format="json"
+                )
+                self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
         tenant.refresh_from_db()
         self.assertEqual(tenant.status, S.PROVISIONING)
         self.assertEqual(self.seeded(tenant), (0, 0, 0))
