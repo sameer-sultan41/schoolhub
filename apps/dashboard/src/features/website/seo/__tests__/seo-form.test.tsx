@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { PermissionKey } from "@schoolhub/types";
 import { toast } from "sonner";
@@ -163,6 +163,8 @@ describe("SeoForm", () => {
         expect.objectContaining({ og_image_file_id: FILE_ID }),
       );
     });
+    // Unmount first: the image field revokes its preview URL on unmount, through the stub.
+    cleanup();
     restoreUrls();
   });
 
