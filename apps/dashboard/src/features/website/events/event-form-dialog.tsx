@@ -22,7 +22,10 @@ import { useContentFormSubmit } from "@/features/website/shared/use-content-form
 import { useInvalidateModule } from "@/hooks/use-invalidate-module";
 import { queryKeys } from "@/lib/query-client";
 import { Services, type SchoolEventDetail } from "@/services";
-import { SCHOOL_EVENTS_RESOURCE } from "@/services/modules/website/school-events/school-events-constant";
+import {
+  EVENTS_PATH_PREFIX,
+  SCHOOL_EVENTS_RESOURCE,
+} from "@/services/modules/website/school-events/school-events-constant";
 import { WEBSITE_QUERY_MODULE } from "@/services/shared/website-content";
 import { EventDateFields } from "./event-date-fields";
 import {
@@ -33,9 +36,6 @@ import {
   eventFormSchema,
   type EventFormValues,
 } from "./event-form-schema";
-
-/** The public path an event's slug sits under. */
-const EVENTS_PATH_PREFIX = "/events/";
 
 export interface EventFormDialogProps {
   open: boolean;

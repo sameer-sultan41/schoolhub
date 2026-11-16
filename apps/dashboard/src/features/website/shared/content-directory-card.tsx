@@ -28,7 +28,6 @@ import { SearchInput } from "@/components/search-input";
 import { enumLabel } from "@/lib/enum-label";
 import { FILTER_ALL } from "@/lib/constants";
 import { resolveErrorMessage } from "@/lib/error-message";
-import { WEBSITE_CONTENT_STATUSES } from "@/services/shared/website-content";
 import { CONTENT_STATUS_LABEL_KEY } from "./content-status-badge";
 import type { ContentDirectory } from "./use-content-directory";
 
@@ -65,13 +64,17 @@ export function ContentDirectoryCard<T extends { id: string }>({
   const { table, query, totalCount, isStalePage, hasActiveFilter } = directory;
 
   if (query.isError && !isStalePage) {
+    // The dialogs and sheet stay mounted: a refetch failing behind an open form must not close it.
     return (
-      <LoadErrorCard
-        message={resolveErrorMessage(query.error, tErrors, labels.loadError)}
-        onRetry={() => {
-          void query.refetch();
-        }}
-      />
+      <>
+        <LoadErrorCard
+          message={resolveErrorMessage(query.error, tErrors, labels.loadError)}
+          onRetry={() => {
+            void query.refetch();
+          }}
+        />
+        {children}
+      </>
     );
   }
 
@@ -110,7 +113,7 @@ export function ContentDirectoryCard<T extends { id: string }>({
                   allLabel={t("directory.allStatuses")}
                   value={directory.status === FILTER_ALL ? "" : directory.status}
                   onChange={directory.setStatus}
-                  options={WEBSITE_CONTENT_STATUSES.map((status) => ({
+                  options={directory.statuses.map((status) => ({
                     id: status,
                     name: enumLabel(t, CONTENT_STATUS_LABEL_KEY, status),
                   }))}

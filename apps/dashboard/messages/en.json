@@ -4613,6 +4613,7 @@
         "uploading": "Uploading {done} of {total}…",
         "uploadFailed": "{name}: {reason}",
         "uploadDone": "{count, plural, one {# photo added.} other {# photos added.}}",
+        "uploadFailedAfterLeave": "{count, plural, one {# photo couldn't be added} other {# photos couldn't be added}} after you left the album: {names}.",
         "addVideo": "Add video",
         "image": "Photo",
         "video": "Video",
@@ -4632,6 +4633,7 @@
         "dragCancel": "Reordering cancelled.",
         "removeTitle": "Remove item {index}?",
         "removeDescription": "It is taken out of the album. This can't be undone.",
+        "removeConfirm": "Remove",
         "removed": "Item removed.",
         "form": {
           "editTitle": "Edit item",

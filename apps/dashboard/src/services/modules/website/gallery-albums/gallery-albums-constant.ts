@@ -1,8 +1,15 @@
+import type { WebsiteContentStatus } from "@/services/shared/website-content";
 import type { GalleryMediaType } from "./gallery-albums-type";
 
 /** The gallery domain's constants. Reads live under `WEBSITE_QUERY_MODULE` (`website-content.ts`). */
 export const GALLERY_ALBUMS_RESOURCE = "gallery-albums";
+
+/** The public website path a slug of this kind sits under (the renderer's route). */
+export const GALLERY_PATH_PREFIX = "/gallery/";
 export const GALLERY_ITEMS_RESOURCE = "gallery-items";
+
+/** The statuses an album can be in: the API has no `:archive` for albums. */
+export const ALBUM_STATUSES: readonly WebsiteContentStatus[] = ["draft", "published"];
 
 /** Sortable column id -> `GalleryAlbumViewSet.ordering_fields`. */
 export const ALBUM_SORT_FIELD: Readonly<Record<string, string>> = {

@@ -9,8 +9,7 @@ import {
   galleryItem,
   violation,
 } from "@/features/website/shared/__tests__/content-fixtures";
-import { Services, type GalleryItemRecord } from "@/services";
-import { FileUploadError } from "@/services/modules/files";
+import { FileUploadError, Services, type GalleryItemRecord } from "@/services";
 import { mocked } from "@/test-fixtures/list-screen";
 import { USER_LOADED, UserLoaded } from "@/test-fixtures/user-loaded";
 import { buildUser, renderWithClient, renderWithProviders, setUrl } from "@/test-utils";
@@ -40,6 +39,7 @@ const fetchItems = mocked(gallery.fetchGalleryItems);
 const reorderItems = mocked(gallery.reorderGalleryItems);
 const createItem = mocked(gallery.createGalleryItem);
 const updateItem = mocked(gallery.updateGalleryItem);
+const deleteItem = mocked(gallery.deleteGalleryItem);
 const publishAlbum = mocked(gallery.publishGalleryAlbum);
 const uploadFile = mocked(Services.files.uploadFile);
 
@@ -130,7 +130,7 @@ describe("gallery items", () => {
     expect(screen.getByRole("button", { name: "Move item 3 later" })).toBeDisabled();
   });
 
-  it("holds every move, Edit and Remove while a reorder is in flight", async () => {
+  it("holds every move, Edit, Remove, Upload and Add video while a reorder is in flight", async () => {
     let settle: (items: GalleryItemRecord[]) => void = () => undefined;
     reorderItems.mockReturnValue(
       new Promise<GalleryItemRecord[]>((resolve) => {
@@ -144,6 +144,8 @@ describe("gallery items", () => {
     expect(screen.getByRole("button", { name: "Move item 1 later" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Edit item 1" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Remove item 3" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Upload photos" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Add video" })).toBeDisabled();
     settle([first, third, second]);
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Edit item 1" })).toBeEnabled();
@@ -254,7 +256,7 @@ describe("gallery items", () => {
     expect(uploadFile).toHaveBeenNthCalledWith(1, expect.any(File), "website.media");
   });
 
-  it("adds every picked photo even if the page is left mid-batch, then reads the items again", async () => {
+  it("adds every picked photo even if the page is left mid-batch, and names any failure in a toast", async () => {
     let finishFirst: (id: string) => void = () => undefined;
     uploadFile
       .mockReturnValueOnce(
@@ -262,7 +264,8 @@ describe("gallery items", () => {
           finishFirst = resolve;
         }),
       )
-      .mockResolvedValueOnce("file-b");
+      .mockRejectedValueOnce(new FileUploadError("put", "The file could not be uploaded."))
+      .mockResolvedValueOnce("file-c");
     createItem.mockResolvedValue(first);
     const { queryClient, unmount } = renderWithClient(<AlbumPage albumId={ALBUM_ID} />);
     const invalidate = jest.spyOn(queryClient, "invalidateQueries");
@@ -272,6 +275,7 @@ describe("gallery items", () => {
     await user.upload(input, [
       new File(["a"], "a.png", { type: "image/png" }),
       new File(["b"], "b.png", { type: "image/png" }),
+      new File(["c"], "c.png", { type: "image/png" }),
     ]);
     unmount();
     finishFirst("file-a");
@@ -281,11 +285,29 @@ describe("gallery items", () => {
     });
     expect(createItem).toHaveBeenLastCalledWith(ALBUM_ID, {
       media_type: "image",
-      file_id: "file-b",
+      file_id: "file-c",
     });
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({ queryKey: ["website"] });
     });
+    expect(toast.error).toHaveBeenCalledWith(
+      "1 photo couldn't be added after you left the album: b.png.",
+    );
+    expect(toast.success).toHaveBeenCalledWith("2 photos added.");
+  });
+
+  it("removes an item through its own confirm", async () => {
+    deleteItem.mockResolvedValue(undefined);
+    const user = await renderAlbum();
+
+    await user.click(screen.getByRole("button", { name: "Remove item 3" }));
+    const confirm = await screen.findByRole("alertdialog", { name: "Remove item 3?" });
+    await user.click(within(confirm).getByRole("button", { name: "Remove" }));
+
+    await waitFor(() => {
+      expect(deleteItem).toHaveBeenCalledWith(ALBUM_ID, third.id);
+    });
+    expect(toast.success).toHaveBeenCalledWith("Item removed.");
   });
 
   it("names the server's reason when an empty album can't be published", async () => {

@@ -30,16 +30,19 @@ interface Progress {
  * "Upload photos": several files picked at once, each uploaded (`website.media`) and added to
  * the album as a photo, one after another so they keep the order they were picked in. Each
  * failure is listed with its file's name and its own reason; the rest still land, even if the
- * page is left meanwhile (only this component's own state stops updating), and the album's
- * items are read again at the end. Progress reports to `onBusyChange`, which holds the album's
+ * page is left meanwhile (only this component's own state stops updating; any failure is then
+ * said in a toast, by file name), and the album's items are read again at the end. Progress reports to `onBusyChange`, which holds the album's
  * reorder while items are being added.
  */
 export function GalleryUpload({
   albumId,
   onBusyChange,
+  disabled,
 }: {
   albumId: string;
   onBusyChange: (busy: boolean) => void;
+  /** Holds a new batch, e.g. while the album is being reordered. */
+  disabled: boolean;
 }) {
   const t = useTranslations("website.gallery.items");
   const tErrors = useTranslations("errors");
@@ -75,6 +78,7 @@ export function GalleryUpload({
 
   async function uploadAll(files: File[]) {
     const failed: string[] = [];
+    const failedNames: string[] = [];
     let added = 0;
     onBusyChange(true);
     setFailures([]);
@@ -89,6 +93,7 @@ export function GalleryUpload({
         added += 1;
       } catch (error) {
         failed.push(t("uploadFailed", { name: file.name, reason: reasonOf(error) }));
+        failedNames.push(file.name);
       }
       // Leaving the page doesn't stop the batch: the files picked are still added.
       if (mountedRef.current) setProgress({ done: index + 1, total: files.length });
@@ -98,6 +103,11 @@ export function GalleryUpload({
       setProgress(null);
       setFailures(failed);
       onBusyChange(false);
+    } else if (failedNames.length > 0) {
+      // The page that would list them is gone: the failures are said once, by name.
+      toast.error(
+        t("uploadFailedAfterLeave", { count: failedNames.length, names: failedNames.join(", ") }),
+      );
     }
     if (added > 0) toast.success(t("uploadDone", { count: added }));
   }
@@ -115,7 +125,7 @@ export function GalleryUpload({
         <Button
           type="button"
           variant="outline"
-          disabled={progress !== null}
+          disabled={disabled || progress !== null}
           onClick={() => {
             inputRef.current?.click();
           }}

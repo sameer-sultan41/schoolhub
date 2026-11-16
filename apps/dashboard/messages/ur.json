@@ -4613,6 +4613,7 @@
         "uploading": "{total} میں سے {done} اپ لوڈ ہو رہی ہیں…",
         "uploadFailed": "{name}: {reason}",
         "uploadDone": "{count, plural, one {# تصویر شامل ہو گئی۔} other {# تصاویر شامل ہو گئیں۔}}",
+        "uploadFailedAfterLeave": "البم چھوڑنے کے بعد {count, plural, one {# تصویر شامل نہیں ہو سکی} other {# تصاویر شامل نہیں ہو سکیں}}: {names}۔",
         "addVideo": "ویڈیو شامل کریں",
         "image": "تصویر",
         "video": "ویڈیو",
@@ -4632,6 +4633,7 @@
         "dragCancel": "ترتیب بدلنا منسوخ ہو گیا۔",
         "removeTitle": "آئٹم {index} ہٹائیں؟",
         "removeDescription": "یہ البم سے نکال دیا جائے گا۔ یہ عمل واپس نہیں ہو سکتا۔",
+        "removeConfirm": "ہٹائیں",
         "removed": "آئٹم ہٹا دیا گیا۔",
         "form": {
           "editTitle": "آئٹم میں ترمیم",

@@ -22,19 +22,21 @@ import {
 } from "@/services/shared/website-content";
 import type { WebsiteContentStatus } from "@/services";
 
-const STATUS_FILTER_VALUES: readonly string[] = [FILTER_ALL, ...WEBSITE_CONTENT_STATUSES];
-
-/** The URL filters every content directory shares (ADR-0024): one status, or every status. */
-export const CONTENT_URL_FILTERS = {
-  status: { default: FILTER_ALL, isValid: (value: string) => STATUS_FILTER_VALUES.includes(value) },
-};
+/** The URL filters of a content directory (ADR-0024): one of `statuses`, or every status. */
+function contentUrlFilters(statuses: readonly WebsiteContentStatus[]) {
+  const values: readonly string[] = [FILTER_ALL, ...statuses];
+  return { status: { default: FILTER_ALL, isValid: (value: string) => values.includes(value) } };
+}
 
 /** No sort in the URL means the server's own order (newest first for each kind). */
 const SERVER_ORDER: SortingState = [];
 
 /** The status filter as the API takes it: `undefined` for every status. */
-export function contentStatusFilter(value: string): WebsiteContentStatus | undefined {
-  return WEBSITE_CONTENT_STATUSES.find((status) => status === value);
+export function contentStatusFilter(
+  value: string,
+  statuses: readonly WebsiteContentStatus[] = WEBSITE_CONTENT_STATUSES,
+): WebsiteContentStatus | undefined {
+  return statuses.find((status) => status === value);
 }
 
 export interface ContentDirectoryOptions<T extends { id: string }> {
@@ -44,6 +46,9 @@ export interface ContentDirectoryOptions<T extends { id: string }> {
   /** Sortable column id -> the API's ordering field (its `ordering_fields`). */
   sortField: Readonly<Record<string, string>>;
   fetchPage: (query: WebsiteContentQuery) => Promise<Page<T>>;
+  /** The statuses this kind can be in, for the filter (albums are never archived). A
+   * module-level constant, so the URL state's callbacks stay stable. */
+  statuses?: readonly WebsiteContentStatus[];
 }
 
 /**
@@ -56,11 +61,13 @@ export function useContentDirectory<T extends { id: string }>({
   resource,
   sortField,
   fetchPage,
+  statuses = WEBSITE_CONTENT_STATUSES,
 }: ContentDirectoryOptions<T>) {
+  const urlFilters = useMemo(() => contentUrlFilters(statuses), [statuses]);
   const hideableIds = useMemo(() => hideableColumnIds(columns), [columns]);
   const sortableIds = useMemo(() => Object.keys(sortField), [sortField]);
   const urlState = useDataGridUrlState({
-    filters: CONTENT_URL_FILTERS,
+    filters: urlFilters,
     sortableIds,
     defaultSorting: SERVER_ORDER,
     hideableIds,
@@ -71,7 +78,7 @@ export function useContentDirectory<T extends { id: string }>({
   const ordering = toOrdering(sorting, sortField);
   const page = pagination.pageIndex + 1;
   const pageSize = pagination.pageSize;
-  const status = contentStatusFilter(filters.status);
+  const status = contentStatusFilter(filters.status, statuses);
 
   const query = useQuery({
     queryKey: queryKeys.list(WEBSITE_QUERY_MODULE, resource, {
@@ -118,6 +125,7 @@ export function useContentDirectory<T extends { id: string }>({
     hasActiveFilter: search !== "" || status !== undefined,
     searchInput: urlState.searchInput,
     setSearchInput: urlState.setSearchInput,
+    statuses,
     status: filters.status,
     setStatus: (value: string) => {
       urlState.setFilters({ status: value || FILTER_ALL });

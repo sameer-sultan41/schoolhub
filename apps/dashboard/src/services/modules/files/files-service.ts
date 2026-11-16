@@ -2,6 +2,7 @@ import { ApiError } from "@schoolhub/api-client";
 
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
+import { FileUploadError } from "./files-errors";
 
 /**
  * The presigned upload flow shared by every module with a file field (a staff photo
@@ -34,26 +35,6 @@ interface PresignedFileUpload {
   upload_url: string;
   upload_method: string;
   headers: Record<string, string>;
-}
-
-export type FileUploadStep = "create" | "put" | "confirm";
-
-/**
- * Thrown for a failure at any one of the three steps, naming which step failed so a
- * caller never has to guess whether a `photo_file_id` it's about to send is actually
- * usable. `cause` carries the original error (an `ApiError` for `create`/`confirm`, a
- * plain `Error` for a failed `put`) for logging/inspection.
- */
-export class FileUploadError extends Error {
-  readonly step: FileUploadStep;
-  override readonly cause?: unknown;
-
-  constructor(step: FileUploadStep, message: string, cause?: unknown) {
-    super(message);
-    this.name = "FileUploadError";
-    this.step = step;
-    this.cause = cause;
-  }
 }
 
 /**
