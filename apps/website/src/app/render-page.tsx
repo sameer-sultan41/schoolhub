@@ -4,6 +4,12 @@ import { notFound } from "next/navigation";
 import { getPage, getSite, toPageSlug } from "@/lib/content";
 import { canonicalOrigin, resolveTenant } from "@/lib/tenant";
 import { getTheme, resolveSection } from "@/themes";
+import {
+  SiteChrome,
+  UNAVAILABLE_METADATA,
+  UnavailableNotice,
+  missingContentMetadata,
+} from "./site-shell";
 
 /**
  * Shared page renderer used by both `/` and `/[...slug]`.
@@ -12,11 +18,6 @@ import { getTheme, resolveSection } from "@/themes";
  * components → HTML, cached by ISR under (tenant, path) and invalidated by the publish
  * webhook through the per-tenant cache tags set in `lib/content.ts`.
  */
-
-const UNAVAILABLE_METADATA: Metadata = {
-  title: "Not available",
-  robots: { index: false, follow: false },
-};
 
 /**
  * `noindex` plus the free-text `robots` directives (`noindex`, `nofollow`, `none`; others are
@@ -51,7 +52,7 @@ export async function renderPageMetadata(segments: string[] | undefined): Promis
   const { tenant, host } = resolution;
   const slug = toPageSlug(segments);
   const page = await getPage(tenant.id, host, slug);
-  if (!page) return { title: tenant.name, robots: { index: false, follow: false } };
+  if (!page) return missingContentMetadata(tenant);
 
   const origin = canonicalOrigin(tenant, host);
   const title = page.seo.title ?? page.title;
@@ -80,16 +81,7 @@ export async function RenderPage({ segments }: { segments: string[] | undefined 
   // Unknown host → 404. A suspended school, or a site in maintenance or not yet published,
   // gets a neutral notice, never another tenant's content (multi-tenancy.md §7).
   if (resolution.status === "unknown") notFound();
-  if (resolution.status === "unavailable") {
-    return (
-      <main className="mx-auto max-w-xl px-6 py-24 text-center">
-        <h1 className="font-heading text-2xl font-semibold">This website is unavailable</h1>
-        <p className="mt-3 text-foreground/75">
-          The site is temporarily offline. Please contact the school directly.
-        </p>
-      </main>
-    );
-  }
+  if (resolution.status === "unavailable") return <UnavailableNotice />;
 
   const { tenant, host } = resolution;
   const slug = toPageSlug(segments);
@@ -102,29 +94,24 @@ export async function RenderPage({ segments }: { segments: string[] | undefined 
   if (!page) notFound();
 
   const theme = getTheme(site?.theme.code);
-  const { Navigation, Footer } = theme;
   const sections = [...page.sections].sort((a, b) => a.position - b.position);
 
   return (
-    <>
-      <Navigation tenant={tenant} site={site} />
-      <main>
-        {sections.map((section) => {
-          const Section = resolveSection(theme, section);
-          // Unknown section types render nothing — forward compatibility as themes evolve.
-          if (!Section) return null;
-          return (
-            <Section
-              key={section.id}
-              section={section}
-              tenant={tenant}
-              host={host}
-              pageId={page.id}
-            />
-          );
-        })}
-      </main>
-      <Footer tenant={tenant} site={site} />
-    </>
+    <SiteChrome tenant={tenant} site={site}>
+      {sections.map((section) => {
+        const Section = resolveSection(theme, section);
+        // Unknown section types render nothing — forward compatibility as themes evolve.
+        if (!Section) return null;
+        return (
+          <Section
+            key={section.id}
+            section={section}
+            tenant={tenant}
+            host={host}
+            pageId={page.id}
+          />
+        );
+      })}
+    </SiteChrome>
   );
 }

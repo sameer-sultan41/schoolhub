@@ -324,6 +324,10 @@ services:
       # Server-side calls stay on the compose network.
       API_BASE_URL: http://api:8000/api/v1
       NEXT_PUBLIC_PLATFORM_DOMAIN: ${PLATFORM_DOMAIN:-localhost}
+      # The public API origin (the API's API_PUBLIC_URL): contact forms post to it, and it is the
+      # only origin next/image optimises. Local addresses need the opt-in below; never in prod.
+      NEXT_PUBLIC_API_ORIGIN: ${NEXT_PUBLIC_API_ORIGIN:-http://api.localhost:8000}
+      WEBSITE_IMAGES_ALLOW_LOCAL_IP: "true"
       # The app's names, mapped from the compose .env's (PUBLIC_CONTENT_TOKEN,
       # REVALIDATE_SECRET) so existing .env files keep working.
       WEBSITE_MACHINE_TOKEN: ${PUBLIC_CONTENT_TOKEN}

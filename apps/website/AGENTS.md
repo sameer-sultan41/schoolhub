@@ -47,20 +47,25 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 
 ## How This App Is Wired
 
-| Concern | Where |
-| ------- | ----- |
-| Host → tenant classification (edge) | `src/proxy.ts` + `src/lib/host.ts` (pure, tested; `/api/revalidate` and `/api/preview` pass on any host) |
-| Subdomain → custom-domain 301 | `src/app/layout.tsx`, after the cached `resolveTenant()` (`customDomainRedirectTarget`); never in the proxy, which stays I/O-free |
-| Authoritative tenant lookup, cached | `src/lib/tenant.ts` — `status`/`website_status` → active, unavailable (neutral notice) or unknown |
-| Read-only transport (machine token) | `src/lib/api.ts` — has **no** write method by design |
-| Public content reads | `src/lib/content.ts` — every export is a read |
-| Page rendering (sections → components) | `src/app/render-page.tsx`, `src/app/[...slug]/page.tsx`, `src/app/page.tsx` |
-| Theme registry + token contract | `src/themes/index.ts`, `src/themes/default/` |
-| Publish invalidation webhook (HMAC) | `src/app/api/revalidate/route.ts` |
-| Unknown host landing | `src/app/platform-landing/page.tsx` (the proxy rewrites here) |
-| Configuration | `src/lib/env.ts` (server: secrets, platform domain — never import from a client component) · `src/lib/env.client.ts` (public `NEXT_PUBLIC_*` only, all optional) |
-| Public form submission (the one write path) | `src/lib/public-api.ts` — browser → public API, endpoint registry; never through `api.ts` |
-| Imports and lint baseline | `@/…` alias only (ESLint bans `../` outside tests); `eslint-suppressions.json` may only shrink (ADR-0014) |
+| Concern                                     | Where                                                                                                                                                                                                                        |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Host → tenant classification (edge)         | `src/proxy.ts` + `src/lib/host.ts` (pure, tested; `/api/revalidate` and `/api/preview` pass on any host)                                                                                                                     |
+| Subdomain → custom-domain 301               | `src/app/layout.tsx`, after the cached `resolveTenant()` (`customDomainRedirectTarget`); never in the proxy, which stays I/O-free                                                                                            |
+| Authoritative tenant lookup, cached         | `src/lib/tenant.ts` — `status`/`website_status` → active, unavailable (neutral notice) or unknown                                                                                                                            |
+| Read-only transport (machine token)         | `src/lib/api.ts` — has **no** write method by design                                                                                                                                                                         |
+| Public content reads                        | `src/lib/content.ts` — every export is a read                                                                                                                                                                                |
+| Page rendering (sections → components)      | `src/app/render-page.tsx`, `src/app/[...slug]/page.tsx`, `src/app/page.tsx`; shared chrome and the unavailable notice in `src/app/site-shell.tsx`                                                                            |
+| News, event and album detail pages          | `src/app/news/[slug]`, `src/app/events/[slug]`, `src/app/gallery/[slug]`; JSON-LD only through `src/components/json-ld.tsx` (`serializeJsonLd` escapes `<`, `>`, `&`, U+2028/2029 — the app's one `dangerouslySetInnerHTML`) |
+| Rich text                                   | `src/themes/default/rich-text-blocks.tsx` — block documents as React elements, never HTML                                                                                                                                    |
+| Preview (Draft Mode)                        | `src/app/api/preview/route.ts` validates the token with the API, then sets Draft Mode and the token cookie; `src/lib/preview.ts`; `pages`/`site` reads send it uncached; exit at `src/app/api/preview/exit/route.ts`         |
+| Image optimiser allow-list                  | `next.config.ts` → `src/lib/image-config.ts` (the public API file route only) and `src/lib/env.build.ts` (`WEBSITE_IMAGES_ALLOW_LOCAL_IP`, never in production)                                                              |
+| Visible strings                             | `src/themes/default/copy.ts` (English; one map for a later i18n pass)                                                                                                                                                        |
+| Theme registry + token contract             | `src/themes/index.ts`, `src/themes/default/`                                                                                                                                                                                 |
+| Publish invalidation webhook (HMAC)         | `src/app/api/revalidate/route.ts` — the signer's `tenant:<id>…` tags, plus `tenant-host:<host>` and `tenant-hosts`                                                                                                           |
+| Unknown host landing                        | `src/app/platform-landing/page.tsx` (the proxy rewrites here)                                                                                                                                                                |
+| Configuration                               | `src/lib/env.ts` (server: secrets, platform domain — never import from a client component) · `src/lib/env.client.ts` (public `NEXT_PUBLIC_*` only, all optional)                                                             |
+| Public form submission (the one write path) | `src/lib/public-api.ts` — browser → public API, endpoint registry; never through `api.ts`                                                                                                                                    |
+| Imports and lint baseline                   | `@/…` alias only (ESLint bans `../` outside tests); `eslint-suppressions.json` may only shrink (ADR-0014)                                                                                                                    |
 
 ### The rules those files encode
 
@@ -68,8 +73,10 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
   regression**, not a feature. Browser → public API is the only write path.
 - The proxy **deletes** inbound `x-schoolhub-*` headers before setting its own; without
   that, a client could hand us a header and read another school's site.
-- Cache tags are always `tenant:<id>…`, and the revalidate webhook only accepts tags inside the
-  tenant that signed the request.
+- Cache tags are `tenant:<id>…` or a host tag (`tenant-host:<host>`, `tenant-hosts`); the
+  revalidate webhook accepts `tenant:` tags only inside the tenant that signed the request.
+- Draft Mode is entered only through `/api/preview` after the API accepted the token, and it
+  redirects only to the path the API returned, never to a request parameter.
 - An unknown or suspended host renders the platform notice or a 404 — **never** another
   tenant's content, and never with `index: true`.
 

@@ -108,3 +108,68 @@ export function makeSite(overrides: Partial<PublicSite> = {}): PublicSite {
     ...overrides,
   };
 }
+
+export function makeNewsPostDetail(
+  overrides: Partial<ApiSchemas["PublicNewsPostDetail"]> = {},
+): ApiSchemas["PublicNewsPostDetail"] {
+  return {
+    id: "n1",
+    slug: "sports-day",
+    title: "Sports day",
+    excerpt: "A day of races.",
+    cover_image_url: null,
+    published_at: "2027-03-01T05:00:00Z",
+    body: { blocks: [{ type: "paragraph", text: "Every house took part." }] },
+    updated_at: "2027-03-02T05:00:00Z",
+    ...overrides,
+  };
+}
+
+export function makeEventDetail(
+  overrides: Partial<ApiSchemas["PublicSchoolEventDetail"]> = {},
+): ApiSchemas["PublicSchoolEventDetail"] {
+  return {
+    id: "e1",
+    slug: "annual-day",
+    title: "Annual day",
+    starts_at: "2027-04-12T04:00:00Z",
+    ends_at: null,
+    is_all_day: false,
+    location: "Main hall",
+    cover_image_url: null,
+    description: { blocks: [{ type: "paragraph", text: "Parents are welcome." }] },
+    updated_at: "2027-03-02T05:00:00Z",
+    ...overrides,
+  };
+}
+
+export function makeAlbumDetail(
+  overrides: Partial<ApiSchemas["PublicGalleryAlbumDetail"]> = {},
+): ApiSchemas["PublicGalleryAlbumDetail"] {
+  return {
+    id: "a1",
+    slug: "science-fair",
+    title: "Science fair",
+    description: "",
+    cover_image_url: null,
+    published_at: "2027-03-01T05:00:00Z",
+    item_count: 0,
+    items: [],
+    ...overrides,
+  };
+}
+
+export function makeGalleryItem(
+  overrides: Partial<ApiSchemas["PublicGalleryItem"]> = {},
+): ApiSchemas["PublicGalleryItem"] {
+  return {
+    id: "i1",
+    media_type: "image",
+    image_url: "https://api.test.invalid/api/v1/public/files/t1/f1",
+    embed_url: null,
+    caption: "",
+    alt_text: "A volcano model",
+    position: 0,
+    ...overrides,
+  };
+}

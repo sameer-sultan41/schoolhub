@@ -12,7 +12,16 @@ export function Navigation({ tenant, site }: ChromeProps) {
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-4">
         <Link href="/" className="flex items-center gap-3">
           {logoUrl ? (
-            <Image src={logoUrl} alt="" width={40} height={40} className="size-10 object-contain" />
+            // Branding allows any https logo URL, outside the optimiser's allow-list (next.config.ts):
+            // the browser loads it directly, so the server never fetches an arbitrary host.
+            <Image
+              src={logoUrl}
+              alt=""
+              width={40}
+              height={40}
+              unoptimized
+              className="size-10 object-contain"
+            />
           ) : null}
           <span className="font-heading text-lg font-semibold text-foreground">{tenant.name}</span>
         </Link>

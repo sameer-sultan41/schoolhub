@@ -2,6 +2,9 @@ import path from "node:path";
 
 import type { NextConfig } from "next";
 
+import { buildEnv } from "./src/lib/env.build";
+import { imagesConfig } from "./src/lib/image-config";
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   /**
@@ -34,10 +37,11 @@ const nextConfig: NextConfig = {
   },
   transpilePackages: ["@schoolhub/ui", "@schoolhub/types"],
   poweredByHeader: false,
-  images: {
-    // Tenant media lives in tenant-prefixed object storage behind the CDN.
-    remotePatterns: [{ protocol: "https", hostname: "**" }],
-  },
+  // Only the public API's file route, which 302s to presigned storage (src/lib/image-config.ts).
+  images: imagesConfig({
+    apiOrigin: buildEnv.NEXT_PUBLIC_API_ORIGIN,
+    allowLocalIP: buildEnv.WEBSITE_IMAGES_ALLOW_LOCAL_IP,
+  }),
   headers() {
     return [
       {
