@@ -102,7 +102,7 @@ export function ImageFileField<TFieldValues extends FieldValues>({
     setStatus("uploading");
     setUploadError(null);
     const pending = upload(file);
-    tracker?.track(pending);
+    tracker.track(pending);
   }
 
   function handleRemove() {

@@ -12,6 +12,11 @@ import type { WebsiteContentStatus } from "@/services";
 
 type PublishAction = "publish" | "unpublish" | "archive";
 
+interface Transition {
+  action: PublishAction;
+  run: () => Promise<unknown>;
+}
+
 export interface PublishActionsProps {
   status: WebsiteContentStatus;
   /** The record type's publish key (`website.page.publish`, …), already checked by the caller. */
@@ -46,13 +51,8 @@ export function PublishActions({
   const invalidateWebsite = useInvalidateModule(WEBSITE_QUERY_MODULE);
 
   const mutation = useMutation({
-    mutationFn: (action: PublishAction) => {
-      if (action === "publish") return publish();
-      if (action === "unpublish") return unpublish();
-      if (!archive) return Promise.reject(new Error("Archive is not supported."));
-      return archive();
-    },
-    onSuccess: (_result, action) => {
+    mutationFn: ({ run }: Transition) => run(),
+    onSuccess: (_result, { action }) => {
       invalidateWebsite();
       toast.success(t(`done.${action}`));
       onDone?.();
@@ -64,23 +64,24 @@ export function PublishActions({
 
   if (!canPublish) return null;
 
-  const actions: PublishAction[] = [];
-  if (status !== "published") actions.push("publish");
-  if (status === "published") actions.push("unpublish");
-  if (archive && status !== "archived") actions.push("archive");
+  // Each offered action carries its own call, so there is no branch for one the record lacks.
+  const transitions: Transition[] = [];
+  if (status !== "published") transitions.push({ action: "publish", run: publish });
+  if (status === "published") transitions.push({ action: "unpublish", run: unpublish });
+  if (archive && status !== "archived") transitions.push({ action: "archive", run: archive });
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {actions.map((action) => (
+      {transitions.map((transition) => (
         <Button
-          key={action}
-          variant={action === "publish" ? "primary" : "outline"}
+          key={transition.action}
+          variant={transition.action === "publish" ? "primary" : "outline"}
           disabled={disabled || mutation.isPending}
           onClick={() => {
-            mutation.mutate(action);
+            mutation.mutate(transition);
           }}
         >
-          {t(action)}
+          {t(transition.action)}
         </Button>
       ))}
     </div>

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -14,6 +15,7 @@ import {
   type RichTextDocument,
 } from "../rich-text";
 import { RichTextBlocksField } from "../rich-text-blocks-field";
+import { submitAfterUploads, UploadTrackerProvider, useUploadTracker } from "../upload-tracker";
 
 jest.mock("@/services", () =>
   jest
@@ -36,9 +38,12 @@ const MESSAGES = {
 function Host({
   initial = emptyRichText(),
   onSave,
+  documentError,
 }: {
   initial?: RichTextDocument;
   onSave: (doc: RichTextDocument) => void;
+  /** An error on the document's own path, as the resolver or a 422 sets it. */
+  documentError?: string;
 }) {
   const form = useForm<HostValues>({
     resolver: zodResolver(
@@ -46,20 +51,28 @@ function Host({
     ) as unknown as Resolver<HostValues>,
     defaultValues: { body: initial },
   });
+  const tracker = useUploadTracker();
+  useEffect(() => {
+    if (documentError) form.setError("body", { type: "server", message: documentError });
+  }, [documentError, form]);
   return (
-    <Form {...form}>
-      <form
-        noValidate
-        onSubmit={(event) => {
-          void form.handleSubmit((values) => {
-            onSave(toRichTextPayload(values.body));
-          })(event);
-        }}
-      >
-        <RichTextBlocksField form={form} name="body" label="Body" />
-        <Button type="submit">Save</Button>
-      </form>
-    </Form>
+    <UploadTrackerProvider value={tracker}>
+      <Form {...form}>
+        <form
+          noValidate
+          onSubmit={submitAfterUploads(tracker, (event) => {
+            void form.handleSubmit((values) => {
+              onSave(toRichTextPayload(values.body));
+            })(event);
+          })}
+        >
+          <RichTextBlocksField form={form} name="body" label="Body" />
+          <Button type="submit" disabled={tracker.isUploading}>
+            Save
+          </Button>
+        </form>
+      </Form>
+    </UploadTrackerProvider>
   );
 }
 
@@ -147,5 +160,84 @@ describe("RichTextBlocksField", () => {
 
     expect(await screen.findByText("Choose an image.")).toBeInTheDocument();
     expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("shows an over-long list line under the list's own field", async () => {
+    const user = userEvent.setup();
+    const onSave = jest.fn();
+    renderWithProviders(
+      <Host
+        initial={{ blocks: [{ type: "list", ordered: false, items: ["Fine", "x".repeat(1001)] }] }}
+        onSave={onSave}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    const items = screen.getByRole("textbox", { name: "Items (one per line)" });
+    await waitFor(() => {
+      expect(items).toHaveAccessibleDescription("At most 1000.");
+    });
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("puts the block cap on the document itself, where the editor shows it", async () => {
+    // Rendering 501 blocks is slow under jsdom, so the two halves are proved apart: the check
+    // puts its issue on the document's own path, and a message there shows under the editor.
+    const blocks = Array.from({ length: 501 }, () => ({ type: "paragraph", text: "" }));
+    const result = richTextSchema(MESSAGES).safeParse({ blocks });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => [issue.path, issue.message])).toEqual([
+      [[], "At most 500."],
+    ]);
+
+    renderWithProviders(<Host onSave={jest.fn()} documentError="At most 500." />);
+    expect(await screen.findByText("At most 500.")).toBeInTheDocument();
+  });
+
+  it("drops blank lines from a list when saving", async () => {
+    const user = userEvent.setup();
+    const onSave = jest.fn();
+    renderWithProviders(
+      <Host
+        initial={{ blocks: [{ type: "list", ordered: true, items: ["One", "", "  ", "Two", ""] }] }}
+        onSave={onSave}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith({
+        blocks: [{ type: "list", ordered: true, items: ["One", "Two"] }],
+      });
+    });
+  });
+
+  it("keeps a block of an unknown type as it came, shown read-only and removable", async () => {
+    const user = userEvent.setup();
+    const onSave = jest.fn();
+    const video = { type: "video", url: "https://video.example/1", caption: "Opening" };
+    renderWithProviders(
+      <Host
+        initial={
+          { blocks: [video, { type: "paragraph", text: "Hi" }] } as unknown as RichTextDocument
+        }
+        onSave={onSave}
+      />,
+    );
+
+    expect(screen.getByText("Unsupported block (video)")).toBeInTheDocument();
+    expect(screen.getByText(/can't be edited here/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith({ blocks: [video, { type: "paragraph", text: "Hi" }] });
+    });
+
+    await user.click(screen.getByRole("button", { name: "Remove block 1" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(onSave).toHaveBeenLastCalledWith({ blocks: [{ type: "paragraph", text: "Hi" }] });
+    });
   });
 });

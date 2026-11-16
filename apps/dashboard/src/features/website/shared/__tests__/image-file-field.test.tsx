@@ -1,10 +1,13 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useForm } from "react-hook-form";
+import { Form } from "@schoolhub/ui";
 
 import { Services } from "@/services";
 import { mocked } from "@/test-fixtures/list-screen";
 import { renderWithProviders, stubObjectUrls } from "@/test-utils";
 
+import { ImageFileField } from "../image-file-field";
 import { FILE_ID, HERO, SchemaHost } from "./schema-test-support";
 
 jest.mock("@/services", () =>
@@ -109,5 +112,21 @@ describe("ImageFileField", () => {
       expect(onSave).toHaveBeenCalledWith({ heading: "Hi" });
     });
     unmount();
+  });
+
+  it("refuses to render outside an UploadTrackerProvider", () => {
+    function Bare() {
+      const form = useForm<{ image: string }>({ defaultValues: { image: "" } });
+      return (
+        <Form {...form}>
+          <ImageFileField form={form} name="image" label="Image" />
+        </Form>
+      );
+    }
+    // React logs the thrown render error; the assertion is the throw itself.
+    const logged = jest.spyOn(console, "error").mockImplementation(() => undefined);
+
+    expect(() => renderWithProviders(<Bare />)).toThrow(/UploadTrackerProvider/);
+    logged.mockRestore();
   });
 });

@@ -116,7 +116,7 @@ export function RichTextBlocksField<TFieldValues extends FieldValues>({
                           form={form}
                           name={`${blocksPath}.${index}`}
                           id={field.id}
-                          type={blocks[index]?.type ?? "paragraph"}
+                          type={blocks[index]?.type ?? ""}
                           index={index}
                           count={fields.length}
                           onMove={move}

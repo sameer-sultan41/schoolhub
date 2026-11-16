@@ -30,6 +30,12 @@ export const RICH_TEXT_BLOCK_TYPES: readonly RichTextBlockType[] = [
   "image",
 ];
 
+/** A block type this editor knows. The server may one day send another (a newer theme); such a
+ * block is kept as it came and shown as unsupported, never dropped and never blocking Save. */
+export function isKnownBlockType(type: unknown): type is RichTextBlockType {
+  return typeof type === "string" && (RICH_TEXT_BLOCK_TYPES as readonly string[]).includes(type);
+}
+
 export const HEADING_LEVELS: readonly HeadingLevel[] = [2, 3, 4];
 
 export const RICH_TEXT_LIMITS = {
@@ -72,10 +78,14 @@ export function toRichText(value: unknown): RichTextDocument {
 }
 
 /** The document as the API takes it: an image with no file keeps no `file_id: ""` (the API
- * refuses an empty id) and no empty `alt`. */
+ * refuses an empty id) nor an empty `alt`; a list keeps no blank lines. Any other block,
+ * one of an unknown type included, goes back as it came. */
 export function toRichTextPayload(doc: RichTextDocument): RichTextDocument {
   return {
     blocks: doc.blocks.map((block) => {
+      if (block.type === "list") {
+        return { ...block, items: block.items.filter((item) => item.trim() !== "") };
+      }
       if (block.type !== "image") return block;
       const image: ImageBlock = { type: "image" };
       if (block.file_id) image.file_id = block.file_id;
@@ -91,23 +101,28 @@ export interface RichTextMessages {
   imageRequired: string;
 }
 
-/** The client-side check of a document, keyed to the editor's own field paths. */
+/**
+ * The client-side check of a document, with every issue on a path the editor shows a message
+ * for: a block's own inputs, a list's `items` as a whole (an over-long line or too many lines),
+ * and the document itself (too many blocks). A block of an unknown type passes unchanged.
+ */
 export function richTextSchema(messages: RichTextMessages) {
   const text = (max: number) => z.string().max(max, messages.tooLong(max));
-  const block = z.discriminatedUnion("type", [
+  const listItems = z.array(z.string()).superRefine((items, ctx) => {
+    if (items.length > RICH_TEXT_LIMITS.listItems) {
+      ctx.addIssue({ code: "custom", message: messages.tooLong(RICH_TEXT_LIMITS.listItems) });
+    } else if (items.some((item) => item.length > RICH_TEXT_LIMITS.listItem)) {
+      ctx.addIssue({ code: "custom", message: messages.tooLong(RICH_TEXT_LIMITS.listItem) });
+    }
+  });
+  const known = z.discriminatedUnion("type", [
     z.object({ type: z.literal("paragraph"), text: text(RICH_TEXT_LIMITS.paragraph) }),
     z.object({
       type: z.literal("heading"),
       level: z.union([z.literal(2), z.literal(3), z.literal(4)]),
       text: text(RICH_TEXT_LIMITS.heading).min(1, messages.required),
     }),
-    z.object({
-      type: z.literal("list"),
-      ordered: z.boolean(),
-      items: z
-        .array(text(RICH_TEXT_LIMITS.listItem))
-        .max(RICH_TEXT_LIMITS.listItems, messages.tooLong(RICH_TEXT_LIMITS.listItems)),
-    }),
+    z.object({ type: z.literal("list"), ordered: z.boolean(), items: listItems }),
     z.object({ type: z.literal("quote"), text: text(RICH_TEXT_LIMITS.quote) }),
     z.object({
       type: z.literal("image"),
@@ -115,7 +130,23 @@ export function richTextSchema(messages: RichTextMessages) {
       alt: text(RICH_TEXT_LIMITS.alt).optional(),
     }),
   ]);
-  return z.object({
-    blocks: z.array(block).max(RICH_TEXT_LIMITS.blocks, messages.tooLong(RICH_TEXT_LIMITS.blocks)),
+  // Each known block is checked on its own, its issues moved under its index; an unknown
+  // one is left alone. The array itself passes through as it came, so nothing is reshaped.
+  const blocks = z.array(z.unknown()).superRefine((items, ctx) => {
+    items.forEach((block, index) => {
+      if (typeof block !== "object" || block === null) return;
+      if (!isKnownBlockType((block as { type?: unknown }).type)) return;
+      const result = known.safeParse(block);
+      if (result.success) return;
+      for (const issue of result.error.issues) {
+        ctx.addIssue({ code: "custom", message: issue.message, path: [index, ...issue.path] });
+      }
+    });
+  });
+  return z.object({ blocks }).superRefine((doc, ctx) => {
+    // On the document, not `blocks`: the editor's own message sits on the document's path.
+    if (doc.blocks.length > RICH_TEXT_LIMITS.blocks) {
+      ctx.addIssue({ code: "custom", message: messages.tooLong(RICH_TEXT_LIMITS.blocks) });
+    }
   });
 }

@@ -24,7 +24,7 @@ import { ArrowDown, ArrowUp, GripVertical, Trash2 } from "lucide-react";
 
 import { ImageFileField } from "./image-file-field";
 import { textValue } from "./schema-model";
-import { HEADING_LEVELS, RICH_TEXT_LIMITS, type RichTextBlockType } from "./rich-text";
+import { HEADING_LEVELS, isKnownBlockType, RICH_TEXT_LIMITS } from "./rich-text";
 
 export interface RichTextBlockProps<TFieldValues extends FieldValues> {
   form: UseFormReturn<TFieldValues>;
@@ -32,7 +32,9 @@ export interface RichTextBlockProps<TFieldValues extends FieldValues> {
   name: string;
   /** The sortable id (the field array's own key, never sent). */
   id: string;
-  type: RichTextBlockType;
+  /** The block's `type`: one this editor knows, or another the server sent, which is shown
+   * read-only and kept as it is. */
+  type: string;
   index: number;
   count: number;
   onMove: (from: number, to: number) => void;
@@ -90,6 +92,7 @@ export function RichTextBlock<TFieldValues extends FieldValues>({
     id,
   });
   const position = index + 1;
+  const typeLabel = isKnownBlockType(type) ? t(`types.${type}`) : t("unsupported.label", { type });
   const style: CSSProperties = {
     transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
     transition,
@@ -101,7 +104,7 @@ export function RichTextBlock<TFieldValues extends FieldValues>({
     <li
       ref={setNodeRef}
       style={style}
-      aria-label={t("blockLabel", { index: position, type: t(`types.${type}`) })}
+      aria-label={t("blockLabel", { index: position, type: typeLabel })}
       className="space-y-3 rounded-md border border-border bg-background p-3"
     >
       <div className="flex items-center gap-1">
@@ -115,7 +118,7 @@ export function RichTextBlock<TFieldValues extends FieldValues>({
         >
           <GripVertical aria-hidden="true" />
         </Button>
-        <span className="flex-1 text-sm font-medium">{t(`types.${type}`)}</span>
+        <span className="flex-1 text-sm font-medium">{typeLabel}</span>
         <Button
           variant="ghost"
           mode="icon"
@@ -152,6 +155,10 @@ export function RichTextBlock<TFieldValues extends FieldValues>({
           <Trash2 aria-hidden="true" />
         </Button>
       </div>
+
+      {isKnownBlockType(type) ? null : (
+        <p className="text-sm text-muted-foreground">{t("unsupported.description")}</p>
+      )}
 
       {type === "heading" ? (
         <FormField

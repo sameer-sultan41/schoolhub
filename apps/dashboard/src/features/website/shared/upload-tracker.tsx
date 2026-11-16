@@ -51,9 +51,19 @@ const UploadTrackerContext = createContext<UploadTracker | null>(null);
 
 export const UploadTrackerProvider = UploadTrackerContext.Provider;
 
-/** The tracker of the form this field sits in, or `null` outside any provider. */
-export function useUploadTrackerContext(): UploadTracker | null {
-  return useContext(UploadTrackerContext);
+/**
+ * The tracker of the form this field sits in. Required: an upload field outside a provider
+ * could not hold Save or be awaited, so its upload could be dropped; that is a wiring bug,
+ * reported at once rather than left to a quick Save.
+ */
+export function useUploadTrackerContext(): UploadTracker {
+  const tracker = useContext(UploadTrackerContext);
+  if (!tracker) {
+    throw new Error(
+      "An upload field must sit inside an UploadTrackerProvider (features/website/shared/upload-tracker.tsx).",
+    );
+  }
+  return tracker;
 }
 
 /** A form's submit handler that first waits for the tracker's uploads, then runs `handler`. */
