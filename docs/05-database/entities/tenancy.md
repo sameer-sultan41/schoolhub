@@ -50,6 +50,8 @@ one shared bag. `academic` carries the school calendar: `working_days` (weekday 
 `holidays` (`[{start_date, end_date, name, campus_id}]`, null `campus_id` = every campus) and `day_window`
 (`{start, end, grace_minutes}`). `apps/school_organization/calendar.py` is the only reader;
 `attendance` refuses to mark on a non-working day and computes `late_minutes` from the window.
+Its writers are `/holiday-calendar` and `/attendance-settings`, each merging only its own keys
+under the row lock; `/school-settings` returns `academic` but ignores it in a PATCH.
 `ai` holds the platform-set AI quota: `monthly_token_budget` overrides
 `AI_MONTHLY_TOKEN_BUDGET_DEFAULT` for one school (`core/ai/budget.py`). No tenant-facing endpoint
 writes it, because the quota is the platform's, not the school's (SEC-16); the school-settings API

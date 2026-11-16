@@ -473,9 +473,8 @@ export interface paths {
          *
          *     A projection of three keys in ``tenant_settings.academic``, the same shape
          *     `holiday_calendar/view.py` gives its slice, under the settings keys §4
-         *     already describes as covering academic configuration. Not `/school-settings`:
-         *     its PATCH replaces the whole `academic` JSON, so a client read-modify-write
-         *     would lose a concurrent change. This writes only its own keys, under a row
+         *     already describes as covering academic configuration. Not `/school-settings`,
+         *     which does not write `academic`: this writes only its own keys, under a row
          *     lock, and merges the nested `student_leave_approval` dict rather than
          *     replacing it.
          *
@@ -494,9 +493,8 @@ export interface paths {
          *
          *     A projection of three keys in ``tenant_settings.academic``, the same shape
          *     `holiday_calendar/view.py` gives its slice, under the settings keys §4
-         *     already describes as covering academic configuration. Not `/school-settings`:
-         *     its PATCH replaces the whole `academic` JSON, so a client read-modify-write
-         *     would lose a concurrent change. This writes only its own keys, under a row
+         *     already describes as covering academic configuration. Not `/school-settings`,
+         *     which does not write `academic`: this writes only its own keys, under a row
          *     lock, and merges the nested `student_leave_approval` dict rather than
          *     replacing it.
          *
@@ -11396,8 +11394,9 @@ export interface components {
             readonly updated_at?: string;
         };
         /**
-         * @description `PATCH /school-settings`: every field optional. `slug` and `status` are not fields, so a
-         *     body that sends them is ignored rather than written.
+         * @description `PATCH /school-settings`: every field optional. `slug`, `status` and `academic` are not
+         *     fields, so a body that sends them is ignored rather than written. `academic` is written only
+         *     by `/holiday-calendar` and `/attendance-settings`, each of which validates its own keys.
          */
         PatchedSchoolSettingsUpdate: {
             name?: string;
@@ -11408,7 +11407,6 @@ export interface components {
             logo_file_id?: string | null;
             /** @description Merged into the stored branding, key by key. */
             branding?: unknown;
-            academic?: unknown;
             timezone?: string;
             locale?: string;
             currency?: string;

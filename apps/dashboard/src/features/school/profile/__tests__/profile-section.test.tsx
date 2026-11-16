@@ -89,7 +89,6 @@ describe("profile section", () => {
         name: "City School North",
         branding: { primary_color: "#123ABC" },
         timezone: "Asia/Karachi",
-        locale: "en",
         currency: "USD",
       });
     });

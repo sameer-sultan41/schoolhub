@@ -34,8 +34,9 @@ class SchoolSettingsSerializer(serializers.Serializer):
 
 
 class SchoolSettingsUpdateSerializer(serializers.Serializer):
-    """`PATCH /school-settings`: every field optional. `slug` and `status` are not fields, so a
-    body that sends them is ignored rather than written."""
+    """`PATCH /school-settings`: every field optional. `slug`, `status` and `academic` are not
+    fields, so a body that sends them is ignored rather than written. `academic` is written only
+    by `/holiday-calendar` and `/attendance-settings`, each of which validates its own keys."""
 
     name = serializers.CharField(max_length=200, required=False)
     logo_file_id = serializers.UUIDField(
@@ -46,7 +47,6 @@ class SchoolSettingsUpdateSerializer(serializers.Serializer):
     branding = serializers.JSONField(
         required=False, help_text="Merged into the stored branding, key by key."
     )
-    academic = serializers.JSONField(required=False)
     timezone = serializers.CharField(max_length=64, required=False)
     locale = serializers.CharField(max_length=10, required=False)
     currency = serializers.CharField(min_length=3, max_length=3, required=False)

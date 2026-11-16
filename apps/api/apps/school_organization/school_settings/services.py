@@ -77,9 +77,6 @@ def update_school_settings(
     if "branding" in changes:
         settings_row.branding = {**(settings_row.branding or {}), **changes["branding"]}
         changed.append("branding")
-    if "academic" in changes:
-        settings_row.academic = changes["academic"]
-        changed.append("academic")
     settings_row.updated_by = actor_id
     settings_row.save(update_fields=[*changed, "updated_by", "updated_at"])
 

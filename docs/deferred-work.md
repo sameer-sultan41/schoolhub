@@ -265,9 +265,9 @@ either this file or `project-status.md`.
 *-types.ts`, `features/dashboard/dashboard-{constants,types}.ts`) that PR #65's shell
   reset deliberately deleted (commit `9548054`), so the files fail to typecheck and their
   own tests fail to even collect. `Services.dashboard`/`dashboard-service.ts` (the one
-  piece that depended on them) was dropped too; `Services.tenant`/`tenant-service.ts` has
-  no such dependency and is the only part of that recovered work that's kept, merged
-  cleanly alongside `Services.auth`.
+  piece that depended on them) was dropped too. `Services.tenant`/`tenant-service.ts`, the
+  one part of that recovered work kept at the time, was later deleted by PR F (the School
+  module), which reads and writes the school through `Services.schoolSettings` instead.
 - **PR #42's review found ten issues and one was a privilege-escalation path.**
   `StudentAttendanceViewSet` drops `DenyRestrictedPrincipals` so students and
   guardians can read their own attendance (§4 grants them an `own`-scoped view) —

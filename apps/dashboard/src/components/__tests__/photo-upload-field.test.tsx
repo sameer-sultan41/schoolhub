@@ -21,11 +21,14 @@ function TestHost({
   savedPhotoFileId,
   savedPhotoUrl,
   onUploadingChange = jest.fn(),
+  removable = false,
 }: {
   uploadPurpose?: string;
   savedPhotoFileId?: string | null;
   savedPhotoUrl?: string | null;
   onUploadingChange?: (uploading: boolean) => void;
+  /** Adds a host-owned Remove button that clears the field, as the school profile's does. */
+  removable?: boolean;
 }) {
   const form = useForm<PhotoUploadFieldValues>({
     defaultValues: {
@@ -44,6 +47,16 @@ function TestHost({
         onUploadStart={() => () => true}
         onUploadingChange={onUploadingChange}
       />
+      {removable ? (
+        <button
+          type="button"
+          onClick={() => {
+            form.setValue("photo_file_id", "", { shouldDirty: true });
+          }}
+        >
+          Remove
+        </button>
+      ) : null}
     </Form>
   );
 }
@@ -96,6 +109,29 @@ describe("PhotoUploadField", () => {
       ).toBeInTheDocument();
     } finally {
       restoreObjectUrls();
+    }
+  });
+
+  it("drops the uploaded file's preview once the host clears the field", async () => {
+    mockUploadFile.mockResolvedValue("file-123");
+    const restoreImageLoading = stubImageLoading();
+    const restoreObjectUrls = stubObjectUrls("blob:new-logo");
+    const { container } = renderWithProviders(<TestHost removable />);
+    try {
+      await userEvent.upload(
+        screen.getByLabelText(/photo/i),
+        new File(["x"], "logo.png", { type: "image/png" }),
+      );
+      await waitFor(() => {
+        expect(container.querySelector('img[src="blob:new-logo"]')).toBeInTheDocument();
+      });
+
+      await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+
+      expect(container.querySelector('img[src="blob:new-logo"]')).not.toBeInTheDocument();
+    } finally {
+      restoreObjectUrls();
+      restoreImageLoading();
     }
   });
 

@@ -45,8 +45,7 @@ from apps.attendance.models import (
 )
 from apps.school_organization import calendar
 from apps.school_organization.models import AcademicSession
-from apps.school_organization.services import assert_session_writable
-from apps.school_organization.tenant_settings import lock_settings_row
+from apps.school_organization.services import assert_session_writable, lock_settings_row
 from apps.student_management.models import EnrollmentStatus, Student, StudentEnrollment
 from apps.student_management.services import enrollment_roll_order
 from apps.timetable.slots.services import effective_slots_for
@@ -188,7 +187,7 @@ def update_attendance_settings(
 ) -> tuple[TenantSettings, dict, dict]:
     """Merge `changes` into the tenant's `academic` under a row lock: `(row, before, after)`.
 
-    Fetch-or-create under a lock (`school_organization.tenant_settings.lock_settings_row`;
+    Fetch-or-create under a lock (`school_organization.services.lock_settings_row`;
     provisioning may not have made the row yet), so the row is read once. Only the
     changed keys are written, so sibling keys survive, and the nested
     `student_leave_approval` dict is merged rather than replaced. Two queries when the

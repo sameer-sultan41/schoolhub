@@ -509,6 +509,16 @@
 - **Mistake.** The profile logo test restored the `URL.createObjectURL`/`revokeObjectURL` stubs at its end, while the form was still mounted. RTL's cleanup unmounts after the test, the logo field revoked its preview URL as it unmounted, and jsdom had no `revokeObjectURL` left to call. It passed locally and failed in CI (PR #183, fixed in `01c2fd11`).
 - **Check.** Use `stubObjectUrls` from `src/test-utils.tsx`, whose restore now unmounts every rendered tree first. For any other global a component touches on unmount (timers, `matchMedia`, `ResizeObserver`), call RTL's `cleanup()` (or the render's `unmount()`) before you restore it. A `describe`-level `afterEach` is no fix: it runs before RTL's root-level cleanup.
 
+### L71. Local state that outranks a form value resets when that value moves
+
+- **Mistake.** `PhotoUploadField` showed its picked-file preview ahead of the form's `logo_file_id`, and only a new pick or an unmount cleared it. The staff and student dialogs remount on every open; the school profile form never does, so Remove logo left the removed logo on screen (PR #183 final review).
+- **Check.** For a component's own state that shadows a form value, record which value it was made for and drop it once the form's value differs (adjust state during render, not an effect). Test it on a host that stays mounted: change the value from outside the component, then assert the shadow is gone.
+
+### L72. A form sends a value it coerced on load only when the user changed it
+
+- **Mistake.** The school profile mapped a stored locale with no picker option (`ar`, `en-GB`) to `en` and sent `locale` on every save, so a rename silently rewrote the tenant's locale (PR #183 final review).
+- **Check.** When a `…ToFormValues` helper substitutes a default for a value the form can't show, the body builder compares against that same mapping and leaves the field out when it is unchanged, as `buildSchoolProfileBody` does for `locale` and `logo_file_id`. Test it with a stored value the form can't represent.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.
