@@ -11,6 +11,9 @@ from django.db import IntegrityError, ProgrammingError, connection, transaction
 from django.test import TestCase
 
 from apps.website_cms.models import (
+    CustomDomain,
+    CustomDomainRoute,
+    CustomDomainStatus,
     NavigationMenu,
     PageSection,
     SeoSetting,
@@ -25,7 +28,9 @@ from apps.website_cms.tests.factories import (
     TenantFactory,
     WebsitePageFactory,
     WebsiteSettingsFactory,
+    make_custom_domain,
 )
+from core.api.tests.rollback import rollback_as_in_production
 from core.tenancy.context import tenant_context
 
 
@@ -70,6 +75,7 @@ class WebsiteRlsIsolationTests(TestCase):
             "gallery_albums",
             "gallery_items",
             "contact_submissions",
+            "custom_domains",
         ]
         with connection.cursor() as cursor:
             cursor.execute("SELECT tablename FROM pg_policies WHERE tablename = ANY(%s)", [tables])
@@ -294,3 +300,34 @@ class ContactCrossTenantTests(WebsiteAPITestCase):
         url = f"/api/v1/contact-submissions/{self.contact_b.id}"
         self.assertEqual(self.client.get(url).status_code, 404)
         self.assertEqual(self.client.patch(url, {"status": "read"}, format="json").status_code, 404)
+
+
+class CustomDomainCrossTenantTests(WebsiteAPITestCase):
+    """Another tenant's domains are invisible and untouchable: 404, never 403."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        # `:verify` is `non_atomic_requests`: a 404 there needs production's rollback (L67).
+        rollback_as_in_production(self)
+        self.allow_everything()
+        self.other = TenantFactory()
+        self.domain_b = make_custom_domain(
+            self.other, "theirs.test", CustomDomainStatus.ACTIVE, is_primary=True
+        )
+
+    def test_list_does_not_leak(self) -> None:
+        response = self.client.get("/api/v1/custom-domains")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"], [])
+
+    def test_patch_delete_and_verify_are_404(self) -> None:
+        url = f"/api/v1/custom-domains/{self.domain_b.id}"
+        response = self.client.patch(url, {"is_primary": False}, format="json")
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(self.client.delete(url).status_code, 404)
+        self.assertEqual(self.client.post(f"{url}:verify").status_code, 404)
+        # Nothing of tenant B's changed: its domain is still live and primary.
+        route = CustomDomainRoute.objects.get(domain="theirs.test")
+        self.assertEqual(route.tenant_id, self.other.id)
+        with tenant_context(self.other.id):
+            self.assertTrue(CustomDomain.objects.alive().get(pk=self.domain_b.id).is_primary)

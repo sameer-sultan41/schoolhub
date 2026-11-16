@@ -980,6 +980,64 @@ export interface paths {
         patch: operations["contact_submissions_partial_update"];
         trace?: never;
     };
+    "/api/v1/custom-domains": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `custom-domains`: claim, verify, choose the primary, remove. JWT only. */
+        get: operations["custom_domains_list"];
+        put?: never;
+        /** @description `custom-domains`: claim, verify, choose the primary, remove. JWT only. */
+        post: operations["custom_domains_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/custom-domains/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description `custom-domains`: claim, verify, choose the primary, remove. JWT only. */
+        delete: operations["custom_domains_destroy"];
+        options?: never;
+        head?: never;
+        /** @description `custom-domains`: claim, verify, choose the primary, remove. JWT only. */
+        patch: operations["custom_domains_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/custom-domains/{id}:verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /custom-domains/{id}:verify`: check DNS now and activate on success.
+         *
+         *     Not wrapped in ATOMIC_REQUESTS: each database step opens its own `tenant_atomic`
+         *     and the DNS lookup runs between them (ADR-0034).
+         */
+        post: operations["custom_domains_:verify_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/delivery-logs": {
         parameters: {
             query?: never;
@@ -8608,6 +8666,55 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        CustomDomain: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly domain: string;
+            readonly status: components["schemas"]["CustomDomainStatusEnum"];
+            readonly tls_status: components["schemas"]["CustomDomainTlsStatusEnum"];
+            readonly is_primary: boolean;
+            /** Format: date-time */
+            readonly verified_at: string | null;
+            readonly last_error: string;
+            readonly last_error_code: components["schemas"]["CustomDomainErrorCodeEnum"] | null;
+            readonly dns_records: components["schemas"]["DnsRecord"][];
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /** @description POST input. Shape only; the service normalises and validates the name (422). */
+        CustomDomainCreate: {
+            domain: string;
+        };
+        /**
+         * @description * `txt_missing` - TXT record missing
+         *     * `txt_mismatch` - TXT record holds another token
+         *     * `cname_missing` - CNAME record missing
+         *     * `cname_mismatch` - CNAME points elsewhere
+         *     * `lookup_timeout` - DNS lookup timed out
+         *     * `lookup_failed` - DNS lookup failed
+         *     * `domain_taken` - Another school uses the domain
+         *     * `target_unconfigured` - Platform CNAME target not configured
+         * @enum {string}
+         */
+        CustomDomainErrorCodeEnum: "txt_missing" | "txt_mismatch" | "cname_missing" | "cname_mismatch" | "lookup_timeout" | "lookup_failed" | "domain_taken" | "target_unconfigured";
+        /**
+         * @description * `pending_dns` - Pending DNS
+         *     * `verifying` - Verifying
+         *     * `active` - Active
+         *     * `failed` - Failed
+         *     * `disabled` - Disabled
+         * @enum {string}
+         */
+        CustomDomainStatusEnum: "pending_dns" | "verifying" | "active" | "failed" | "disabled";
+        /**
+         * @description * `pending` - Pending
+         *     * `issued` - Issued
+         *     * `failed` - Failed
+         * @enum {string}
+         */
+        CustomDomainTlsStatusEnum: "pending" | "issued" | "failed";
         /**
          * @description `reports.daily_register`: a daily row as marked, a derived day, or one period's row.
          *
@@ -8794,6 +8901,20 @@ export interface components {
             readonly created_at: string;
             /** Format: date-time */
             readonly updated_at: string;
+        };
+        /**
+         * @description One DNS record the school must create: `TXT` (the token) or `CNAME` (the target).
+         *
+         *     The CNAME must point directly at the target (chains are not followed) and stay: the
+         *     daily re-check reads it. The TXT record proves ownership at verification and may then be
+         *     removed (`keep_after_verification: false`); if it is kept, it must keep this token, or
+         *     the daily re-check counts a failure (a new owner of the domain evicts a stale holder).
+         */
+        DnsRecord: {
+            type: string;
+            name: string;
+            value: string;
+            keep_after_verification: boolean;
         };
         /**
          * @description * `verified` - verified
@@ -10940,6 +11061,17 @@ export interface components {
                 };
             };
         };
+        PaginatedCustomDomainList: {
+            data?: components["schemas"]["CustomDomain"][];
+            meta?: {
+                pagination?: {
+                    page?: number;
+                    page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
+                };
+            };
+        };
         PaginatedDeliveryLogList: {
             data?: components["schemas"]["DeliveryLog"][];
             meta?: {
@@ -11850,6 +11982,10 @@ export interface components {
             readonly created_at?: string;
             /** Format: date-time */
             readonly updated_at?: string;
+        };
+        /** @description PATCH input: `is_primary` is the only writable field. */
+        PatchedCustomDomainUpdate: {
+            is_primary?: boolean;
         };
         PatchedDepartment: {
             /** Format: uuid */
@@ -17298,6 +17434,127 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ContactSubmission"];
+                };
+            };
+        };
+    };
+    custom_domains_list: {
+        parameters: {
+            query?: {
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedCustomDomainList"];
+                };
+            };
+        };
+    };
+    custom_domains_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomDomainCreate"];
+                "application/x-www-form-urlencoded": components["schemas"]["CustomDomainCreate"];
+                "multipart/form-data": components["schemas"]["CustomDomainCreate"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomDomain"];
+                };
+            };
+        };
+    };
+    custom_domains_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    custom_domains_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedCustomDomainUpdate"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedCustomDomainUpdate"];
+                "multipart/form-data": components["schemas"]["PatchedCustomDomainUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomDomain"];
+                };
+            };
+        };
+    };
+    "custom_domains_:verify_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomDomain"];
                 };
             };
         };

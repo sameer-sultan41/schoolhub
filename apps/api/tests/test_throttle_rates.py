@@ -8,11 +8,6 @@ from settings rather than a class attribute.
 
 from __future__ import annotations
 
-import importlib
-import sys
-from unittest import mock
-
-from cryptography.fernet import Fernet
 from django.conf import settings
 from django.test import SimpleTestCase
 
@@ -31,6 +26,7 @@ from core.api.throttling import (
     UserRateThrottle,
 )
 from core.rbac.machine import MachineClientThrottle
+from tests.prod_settings import load_prod_settings
 
 DEFAULT_RATES = {
     "tenant": "600/min",
@@ -94,30 +90,14 @@ class NumProxiesWiringTests(SimpleTestCase):
 class ProductionNumProxiesTests(SimpleTestCase):
     """`config.settings.prod` refuses to boot without `NUM_PROXIES` (0 = direct is allowed)."""
 
-    def load_prod(self, **extra: str):
-        from config.settings import base
-
-        # django-environ reads `Env.ENVIRON`; swapping it keeps the test off `os.environ`.
-        environ = {
-            "INTEGRATIONS_ENCRYPTION_KEYS": Fernet.generate_key().decode(),
-            "API_PUBLIC_URL": "https://api.example.com",
-            **extra,
-        }
-        with mock.patch.object(base.env, "ENVIRON", environ):
-            sys.modules.pop("config.settings.prod", None)
-            try:
-                return importlib.import_module("config.settings.prod")
-            finally:
-                sys.modules.pop("config.settings.prod", None)
-
     def test_missing_num_proxies_fails_at_import(self) -> None:
         from django.core.exceptions import ImproperlyConfigured
 
         with self.assertRaises(ImproperlyConfigured):
-            self.load_prod()
+            load_prod_settings(NUM_PROXIES=None)
 
     def test_zero_is_allowed_and_reaches_drf(self) -> None:
-        prod = self.load_prod(NUM_PROXIES="0")
+        prod = load_prod_settings(NUM_PROXIES="0")
 
         self.assertEqual(prod.NUM_PROXIES, 0)
         self.assertEqual(prod.REST_FRAMEWORK["NUM_PROXIES"], 0)
@@ -126,4 +106,4 @@ class ProductionNumProxiesTests(SimpleTestCase):
         from django.core.exceptions import ImproperlyConfigured
 
         with self.assertRaises(ImproperlyConfigured):
-            self.load_prod(NUM_PROXIES="-1")
+            load_prod_settings(NUM_PROXIES="-1")

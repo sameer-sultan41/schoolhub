@@ -72,13 +72,17 @@ the contract is in [website-cms.md](../03-modules/website-cms.md) §16.
    even with no tenant bound. This is the denormalised read model platform-admin chose for its
    own cross-tenant lookup. Global uniqueness applies to active routes only, and DNS proof (a
    TXT token plus a CNAME to `WEBSITE_CNAME_TARGET`) decides who gets one.
-8. **An active domain is re-verified daily.** A recheck failure is a missing or wrong CNAME,
-   or a TXT record that is present but carries a token that is not ours (the domain was handed
-   to someone else). A TXT record that is simply absent is not a failure on its own, because
-   the CNAME already proves the domain still points at us. Three consecutive failures
+8. **An active domain is re-verified daily, on definite results only.** A definite failure
+   is a missing or wrong CNAME, or a TXT record that is present but holds another token (the
+   domain was handed to someone else). A TXT record that is simply absent passes, because the
+   CNAME already proves the domain still points at us. An inconclusive result (a timeout, no
+   nameservers, no resolver configuration) never counts: it changes nothing, so a resolver
+   outage cannot lapse every school's domain. Three consecutive definite failures
    (`ACTIVE_RECHECK_FAILURE_LIMIT`, `consecutive_failures`) make the domain `failed`, drop its
    route and notify the school; the site falls back to the subdomain, never to another school's
-   content.
+   content. A domain is the `is_primary` host only while `tls_status = issued`. Activating a
+   domain evicts a route held by a soft-deleted tenant, so a deleted school cannot block the
+   name.
 9. **Preview is a header.** A signed, 600-second, page-bound token goes in `X-Preview-Token`,
    never a query string. A valid token reads its own page in any status, and `site` with it
    skips the "live" check (so a school can preview before its first publish) but never the
