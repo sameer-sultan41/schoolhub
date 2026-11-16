@@ -40,8 +40,12 @@ export function localDateToIso(value: string): string | null {
   return value === "" ? null : localInputToIso(`${value}T00:00`);
 }
 
-/** A `date` value -> the API's timestamp of that day's last local millisecond, for an inclusive
- * "on or before" bound; blank clears it. */
-export function localDayEndToIso(value: string): string | null {
-  return value === "" ? null : localInputToIso(`${value}T23:59:59.999`);
+/** A `date` value -> the API's timestamp of the next day's local midnight, sent as an exclusive
+ * bound (`__lt`) so the day itself is included whole; blank clears it. */
+export function nextLocalDayToIso(value: string): string | null {
+  const start = localDateToIso(value);
+  if (start === null) return null;
+  const next = new Date(start);
+  next.setDate(next.getDate() + 1);
+  return next.toISOString();
 }

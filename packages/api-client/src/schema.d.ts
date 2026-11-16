@@ -17357,6 +17357,7 @@ export interface operations {
         parameters: {
             query?: {
                 created_at__gte?: string;
+                created_at__lt?: string;
                 created_at__lte?: string;
                 /** @description Which field to use when ordering the results. */
                 ordering?: string;

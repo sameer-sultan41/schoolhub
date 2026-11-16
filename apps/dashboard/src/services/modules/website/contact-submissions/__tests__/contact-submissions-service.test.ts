@@ -39,7 +39,7 @@ describe("contact-submissions-service", () => {
       page: 2,
       status: "new",
       createdFrom: "2026-11-01",
-      createdTo: "2026-11-30",
+      createdBefore: "2026-12-01T00:00:00.000Z",
     });
 
     expect(mockGet).toHaveBeenCalledWith(
@@ -49,7 +49,7 @@ describe("contact-submissions-service", () => {
           page: 2,
           status: "new",
           created_at__gte: "2026-11-01",
-          created_at__lte: "2026-11-30",
+          created_at__lt: "2026-12-01T00:00:00.000Z",
         }),
       }),
     );

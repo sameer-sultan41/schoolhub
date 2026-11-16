@@ -271,13 +271,13 @@ function stubInbox(api: MockApi, submissions: ContactSubmission[]) {
     const params = request.searchParams;
     const status = params.get("status");
     const from = params.get("created_at__gte");
-    const to = params.get("created_at__lte");
+    const before = params.get("created_at__lt");
     const search = params.get("search")?.toLowerCase();
     const matching = submissions.filter(
       (entry) =>
         (!status || entry.status === status) &&
         (!from || Date.parse(entry.created_at) >= Date.parse(from)) &&
-        (!to || Date.parse(entry.created_at) <= Date.parse(to)) &&
+        (!before || Date.parse(entry.created_at) < Date.parse(before)) &&
         (!search ||
           `${entry.name} ${entry.email} ${entry.subject} ${entry.message}`
             .toLowerCase()

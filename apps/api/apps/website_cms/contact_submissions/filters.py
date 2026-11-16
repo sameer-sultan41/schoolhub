@@ -11,6 +11,8 @@ class ContactSubmissionFilterSet(django_filters.FilterSet):
     status = django_filters.ChoiceFilter(choices=ContactStatus.choices)
     created_at__gte = django_filters.IsoDateTimeFilter(field_name="created_at", lookup_expr="gte")
     created_at__lte = django_filters.IsoDateTimeFilter(field_name="created_at", lookup_expr="lte")
+    # An exclusive end: the dashboard sends the next day's local midnight for a day range.
+    created_at__lt = django_filters.IsoDateTimeFilter(field_name="created_at", lookup_expr="lt")
 
     class Meta:
         model = ContactSubmission

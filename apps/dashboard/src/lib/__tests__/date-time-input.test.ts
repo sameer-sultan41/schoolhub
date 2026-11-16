@@ -2,7 +2,7 @@ import {
   isoToLocalDate,
   isoToLocalInput,
   localDateToIso,
-  localDayEndToIso,
+  nextLocalDayToIso,
   localInputToIso,
 } from "@/lib/date-time-input";
 
@@ -25,10 +25,9 @@ describe("date-time inputs", () => {
     expect(isoToLocalDate(undefined)).toBe("");
   });
 
-  it("reads a date input as an inclusive end: that day's last local millisecond", () => {
-    expect(localDayEndToIso("2026-12-10")).toBe(
-      new Date(2026, 11, 10, 23, 59, 59, 999).toISOString(),
-    );
-    expect(localDayEndToIso("")).toBeNull();
+  it("reads a date input as an exclusive end: the next day's local midnight", () => {
+    expect(nextLocalDayToIso("2026-12-10")).toBe(new Date(2026, 11, 11).toISOString());
+    expect(nextLocalDayToIso("2026-12-31")).toBe(new Date(2027, 0, 1).toISOString());
+    expect(nextLocalDayToIso("")).toBeNull();
   });
 });

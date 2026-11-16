@@ -13,7 +13,7 @@ import { isOffsetPagination } from "@schoolhub/types";
 import { hideableColumnIds, useDataGridUrlState } from "@/hooks/use-data-grid-url-state";
 import { usePageClamp } from "@/hooks/use-page-clamp";
 import { FILTER_ALL } from "@/lib/constants";
-import { localDateToIso, localDayEndToIso } from "@/lib/date-time-input";
+import { localDateToIso, nextLocalDayToIso } from "@/lib/date-time-input";
 import { toOrdering } from "@/lib/helpers";
 import { queryKeys } from "@/lib/query-client";
 import { Services, type ContactSubmissionRecord } from "@/services";
@@ -34,7 +34,7 @@ export type ContactInboxFilters = Record<keyof typeof CONTACT_URL_FILTERS, strin
 /**
  * The inbox's list state: search, status, the received-date range, sort, page and hidden columns
  * in the URL; the server-paginated read with the page clamp and stale-page reset; and the table.
- * The dates are the viewer's local days, sent as an inclusive range of instants.
+ * The dates are the viewer's local days: from that day's midnight, before the midnight after `to`.
  */
 export function useContactInbox(columns: ColumnDef<ContactSubmissionRecord>[]) {
   const hideableIds = useMemo(() => hideableColumnIds(columns), [columns]);
@@ -52,8 +52,8 @@ export function useContactInbox(columns: ColumnDef<ContactSubmissionRecord>[]) {
   const pageSize = pagination.pageSize;
   const status = CONTACT_SUBMISSION_STATUSES.find((value) => value === filters.status);
   const createdFrom = localDateToIso(filters.from) ?? undefined;
-  const createdTo = localDayEndToIso(filters.to) ?? undefined;
-  const params = { page, pageSize, search, ordering, status, createdFrom, createdTo };
+  const createdBefore = nextLocalDayToIso(filters.to) ?? undefined;
+  const params = { page, pageSize, search, ordering, status, createdFrom, createdBefore };
 
   const query = useQuery({
     queryKey: queryKeys.list(WEBSITE_QUERY_MODULE, CONTACT_SUBMISSIONS_RESOURCE, params),

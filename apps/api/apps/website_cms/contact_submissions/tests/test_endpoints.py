@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+from urllib.parse import quote
+
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
@@ -63,6 +66,13 @@ class ContactInboxTests(WebsiteAPITestCase):
         self.assertEqual(future.json()["data"], [])
         past = self.client.get(f"{LIST}?created_at__lte=2999-01-01T00:00:00Z")
         self.assertEqual(len(past.json()["data"]), 1)
+
+    def test_created_at_lt_excludes_its_own_instant(self) -> None:
+        row = self.make_contact()
+        stamp = quote(row.created_at.isoformat())
+        later = quote((row.created_at + timedelta(microseconds=1)).isoformat())
+        self.assertEqual(self.client.get(f"{LIST}?created_at__lt={stamp}").json()["data"], [])
+        self.assertEqual(len(self.client.get(f"{LIST}?created_at__lt={later}").json()["data"]), 1)
 
     def test_ip_never_serialised_to_staff_api(self) -> None:
         row = self.make_contact(ip="198.51.100.9")

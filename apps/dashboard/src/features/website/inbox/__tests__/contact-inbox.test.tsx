@@ -130,7 +130,7 @@ describe("contact inbox", () => {
       expect.objectContaining({
         status: "spam",
         createdFrom: new Date(2026, 10, 1).toISOString(),
-        createdTo: new Date(2026, 10, 30, 23, 59, 59, 999).toISOString(),
+        createdBefore: new Date(2026, 11, 1).toISOString(),
       }),
     );
   });
@@ -144,7 +144,7 @@ describe("contact inbox", () => {
         expect.objectContaining({
           status: "responded",
           createdFrom: new Date(2026, 9, 1).toISOString(),
-          createdTo: undefined,
+          createdBefore: undefined,
         }),
       );
     });
