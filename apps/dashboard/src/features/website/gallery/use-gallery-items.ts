@@ -38,7 +38,8 @@ export function moveId(ids: readonly string[], from: number, to: number): string
  * An album's items, in display order, and their reorder. A reorder shows at once and sends
  * every id in the new order (`PATCH …/gallery-items:reorder`, the server's own check that the
  * list is the album's whole set); the server's answer replaces the list, and a refusal puts
- * the previous order back and says why.
+ * the previous order back and says why. Either way the list is then read again (TanStack's
+ * optimistic-update pattern).
  */
 export function useGalleryItems(albumId: string) {
   const tGallery = useTranslations("website.gallery.items");
@@ -80,6 +81,8 @@ export function useGalleryItems(albumId: string) {
         ),
       );
     },
+    // Whatever happened, the list is read again: the server's order is the truth.
+    onSettled: () => queryClient.invalidateQueries({ queryKey }),
   });
 
   return {

@@ -24,8 +24,10 @@ export interface GalleryItemTileProps {
   count: number;
   /** `website.gallery-album.update`: reorder, edit and remove. */
   canUpdate: boolean;
-  /** Holds every move while a reorder is in flight. */
+  /** Holds every move while the list is being reordered, uploaded to or read again. */
   disabled: boolean;
+  /** Holds Edit and Remove while a reorder is in flight. */
+  actionsDisabled: boolean;
   onMove: (from: number, to: number) => void;
   onEdit: () => void;
   onRemove: () => void;
@@ -51,6 +53,7 @@ export function GalleryItemTile({
   count,
   canUpdate,
   disabled,
+  actionsDisabled,
   onMove,
   onEdit,
   onRemove,
@@ -139,6 +142,7 @@ export function GalleryItemTile({
               mode="icon"
               size="sm"
               aria-label={t("edit", { index: position })}
+              disabled={actionsDisabled}
               onClick={onEdit}
             >
               <Pencil aria-hidden="true" />
@@ -149,6 +153,7 @@ export function GalleryItemTile({
               mode="icon"
               size="sm"
               aria-label={t("remove", { index: position })}
+              disabled={actionsDisabled}
               onClick={onRemove}
             >
               <Trash2 aria-hidden="true" />

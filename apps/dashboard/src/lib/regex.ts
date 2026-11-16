@@ -26,6 +26,8 @@ export const Regex = {
   /** A news, event or album slug: one lowercase segment of letters and digits joined by single
    * hyphens (`website_cms/constants.py::CONTENT_SLUG_PATTERN`). */
   WEBSITE_CONTENT_SLUG: /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+  /** A combining mark (an accent after NFKD), dropped from a slug. Global: use with `replace`. */
+  COMBINING_MARKS: /\p{M}/gu,
   /** Every run of characters a slug cannot hold. Global: use with `replace`. */
   NON_SLUG_CHARACTERS: /[^a-z0-9]+/g,
   /** A hyphen at either end. Global: use with `replace`. */

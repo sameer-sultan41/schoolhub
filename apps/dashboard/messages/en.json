@@ -4637,7 +4637,7 @@
           "editTitle": "Edit item",
           "videoTitle": "Add a video",
           "embedUrl": "Video link",
-          "embedUrlHint": "A YouTube or Vimeo link starting with https://.",
+          "embedUrlHint": "Paste a video link, starting with https://.",
           "caption": "Caption",
           "altText": "Description for screen readers",
           "altTextHint": "Say what the photo shows, for visitors who can't see it.",
@@ -4820,7 +4820,7 @@
       "empty_album": "Add at least one photo or video before publishing this album.",
       "end_before_start": "The event can't end before it starts.",
       "invalid_url": "Use an https:// link of at most 500 characters.",
-      "embed_host_not_allowed": "Only YouTube and Vimeo videos can be embedded.",
+      "embed_host_not_allowed": "This video site isn't supported.",
       "embed_required": "Enter the video's link.",
       "file_required": "Choose an image.",
       "invalid_event": "That event no longer exists.",
@@ -4836,7 +4836,13 @@
       "onFile": "An image is on file.",
       "none": "No image.",
       "remove": "Remove image",
-      "uploadFailed": "The image couldn't be uploaded."
+      "uploadFailed": "The image couldn't be uploaded.",
+      "steps": {
+        "create": "The upload couldn't be started.",
+        "createRefused": "The image was refused: {reason}",
+        "put": "The image couldn't be sent to storage. Check the connection and try again.",
+        "confirm": "The image was sent but couldn't be confirmed. Please try again."
+      }
     },
     "richText": {
       "empty": "No content yet. Add a block to start.",

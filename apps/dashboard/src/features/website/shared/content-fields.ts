@@ -30,6 +30,7 @@ export interface ContentFieldMessages extends RichTextMessages {
 export function slugify(title: string): string {
   return title
     .normalize("NFKD")
+    .replace(Regex.COMBINING_MARKS, "")
     .toLowerCase()
     .replace(Regex.NON_SLUG_CHARACTERS, "-")
     .replace(Regex.EDGE_HYPHENS, "")

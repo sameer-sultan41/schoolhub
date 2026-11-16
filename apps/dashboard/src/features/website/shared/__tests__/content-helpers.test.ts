@@ -35,6 +35,8 @@ describe("slugify", () => {
   it.each([
     ["Sports Day: Results!", "sports-day-results"],
     ["  Café opening  ", "cafe-opening"],
+    ["résumé", "resume"],
+    ["Naïve Façade", "naive-facade"],
     ["!!! ???", ""],
     ["2026 -- Prize   day", "2026-prize-day"],
   ])("%s -> %s", (title, slug) => {

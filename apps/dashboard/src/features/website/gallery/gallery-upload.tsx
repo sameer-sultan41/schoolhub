@@ -7,6 +7,7 @@ import { Alert, AlertDescription, Button } from "@schoolhub/ui";
 import { Upload } from "lucide-react";
 
 import { CONTENT_REASON_SCOPE } from "@/features/website/shared/content-fields";
+import { useUploadErrorText } from "@/features/website/shared/use-upload-error-text";
 import { withReasonText } from "@/features/website/shared/reason-message";
 import { useInvalidateModule } from "@/hooks/use-invalidate-module";
 import { foldUnknownFieldErrors, NON_FIELD, resolveErrorMessage } from "@/lib/error-message";
@@ -28,8 +29,10 @@ interface Progress {
 /**
  * "Upload photos": several files picked at once, each uploaded (`website.media`) and added to
  * the album as a photo, one after another so they keep the order they were picked in. Each
- * failure is listed with its file's name and its own reason; the rest still land. Progress
- * reports to `onBusyChange`, which holds the album's reorder while items are being added.
+ * failure is listed with its file's name and its own reason; the rest still land, even if the
+ * page is left meanwhile (only this component's own state stops updating), and the album's
+ * items are read again at the end. Progress reports to `onBusyChange`, which holds the album's
+ * reorder while items are being added.
  */
 export function GalleryUpload({
   albumId,
@@ -43,6 +46,7 @@ export function GalleryUpload({
   const tCommon = useTranslations("common");
   const invalidateWebsite = useInvalidateModule(WEBSITE_QUERY_MODULE);
   const tReasons = useTranslations("website.reasons");
+  const uploadErrorText = useUploadErrorText();
   const inputRef = useRef<HTMLInputElement>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [failures, setFailures] = useState<string[]>([]);
@@ -65,8 +69,8 @@ export function GalleryUpload({
         NON_FIELD,
       );
     }
-    // `FileUploadError`'s message is already specific: the server's refusal or the failed step.
-    return error instanceof Error ? error.message : tCommon("submitFailed");
+    // The upload itself failed: said by the step that failed.
+    return uploadErrorText(error);
   }
 
   async function uploadAll(files: File[]) {
@@ -86,13 +90,15 @@ export function GalleryUpload({
       } catch (error) {
         failed.push(t("uploadFailed", { name: file.name, reason: reasonOf(error) }));
       }
-      if (!mountedRef.current) return;
-      setProgress({ done: index + 1, total: files.length });
+      // Leaving the page doesn't stop the batch: the files picked are still added.
+      if (mountedRef.current) setProgress({ done: index + 1, total: files.length });
     }
     invalidateWebsite();
-    setProgress(null);
-    setFailures(failed);
-    onBusyChange(false);
+    if (mountedRef.current) {
+      setProgress(null);
+      setFailures(failed);
+      onBusyChange(false);
+    }
     if (added > 0) toast.success(t("uploadDone", { count: added }));
   }
 

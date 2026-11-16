@@ -155,7 +155,7 @@ test.describe("the school admin", () => {
     const form = websiteContentPage.dialog("Add a video");
     await form.getByLabel("Video link").fill("https://www.dailymotion.com/video/x1");
     await form.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(form.getByText("Only YouTube and Vimeo videos can be embedded.")).toBeVisible();
+    await expect(form.getByText("This video site isn't supported.")).toBeVisible();
   });
 
   test("names why an empty album can't be published", async ({

@@ -9,10 +9,11 @@ import {
   galleryItem,
   violation,
 } from "@/features/website/shared/__tests__/content-fixtures";
-import { Services } from "@/services";
+import { Services, type GalleryItemRecord } from "@/services";
+import { FileUploadError } from "@/services/modules/files";
 import { mocked } from "@/test-fixtures/list-screen";
 import { USER_LOADED, UserLoaded } from "@/test-fixtures/user-loaded";
-import { buildUser, renderWithProviders, setUrl } from "@/test-utils";
+import { buildUser, renderWithClient, renderWithProviders, setUrl } from "@/test-utils";
 
 import { AlbumPage } from "../album-page";
 
@@ -106,18 +107,47 @@ describe("gallery items", () => {
     fetchItems.mockResolvedValue([first, second, third]);
   });
 
-  it("sends the album's whole order after a move, and shows it", async () => {
-    reorderItems.mockResolvedValue([{ ...second, position: 0 }, { ...first, position: 1 }, third]);
+  it("sends the album's whole order after a move, shows it, then reads the list again", async () => {
+    const reordered = [{ ...second, position: 0 }, { ...first, position: 1 }, third];
+    reorderItems.mockResolvedValue(reordered);
     const user = await renderAlbum();
+    // The read after the reorder answers what the server now holds.
+    fetchItems.mockResolvedValue(reordered);
 
     await user.click(screen.getByRole("button", { name: "Move item 1 later" }));
 
     expect(reorderItems).toHaveBeenCalledWith(ALBUM_ID, [second.id, first.id, third.id]);
     await waitFor(() => {
+      expect(fetchItems).toHaveBeenCalledTimes(2);
+    });
+    await waitFor(() => {
       expect(shownOrder()).toEqual(["Judging", "Opening", "Prize giving"]);
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Move item 1 later" })).toBeEnabled();
     });
     expect(screen.getByRole("button", { name: "Move item 1 earlier" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Move item 3 later" })).toBeDisabled();
+  });
+
+  it("holds every move, Edit and Remove while a reorder is in flight", async () => {
+    let settle: (items: GalleryItemRecord[]) => void = () => undefined;
+    reorderItems.mockReturnValue(
+      new Promise<GalleryItemRecord[]>((resolve) => {
+        settle = resolve;
+      }),
+    );
+    const user = await renderAlbum();
+
+    await user.click(screen.getByRole("button", { name: "Move item 2 later" }));
+
+    expect(screen.getByRole("button", { name: "Move item 1 later" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Edit item 1" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Remove item 3" })).toBeDisabled();
+    settle([first, third, second]);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Edit item 1" })).toBeEnabled();
+    });
   });
 
   it("puts the order back and says why when the server refuses it", async () => {
@@ -150,9 +180,7 @@ describe("gallery items", () => {
     );
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
 
-    expect(
-      await within(dialog).findByText("Only YouTube and Vimeo videos can be embedded."),
-    ).toBeVisible();
+    expect(await within(dialog).findByText("This video site isn't supported.")).toBeVisible();
     expect(within(dialog).getByLabelText("Video link")).toHaveAttribute("aria-invalid", "true");
     expect(createItem).toHaveBeenCalledWith(ALBUM_ID, {
       media_type: "video_embed",
@@ -204,7 +232,9 @@ describe("gallery items", () => {
   });
 
   it("adds several photos in the order picked, listing a failure by its file", async () => {
-    uploadFile.mockResolvedValueOnce("file-a").mockRejectedValueOnce(new Error("Too large."));
+    uploadFile
+      .mockResolvedValueOnce("file-a")
+      .mockRejectedValueOnce(new FileUploadError("put", "The file could not be uploaded."));
     createItem.mockResolvedValue(first);
     const user = await renderAlbum();
 
@@ -214,10 +244,48 @@ describe("gallery items", () => {
       new File(["b"], "b.png", { type: "image/png" }),
     ]);
 
-    expect(await screen.findByText("b.png: Too large.")).toBeVisible();
+    expect(
+      await screen.findByText(
+        "b.png: The image couldn't be sent to storage. Check the connection and try again.",
+      ),
+    ).toBeVisible();
     expect(createItem).toHaveBeenCalledTimes(1);
     expect(createItem).toHaveBeenCalledWith(ALBUM_ID, { media_type: "image", file_id: "file-a" });
     expect(uploadFile).toHaveBeenNthCalledWith(1, expect.any(File), "website.media");
+  });
+
+  it("adds every picked photo even if the page is left mid-batch, then reads the items again", async () => {
+    let finishFirst: (id: string) => void = () => undefined;
+    uploadFile
+      .mockReturnValueOnce(
+        new Promise<string>((resolve) => {
+          finishFirst = resolve;
+        }),
+      )
+      .mockResolvedValueOnce("file-b");
+    createItem.mockResolvedValue(first);
+    const { queryClient, unmount } = renderWithClient(<AlbumPage albumId={ALBUM_ID} />);
+    const invalidate = jest.spyOn(queryClient, "invalidateQueries");
+    const user = userEvent.setup();
+
+    const input = await screen.findByLabelText("Upload photos", { selector: "input" });
+    await user.upload(input, [
+      new File(["a"], "a.png", { type: "image/png" }),
+      new File(["b"], "b.png", { type: "image/png" }),
+    ]);
+    unmount();
+    finishFirst("file-a");
+
+    await waitFor(() => {
+      expect(createItem).toHaveBeenCalledTimes(2);
+    });
+    expect(createItem).toHaveBeenLastCalledWith(ALBUM_ID, {
+      media_type: "image",
+      file_id: "file-b",
+    });
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: ["website"] });
+    });
   });
 
   it("names the server's reason when an empty album can't be published", async () => {

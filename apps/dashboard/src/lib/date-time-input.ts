@@ -2,6 +2,10 @@
  * Between the API's timestamps (ISO 8601, UTC) and the browser's `datetime-local` and `date`
  * inputs, which hold the viewer's own local time with no zone. Shared by every form with a
  * date-time input (exam marks-entry windows, website events).
+ *
+ * The local time is the browser's own zone, not the school's: the dashboard does not know the
+ * tenant's time zone yet. A value entered from another zone is stored shifted by the difference,
+ * and an all-day event entered there can land on the adjacent day (`docs/deferred-work.md`).
  */
 
 /** The browser's `datetime-local` value is `YYYY-MM-DDTHH:mm`: its first 16 characters. */

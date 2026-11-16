@@ -55,7 +55,8 @@ export function GalleryItems({ albumId, canUpdate }: { albumId: string; canUpdat
   );
   const ids = items.map((item) => item.id);
   const positionOf = (id: string | number) => ids.indexOf(String(id)) + 1;
-  const moveHeld = isReordering || isUploading;
+  // A move is computed from the list on screen, so it waits until that list is settled.
+  const moveHeld = isReordering || isUploading || query.isFetching;
 
   const announcements: Announcements = {
     onDragStart: ({ active }) => t("dragStart", { index: positionOf(active.id) }),
@@ -151,6 +152,7 @@ export function GalleryItems({ albumId, canUpdate }: { albumId: string; canUpdat
                   count={items.length}
                   canUpdate={canUpdate}
                   disabled={moveHeld}
+                  actionsDisabled={isReordering}
                   onMove={move}
                   onEdit={() => {
                     setTarget({ action: "edit", item, index });
