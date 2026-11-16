@@ -23,6 +23,8 @@ class AdvisoryLockNamespace(IntEnum):
 
     # Every exam sitting write and `:publish-schedule` in one school (examinations).
     EXAM_SCHEDULE = 1
+    # Every custom-domain write in one school: the limit, the primary flag, activation (website).
+    CUSTOM_DOMAINS = 2
 
 
 def advisory_lock_key(key: uuid.UUID) -> int:

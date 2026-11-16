@@ -11,8 +11,12 @@ from unittest import mock
 from django.test import TestCase, override_settings
 
 from apps.website_cms import tasks
-from apps.website_cms.revalidation import host_tag, queue_revalidation
-from apps.website_cms.tests.factories import TenantFactory
+from apps.website_cms.features import FEATURE
+from apps.website_cms.models import CustomDomainStatus
+from apps.website_cms.revalidation import host_tags, queue_revalidation
+from apps.website_cms.tests.factories import TenantFactory, enable_feature, make_custom_domain
+from core.tenancy.context import tenant_context
+from core.tenancy.models import FeatureFlag, TenantFeatureOverride
 
 URL = "http://website:3001/api/revalidate"
 SECRET = "test-signing-key"
@@ -29,9 +33,64 @@ class QueueRevalidationTests(TestCase):
         task.delay.assert_called_once_with(str(tenant.id), ["a", "b"])
 
     @override_settings(PLATFORM_DOMAIN="schools.test")
-    def test_host_tag_names_the_platform_subdomain(self) -> None:
+    def test_host_tags_name_the_platform_subdomain(self) -> None:
         tenant = TenantFactory(slug="greenfield")
-        self.assertEqual(host_tag(tenant), "tenant-host:greenfield.schools.test")
+        self.assertEqual(host_tags(tenant), ["tenant-host:greenfield.schools.test"])
+
+    @override_settings(PLATFORM_DOMAIN="schools.test")
+    def test_host_tags_cover_every_active_custom_domain(self) -> None:
+        tenant = TenantFactory(slug="greenfield")
+        make_custom_domain(tenant, "www.greenfield.org", CustomDomainStatus.ACTIVE)
+        make_custom_domain(tenant, "old.greenfield.org", CustomDomainStatus.DISABLED)
+        self.assertEqual(
+            host_tags(tenant),
+            ["tenant-host:greenfield.schools.test", "tenant-host:www.greenfield.org"],
+        )
+
+
+@override_settings(PLATFORM_DOMAIN="schools.test")
+class ModuleFlagRevalidationTests(TestCase):
+    """Decision 8: switching `module.website` drops the tenant's cache on every host."""
+
+    def setUp(self) -> None:
+        self.tenant = TenantFactory(slug="greenfield")
+        make_custom_domain(self.tenant, "www.greenfield.org", CustomDomainStatus.ACTIVE)
+        self.expected = [
+            str(self.tenant.id),
+            ["tenant-host:greenfield.schools.test", "tenant-host:www.greenfield.org"],
+        ]
+
+    def test_enabling_the_module_queues_every_host_tag(self) -> None:
+        with (
+            mock.patch("apps.website_cms.revalidation.revalidate_website") as task,
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            enable_feature(self.tenant, FEATURE)
+        task.delay.assert_called_once_with(*self.expected)
+
+    def test_disabling_and_removing_the_override_queue_too(self) -> None:
+        enable_feature(self.tenant, FEATURE)
+        with tenant_context(self.tenant.id):
+            override = TenantFeatureOverride.objects.get(feature_flag__key=FEATURE)
+            for name, change in (("disable", override.save), ("remove", override.delete)):
+                with (
+                    self.subTest(change=name),
+                    mock.patch("apps.website_cms.revalidation.revalidate_website") as task,
+                    self.captureOnCommitCallbacks(execute=True),
+                ):
+                    override.enabled = False
+                    change()
+                task.delay.assert_called_once_with(*self.expected)
+
+    def test_another_modules_flag_queues_nothing(self) -> None:
+        other = FeatureFlag.objects.exclude(key=FEATURE).first()
+        assert other is not None
+        with (
+            mock.patch("apps.website_cms.revalidation.revalidate_website") as task,
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            enable_feature(self.tenant, other.key)
+        task.delay.assert_not_called()
 
 
 @override_settings(WEBSITE_REVALIDATE_URL=URL, WEBSITE_REVALIDATE_SECRET=SECRET)

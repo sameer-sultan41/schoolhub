@@ -17,6 +17,9 @@ PAYMENT_PROVIDERS_ENABLED = ["fake"]
 # The live E2E lane signs a callback for a checkout it started; the fake provider has
 # to "know" that payment for the callback's re-fetch to confirm it.
 PAYMENT_FAKE_SETTLES_ON_INITIATE = True
+# Custom domains verify without real DNS in dev: any `*.test` domain passes, so the live E2E
+# lane can activate one from outside the API process (L64).
+WEBSITE_DNS_VERIFIER = env("WEBSITE_DNS_VERIFIER", default="") or "fake"
 ALLOWED_HOSTS = ["*"]
 
 INSTALLED_APPS += ["drf_spectacular_sidecar"]
@@ -32,6 +35,8 @@ SPECTACULAR_SETTINGS |= {
 # emailed account links and payment return URLs.
 DASHBOARD_URL_SCHEME = "http"
 DASHBOARD_URL_PORT = "3000"
+# The website's dev server (`next dev --port 3001`), for preview links.
+WEBSITE_URL_PORT = "3001"
 # The compose API (`api.localhost:8000`, as NEXT_PUBLIC_API_BASE_URL in infra/compose).
 API_PUBLIC_URL = env("API_PUBLIC_URL", default="http://api.localhost:8000")
 

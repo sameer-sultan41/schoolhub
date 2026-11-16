@@ -7,8 +7,13 @@ Every rate is read from `REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]` by scope.
 """
 
 import hashlib
+import re
 
 from rest_framework.throttling import SimpleRateThrottle
+
+from core.api.client_ip import client_ip
+
+_SLUG_RE = re.compile(r"[a-z0-9_-]{1,63}")
 
 
 class TenantRateThrottle(SimpleRateThrottle):
@@ -50,12 +55,33 @@ class AuthEndpointThrottle(SimpleRateThrottle):
 
 
 class PublicFormThrottle(SimpleRateThrottle):
-    """For unauthenticated public endpoints (contact, admission enquiry)."""
+    """For unauthenticated public endpoints (contact, admission enquiry).
+
+    Keyed on `client_ip`, not DRF's `get_ident`: with `NUM_PROXIES` unset `get_ident` keys on
+    the whole `X-Forwarded-For` value, so rotating that header would reset the bucket.
+    """
 
     scope = "public_form"
 
     def get_cache_key(self, request, view):
-        return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
+        return self.cache_format % {"scope": self.scope, "ident": client_ip(request) or "unknown"}
+
+
+class PublicFormTenantThrottle(SimpleRateThrottle):
+    """The public contact form, per school (the `X-Tenant-Slug` it names).
+
+    Not a `throttle_classes` entry: DRF would count every request, including ones the IP
+    bucket refused and 404s and 422s, letting one address burn a school's budget. The view
+    calls `allow_request` itself, once the request is valid and would store a message.
+    """
+
+    scope = "public_form_tenant"
+
+    def get_cache_key(self, request, view):
+        slug = request.headers.get("X-Tenant-Slug", "").strip().lower()
+        # Only a slug-shaped value is a key part; anything else shares one sentinel bucket.
+        ident = slug if _SLUG_RE.fullmatch(slug) else "invalid"
+        return self.cache_format % {"scope": self.scope, "ident": ident}
 
 
 class AIRequestThrottle(UserRateThrottle):
@@ -67,6 +93,21 @@ class AIRequestThrottle(UserRateThrottle):
     """
 
     scope = "ai"
+
+
+class PublicFileThrottle(SimpleRateThrottle):
+    """The anonymous public file redirect, per (client IP, file).
+
+    Not per IP alone: an image optimiser fetches many distinct files from one address, which
+    one bucket would starve. Per file, a hot-linker hammering one image is still slowed.
+    """
+
+    scope = "public_file"
+
+    def get_cache_key(self, request, view):
+        kwargs = getattr(view, "kwargs", None) or {}
+        ident = f"{client_ip(request) or 'unknown'}:{kwargs.get('file_id', '')}"
+        return self.cache_format % {"scope": self.scope, "ident": ident}
 
 
 class PaymentCallbackThrottle(SimpleRateThrottle):

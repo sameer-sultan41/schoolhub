@@ -15,7 +15,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from apps.website_cms.models import Theme, WebsiteSettings
 from apps.website_cms.permissions import PAGE_VIEW_KEY
-from apps.website_cms.revalidation import host_tag, queue_revalidation
+from apps.website_cms.revalidation import host_tags, queue_revalidation
 from apps.website_cms.settings import services
 from apps.website_cms.settings.serializers import ThemeSerializer, WebsiteSettingsSerializer
 from apps.website_cms.views import FEATURE, STAFF_PERMISSIONS
@@ -54,7 +54,7 @@ class WebsiteSettingsView(TenantScopedViewSetMixin, APIView):
         after = WebsiteSettingsSerializer(row).data
         if changed:
             record_audit(request, "update", row, before=before, after=after)
-            extra = [host_tag(request.tenant)] if changed & services.HOST_TAG_FIELDS else []
+            extra = host_tags(request.tenant) if changed & services.HOST_TAG_FIELDS else []
             queue_revalidation(request.tenant.pk, extra)
         return ActionResponse.ok(after, message="Website settings updated.")
 

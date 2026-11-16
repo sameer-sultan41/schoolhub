@@ -3,7 +3,7 @@
 > **Agent Context** — Load this block first.
 > **Summary:** The platform (SaaS-operator) scope above all tenants: tenant lifecycle (provisioning → trial → active → suspension → deletion), plans/subscriptions and billing of schools, feature flags, usage tracking and quotas, the school onboarding wizard, legacy-data migration/import, platform-level aggregate reporting, and audited impersonation. Used only by platform roles — never by tenant users. Implements scope §10 and the platform items of §22.
 > **Co-load with:** `../02-architecture/multi-tenancy.md` · `../02-architecture/auth-and-rbac.md` · `../05-database/entities/tenancy.md`
-> **Owns entities:** `tenants`, `tenant_settings`, `plans`, `subscriptions`, `feature_flags`, `tenant_feature_overrides`, `custom_domains`
+> **Owns entities:** `tenants`, `tenant_settings`, `plans`, `subscriptions`, `feature_flags`, `tenant_feature_overrides` (`custom_domains` moved to website-cms; see §15)
 > **Depends on modules:** all tenant modules (flag/quota enforcement targets), reporting-analytics (boundary), website-cms (domain/suspension effects)
 
 ## 1. Purpose
@@ -67,6 +67,7 @@ Tenant users can never hold `platform.*` keys; the seed matrix forbids it struct
 - **Flags:** override expiry dates; flag audit trail; percentage rollouts for gradual feature releases *(recommendation)*.
 - **Quotas:** per-quota grace thresholds (AI tokens warn at 80%, ai-governance.md §5); AI token budgets enforced at the AI gateway; storage measured nightly.
 - **Migration:** reusable mapping templates per source system; AI-assisted column mapping (`AI-PLA-01`); imports run as background jobs with per-row error files.
+- **Custom domains:** not a platform-admin sub-feature. Binding, verification, TLS status and the domain lifecycle belong to [website-cms](website-cms.md) (§15 says why); this module keeps only the plan-gating of custom domains, which waits on the plan resolver.
 
 ## 7. Workflows
 
@@ -165,7 +166,8 @@ Cross-referenced to [`ai-features.md`](../04-ai/ai-features.md). Platform AI fea
 Full column specs in [`../05-database/entities/tenancy.md`](../05-database/entities/tenancy.md).
 
 - **Platform-scope (no `tenant_id`):** `tenants`, `plans`, `feature_flags`.
-- **Tenant-scoped:** `tenant_settings` (1:1 with tenant), `subscriptions`, `tenant_feature_overrides`, `custom_domains` (bound via website-cms UI, owned here for lifecycle/TLS).
+- **Tenant-scoped:** `tenant_settings` (1:1 with tenant), `subscriptions`, `tenant_feature_overrides`.
+- **Moved to website-cms:** `custom_domains` and the platform-scope `custom_domain_routes`, with their lifecycle and TLS status. The `website.custom-domain.*` keys and the public website are their only users, and adding them to the tenancy app would collide with this module's own in-flight `core.tenancy` migrations (website-cms plan, decision 7). The columns stay documented in [`tenancy.md`](../05-database/entities/tenancy.md).
 - **Shared platform primitives referenced, not owned by this module:** `users`, `roles`, `permissions`, `role_permissions`, `user_roles`, `audit_logs`, `files`, `webhooks`, `webhook_deliveries`, `background_jobs` (defined in the same entity file; owned by the auth/platform core).
 
 ## 16. API Requirements
@@ -192,7 +194,7 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 | Module | Direction | What is shared |
 | ------ | --------- | -------------- |
 | all tenant modules | outbound | Feature-flag and quota enforcement; module enablement per plan |
-| website-cms | outbound | Suspension notice on public sites; custom-domain lifecycle |
+| website-cms | outbound | Suspension notice on public sites; plan-gating of custom domains (the domain lifecycle itself is website-cms's, §15) |
 | reporting-analytics | boundary | Tenant reporting stays tenant-side; platform aggregates stay here |
 | fees-finance | none (namesake only) | School-side fee billing is unrelated to platform subscription billing |
 | student-management / staff-management / examinations / fees-finance | outbound | Import pipelines write into these modules' entities under their validations |
