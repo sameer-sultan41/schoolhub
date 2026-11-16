@@ -126,6 +126,14 @@ export const STUDENT_IMPORT_OPTIONAL_COLUMNS = [
  * someone else's import. */
 export const STUDENT_IMPORT_JOB_STORAGE_PREFIX = "schoolhub:students-import-job:";
 
+/** The key the bulk import needs (`students.student.import`, `student_management/permissions.py`). */
+export const STUDENT_IMPORT_PERMISSION = "students.student.import";
+
+/** `/students?import=1` opens the import dialog (the onboarding wizard's students step links
+ * there); the toolbar removes the key once it has read it. */
+export const STUDENT_IMPORT_URL_PARAM = "import";
+export const STUDENT_IMPORT_URL_VALUE = "1";
+
 /** Download-name hints for the export CSV and the batch ID-card PDF (see `downloadFile`). */
 export const STUDENT_EXPORT_FILENAME = "students-export.csv";
 export const ID_CARDS_FILENAME = "id-cards.pdf";

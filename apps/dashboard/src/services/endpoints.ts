@@ -32,6 +32,10 @@ export const endpoints = {
   schoolSettings: {
     detail: "/school-settings",
   },
+  /** The school's setup checklist: a singleton (`GET`/`PATCH`). */
+  onboarding: {
+    detail: "/onboarding",
+  },
   dashboard: {
     students: "/students",
     staff: "/staff",

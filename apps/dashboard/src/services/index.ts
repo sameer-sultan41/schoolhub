@@ -14,6 +14,7 @@ import { LedgerEntriesService } from "./modules/ledger-entries";
 import { NoticesService } from "./modules/notices";
 import { NotificationPreferencesService } from "./modules/notification-preferences";
 import { NotificationsService } from "./modules/notifications";
+import { OnboardingService } from "./modules/onboarding";
 import { ParentPortalService } from "./modules/parent-portal";
 import { PaymentsService } from "./modules/payments";
 import { ReceiptsService } from "./modules/receipts";
@@ -87,6 +88,7 @@ export const Services = {
   jobs: JobsService,
   schoolOrganization: SchoolOrganizationService,
   schoolSettings: SchoolSettingsService,
+  onboarding: OnboardingService,
   curriculum: CurriculumService,
   teacherAllocations: TeacherAllocationsService,
   promotions: PromotionsService,

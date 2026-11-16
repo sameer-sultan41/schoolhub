@@ -18,6 +18,7 @@ import {
   STUDENT_EXPORT_FILENAME,
   STUDENT_IMPORT_JOB_STORAGE_PREFIX,
   STUDENT_IMPORT_OPTIONAL_COLUMNS,
+  STUDENT_IMPORT_PERMISSION,
   STUDENT_IMPORT_REQUIRED_COLUMNS,
   STUDENT_WITHDRAWABLE_STATUS,
 } from "@/services/modules/students/students-constant";
@@ -108,7 +109,7 @@ export function StudentToolbar() {
   const { data: currentUser, isError: isCurrentUserError } = useCurrentUser();
   const canCreate = hasPermission(currentUser, "students.student.create");
   const canExport = hasPermission(currentUser, "students.student.export");
-  const canImport = hasPermission(currentUser, "students.student.import");
+  const canImport = hasPermission(currentUser, STUDENT_IMPORT_PERMISSION);
   // Fail closed, as the sidebar's own module gate does: the button stays disabled until
   // the user's permissions are actually known (the API enforces regardless), and the
   // `title` says why rather than leaving a dead button unexplained.
