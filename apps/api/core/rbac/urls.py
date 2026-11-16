@@ -13,6 +13,10 @@ from core.rbac.views import (
     LoginView,
     LogoutView,
     MeView,
+    MfaConfirmView,
+    MfaDisableView,
+    MfaEnrollView,
+    MfaVerifyView,
     RefreshView,
 )
 
@@ -24,6 +28,11 @@ urlpatterns = [
     path("auth/logout", LogoutView.as_view(), name="logout"),
     path("auth/me", MeView.as_view(), name="me"),
     path("auth/change-password", ChangePasswordView.as_view(), name="change-password"),
+    # TOTP MFA (core/rbac/mfa.py): :verify completes a challenged login; the rest are enrolment.
+    path("auth/mfa:verify", MfaVerifyView.as_view(), name="mfa-verify"),
+    path("auth/mfa:enroll", MfaEnrollView.as_view(), name="mfa-enroll"),
+    path("auth/mfa:confirm", MfaConfirmView.as_view(), name="mfa-confirm"),
+    path("auth/mfa:disable", MfaDisableView.as_view(), name="mfa-disable"),
     # Reached from an emailed link, unauthenticated; the body names the school (ADR-0033).
     path("auth/invitations:preview", InvitationPreviewView.as_view(), name="invitation-preview"),
     path("auth/invitations:accept", InvitationAcceptView.as_view(), name="invitation-accept"),

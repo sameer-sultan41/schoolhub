@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from django.contrib.auth import authenticate
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.tokens import RefreshToken
 
+from core.rbac import mfa
 from core.rbac.backends import AmbiguousPrincipal
 from core.rbac.models import User
-from core.rbac.permissions import effective_permission_keys, is_restricted_principal
+from core.rbac.permissions import (
+    FIRST_FACTOR_AMR,
+    effective_permission_keys,
+    is_restricted_principal,
+)
 from core.tenancy.access import operational_tenant
 from core.tenancy.models import Tenant
 
@@ -67,7 +75,11 @@ class LoginSerializer(TokenObtainPairSerializer):
             if refusal is not None:
                 self.fail("inactive")
 
-        refresh = self.get_token(user)
+        if user.mfa_enabled:
+            # The `second_factor` step (auth-and-rbac §1): no token until /auth/mfa:verify.
+            return {"mfa_required": True, "mfa_token": mfa.issue_challenge(user)}
+
+        refresh = issue_token_pair(user, amr=[FIRST_FACTOR_AMR])
         return {
             "access": str(refresh.access_token),
             "refresh": str(refresh),
@@ -81,6 +93,19 @@ class LoginSerializer(TokenObtainPairSerializer):
         token["tenant_id"] = str(user.tenant_id) if user.tenant_id else None
         token["is_platform"] = user.is_platform
         return token
+
+
+def issue_token_pair(user: User, *, amr: Sequence[str]) -> RefreshToken:
+    """The refresh token of a new sign-in; ``.access_token`` derives the access token.
+
+    ``amr`` (RFC 8176) names the factors the user passed: ``["pwd"]`` after the password,
+    ``["pwd", "otp"]`` after the second factor. SimpleJWT copies every claim of the refresh
+    token into each access token it derives, on refresh and rotation too, so the claim lasts
+    the whole session. The platform console requires ``"otp"`` (``IsPlatformPrincipal``).
+    """
+    refresh = LoginSerializer.get_token(user)
+    refresh["amr"] = list(amr)
+    return refresh
 
 
 class TenantSummarySerializer(serializers.ModelSerializer):
@@ -144,6 +169,53 @@ class RefreshResponseSerializer(serializers.Serializer):
 
     access_token = serializers.CharField()
     expires_in = serializers.IntegerField()
+
+
+class SignedInResponseSerializer(RefreshResponseSerializer):
+    """A completed sign-in (login without MFA, or ``/auth/mfa:verify``); schema only."""
+
+    user = UserSerializer()
+
+
+class MfaChallengeResponseSerializer(serializers.Serializer):
+    """Login's answer for a user with MFA on: no token yet, a challenge to verify; schema only."""
+
+    mfa_required = serializers.BooleanField()
+    mfa_token = serializers.CharField(
+        help_text="Signed and short-lived; send it to /auth/mfa:verify with a code."
+    )
+
+
+# A six-digit TOTP code (RFC 6238 with pyotp's defaults).
+_TOTP_CODE = r"^\d{6}$"
+
+
+class MfaVerifySerializer(serializers.Serializer):
+    mfa_token = serializers.CharField()
+    code = serializers.RegexField(_TOTP_CODE, required=False)
+    recovery_code = serializers.CharField(required=False, max_length=64)
+
+    def validate(self, attrs: dict) -> dict:
+        if ("code" in attrs) == ("recovery_code" in attrs):
+            raise serializers.ValidationError("Send either code or recovery_code.")
+        return attrs
+
+
+class MfaEnrollResponseSerializer(serializers.Serializer):
+    """Schema only: the new secret, shown once, and the URI an authenticator app scans."""
+
+    secret = serializers.CharField()
+    otpauth_uri = serializers.CharField()
+
+
+class MfaConfirmSerializer(serializers.Serializer):
+    code = serializers.RegexField(_TOTP_CODE)
+
+
+class MfaConfirmResponseSerializer(SignedInResponseSerializer):
+    """Schema only: MFA is on; the recovery codes are shown this once."""
+
+    recovery_codes = serializers.ListField(child=serializers.CharField())
 
 
 class ChangePasswordSerializer(serializers.Serializer):

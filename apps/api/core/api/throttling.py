@@ -39,8 +39,9 @@ class UserRateThrottle(SimpleRateThrottle):
 class AuthEndpointThrottle(SimpleRateThrottle):
     """Strict bucket for credential endpoints (login, refresh, password reset).
 
-    Keyed on IP so credential stuffing across many accounts is caught; per-account
-    lockout is handled separately in the auth service.
+    Keyed on IP so credential stuffing across many accounts is caught. The only per-account
+    limit is on the second factor (``core.rbac.mfa``: ``MFA_MAX_FAILED_ATTEMPTS`` consecutive
+    wrong codes lock it); password attempts have no per-account lockout yet.
     """
 
     scope = "auth"
