@@ -44,3 +44,13 @@ export function withReasonText(
     meta: error.meta,
   });
 }
+
+/** Where a reasoned refusal names its reason (`website_cms/errors.py`: `meta={"reason": …}`). */
+const REASON_META_KEY = "reason";
+
+/** A refusal's `meta.reason`, or `null` when it carries none (or isn't an `ApiError`). */
+export function refusalReason(error: unknown): string | null {
+  if (!(error instanceof ApiError)) return null;
+  const reason = error.meta[REASON_META_KEY];
+  return typeof reason === "string" ? reason : null;
+}

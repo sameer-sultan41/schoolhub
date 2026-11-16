@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+from urllib.parse import quote
+
 from django.db import IntegrityError, transaction
+from django.test import TestCase
 from django.utils import timezone
+from drf_spectacular.generators import SchemaGenerator
 
 from apps.school_organization.tests.factories import grant_default_role
 from apps.website_cms.constants import (
@@ -29,6 +34,14 @@ def detail(row) -> str:
     return f"{LIST}/{row.id}"
 
 
+class ContactSubmissionContractTests(TestCase):
+    def test_schema_marks_the_page_and_handler_ids_nullable(self) -> None:
+        schema = SchemaGenerator().get_schema(request=None, public=True)
+        fields = schema["components"]["schemas"]["ContactSubmission"]["properties"]
+        for name in ("source_page_id", "handled_by_id"):
+            self.assertIs(fields[name].get("nullable"), True, name)
+
+
 class ContactInboxTests(WebsiteAPITestCase):
     def setUp(self) -> None:
         super().setUp()
@@ -38,6 +51,12 @@ class ContactInboxTests(WebsiteAPITestCase):
         row = self.make_contact()
         self.assertEqual(self.client.get(LIST).status_code, 200)
         self.assertEqual(self.client.get(detail(row)).status_code, 200)
+
+    def test_a_new_row_without_a_page_reads_null_ids(self) -> None:
+        row = self.make_contact()
+        data = self.client.get(detail(row)).json()["data"]
+        self.assertIsNone(data["handled_by_id"])
+        self.assertIsNone(data["source_page_id"])
 
     def test_list_without_the_key_is_403(self) -> None:
         self.sign_in_reader()
@@ -57,6 +76,13 @@ class ContactInboxTests(WebsiteAPITestCase):
         self.assertEqual(future.json()["data"], [])
         past = self.client.get(f"{LIST}?created_at__lte=2999-01-01T00:00:00Z")
         self.assertEqual(len(past.json()["data"]), 1)
+
+    def test_created_at_lt_excludes_its_own_instant(self) -> None:
+        row = self.make_contact()
+        stamp = quote(row.created_at.isoformat())
+        later = quote((row.created_at + timedelta(microseconds=1)).isoformat())
+        self.assertEqual(self.client.get(f"{LIST}?created_at__lt={stamp}").json()["data"], [])
+        self.assertEqual(len(self.client.get(f"{LIST}?created_at__lt={later}").json()["data"]), 1)
 
     def test_ip_never_serialised_to_staff_api(self) -> None:
         row = self.make_contact(ip="198.51.100.9")

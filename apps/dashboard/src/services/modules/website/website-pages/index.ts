@@ -3,6 +3,7 @@ import {
   createWebsitePage,
   deleteWebsitePage,
   fetchWebsitePage,
+  fetchPublishedWebsitePages,
   fetchWebsitePagePage,
   previewWebsitePage,
   publishWebsitePage,
@@ -13,6 +14,7 @@ import {
 
 export const WebsitePagesService = {
   fetchWebsitePagePage,
+  fetchPublishedWebsitePages,
   fetchWebsitePage,
   createWebsitePage,
   updateWebsitePage,

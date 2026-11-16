@@ -1,5 +1,5 @@
 import type * as ApiClientModule from "@schoolhub/api-client";
-import type { ApiClientConfig } from "@schoolhub/api-client";
+import { MAX_PAGE_SIZE, type ApiClientConfig } from "@schoolhub/api-client";
 
 const mockGet = jest.fn();
 const mockPost = jest.fn();
@@ -49,6 +49,42 @@ describe("website-pages-service", () => {
       }),
     );
     expect(page.pagination).toEqual(PAGE_META.pagination);
+  });
+
+  it("reads every published page, by title then slug, through to the last page", async () => {
+    const { fetchPublishedWebsitePages } = await import("../website-pages-service");
+    const meta = (page: number) => ({
+      pagination: { page, page_size: MAX_PAGE_SIZE, total_count: 101, total_pages: 2 },
+    });
+    mockGet
+      .mockResolvedValueOnce({ data: [{ id: "p1" }], meta: meta(1) })
+      .mockResolvedValueOnce({ data: [{ id: "p101" }], meta: meta(2) });
+
+    const pages = await fetchPublishedWebsitePages();
+
+    expect(mockGet.mock.calls.map((call: unknown[]) => call[1])).toEqual([
+      expect.objectContaining({
+        query: { page: 1, page_size: MAX_PAGE_SIZE, ordering: "title,slug", status: "published" },
+      }),
+      expect.objectContaining({
+        query: { page: 2, page_size: MAX_PAGE_SIZE, ordering: "title,slug", status: "published" },
+      }),
+    ]);
+    // The page past the first is in the list, so a menu link to it never reads as unpublished.
+    expect(pages).toEqual([{ id: "p1" }, { id: "p101" }]);
+  });
+
+  it("stops reading published pages at the declared bound", async () => {
+    const { fetchPublishedWebsitePages } = await import("../website-pages-service");
+    const { PUBLISHED_PAGES_MAX_PAGES } = await import("../website-pages-constant");
+    mockGet.mockResolvedValue({
+      data: [{ id: "p" }],
+      meta: { pagination: { page: 1, page_size: 1, total_count: 999, total_pages: 999 } },
+    });
+
+    await fetchPublishedWebsitePages();
+
+    expect(mockGet).toHaveBeenCalledTimes(PUBLISHED_PAGES_MAX_PAGES);
   });
 
   it("creates, reads, updates and deletes a page", async () => {

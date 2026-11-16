@@ -14,6 +14,7 @@ import { CONTENT_REASON_SCOPE } from "@/features/website/shared/content-fields";
 import { DeleteContentDialog } from "@/features/website/shared/delete-content-dialog";
 import { canEditContent } from "@/features/website/shared/content-permissions";
 import { PublishActions } from "@/features/website/shared/publish-actions";
+import { SeoButton } from "@/features/website/seo/seo-button";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { hasPermission } from "@/lib/permissions";
 import { Services, type GalleryAlbumRecord } from "@/services";
@@ -22,7 +23,7 @@ import { AlbumFormDialog } from "./album-form-dialog";
 /**
  * An album's title, status and actions: Edit album, Publish or Unpublish (albums have no
  * archive; the server refuses to publish an empty one, `empty_album`, and that reason shows),
- * and Delete, offered once the album is not published. Each follows its own key.
+ * SEO, and Delete, offered once the album is not published. Each follows its own key.
  */
 export function AlbumHeader({ album }: { album: GalleryAlbumRecord }) {
   const t = useTranslations("website.gallery");
@@ -64,6 +65,10 @@ export function AlbumHeader({ album }: { album: GalleryAlbumRecord }) {
             canPublish={canPublish}
             publish={() => Services.galleryAlbums.publishGalleryAlbum(album.id)}
             unpublish={() => Services.galleryAlbums.unpublishGalleryAlbum(album.id)}
+          />
+          <SeoButton
+            target={{ targetType: "gallery_album", targetId: album.id }}
+            title={album.title}
           />
           {canDelete && album.status !== "published" && (
             <Button

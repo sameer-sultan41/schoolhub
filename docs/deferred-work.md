@@ -18,7 +18,19 @@ either this file or `project-status.md`.
   - **Multi-locale content.** The `locale` column and its (tenant, slug, locale) uniqueness ship; v1 is single-locale. The client has not decided between full translation and a single-locale site (module doc §19).
   - **Outbound `website.*` webhooks** (`website.page.published`, `website.contact-submission.created`). No webhook system exists.
   - **Contact CSV export and the traffic summary report** (§13). The inbox ships first; the traffic report needs the analytics integration.
-  - **A real TLS edge provider, and plan-gating of custom domains.** The `EdgeCertificateProvisioner` adapter ships with a `NullProvisioner` that leaves `tls_status=pending`; gating waits for platform-admin's plan resolver.
+  - **PR D follow-ups** (custom domains):
+    - **A real TLS edge provider.** The `EdgeCertificateProvisioner` adapter ships with a `NullProvisioner` that leaves `tls_status=pending`; until a provider (and the edge it fronts) is chosen, a verified domain has a route but no certificate issuance or status change. Effects while it is missing: no domain can be made primary (`PATCH is_primary` answers 422 `tls_not_issued`), so preview links, `tenant_site_url` and `by-host`'s `custom_domain` stay on the subdomain; `website.domain-active` tells the school HTTPS is still pending.
+    - **Plan-gating of custom domains.** Waits on platform-admin's plan resolver; every school may bind up to five domains until it ships.
+    - **Apex custom domains.** Verification requires a CNAME from the domain to `WEBSITE_CNAME_TARGET`, and DNS forbids a CNAME at a zone apex, so a school binds `www.myschool.tld`, not `myschool.tld`. Accepting an apex needs an A/ALIAS check against the edge's addresses, which depends on the real edge provider above.
+    - **Disabling a custom domain without deleting it.** `custom_domains.status` has `disabled`, but no route sets it in v1 (the module doc's §16 has no disable action); remove the domain instead, and re-add it to restore it.
+    - **Terraform names settings modules that do not exist** (infra-owned). `infra/terraform/envs/production/main.tf` sets `DJANGO_SETTINGS_MODULE = "config.settings.production"` and staging sets `config.settings.staging`, but `apps/api/config/settings/` has only `base`, `dev`, `prod` and `test`, so either environment would fail at boot. Fixing it belongs in an infra PR (`infra/AGENTS.md` governs Terraform), not this one. That PR must also pass `WEBSITE_CNAME_TARGET`, which `prod.py` now requires, and the other website settings (`WEBSITE_MACHINE_TOKENS`, `WEBSITE_REVALIDATE_URL`, `WEBSITE_REVALIDATE_SECRET`, `NUM_PROXIES`), none of which Terraform sets yet.
+  - **Coordination note for the platform-admin session** (handoff from `website-cms` PR D; nothing here blocks either module):
+    - **`custom_domains` and `custom_domain_routes` live in `website_cms`**, not platform-admin. Ownership moved because the claim lifecycle (DNS verification, the route table the renderer resolves, revalidation and the domain notifications) is website behaviour, and `core/` and platform-admin must not import `website_cms`. Platform-admin's docs carry the same note (`platform-admin.md` §6, §15, §18; `tenancy.md`).
+    - **`provision_tenant` may call `website_cms.settings.services.ensure_default_site(tenant)`** so a new school has a default site at once; until then it is created on the first CMS write.
+    - **`lifecycle.transition` (suspend, reinstate, delete) should queue `website_cms` revalidation with every host tag of the tenant** (`revalidation.host_tags(tenant)`), so `GET /public/tenants/by-host` reflects the change at once. Until it does, the 300 s cache TTL bounds the staleness.
+    - **`lifecycle.transition(delete)` should hard-delete the tenant's `custom_domain_routes` and clear `is_primary` on its `custom_domains` in the same transaction.** Until it does, a deleted school's route lingers: host resolution already ignores it, and the next school to activate the domain evicts it (`custom_domains.services._insert_route`), but the domain cannot resolve anywhere until then.
+    - **Restoring a soft-deleted tenant must reconcile its `custom_domains`.** While the school was deleted, another school's activation may have evicted its route (`custom_domains.services._evict_deleted_tenants_route`), leaving an `active` (possibly `is_primary`) claim with no route. The restore transition should move every `active` claim whose route is gone to `failed` with `is_primary = false` (one `UPDATE`, as the CHECK requires), so the school sees it must verify again and nothing builds links on a host it no longer holds.
+    - **The machine scope `website.public-content.view` is outside the role registry** (it is declared in `MACHINE_SCOPES`, not as a grantable `Permission`), so platform-admin's per-key `scope` work needs no case for it.
   - **Notice attachments on the site, and teacher subjects.** Neither is in the public notices or teachers payload yet.
   - **Consent text on public forms** (§6), as a tenant-configurable string, and **a retention purge of `contact_submissions.ip`**. Until the purge ships, the staff API never serialises `ip`.
   - **Renderer i18n.** `apps/website` has no i18n today. New visible strings live in one `src/themes/default/copy.ts` constant map (English), so a later pass has one source.
@@ -49,10 +61,16 @@ either this file or `project-status.md`.
     - The content inventory's `updated_at` ordering has no `id` tiebreak, because the API's `ordering_fields` lack `id`; rows with an equal timestamp may swap between pages.
     - The Website landing makes 16 requests per load (a count per status for four kinds, plus the stale samples). A server aggregate for the §13 inventory would replace them.
     - Keyboard drag of rich-text blocks and FAQ items has no e2e (sections have one in `website-pages.spec.ts`); Jest drives only their move buttons, as it cannot drive `@dnd-kit`'s keyboard sensor reliably.
-    - No optimistic concurrency on `PATCH /website-pages/{id}/page-sections`: two editors saving the same page's sections, the last save wins. An `If-Match` / `expected_updated_at` check would refuse the stale one with 409.
+    - No optimistic concurrency on `PATCH /website-pages/{id}/page-sections`, `PATCH /website-settings` or `PATCH /navigation-menus/{location}`: two people saving the same page's sections, the site settings or one menu, the last save wins. An `If-Match` / `expected_updated_at` check would refuse the stale one with 409.
     - Image previews in the CMS. The CMS serializers return file ids only, so a saved image shows "on file". Add a display URL to the CMS serializers, then show it in `ImageFileField` and the gallery tiles.
     - An unsaved-changes warning when leaving the page editor (route change, tab close).
     - `isLeaving` in the page editor is never reset if `router.push` fails after a delete, so the skeleton would stay.
+  - **PR H follow-ups** (the dashboard's site settings, navigation, SEO, custom domains and contact inbox screens):
+    - No editor for `header_config` / `footer_config`. The renderer reads neither yet and the menus carry the header and footer links; the editor waits for the theme's chrome to decide their shape. Every settings PATCH leaves them untouched.
+    - Some settings 422s carry no `<reason>:` prefix (`Unknown or inactive theme.`, `A site must keep a home page.`, the social and header/footer link messages), so the dashboard shows the server's English sentence to an Urdu viewer. The same inconsistency as the PR A item on `meta.reason` above: route them through `errors.violation` with a reason, then add `website.reasons.*` copy.
+    - The limit of 5 custom domains is declared three times: `MAX_CUSTOM_DOMAINS` (`website_cms/constants.py`), `CUSTOM_DOMAIN_LIMIT` (the dashboard's custom-domains constants, which holds Add at the limit) and the e2e stub. A change to the backend value leaves the dashboard's held button wrong until it is copied. Expose the limit from the API (say `meta.limit` on `GET /custom-domains`) and read it there.
+    - No control clears the primary domain. `PATCH /custom-domains/{id}` accepts `is_primary: false`, but no flow needs it yet: in v1 the null edge provisioner leaves every certificate `pending`, so no domain can become primary and Make primary stays disabled with its reason. Add "Stop using as primary" when an edge provider ships.
+    - Switching the theme of a published site saves with no confirm, though sections whose type the new theme doesn't define are hidden under it. Confirm a theme switch on a published site, naming the sections (by page) it would hide.
   - **PR B follow-ups** (minor review findings from news, events, gallery, contact and the opt-in flags, each left for the PR that next touches its file):
     - `content.seo_image_ids` and `content.locked` duplicate the equivalent helpers in `pages/`. One shared helper, once a third resource needs it; today the two copies are small and tested separately.
     - Gallery item `partial_update` and `destroy` fetch the album twice (once to lock, once to authorise). A redundant read, harmless at the album sizes a school has.
@@ -74,13 +92,45 @@ either this file or `project-status.md`.
   - **Is the provider's `failed` event terminal for an order?** Task 4's amendment (PR 2) must confirm, against the chosen aggregator's docs and sandbox, whether a `failed` status is final for an order id or whether the same order can still be paid afterwards. Today a `failed` event fails a pending payment and a later `paid` still confirms it (`paid_after_failed`); if the provider allows retries on one order, `failed` should perhaps not fail the payment at all.
   - **Refund locking is not aligned with the online-payment lock order.** `request_refund` and `process_refund` lock the payment (and the refund) together with its invoice in one `select_for_update().select_related(...)` statement, so the row order is the planner's, not invoice-first, while every online-payment path (initiation, callbacks, the sweep, reconciliation, `:resolve`, `cancel_invoice`) takes the invoice, then the payment ([ADR-0034](decisions/0034-online-fee-payments.md) decision 10). A refund racing a gateway confirm on the same invoice could deadlock (Postgres would abort one side). Align both to lock the invoice first.
 
-- **DRF `NUM_PROXIES` is unset, so per-IP throttles key on the raw `X-Forwarded-For` header.**
-  With `NUM_PROXIES` unset, DRF's `get_ident` uses the whole `X-Forwarded-For` value when
-  present, which a client can set to anything, so a caller can rotate it to escape every per-IP
-  budget (`AuthEndpointThrottle`, `anon`, and `payment_callback_failure`'s token-guessing
-  limit). Set `REST_FRAMEWORK["NUM_PROXIES"]` to the number of proxies in front of the API in
-  each environment (the load balancer, plus any CDN), and test that a spoofed header does not
-  change the throttle key.
+- **Website & CMS, PR C follow-ups** (the public content API; minor review findings, each left for the PR that next touches its file):
+  - `MAX_HOSTNAME_LENGTH` (`core/tenancy/hosts.py`) duplicates `DOMAIN_MAX_LENGTH` (`website_cms`); make the model reference the core constant.
+  - Changing only the locale of the seeded homepage (slug `home`) fails with 422 `reserved_slug`; exempt `page_type=home` from the reserved-slug check.
+  - A page that already had the slug `home` before it became reserved is still served at `/home`. Rename or migrate such rows.
+  - Departments and classes are sliced in Python; push the limit into `public.py`'s queries.
+  - Gallery and cover URLs are not checked for publicness when built, so the renderer can show a broken image after an unpublish (the redirect answers 404). Check `visibility` where the URL is built.
+  - An unknown `scope` on `school-events` falls back to `upcoming`; answer 400 instead.
+  - No test pins the album list's nulls-last ordering by `published_at`.
+  - Random file ids give a scanner a fresh throttle bucket each; add a coarse per-IP ceiling beside the per-(IP, file) one.
+  - **A change to the platform default of the `module.website` flag does not revalidate the renderer.** Only a tenant override does (the flag signal). The 300 s TTL bounds the staleness; whole-platform invalidation is the natural fix.
+  - **A tenant override that expires does not revalidate** either: nothing runs when it lapses, so the cached site can show the module on or off for up to the TTL.
+  - **Platform-admin creating a tenant should lowercase and validate the slug.** `resolve_host` lowercases the host, so a tenant slug with capitals would never match; the slug validator applies to the tenant endpoints but the platform-admin create path must use the same lowercase rule.
+  - `CONTACT_BODY_MAX_BYTES` (32 KB) could clip a 5000-character message written in a script of four-byte characters; raise it if a school reports one.
+  - The contact tenant throttle keys on the raw `X-Tenant-Slug` before the school is resolved; bogus slugs only fill their own buckets, but a shape-valid flood costs a cache key each.
+  - The renderer must send an empty slug for `/` (not `home`), a random `Idempotency-Key` and the preview header; these land with PR E.
+
+- **`NUM_PROXIES` is now required, and operators must set the real hop count.** Production
+  refuses to boot without `NUM_PROXIES` (`0` means no proxy), and the production and staging
+  Terraform take a required `num_proxies` input with no default. DRF's throttles and
+  `core.api.client_ip.client_ip` (the stored `contact_submissions.ip` and the audit log, which used to take the spoofable left-most entry) both honour it. What remains is operational: the example
+  `num_proxies = 2` assumes CloudFront then the ALB, and each environment must confirm its real
+  chain. A wrong value is not detected by the boot check (too small records a proxy's address,
+  too large trusts a client-supplied `X-Forwarded-For` entry). It blocks launching the public
+  site until set. An unset value in dev and test keeps keying on the raw header.
+
+- **LAUNCH BLOCKER: restrict the ALB to CloudFront before trusting `num_proxies = 2`.** The
+  value is safe only once the ALB accepts traffic from CloudFront alone: the origin-facing
+  managed prefix list on the ALB security group, or a CloudFront custom origin header checked by
+  an ALB listener rule. Until then anyone connecting to the ALB directly controls
+  `X-Forwarded-For`, so the per-IP limits (public form, login, password reset, invitations,
+  payment-callback failures) and the stored audit and contact IPs are spoofable.
+  ([ADR-0039](decisions/0039-public-content-api.md) Consequences.)
+
+- **Terraform wiring for the public website is missing.** The API container needs
+  `WEBSITE_MACHINE_TOKENS`, `WEBSITE_REVALIDATE_URL` (the renderer's internal origin) and
+  `WEBSITE_REVALIDATE_SECRET` (both secrets as `api_secrets` ARNs) and `WEBSITE_CNAME_TARGET`;
+  the renderer task needs `WEBSITE_MACHINE_TOKEN` and the same revalidate secret. Until wired,
+  staging and production sites are dark (the renderer's reads get 401 and fail closed) and
+  revalidation is a no-op.
 
 - **AI gateway and AI-FEE-02 follow-ups** (`feat/ai-gateway`, plan
   `docs/superpowers/plans/2026-11-07-ai-gateway.md`, [ADR-0035](decisions/0035-ai-gateway-shape.md)).

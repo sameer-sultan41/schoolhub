@@ -4447,7 +4447,12 @@
       "pages": "Pages",
       "news": "News",
       "events": "Events",
-      "gallery": "Gallery"
+      "gallery": "Gallery",
+      "navigation": "Navigation",
+      "settings": "Settings",
+      "seo": "SEO",
+      "domains": "Domains",
+      "inbox": "Contact inbox"
     },
     "status": {
       "draft": "Draft",
@@ -4823,7 +4828,6 @@
       "home_exists": "The website already has a home page.",
       "too_many_sections": "This page has more sections than a page may hold. Remove some, then save.",
       "invalid_section_id": "The page changed since you opened it. Reload it and try again.",
-      "publish_required": "This page is live — only a publisher can change it. Ask a publisher, or unpublish it first.",
       "empty_album": "Add at least one photo or video before publishing this album.",
       "end_before_start": "The event can't end before it starts.",
       "invalid_url": "Use an https:// link of at most 500 characters.",
@@ -4837,6 +4841,31 @@
         "slug_taken": "Another item already uses this address.",
         "invalid_slug": "Use lowercase letters, digits and single hyphens.",
         "publish_required": "This is live: only a publisher can change it. Ask a publisher, or have it unpublished first."
+      },
+      "seo": {
+        "invalid_url": "Use an https:// link, or a path on this site starting with /.",
+        "invalid_target": "This item no longer exists. Close this and reload the page."
+      },
+      "navigation": {
+        "invalid_target": {
+          "page": "Choose a published page.",
+          "url": "Use an https:// link, or a path on this site starting with /.",
+          "other": "This kind of link takes no target."
+        },
+        "invalid_label": "Give the link a name of 1 to 60 characters.",
+        "depth_exceeded": "Menus go two levels deep: a sub-link can't have sub-links of its own.",
+        "too_many_items": "A menu holds at most 50 links. Remove some, then save."
+      },
+      "publish_required": "This page is live — only a publisher can change it. Ask a publisher, or unpublish it first.",
+      "domains": {
+        "invalid_domain": "Enter a domain name such as www.yourschool.edu.pk.",
+        "platform_domain": "Use the school's own domain, not one under the platform's.",
+        "duplicate_domain": "The school has already added this domain.",
+        "domain_limit": "The school has added as many domains as it can. Remove one to add another.",
+        "not_active": "Only a verified, active domain can be the primary domain.",
+        "tls_not_issued": "The domain's HTTPS certificate isn't issued yet, so it can't be the primary domain.",
+        "not_verifiable": "This domain can't be checked.",
+        "domain_taken": "Another school already uses this domain."
       }
     },
     "imageField": {
@@ -4927,6 +4956,319 @@
         "notAnOption": "Choose one of the options.",
         "imageRequired": "Choose an image."
       }
+    },
+    "seo": {
+      "action": "SEO",
+      "dialogTitle": "SEO: {title}",
+      "dialogIntro": "How this appears in search results and when it is shared.",
+      "siteTitle": "SEO",
+      "siteSummary": "The website's own search title, description and share image. Each page, post, event and album sets its own from its editor.",
+      "loadError": "The SEO settings couldn't be loaded.",
+      "saved": "SEO settings saved.",
+      "fields": {
+        "meta_title": "Search title",
+        "meta_description": "Search description",
+        "og_image_file_id": "Share image",
+        "canonical_url": "Canonical link",
+        "robots": "Robots"
+      },
+      "hints": {
+        "meta_title": "Up to 70 characters, shown as the title in search results.",
+        "meta_description": "Up to 170 characters, shown under the title in search results.",
+        "canonical_url": "Only when this content's main address is elsewhere: an https:// link, or a path on this site starting with /.",
+        "robots": "An instruction for search engines, such as noindex. Leave it empty for the default."
+      }
+    },
+    "settings": {
+      "title": "Site settings",
+      "summary": "Whether visitors see the website, its theme, and the links and details it carries.",
+      "loadError": "The site settings couldn't be loaded.",
+      "theme": "Theme",
+      "themePlaceholder": "Choose a theme",
+      "themeOption": "{name} ({version})",
+      "themeConfig": "Theme settings",
+      "noThemeConfig": "This theme has no settings of its own.",
+      "analyticsId": "Analytics ID",
+      "analyticsHint": "Kept with the site's settings; it isn't added to the website's pages yet.",
+      "saved": "Site settings saved.",
+      "created": "The website was created, with its standard pages as drafts.",
+      "createSite": "Create the website",
+      "social": {
+        "title": "Social links",
+        "hint": "The school's pages on social media, each with its full https:// address.",
+        "empty": "No social links yet.",
+        "row": "Social link {index}",
+        "platform": "Platform",
+        "platformPlaceholder": "Facebook",
+        "url": "Link",
+        "remove": "Remove social link {index}",
+        "add": "Add a social link"
+      },
+      "status": {
+        "title": "Website status",
+        "state": {
+          "live": "Live",
+          "maintenance": "Maintenance",
+          "offline": "Offline"
+        },
+        "notCreated": "The website hasn't been created yet. Saving these settings, or switching it on, creates it with its standard pages as drafts.",
+        "published": "Published",
+        "publishedHint": "Visitors can see the website's published pages at the school's address.",
+        "maintenance": "Maintenance mode",
+        "maintenanceHint": "Visitors see a maintenance notice instead of the website, even while it is published."
+      },
+      "homepage": {
+        "label": "Home page",
+        "hint": "The website always opens on its home page.",
+        "none": "Created with the website.",
+        "unavailable": "The home page couldn't be loaded."
+      },
+      "confirm": {
+        "publish": {
+          "on": {
+            "title": "Publish the website?",
+            "description": "Visitors will be able to see its published pages at the school's address.",
+            "confirm": "Publish",
+            "done": "The website is published."
+          },
+          "off": {
+            "title": "Take the website offline?",
+            "description": "Visitors will no longer see it. Its pages and settings are kept.",
+            "confirm": "Take offline",
+            "done": "The website is offline."
+          }
+        },
+        "maintenance": {
+          "on": {
+            "title": "Turn on maintenance mode?",
+            "description": "Visitors will see a maintenance notice instead of the website until you turn it off.",
+            "confirm": "Turn on",
+            "done": "Maintenance mode is on."
+          },
+          "off": {
+            "title": "Turn off maintenance mode?",
+            "description": "Visitors will see the website again, if it is published.",
+            "confirm": "Turn off",
+            "done": "Maintenance mode is off."
+          }
+        },
+        "maintenanceWhileUnpublished": "This has no visible effect while the website is unpublished: visitors see nothing either way. It applies once the website is published."
+      }
+    },
+    "navigation": {
+      "title": "Navigation",
+      "summary": "The links in the website's header and footer. Each menu goes two levels deep and holds up to 50 links.",
+      "loadError": "The menus couldn't be loaded.",
+      "locationsLabel": "Menus",
+      "locations": {
+        "header": "Header",
+        "footer_primary": "Footer",
+        "footer_secondary": "Footer, second row"
+      },
+      "targetTypes": {
+        "page": "A page",
+        "url": "A link",
+        "news_index": "News list",
+        "events_index": "Events list",
+        "gallery_index": "Gallery"
+      },
+      "fields": {
+        "label": "Label",
+        "targetType": "Links to",
+        "page": "Page",
+        "url": "Link"
+      },
+      "pagePlaceholder": "Choose a page",
+      "stalePage": "A page that is no longer published",
+      "stalePageHint": "This page isn't published any more. The link is kept as it is until you choose another page.",
+      "noPublishedPages": "No page is published yet. Publish a page to link to it.",
+      "choosePage": "Choose a published page.",
+      "untitled": "Untitled link",
+      "listLabel": "Links",
+      "empty": "This menu has no links yet.",
+      "addItem": "Add a link",
+      "limits": "Up to {max} links, two levels deep.",
+      "full": "This menu holds the most links it can ({max}).",
+      "save": "Save menu",
+      "saved": "Menu saved.",
+      "item": {
+        "label": "Link {index}: {name}",
+        "drag": "Drag link {index}",
+        "moveUp": "Move link {index} up",
+        "moveDown": "Move link {index} down",
+        "nest": "Nest link {index} under the link above",
+        "nestBlocked": "Link {index} has sub-links, so it can't be nested: menus go two levels deep",
+        "remove": "Remove link {index}",
+        "children": "Sub-links of {name}",
+        "addChild": "Add a sub-link to {name}"
+      },
+      "child": {
+        "label": "Sub-link {index} of link {parent}",
+        "title": "Sub-link {index}",
+        "drag": "Drag sub-link {index} of link {parent}",
+        "moveUp": "Move sub-link {index} of link {parent} up",
+        "moveDown": "Move sub-link {index} of link {parent} down",
+        "unnest": "Move sub-link {index} of link {parent} out to the top level",
+        "remove": "Remove sub-link {index} of link {parent}"
+      },
+      "drag": {
+        "role": "sortable link",
+        "instructions": "To pick up a link, press space or enter. Use the arrow keys to move it, then space or enter to drop it, or escape to cancel.",
+        "start": "Picked up link {index}.",
+        "over": "Link {index} is over position {position}.",
+        "end": "Link {index} dropped at position {position}.",
+        "cancel": "Move cancelled."
+      },
+      "removeConfirm": {
+        "title": "Remove “{name}” and its sub-links?",
+        "description": "{count, plural, one {Its # sub-link goes} other {Its # sub-links go}} with it. Nothing changes on the website until you save the menu.",
+        "confirm": "Remove"
+      }
+    },
+    "copy": {
+      "done": "Copied.",
+      "failed": "Couldn't copy. Select the text and copy it instead."
+    },
+    "domains": {
+      "title": "Custom domains",
+      "summary": "Serve the website at the school's own address, such as www.yourschool.edu.pk. Its subdomain keeps working.",
+      "loadError": "The domains couldn't be loaded.",
+      "emptyTitle": "No custom domains yet",
+      "emptyDescription": "Add one to serve the website at the school's own address.",
+      "primary": "Primary",
+      "verifiedAt": "Verified {when}",
+      "lastCheck": "Last DNS check",
+      "status": {
+        "pending_dns": "Waiting for DNS",
+        "verifying": "Checking",
+        "active": "Active",
+        "failed": "Failed",
+        "disabled": "Disabled"
+      },
+      "tls": {
+        "pending": "HTTPS pending",
+        "issued": "HTTPS ready",
+        "failed": "HTTPS failed"
+      },
+      "errors": {
+        "txt_missing": "The TXT record wasn't found. Add it as shown below, then check again. DNS changes can take a while to appear.",
+        "txt_mismatch": "The TXT record holds a different value. Change it to the value below, then check again.",
+        "cname_missing": "The CNAME record wasn't found. Add it as shown below, then check again.",
+        "cname_mismatch": "The CNAME record points somewhere else. Point it straight at the target below: a chain of CNAMEs isn't followed.",
+        "lookup_timeout": "The DNS check timed out, so nothing changed. Try again in a few minutes.",
+        "lookup_failed": "The DNS check couldn't finish, so nothing changed. Try again in a few minutes.",
+        "domain_taken": "Another school already uses this domain.",
+        "target_unconfigured": "Custom domains aren't set up on this platform yet. Contact support."
+      },
+      "dns": {
+        "title": "DNS records",
+        "intro": "Add these records at the domain's DNS provider.",
+        "record": "{type} record",
+        "name": "Name",
+        "value": "Value",
+        "copyName": "Copy the {type} record's name",
+        "copyValue": "Copy the {type} record's value",
+        "keep": "Keep this record: the website needs it after verification.",
+        "removable": "You can remove this record once the domain is verified. If you keep it, keep its value unchanged.",
+        "directCname": "Point the CNAME straight at this target: a CNAME that points to another CNAME isn't followed."
+      },
+      "actions": {
+        "verify": "Check DNS",
+        "makePrimary": "Make primary",
+        "remove": "Remove"
+      },
+      "primaryBlocked": {
+        "not_active": "Can be made primary once the domain is verified.",
+        "tls_not_issued": "Can be made primary once its HTTPS certificate is issued."
+      },
+      "verifyResult": {
+        "active": "{domain} is verified and active.",
+        "failed": "{domain} didn't pass the DNS check.",
+        "inconclusive": "The DNS check didn't finish. Try again in a few minutes."
+      },
+      "primaryDone": "{domain} is now the primary domain.",
+      "add": {
+        "open": "Add domain",
+        "limitReached": "A school can add up to {limit} domains. Remove one to add another.",
+        "title": "Add a custom domain",
+        "description": "Enter the address visitors will type, such as www.yourschool.edu.pk.",
+        "label": "Domain",
+        "placeholder": "www.yourschool.edu.pk",
+        "submit": "Add domain",
+        "submitting": "Adding the domain",
+        "required": "Enter a domain.",
+        "tooLong": "That is too long for a domain name."
+      },
+      "instructions": {
+        "title": "Set up {domain}",
+        "description": "The domain is added. Add these records at its DNS provider, then use Check DNS on the domain.",
+        "done": "Done"
+      },
+      "remove": {
+        "title": "Remove {domain}?",
+        "description": "The website stops answering at this address. Its subdomain keeps working.",
+        "descriptionPrimary": "This is the primary domain. The website stops answering here and its links go back to its subdomain.",
+        "confirm": "Remove",
+        "done": "{domain} removed."
+      }
+    },
+    "inbox": {
+      "title": "Contact inbox",
+      "summary": "Messages sent through the website's contact form.",
+      "list": {
+        "caption": "Contact messages",
+        "searchPlaceholder": "Search name, email, subject or message",
+        "loadError": "The messages couldn't be loaded.",
+        "emptyTitle": "No messages yet",
+        "emptyDescription": "Messages sent through the website's contact form appear here.",
+        "noMatches": "Nothing matches",
+        "noMatchesDescription": "Try another search, status or date range."
+      },
+      "filters": {
+        "status": "Status",
+        "allStatuses": "All statuses",
+        "from": "Received from",
+        "to": "Received to"
+      },
+      "columns": {
+        "receivedAt": "Received",
+        "name": "From",
+        "subject": "Subject",
+        "contact": "Contact",
+        "status": "Status"
+      },
+      "status": {
+        "new": "New",
+        "read": "Read",
+        "responded": "Responded",
+        "spam": "Spam"
+      },
+      "noSubject": "(No subject)",
+      "openRow": "Open the message from {name}",
+      "detail": {
+        "loadingTitle": "Loading the message…",
+        "loadError": "The message couldn't be loaded.",
+        "received": "Received",
+        "email": "Email",
+        "phone": "Phone",
+        "subject": "Subject",
+        "message": "Message",
+        "lastUpdated": "Updated {when}"
+      },
+      "actions": {
+        "read": "Mark read",
+        "responded": "Mark responded",
+        "spam": "Mark as spam",
+        "done": {
+          "read": "Marked read.",
+          "responded": "Marked responded.",
+          "spam": "Marked as spam."
+        }
+      }
+    },
+    "readGate": {
+      "title": "This section needs permission to view the website",
+      "description": "Its settings are read with permission to view the website's content, which your role doesn't include. Ask an administrator to add it."
     }
   },
   "reports": {

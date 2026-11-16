@@ -393,7 +393,7 @@ Ships the app skeleton, themes, site settings, pages with sections, navigation, 
 **Files:** the `contact_submissions/` package and `website_cms/notifications.py`.
 
 **Endpoints:**
-- `GET /contact-submissions` (filters: `status`, `created_at__gte`, `created_at__lte`, `search`);
+- `GET /contact-submissions` (filters: `status`, `created_at__gte`, `created_at__lte`, `created_at__lt` (exclusive; the dashboard sends next local midnight), `search`);
 - `GET /contact-submissions/{id}`;
 - `PATCH /contact-submissions/{id}`: only `status`; it sets `handled_by=request.user`.
 
@@ -799,7 +799,7 @@ Each is a directory with a create/edit dialog that uses the shared rich-text and
 
 - **Site settings:** a theme picker, a `theme_config` form via `SchemaFields`, publish and maintenance switches with a confirm dialog, the homepage display, social links and the analytics id.
 - **Navigation editor:** three location tabs and a tree with two levels, dnd and target pickers (a published page, URL, or index).
-- **SEO:** a site form, and an "SEO" tab in the page, news, event and album editors, through a shared `seo-form.tsx`.
+- **SEO:** a site form, and an "SEO" button in the page, news, event and album editors that opens the shared `seo-form.tsx` in a dialog (amended in H1: a tab would unmount the page editor's unsaved sections, and the news and event editors are themselves dialogs).
 
 - [ ] Tests:
   - `navigation-editor.test.tsx` (depth limit, unpublished target error);

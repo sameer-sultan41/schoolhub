@@ -1,6 +1,6 @@
 import { ApiError } from "@schoolhub/api-client";
 
-import { reasonText, withReasonText } from "../reason-message";
+import { reasonText, refusalReason, withReasonText } from "../reason-message";
 
 jest.mock("@/services", () =>
   jest
@@ -60,5 +60,21 @@ describe("reason messages", () => {
     expect((rewritten as ApiError).meta).toEqual({ reason: "page_in_use" });
     const plain = new Error("boom");
     expect(withReasonText(plain, tReasons)).toBe(plain);
+  });
+
+  it("reads a refusal's meta.reason, and null when it carries none", () => {
+    const refusal = (meta?: Record<string, unknown>) =>
+      new ApiError({
+        code: "conflict",
+        message: "x",
+        status: 409,
+        url: "/api/v1/x",
+        ...(meta ? { meta } : {}),
+      });
+
+    expect(refusalReason(refusal({ reason: "domain_taken" }))).toBe("domain_taken");
+    expect(refusalReason(refusal())).toBeNull();
+    expect(refusalReason(refusal({ reason: 3 }))).toBeNull();
+    expect(refusalReason(new Error("boom"))).toBeNull();
   });
 });

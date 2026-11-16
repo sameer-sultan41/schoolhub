@@ -10,6 +10,16 @@ variable "platform_domain" {
   default     = "staging.schoolhub.example"
 }
 
+variable "num_proxies" {
+  description = "How many proxies (CDN, ALB) in front of the API append to X-Forwarded-For: 2 when requests pass CloudFront then the ALB, 1 for the ALB alone, 0 when reached directly. Per-IP throttles, audit and contact IPs trust the header only this far, and the API refuses to boot without it."
+  type        = number
+
+  validation {
+    condition     = var.num_proxies >= 0 && floor(var.num_proxies) == var.num_proxies
+    error_message = "num_proxies must be a whole number >= 0."
+  }
+}
+
 variable "hosted_zone_id" {
   description = "Route 53 hosted zone ID for platform_domain. Created out of band; see terraform/README.md."
   type        = string

@@ -19,10 +19,14 @@ from core.api.throttling import (
     PasswordResetIPThrottle,
     PaymentCallbackFailureThrottle,
     PaymentCallbackThrottle,
+    PublicFileThrottle,
+    PublicFormTenantThrottle,
     PublicFormThrottle,
     TenantRateThrottle,
     UserRateThrottle,
 )
+from core.rbac.machine import MachineClientThrottle
+from tests.prod_settings import load_prod_settings
 
 DEFAULT_RATES = {
     "tenant": "600/min",
@@ -30,12 +34,15 @@ DEFAULT_RATES = {
     "anon": "20/min",
     "auth": "10/min",
     "public_form": "5/min",
+    "public_form_tenant": "200/hour",
     "ai": "10/min",
     "payment_callback": "600/min",
     "payment_callback_failure": "30/min",
     "password_reset_email": "5/hour",
     "password_reset_ip": "20/hour",
     "invitation_ip": "60/hour",
+    "machine_client": "1200/min",
+    "public_file": "120/min",
 }
 
 
@@ -49,13 +56,54 @@ class ThrottleRateTests(SimpleTestCase):
             UserRateThrottle,
             AuthEndpointThrottle,
             PublicFormThrottle,
+            PublicFormTenantThrottle,
             AIRequestThrottle,
             PaymentCallbackThrottle,
             PaymentCallbackFailureThrottle,
             PasswordResetEmailThrottle,
             PasswordResetIPThrottle,
             InvitationIPThrottle,
+            MachineClientThrottle,
+            PublicFileThrottle,
         ):
             with self.subTest(throttle=throttle.__name__):
                 self.assertNotIn("rate", vars(throttle))
                 self.assertEqual(throttle().get_rate(), DEFAULT_RATES[throttle.scope])
+
+
+class NumProxiesWiringTests(SimpleTestCase):
+    """`NUM_PROXIES` (env, base.py) reaches DRF, whose `get_ident` every per-IP throttle uses."""
+
+    def test_drf_reads_the_num_proxies_setting(self) -> None:
+        from rest_framework.settings import api_settings
+
+        self.assertIn("NUM_PROXIES", settings.REST_FRAMEWORK)
+        self.assertEqual(settings.REST_FRAMEWORK["NUM_PROXIES"], settings.NUM_PROXIES)
+        self.assertEqual(api_settings.NUM_PROXIES, settings.NUM_PROXIES)
+
+    def test_base_settings_pass_the_variable_through(self) -> None:
+        from config.settings import base
+
+        self.assertIs(base.REST_FRAMEWORK["NUM_PROXIES"], base.NUM_PROXIES)
+
+
+class ProductionNumProxiesTests(SimpleTestCase):
+    """`config.settings.prod` refuses to boot without `NUM_PROXIES` (0 = direct is allowed)."""
+
+    def test_missing_num_proxies_fails_at_import(self) -> None:
+        from django.core.exceptions import ImproperlyConfigured
+
+        with self.assertRaises(ImproperlyConfigured):
+            load_prod_settings(NUM_PROXIES=None)
+
+    def test_zero_is_allowed_and_reaches_drf(self) -> None:
+        prod = load_prod_settings(NUM_PROXIES="0")
+
+        self.assertEqual(prod.NUM_PROXIES, 0)
+        self.assertEqual(prod.REST_FRAMEWORK["NUM_PROXIES"], 0)
+
+    def test_negative_is_refused(self) -> None:
+        from django.core.exceptions import ImproperlyConfigured
+
+        with self.assertRaises(ImproperlyConfigured):
+            load_prod_settings(NUM_PROXIES="-1")

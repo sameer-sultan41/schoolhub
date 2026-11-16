@@ -45,3 +45,4 @@ export * from "./domains/fees-reports";
 export * from "./domains/fees-spend";
 export * from "./domains/website";
 export * from "./domains/website-content";
+export * from "./domains/website-site";

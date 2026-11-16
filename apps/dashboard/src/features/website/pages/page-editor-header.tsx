@@ -12,6 +12,7 @@ import { HOME_PAGE_TYPE } from "@/services/modules/website/website-pages/website
 import { pagePublicPath } from "@/services/modules/website/website-pages/website-pages-helper";
 import { ContentStatusBadge } from "@/features/website/shared/content-status-badge";
 import { PublishActions } from "@/features/website/shared/publish-actions";
+import { SeoButton } from "@/features/website/seo/seo-button";
 import { usePageTypeLabel } from "./page-type-label";
 import { PreviewPageButton } from "./preview-page-button";
 
@@ -27,8 +28,8 @@ export interface PageEditorHeaderProps {
 }
 
 /**
- * The page's title, address, type and status, with its actions: details, preview, the publish
- * workflow and delete. Publish waits for a saved, visible section (the API refuses a page
+ * The page's title, address, type and status, with its actions: details, preview, SEO, the
+ * publish workflow and delete. Publish waits for a saved, visible section (the API refuses a page
  * with none, `no_visible_sections`) and says why. Delete is offered only where the API could
  * allow it: never on the home page, and only once unpublished.
  */
@@ -82,6 +83,7 @@ export function PageEditorHeader({
             </Button>
           ) : null}
           <PreviewPageButton pageId={page.id} />
+          <SeoButton target={{ targetType: "page", targetId: page.id }} title={page.title} />
           <PublishActions
             status={page.status}
             canPublish={canPublish}

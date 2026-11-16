@@ -11,6 +11,6 @@ export function toContactSubmissionQueryParams(query: ContactSubmissionQuery): Q
   if (query.ordering) params.ordering = query.ordering;
   if (query.status) params.status = query.status;
   if (query.createdFrom) params.created_at__gte = query.createdFrom;
-  if (query.createdTo) params.created_at__lte = query.createdTo;
+  if (query.createdBefore) params.created_at__lt = query.createdBefore;
   return params;
 }

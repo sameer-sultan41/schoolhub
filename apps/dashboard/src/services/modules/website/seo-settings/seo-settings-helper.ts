@@ -8,3 +8,8 @@ export function toSeoTargetParams(target: SeoTarget): QueryParams {
   if (target.targetId) params.target_id = target.targetId;
   return params;
 }
+
+/** One target's cache id: its type, and its record's id when it has one. */
+export function seoTargetKey(target: SeoTarget): string {
+  return target.targetId ? `${target.targetType}:${target.targetId}` : target.targetType;
+}
