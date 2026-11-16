@@ -79,7 +79,7 @@ test.describe("the school admin", () => {
 
     const row = websiteContentPage.row("News posts", "Sports Day 2026");
     await expect(row.getByText("Draft", { exact: true })).toBeVisible();
-    await row.getByRole("button", { name: "Sports Day 2026" }).click();
+    await row.getByRole("button", { name: "Sports Day 2026", exact: true }).click();
     const sheet = websiteContentPage.dialog("Sports Day 2026");
     await sheet.getByRole("button", { name: "Publish", exact: true }).click();
 
@@ -216,7 +216,7 @@ test.describe("the principal", () => {
 
     await websiteContentPage
       .row("News posts", "Library week")
-      .getByRole("button", { name: "Library week" })
+      .getByRole("button", { name: "Library week", exact: true })
       .click();
     const sheet = websiteContentPage.dialog("Library week");
 
