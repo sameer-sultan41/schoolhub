@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Form } from "@schoolhub/ui";
 
-import { Services } from "@/services";
+import { Services, type JsonSchema } from "@/services";
 import { mocked } from "@/test-fixtures/list-screen";
 import { renderWithProviders, stubObjectUrls } from "@/test-utils";
 
@@ -165,6 +165,54 @@ describe("ImageFileField", () => {
     await user.click(screen.getByRole("button", { name: "Read" }));
 
     expect(read).toHaveBeenCalledWith({ blocks: [{ file_id: "" }, { file_id: FILE_ID }] });
+  });
+
+  it("holds moving and removing list items while an item's image uploads", async () => {
+    const SLIDES = {
+      type: "object",
+      properties: {
+        items: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              photo_file_id: { type: "string", minLength: 36, maxLength: 36, "x-widget": "image" },
+              caption: { type: "string", maxLength: 100, "x-widget": "text" },
+            },
+          },
+        },
+      },
+    } as JsonSchema;
+    const user = userEvent.setup();
+    const upload = pendingUpload();
+    const onSave = jest.fn().mockResolvedValue(undefined);
+    renderWithProviders(
+      <SchemaHost
+        schema={SLIDES}
+        content={{ items: [{ caption: "First" }, { caption: "Second" }] }}
+        onSave={onSave}
+      />,
+    );
+
+    const [firstPhoto] = screen.getAllByLabelText("Photo");
+    if (!firstPhoto) throw new Error("no photo field");
+    await user.upload(firstPhoto, PICKED);
+    expect(screen.getByRole("button", { name: "Move item 1 down" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Move item 2 up" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Remove item 1" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Remove item 2" })).toBeDisabled();
+
+    upload.finish(FILE_ID);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Move item 1 down" })).toBeEnabled();
+    });
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith({
+        items: [{ photo_file_id: FILE_ID, caption: "First" }, { caption: "Second" }],
+      });
+    });
   });
 
   it("refuses to render outside an UploadTrackerProvider", () => {

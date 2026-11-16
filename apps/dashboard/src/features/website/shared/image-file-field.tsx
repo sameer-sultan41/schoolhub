@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent } from "react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
 import {
@@ -59,10 +59,12 @@ export function ImageFileField<TFieldValues extends FieldValues>({
   const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle");
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  // The field's path as of the latest render: a block or item moved while the upload ran has
-  // a new index, and the result must land on it, not on whatever now holds the old one.
+  // The field's path as of the latest commit: a block or item moved while the upload ran has a
+  // new index, and the result must land on it, not on whatever now holds the old one. A layout
+  // effect runs inside the commit, so no upload can resolve between a move and this update;
+  // writing the ref during render instead is what `react-hooks/refs` forbids.
   const nameRef = useRef(name);
-  useEffect(() => {
+  useLayoutEffect(() => {
     nameRef.current = name;
   }, [name]);
 
