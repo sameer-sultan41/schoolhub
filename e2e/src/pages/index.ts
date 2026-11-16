@@ -34,6 +34,7 @@ export * from "./dashboard/fees/fee-payments.page";
 export * from "./dashboard/fees/fee-reports.page";
 export * from "./dashboard/fees/fee-structures.page";
 export * from "./dashboard/fees/ledger.page";
+export * from "./dashboard/website/website-content.page";
 export * from "./dashboard/login.page";
 export * from "./dashboard/staff.page";
 export * from "./dashboard/students.page";

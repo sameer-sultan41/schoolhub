@@ -48,6 +48,7 @@ import {
   PromotionsPage,
   PublicSitePage,
   QuestionBanksPage,
+  WebsiteContentPage,
   ResetPasswordPage,
   StaffAttendancePage,
   StaffPage,
@@ -154,6 +155,7 @@ export interface E2EFixtures {
   feeStructuresPage: FeeStructuresPage;
   ledgerPage: LedgerPage;
   questionBanksPage: QuestionBanksPage;
+  websiteContentPage: WebsiteContentPage;
   /**
    * Signs a **second** identity in, on its own browser context, and hands back that
    * context's page objects.
@@ -414,6 +416,10 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
 
   questionBanksPage: async ({ page }, use) => {
     await use(new QuestionBanksPage(page));
+  },
+
+  websiteContentPage: async ({ page }, use) => {
+    await use(new WebsiteContentPage(page));
   },
 
   feeGrantsPage: async ({ page }, use) => {
