@@ -40,6 +40,26 @@ API_PUBLIC_URL = env("API_PUBLIC_URL", default="")
 # so a stack with no renderer never errors. The secret is the renderer's REVALIDATE_SECRET.
 WEBSITE_REVALIDATE_URL = env("WEBSITE_REVALIDATE_URL", default="")
 WEBSITE_REVALIDATE_SECRET = env("WEBSITE_REVALIDATE_SECRET", default="")
+# Platform services calling the API with a static bearer token (core.rbac.machine). Each
+# client's tokens come from the named setting: comma-separated, newest first, so a token
+# rotates with overlap. An empty setting rejects every token. Scopes must be in MACHINE_SCOPES.
+MACHINE_CLIENTS: dict[str, dict[str, str | list[str]]] = {
+    "website-renderer": {
+        "tokens_setting": "WEBSITE_MACHINE_TOKENS",
+        "scopes": ["website.public-content.view"],
+    },
+}
+WEBSITE_MACHINE_TOKENS = env("WEBSITE_MACHINE_TOKENS", default="")
+# The hostname a school's custom domain must CNAME to (website_cms custom domains).
+WEBSITE_CNAME_TARGET = env("WEBSITE_CNAME_TARGET", default="")
+# The renderer's dev server port in links onto a tenant's site (preview); empty means the
+# scheme's default. The scheme is DASHBOARD_URL_SCHEME, as both front ends share it.
+WEBSITE_URL_PORT = ""
+# How many proxies in front of the API append to X-Forwarded-For. Unset keeps DRF's default
+# (None: the header is used whole); set it in any deployment behind a known proxy chain, or a
+# client can rotate the header to reset its per-IP throttles.
+_num_proxies = env("NUM_PROXIES", default="")
+NUM_PROXIES: int | None = int(_num_proxies) if _num_proxies else None
 
 # Encrypts each school's payment-gateway credentials (core.integrations.crypto): Fernet
 # keys, newest first. No default here, so production must set it (prod.py reads it from the
@@ -144,8 +164,9 @@ MIDDLEWARE = [
 ]
 
 # The dashboard calls the API cross-origin, so a request header the preflight doesn't allow
-# never reaches it. `Idempotency-Key` is the one custom header the dashboard sends (§2.5).
-CORS_ALLOW_HEADERS = (*default_headers, "idempotency-key")
+# never reaches it. `Idempotency-Key` is the one custom header the dashboard sends (§2.5);
+# `X-Tenant-Slug` is the renderer's browser-side contact form's (website_cms public API).
+CORS_ALLOW_HEADERS = (*default_headers, "idempotency-key", "x-tenant-slug")
 
 ROOT_URLCONF = "config.urls"
 WSGI_APPLICATION = "config.wsgi.application"
@@ -227,6 +248,8 @@ THROTTLE_RATES: dict[str, str] = {
     "anon": "20/min",
     "auth": "10/min",
     "public_form": "5/min",
+    # The public contact form, per school: bounds spam from many IPs at one school.
+    "public_form_tenant": "200/hour",
     # Endpoints that call the AI provider (core.api.throttling.AIRequestThrottle).
     "ai": "10/min",
     # The public payment callback: per (school, callback token), and failed signatures per IP.
@@ -237,6 +260,11 @@ THROTTLE_RATES: dict[str, str] = {
     "password_reset_email": "5/hour",
     "password_reset_ip": "20/hour",
     "invitation_ip": "60/hour",
+    # Machine-client reads (core.rbac.machine.MachineClientThrottle), per (client, host):
+    # about 8 reads per page render, ISR misses only (plan decision 2a).
+    "machine_client": "1200/min",
+    # The anonymous public file redirect, per (client IP, file).
+    "public_file": "120/min",
 }
 
 REST_FRAMEWORK = {
@@ -265,6 +293,7 @@ REST_FRAMEWORK = {
         "core.api.throttling.UserRateThrottle",
     ),
     "DEFAULT_THROTTLE_RATES": THROTTLE_RATES,
+    "NUM_PROXIES": NUM_PROXIES,
 }
 
 SIMPLE_JWT = {
@@ -421,6 +450,10 @@ SPECTACULAR_SETTINGS = {
         "NavigationTargetTypeEnum": "apps.website_cms.constants.NavTargetType",
         "SectionTypeEnum": "apps.website_cms.constants.SectionType",
         "GalleryMediaTypeEnum": "apps.website_cms.models.MediaType",
+        # The public content API: `status` is a tenant's lifecycle there, beside pages' `status`.
+        "TenantStatusEnum": "core.tenancy.models.TenantStatus",
+        "WebsiteStatusEnum": "apps.website_cms.constants.WebsiteStatus",
+        "TextDirectionEnum": "apps.website_cms.constants.TextDirection",
     },
 }
 

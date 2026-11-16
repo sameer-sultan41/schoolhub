@@ -19,6 +19,9 @@ from apps.website_cms.models import (
     ContactStatus,
     ContactSubmission,
     ContentStatus,
+    CustomDomain,
+    CustomDomainRoute,
+    CustomDomainStatus,
     GalleryAlbum,
     GalleryItem,
     MediaType,
@@ -152,6 +155,28 @@ class GalleryItemFactory(factory.django.DjangoModelFactory):
     position = factory.Sequence(lambda n: n)
 
 
+class CustomDomainFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = CustomDomain
+
+    tenant = factory.SubFactory(TenantFactory)
+    domain = factory.Sequence(lambda n: f"school{n}.example.org")
+    verification_token = factory.Sequence(lambda n: f"token-{n}")
+
+
+def make_custom_domain(tenant, domain: str, status: str, *, is_primary: bool = False):
+    """A custom domain of ``tenant``; an active one also gets its route row, as services do."""
+    from core.tenancy.context import tenant_context
+
+    with tenant_context(tenant.id):
+        row = CustomDomainFactory(
+            tenant=tenant, domain=domain, status=status, is_primary=is_primary
+        )
+    if status == CustomDomainStatus.ACTIVE:
+        CustomDomainRoute.objects.create(domain=domain, tenant=tenant, custom_domain=row)
+    return row
+
+
 def enable_feature(tenant, key: str) -> None:
     """Force ``key`` on for ``tenant``; `module.website` ships `default_enabled=False`."""
     from core.tenancy.context import tenant_context
@@ -167,6 +192,7 @@ def enable_feature(tenant, key: str) -> None:
 
 __all__ = [
     "ContactSubmissionFactory",
+    "CustomDomainFactory",
     "GalleryAlbumFactory",
     "GalleryItemFactory",
     "NavigationMenuFactory",
@@ -182,4 +208,5 @@ __all__ = [
     "default_theme",
     "enable_feature",
     "grant",
+    "make_custom_domain",
 ]

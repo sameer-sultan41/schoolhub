@@ -9848,6 +9848,362 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/public/classes:
+    get:
+      operationId: public_classes
+      description: Classes that opted in to the website.
+      parameters:
+      - in: query
+        name: host
+        schema:
+          type: string
+        description: The site's host, as the visitor's browser sent it.
+        required: true
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Rows to return, 1 to 50 (the default and the cap).
+      tags:
+      - public
+      security:
+      - machineToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublicClass'
+          description: ''
+        '404':
+          description: No live site, page or tenant answers on this host.
+  /api/v1/public/contact-submissions:
+    post:
+      operationId: public_contact_submissions_create
+      description: Store a contact message for a live site and notify its staff; 404
+        for any refusal.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: A retry with the same key replays the first response.
+      - in: header
+        name: X-Tenant-Slug
+        schema:
+          type: string
+        description: The school's slug.
+        required: true
+      tags:
+      - public
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublicContactSubmission'
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactReceived'
+          description: ''
+        '413':
+          description: The body is over 32 KB.
+        '415':
+          description: The body is not JSON.
+        '404':
+          description: No live site for this school (the same for every refusal).
+        '422':
+          description: A field broke a rule; keyed by field.
+        '429':
+          description: Too many submissions.
+  /api/v1/public/departments:
+    get:
+      operationId: public_departments
+      description: Departments that opted in to the website.
+      parameters:
+      - in: query
+        name: host
+        schema:
+          type: string
+        description: The site's host, as the visitor's browser sent it.
+        required: true
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Rows to return, 1 to 50 (the default and the cap).
+      tags:
+      - public
+      security:
+      - machineToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublicDepartment'
+          description: ''
+        '404':
+          description: No live site, page or tenant answers on this host.
+  /api/v1/public/files/{tenant_id}/{file_id}:
+    get:
+      operationId: public_files_retrieve
+      description: |-
+        Redirect to a `ready`, `public`, live file of an operational school; 404 otherwise.
+
+        Every miss (unknown or suspended school, other school's file, private, pending, deleted)
+        answers the same 404, so a caller learns nothing about which check failed.
+      parameters:
+      - in: path
+        name: file_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: tenant_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - public
+      responses:
+        '302':
+          description: No response body
+        '404':
+          description: No such public file (the same for every miss).
+  /api/v1/public/gallery-albums:
+    get:
+      operationId: public_gallery_albums
+      description: Published gallery albums with their item counts.
+      parameters:
+      - in: query
+        name: host
+        schema:
+          type: string
+        description: The site's host, as the visitor's browser sent it.
+        required: true
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Rows to return, 1 to 50 (the default and the cap).
+      tags:
+      - public
+      security:
+      - machineToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublicGalleryAlbum'
+          description: ''
+        '404':
+          description: No live site, page or tenant answers on this host.
+  /api/v1/public/gallery-albums/{slug}:
+    get:
+      operationId: public_gallery_album
+      description: One published album by slug, with its items (at most 200).
+      parameters:
+      - in: query
+        name: host
+        schema:
+          type: string
+        description: The site's host, as the visitor's browser sent it.
+        required: true
+      - in: path
+        name: slug
+        schema:
+          type: string
+        description: The item's slug.
+        required: true
+      tags:
+      - public
+      security:
+      - machineToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicGalleryAlbumDetail'
+          description: ''
+        '404':
+          description: No live site, page or tenant answers on this host.
+  /api/v1/public/gallery-items:
+    get:
+      operationId: public_gallery_items
+      description: The latest images across published albums.
+      parameters:
+      - in: query
+        name: host
+        schema:
+          type: string
+        description: The site's host, as the visitor's browser sent it.
+        required: true
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Rows to return, 1 to 50 (the default and the cap).
+      tags:
+      - public
+      security:
+      - machineToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublicGalleryImage'
+          description: ''
+        '404':
+          description: No live site, page or tenant answers on this host.
+  /api/v1/public/news-posts:
+    get:
+      operationId: public_news_posts
+      description: Published news posts, newest first.
+      parameters:
+      - in: query
+        name: host
+        schema:
+          type: string
+        description: The site's host, as the visitor's browser sent it.
+        required: true
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Rows to return, 1 to 50 (the default and the cap).
+      tags:
+      - public
+      security:
+      - machineToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublicNewsPost'
+          description: ''
+        '404':
+          description: No live site, page or tenant answers on this host.
+  /api/v1/public/news-posts/{slug}:
+    get:
+      operationId: public_news_post
+      description: One published news post by slug.
+      parameters:
+      - in: query
+        name: host
+        schema:
+          type: string
+        description: The site's host, as the visitor's browser sent it.
+        required: true
+      - in: path
+        name: slug
+        schema:
+          type: string
+        description: The item's slug.
+        required: true
+      tags:
+      - public
+      security:
+      - machineToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicNewsPostDetail'
+          description: ''
+        '404':
+          description: No live site, page or tenant answers on this host.
+  /api/v1/public/notices:
+    get:
+      operationId: public_notices
+      description: Published school notices, newest first.
+      parameters:
+      - in: query
+        name: host
+        schema:
+          type: string
+        description: The site's host, as the visitor's browser sent it.
+        required: true
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Rows to return, 1 to 50 (the default and the cap).
+      tags:
+      - public
+      security:
+      - machineToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublicNotice'
+          description: ''
+        '404':
+          description: No live site, page or tenant answers on this host.
+  /api/v1/public/pages:
+    get:
+      operationId: public_page
+      description: |-
+        `GET /public/pages?host=&slug=`: a published page with its visible sections, in order.
+
+        An empty slug is the homepage, which answers at `/` only. A draft is read only under a
+        preview token in the `X-Preview-Token` header naming this tenant and this page (decision 9);
+        then `slug` is optional, the site need not be live, and the response is never cached.
+      parameters:
+      - in: header
+        name: X-Preview-Token
+        schema:
+          type: string
+        description: 'A page preview token for this host''s school: reads before the
+          site is live.'
+      - in: query
+        name: host
+        schema:
+          type: string
+        description: The site's host, as the visitor's browser sent it.
+        required: true
+      - in: query
+        name: slug
+        schema:
+          type: string
+        description: Empty for the homepage. Under a preview token, omit it to read
+          the token's page.
+      tags:
+      - public
+      security:
+      - machineToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicPage'
+          description: ''
+        '404':
+          description: No live site, page or tenant answers on this host.
   /api/v1/public/payment-callbacks/{tenant_slug}/{callback_token}:
     post:
       operationId: public_payment_callbacks_create
@@ -9892,6 +10248,197 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/public/school-events:
+    get:
+      operationId: public_school_events
+      description: 'Published events by `scope`: upcoming (soonest first, the default)
+        or past.'
+      parameters:
+      - in: query
+        name: host
+        schema:
+          type: string
+        description: The site's host, as the visitor's browser sent it.
+        required: true
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Rows to return, 1 to 50 (the default and the cap).
+      - in: query
+        name: scope
+        schema:
+          type: string
+          enum:
+          - past
+          - upcoming
+        description: '`upcoming` (default): not over yet. `past`: over.'
+      tags:
+      - public
+      security:
+      - machineToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublicSchoolEvent'
+          description: ''
+        '404':
+          description: No live site, page or tenant answers on this host.
+  /api/v1/public/school-events/{slug}:
+    get:
+      operationId: public_school_event
+      description: One published event by slug.
+      parameters:
+      - in: query
+        name: host
+        schema:
+          type: string
+        description: The site's host, as the visitor's browser sent it.
+        required: true
+      - in: path
+        name: slug
+        schema:
+          type: string
+        description: The item's slug.
+        required: true
+      tags:
+      - public
+      security:
+      - machineToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicSchoolEventDetail'
+          description: ''
+        '404':
+          description: No live site, page or tenant answers on this host.
+  /api/v1/public/site:
+    get:
+      operationId: public_site
+      description: |-
+        `GET /public/site?host=`: theme, navigation, header/footer, social links and site SEO.
+
+        A valid preview token for this school reads it before the site is live (decision 9).
+      parameters:
+      - in: header
+        name: X-Preview-Token
+        schema:
+          type: string
+        description: 'A page preview token for this host''s school: reads before the
+          site is live.'
+      - in: query
+        name: host
+        schema:
+          type: string
+        description: The site's host, as the visitor's browser sent it.
+        required: true
+      tags:
+      - public
+      security:
+      - machineToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicSite'
+          description: ''
+        '404':
+          description: No live site, page or tenant answers on this host.
+  /api/v1/public/sitemap:
+    get:
+      operationId: public_sitemap
+      description: '`GET /public/sitemap?host=`: every published, indexable path of
+        the site.'
+      parameters:
+      - in: query
+        name: host
+        schema:
+          type: string
+        description: The site's host, as the visitor's browser sent it.
+        required: true
+      tags:
+      - public
+      security:
+      - machineToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublicSitemapEntry'
+          description: ''
+        '404':
+          description: No live site, page or tenant answers on this host.
+  /api/v1/public/teachers:
+    get:
+      operationId: public_teachers
+      description: Staff who opted in to the website, as public teacher cards.
+      parameters:
+      - in: query
+        name: host
+        schema:
+          type: string
+        description: The site's host, as the visitor's browser sent it.
+        required: true
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Rows to return, 1 to 50 (the default and the cap).
+      tags:
+      - public
+      security:
+      - machineToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublicTeacher'
+          description: ''
+        '404':
+          description: No live site, page or tenant answers on this host.
+  /api/v1/public/tenants/by-host:
+    get:
+      operationId: public_tenants_by_host
+      description: |-
+        `GET /public/tenants/by-host?host=`: who the host belongs to and the state of its site.
+
+        The exception to "404 unless live": a suspended school answers 200 with its `status`, so
+        the renderer shows a neutral notice, and a site that is off, unpublished or in maintenance
+        answers with its `website_status`; either way only identity, branding and state are sent.
+        A provisioning, deprovisioned or deleted school, or an unknown host, is 404.
+      parameters:
+      - in: query
+        name: host
+        schema:
+          type: string
+        description: The site's host, as the visitor's browser sent it.
+        required: true
+      tags:
+      - public
+      security:
+      - machineToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicTenant'
+          description: ''
+        '404':
+          description: No live site, page or tenant answers on this host.
   /api/v1/question-banks:
     get:
       operationId: question_banks_list
@@ -18412,6 +18959,18 @@ components:
       description: |-
         * `hard` - hard
         * `soft` - soft
+    ContactReceived:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/ContactReceivedStatusEnum'
+      required:
+      - status
+    ContactReceivedStatusEnum:
+      enum:
+      - received
+      type: string
+      description: '* `received` - received'
     ContactSubmission:
       type: object
       properties:
@@ -28477,6 +29036,691 @@ components:
           type: integer
       required:
       - updated
+    PublicBranding:
+      type: object
+      description: The renderer's `TenantBranding` keys; a value failing its pattern
+        is null.
+      properties:
+        primary_color:
+          type: string
+          nullable: true
+        secondary_color:
+          type: string
+          nullable: true
+        accent_color:
+          type: string
+          nullable: true
+        background_color:
+          type: string
+          nullable: true
+        foreground_color:
+          type: string
+          nullable: true
+        heading_font:
+          type: string
+          nullable: true
+        body_font:
+          type: string
+          nullable: true
+        logo_url:
+          type: string
+          nullable: true
+        logo_dark_url:
+          type: string
+          nullable: true
+        favicon_url:
+          type: string
+          nullable: true
+        radius:
+          type: string
+          nullable: true
+      required:
+      - accent_color
+      - background_color
+      - body_font
+      - favicon_url
+      - foreground_color
+      - heading_font
+      - logo_dark_url
+      - logo_url
+      - primary_color
+      - radius
+      - secondary_color
+    PublicClass:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        level:
+          type: integer
+      required:
+      - id
+      - level
+      - name
+    PublicContactSubmission:
+      type: object
+      description: Shape only; `create_contact_submission` owns every field rule (field-keyed
+        422s).
+      properties:
+        name:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        subject:
+          type: string
+          nullable: true
+        message:
+          type: string
+          nullable: true
+        source_page_id:
+          type: string
+          format: uuid
+          nullable: true
+        company_website:
+          type: string
+          nullable: true
+    PublicDepartment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+      required:
+      - description
+      - id
+      - name
+    PublicGalleryAlbum:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        cover_image_url:
+          type: string
+          nullable: true
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+        item_count:
+          type: integer
+      required:
+      - cover_image_url
+      - description
+      - id
+      - item_count
+      - published_at
+      - slug
+      - title
+    PublicGalleryAlbumDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        cover_image_url:
+          type: string
+          nullable: true
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+        item_count:
+          type: integer
+          description: All live items; `items` is capped.
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicGalleryItem'
+      required:
+      - cover_image_url
+      - description
+      - id
+      - item_count
+      - items
+      - published_at
+      - slug
+      - title
+    PublicGalleryImage:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        image_url:
+          type: string
+        caption:
+          type: string
+        alt_text:
+          type: string
+        album_slug:
+          type: string
+        album_title:
+          type: string
+      required:
+      - album_slug
+      - album_title
+      - alt_text
+      - caption
+      - id
+      - image_url
+    PublicGalleryItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        media_type:
+          $ref: '#/components/schemas/GalleryMediaTypeEnum'
+        image_url:
+          type: string
+          nullable: true
+          description: Null for a video embed.
+        embed_url:
+          type: string
+          nullable: true
+          description: Null for an image.
+        caption:
+          type: string
+        alt_text:
+          type: string
+        position:
+          type: integer
+      required:
+      - alt_text
+      - caption
+      - embed_url
+      - id
+      - image_url
+      - media_type
+      - position
+    PublicNavItem:
+      type: object
+      properties:
+        label:
+          type: string
+        href:
+          type: string
+          description: A site path (`/about`) or an https URL.
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicNavLink'
+      required:
+      - children
+      - href
+      - label
+    PublicNavLink:
+      type: object
+      properties:
+        label:
+          type: string
+        href:
+          type: string
+          description: A site path (`/about`) or an https URL.
+      required:
+      - href
+      - label
+    PublicNavigation:
+      type: object
+      properties:
+        header:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicNavItem'
+        footer_primary:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicNavItem'
+        footer_secondary:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicNavItem'
+      required:
+      - footer_primary
+      - footer_secondary
+      - header
+    PublicNewsPost:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        title:
+          type: string
+        excerpt:
+          type: string
+        cover_image_url:
+          type: string
+          nullable: true
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - cover_image_url
+      - excerpt
+      - id
+      - published_at
+      - slug
+      - title
+    PublicNewsPostDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        title:
+          type: string
+        excerpt:
+          type: string
+        cover_image_url:
+          type: string
+          nullable: true
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+        body:
+          type: object
+          additionalProperties: {}
+          description: A rich-text block document; image ids become `*_url`.
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - body
+      - cover_image_url
+      - excerpt
+      - id
+      - published_at
+      - slug
+      - title
+      - updated_at
+    PublicNotice:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          description: '`announcement` or `notice`.'
+        title:
+          type: string
+        body:
+          type: string
+          description: Plain text.
+        published_at:
+          type: string
+          format: date-time
+      required:
+      - body
+      - id
+      - kind
+      - published_at
+      - title
+    PublicPage:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        path:
+          type: string
+          description: '`/` for the homepage, else `/<slug>`.'
+        title:
+          type: string
+        page_type:
+          $ref: '#/components/schemas/WebsitePageTypeEnum'
+        status:
+          allOf:
+          - $ref: '#/components/schemas/WebsiteContentStatusEnum'
+          description: |-
+            `published`, unless read under a preview token.
+
+            * `draft` - Draft
+            * `published` - Published
+            * `archived` - Archived
+        is_homepage:
+          type: boolean
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+        sections:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicSection'
+        seo:
+          $ref: '#/components/schemas/PublicSeo'
+      required:
+      - id
+      - is_homepage
+      - page_type
+      - path
+      - published_at
+      - sections
+      - seo
+      - slug
+      - status
+      - title
+      - updated_at
+    PublicSchoolEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        title:
+          type: string
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+          nullable: true
+        is_all_day:
+          type: boolean
+        location:
+          type: string
+        cover_image_url:
+          type: string
+          nullable: true
+      required:
+      - cover_image_url
+      - ends_at
+      - id
+      - is_all_day
+      - location
+      - slug
+      - starts_at
+      - title
+    PublicSchoolEventDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        title:
+          type: string
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+          nullable: true
+        is_all_day:
+          type: boolean
+        location:
+          type: string
+        cover_image_url:
+          type: string
+          nullable: true
+        description:
+          type: object
+          additionalProperties: {}
+          description: A rich-text block document; image ids become `*_url`.
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - cover_image_url
+      - description
+      - ends_at
+      - id
+      - is_all_day
+      - location
+      - slug
+      - starts_at
+      - title
+      - updated_at
+    PublicSection:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/SectionTypeEnum'
+        position:
+          type: integer
+        props:
+          type: object
+          additionalProperties: {}
+          description: The section's content; image ids become `*_url`.
+      required:
+      - id
+      - position
+      - props
+      - type
+    PublicSeo:
+      type: object
+      properties:
+        title:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        canonical_url:
+          type: string
+          nullable: true
+        og_image_url:
+          type: string
+          nullable: true
+        robots:
+          type: string
+          nullable: true
+        noindex:
+          type: boolean
+      required:
+      - canonical_url
+      - description
+      - noindex
+      - og_image_url
+      - robots
+      - title
+    PublicSite:
+      type: object
+      properties:
+        theme:
+          $ref: '#/components/schemas/PublicSiteTheme'
+        navigation:
+          $ref: '#/components/schemas/PublicNavigation'
+        header_config:
+          type: object
+          additionalProperties: {}
+        footer_config:
+          type: object
+          additionalProperties: {}
+        social_links:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicSocialLink'
+        seo:
+          $ref: '#/components/schemas/PublicSeo'
+      required:
+      - footer_config
+      - header_config
+      - navigation
+      - seo
+      - social_links
+      - theme
+    PublicSiteTheme:
+      type: object
+      properties:
+        code:
+          type: string
+        version:
+          type: string
+        config:
+          type: object
+          additionalProperties: {}
+      required:
+      - code
+      - config
+      - version
+    PublicSitemapEntry:
+      type: object
+      properties:
+        path:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - path
+      - updated_at
+    PublicSocialLink:
+      type: object
+      properties:
+        platform:
+          type: string
+        url:
+          type: string
+      required:
+      - platform
+      - url
+    PublicTeacher:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        full_name:
+          type: string
+        designation:
+          type: string
+        photo_url:
+          type: string
+          nullable: true
+          description: Null unless the photo is public.
+        bio:
+          type: string
+      required:
+      - bio
+      - designation
+      - full_name
+      - id
+      - photo_url
+    PublicTenant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        name:
+          type: string
+        status:
+          $ref: '#/components/schemas/TenantStatusEnum'
+        website_status:
+          $ref: '#/components/schemas/WebsiteStatusEnum'
+        branding:
+          $ref: '#/components/schemas/PublicBranding'
+        locale:
+          $ref: '#/components/schemas/PublicTenantLocale'
+        contact:
+          allOf:
+          - $ref: '#/components/schemas/PublicTenantContact'
+          nullable: true
+          description: The primary campus; null unless the site is live.
+        custom_domain:
+          type: string
+          nullable: true
+          description: The primary active custom domain; null without one or unless
+            the site is live.
+        enabled_modules:
+          type: array
+          items:
+            type: string
+          description: Empty unless the site is live.
+      required:
+      - branding
+      - contact
+      - custom_domain
+      - enabled_modules
+      - id
+      - locale
+      - name
+      - slug
+      - status
+      - website_status
+    PublicTenantContact:
+      type: object
+      properties:
+        campus_name:
+          type: string
+        address:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+      required:
+      - address
+      - campus_name
+      - email
+      - phone
+    PublicTenantLocale:
+      type: object
+      properties:
+        default_locale:
+          type: string
+        enabled_locales:
+          type: array
+          items:
+            type: string
+        timezone:
+          type: string
+        direction:
+          $ref: '#/components/schemas/TextDirectionEnum'
+      required:
+      - default_locale
+      - direction
+      - enabled_locales
+      - timezone
     QualificationTypeEnum:
       enum:
       - degree
@@ -31801,6 +33045,22 @@ components:
         * `declined` - Declined
         * `completed` - Completed
         * `cancelled` - Cancelled
+    TenantStatusEnum:
+      enum:
+      - provisioning
+      - trial
+      - active
+      - past_due
+      - suspended
+      - deprovisioned
+      type: string
+      description: |-
+        * `provisioning` - Provisioning
+        * `trial` - Trial
+        * `active` - Active
+        * `past_due` - Past due
+        * `suspended` - Suspended
+        * `deprovisioned` - Deprovisioned
     Term:
       type: object
       properties:
@@ -31842,6 +33102,14 @@ components:
       - sequence
       - start_date
       - updated_at
+    TextDirectionEnum:
+      enum:
+      - ltr
+      - rtl
+      type: string
+      description: |-
+        * `ltr` - Left to right
+        * `rtl` - Right to left
     Theme:
       type: object
       properties:
@@ -32721,6 +33989,16 @@ components:
       - theme_code
       - theme_version
       - updated_at
+    WebsiteStatusEnum:
+      enum:
+      - live
+      - maintenance
+      - unpublished
+      type: string
+      description: |-
+        * `live` - Live
+        * `maintenance` - Maintenance
+        * `unpublished` - Unpublished
     WithdrawRequest:
       type: object
       properties:
@@ -32740,3 +34018,6 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    machineToken:
+      type: http
+      scheme: bearer

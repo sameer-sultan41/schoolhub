@@ -9,21 +9,43 @@ PAGE_SLUG_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*(?:/[a-z0-9]+(?:-[a-z0-9]+)*)*$"
 PAGE_SLUG_RE = re.compile(PAGE_SLUG_PATTERN)
 PAGE_SLUG_MAX_LENGTH = 120
 
+#: The renderer's routes for single news posts, events and albums (`/<prefix>/<slug>`), and
+#: for their listings (`/<prefix>`). Each is also a reserved first page-slug segment.
+NEWS_PATH_PREFIX = "news"
+EVENTS_PATH_PREFIX = "events"
+GALLERY_PATH_PREFIX = "gallery"
+
+#: The homepage's seeded slug. Reserved, so no other page takes it; the homepage itself is
+#: served at `/` only (its slug is never a second address for it).
+HOMEPAGE_SLUG = "home"
+
 #: First slug segments the renderer owns as routes.
 RESERVED_PAGE_SLUGS = frozenset(
     {
+        HOMEPAGE_SLUG,
         "admin",
         "api",
         "verify",
-        "news",
-        "events",
-        "gallery",
+        NEWS_PATH_PREFIX,
+        EVENTS_PATH_PREFIX,
+        GALLERY_PATH_PREFIX,
         "notices",
         "preview",
         "sitemap.xml",
         "robots.txt",
     }
 )
+
+#: Platform subdomain labels that never name a tenant's site. Mirrors the renderer's
+#: `RESERVED_LABELS` (apps/website/src/lib/host.ts); keep the two in step.
+RESERVED_SUBDOMAIN_LABELS = frozenset(
+    {"www", "api", "app", "admin", "dashboard", "static", "cdn", "mail", "status"}
+)
+
+#: Custom domain columns (docs/05-database/entities/tenancy.md `custom_domains`).
+DOMAIN_MAX_LENGTH = 253
+DOMAIN_TOKEN_MAX_LENGTH = 64
+DOMAIN_ERROR_MAX_LENGTH = 300
 
 #: The only `x-widget` hints a theme schema may carry.
 SCHEMA_WIDGETS = frozenset({"text", "textarea", "image", "rich-text", "url"})
@@ -97,11 +119,59 @@ CONTENT_SLUG_MAX_LENGTH = 120
 #: Longest stored embed URL (the column is varchar(500)); the service answers 422 above it.
 EMBED_URL_MAX_LENGTH = 500
 
+#: Most rows a public list returns, and the default when `page_size` is absent (bare arrays).
+PUBLIC_LIST_MAX = 50
+
+#: Seconds a browser or CDN may reuse the public file redirect; the presign outlives it.
+PUBLIC_FILE_CACHE_SECONDS = 300
+
+#: Most items a public album detail returns; `item_count` still reports the total.
+PUBLIC_ALBUM_ITEMS_MAX = 200
+
 
 def empty_rich_text() -> dict[str, list[dict[str, object]]]:
     """The empty block document, the default for news `body` and event `description`."""
     return {"blocks": []}
 
+
+class WebsiteStatus(models.TextChoices):
+    """A site's public state, as `hosts.website_status` derives it (plan decision 2)."""
+
+    LIVE = "live", "Live"
+    MAINTENANCE = "maintenance", "Maintenance"
+    UNPUBLISHED = "unpublished", "Unpublished"
+
+
+class TextDirection(models.TextChoices):
+    LTR = "ltr", "Left to right"
+    RTL = "rtl", "Right to left"
+
+
+#: Language codes written right to left; the dashboard's `directionFor` covers `ur`.
+RTL_LANGUAGES = frozenset({"ar", "fa", "he", "ps", "sd", "ur"})
+
+#: The branding keys the public site receives (the renderer's `TenantBranding` contract), by
+#: kind. Any other stored key stays internal; a value failing its pattern is sent as null.
+BRANDING_COLOUR_KEYS = (
+    "primary_color",
+    "secondary_color",
+    "accent_color",
+    "background_color",
+    "foreground_color",
+)
+BRANDING_FONT_KEYS = ("heading_font", "body_font")
+BRANDING_URL_KEYS = ("logo_url", "logo_dark_url", "favicon_url")
+BRANDING_LENGTH_KEYS = ("radius",)
+BRANDING_VALUE_MAX_LENGTH = 500
+#: `#rgb`, `#rrggbb`, `#rrggbbaa`, or `rgb()`/`hsl()`/`oklch()` holding only numbers, `%`, `.`,
+#: spaces, commas and `/`: nothing that can close a declaration or start another.
+BRANDING_COLOUR_RE = re.compile(
+    r"#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})|(?:rgba?|hsla?|oklch)\([0-9.%, /]+\)"
+)
+#: A font-family list: letters, digits, spaces, quotes, commas and hyphens.
+BRANDING_FONT_RE = re.compile(r"[A-Za-z0-9 '\",-]{1,200}")
+#: A CSS length: `0`, or a number in `px`, `rem`, `em` or `%`.
+BRANDING_LENGTH_RE = re.compile(r"0|(?:\d+(?:\.\d+)?|\.\d+)(?:px|rem|em|%)")
 
 #: Hosts a gallery `video_embed` item may point at.
 EMBED_HOSTS = frozenset(
@@ -117,3 +187,10 @@ CONTACT_SUBJECT_MAX = 200
 CONTACT_MESSAGE_MAX = 5000
 #: Digits, spaces and `+-()`, between 7 and 30 characters.
 CONTACT_PHONE_RE = re.compile(rf"^[0-9 +\-()]{{{CONTACT_PHONE_MIN},{CONTACT_PHONE_MAX}}}$")
+
+#: The public contact POST's body cap in bytes: a 5000-character message of 4-byte characters
+#: (20 KB) plus the other fields always fits.
+CONTACT_BODY_MAX_BYTES = 32 * 1024
+
+#: How long the CORS receiver remembers whether a host serves an operational school.
+CORS_TENANT_CACHE_SECONDS = 60

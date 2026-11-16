@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from django.conf import settings
 from django.db import models
+from django.db.models.functions import Lower
 
 from apps.website_cms.constants import (
     CONTACT_EMAIL_MAX,
@@ -19,11 +20,14 @@ from apps.website_cms.constants import (
     CONTACT_PHONE_MAX,
     CONTACT_SUBJECT_MAX,
     CONTENT_SLUG_MAX_LENGTH,
+    DOMAIN_ERROR_MAX_LENGTH,
+    DOMAIN_MAX_LENGTH,
+    DOMAIN_TOKEN_MAX_LENGTH,
     EMBED_URL_MAX_LENGTH,
     PAGE_SLUG_MAX_LENGTH,
     empty_rich_text,
 )
-from core.tenancy.models import TenantOwnedModel, TimestampedModel
+from core.tenancy.models import Tenant, TenantOwnedModel, TimestampedModel
 
 
 class PageType(models.TextChoices):
@@ -68,6 +72,20 @@ class ContactStatus(models.TextChoices):
     READ = "read", "Read"
     RESPONDED = "responded", "Responded"
     SPAM = "spam", "Spam"
+
+
+class CustomDomainStatus(models.TextChoices):
+    PENDING_DNS = "pending_dns", "Pending DNS"
+    VERIFYING = "verifying", "Verifying"
+    ACTIVE = "active", "Active"
+    FAILED = "failed", "Failed"
+    DISABLED = "disabled", "Disabled"
+
+
+class TlsStatus(models.TextChoices):
+    PENDING = "pending", "Pending"
+    ISSUED = "issued", "Issued"
+    FAILED = "failed", "Failed"
 
 
 class Theme(TimestampedModel):
@@ -414,3 +432,88 @@ class ContactSubmission(TenantOwnedModel):
 
     def __str__(self) -> str:
         return f"{self.name} ({self.status})"
+
+
+class CustomDomain(TenantOwnedModel):
+    """A school's claim on a custom domain for its site (plan decision 7).
+
+    Unique per tenant, not globally: a claim proves nothing until DNS does, so two schools may
+    both claim a domain and only verification activates one (`CustomDomainRoute`).
+    """
+
+    domain = models.CharField(max_length=DOMAIN_MAX_LENGTH)
+    status = models.CharField(
+        max_length=20, choices=CustomDomainStatus.choices, default=CustomDomainStatus.PENDING_DNS
+    )
+    verification_token = models.CharField(max_length=DOMAIN_TOKEN_MAX_LENGTH)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    tls_status = models.CharField(
+        max_length=20, choices=TlsStatus.choices, default=TlsStatus.PENDING
+    )
+    is_primary = models.BooleanField(default=False)
+    last_error = models.CharField(max_length=DOMAIN_ERROR_MAX_LENGTH, blank=True, default="")
+    failure_notified_at = models.DateTimeField(null=True, blank=True)
+    consecutive_failures = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        db_table = "custom_domains"
+        ordering = ["domain", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "domain"],
+                name="custom_domains_unique_tenant_domain",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+            # Also serves the spec's (tenant_id, is_primary) lookup.
+            models.UniqueConstraint(
+                fields=["tenant"],
+                name="custom_domains_one_primary_per_tenant",
+                condition=models.Q(is_primary=True, deleted_at__isnull=True),
+            ),
+            models.CheckConstraint(
+                condition=(models.Q(is_primary=False) | models.Q(status=CustomDomainStatus.ACTIVE)),
+                name="custom_domains_primary_is_active",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(domain=Lower("domain")),
+                name="custom_domains_domain_lowercase",
+            ),
+            # The target of `custom_domain_routes`' composite foreign key (migration 0007).
+            models.UniqueConstraint(
+                fields=["id", "tenant"], name="custom_domains_unique_id_tenant"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.domain} ({self.status})"
+
+
+class CustomDomainRoute(TimestampedModel):
+    """Active custom domain -> tenant, read by host resolution before any tenant is known.
+
+    Platform scope: no RLS and not a `TenantOwnedModel`, because the lookup has no tenant to
+    bind. It holds only active domains; services insert a row on activation and delete it on
+    disable, failure or delete, in the same transaction. Rows are hard-deleted, never
+    soft-deleted. Every write filters by both `custom_domain_id` and `tenant_id`, and a composite
+    foreign key `(custom_domain_id, tenant_id) -> custom_domains (id, tenant_id)` (migration 0007)
+    makes the database refuse a route whose tenant is not its domain's tenant.
+    """
+
+    domain = models.CharField(max_length=DOMAIN_MAX_LENGTH, unique=True)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="+")
+    custom_domain = models.OneToOneField(CustomDomain, on_delete=models.CASCADE, related_name="+")
+
+    objects = models.Manager()
+
+    class Meta:
+        db_table = "custom_domain_routes"
+        ordering = ["domain"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(domain=Lower("domain")),
+                name="custom_domain_routes_domain_lowercase",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.domain} -> {self.tenant_id}"

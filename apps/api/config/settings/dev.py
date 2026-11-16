@@ -32,6 +32,8 @@ SPECTACULAR_SETTINGS |= {
 # emailed account links and payment return URLs.
 DASHBOARD_URL_SCHEME = "http"
 DASHBOARD_URL_PORT = "3000"
+# The website's dev server (`next dev --port 3001`), for preview links.
+WEBSITE_URL_PORT = "3001"
 # The compose API (`api.localhost:8000`, as NEXT_PUBLIC_API_BASE_URL in infra/compose).
 API_PUBLIC_URL = env("API_PUBLIC_URL", default="http://api.localhost:8000")
 

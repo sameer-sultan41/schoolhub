@@ -30,7 +30,12 @@
 ### 2.2 Authentication & Authorization
 - `Authorization: Bearer <JWT access token>` (15 min) + rotating refresh token (30 days, revocable). Refresh in an HttpOnly cookie for web, secure storage for future mobile.
 - Every request resolves `(user, tenant, roles, permissions)`; endpoint guards check `module.resource.action` permission keys per [`auth-and-rbac.md`](auth-and-rbac.md).
-- Service-to-service calls (website renderer → API) use scoped machine tokens with read-only public-content permissions.
+- Service-to-service calls (website renderer → API) use scoped machine tokens with read-only public-content permissions ([ADR-0039](../decisions/0039-public-content-api.md)):
+  - `MACHINE_CLIENTS` (settings) maps a client name to `{tokens_setting, scopes}`; today only `website-renderer`, with `WEBSITE_MACHINE_TOKENS` (comma-separated, newest first, so a token rotates with overlap) and the scope `website.public-content.view`.
+  - `MACHINE_SCOPES` (`core/rbac/machine.py`) is the closed set of scopes a machine client can hold. They are not in the role registry, so no `Permission` row is grantable and a person can never hold one.
+  - Authentication is set **per view** (`MachineTokenAuthentication`, `HasMachineScope` reading `required_machine_scope`, `MachineClientThrottle`), never in `DEFAULT_AUTHENTICATION_CLASSES`: a machine token opens no CMS route, and a staff JWT opens no machine route (401). Tokens are compared in constant time and an empty setting rejects everything.
+  - The throttle `machine_client` is 1200/min per normalised `?host=` (not per principal, which has no id). A contract test (`PublicEndpointContractTests`) requires every `/api/v1/public/` route to be either machine-guarded with a registered scope or on a short allowlist of anonymous routes (the payment callback, the file redirect, the contact `POST`) that carry their own throttles and no authentication classes.
+- Per-IP throttles and stored client IPs use DRF's `NUM_PROXIES` setting (production requires it) through `core.api.client_ip.client_ip`.
 
 ### 2.3 Response Envelope & Errors
 ```json
