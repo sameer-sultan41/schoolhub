@@ -692,21 +692,14 @@ def _promotion_approvers(tenant_id: uuid.UUID) -> set[uuid.UUID]:
 
     §12 addresses this to the `principal`, but a role is only ever a bundle of
     permission keys (auth-and-rbac.md) — a school that moved approval onto a
-    custom role would otherwise be told nothing. Resolved the same way
-    `core.rbac.permissions.effective_permission_keys` resolves it, so the people
-    notified are exactly the people the endpoint would let through.
+    custom role would otherwise be told nothing.
     """
-    from core.rbac.models import User
+    from core.rbac.permissions import holders_of_permission
 
     return set(
-        User.objects.filter(
-            tenant_id=tenant_id,
-            is_active=True,
-            deleted_at__isnull=True,
-            user_roles__deleted_at__isnull=True,
-            user_roles__role__deleted_at__isnull=True,
-            user_roles__role__permissions__key=PROMOTION_APPROVAL_KEY,
-        ).values_list("pk", flat=True)
+        holders_of_permission(PROMOTION_APPROVAL_KEY, tenant_id=tenant_id).values_list(
+            "pk", flat=True
+        )
     )
 
 

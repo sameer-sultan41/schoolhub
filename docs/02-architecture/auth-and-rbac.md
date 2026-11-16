@@ -85,6 +85,7 @@ erDiagram
      payload carries the enqueuing request's declaration as `scope_permission`
      (`core/exports/scope.py`). A job without one fails and asks the user to export again.
 4. **Tenant-level:** RLS underneath everything (see `multi-tenancy.md`) — RBAC narrows *within* a tenant, never across.
+   The RBAC tables themselves (`users`, `roles`, `role_permissions`, `user_roles`) carry no RLS, and default roles are shared by every tenant, so a lookup of *who holds a key* (an approver notice) goes through `holders_of_permission(key, tenant_id=...)` in `core/rbac/permissions.py`, which filters by the user's tenant.
 
 ### 2.4 Approval & Financial Permissions
 - Approval steps in configurable workflows (leave, result publishing, refunds, certificate issuance, admission acceptance) each name a required permission (e.g. `hr.leave-request.approve`) and optionally a role; a user cannot approve a step they initiated (segregation of duties).

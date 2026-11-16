@@ -598,8 +598,7 @@ def notify_results_pending_approval(*, tenant_id: str, exam_id: str) -> dict[str
     from apps.examinations import notifications
     from apps.examinations.models import Exam, Result, ResultStatus
     from core.notifications.services import Recipient, notify
-    from core.rbac.models import User
-    from core.rbac.permissions import effective_permission_keys
+    from core.rbac.permissions import holders_of_permission
     from core.tenancy.context import tenant_atomic
     from core.tenancy.models import Tenant
 
@@ -614,13 +613,11 @@ def notify_results_pending_approval(*, tenant_id: str, exam_id: str) -> dict[str
         if not pending:
             return {"notified": 0}
 
-        # Every active user in the tenant, filtered by the key. The candidate
-        # set is a school's staff, not its students, so this is small — and
-        # `effective_permission_keys` is cached per user.
         recipients = [
-            Recipient(user_id=user.pk)
-            for user in User.objects.filter(is_active=True)
-            if "exams.result.approve" in effective_permission_keys(user)
+            Recipient(user_id=user_id)
+            for user_id in holders_of_permission(
+                "exams.result.approve", tenant_id=uuid.UUID(tenant_id)
+            ).values_list("pk", flat=True)
         ]
         if not recipients:
             logger.warning(

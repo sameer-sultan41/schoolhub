@@ -15,7 +15,7 @@ from rest_framework import exceptions, permissions
 from rest_framework.request import Request
 
 from core.rbac.cache import scope_grants_cache_key
-from core.rbac.models import RecordScope, UserRole
+from core.rbac.models import RecordScope, User, UserRole
 
 _CACHE_TTL = 300
 
@@ -73,6 +73,31 @@ def scope_grants(user: RbacUser) -> ScopeGrants:
     }
     cache.set(cache_key, grants, _CACHE_TTL)
     return grants
+
+
+def holders_of_permission(key: str, *, tenant_id: uuid.UUID | None) -> QuerySet[User]:
+    """Active users of ``tenant_id`` who hold ``key`` through a live role assignment.
+
+    The one way to ask "who in this school can do X" (approver notices). `users`,
+    `roles` and `user_roles` carry no RLS and default roles are shared across
+    tenants, so the tenant filter here is the only thing keeping the answer inside
+    one school. It filters on `User.tenant_id` rather than the nullable
+    `UserRole.tenant_id`, and reads the same live rows `scope_grants` does, so the
+    holders are exactly the users the permission class lets through.
+
+    Fails closed on a missing tenant: `tenant_id=None` would compile to `IS NULL`
+    and return platform users.
+    """
+    if tenant_id is None:
+        return User.objects.none()
+    holding = UserRole.objects.filter(
+        deleted_at__isnull=True,
+        role__deleted_at__isnull=True,
+        role__permissions__key=key,
+    ).values("user_id")
+    return User.objects.filter(
+        tenant_id=tenant_id, is_active=True, deleted_at__isnull=True, pk__in=holding
+    )
 
 
 def effective_permission_keys(user: RbacUser) -> frozenset[str]:

@@ -27,6 +27,16 @@ either this file or `project-status.md`.
   each environment (the load balancer, plus any CDN), and test that a spoofed header does not
   change the throttle key.
 
+- **`notify()` does not check that a recipient belongs to the tenant it writes for.**
+  `core.notifications.services.notify` persists a `Notification` with the caller's `tenant_id`
+  for every recipient it is handed, and `Notification.user_id`'s help text says "tenant-checked
+  at write time", which no code does. PR #190 fixed the producers that handed it other schools'
+  approvers (`core.rbac.permissions.holders_of_permission`); a guard in `notify()` that drops or
+  refuses a recipient whose `users.tenant_id` differs would be defence in depth behind them, and
+  the help text should then describe it. The same gap is in `resolve_addresses`
+  (`core/notifications/services.py`), which reads emails with `User.objects.filter(pk__in=...)`
+  and no tenant filter, at persist and at send time; the guard belongs in both places.
+
 - **AI gateway and AI-FEE-02 follow-ups** (`feat/ai-gateway`, plan
   `docs/superpowers/plans/2026-11-07-ai-gateway.md`, [ADR-0035](decisions/0035-ai-gateway-shape.md)).
   The gateway and the on-demand finance report summary shipped backend only. Left out on purpose:
