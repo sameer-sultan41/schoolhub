@@ -1,7 +1,7 @@
 """What published website content still references a file (decision 4's reference providers).
 
-One small function per content type; `core.files.visibility` unions their answers. News, events
-and gallery add their own function here and one line to `PROVIDERS`.
+One small function per content type; `core.files.visibility` unions their answers. Each takes
+the candidate ids and loads only rows that can mention them (lesson L71), never every published row.
 """
 
 from __future__ import annotations
@@ -14,17 +14,22 @@ from uuid import UUID
 from django.db.models import Q
 
 from apps.website_cms.constants import DEFAULT_THEME_CODE
+from apps.website_cms.content import TARGET_MODELS
 from apps.website_cms.models import (
     ContentStatus,
+    GalleryAlbum,
+    GalleryItem,
+    NewsPost,
     PageSection,
+    SchoolEvent,
     SeoSetting,
     SeoTargetType,
     Theme,
-    WebsitePage,
     WebsiteSettings,
 )
-from apps.website_cms.validation import referenced_file_ids
+from apps.website_cms.validation import referenced_file_ids, rich_text_file_ids
 from core.files.visibility import register_public_reference_provider
+from core.tenancy.models import TenantOwnedModel
 
 
 def _active_section_types() -> dict:
@@ -55,24 +60,84 @@ def page_section_files(candidates: set[UUID]) -> set[UUID]:
     return found
 
 
-def seo_image_files(candidates: set[UUID]) -> set[UUID]:
-    """OG images of the site, or of a published page."""
-    rows = list(SeoSetting.objects.alive().filter(og_image_file_id__in=candidates))
-    page_ids = {row.target_id for row in rows if row.target_type == SeoTargetType.PAGE}
-    published_pages = set(
-        WebsitePage.objects.alive()
-        .filter(id__in=page_ids, status=ContentStatus.PUBLISHED)
+def _published_ids(model: type[TenantOwnedModel], ids: set[UUID | None]) -> set[UUID]:
+    """The subset of `ids` that name a live, published row of `model`."""
+    return set(
+        model.objects.alive()
+        .filter(id__in=ids, status=ContentStatus.PUBLISHED)
         .values_list("id", flat=True)
     )
+
+
+def seo_image_files(candidates: set[UUID]) -> set[UUID]:
+    """OG images of the site, or of a published page, post, event or album."""
+    rows = list(SeoSetting.objects.alive().filter(og_image_file_id__in=candidates))
+    published = {
+        target_type: _published_ids(
+            model, {row.target_id for row in rows if row.target_type == target_type}
+        )
+        for target_type, model in TARGET_MODELS.items()
+    }
     return {
         row.og_image_file_id
         for row in rows
-        if row.target_type == SeoTargetType.SITE
-        or (row.target_type == SeoTargetType.PAGE and row.target_id in published_pages)
+        if row.og_image_file_id is not None
+        and (
+            row.target_type == SeoTargetType.SITE
+            or row.target_id in published.get(row.target_type, set())
+        )
     }
 
 
-PROVIDERS: tuple[Callable[[set[UUID]], set[UUID]], ...] = (page_section_files, seo_image_files)
+def _rich_text_files(
+    model: type[NewsPost] | type[SchoolEvent], field: str, candidates: set[UUID]
+) -> set[UUID]:
+    """Cover images and rich-text images of the published rows of `model`."""
+    covers = set(
+        model.objects.alive()
+        .filter(status=ContentStatus.PUBLISHED, cover_image_file_id__in=candidates)
+        .values_list("cover_image_file_id", flat=True)
+    )
+    mentions = reduce(or_, (Q(**{f"{field}__icontains": str(i)}) for i in candidates))
+    found: set[UUID] = {c for c in covers if c is not None}
+    for row in model.objects.alive().filter(mentions, status=ContentStatus.PUBLISHED):
+        found |= rich_text_file_ids(getattr(row, field)) & candidates
+    return found
+
+
+def news_files(candidates: set[UUID]) -> set[UUID]:
+    """Covers and body images of published news posts."""
+    return _rich_text_files(NewsPost, "body", candidates) if candidates else set()
+
+
+def event_files(candidates: set[UUID]) -> set[UUID]:
+    """Covers and description images of published events."""
+    return _rich_text_files(SchoolEvent, "description", candidates) if candidates else set()
+
+
+def gallery_files(candidates: set[UUID]) -> set[UUID]:
+    """Covers and image items of published albums."""
+    if not candidates:
+        return set()
+    published = GalleryAlbum.objects.alive().filter(status=ContentStatus.PUBLISHED)
+    covers = published.filter(cover_image_file_id__in=candidates).values_list(
+        "cover_image_file_id", flat=True
+    )
+    items = (
+        GalleryItem.objects.alive()
+        .filter(file_id__in=candidates, gallery_album__in=published)
+        .values_list("file_id", flat=True)
+    )
+    return {i for i in (*covers, *items) if i is not None}
+
+
+PROVIDERS: tuple[Callable[[set[UUID]], set[UUID]], ...] = (
+    page_section_files,
+    seo_image_files,
+    news_files,
+    event_files,
+    gallery_files,
+)
 
 
 def register_providers() -> None:

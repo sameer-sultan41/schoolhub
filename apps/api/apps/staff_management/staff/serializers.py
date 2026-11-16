@@ -86,6 +86,7 @@ class StaffSerializer(serializers.ModelSerializer):
             "phone",
             "national_id",
             "public_bio",
+            "show_on_website",
             "address",
             "custom_fields",
             "created_at",

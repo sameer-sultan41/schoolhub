@@ -7,6 +7,7 @@ through the tenant-scoped default manager inside ``tenant_context(...)``.
 from __future__ import annotations
 
 import factory
+from django.utils import timezone
 
 from apps.school_organization.tests.factories import (
     TenantFactory,
@@ -15,11 +16,18 @@ from apps.school_organization.tests.factories import (
     grant,
 )
 from apps.website_cms.models import (
+    ContactStatus,
+    ContactSubmission,
     ContentStatus,
+    GalleryAlbum,
+    GalleryItem,
+    MediaType,
     MenuLocation,
     NavigationMenu,
+    NewsPost,
     PageSection,
     PageType,
+    SchoolEvent,
     SeoSetting,
     SeoTargetType,
     Theme,
@@ -88,6 +96,62 @@ class SeoSettingFactory(factory.django.DjangoModelFactory):
     meta_title = "A school"
 
 
+class NewsPostFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = NewsPost
+
+    tenant = factory.SubFactory(TenantFactory)
+    title = factory.Sequence(lambda n: f"News {n}")
+    slug = factory.Sequence(lambda n: f"news-{n}")
+    body = factory.LazyFunction(lambda: {"blocks": [{"type": "paragraph", "text": "Hello"}]})
+    status = ContentStatus.DRAFT
+
+
+class ContactSubmissionFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = ContactSubmission
+
+    tenant = factory.SubFactory(TenantFactory)
+    name = factory.Sequence(lambda n: f"Visitor {n}")
+    email = factory.Sequence(lambda n: f"visitor{n}@example.com")
+    message = "Do you have places in Grade 3?"
+    status = ContactStatus.NEW
+    ip = "203.0.113.7"
+
+
+class SchoolEventFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = SchoolEvent
+
+    tenant = factory.SubFactory(TenantFactory)
+    title = factory.Sequence(lambda n: f"Event {n}")
+    slug = factory.Sequence(lambda n: f"event-{n}")
+    description = factory.LazyFunction(lambda: {"blocks": [{"type": "paragraph", "text": "Join"}]})
+    starts_at = factory.LazyFunction(timezone.now)
+    status = ContentStatus.DRAFT
+
+
+class GalleryAlbumFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = GalleryAlbum
+
+    tenant = factory.SubFactory(TenantFactory)
+    title = factory.Sequence(lambda n: f"Album {n}")
+    slug = factory.Sequence(lambda n: f"album-{n}")
+    status = ContentStatus.DRAFT
+
+
+class GalleryItemFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = GalleryItem
+
+    tenant = factory.SubFactory(TenantFactory)
+    gallery_album = factory.SubFactory(GalleryAlbumFactory)
+    media_type = MediaType.VIDEO_EMBED
+    embed_url = "https://www.youtube.com/watch?v=abc"
+    position = factory.Sequence(lambda n: n)
+
+
 def enable_feature(tenant, key: str) -> None:
     """Force ``key`` on for ``tenant``; `module.website` ships `default_enabled=False`."""
     from core.tenancy.context import tenant_context
@@ -102,7 +166,12 @@ def enable_feature(tenant, key: str) -> None:
 
 
 __all__ = [
+    "ContactSubmissionFactory",
+    "GalleryAlbumFactory",
+    "GalleryItemFactory",
     "NavigationMenuFactory",
+    "NewsPostFactory",
+    "SchoolEventFactory",
     "PageSectionFactory",
     "SeoSettingFactory",
     "TenantFactory",

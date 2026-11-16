@@ -415,10 +415,12 @@ SPECTACULAR_SETTINGS = {
         # is the OpenAPI enum the renderer's registry is typed against (plan decision 6).
         "WebsiteContentStatusEnum": "apps.website_cms.models.ContentStatus",
         "WebsitePageTypeEnum": "apps.website_cms.models.PageType",
+        "ContactSubmissionStatusEnum": "apps.website_cms.models.ContactStatus",
         "NavigationMenuLocationEnum": "apps.website_cms.models.MenuLocation",
         "SeoTargetTypeEnum": "apps.website_cms.models.SeoTargetType",
         "NavigationTargetTypeEnum": "apps.website_cms.constants.NavTargetType",
         "SectionTypeEnum": "apps.website_cms.constants.SectionType",
+        "GalleryMediaTypeEnum": "apps.website_cms.models.MediaType",
     },
 }
 

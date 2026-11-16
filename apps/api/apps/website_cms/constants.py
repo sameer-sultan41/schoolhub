@@ -87,3 +87,33 @@ class NavTargetType(models.TextChoices):
     NEWS_INDEX = "news_index", "News listing"
     EVENTS_INDEX = "events_index", "Events listing"
     GALLERY_INDEX = "gallery_index", "Gallery listing"
+
+
+#: News, event and album slugs: one lowercase segment, 120 characters at most (decision 14).
+CONTENT_SLUG_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
+CONTENT_SLUG_RE = re.compile(CONTENT_SLUG_PATTERN)
+CONTENT_SLUG_MAX_LENGTH = 120
+
+#: Longest stored embed URL (the column is varchar(500)); the service answers 422 above it.
+EMBED_URL_MAX_LENGTH = 500
+
+
+def empty_rich_text() -> dict[str, list[dict[str, object]]]:
+    """The empty block document, the default for news `body` and event `description`."""
+    return {"blocks": []}
+
+
+#: Hosts a gallery `video_embed` item may point at.
+EMBED_HOSTS = frozenset(
+    {"www.youtube.com", "youtube.com", "youtu.be", "player.vimeo.com", "vimeo.com"}
+)
+
+#: Contact form limits, declared once for the model columns and the service's checks.
+CONTACT_NAME_MAX = 150
+CONTACT_EMAIL_MAX = 254
+CONTACT_PHONE_MAX = 30
+CONTACT_PHONE_MIN = 7
+CONTACT_SUBJECT_MAX = 200
+CONTACT_MESSAGE_MAX = 5000
+#: Digits, spaces and `+-()`, between 7 and 30 characters.
+CONTACT_PHONE_RE = re.compile(rf"^[0-9 +\-()]{{{CONTACT_PHONE_MIN},{CONTACT_PHONE_MAX}}}$")

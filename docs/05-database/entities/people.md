@@ -162,6 +162,7 @@ Employee master record for teaching and non-teaching staff.
 | phone | varchar(32) | no | — | |
 | national_id | varchar(64) | yes | null | Unique (tenant_id, national_id) when set |
 | public_bio | text | yes | null | Opt-in website-published bio |
+| show_on_website | boolean | no | `false` | Opt-in: list on the public website; its photo is public while this is set and the person is employed (`active`/`on_leave`, not deleted) |
 | address | jsonb | yes | null | |
 | custom_fields | jsonb | no | `'{}'` | |
 

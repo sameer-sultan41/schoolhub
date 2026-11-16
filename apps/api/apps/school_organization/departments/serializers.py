@@ -28,6 +28,7 @@ class DepartmentSerializer(serializers.ModelSerializer):
             "head_staff_id",
             "description",
             "is_active",
+            "show_on_website",
             "created_at",
             "updated_at",
         )

@@ -15,6 +15,7 @@ from django.db import transaction
 from apps.staff_management import uploads
 from apps.staff_management.models import Designation, Gender, Staff
 from apps.staff_management.staff.services.numbering import allocate_employee_number
+from apps.staff_management.visibility import sync_staff_photos
 from core.api.exceptions import DomainRuleViolation
 from core.files.services import assert_file_usable
 
@@ -90,6 +91,7 @@ def create_staff(
     email: str | None = None,
     national_id: str | None = None,
     public_bio: str | None = None,
+    show_on_website: bool = False,
     address: dict | None = None,
     custom_fields: dict | None = None,
     actor_id: uuid.UUID,
@@ -116,7 +118,7 @@ def create_staff(
         campus=campus, joining_date=joining_date, tenant_id=tenant_id
     )
 
-    return Staff.objects.create(
+    staff = Staff.objects.create(
         tenant_id=tenant_id,
         employee_number=employee_number,
         first_name=first_name,
@@ -135,8 +137,12 @@ def create_staff(
         phone=phone,
         national_id=national_id,
         public_bio=public_bio,
+        show_on_website=show_on_website,
         address=address,
         custom_fields=custom_fields or {},
         created_by=actor_id,
         updated_by=actor_id,
     )
+    if show_on_website:
+        sync_staff_photos({photo_file.pk if photo_file is not None else None})
+    return staff

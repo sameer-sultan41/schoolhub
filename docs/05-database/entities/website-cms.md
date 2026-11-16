@@ -92,14 +92,14 @@ School news articles with listing + detail pages.
 | ------ | ---- | ---- | ------- | ----- |
 | title | varchar(200) | no | — | |
 | slug | varchar(120) | no | — | Unique per tenant |
-| excerpt | varchar(500) | yes | — | Listing/OG fallback text |
-| body | jsonb | no | `'{}'` | Structured rich text |
+| excerpt | varchar(500) | no | `''` | Listing/OG fallback text |
+| body | jsonb | no | `{"blocks": []}` | Structured rich text; the default is a valid empty document |
 | cover_image_file_id | uuid | yes | — | FK → files |
 | status | varchar(20) | no | `'draft'` | Enum: `draft` `published` `archived` |
-| published_at | timestamptz | yes | — | Display date; scheduling *(recommendation)* |
-| locale | varchar(10) | yes | — | Null = default locale |
+| published_at | timestamptz | yes | — | Display date; read-only, set on publish and cleared on unpublish or archive; scheduling *(recommendation)* |
+| locale | varchar(10) | no | `''` | Empty = default locale |
 
-Indexes: unique(tenant_id, slug); (tenant_id, status, published_at).
+Indexes: unique(tenant_id, slug) among live rows (`deleted_at IS NULL`); (tenant_id, status, published_at).
 Relationships: author = `created_by`; `seo_settings` may target a post.
 
 ### school_events
@@ -109,15 +109,15 @@ Public website events (open day, annual function). Distinct from the academic ca
 | ------ | ---- | ---- | ------- | ----- |
 | title | varchar(200) | no | — | |
 | slug | varchar(120) | no | — | Unique per tenant |
-| description | jsonb | no | `'{}'` | Structured rich text |
+| description | jsonb | no | `{"blocks": []}` | Structured rich text; the default is a valid empty document |
 | starts_at | timestamptz | no | — | Tenant timezone applied at render |
 | ends_at | timestamptz | yes | — | ≥ starts_at |
 | is_all_day | boolean | no | `false` | |
-| location | varchar(200) | yes | — | Free text / campus name |
+| location | varchar(200) | no | `''` | Free text / campus name |
 | cover_image_file_id | uuid | yes | — | FK → files |
 | status | varchar(20) | no | `'draft'` | Enum: `draft` `published` `archived` |
 
-Indexes: unique(tenant_id, slug); (tenant_id, status, starts_at).
+Indexes: unique(tenant_id, slug) among live rows; (tenant_id, status, starts_at). Events are archived, never deleted through the API.
 Relationships: optionally linked from `gallery_albums.school_event_id`.
 
 ### gallery_albums
@@ -127,13 +127,13 @@ Photo/video albums for the gallery section.
 | ------ | ---- | ---- | ------- | ----- |
 | title | varchar(200) | no | — | |
 | slug | varchar(120) | no | — | Unique per tenant |
-| description | text | yes | — | |
+| description | text | no | `''` | |
 | cover_image_file_id | uuid | yes | — | FK → files; falls back to first item |
-| school_event_id | uuid | yes | — | FK → school_events (album of an event) |
+| school_event_id | uuid | yes | — | FK → school_events (album of an event); `ON DELETE SET NULL` |
 | status | varchar(20) | no | `'draft'` | Enum: `draft` `published` `archived` |
 | published_at | timestamptz | yes | — | |
 
-Indexes: unique(tenant_id, slug); (tenant_id, status).
+Indexes: unique(tenant_id, slug) among live rows; (tenant_id, status). The API offers draft and published only (no archive action); `archived` stays in the enum for a later need.
 Relationships: 1:N `gallery_items`; N:1 `school_events` (optional).
 
 ### gallery_items
@@ -144,12 +144,12 @@ Individual media entries inside an album.
 | gallery_album_id | uuid | no | — | FK → gallery_albums |
 | media_type | varchar(20) | no | `'image'` | Enum: `image` `video_embed` |
 | file_id | uuid | yes | — | FK → files; required when media_type = `image` |
-| embed_url | varchar(500) | yes | — | Required when media_type = `video_embed`; provider whitelist |
-| caption | varchar(300) | yes | — | |
-| alt_text | varchar(300) | yes | — | Accessibility; AI-suggested via `AI-WEB-03` |
-| position | integer | no | — | Order within album |
+| embed_url | varchar(500) | no | `''` | Required when media_type = `video_embed`: absolute `https` URL on the host whitelist (`EMBED_HOSTS`); 500 is declared once as `EMBED_URL_MAX_LENGTH` |
+| caption | varchar(300) | no | `''` | |
+| alt_text | varchar(300) | no | `''` | Accessibility; AI-suggested via `AI-WEB-03` |
+| position | integer | no | — | Order within album; new items append at `max+1`, reorder writes in two passes |
 
-Indexes: unique(gallery_album_id, position); (gallery_album_id).
+Indexes: unique(gallery_album_id, position) among live rows; (gallery_album_id).
 Relationships: N:1 `gallery_albums`; N:1 `files`.
 
 ### contact_submissions
@@ -158,14 +158,14 @@ Public contact-form submissions. **Exceptions:** `created_by` is NULL (submitter
 | Column | Type | Null | Default | Notes |
 | ------ | ---- | ---- | ------- | ----- |
 | name | varchar(150) | no | — | |
-| email | varchar(254) | yes | — | Email or phone required (application-level rule) |
-| phone | varchar(30) | yes | — | |
-| subject | varchar(200) | yes | — | |
-| message | text | no | — | Length-capped |
+| email | varchar(254) | no | `''` | Email or phone required: enforced in the service and by the `contact_submissions_email_or_phone` CHECK (`email <> '' OR phone <> ''`) |
+| phone | varchar(30) | no | `''` | |
+| subject | varchar(200) | no | `''` | |
+| message | text | no | — | At most 5000 characters (service rule, `CONTACT_MESSAGE_MAX`) |
 | source_page_id | uuid | yes | — | FK → website_pages (where the form lived) |
 | status | varchar(20) | no | `'new'` | Enum: `new` `read` `responded` `spam` |
 | handled_by | uuid | yes | — | FK → users (triaging staff member) |
-| ip | inet | yes | — | Rate limiting/spam; retention-limited per privacy policy |
+| ip | inet | yes | — | Rate limiting/spam; retention-limited per privacy policy. Never exposed to staff: the serializer has no `ip` field |
 
 Indexes: (tenant_id, status, created_at).
 Relationships: N:1 `website_pages`, `users`. Admission-form submissions are **not** stored here — they create enquiry/application records in [`admissions.md`](admissions.md).

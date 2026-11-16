@@ -110,6 +110,9 @@ class Department(TenantOwnedModel):
     head_staff_id = models.UUIDField(null=True, blank=True, help_text="staff(id) — head of dept.")
     description = models.CharField(max_length=300, null=True, blank=True)
     is_active = models.BooleanField(default=True)
+    show_on_website = models.BooleanField(
+        default=False, help_text="Opt-in: list this department on the website."
+    )
 
     class Meta:
         db_table = "departments"
@@ -221,6 +224,9 @@ class Class(TenantOwnedModel):
         help_text="Promotion ordering; the next level up is the promotion target."
     )
     is_active = models.BooleanField(default=True)
+    show_on_website = models.BooleanField(
+        default=False, help_text="Opt-in: list this class on the website."
+    )
 
     class Meta:
         db_table = "classes"

@@ -10,9 +10,19 @@ soft-deleted slug or menu can be reused (decision 14). String columns use "" for
 
 from __future__ import annotations
 
+from django.conf import settings
 from django.db import models
 
-from apps.website_cms.constants import PAGE_SLUG_MAX_LENGTH
+from apps.website_cms.constants import (
+    CONTACT_EMAIL_MAX,
+    CONTACT_NAME_MAX,
+    CONTACT_PHONE_MAX,
+    CONTACT_SUBJECT_MAX,
+    CONTENT_SLUG_MAX_LENGTH,
+    EMBED_URL_MAX_LENGTH,
+    PAGE_SLUG_MAX_LENGTH,
+    empty_rich_text,
+)
 from core.tenancy.models import TenantOwnedModel, TimestampedModel
 
 
@@ -46,6 +56,18 @@ class SeoTargetType(models.TextChoices):
     NEWS_POST = "news_post", "News post"
     SCHOOL_EVENT = "school_event", "School event"
     GALLERY_ALBUM = "gallery_album", "Gallery album"
+
+
+class MediaType(models.TextChoices):
+    IMAGE = "image", "Image"
+    VIDEO_EMBED = "video_embed", "Video embed"
+
+
+class ContactStatus(models.TextChoices):
+    NEW = "new", "New"
+    READ = "read", "Read"
+    RESPONDED = "responded", "Responded"
+    SPAM = "spam", "Spam"
 
 
 class Theme(TimestampedModel):
@@ -224,3 +246,171 @@ class SeoSetting(TenantOwnedModel):
 
     def __str__(self) -> str:
         return f"SEO {self.target_type} {self.target_id}"
+
+
+class NewsPost(TenantOwnedModel):
+    """A school news article; `body` is a rich-text block document."""
+
+    title = models.CharField(max_length=200)
+    slug = models.CharField(max_length=CONTENT_SLUG_MAX_LENGTH)
+    excerpt = models.CharField(max_length=500, blank=True, default="")
+    body = models.JSONField(default=empty_rich_text, blank=True)
+    cover_image_file_id = models.UUIDField(null=True, blank=True)
+    status = models.CharField(
+        max_length=20, choices=ContentStatus.choices, default=ContentStatus.DRAFT
+    )
+    published_at = models.DateTimeField(null=True, blank=True)
+    locale = models.CharField(max_length=10, blank=True, default="")
+
+    class Meta:
+        db_table = "news_posts"
+        ordering = ["-published_at", "-created_at", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "slug"],
+                name="news_posts_unique_slug",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["tenant", "status", "published_at"], name="news_posts_status_pub_idx"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.slug
+
+
+class SchoolEvent(TenantOwnedModel):
+    """A public website event (open day, annual function); `description` is rich text."""
+
+    title = models.CharField(max_length=200)
+    slug = models.CharField(max_length=CONTENT_SLUG_MAX_LENGTH)
+    description = models.JSONField(default=empty_rich_text, blank=True)
+    starts_at = models.DateTimeField()
+    ends_at = models.DateTimeField(null=True, blank=True)
+    is_all_day = models.BooleanField(default=False)
+    location = models.CharField(max_length=200, blank=True, default="")
+    cover_image_file_id = models.UUIDField(null=True, blank=True)
+    status = models.CharField(
+        max_length=20, choices=ContentStatus.choices, default=ContentStatus.DRAFT
+    )
+
+    class Meta:
+        db_table = "school_events"
+        ordering = ["-starts_at", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "slug"],
+                name="school_events_unique_slug",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["tenant", "status", "starts_at"], name="school_events_status_start_idx"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.slug
+
+
+class GalleryAlbum(TenantOwnedModel):
+    """An album of images and video embeds, optionally the album of a school event."""
+
+    title = models.CharField(max_length=200)
+    slug = models.CharField(max_length=CONTENT_SLUG_MAX_LENGTH)
+    description = models.TextField(blank=True, default="")
+    cover_image_file_id = models.UUIDField(null=True, blank=True)
+    school_event = models.ForeignKey(
+        SchoolEvent, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    status = models.CharField(
+        max_length=20, choices=ContentStatus.choices, default=ContentStatus.DRAFT
+    )
+    published_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "gallery_albums"
+        ordering = ["-created_at", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "slug"],
+                name="gallery_albums_unique_slug",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "status"], name="gallery_albums_status_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return self.slug
+
+
+class GalleryItem(TenantOwnedModel):
+    """One media entry of an album, ordered by `position`."""
+
+    gallery_album = models.ForeignKey(GalleryAlbum, on_delete=models.CASCADE, related_name="items")
+    media_type = models.CharField(max_length=20, choices=MediaType.choices, default=MediaType.IMAGE)
+    file_id = models.UUIDField(null=True, blank=True)
+    embed_url = models.CharField(max_length=EMBED_URL_MAX_LENGTH, blank=True, default="")
+    caption = models.CharField(max_length=300, blank=True, default="")
+    alt_text = models.CharField(max_length=300, blank=True, default="")
+    position = models.PositiveIntegerField()
+
+    class Meta:
+        db_table = "gallery_items"
+        ordering = ["gallery_album_id", "position", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["gallery_album", "position"],
+                name="gallery_items_unique_position",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
+        ]
+        indexes = [models.Index(fields=["gallery_album"], name="gallery_items_album_idx")]
+
+    def __str__(self) -> str:
+        return f"{self.media_type}@{self.position}"
+
+
+class ContactSubmission(TenantOwnedModel):
+    """A public contact-form message. `created_by` stays NULL (anonymous submitter) and `ip`
+    is never serialised to staff (privacy; retention-limited)."""
+
+    name = models.CharField(max_length=CONTACT_NAME_MAX)
+    email = models.CharField(max_length=CONTACT_EMAIL_MAX, blank=True, default="")
+    phone = models.CharField(max_length=CONTACT_PHONE_MAX, blank=True, default="")
+    subject = models.CharField(max_length=CONTACT_SUBJECT_MAX, blank=True, default="")
+    message = models.TextField()
+    source_page = models.ForeignKey(
+        WebsitePage, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    status = models.CharField(
+        max_length=20, choices=ContactStatus.choices, default=ContactStatus.NEW
+    )
+    handled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    ip = models.GenericIPAddressField(null=True, blank=True)
+
+    class Meta:
+        db_table = "contact_submissions"
+        ordering = ["-created_at", "id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(email="") | ~models.Q(phone=""),
+                name="contact_submissions_email_or_phone",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["tenant", "status", "created_at"], name="contact_sub_status_created_idx"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.status})"

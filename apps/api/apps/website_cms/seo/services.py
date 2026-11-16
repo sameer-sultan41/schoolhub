@@ -7,16 +7,14 @@ from uuid import UUID
 
 from django.db import IntegrityError, transaction
 
+from apps.website_cms.content import TARGET_MODELS
 from apps.website_cms.errors import violation
-from apps.website_cms.models import SeoSetting, SeoTargetType, WebsitePage
+from apps.website_cms.models import SeoSetting, SeoTargetType
 from apps.website_cms.revalidation import queue_revalidation
 from apps.website_cms.validation import assert_files_usable, is_safe_url
 from core.api.exceptions import DomainRuleViolation
 from core.files.visibility import sync_file_visibility
 from core.tenancy.models import Tenant
-
-#: Target types whose lookups are wired. News, events and albums arrive with their resources (B1).
-SUPPORTED_TARGETS = frozenset({SeoTargetType.SITE, SeoTargetType.PAGE})
 
 
 def resolve_target(target_type: str, target_id: UUID | None) -> UUID | None:
@@ -25,12 +23,13 @@ def resolve_target(target_type: str, target_id: UUID | None) -> UUID | None:
         if target_id is not None:
             raise violation("target_id", "invalid_target", "the site takes no target_id.")
         return None
-    if target_type not in SUPPORTED_TARGETS:
+    model = TARGET_MODELS.get(target_type)
+    if model is None:
         raise violation("target_type", "unsupported_target", "this target type is not supported.")
     if target_id is None:
         raise violation("target_id", "invalid_target", "target_id is required for this type.")
-    if not WebsitePage.objects.alive().filter(id=target_id).exists():
-        raise violation("target_id", "invalid_target", "this page does not exist.")
+    if not model.objects.alive().filter(id=target_id).exists():
+        raise violation("target_id", "invalid_target", "this target does not exist.")
     return target_id
 
 

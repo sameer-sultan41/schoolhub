@@ -11,7 +11,16 @@ from apps.school_organization.serializer_helpers import READ_ONLY_FIELDS, normal
 class ClassSerializer(serializers.ModelSerializer):
     class Meta:
         model = Class
-        fields = ("id", "name", "code", "level", "is_active", "created_at", "updated_at")
+        fields = (
+            "id",
+            "name",
+            "code",
+            "level",
+            "is_active",
+            "show_on_website",
+            "created_at",
+            "updated_at",
+        )
         read_only_fields = READ_ONLY_FIELDS
 
     def validate_code(self, value: str | None) -> str | None:

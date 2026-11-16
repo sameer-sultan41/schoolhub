@@ -65,6 +65,11 @@ class WebsiteRlsIsolationTests(TestCase):
             "page_sections",
             "navigation_menus",
             "seo_settings",
+            "news_posts",
+            "school_events",
+            "gallery_albums",
+            "gallery_items",
+            "contact_submissions",
         ]
         with connection.cursor() as cursor:
             cursor.execute("SELECT tablename FROM pg_policies WHERE tablename = ANY(%s)", [tables])
@@ -183,3 +188,109 @@ class NavigationSeoCrossTenantTests(WebsiteAPITestCase):
         self.assertEqual(response.status_code, 200)
         with tenant_context(self.other.id):
             self.assertEqual(SeoSetting.objects.get().meta_title, "Theirs")
+
+
+class ContentCrossTenantTests(WebsiteAPITestCase):
+    """News, events and albums of tenant B are invisible to tenant A: 404, never 403."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.allow_everything()
+        self.other = TenantFactory()
+        self.news_b = self.make_news(tenant=self.other, slug="theirs")
+        self.event_b = self.make_event(tenant=self.other, slug="theirs")
+        self.album_b = self.make_album(tenant=self.other, slug="theirs")
+        self.item_b = self.make_item(self.album_b, position=0)
+
+    def test_lists_do_not_leak(self) -> None:
+        for path in ("news-posts", "school-events", "gallery-albums"):
+            with self.subTest(path=path):
+                response = self.client.get(f"/api/v1/{path}")
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()["data"], [])
+
+    def test_news_detail_patch_delete_and_actions_are_404(self) -> None:
+        url = f"/api/v1/news-posts/{self.news_b.id}"
+        self.assertEqual(self.client.get(url).status_code, 404)
+        self.assertEqual(self.client.patch(url, {"title": "x"}, format="json").status_code, 404)
+        self.assertEqual(self.client.delete(url).status_code, 404)
+        for action in ("publish", "unpublish", "archive"):
+            with self.subTest(action=action):
+                self.assertEqual(self.client.post(f"{url}:{action}").status_code, 404)
+
+    def test_event_detail_patch_and_actions_are_404(self) -> None:
+        url = f"/api/v1/school-events/{self.event_b.id}"
+        self.assertEqual(self.client.get(url).status_code, 404)
+        self.assertEqual(self.client.patch(url, {"title": "x"}, format="json").status_code, 404)
+        for action in ("publish", "unpublish", "archive"):
+            with self.subTest(action=action):
+                self.assertEqual(self.client.post(f"{url}:{action}").status_code, 404)
+
+    def test_album_detail_patch_delete_and_actions_are_404(self) -> None:
+        url = f"/api/v1/gallery-albums/{self.album_b.id}"
+        self.assertEqual(self.client.get(url).status_code, 404)
+        self.assertEqual(self.client.patch(url, {"title": "x"}, format="json").status_code, 404)
+        self.assertEqual(self.client.delete(url).status_code, 404)
+        for action in ("publish", "unpublish"):
+            with self.subTest(action=action):
+                self.assertEqual(self.client.post(f"{url}:{action}").status_code, 404)
+
+    def test_item_routes_under_a_foreign_album_are_404(self) -> None:
+        base = f"/api/v1/gallery-albums/{self.album_b.id}/gallery-items"
+        self.assertEqual(self.client.get(base).status_code, 404)
+        payload = {"media_type": "video_embed", "embed_url": "https://youtu.be/x"}
+        self.assertEqual(self.client.post(base, payload, format="json").status_code, 404)
+        item = f"{base}/{self.item_b.id}"
+        self.assertEqual(self.client.patch(item, {"caption": "x"}, format="json").status_code, 404)
+        self.assertEqual(self.client.delete(item).status_code, 404)
+        ids = {"ids": [str(self.item_b.id)]}
+        reorder = self.client.patch(f"{base}:reorder", ids, format="json")
+        self.assertEqual(reorder.status_code, 404)
+
+    def test_a_foreign_item_under_my_album_is_404(self) -> None:
+        mine = self.make_album(slug="mine")
+        url = f"/api/v1/gallery-albums/{mine.id}/gallery-items/{self.item_b.id}"
+        self.assertEqual(self.client.patch(url, {"caption": "x"}, format="json").status_code, 404)
+        self.assertEqual(self.client.delete(url).status_code, 404)
+
+    def test_an_album_cannot_link_a_foreign_event(self) -> None:
+        response = self.client.post(
+            "/api/v1/gallery-albums",
+            {"title": "T", "slug": "t", "school_event_id": str(self.event_b.id)},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_seo_targets_of_another_tenant_are_invalid(self) -> None:
+        for target_type, row in (
+            ("news_post", self.news_b),
+            ("school_event", self.event_b),
+            ("gallery_album", self.album_b),
+        ):
+            with self.subTest(target_type=target_type):
+                response = self.client.patch(
+                    f"/api/v1/seo-settings?target_type={target_type}&target_id={row.id}",
+                    {"meta_title": "T"},
+                    format="json",
+                )
+                self.assertEqual(response.status_code, 422)
+
+
+class ContactCrossTenantTests(WebsiteAPITestCase):
+    """Another tenant's submissions are invisible to the inbox: 404, never 403."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.allow_everything()
+        self.other = TenantFactory()
+        self.contact_b = self.make_contact(tenant=self.other)
+
+    def test_list_does_not_leak(self) -> None:
+        response = self.client.get("/api/v1/contact-submissions")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"], [])
+
+    def test_detail_and_patch_are_404(self) -> None:
+        url = f"/api/v1/contact-submissions/{self.contact_b.id}"
+        self.assertEqual(self.client.get(url).status_code, 404)
+        self.assertEqual(self.client.patch(url, {"status": "read"}, format="json").status_code, 404)

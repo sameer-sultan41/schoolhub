@@ -6,5 +6,6 @@ from core.api.exceptions import DomainRuleViolation
 
 
 def violation(field: str, reason: str, message: str) -> DomainRuleViolation:
-    """A 422 whose detail is `<reason>: <message>` under `field`, with `reason` in `meta`."""
-    return DomainRuleViolation({field: f"{reason}: {message}"}, meta={"reason": reason})
+    """A 422 whose detail is `<reason>: <message>` under `field` (bare if empty)."""
+    text = f"{reason}: {message}"
+    return DomainRuleViolation({field: text} if field else text, meta={"reason": reason})

@@ -245,3 +245,5 @@ one disclosed docstring-only `description` field (a stale cross-reference
 from `HolidayCalendarView`'s docstring to a class that had moved out of its
 file), fixed in the same commit that caused it. No endpoint, permission, or
 response shape changed anywhere in the module.
+
+**`public.py` (website read surface).** `public.py` is the only module website_cms imports from this app (ADR-0013); it is read-only, called inside a bound tenant, returns frozen dataclasses and runs a constant number of queries. `public_departments()` and `public_classes()` list active rows with `show_on_website`; `primary_campus_contact()` reads the primary campus's address (one display line), phone and email.
