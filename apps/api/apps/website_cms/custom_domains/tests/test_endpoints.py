@@ -11,12 +11,18 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken
 
 from apps.school_organization.tests.factories import grant_default_role
-from apps.website_cms.constants import MAX_CUSTOM_DOMAINS
+from apps.website_cms.constants import DOMAIN_INPUT_MAX_LENGTH, MAX_CUSTOM_DOMAINS
 from apps.website_cms.custom_domains.adapters import DnsCheck
 from apps.website_cms.custom_domains.services import DOMAIN_TAKEN_REASON
 from apps.website_cms.hosts import resolve_host
-from apps.website_cms.models import CustomDomain, CustomDomainRoute, CustomDomainStatus
-from apps.website_cms.notifications import DOMAIN_ACTIVE
+from apps.website_cms.models import (
+    CustomDomain,
+    CustomDomainRoute,
+    CustomDomainStatus,
+    DomainErrorCode,
+    TlsStatus,
+)
+from apps.website_cms.notifications import DOMAIN_ACTIVE, TLS_PENDING_NOTE
 from apps.website_cms.revalidation import host_tag
 from apps.website_cms.tests.base import WebsiteAPITestCase
 from apps.website_cms.tests.factories import (
@@ -29,6 +35,7 @@ from apps.website_cms.urls_builder import platform_site_host, tenant_site_host
 from core.api.tests.rollback import rollback_as_in_production
 from core.notifications.models import Notification
 from core.tenancy.context import tenant_context
+from core.tenancy.models import Tenant
 
 LIST = "/api/v1/custom-domains"
 DOMAIN_KEYS = (
@@ -101,6 +108,10 @@ class DomainTestCase(WebsiteAPITestCase):
     def notifications(self, event_key: str, row: CustomDomain) -> list[Notification]:
         with tenant_context(row.tenant_id):
             return list(Notification.objects.filter(event_key=event_key, source_id=row.pk))
+
+    def issue_certificate(self, row: CustomDomain) -> None:
+        with tenant_context(row.tenant_id):
+            CustomDomain.objects.filter(pk=row.pk).update(tls_status=TlsStatus.ISSUED)
 
     def stub(self, verifier: StubVerifier):
         return mock.patch(f"{SERVICES}.get_dns_verifier", return_value=verifier)
@@ -180,6 +191,13 @@ class CreateDomainTests(DomainTestCase):
         with tenant_context(self.tenant.id):
             self.assertFalse(CustomDomain.objects.exists())
 
+    def test_oversized_input_is_refused_before_mapping(self) -> None:
+        raw = "a" * (DOMAIN_INPUT_MAX_LENGTH + 1)
+        with mock.patch(f"{SERVICES}.idna.encode") as encode:
+            response = self.client.post(LIST, {"domain": raw}, format="json")
+        self.assertEqual(response.status_code, 400)
+        encode.assert_not_called()
+
     @override_settings(PLATFORM_DOMAIN="SchoolHub.pk")
     def test_platform_subdomain_rejected(self) -> None:
         for raw in ("schoolhub.pk", "greenfield.schoolhub.pk", "www.greenfield.SCHOOLHUB.pk"):
@@ -235,7 +253,9 @@ class VerifyDomainTests(DomainTestCase):
         self.assertEqual(resolve_host("www.greenfield.test"), self.tenant)
         sent = self.notifications(DOMAIN_ACTIVE, row)
         self.assertEqual({n.user_id for n in sent}, {self.it_admin.pk})
-        self.assertEqual(sent[0].title, "www.greenfield.test is now live")
+        self.assertEqual(sent[0].title, "www.greenfield.test is verified")
+        # No edge provider yet: the message says HTTPS is pending and why that matters.
+        self.assertIn(TLS_PENDING_NOTE, sent[0].body)
         tags = set(revalidate.call_args.args[1])
         self.assertIn(host_tag("www.greenfield.test"), tags)
         self.assertIn(host_tag(platform_site_host(self.tenant)), tags)
@@ -247,6 +267,7 @@ class VerifyDomainTests(DomainTestCase):
         data = response.json()["data"]
         self.assertEqual(data["status"], CustomDomainStatus.FAILED)
         self.assertIn("_schoolhub-verify.www.greenfield.example", data["last_error"])
+        self.assertEqual(data["last_error_code"], DomainErrorCode.TXT_MISSING)
         self.assertFalse(CustomDomainRoute.objects.filter(custom_domain_id=row.id).exists())
         # A first failure is not yet a day old: no failure notification.
         self.assertEqual(self.notifications("website.domain-failed", row), [])
@@ -278,9 +299,11 @@ class VerifyDomainTests(DomainTestCase):
         response = self.client.post(verify_url(mine))
         self.assertEqual(response.status_code, 409)
         self.assertTrue(response.json()["error"]["details"][0]["issue"].startswith("domain_taken"))
+        self.assertEqual(reason(response), "domain_taken")
         stored = self.stored(mine)
         self.assertEqual(stored.status, CustomDomainStatus.FAILED)
         self.assertEqual(stored.last_error, DOMAIN_TAKEN_REASON)
+        self.assertEqual(stored.last_error_code, DomainErrorCode.DOMAIN_TAKEN)
         route = CustomDomainRoute.objects.get(domain="shared.test")
         self.assertEqual((route.tenant_id, route.custom_domain_id), (other.id, theirs.id))
 
@@ -300,6 +323,26 @@ class VerifyDomainTests(DomainTestCase):
         self.assertIsNone(stored.verified_at)
         self.assertEqual(stored.status, CustomDomainStatus.FAILED)
         self.assertEqual(stored.last_error, DOMAIN_TAKEN_REASON)
+
+    def test_a_deleted_schools_route_does_not_block_the_domain(self) -> None:
+        # A soft-deleted school's route is evicted, and the insert retried once.
+        gone = self.make_other_tenant()
+        self.claim("reused.test", CustomDomainStatus.ACTIVE, tenant=gone)
+        Tenant.objects.filter(pk=gone.pk).update(deleted_at=timezone.now())
+        mine = self.claim("reused.test")
+        response = self.client.post(verify_url(mine))
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["data"]["status"], CustomDomainStatus.ACTIVE)
+        route = CustomDomainRoute.objects.get(domain="reused.test")
+        self.assertEqual((route.tenant_id, route.custom_domain_id), (self.tenant.id, mine.id))
+
+    def test_a_live_schools_route_is_never_evicted(self) -> None:
+        other = self.make_other_tenant()
+        theirs = self.claim("kept.test", CustomDomainStatus.ACTIVE, tenant=other)
+        mine = self.claim("kept.test")
+        self.assertEqual(self.client.post(verify_url(mine)).status_code, 409)
+        route = CustomDomainRoute.objects.get(domain="kept.test")
+        self.assertEqual(route.custom_domain_id, theirs.id)
 
     def test_concurrent_activation_second_gets_409_not_500(self) -> None:
         # The other school activates between this check's read and its write: nothing was
@@ -335,7 +378,7 @@ class VerifyDomainTests(DomainTestCase):
         self.assertEqual(self.client.post(verify_url(row)).status_code, 200)
         title = self.notifications(DOMAIN_ACTIVE, row)[0].title
         self.assertLessEqual(len(title), 200)
-        self.assertTrue(title.endswith("is now live"))
+        self.assertTrue(title.endswith("is verified"))
 
 
 class PrimaryAndDeleteTests(DomainTestCase):
@@ -352,9 +395,17 @@ class PrimaryAndDeleteTests(DomainTestCase):
                 self.assertEqual(response.status_code, 422)
                 self.assertEqual(reason(response), "not_active")
 
+    def test_primary_requires_an_issued_certificate(self) -> None:
+        row = self.claim("one.test", CustomDomainStatus.ACTIVE)
+        response = self.client.patch(detail(row), {"is_primary": True}, format="json")
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(reason(response), "tls_not_issued")
+        self.assertFalse(self.stored(row).is_primary)
+
     def test_making_one_primary_clears_the_other(self) -> None:
         first = self.claim("one.test", CustomDomainStatus.ACTIVE, is_primary=True)
         second = self.claim("two.test", CustomDomainStatus.ACTIVE)
+        self.issue_certificate(second)
         with mock.patch(f"{SERVICES}.queue_revalidation") as revalidate:
             response = self.client.patch(detail(second), {"is_primary": True}, format="json")
         self.assertEqual(response.status_code, 200)

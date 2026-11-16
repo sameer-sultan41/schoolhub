@@ -8357,6 +8357,7 @@ export interface components {
             /** Format: date-time */
             readonly verified_at: string | null;
             readonly last_error: string;
+            readonly last_error_code: components["schemas"]["CustomDomainErrorCodeEnum"];
             readonly dns_records: components["schemas"]["DnsRecord"][];
             /** Format: date-time */
             readonly created_at: string;
@@ -8367,6 +8368,18 @@ export interface components {
         CustomDomainCreate: {
             domain: string;
         };
+        /**
+         * @description * `txt_missing` - TXT record missing
+         *     * `txt_mismatch` - TXT record holds another token
+         *     * `cname_missing` - CNAME record missing
+         *     * `cname_mismatch` - CNAME points elsewhere
+         *     * `lookup_timeout` - DNS lookup timed out
+         *     * `lookup_failed` - DNS lookup failed
+         *     * `domain_taken` - Another school uses the domain
+         *     * `target_unconfigured` - Platform CNAME target not configured
+         * @enum {string}
+         */
+        CustomDomainErrorCodeEnum: "txt_missing" | "txt_mismatch" | "cname_missing" | "cname_mismatch" | "lookup_timeout" | "lookup_failed" | "domain_taken" | "target_unconfigured";
         /**
          * @description * `pending_dns` - Pending DNS
          *     * `verifying` - Verifying
@@ -8574,7 +8587,9 @@ export interface components {
          * @description One DNS record the school must create: `TXT` (the token) or `CNAME` (the target).
          *
          *     The CNAME must point directly at the target (chains are not followed) and stay: the
-         *     daily re-check reads it. The TXT record proves ownership once and may then be removed.
+         *     daily re-check reads it. The TXT record proves ownership at verification and may then be
+         *     removed (`keep_after_verification: false`); if it is kept, it must keep this token, or
+         *     the daily re-check counts a failure (a new owner of the domain evicts a stale holder).
          */
         DnsRecord: {
             type: string;

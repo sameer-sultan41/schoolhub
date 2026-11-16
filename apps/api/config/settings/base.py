@@ -453,6 +453,7 @@ SPECTACULAR_SETTINGS = {
         "GalleryMediaTypeEnum": "apps.website_cms.models.MediaType",
         "CustomDomainStatusEnum": "apps.website_cms.models.CustomDomainStatus",
         "CustomDomainTlsStatusEnum": "apps.website_cms.models.TlsStatus",
+        "CustomDomainErrorCodeEnum": "apps.website_cms.models.DomainErrorCode",
     },
 }
 

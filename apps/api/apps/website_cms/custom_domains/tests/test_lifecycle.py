@@ -13,20 +13,33 @@ from django.utils import timezone
 from apps.school_organization.tests.factories import grant_default_role
 from apps.website_cms import tasks
 from apps.website_cms.constants import ACTIVE_RECHECK_FAILURE_LIMIT, VERIFY_IN_FLIGHT_SECONDS
-from apps.website_cms.custom_domains.adapters import DnsCheck
+from apps.website_cms.custom_domains.adapters import DnsCheck, failed, inconclusive
 from apps.website_cms.custom_domains.services import (
     recheck_tenant_active_domains,
     reverify_tenant_domains,
+    routed_tenant_ids,
 )
+from apps.website_cms.features import FEATURE
 from apps.website_cms.hosts import resolve_host
-from apps.website_cms.models import CustomDomain, CustomDomainRoute, CustomDomainStatus
+from apps.website_cms.models import (
+    CustomDomain,
+    CustomDomainRoute,
+    CustomDomainStatus,
+    DomainErrorCode,
+)
 from apps.website_cms.notifications import DOMAIN_ACTIVE, DOMAIN_FAILED
 from apps.website_cms.revalidation import host_tag
-from apps.website_cms.tests.factories import TenantFactory, UserFactory, make_custom_domain
+from apps.website_cms.tests.factories import (
+    TenantFactory,
+    UserFactory,
+    enable_feature,
+    make_custom_domain,
+)
 from apps.website_cms.urls_builder import platform_site_host, tenant_site_host
 from config.celery import app
 from core.notifications.models import Notification
 from core.tenancy.context import tenant_context
+from core.tenancy.models import Tenant, TenantStatus
 
 SERVICES = "apps.website_cms.custom_domains.services"
 
@@ -41,8 +54,8 @@ class StubVerifier:
             self.during()
         return self.result
 
-    def check_cname(self, domain: str, cname_target: str) -> DnsCheck:
-        return self.check(domain, "", cname_target)
+    def recheck(self, domain: str, token: str, cname_target: str) -> DnsCheck:
+        return self.check(domain, token, cname_target)
 
 
 class SweepTestCase(TestCase):
@@ -51,6 +64,7 @@ class SweepTestCase(TestCase):
         self.tenant = TenantFactory()
         self.it_admin = UserFactory(tenant=self.tenant)
         grant_default_role(self.it_admin, "it_admin")
+        enable_feature(self.tenant, FEATURE)
 
     def claim(self, domain: str, status: str, *, age_hours: float = 1, **kwargs) -> CustomDomain:
         row = make_custom_domain(self.tenant, domain, status, **kwargs)
@@ -154,12 +168,24 @@ class ReverifyClaimsTests(SweepTestCase):
         self.assertEqual(self.stored(busy).status, CustomDomainStatus.VERIFYING)
         self.assertEqual(self.stored(stuck).status, CustomDomainStatus.FAILED)
 
-    def test_the_task_sweeps_every_tenant_without_a_transaction(self) -> None:
+    def test_the_task_activates_a_ready_claim(self) -> None:
         row = self.claim("www.greenfield.test", CustomDomainStatus.PENDING_DNS)
         summary = tasks.reverify_custom_domains()
         self.assertEqual(summary["failed"], 0)
         self.assertGreaterEqual(summary["affected"], 1)
         self.assertEqual(self.stored(row).status, CustomDomainStatus.ACTIVE)
+
+    def test_a_school_that_is_not_operational_or_has_the_module_off_is_skipped(self) -> None:
+        row = self.claim("www.greenfield.test", CustomDomainStatus.PENDING_DNS)
+        verifier = mock.Mock()
+        with mock.patch(f"{SERVICES}.get_dns_verifier", return_value=verifier):
+            Tenant.objects.filter(pk=self.tenant.pk).update(status=TenantStatus.SUSPENDED)
+            self.assertEqual(reverify_tenant_domains(self.tenant.id), 0)
+            Tenant.objects.filter(pk=self.tenant.pk).update(status=TenantStatus.ACTIVE)
+            with mock.patch(f"{SERVICES}.is_feature_enabled", return_value=False):
+                self.assertEqual(reverify_tenant_domains(self.tenant.id), 0)
+        verifier.check.assert_not_called()
+        self.assertEqual(self.stored(row).status, CustomDomainStatus.PENDING_DNS)
 
 
 class ActiveRecheckTests(SweepTestCase):
@@ -171,17 +197,48 @@ class ActiveRecheckTests(SweepTestCase):
         stored = self.stored(row)
         self.assertEqual((stored.consecutive_failures, stored.last_error), (0, ""))
 
-    def test_the_recheck_reads_only_the_cname(self) -> None:
-        # The TXT token proved ownership once; a school may delete it after go-live.
+    def test_the_daily_recheck_uses_the_recheck_rules(self) -> None:
+        # Not `check`: a removed TXT record must not lapse a live domain.
         row = self.claim("www.greenfield.example", CustomDomainStatus.ACTIVE)
         verifier = mock.Mock()
-        verifier.check_cname.return_value = DnsCheck(True)
+        verifier.recheck.return_value = DnsCheck(True)
         with mock.patch(f"{SERVICES}.get_dns_verifier", return_value=verifier):
             recheck_tenant_active_domains(self.tenant.id)
         verifier.check.assert_not_called()
-        verifier.check_cname.assert_called_once_with(
-            "www.greenfield.example", settings.WEBSITE_CNAME_TARGET
+        verifier.recheck.assert_called_once_with(
+            "www.greenfield.example", row.verification_token, settings.WEBSITE_CNAME_TARGET
         )
+        self.assertEqual(self.stored(row).status, CustomDomainStatus.ACTIVE)
+
+    def test_inconclusive_rechecks_never_lapse_a_domain(self) -> None:
+        # A resolver outage for three nights must not drop every school's domain.
+        row = self.claim("www.greenfield.example", CustomDomainStatus.ACTIVE)
+        outage = inconclusive(DomainErrorCode.LOOKUP_TIMEOUT, "The DNS lookup timed out.")
+        with mock.patch(f"{SERVICES}.get_dns_verifier", return_value=StubVerifier(outage)):
+            for _ in range(ACTIVE_RECHECK_FAILURE_LIMIT + 1):
+                self.assertEqual(recheck_tenant_active_domains(self.tenant.id), 0)
+        stored = self.stored(row)
+        self.assertEqual(stored.status, CustomDomainStatus.ACTIVE)
+        self.assertEqual(stored.consecutive_failures, 0)
+        self.assertEqual(resolve_host("www.greenfield.example"), self.tenant)
+
+    def test_another_owners_token_evicts_the_holder_after_three_rechecks(self) -> None:
+        # The CNAME still points at us, but the TXT now holds someone else's token.
+        row = self.claim("www.greenfield.test", CustomDomainStatus.ACTIVE)
+        mismatch = failed(DomainErrorCode.TXT_MISMATCH, "Another token.")
+        with mock.patch(f"{SERVICES}.get_dns_verifier", return_value=StubVerifier(mismatch)):
+            for _ in range(ACTIVE_RECHECK_FAILURE_LIMIT):
+                recheck_tenant_active_domains(self.tenant.id)
+        stored = self.stored(row)
+        self.assertEqual(stored.status, CustomDomainStatus.FAILED)
+        self.assertEqual(stored.last_error_code, DomainErrorCode.TXT_MISMATCH)
+        self.assertIsNone(resolve_host("www.greenfield.test"))
+
+    def test_a_removed_txt_record_keeps_the_domain_active(self) -> None:
+        # The fake's recheck passes `*.test`, as the real one passes a missing TXT record.
+        row = self.claim("www.greenfield.test", CustomDomainStatus.ACTIVE)
+        for _ in range(ACTIVE_RECHECK_FAILURE_LIMIT):
+            recheck_tenant_active_domains(self.tenant.id)
         self.assertEqual(self.stored(row).status, CustomDomainStatus.ACTIVE)
 
     def test_active_domain_dropped_after_three_failed_rechecks(self) -> None:
@@ -218,15 +275,20 @@ class ActiveRecheckTests(SweepTestCase):
             with tenant_context(self.tenant.id):
                 CustomDomain.objects.filter(pk=row.pk).update(deleted_at=timezone.now())
 
-        stub = StubVerifier(DnsCheck(False, "gone"), during=user_deletes)
+        stub = StubVerifier(failed(DomainErrorCode.CNAME_MISSING, "gone"), during=user_deletes)
         with mock.patch(f"{SERVICES}.get_dns_verifier", return_value=stub):
             self.assertEqual(recheck_tenant_active_domains(self.tenant.id), 0)
         self.assertEqual(self.sent(DOMAIN_FAILED, row), 0)
 
-    def test_the_daily_task_runs(self) -> None:
+    def test_the_daily_task_visits_only_live_schools_with_routes(self) -> None:
         row = self.claim("www.greenfield.example", CustomDomainStatus.ACTIVE)
+        TenantFactory()  # no routes: not visited
+        gone = TenantFactory()
+        make_custom_domain(gone, "gone.example", CustomDomainStatus.ACTIVE)
+        Tenant.objects.filter(pk=gone.pk).update(deleted_at=timezone.now())
+        self.assertEqual(routed_tenant_ids(), [self.tenant.id])
         summary = tasks.recheck_active_custom_domains()
-        self.assertEqual(summary["failed"], 0)
+        self.assertEqual((summary["tenants"], summary["failed"]), (1, 0))
         self.assertEqual(self.stored(row).consecutive_failures, 1)
 
 

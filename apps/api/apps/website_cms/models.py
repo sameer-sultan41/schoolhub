@@ -82,6 +82,19 @@ class CustomDomainStatus(models.TextChoices):
     DISABLED = "disabled", "Disabled"
 
 
+class DomainErrorCode(models.TextChoices):
+    """Why a custom domain's last check failed, for clients to act on; `last_error` is prose."""
+
+    TXT_MISSING = "txt_missing", "TXT record missing"
+    TXT_MISMATCH = "txt_mismatch", "TXT record holds another token"
+    CNAME_MISSING = "cname_missing", "CNAME record missing"
+    CNAME_MISMATCH = "cname_mismatch", "CNAME points elsewhere"
+    LOOKUP_TIMEOUT = "lookup_timeout", "DNS lookup timed out"
+    LOOKUP_FAILED = "lookup_failed", "DNS lookup failed"
+    DOMAIN_TAKEN = "domain_taken", "Another school uses the domain"
+    TARGET_UNCONFIGURED = "target_unconfigured", "Platform CNAME target not configured"
+
+
 class TlsStatus(models.TextChoices):
     PENDING = "pending", "Pending"
     ISSUED = "issued", "Issued"
@@ -452,6 +465,9 @@ class CustomDomain(TenantOwnedModel):
     )
     is_primary = models.BooleanField(default=False)
     last_error = models.CharField(max_length=DOMAIN_ERROR_MAX_LENGTH, blank=True, default="")
+    last_error_code = models.CharField(
+        max_length=30, choices=DomainErrorCode.choices, blank=True, default=""
+    )
     failure_notified_at = models.DateTimeField(null=True, blank=True)
     consecutive_failures = models.PositiveSmallIntegerField(default=0)
 

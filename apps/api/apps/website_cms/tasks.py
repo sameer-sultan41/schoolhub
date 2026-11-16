@@ -111,9 +111,18 @@ def reverify_custom_domains() -> dict[str, int]:
 
 @shared_task(name="website_cms.recheck_active_custom_domains")
 def recheck_active_custom_domains() -> dict[str, int]:
-    """Daily: re-verify active domains; three failures in a row lapse one to `failed`."""
-    from apps.website_cms.custom_domains.services import recheck_tenant_active_domains
+    """Daily: re-check active domains; three definite failures in a row lapse one to `failed`.
+
+    Visits only the schools holding a route (read from the platform-scope route table).
+    """
+    from apps.website_cms.custom_domains.services import (
+        recheck_tenant_active_domains,
+        routed_tenant_ids,
+    )
 
     return for_each_tenant(
-        recheck_tenant_active_domains, job="website-domain-recheck", atomic=False
+        recheck_tenant_active_domains,
+        job="website-domain-recheck",
+        atomic=False,
+        tenant_ids=routed_tenant_ids(),
     )

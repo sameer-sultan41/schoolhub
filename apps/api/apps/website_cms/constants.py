@@ -35,6 +35,9 @@ RESERVED_SUBDOMAIN_LABELS = frozenset(
 DOMAIN_MAX_LENGTH = 253
 DOMAIN_TOKEN_MAX_LENGTH = 64
 DOMAIN_ERROR_MAX_LENGTH = 300
+#: Longest domain input accepted before UTS #46 mapping: room for surrounding whitespace, a
+#: trailing dot and characters the mapping removes, so huge input never reaches `idna`.
+DOMAIN_INPUT_MAX_LENGTH = DOMAIN_MAX_LENGTH + 64
 
 #: Custom domain lifecycle (module doc §20 "Custom domains").
 MAX_CUSTOM_DOMAINS = 5

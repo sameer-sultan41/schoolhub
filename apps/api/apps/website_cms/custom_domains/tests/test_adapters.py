@@ -17,10 +17,12 @@ from apps.website_cms.custom_domains.adapters import (
     get_dns_verifier,
     get_edge_provisioner,
 )
+from apps.website_cms.models import DomainErrorCode
 
 DOMAIN = "www.greenfield.example"
 TOKEN = "token-123"
 TARGET = "sites.schoolhub.example"
+TXT_NAME = f"_schoolhub-verify.{DOMAIN}"
 
 
 def txt(*values: str) -> list:
@@ -33,7 +35,7 @@ def cname(target: str) -> list:
 
 
 class DnspythonVerifierTests(SimpleTestCase):
-    def run_check(self, answers: dict[str, object], target: str = TARGET, *, cname_only=False):
+    def run_check(self, answers: dict[str, object], target: str = TARGET, *, recheck=False):
         """`answers` maps a record type to its rdata list or an exception to raise."""
         seen: list[tuple[str, str, float]] = []
 
@@ -47,10 +49,8 @@ class DnspythonVerifierTests(SimpleTestCase):
         with mock.patch.object(dns.resolver.Resolver, "resolve", autospec=True) as patched:
             patched.side_effect = resolve
             verifier = DnspythonVerifier()
-            if cname_only:
-                result = verifier.check_cname(DOMAIN, target)
-            else:
-                result = verifier.check(DOMAIN, TOKEN, target)
+            check = verifier.recheck if recheck else verifier.check
+            result = check(DOMAIN, TOKEN, target)
         return result, seen
 
     def test_token_and_cname_verify(self) -> None:
@@ -58,64 +58,86 @@ class DnspythonVerifierTests(SimpleTestCase):
         self.assertTrue(result.ok)
         self.assertEqual(
             seen,
-            [
-                (f"_schoolhub-verify.{DOMAIN}", "TXT", DNS_TIMEOUT_SECONDS),
-                (DOMAIN, "CNAME", DNS_TIMEOUT_SECONDS),
-            ],
+            [(TXT_NAME, "TXT", DNS_TIMEOUT_SECONDS), (DOMAIN, "CNAME", DNS_TIMEOUT_SECONDS)],
         )
 
     def test_a_split_txt_string_is_joined(self) -> None:
         result, _ = self.run_check({"TXT": txt("token", "-123"), "CNAME": cname(TARGET)})
         self.assertTrue(result.ok)
 
-    def test_wrong_token_fails(self) -> None:
-        result, seen = self.run_check({"TXT": txt("another"), "CNAME": cname(TARGET)})
-        self.assertFalse(result.ok)
-        self.assertIn("does not hold the token", result.reason)
-        self.assertEqual(len(seen), 1)
-
-    def test_wrong_cname_fails(self) -> None:
-        result, _ = self.run_check({"TXT": txt(TOKEN), "CNAME": cname("elsewhere.example.")})
-        self.assertFalse(result.ok)
-        self.assertIn("CNAME", result.reason)
-
-    def test_resolver_errors_are_failed_checks_not_exceptions(self) -> None:
-        for error, words in (
-            (dns.resolver.NXDOMAIN(), "not found"),
-            (dns.resolver.NoAnswer(), "not found"),
-            (dns.resolver.LifetimeTimeout(timeout=DNS_TIMEOUT_SECONDS, errors=[]), "timed out"),
-            (dns.resolver.NoNameservers(), "failed"),
-            (dns.exception.DNSException(), "failed"),
-        ):
-            with self.subTest(error=type(error).__name__):
-                result, _ = self.run_check({"TXT": error})
+    def test_definite_failures_carry_their_code(self) -> None:
+        cases = [
+            ({"TXT": dns.resolver.NXDOMAIN()}, DomainErrorCode.TXT_MISSING),
+            ({"TXT": dns.resolver.NoAnswer()}, DomainErrorCode.TXT_MISSING),
+            ({"TXT": txt("another")}, DomainErrorCode.TXT_MISMATCH),
+            ({"TXT": txt(TOKEN), "CNAME": dns.resolver.NoAnswer()}, DomainErrorCode.CNAME_MISSING),
+            ({"TXT": txt(TOKEN), "CNAME": cname("chain.example.")}, DomainErrorCode.CNAME_MISMATCH),
+        ]
+        for answers, code in cases:
+            with self.subTest(code=code):
+                result, _ = self.run_check(answers)
                 self.assertFalse(result.ok)
-                self.assertIn(words, result.reason)
+                self.assertEqual(result.code, code)
+                self.assertFalse(result.inconclusive)
+                self.assertTrue(result.reason)
 
-    def test_cname_only_check_ignores_the_txt_record(self) -> None:
-        result, seen = self.run_check({"CNAME": cname(TARGET)}, cname_only=True)
-        self.assertTrue(result.ok)
-        self.assertEqual(seen, [(DOMAIN, "CNAME", DNS_TIMEOUT_SECONDS)])
-        result, _ = self.run_check({"CNAME": cname("chain.example.")}, cname_only=True)
-        self.assertFalse(result.ok)
-        self.assertIn("direct CNAME", result.reason)
+    def test_resolver_errors_are_inconclusive_not_exceptions(self) -> None:
+        cases = [
+            (dns.resolver.LifetimeTimeout(timeout=3.0, errors=[]), DomainErrorCode.LOOKUP_TIMEOUT),
+            (dns.resolver.NoNameservers(), DomainErrorCode.LOOKUP_FAILED),
+            (dns.exception.DNSException(), DomainErrorCode.LOOKUP_FAILED),
+        ]
+        for error, code in cases:
+            for recheck in (False, True):
+                with self.subTest(error=type(error).__name__, recheck=recheck):
+                    result, _ = self.run_check({"TXT": error}, recheck=recheck)
+                    self.assertFalse(result.ok)
+                    self.assertTrue(result.inconclusive)
+                    self.assertEqual(result.code, code)
 
-    def test_an_unconfigured_resolver_is_a_failed_check_not_a_500(self) -> None:
+    def test_an_unconfigured_resolver_is_inconclusive_not_a_500(self) -> None:
         broken = mock.patch.object(
             dns.resolver, "Resolver", side_effect=dns.resolver.NoResolverConfiguration()
         )
         with broken:
             for result in (
                 DnspythonVerifier().check(DOMAIN, TOKEN, TARGET),
-                DnspythonVerifier().check_cname(DOMAIN, TARGET),
+                DnspythonVerifier().recheck(DOMAIN, TOKEN, TARGET),
             ):
                 self.assertFalse(result.ok)
-                self.assertIn("failed", result.reason)
+                self.assertTrue(result.inconclusive)
+                self.assertEqual(result.code, DomainErrorCode.LOOKUP_FAILED)
+
+    def test_the_recheck_passes_when_the_txt_record_was_removed(self) -> None:
+        # Schools may delete the TXT after go-live; the CNAME is what routes the domain.
+        for missing in (dns.resolver.NXDOMAIN(), dns.resolver.NoAnswer()):
+            with self.subTest(error=type(missing).__name__):
+                result, _ = self.run_check({"TXT": missing, "CNAME": cname(TARGET)}, recheck=True)
+                self.assertTrue(result.ok)
+
+    def test_the_recheck_fails_on_another_token(self) -> None:
+        # A new owner of the domain published their own token: a definite failure.
+        answers = {"TXT": txt("new-owner"), "CNAME": cname(TARGET)}
+        result, _ = self.run_check(answers, recheck=True)
+        self.assertFalse(result.ok)
+        self.assertFalse(result.inconclusive)
+        self.assertEqual(result.code, DomainErrorCode.TXT_MISMATCH)
+
+    def test_the_recheck_still_needs_the_cname(self) -> None:
+        answers = {"TXT": dns.resolver.NXDOMAIN(), "CNAME": cname("elsewhere.example.")}
+        result, _ = self.run_check(answers, recheck=True)
+        self.assertFalse(result.ok)
+        self.assertEqual(result.code, DomainErrorCode.CNAME_MISMATCH)
 
     def test_no_cname_target_fails_closed(self) -> None:
-        result, seen = self.run_check({}, target="")
-        self.assertFalse(result.ok)
-        self.assertEqual(seen, [])
+        for recheck in (False, True):
+            with self.subTest(recheck=recheck):
+                result, seen = self.run_check({}, target="", recheck=recheck)
+                self.assertFalse(result.ok)
+                # The platform's own misconfiguration never counts against a school.
+                self.assertTrue(result.inconclusive)
+                self.assertEqual(result.code, DomainErrorCode.TARGET_UNCONFIGURED)
+                self.assertEqual(seen, [])
 
 
 class FakeVerifierTests(SimpleTestCase):
@@ -124,8 +146,10 @@ class FakeVerifierTests(SimpleTestCase):
         self.assertTrue(verifier.check("www.greenfield.test", TOKEN, "").ok)
         self.assertFalse(verifier.check("www.greenfield.example", TOKEN, "").ok)
         self.assertFalse(verifier.check("test.example", TOKEN, "").ok)
-        self.assertTrue(verifier.check_cname("www.greenfield.test", TARGET).ok)
-        self.assertFalse(verifier.check_cname("www.greenfield.example", TARGET).ok)
+        self.assertTrue(verifier.recheck("www.greenfield.test", TOKEN, TARGET).ok)
+        lapsed = verifier.recheck("www.greenfield.example", TOKEN, TARGET)
+        self.assertFalse(lapsed.ok)
+        self.assertFalse(lapsed.inconclusive)
 
 
 class AdapterSelectionTests(SimpleTestCase):

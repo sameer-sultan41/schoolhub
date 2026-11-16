@@ -18764,6 +18764,10 @@ components:
         last_error:
           type: string
           readOnly: true
+        last_error_code:
+          allOf:
+          - $ref: '#/components/schemas/CustomDomainErrorCodeEnum'
+          readOnly: true
         dns_records:
           type: array
           items:
@@ -18784,6 +18788,7 @@ components:
       - id
       - is_primary
       - last_error
+      - last_error_code
       - status
       - tls_status
       - updated_at
@@ -18795,8 +18800,29 @@ components:
       properties:
         domain:
           type: string
+          maxLength: 317
       required:
       - domain
+    CustomDomainErrorCodeEnum:
+      enum:
+      - txt_missing
+      - txt_mismatch
+      - cname_missing
+      - cname_mismatch
+      - lookup_timeout
+      - lookup_failed
+      - domain_taken
+      - target_unconfigured
+      type: string
+      description: |-
+        * `txt_missing` - TXT record missing
+        * `txt_mismatch` - TXT record holds another token
+        * `cname_missing` - CNAME record missing
+        * `cname_mismatch` - CNAME points elsewhere
+        * `lookup_timeout` - DNS lookup timed out
+        * `lookup_failed` - DNS lookup failed
+        * `domain_taken` - Another school uses the domain
+        * `target_unconfigured` - Platform CNAME target not configured
     CustomDomainStatusEnum:
       enum:
       - pending_dns
@@ -19263,7 +19289,9 @@ components:
         One DNS record the school must create: `TXT` (the token) or `CNAME` (the target).
 
         The CNAME must point directly at the target (chains are not followed) and stay: the
-        daily re-check reads it. The TXT record proves ownership once and may then be removed.
+        daily re-check reads it. The TXT record proves ownership at verification and may then be
+        removed (`keep_after_verification: false`); if it is kept, it must keep this token, or
+        the daily re-check counts a failure (a new owner of the domain evicts a stale holder).
       properties:
         type:
           type: string

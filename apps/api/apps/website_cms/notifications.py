@@ -27,9 +27,13 @@ CONTACT_RECIPIENT_ROLES = ("reception", "school_admin")
 DOMAIN_RECIPIENT_ROLES = ("it_admin",)
 
 PREVIEW_LENGTH = 200
+#: `domain.tls` in `website.domain-active`: until a certificate is issued the domain cannot
+#: be the primary domain (controller ruling, PR D).
+TLS_PENDING_NOTE = "Its HTTPS certificate is still pending, so it cannot be the primary domain yet."
+TLS_ISSUED_NOTE = "Its HTTPS certificate is issued."
 
 _CONTACT_VARS = {"contact.name", "contact.subject", "contact.preview", "school.name"}
-_DOMAIN_ACTIVE_VARS = {"domain.hostname", "school.name"}
+_DOMAIN_ACTIVE_VARS = {"domain.hostname", "domain.tls", "school.name"}
 _DOMAIN_FAILED_VARS = {"domain.hostname", "domain.reason", "school.name"}
 
 catalog.register(
@@ -58,15 +62,16 @@ catalog.register(
     category=NotificationCategory.GENERAL,
     channels={NotificationChannel.EMAIL},
     variables=_DOMAIN_ACTIVE_VARS,
-    description="A custom domain was verified and its certificate issued.",
+    description="A custom domain was verified; the message says whether HTTPS is ready.",
 )
 for _channel in (NotificationChannel.IN_APP, NotificationChannel.EMAIL):
     templates.register(
         DOMAIN_ACTIVE,
         channel=_channel,
-        subject="{{ domain.hostname }} is now live",
+        subject="{{ domain.hostname }} is verified",
         body=(
-            "The custom domain {{ domain.hostname }} for {{ school.name }} is verified and active."
+            "The custom domain {{ domain.hostname }} for {{ school.name }} is verified. "
+            "{{ domain.tls }}"
         ),
         variables=_DOMAIN_ACTIVE_VARS,
     )

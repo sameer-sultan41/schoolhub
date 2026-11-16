@@ -19,6 +19,7 @@ Rules this file owns:
 from __future__ import annotations
 
 import enum
+import logging
 import secrets
 from datetime import timedelta
 from typing import Any
@@ -45,21 +46,34 @@ from apps.website_cms.custom_domains.adapters import (
     get_dns_verifier,
     get_edge_provisioner,
 )
-from apps.website_cms.errors import violation
-from apps.website_cms.models import CustomDomain, CustomDomainRoute, CustomDomainStatus
+from apps.website_cms.errors import conflict, violation
+from apps.website_cms.features import FEATURE
+from apps.website_cms.models import (
+    CustomDomain,
+    CustomDomainRoute,
+    CustomDomainStatus,
+    DomainErrorCode,
+    TlsStatus,
+)
 from apps.website_cms.notifications import (
     DOMAIN_ACTIVE,
     DOMAIN_FAILED,
     DOMAIN_RECIPIENT_ROLES,
+    TLS_ISSUED_NOTE,
+    TLS_PENDING_NOTE,
     role_recipients,
 )
 from apps.website_cms.revalidation import host_tag, host_tags, queue_revalidation
-from core.api.exceptions import Conflict, DomainRuleViolation
+from core.api.exceptions import DomainRuleViolation
 from core.notifications.services import notify
+from core.tenancy.access import operational_tenant
 from core.tenancy.context import tenant_atomic
+from core.tenancy.features import is_feature_enabled
 from core.tenancy.hosts import normalise_host
 from core.tenancy.locks import AdvisoryLockNamespace, advisory_xact_lock
 from core.tenancy.models import Tenant
+
+logger = logging.getLogger(__name__)
 
 #: The statuses a DNS check may move a claim out of.
 VERIFIABLE = (
@@ -70,6 +84,7 @@ VERIFIABLE = (
 #: Characters that make the input a URL or an address, not a domain name.
 _NOT_A_DOMAIN = frozenset(":/\\@?#% \t\n")
 DOMAIN_TAKEN_REASON = "Another school's website already uses this domain."
+TAKEN = DnsCheck(False, DOMAIN_TAKEN_REASON, DomainErrorCode.DOMAIN_TAKEN)
 NOTIFICATION_SOURCE = "custom_domain"
 # A notification title and email subject hold 200 characters; the longest domain subject
 # ("<hostname> could not be verified") adds 22 to the hostname.
@@ -139,7 +154,7 @@ def create_custom_domain(tenant: Tenant, raw_domain: str, actor_id: UUID) -> Cus
 
 
 def set_primary(tenant: Tenant, pk: UUID, is_primary: bool, actor_id: UUID) -> CustomDomain:
-    """Make an active domain the site's primary host (clearing any other), or unset it."""
+    """Make an active domain with an issued certificate the primary host, or unset it."""
     advisory_xact_lock(AdvisoryLockNamespace.CUSTOM_DOMAINS, tenant.pk)
     row = locked(CustomDomain, pk)
     if row.is_primary == is_primary:
@@ -148,6 +163,13 @@ def set_primary(tenant: Tenant, pk: UUID, is_primary: bool, actor_id: UUID) -> C
         if row.status != CustomDomainStatus.ACTIVE:
             raise violation(
                 "is_primary", "not_active", "only an active domain can be the primary domain."
+            )
+        # Links built on the primary host must work over HTTPS (controller ruling, PR D).
+        if row.tls_status != TlsStatus.ISSUED:
+            raise violation(
+                "is_primary",
+                "tls_not_issued",
+                "the domain's HTTPS certificate is not issued yet.",
             )
         CustomDomain.objects.alive().filter(is_primary=True).exclude(pk=pk).update(
             is_primary=False, updated_by=actor_id, updated_at=timezone.now()
@@ -191,7 +213,7 @@ def verify_custom_domain(tenant: Tenant, pk: UUID, actor_id: UUID | None) -> Cus
     check = _check(row)
     outcome = _apply_check(tenant, row, (CustomDomainStatus.VERIFYING,), check, actor_id)
     if outcome is Outcome.TAKEN:
-        raise Conflict({"domain": f"domain_taken: {DOMAIN_TAKEN_REASON}"})
+        raise conflict("domain", DomainErrorCode.DOMAIN_TAKEN.value, DOMAIN_TAKEN_REASON)
     with tenant_atomic(tenant.pk):
         return get_object_or_404(CustomDomain.objects.alive(), pk=pk)
 
@@ -202,9 +224,8 @@ def reverify_tenant_domains(tenant_id: UUID) -> int:
     A `pending_dns` claim keeps its status on a failed check (its owner may still be setting
     DNS up) but records the reason; `verifying` and `failed` claims become `failed`. A claim
     moved to `verifying` in the last `VERIFY_IN_FLIGHT_SECONDS` is skipped: a user's `:verify`
-    is checking it.
+    is checking it. A school that is not operational, or has `module.website` off, is skipped.
     """
-    tenant = Tenant.objects.get(pk=tenant_id)
     now = timezone.now()
     since = now - timedelta(hours=DOMAIN_RETRY_WINDOW_HOURS)
     in_flight = now - timedelta(seconds=VERIFY_IN_FLIGHT_SECONDS)
@@ -215,6 +236,11 @@ def reverify_tenant_domains(tenant_id: UUID) -> int:
             # A user's own `:verify` is mid-check: let it write its result, not this sweep.
             .exclude(status=CustomDomainStatus.VERIFYING, updated_at__gt=in_flight)
         )
+        if not rows or not is_feature_enabled(FEATURE, tenant_id=tenant_id):
+            return 0
+    tenant, refusal = operational_tenant(tenant_id)
+    if tenant is None or refusal is not None:
+        return 0
     acted = 0
     for row in rows:
         outcome = _apply_check(
@@ -229,23 +255,43 @@ def reverify_tenant_domains(tenant_id: UUID) -> int:
     return acted
 
 
-def recheck_tenant_active_domains(tenant_id: UUID) -> int:
-    """Daily beat step (no transaction open): re-verify this school's active domains.
+def routed_tenant_ids() -> list[UUID]:
+    """Every live tenant holding a route (platform scope): the daily re-check's sweep.
 
-    Only the CNAME is checked: it is what still routes the domain to us. The TXT token proved
-    ownership at verification, and schools often remove it after go-live. After
-    `ACTIVE_RECHECK_FAILURE_LIMIT` consecutive failures the domain turns `failed`, its route
-    is dropped and the school is notified: lapsed verification falls back to the subdomain
-    (website-builder §1).
+    A soft-deleted tenant's routes are not re-checked: host resolution already ignores them,
+    and an activation evicts one that blocks another school (`_insert_route`).
     """
-    tenant = Tenant.objects.get(pk=tenant_id)
+    return list(
+        CustomDomainRoute.objects.filter(tenant__deleted_at__isnull=True)
+        .values_list("tenant_id", flat=True)
+        .distinct()
+        .order_by("tenant_id")
+    )
+
+
+def recheck_tenant_active_domains(tenant_id: UUID) -> int:
+    """Daily beat step (no transaction open): re-check this school's active domains.
+
+    Every school with a route is re-checked, whatever its status or module flag, because a
+    route is what the renderer serves. The CNAME must still point at us; a TXT record, if
+    the school kept one, must still hold this claim's token, so a new owner of the domain
+    (possibly another school) evicts a stale holder. A missing TXT passes. Only definite
+    failures count: an inconclusive lookup (resolver outage) changes nothing, so an outage
+    cannot lapse every school's domain. After `ACTIVE_RECHECK_FAILURE_LIMIT` definite
+    failures in a row the domain turns `failed`, its route is dropped and the school is
+    notified: lapsed verification falls back to the subdomain (website-builder §1).
+    """
     with tenant_atomic(tenant_id):
         rows = list(CustomDomain.objects.alive().filter(status=CustomDomainStatus.ACTIVE))
+    if not rows:
+        return 0
+    tenant = Tenant.objects.get(pk=tenant_id)
     verifier = get_dns_verifier()
     target = settings.WEBSITE_CNAME_TARGET
     acted = 0
     for row in rows:
-        acted += _apply_recheck(tenant, row, verifier.check_cname(row.domain, target))
+        check = verifier.recheck(row.domain, row.verification_token, target)
+        acted += _apply_recheck(tenant, row, check)
     return acted
 
 
@@ -275,10 +321,14 @@ def _apply_check(
         if check.ok:
             outcome = _activate(tenant, row, expected, actor_id)
         else:
-            outcome = _fail(tenant, row, expected, check.reason, actor_id, keep_status=keep_status)
+            outcome = _fail(tenant, row, expected, check, actor_id, keep_status=keep_status)
     if outcome is Outcome.ACTIVATED:
         get_edge_provisioner().request(row.domain)
     return outcome
+
+
+class _DomainTaken(Exception):
+    """Rolls the activation savepoint back when another school holds the route."""
 
 
 def _activate(
@@ -293,6 +343,7 @@ def _activate(
                 status=CustomDomainStatus.ACTIVE,
                 verified_at=now,
                 last_error="",
+                last_error_code="",
                 consecutive_failures=0,
                 failure_notified_at=None,
                 updated_by=actor_id,
@@ -300,29 +351,62 @@ def _activate(
             )
             if not moved:
                 return Outcome.DISCARDED
-            CustomDomainRoute.objects.create(
-                domain=row.domain, tenant_id=tenant.pk, custom_domain_id=row.pk
-            )
-    except IntegrityError:
-        _fail(tenant, row, expected, DOMAIN_TAKEN_REASON, actor_id)
+            if not _insert_route(tenant, row):
+                raise _DomainTaken
+    except _DomainTaken:
+        _fail(tenant, row, expected, TAKEN, actor_id)
         return Outcome.TAKEN
     _notify(DOMAIN_ACTIVE, tenant, row)
     _revalidate(tenant, row.domain)
     return Outcome.ACTIVATED
 
 
+def _insert_route(tenant: Tenant, row: CustomDomain) -> bool:
+    """Insert the route; the unique `domain` decides who holds it (never check-then-write).
+
+    A route held by a soft-deleted school blocks nobody: it is deleted (by domain and that
+    school's id) and the insert retried once, still decided by the database.
+    """
+    for attempt in range(2):
+        try:
+            with transaction.atomic():
+                CustomDomainRoute.objects.create(
+                    domain=row.domain, tenant_id=tenant.pk, custom_domain_id=row.pk
+                )
+            return True
+        except IntegrityError:
+            if attempt or not _evict_deleted_tenants_route(row.domain):
+                return False
+    return False
+
+
+def _evict_deleted_tenants_route(domain: str) -> bool:
+    """Delete `domain`'s route if a soft-deleted school holds it; True when one was."""
+    holder = (
+        CustomDomainRoute.objects.filter(domain=domain, tenant__deleted_at__isnull=False)
+        .values_list("tenant_id", flat=True)
+        .first()
+    )
+    if holder is None:
+        return False
+    CustomDomainRoute.objects.filter(domain=domain, tenant_id=holder).delete()
+    return True
+
+
 def _fail(
     tenant: Tenant,
     row: CustomDomain,
     expected: tuple[str, ...],
-    reason: str,
+    check: DnsCheck,
     actor_id: UUID | None,
     *,
     keep_status: bool = False,
 ) -> Outcome:
     now = timezone.now()
+    reason = check.reason[:DOMAIN_ERROR_MAX_LENGTH]
     fields: dict[str, Any] = {
-        "last_error": reason[:DOMAIN_ERROR_MAX_LENGTH],
+        "last_error": reason,
+        "last_error_code": check.code,
         "updated_by": actor_id,
         "updated_at": now,
     }
@@ -340,6 +424,11 @@ def _fail(
 
 def _apply_recheck(tenant: Tenant, row: CustomDomain, check: DnsCheck) -> int:
     """One active domain's daily result; 1 when a row changed."""
+    if check.inconclusive:
+        logger.warning(
+            "custom domain %s re-check inconclusive (%s); not counted", row.pk, check.code
+        )
+        return 0
     now = timezone.now()
     with tenant_atomic(tenant.pk):
         advisory_xact_lock(AdvisoryLockNamespace.CUSTOM_DOMAINS, tenant.pk)
@@ -350,18 +439,20 @@ def _apply_recheck(tenant: Tenant, row: CustomDomain, check: DnsCheck) -> int:
         if check.ok:
             if row.consecutive_failures == 0:
                 return 0
-            return claim.update(consecutive_failures=0, last_error="", updated_at=now)
+            return claim.update(
+                consecutive_failures=0, last_error="", last_error_code="", updated_at=now
+            )
         failures = row.consecutive_failures + 1
         reason = check.reason[:DOMAIN_ERROR_MAX_LENGTH]
+        recorded = {"last_error": reason, "last_error_code": check.code, "updated_at": now}
         if failures < ACTIVE_RECHECK_FAILURE_LIMIT:
-            return claim.update(consecutive_failures=failures, last_error=reason, updated_at=now)
+            return claim.update(consecutive_failures=failures, **recorded)
         lapsed = claim.update(
             status=CustomDomainStatus.FAILED,
             is_primary=False,
             consecutive_failures=failures,
-            last_error=reason,
             failure_notified_at=now,
-            updated_at=now,
+            **recorded,
         )
         if not lapsed:
             return 0
@@ -389,6 +480,9 @@ def _notify(event_key: str, tenant: Tenant, row: CustomDomain, *, reason: str = 
     context: dict[str, object] = {"domain.hostname": hostname, "school.name": tenant.name}
     if event_key == DOMAIN_FAILED:
         context["domain.reason"] = reason
+    if event_key == DOMAIN_ACTIVE:
+        issued = row.tls_status == TlsStatus.ISSUED
+        context["domain.tls"] = TLS_ISSUED_NOTE if issued else TLS_PENDING_NOTE
     notify(
         event_key,
         tenant_id=tenant.pk,

@@ -6,6 +6,7 @@ from django.conf import settings
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from apps.website_cms.constants import DOMAIN_INPUT_MAX_LENGTH
 from apps.website_cms.custom_domains.adapters import txt_record_name
 from apps.website_cms.models import CustomDomain
 
@@ -14,7 +15,9 @@ class DnsRecordSerializer(serializers.Serializer):
     """One DNS record the school must create: `TXT` (the token) or `CNAME` (the target).
 
     The CNAME must point directly at the target (chains are not followed) and stay: the
-    daily re-check reads it. The TXT record proves ownership once and may then be removed.
+    daily re-check reads it. The TXT record proves ownership at verification and may then be
+    removed (`keep_after_verification: false`); if it is kept, it must keep this token, or
+    the daily re-check counts a failure (a new owner of the domain evicts a stale holder).
     """
 
     type = serializers.CharField()
@@ -36,6 +39,7 @@ class CustomDomainSerializer(serializers.ModelSerializer):
             "is_primary",
             "verified_at",
             "last_error",
+            "last_error_code",
             "dns_records",
             "created_at",
             "updated_at",
@@ -64,7 +68,7 @@ class CustomDomainSerializer(serializers.ModelSerializer):
 class CustomDomainCreateSerializer(serializers.Serializer):
     """POST input. Shape only; the service normalises and validates the name (422)."""
 
-    domain = serializers.CharField(trim_whitespace=True)
+    domain = serializers.CharField(trim_whitespace=True, max_length=DOMAIN_INPUT_MAX_LENGTH)
 
 
 class CustomDomainUpdateSerializer(serializers.Serializer):
