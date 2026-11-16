@@ -102,8 +102,10 @@ export function MenuItemEditor({
     <li
       ref={setNodeRef}
       style={style}
+      tabIndex={-1}
+      data-row-path={`items.${String(index)}`}
       aria-label={t("item.label", { index: position, name })}
-      className="space-y-3 rounded-md border border-border bg-background p-3"
+      className="space-y-3 rounded-md border border-border bg-background p-3 outline-none focus:ring-2 focus:ring-ring"
     >
       <div className="flex flex-wrap items-center gap-1">
         <Button
@@ -240,8 +242,10 @@ function MenuChildRow({
     <li
       ref={setNodeRef}
       style={style}
+      tabIndex={-1}
+      data-row-path={`items.${String(parentIndex)}.children.${String(index)}`}
       aria-label={t("child.label", where)}
-      className="space-y-3 rounded-md border border-border bg-background p-3"
+      className="space-y-3 rounded-md border border-border bg-background p-3 outline-none focus:ring-2 focus:ring-ring"
     >
       <div className="flex items-center gap-1">
         <Button

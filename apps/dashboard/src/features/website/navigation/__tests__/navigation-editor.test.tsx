@@ -143,9 +143,12 @@ describe("navigation editor", () => {
     await user.click(
       link("Link 3: News").getByRole("button", { name: "Nest link 3 under the link above" }),
     );
-    expect(
-      link("Link 2: About").getByRole("listitem", { name: "Sub-link 2 of link 2" }),
-    ).toBeVisible();
+    // Focus follows the moved link, so a keyboard user keeps their place.
+    await waitFor(() => {
+      expect(
+        link("Link 2: About").getByRole("listitem", { name: "Sub-link 2 of link 2" }),
+      ).toHaveFocus();
+    });
     await user.click(panel("Header").getByRole("button", { name: "Save menu" }));
 
     await waitFor(() => {
@@ -175,7 +178,9 @@ describe("navigation editor", () => {
     );
 
     // "Our staff" follows its old parent, which, with no sub-links left, may now be nested.
-    expect(panel("Header").getByRole("listitem", { name: "Link 3: Our staff" })).toBeVisible();
+    await waitFor(() => {
+      expect(panel("Header").getByRole("listitem", { name: "Link 3: Our staff" })).toHaveFocus();
+    });
     expect(
       link("Link 2: About").getByRole("button", { name: "Nest link 2 under the link above" }),
     ).toBeEnabled();
@@ -245,6 +250,77 @@ describe("navigation editor", () => {
     ).toBeVisible();
     expect(within(added).getByText("This field is required.")).toBeVisible();
     expect(updateMenu).not.toHaveBeenCalled();
+  });
+
+  it("asks before removing a link with sub-links, and removes a bare link at once", async () => {
+    const user = await renderEditor();
+    const removeAbout = () => link("Link 2: About").getByRole("button", { name: "Remove link 2" });
+
+    await user.click(removeAbout());
+    let dialog = await screen.findByRole("alertdialog", {
+      name: "Remove “About” and its sub-links?",
+    });
+    expect(within(dialog).getByText(/Its 1 sub-link goes with it/)).toBeVisible();
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    });
+    expect(panel("Header").getByRole("listitem", { name: "Link 2: About" })).toBeVisible();
+
+    await user.click(removeAbout());
+    dialog = await screen.findByRole("alertdialog", { name: "Remove “About” and its sub-links?" });
+    await user.click(within(dialog).getByRole("button", { name: "Remove" }));
+
+    await waitFor(() => {
+      expect(panel("Header").queryByDisplayValue("About")).not.toBeInTheDocument();
+    });
+    expect(panel("Header").queryByDisplayValue("Our staff")).not.toBeInTheDocument();
+
+    // "Home" has no sub-links: it goes without a question.
+    await user.click(link("Link 1: Home").getByRole("button", { name: "Remove link 1" }));
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(panel("Header").queryByDisplayValue("Home")).not.toBeInTheDocument();
+  });
+
+  it("resends a kept link to an unpublished page unchanged, which the server accepts", async () => {
+    const user = await renderEditor();
+
+    await user.click(screen.getByRole("tab", { name: "Footer" }));
+    await user.click(panel("Footer").getByRole("button", { name: "Save menu" }));
+
+    await waitFor(() => {
+      expect(updateMenu).toHaveBeenCalledWith("footer_primary", [
+        { label: "Old fees", target_type: "page", target: UNPUBLISHED_ID, children: [] },
+      ]);
+    });
+  });
+
+  it("does not mark a page that came from a later page of the published list", async () => {
+    // A school past one `MAX_PAGE_SIZE` page of published pages: the last one is still known.
+    const many = Array.from({ length: 101 }, (_unused, index) =>
+      publishedPage(
+        `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+        `Page ${String(index)}`,
+      ),
+    );
+    const late = many[100];
+    if (late === undefined) throw new Error("fixture");
+    fetchPublished.mockResolvedValue(many);
+    fetchMenus.mockResolvedValue([
+      menu("header", []),
+      menu("footer_primary", [
+        { label: "Late", target_type: "page", target: late.id, children: [] },
+      ]),
+      menu("footer_secondary", []),
+    ]);
+    const user = await renderEditor();
+
+    await user.click(screen.getByRole("tab", { name: "Footer" }));
+
+    expect(panel("Footer").getByRole("combobox", { name: "Page" })).toHaveTextContent("Page 100");
+    expect(
+      panel("Footer").queryByText(/This page isn't published any more/),
+    ).not.toBeInTheDocument();
   });
 
   it("is read-only without website.navigation.update", async () => {

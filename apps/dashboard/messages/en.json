@@ -5101,6 +5101,11 @@
         "over": "Link {index} is over position {position}.",
         "end": "Link {index} dropped at position {position}.",
         "cancel": "Move cancelled."
+      },
+      "removeConfirm": {
+        "title": "Remove “{name}” and its sub-links?",
+        "description": "{count, plural, one {Its # sub-link goes} other {Its # sub-links go}} with it. Nothing changes on the website until you save the menu.",
+        "confirm": "Remove"
       }
     }
   },

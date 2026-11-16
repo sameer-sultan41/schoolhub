@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { closestCenter, DndContext } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { Alert, Button, Form } from "@schoolhub/ui";
 import { Plus } from "lucide-react";
 
+import { ResponsiveAlertDialog } from "@/components/responsive-alert-dialog";
 import { useFormDialogSubmit } from "@/hooks/use-form-dialog-submit";
 import { useInvalidateModule } from "@/hooks/use-invalidate-module";
 import {
@@ -53,6 +54,13 @@ function invalidTargetKey(type: NavigationTargetType | undefined): string {
   return "other";
 }
 
+/** A top-level link waiting on the confirm that removes it with its sub-links. */
+interface PendingRemoval {
+  index: number;
+  name: string;
+  count: number;
+}
+
 export interface MenuEditorProps {
   menu: NavigationMenuRecord;
   pages: readonly WebsitePageRecord[];
@@ -65,7 +73,8 @@ export interface MenuEditorProps {
  * The editor holds the server's rules it can: at most `NAV_MAX_ITEMS` links (Add stops there),
  * two levels (nesting a link that has sub-links is refused), a label of 1 to 60 characters, a
  * published page or a safe link. Anything the server still refuses lands under the link it names
- * (`items.2.children.0.target`) or, for the menu as a whole, as the form's message.
+ * (`items.2.children.0.target`) or, for the menu as a whole, as the form's message. Removing a
+ * link that holds sub-links asks first; a nest or move-out puts focus on the row that moved.
  */
 export function MenuEditor({ menu, pages, canUpdate }: MenuEditorProps) {
   const t = useTranslations("website.navigation");
@@ -97,6 +106,32 @@ export function MenuEditor({ menu, pages, canUpdate }: MenuEditorProps) {
   const ids = fields.map((field) => field.id);
   const dnd = useMenuDnd(ids, move);
   const full = countLinks(items) >= NAV_MAX_ITEMS;
+  const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval | null>(null);
+  const listRef = useRef<HTMLOListElement>(null);
+  // The row a nest or move-out just moved (`items.1.children.2`): focused once it has rendered,
+  // since `replace` remounts every row and focus would otherwise fall back to the page.
+  const focusPath = useRef<string | null>(null);
+  useEffect(() => {
+    if (focusPath.current === null) return;
+    const row = listRef.current?.querySelector<HTMLElement>(
+      `[data-row-path="${focusPath.current}"]`,
+    );
+    focusPath.current = null;
+    row?.focus();
+  });
+
+  function requestRemove(index: number) {
+    const item = form.getValues(`items.${index}`);
+    if (item.children.length === 0) {
+      remove(index);
+      return;
+    }
+    setPendingRemoval({
+      index,
+      name: item.label.trim() || t("untitled"),
+      count: item.children.length,
+    });
+  }
 
   const { handleSubmit, formError, isPending } = useFormDialogSubmit({
     form,
@@ -144,7 +179,7 @@ export function MenuEditor({ menu, pages, canUpdate }: MenuEditorProps) {
               onDragEnd={dnd.onDragEnd}
             >
               <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-                <ol className="space-y-3" aria-label={t("listLabel")}>
+                <ol ref={listRef} className="space-y-3" aria-label={t("listLabel")}>
                   {fields.map((field, index) => (
                     <MenuItemEditor
                       key={field.id}
@@ -156,11 +191,15 @@ export function MenuEditor({ menu, pages, canUpdate }: MenuEditorProps) {
                       nestable={canNest(items, index)}
                       full={full}
                       onMove={move}
-                      onRemove={remove}
+                      onRemove={requestRemove}
                       onNest={(at) => {
-                        replace(nestItem(form.getValues("items"), at));
+                        const current = form.getValues("items");
+                        const siblings = current[at - 1]?.children.length ?? 0;
+                        focusPath.current = `items.${String(at - 1)}.children.${String(siblings)}`;
+                        replace(nestItem(current, at));
                       }}
                       onUnnest={(parent, child) => {
+                        focusPath.current = `items.${String(parent + 1)}`;
                         replace(unnestItem(form.getValues("items"), parent, child));
                       }}
                     />
@@ -196,6 +235,23 @@ export function MenuEditor({ menu, pages, canUpdate }: MenuEditorProps) {
           </div>
         ) : null}
       </form>
+      {pendingRemoval && (
+        <ResponsiveAlertDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setPendingRemoval(null);
+          }}
+          title={t("removeConfirm.title", { name: pendingRemoval.name })}
+          description={t("removeConfirm.description", { count: pendingRemoval.count })}
+          confirmLabel={t("removeConfirm.confirm")}
+          variant="destructive"
+          isPending={false}
+          onConfirm={() => {
+            remove(pendingRemoval.index);
+            setPendingRemoval(null);
+          }}
+        />
+      )}
     </Form>
   );
 }
