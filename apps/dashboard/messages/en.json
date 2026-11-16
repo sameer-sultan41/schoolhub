@@ -4597,6 +4597,7 @@
       "created": "Album created.",
       "saved": "Album saved.",
       "notFound": "This album couldn't be found.",
+      "notFoundDescription": "It may have been deleted, or the link is wrong.",
       "loadError": "This album couldn't be loaded.",
       "publishHint": "Albums are published or unpublished; there is no archive.",
       "delete": {

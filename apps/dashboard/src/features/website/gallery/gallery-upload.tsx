@@ -144,7 +144,7 @@ export function GalleryUpload({
           onChange={handleChange}
         />
         <p className="text-sm text-muted-foreground" aria-live="polite">
-          {progress ? t("uploading", progress) : null}
+          {progress ? t("uploading", { done: progress.done, total: progress.total }) : null}
         </p>
       </div>
       {failures.length > 0 ? (
