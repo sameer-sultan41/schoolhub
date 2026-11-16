@@ -134,6 +134,18 @@ describe("POST /api/revalidate", () => {
     expect(mockRevalidateTag).not.toHaveBeenCalled();
   });
 
+  it.each(["tenant:t10", "tenant:t1x:page:/about", "tenant:t1-other"])(
+    "never revalidates another tenant whose id the signer's prefixes (%p)",
+    async (tag) => {
+      const body = JSON.stringify({ tenant_id: "t1", tags: [tag] });
+      const response = await POST(makeRequest(body, await sign(body)));
+
+      expect(response.status).toBe(200);
+      expect(mockRevalidateTag).toHaveBeenCalledTimes(1);
+      expect(mockRevalidateTag).toHaveBeenCalledWith("tenant:t1", { expire: 0 });
+    },
+  );
+
   it("never revalidates a tag belonging to another tenant", async () => {
     const body = JSON.stringify({ tenant_id: "t1", tags: ["tenant:t2:page:/about"] });
     const response = await POST(makeRequest(body, await sign(body)));
