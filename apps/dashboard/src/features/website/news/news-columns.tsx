@@ -18,6 +18,8 @@ import type { NewsPostRecord } from "@/services";
 export interface NewsColumnsOptions {
   /** `website.news-post.update`: the row's Edit. */
   canUpdate: boolean;
+  /** `website.news-post.publish`: Edit on a published row. */
+  canPublish: boolean;
   onOpen: (post: NewsPostRecord) => void;
   onEdit: (post: NewsPostRecord) => void;
 }
@@ -28,6 +30,7 @@ export interface NewsColumnsOptions {
  */
 export function useNewsColumns({
   canUpdate,
+  canPublish,
   onOpen,
   onEdit,
 }: NewsColumnsOptions): ColumnDef<NewsPostRecord>[] {
@@ -54,11 +57,12 @@ export function useNewsColumns({
       updatedColumn(t("columns.updatedAt")),
       editColumn({
         canUpdate,
+        canPublish,
         label: t("actions.edit"),
         rowLabel: (post) => t("actions.editRow", { title: post.title }),
         onEdit,
       }),
     ],
-    [t, locale, canUpdate, onOpen, onEdit],
+    [t, locale, canUpdate, canPublish, onOpen, onEdit],
   );
 }

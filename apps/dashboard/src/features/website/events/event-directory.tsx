@@ -43,6 +43,7 @@ export function EventDirectory() {
 
   const columns = useEventColumns({
     canUpdate: permissions.canUpdate,
+    canPublish: permissions.canPublish,
     onOpen: handleOpen,
     onEdit: handleEdit,
   });

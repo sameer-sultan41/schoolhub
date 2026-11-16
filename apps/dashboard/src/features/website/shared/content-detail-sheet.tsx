@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { cn, Skeleton } from "@schoolhub/ui";
+import { Alert, AlertDescription, cn, Skeleton } from "@schoolhub/ui";
 
 import {
   ResponsiveSheet,
@@ -59,6 +59,8 @@ export interface ContentDetailSheetProps {
   richTextLabel: string;
   /** The actions: Edit, the lifecycle and Delete. */
   footer: ReactNode;
+  /** Why the viewer can't change it (a live record without the publish key), above its facts. */
+  notice?: string | null;
 }
 
 /**
@@ -74,6 +76,7 @@ export function ContentDetailSheet({
   facts,
   richTextLabel,
   footer,
+  notice,
 }: ContentDetailSheetProps) {
   const t = useTranslations("website.content");
   const tCommon = useTranslations("common");
@@ -106,6 +109,11 @@ export function ContentDetailSheet({
             />
           ) : detail ? (
             <>
+              {notice ? (
+                <Alert variant="info">
+                  <AlertDescription>{notice}</AlertDescription>
+                </Alert>
+              ) : null}
               <dl className="grid grid-cols-2 gap-x-3 gap-y-4">{facts}</dl>
               <section className="flex flex-col gap-2">
                 <h3 className="text-sm font-semibold text-foreground">{richTextLabel}</h3>

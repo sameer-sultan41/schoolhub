@@ -15,6 +15,8 @@ import type { GalleryAlbumRecord } from "@/services";
 export interface AlbumColumnsOptions {
   /** `website.gallery-album.update`: the row's Edit. */
   canUpdate: boolean;
+  /** `website.gallery-album.publish`: Edit on a published row. */
+  canPublish: boolean;
   onEdit: (album: GalleryAlbumRecord) => void;
 }
 
@@ -24,6 +26,7 @@ export interface AlbumColumnsOptions {
  */
 export function useAlbumColumns({
   canUpdate,
+  canPublish,
   onEdit,
 }: AlbumColumnsOptions): ColumnDef<GalleryAlbumRecord>[] {
   const t = useTranslations("website.gallery");
@@ -63,11 +66,12 @@ export function useAlbumColumns({
       updatedColumn(t("columns.updatedAt")),
       editColumn({
         canUpdate,
+        canPublish,
         label: t("actions.edit"),
         rowLabel: (album) => t("actions.editRow", { title: album.title }),
         onEdit,
       }),
     ],
-    [t, locale, canUpdate, onEdit],
+    [t, locale, canUpdate, canPublish, onEdit],
   );
 }

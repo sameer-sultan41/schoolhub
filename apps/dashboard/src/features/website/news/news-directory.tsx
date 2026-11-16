@@ -46,6 +46,7 @@ export function NewsDirectory() {
 
   const columns = useNewsColumns({
     canUpdate: permissions.canUpdate,
+    canPublish: permissions.canPublish,
     onOpen: handleOpen,
     onEdit: handleEdit,
   });

@@ -25,13 +25,14 @@ export function AlbumDirectory() {
   const t = useTranslations("website.gallery");
   const { data: user } = useCurrentUser();
   const canUpdate = hasPermission(user, "website.gallery-album.update");
+  const canPublish = hasPermission(user, "website.gallery-album.publish");
   const [editTarget, setEditTarget] = useState<GalleryAlbumRecord | null>(null);
 
   // Stable, so the columns' own `useMemo` skips a rebuild on a keystroke or a page change.
   const handleEdit = useCallback((album: GalleryAlbumRecord) => {
     setEditTarget(album);
   }, []);
-  const columns = useAlbumColumns({ canUpdate, onEdit: handleEdit });
+  const columns = useAlbumColumns({ canUpdate, canPublish, onEdit: handleEdit });
   const directory = useContentDirectory({
     columns,
     resource: GALLERY_ALBUMS_RESOURCE,

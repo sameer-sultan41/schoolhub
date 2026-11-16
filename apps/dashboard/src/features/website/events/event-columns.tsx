@@ -18,6 +18,8 @@ import { useEventWhen } from "./use-event-when";
 export interface EventColumnsOptions {
   /** `website.school-event.update`: the row's Edit. */
   canUpdate: boolean;
+  /** `website.school-event.publish`: Edit on a published row. */
+  canPublish: boolean;
   onOpen: (event: SchoolEventRecord) => void;
   onEdit: (event: SchoolEventRecord) => void;
 }
@@ -28,6 +30,7 @@ export interface EventColumnsOptions {
  */
 export function useEventColumns({
   canUpdate,
+  canPublish,
   onOpen,
   onEdit,
 }: EventColumnsOptions): ColumnDef<SchoolEventRecord>[] {
@@ -57,11 +60,12 @@ export function useEventColumns({
       updatedColumn(t("columns.updatedAt")),
       editColumn({
         canUpdate,
+        canPublish,
         label: t("actions.edit"),
         rowLabel: (event) => t("actions.editRow", { title: event.title }),
         onEdit,
       }),
     ],
-    [t, when, canUpdate, onOpen, onEdit],
+    [t, when, canUpdate, canPublish, onOpen, onEdit],
   );
 }

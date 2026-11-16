@@ -4,6 +4,14 @@ import { slugify } from "../content-fields";
 import { rekeyRichTextErrors } from "../use-content-form-submit";
 import { documentError, violation } from "./content-fixtures";
 
+jest.mock("@/services", () =>
+  jest
+    .requireActual<{
+      servicesMock: (domains: Record<string, readonly string[]>) => unknown;
+    }>("@/test-fixtures/services-mock")
+    .servicesMock({}),
+);
+
 describe("rekeyRichTextErrors", () => {
   const doc = { blocks: [{ type: "paragraph", text: "" }] };
 

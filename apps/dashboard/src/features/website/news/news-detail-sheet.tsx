@@ -7,6 +7,7 @@ import { EMPTY_VALUE } from "@/lib/constants";
 import { formatDate } from "@/lib/helpers";
 import { Services } from "@/services";
 import { ContentDetailSheet, ContentFact } from "@/features/website/shared/content-detail-sheet";
+import { canEditContent, isPublisherOnly } from "@/features/website/shared/content-permissions";
 import { PublishActions } from "@/features/website/shared/publish-actions";
 import { SeoButton } from "@/features/website/seo/seo-button";
 import { useNewsPostDetail } from "./news-form-dialog";
@@ -39,6 +40,7 @@ export function NewsDetailSheet({
 }: NewsDetailSheetProps) {
   const t = useTranslations("website.news");
   const tContent = useTranslations("website.content");
+  const tReasons = useTranslations("website.reasons");
   const locale = useLocale();
   const query = useNewsPostDetail(postId);
   const post = query.data;
@@ -59,6 +61,11 @@ export function NewsDetailSheet({
       onRetry={() => {
         void query.refetch();
       }}
+      notice={
+        post && isPublisherOnly(post.status, permissions.canUpdate, permissions.canPublish)
+          ? tReasons("content.publish_required")
+          : null
+      }
       richTextLabel={t("form.body")}
       facts={
         post && (
@@ -81,7 +88,7 @@ export function NewsDetailSheet({
       footer={
         post && (
           <>
-            {permissions.canUpdate && (
+            {canEditContent(post.status, permissions.canUpdate, permissions.canPublish) && (
               <Button variant="outline" onClick={onEdit}>
                 {t("actions.edit")}
               </Button>
