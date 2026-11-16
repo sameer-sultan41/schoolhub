@@ -9,8 +9,6 @@ from django.db import connection
 from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
-from rest_framework.test import APIClient
-from rest_framework_simplejwt.tokens import AccessToken
 
 from apps.school_organization.tests.factories import grant_default_role
 from apps.website_cms.constants import DOMAIN_INPUT_MAX_LENGTH, MAX_CUSTOM_DOMAINS
@@ -62,13 +60,6 @@ def verify_url(row: CustomDomain) -> str:
 
 def reason(response) -> str:
     return response.json()["error"]["meta"]["reason"]
-
-
-def jwt_only_client(user) -> APIClient:
-    """The bearer token alone, as a real client sends it: no `force_login` session (L63)."""
-    client = APIClient()
-    client.credentials(HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(user)}")
-    return client
 
 
 class StubVerifier:
@@ -514,7 +505,7 @@ class DomainPermissionTests(DomainTestCase):
             with self.subTest(role=slug):
                 user = UserFactory(tenant=self.tenant)
                 grant_default_role(user, slug)
-                client = jwt_only_client(user)
+                client = self.bearer_client(user)
                 domain = f"{slug.replace('_', '-')}.test"
                 response = client.post(LIST, {"domain": domain}, format="json")
                 self.assertEqual(response.status_code, 201, response.content)
@@ -527,7 +518,7 @@ class DomainPermissionTests(DomainTestCase):
         # L63: no `force_login` session, so the viewset must bind the tenant itself.
         mine = self.claim("mine.test")
         foreign = self.claim("theirs.test", tenant=self.make_other_tenant())
-        client = jwt_only_client(self.user)
+        client = self.bearer_client()
         rows = client.get(LIST).json()["data"]
         self.assertEqual([r["id"] for r in rows], [str(mine.id)])
         self.assertEqual(client.post(verify_url(foreign)).status_code, 404)
