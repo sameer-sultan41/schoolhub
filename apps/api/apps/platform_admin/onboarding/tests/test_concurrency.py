@@ -30,8 +30,10 @@ class CompletedAtConcurrencyTests(TransactionTestCase):
     def setUp(self) -> None:
         super().setUp()
         self.tenant = TenantFactory()
-        build_setup(self.tenant, session_status=SessionStatus.ACTIVE)
+        # `tenant_atomic`, not just the factories' `tenant_context`: a TransactionTestCase runs in
+        # autocommit, where `SET LOCAL` outside a transaction binds nothing and RLS refuses.
         with tenant_atomic(self.tenant.id):
+            build_setup(self.tenant, session_status=SessionStatus.ACTIVE)
             TenantSettings.objects.create(
                 tenant=self.tenant,
                 onboarding={"profile_confirmed_at": timezone.now().isoformat()},
