@@ -132,19 +132,16 @@ def notify_leave_submitted(*, request) -> None:
     failing the guardian's submission would not fix it.
     """
     from core.notifications.services import Recipient, notify
-    from core.rbac.models import RolePermission, UserRole
+    from core.rbac.permissions import holders_of_permission
 
     step = request.approvals.alive().filter(level=request.current_approval_level).first()
     if step is None:
         return
 
-    role_ids = RolePermission.objects.filter(
-        permission__key=step.required_permission, role__deleted_at__isnull=True
-    ).values_list("role_id", flat=True)
     user_ids = set(
-        UserRole.objects.filter(role_id__in=role_ids, deleted_at__isnull=True)
-        .exclude(user_id=request.submitted_by)
-        .values_list("user_id", flat=True)
+        holders_of_permission(step.required_permission, tenant_id=request.tenant_id)
+        .exclude(pk=request.submitted_by)
+        .values_list("pk", flat=True)
     )
     if not user_ids:
         # Documented behaviour that was a silent `return`. A school with nobody

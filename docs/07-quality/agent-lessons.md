@@ -504,6 +504,11 @@
 - **Mistake.** `_ledger_report_queryset` passed `LedgerEntry.objects` to `scope_queryset`, which returns its input unchanged for an `all` scope. The finance summary ANDs two of these, so every `all`-scoped caller of the `income-vs-expense` and `trial-balance` summaries got a `TypeError` (500): `&` is not defined on a Manager (PR #167 CI, the cross-tenant test).
 - **Check.** Pass `Model.objects.all()` (or a filtered queryset) to `scope_queryset`, and test every combinator (`&`, `|`, `.union`) applied to its result with an `all`-scoped caller, not only a narrowed one.
 
+### L70. A lookup of who holds a key on the RBAC tables filters by tenant itself
+
+- **Mistake.** `notify_leave_submitted` (`apps/attendance/notifications.py`) resolved approvers with `RolePermission`/`UserRole` and no tenant filter, and `notify_results_pending_approval` (`apps/examinations/tasks.py`) iterated `User.objects.filter(is_active=True)`. `users`, `roles` and `user_roles` have no RLS and default roles are shared, so a leave request or a pending result in one school emailed the approvers of every school, with the first school's student details (PR #190).
+- **Check.** Resolve "who in this school holds key X" with `core.rbac.permissions.holders_of_permission(key, tenant_id=...)`, never a hand-built `UserRole`/`RolePermission`/`User` query. Any other query on those tables that returns users filters `tenant_id` explicitly, and its test puts a holder of the same key in a second tenant and asserts they are left out.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.
