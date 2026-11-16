@@ -13,6 +13,7 @@ from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, Permis
 from django.db import models
 from django.utils import timezone
 
+from core.rbac.registry import PermissionScope
 from core.tenancy.managers import AllTenantsManager
 from core.tenancy.models import TenantOwnedModel, TimestampedModel
 
@@ -123,7 +124,11 @@ class User(AbstractBaseUser, PermissionsMixin, TimestampedModel):
 
 
 class Permission(models.Model):
-    """A static permission key. Platform-scope: seeded by migrations, never tenant-editable."""
+    """A static permission key. Platform-owned: synced from the registry, never tenant-editable.
+
+    ``scope`` says who may hold the key (ADR-0036): a school's roles (``tenant``) or the
+    platform roles (``platform``). Every grant path filters on it.
+    """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     key = models.CharField(max_length=120, unique=True, help_text="module.resource.action")
@@ -131,6 +136,9 @@ class Permission(models.Model):
     resource = models.CharField(max_length=60)
     action = models.CharField(max_length=30)
     description = models.CharField(max_length=255, blank=True)
+    scope = models.CharField(
+        max_length=10, choices=PermissionScope.choices, default=PermissionScope.TENANT
+    )
 
     objects = models.Manager()
 
@@ -166,6 +174,10 @@ class Role(TimestampedModel):
         default=False,
         help_text="Student/guardian role: can never hold staff permission keys.",
     )
+    is_platform = models.BooleanField(
+        default=False,
+        help_text="Platform role: holds platform-scope keys, held by platform users only.",
+    )
     permissions = models.ManyToManyField(Permission, through="RolePermission", related_name="roles")
 
     objects = AllTenantsManager()
@@ -177,6 +189,11 @@ class Role(TimestampedModel):
                 fields=["tenant", "slug"],
                 name="roles_unique_slug_per_tenant",
                 condition=models.Q(deleted_at__isnull=True),
+            ),
+            # A platform role belongs to no school.
+            models.CheckConstraint(
+                condition=models.Q(is_platform=False) | models.Q(tenant__isnull=True),
+                name="roles_platform_has_no_tenant",
             ),
         ]
 
@@ -203,7 +220,11 @@ class RolePermission(models.Model):
 
 
 class UserRole(TimestampedModel):
-    """Assignment of a role to a user, optionally narrowed by a record scope."""
+    """Assignment of a role to a user, optionally narrowed by a record scope.
+
+    ``role.is_platform`` must equal ``user.is_platform``. A database trigger enforces it
+    (rbac migration 0003), so a bulk insert cannot slip a tenant user a platform role.
+    """
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="user_roles")
     role = models.ForeignKey(Role, on_delete=models.PROTECT, related_name="user_roles")

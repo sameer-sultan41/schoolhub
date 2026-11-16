@@ -45,7 +45,7 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 | `platform.migration.import` | Run legacy-data imports into a tenant | `platform_super_admin` |
 | `platform.report.view` | Platform aggregate reporting | `platform_super_admin`, `platform_support` |
 
-Tenant users can never hold `platform.*` keys; the seed matrix forbids it structurally (platform permissions attach only to platform-scope roles).
+Every key above is **platform-scope** ([ADR-0036](../decisions/0036-platform-scope-and-cross-tenant-access.md)): only the two platform roles hold them, and no school's role ever can. The scope, not the module name, decides it: the tenant-side `platform.file.*`, `platform.job.view` and `platform.notification.view` keys stay tenant-scope. `registry.register(..., scope="platform")` refuses a tenant default role, every grant path filters on `Permission.scope`, and only a platform user may hold a platform role (a trigger on `user_roles`). Both roles are synced as shared `tenant=None` rows on every migrate (`core.rbac.sync.sync_default_roles`), and an operator account is created with `manage.py create_platform_admin --email --first-name [--role]`.
 
 ## 5. Main Features
 
@@ -170,7 +170,7 @@ Full column specs in [`../05-database/entities/tenancy.md`](../05-database/entit
 
 ## 16. API Requirements
 
-Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md). Platform-console resources are namespaced under `/api/v1/platform/...` and require platform-scope JWTs *(recommendation)*; tenant-facing touchpoints (billing view, onboarding) are normal tenant endpoints.
+Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md). Platform-console resources are namespaced under `/api/v1/platform/...` and built on `core.api.platform.PlatformViewSet` ([ADR-0036](../decisions/0036-platform-scope-and-cross-tenant-access.md)): an anonymous caller gets 401, any tenant principal **404**, a platform token without `"otp"` in its `amr` claim 403 `mfa_required`, and a platform user without the route's key 403. A route that touches one school's rows is nested under `tenants/{tenant_pk}/` and binds that school for the whole request (`PlatformTenantNestedMixin`). Tenant-facing touchpoints (billing view, onboarding) are normal tenant endpoints.
 
 - `GET/POST /api/v1/platform/tenants` · `GET/PATCH /api/v1/platform/tenants/{id}` · `POST .../tenants/{id}:provision` / `:suspend` / `:reinstate` / `:export` / `:delete` (all with `Idempotency-Key`)
 - `POST /api/v1/platform/tenants/{id}:impersonate` — returns a time-boxed elevated token; `DELETE /api/v1/platform/impersonation-grants/{id}` releases it

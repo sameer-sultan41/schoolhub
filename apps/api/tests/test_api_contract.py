@@ -153,6 +153,7 @@ class ErrorCodeContractTests(APITestCase):
             TenantNotFound,
             TenantSuspended,
         )
+        from core.rbac.permissions import MfaRequired
 
         emitted = set(_CODE_BY_STATUS.values()) | {
             DomainRuleViolation.default_code,
@@ -166,6 +167,8 @@ class ErrorCodeContractTests(APITestCase):
             # The AI gateway's `CodedAPIException`s.
             AIQuotaExceeded.default_code,
             AIUnavailable.default_code,
+            # The platform console's second-factor gate.
+            MfaRequired.default_code,
         }
         self.assertEqual(
             emitted - CLIENT_KNOWN_SERVER_CODES,

@@ -1613,23 +1613,6 @@ first_name, id) > (<previous chunk's last row>) ORDER BY last_name, first_name, 
   guard students' own version now has: add `populatedStaffId !== staffDetailQuery.data.id`
   to the `if`, and add `populatedStaffId` to the effect's dependency array.
 
-- **No production mechanism provisions a tenant's default roles.** `principal`'s new
-  `students.document.view` grant (`apps/api/apps/student_management/permissions.py`,
-  students Phase 2) reaches a `principal` role only when one is created via
-  `seed_all_roles`/`seed_e2e_data` (dev/e2e tooling) — both derive the role's permission
-  set from the registry's `default_roles` on every run. Reading `core/rbac/seeding.py`
-  and `apps/staff_management/staff/services/invite.py` in full confirms there is no
-  production code anywhere that creates a platform-default (`tenant=None`) `Role` row for
-  any role except `school_owner` (`ensure_school_owner_role`) — not `principal`, not
-  `teacher`, not `school_admin`. The staff invite flow is written to let an admin assign a
-  `tenant=None` default role, but nothing ever creates one for a real tenant. A migration
-  "backfilling existing tenants' `principal` role" was considered during this phase's plan
-  review and rejected for exactly this reason — it would only ever touch dev/e2e seed
-  fixtures, giving false confidence that production tenants are covered when none are.
-  This is a pre-existing, platform-wide gap in `core.rbac`/`core.tenancy` — building a
-  real tenant-provisioning system for default roles is its own spec and plan, not a
-  one-permission backfill inside a dashboard-tabs PR.
-
 - **`core/files`' generic `GET /files` and `POST /files/{id}:download` remain open to
   any `platform.file.view` holder, including for student documents.** `platform.file.view`
   is granted to every staff role (`apps/api/core/files/permissions.py`), so a staff member

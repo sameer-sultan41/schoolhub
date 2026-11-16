@@ -152,6 +152,9 @@ export const API_ERROR_CODES = [
   // `tenant` or `user`) and AI being unavailable (503).
   "ai_quota_exceeded",
   "ai_unavailable",
+  // A platform console token issued without a second factor (403; apps/api/core/rbac/permissions.py
+  // `MfaRequired`, ADR-0036).
+  "mfa_required",
   // Synthesised by this client when the request never produced an envelope.
   "network_error",
   "server_error",

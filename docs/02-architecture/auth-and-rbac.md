@@ -29,9 +29,11 @@ erDiagram
 - A **permission** is a static, code-defined key: **`module.resource.action`** — e.g. `attendance.student-attendance.mark`, `fees.invoice.create`, `exams.result.approve`, `library.book.issue`.
 - **Actions vocabulary (locked):** `view`, `create`, `update`, `delete`, `export`, `import`, `approve`, `publish`, plus rare module-specific verbs (`mark`, `issue`, `collect`, `refund`) declared in that module doc §4.
 - Permissions ship with the code (migration-seeded); tenants can never invent permission keys — only combine them into roles.
+- Every key has a **scope**: `tenant` (held by a school's roles) or `platform` (held by the platform roles only, never by a school). The scope, not the module name, decides who may hold a key ([ADR-0036](../decisions/0036-platform-scope-and-cross-tenant-access.md)).
 
 ### 2.2 Roles
 - A **role** = named set of permissions, either **default** (platform-seeded per `users-and-roles.md`, updatable by releases) or **custom** (tenant-created, tenant-scoped).
+- Every default role, tenant and platform, is one shared `tenant=None` row, created and granted its registry keys on every migrate (`core.rbac.sync.sync_default_roles`, additive only). A platform role (`is_platform`) holds platform-scope keys and is held by platform users only.
 - Users get roles via `user_role` rows; effective permissions = union of all roles. No direct user→permission grants. No role inheritance hierarchy — composition over inheritance (a custom role is built by cloning + editing; simpler to audit than inheritance chains). *This is a deliberate simplification recommendation.*
 
 ### 2.3 Check Levels

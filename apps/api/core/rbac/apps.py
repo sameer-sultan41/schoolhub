@@ -12,10 +12,10 @@ class RbacConfig(AppConfig):
         # Register permission-cache invalidation and load every module's keys.
         from core.rbac import signals  # noqa: F401
         from core.rbac.registry import load_module_permissions
-        from core.rbac.sync import sync_permissions_on_migrate
+        from core.rbac.sync import sync_rbac_on_migrate
 
         load_module_permissions()
 
-        # Keeps the permissions table in step with the registry on every migrate,
-        # the same way Django maintains content types.
-        post_migrate.connect(sync_permissions_on_migrate, sender=self)
+        # Keeps the permissions table, and every default role, in step with the registry on
+        # every migrate, the same way Django maintains content types.
+        post_migrate.connect(sync_rbac_on_migrate, sender=self)

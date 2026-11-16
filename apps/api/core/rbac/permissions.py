@@ -11,9 +11,10 @@ from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured
 from django.db import models
 from django.db.models import Exists, OuterRef, Q, QuerySet
-from rest_framework import exceptions, permissions
+from rest_framework import exceptions, permissions, status
 from rest_framework.request import Request
 
+from core.api.exceptions import CodedAPIException
 from core.rbac.cache import scope_grants_cache_key
 from core.rbac.models import RecordScope, UserRole
 
@@ -202,12 +203,39 @@ def route_permission(request: Request, view: object) -> str | AnyOf:
     return declared
 
 
+class MfaRequired(CodedAPIException):
+    """A platform user whose token was issued without a second factor (ADR-0036)."""
+
+    status_code = status.HTTP_403_FORBIDDEN
+    default_detail = "Sign in with your authenticator code to use the platform console."
+    default_code = "mfa_required"
+
+
+# The `amr` value (RFC 8176) a token carries once its holder passed a one-time password.
+OTP_AMR = "otp"
+
+
 class IsPlatformPrincipal(permissions.BasePermission):
-    """Platform-scope endpoints (`/api/v1/platform/...`) only."""
+    """Platform-scope endpoints (`/api/v1/platform/...`) only (ADR-0036).
+
+    Listed after ``IsAuthenticated``, which turns an anonymous caller away with a 401 first.
+    A signed-in tenant principal, an impersonation token included, gets a 404 rather than a
+    403: the console's routes do not exist for a school's users (invariant 2's reasoning). A
+    platform user's token must also carry ``"otp"`` in its ``amr`` claim, or the request is a
+    403 ``mfa_required``; a token without the claim fails closed.
+    """
 
     def has_permission(self, request, view) -> bool:
         user = request.user
-        return bool(user and user.is_authenticated and user.is_platform)
+        if not (user and user.is_authenticated):
+            return False
+        if not user.is_platform:
+            raise exceptions.NotFound()
+        token = request.auth
+        amr = token.get("amr") if token is not None and hasattr(token, "get") else None
+        if not isinstance(amr, list | tuple) or OTP_AMR not in amr:
+            raise MfaRequired()
+        return True
 
 
 def live_restricted_role_assignments() -> QuerySet[UserRole]:
