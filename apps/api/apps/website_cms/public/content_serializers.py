@@ -72,6 +72,7 @@ class PublicGalleryAlbumDetailSerializer(serializers.Serializer):
     description = serializers.CharField()
     cover_image_url = serializers.CharField(allow_null=True)
     published_at = serializers.DateTimeField(allow_null=True)
+    item_count = serializers.IntegerField(help_text="All live items; `items` is capped.")
     items = PublicGalleryItemSerializer(many=True)
 
 

@@ -11,14 +11,16 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
-from django.db.models import Count, F, QuerySet
-from django.db.models.functions import Coalesce
+from django.db.models import Count, F, Q, QuerySet
+from django.db.models.functions import Coalesce, TruncDate
 from django.utils import timezone
 
 from apps.communication.public import public_notices
 from apps.school_organization.public import public_classes, public_departments
 from apps.staff_management.public import public_teachers
+from apps.website_cms.constants import PUBLIC_ALBUM_ITEMS_MAX
 from apps.website_cms.media import public_file_url, to_public
 from apps.website_cms.models import (
     ContentStatus,
@@ -106,13 +108,23 @@ def _event_summary(event: SchoolEvent, tenant_id: UUID) -> dict[str, Any]:
 
 
 def read_event_list(tenant: Tenant, scope: str, limit: int) -> list[dict[str, Any]]:
-    """`PublicSchoolEvent[]`. `upcoming` is `coalesce(ends_at, starts_at) >= now`, soonest first;
-    `past` is the rest, most recent first."""
-    events = _published_events().annotate(ends=Coalesce("ends_at", "starts_at"))
+    """`PublicSchoolEvent[]`. `upcoming` is not over yet, soonest first; `past` is the rest.
+
+    A timed event is over at `coalesce(ends_at, starts_at)`. An all-day event stays up through
+    the school's own calendar day of that instant, whatever the server's UTC clock says.
+    """
+    zone = ZoneInfo(tenant.timezone)
+    events = _published_events().annotate(
+        ends=Coalesce("ends_at", "starts_at"),
+        end_day=TruncDate(Coalesce("ends_at", "starts_at"), tzinfo=zone),
+    )
+    now, today = timezone.now(), tenant.local_date()
     if scope == EventScope.PAST:
-        events = events.filter(ends__lt=timezone.now()).order_by("-starts_at", "id")
+        over = Q(is_all_day=True, end_day__lt=today) | Q(is_all_day=False, ends__lt=now)
+        events = events.filter(over).order_by("-starts_at", "id")
     else:
-        events = events.filter(ends__gte=timezone.now()).order_by("starts_at", "id")
+        live = Q(is_all_day=True, end_day__gte=today) | Q(is_all_day=False, ends__gte=now)
+        events = events.filter(live).order_by("starts_at", "id")
     return [_event_summary(event, tenant.pk) for event in events[:limit]]
 
 
@@ -148,7 +160,9 @@ def _album_summary(album: GalleryAlbum, tenant_id: UUID) -> dict[str, Any]:
 
 def read_album_list(tenant: Tenant, limit: int) -> list[dict[str, Any]]:
     """`PublicGalleryAlbum[]`, newest first, with the count of each album's live items."""
-    albums = list(_published_albums().order_by("-created_at", "id")[:limit])
+    newest_first = (F("published_at").desc(nulls_last=True), "-created_at", "id")
+    ordered = _published_albums().order_by(*newest_first)
+    albums = list(ordered[:limit])
     counts = dict(
         GalleryItem.objects.alive()
         .filter(gallery_album__in=[album.id for album in albums])
@@ -179,9 +193,11 @@ def read_album(tenant: Tenant, slug: str) -> dict[str, Any] | None:
     album = _published_albums().filter(slug=slug).first()
     if album is None:
         return None
-    items = GalleryItem.objects.alive().filter(gallery_album=album).order_by("position", "id")
+    live = GalleryItem.objects.alive().filter(gallery_album=album)
+    items = live.order_by("position", "id")[:PUBLIC_ALBUM_ITEMS_MAX]
     return {
         **_album_summary(album, tenant.pk),
+        "item_count": live.count(),
         "items": [_item(item, tenant.pk) for item in items],
     }
 

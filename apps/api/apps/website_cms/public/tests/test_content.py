@@ -5,7 +5,9 @@ tenant); every response shape has an exact key-set assertion (C2's convention).
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
+from unittest import mock
+from zoneinfo import ZoneInfo
 
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
@@ -22,8 +24,14 @@ from apps.staff_management.models import EmploymentStatus
 from apps.staff_management.tests.factories import StaffFactory
 from apps.staff_management.uploads import STAFF_PHOTO
 from apps.staff_management.visibility import sync_staff_photos
-from apps.website_cms.constants import PUBLIC_LIST_MAX
-from apps.website_cms.models import ContentStatus, MediaType, NewsPost
+from apps.website_cms.constants import PUBLIC_ALBUM_ITEMS_MAX, PUBLIC_LIST_MAX
+from apps.website_cms.models import (
+    ContentStatus,
+    GalleryAlbum,
+    GalleryItem,
+    MediaType,
+    NewsPost,
+)
 from apps.website_cms.public.tests.test_views import PLATFORM, PublicAPITestCase
 from apps.website_cms.tests.factories import (
     GalleryAlbumFactory,
@@ -62,7 +70,7 @@ ALBUM_KEYS = {
     "published_at",
     "item_count",
 }
-ALBUM_DETAIL_KEYS = ALBUM_KEYS - {"item_count"} | {"items"}
+ALBUM_DETAIL_KEYS = ALBUM_KEYS | {"items"}
 ITEM_KEYS = {"id", "media_type", "image_url", "embed_url", "caption", "alt_text", "position"}
 IMAGE_KEYS = {"id", "image_url", "caption", "alt_text", "album_slug", "album_title"}
 TEACHER_KEYS = {"id", "full_name", "designation", "photo_url", "bio"}
@@ -193,6 +201,66 @@ class EventTests(ContentTestCase):
         self.assertEqual(self.data("school-events", scope="bogus"), upcoming)
         self.assertEqual(set(upcoming[0]), EVENT_KEYS)
 
+    def test_all_day_event_is_upcoming_through_its_local_day_then_past(self) -> None:
+        zone = ZoneInfo("Asia/Karachi")
+        with tenant_context(self.tenant.id):
+            type(self.tenant).objects.filter(pk=self.tenant.pk).update(timezone="Asia/Karachi")
+        self.tenant.refresh_from_db()
+        today = self.tenant.local_date()
+        midnight = datetime.combine(today, datetime.min.time(), tzinfo=zone)
+        today_event = self.make_event(status=PUBLISHED, is_all_day=True, starts_at=midnight)
+        yesterday_event = self.make_event(
+            status=PUBLISHED, is_all_day=True, starts_at=midnight - timedelta(days=1)
+        )
+        multi = self.make_event(
+            status=PUBLISHED,
+            is_all_day=True,
+            starts_at=midnight - timedelta(days=2),
+            ends_at=midnight,
+        )
+
+        upcoming = [row["id"] for row in self.data("school-events")]
+        past = [row["id"] for row in self.data("school-events", scope="past")]
+
+        self.assertCountEqual(upcoming, [str(today_event.id), str(multi.id)])
+        self.assertEqual(past, [str(yesterday_event.id)])
+
+    def test_all_day_event_becomes_past_the_next_local_day(self) -> None:
+        with tenant_context(self.tenant.id):
+            type(self.tenant).objects.filter(pk=self.tenant.pk).update(timezone="Asia/Karachi")
+        self.tenant.refresh_from_db()
+        tomorrow = self.tenant.local_date() + timedelta(days=1)
+        midnight = datetime.combine(tomorrow, datetime.min.time(), tzinfo=ZoneInfo("Asia/Karachi"))
+        event = self.make_event(status=PUBLISHED, is_all_day=True, starts_at=midnight)
+        self.assertEqual([r["id"] for r in self.data("school-events")], [str(event.id)])
+        # Seen from the day after: the same event, one local day later, is past.
+        later = mock.patch.object(
+            type(self.tenant), "local_date", return_value=tomorrow + timedelta(days=1)
+        )
+        with later:
+            self.assertEqual(self.data("school-events"), [])
+            self.assertEqual(
+                [r["id"] for r in self.data("school-events", scope="past")], [str(event.id)]
+            )
+
+    def test_timed_event_with_a_past_end_is_past(self) -> None:
+        now = timezone.now()
+        event = self.make_event(
+            status=PUBLISHED, starts_at=now - timedelta(days=2), ends_at=now - timedelta(hours=1)
+        )
+        self.assertEqual(self.data("school-events"), [])
+        self.assertEqual(
+            [row["id"] for row in self.data("school-events", scope="past")], [str(event.id)]
+        )
+
+    def test_event_page_size_bounded(self) -> None:
+        now = timezone.now()
+        for day in range(3):
+            self.make_event(status=PUBLISHED, starts_at=now + timedelta(days=day + 1))
+        self.assertEqual(len(self.data("school-events", page_size=2)), 2)
+        self.assertEqual(len(self.data("school-events", page_size=0)), 1)
+        self.assertEqual(len(self.data("school-events", page_size=999)), 3)
+
     def test_event_detail_has_description_with_public_image_urls(self) -> None:
         description = {"blocks": [{"type": "image", "file_id": FILE_ID, "alt": "Hall"}]}
         self.make_event(
@@ -249,6 +317,57 @@ class GalleryTests(ContentTestCase):
         for slug in ("draft", "archived"):
             with self.subTest(slug=slug):
                 self.assertEqual(self.read(f"gallery-albums/{slug}").status_code, 404)
+
+    def test_album_detail_items_capped_with_total_count(self) -> None:
+        album = self.make_album(slug="big", status=PUBLISHED)
+        with tenant_context(self.tenant.id):
+            GalleryItem.objects.bulk_create(
+                GalleryItem(
+                    tenant=self.tenant,
+                    gallery_album=album,
+                    media_type=MediaType.VIDEO_EMBED,
+                    embed_url="https://www.youtube.com/watch?v=abc",
+                    position=position,
+                )
+                for position in range(PUBLIC_ALBUM_ITEMS_MAX + 1)
+            )
+        data = self.data("gallery-albums/big")
+        self.assertEqual(len(data["items"]), PUBLIC_ALBUM_ITEMS_MAX)
+        self.assertEqual(data["item_count"], PUBLIC_ALBUM_ITEMS_MAX + 1)
+        self.assertEqual(data["items"][0]["position"], 0)
+
+    def test_soft_deleted_items_and_albums_are_never_listed(self) -> None:
+        now = timezone.now()
+        album = self.make_album(slug="kept", status=PUBLISHED)
+        gone_album = self.make_album(slug="gone", status=PUBLISHED)
+        kept = self.make_item(
+            album, position=0, media_type=MediaType.IMAGE, file_id=FILE_ID, embed_url=""
+        )
+        deleted_item = self.make_item(
+            album, position=1, media_type=MediaType.IMAGE, file_id=FILE_ID, embed_url=""
+        )
+        self.make_item(
+            gone_album, position=0, media_type=MediaType.IMAGE, file_id=FILE_ID, embed_url=""
+        )
+        with tenant_context(self.tenant.id):
+            GalleryItem.objects.filter(pk=deleted_item.pk).update(deleted_at=now)
+            GalleryAlbum.objects.filter(pk=gone_album.pk).update(deleted_at=now)
+
+        self.assertEqual([r["id"] for r in self.data("gallery-items")], [str(kept.id)])
+        detail = self.data("gallery-albums/kept")
+        self.assertEqual([i["id"] for i in detail["items"]], [str(kept.id)])
+        self.assertEqual(detail["item_count"], 1)
+        self.assertEqual(self.read("gallery-albums/gone").status_code, 404)
+        self.assertEqual([r["slug"] for r in self.data("gallery-albums")], ["kept"])
+
+    def test_gallery_items_page_size_bounded(self) -> None:
+        album = self.make_album(slug="a", status=PUBLISHED)
+        for position in range(3):
+            self.make_item(
+                album, position=position, media_type=MediaType.IMAGE, file_id=FILE_ID, embed_url=""
+            )
+        self.assertEqual(len(self.data("gallery-items", page_size=2)), 2)
+        self.assertEqual(len(self.data("gallery-items", page_size=999)), 3)
 
     def test_gallery_items_only_from_published_albums(self) -> None:
         live = self.make_album(slug="live", status=PUBLISHED)

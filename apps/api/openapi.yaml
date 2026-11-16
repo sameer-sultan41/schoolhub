@@ -29124,6 +29124,9 @@ components:
           type: string
           format: date-time
           nullable: true
+        item_count:
+          type: integer
+          description: All live items; `items` is capped.
         items:
           type: array
           items:
@@ -29132,6 +29135,7 @@ components:
       - cover_image_url
       - description
       - id
+      - item_count
       - items
       - published_at
       - slug

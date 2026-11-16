@@ -13410,6 +13410,8 @@ export interface components {
             cover_image_url: string | null;
             /** Format: date-time */
             published_at: string | null;
+            /** @description All live items; `items` is capped. */
+            item_count: number;
             items: components["schemas"]["PublicGalleryItem"][];
         };
         PublicGalleryImage: {

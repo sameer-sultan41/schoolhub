@@ -122,6 +122,9 @@ EMBED_URL_MAX_LENGTH = 500
 #: Most rows a public list returns, and the default when `page_size` is absent (bare arrays).
 PUBLIC_LIST_MAX = 50
 
+#: Most items a public album detail returns; `item_count` still reports the total.
+PUBLIC_ALBUM_ITEMS_MAX = 200
+
 
 def empty_rich_text() -> dict[str, list[dict[str, object]]]:
     """The empty block document, the default for news `body` and event `description`."""
