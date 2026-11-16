@@ -40,6 +40,7 @@ describe("Services", () => {
       "budgets",
       "contactSubmissions",
       "curriculum",
+      "customDomains",
       "dashboard",
       "discounts",
       "examReports",
