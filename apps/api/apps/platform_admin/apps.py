@@ -6,3 +6,8 @@ class PlatformAdminConfig(AppConfig):
     name = "apps.platform_admin"
     label = "platform_admin"
     verbose_name = "Platform administration"
+
+    def ready(self) -> None:
+        from apps.platform_admin import hooks
+
+        hooks.register()

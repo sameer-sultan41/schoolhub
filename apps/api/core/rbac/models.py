@@ -287,6 +287,8 @@ class InvitationKind(models.TextChoices):
     STAFF = "staff", "Staff"
     GUARDIAN = "guardian", "Guardian"
     STUDENT = "student", "Student"
+    # A school's first owner, invited by the platform console's `:provision`.
+    OWNER = "owner", "Owner"
 
 
 class InvitationStatus(models.TextChoices):

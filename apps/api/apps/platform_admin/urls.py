@@ -4,4 +4,8 @@ Platform users only (`core.api.platform.PlatformViewSet`). The module's tenant-f
 (a school's own subscription and onboarding) live under a separate include, not here.
 """
 
-urlpatterns: list = []
+from django.urls import include, path
+
+urlpatterns = [
+    path("", include("apps.platform_admin.tenants.urls")),
+]

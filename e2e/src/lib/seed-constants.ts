@@ -235,3 +235,13 @@ export const E2E_FINANCE_FEE_HEAD_CODE = "E2E-LIBRARY";
 export const E2E_FINANCE_FEE_HEAD_NAME = "E2E Library Fee";
 export const E2E_FINANCE_DRAFT_STRUCTURE_NAME = "E2E Draft Fees";
 export const E2E_FINANCE_DRAFT_AMOUNT = "750.00";
+
+/**
+ * Mirrors seed_e2e_data.py's E2E_PLATFORM_OPERATOR_EMAIL — a `platform_super_admin` with TOTP
+ * on. It signs in with the admin password, then a code computed from the key below
+ * (`createPlatformLiveSession` in `@/lib/live-platform`).
+ */
+export const E2E_PLATFORM_OPERATOR_EMAIL = "e2e-platform-operator@schoolhub.test";
+
+/** Mirrors seed_e2e_data.py's E2E_PLATFORM_TOTP_KEY: RFC 6238's test key, the raw HMAC key. */
+export const E2E_PLATFORM_TOTP_KEY = "12345678901234567890";

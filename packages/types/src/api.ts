@@ -161,6 +161,13 @@ export const API_ERROR_CODES = [
   "invalid_mfa_code",
   "mfa_challenge_invalid",
   "mfa_already_enabled",
+  // The platform console's tenant lifecycle (apps/api/apps/platform_admin/tenants): a move the
+  // state machine does not allow, a restore after the retention window, a reinstatement with no
+  // live subscription to return to, and a delete with neither an export nor a waiver (all 409).
+  "invalid_transition",
+  "retention_expired",
+  "no_live_subscription",
+  "export_required",
   // Synthesised by this client when the request never produced an envelope.
   "network_error",
   "server_error",

@@ -49,6 +49,11 @@ def create_body(**overrides) -> dict:
     }
 
 
+def resolving_to(state: str):
+    """Stand in for the subscription app's `subscription_state` hook (Task 4 registers it)."""
+    return mock.patch.dict(subscription_state._hooks, {"resolver": lambda _tenant: state})
+
+
 def field_errors(response) -> set[str]:
     return {detail["field"] for detail in response.json()["error"]["details"]}
 
@@ -372,10 +377,7 @@ class LifecycleActionTests(PlatformAPITestCase):
 
     def test_reinstate_follows_the_registered_subscription_state(self) -> None:
         for state, expected in (("active", S.ACTIVE), ("past_due", S.PAST_DUE)):
-            with (
-                self.subTest(state=state),
-                mock.patch.object(subscription_state, "_resolver", lambda _tenant, s=state: s),
-            ):
+            with self.subTest(state=state), resolving_to(state):
                 tenant = make_tenant(status=S.SUSPENDED)
                 response = self.act(tenant, "reinstate")
                 self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
@@ -384,7 +386,7 @@ class LifecycleActionTests(PlatformAPITestCase):
     def test_a_trialing_subscription_still_needs_a_trial_end(self) -> None:
         tenant = make_tenant(status=S.SUSPENDED)
 
-        with mock.patch.object(subscription_state, "_resolver", lambda _tenant: "trialing"):
+        with resolving_to("trialing"):
             response = self.act(tenant, "reinstate")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

@@ -23,8 +23,13 @@
 | provisioned_at | timestamptz | yes | — | Seed transaction completed |
 | suspended_at | timestamptz | yes | — | With reason in `audit_logs` |
 | deprovision_after | timestamptz | yes | — | End of 90-day retention window |
+| current_plan | varchar(50) | no | `''` | The live plan's `code`; blank without one. Denormalised read model |
+| subscription_status | varchar(20) | no | `''` | The live subscription's `status`; blank without one. Denormalised read model |
+| billing_provider_ref | varchar(120) | no | `''` | The billing provider's reference; unique when set. Denormalised read model |
 
-Indexes: unique(slug); (status).
+Indexes: unique(slug); (status); unique(billing_provider_ref) where not blank.
+
+The last three columns let a platform-wide lookup (the billing webhook, "is this plan in use?") read subscription state with no tenant bound, which the RLS-bound `subscriptions` table cannot answer. The subscription services write them in the same transaction as the `subscriptions` row, which stays the source of truth. They are plain columns, not a foreign key to `plans`, because `core` never references the platform console's app (ADR-0013). `contact_email` is stored blank (not null) on rows older than the column; the console requires it, since `:provision` invites the owner there.
 Relationships: 1:1 `tenant_settings`; 1:N `subscriptions`, `custom_domains`, `users`, and every tenant-owned table platform-wide.
 
 ### tenant_settings

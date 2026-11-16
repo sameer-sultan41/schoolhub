@@ -45,6 +45,22 @@ either this file or `project-status.md`.
     form expects tokens; no tenant user can have MFA on yet, and the platform console (PR D)
     handles `mfa_required`.
 
+- **The tenant lifecycle, what platform-admin PR A leaves out** (Task 3,
+  `apps/api/apps/platform_admin/tenants/`, platform-admin §7.4).
+  - **The owner's read-only billing login while suspended** (multi-tenancy §7, platform-admin
+    §7.2). A suspended school refuses every login today, owner included
+    (`core.tenancy.access.operational_tenant`), so the owner cannot see the billing state that
+    explains the suspension. It needs a scoped exception at sign-in and refresh for
+    `school_owner`, limited to the tenant-facing subscription route PR B adds, and a test that
+    no other route answers that session.
+  - **The public website's suspension notice** (platform-admin §6, §18). A suspended school's
+    website should show a neutral notice. `apps/website` resolves tenants by host, but the API
+    has no `/public/tenants/by-host` route yet (the website-cms module), so there is nowhere to
+    read the status from; it lands with that route.
+  - **Platform-ops copies of the lifecycle notices.** `notify()` is per tenant, so
+    `platform.tenant-suspended`/`-reinstated` reach the school's owners only; §12's copy to
+    platform ops waits for the platform-ops channel (PR B).
+
 - **AI gateway and AI-FEE-02 follow-ups** (`feat/ai-gateway`, plan
   `docs/superpowers/plans/2026-11-07-ai-gateway.md`, [ADR-0035](decisions/0035-ai-gateway-shape.md)).
   The gateway and the on-demand finance report summary shipped backend only. Left out on purpose:

@@ -9121,6 +9121,341 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/platform/tenants:
+    get:
+      operationId: platform_tenants_list
+      description: '`GET/POST /platform/tenants`.'
+      parameters:
+      - in: query
+        name: current_plan
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - active
+          - deprovisioned
+          - past_due
+          - provisioning
+          - suspended
+          - trial
+        description: |-
+          * `provisioning` - Provisioning
+          * `trial` - Trial
+          * `active` - Active
+          * `past_due` - Past due
+          * `suspended` - Suspended
+          * `deprovisioned` - Deprovisioned
+      - in: query
+        name: subscription_status
+        schema:
+          type: string
+      tags:
+      - platform
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTenantList'
+          description: ''
+    post:
+      operationId: platform_tenants_create
+      description: '`GET/POST /platform/tenants`.'
+      summary: Create a school, in provisioning
+      tags:
+      - platform
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TenantCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TenantCreate'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+          description: ''
+  /api/v1/platform/tenants/{tenant_pk}:
+    get:
+      operationId: platform_tenants_retrieve
+      description: '`GET/PATCH /platform/tenants/{tenant_pk}` and its lifecycle colon-actions.'
+      parameters:
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+          description: ''
+    patch:
+      operationId: platform_tenants_partial_update
+      description: '`GET/PATCH /platform/tenants/{tenant_pk}` and its lifecycle colon-actions.'
+      summary: Edit a school's name and contact; its slug only while provisioning
+      parameters:
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTenantUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTenantUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTenantUpdate'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+          description: ''
+  /api/v1/platform/tenants/{tenant_pk}:delete:
+    post:
+      operationId: platform_tenants_:delete_create
+      description: '`GET/PATCH /platform/tenants/{tenant_pk}` and its lifecycle colon-actions.'
+      summary: Start deprovisioning (reason, and an export or a waiver, required)
+      parameters:
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Delete'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Delete'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Delete'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+          description: ''
+        '409':
+          description: invalid_transition, or export_required
+  /api/v1/platform/tenants/{tenant_pk}:provision:
+    post:
+      operationId: platform_tenants_:provision_create
+      description: '`GET/PATCH /platform/tenants/{tenant_pk}` and its lifecycle colon-actions.'
+      summary: 'Provision: seed settings, invite the owner and start the trial'
+      parameters:
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Provision'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Provision'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Provision'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+          description: ''
+        '409':
+          description: 'invalid_transition: the tenant''s status does not allow this
+            action.'
+        '422':
+          description: A plan_code before plans exist, or no contact
+  /api/v1/platform/tenants/{tenant_pk}:reinstate:
+    post:
+      operationId: platform_tenants_:reinstate_create
+      description: '`GET/PATCH /platform/tenants/{tenant_pk}` and its lifecycle colon-actions.'
+      summary: Reinstate a suspended school to the status its subscription implies
+      parameters:
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reinstate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Reinstate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Reinstate'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+          description: ''
+        '409':
+          description: invalid_transition, or no_live_subscription
+  /api/v1/platform/tenants/{tenant_pk}:restore:
+    post:
+      operationId: platform_tenants_:restore_create
+      description: '`GET/PATCH /platform/tenants/{tenant_pk}` and its lifecycle colon-actions.'
+      summary: Restore a deprovisioned school inside its retention window (as suspended)
+      parameters:
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reason'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Reason'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Reason'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+          description: ''
+        '409':
+          description: invalid_transition, or retention_expired
+  /api/v1/platform/tenants/{tenant_pk}:suspend:
+    post:
+      operationId: platform_tenants_:suspend_create
+      description: '`GET/PATCH /platform/tenants/{tenant_pk}` and its lifecycle colon-actions.'
+      summary: Suspend a school (reason required)
+      parameters:
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reason'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Reason'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Reason'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+          description: ''
+        '409':
+          description: 'invalid_transition: the tenant''s status does not allow this
+            action.'
   /api/v1/public/payment-callbacks/{tenant_slug}/{callback_token}:
     post:
       operationId: public_payment_callbacks_create
@@ -17216,6 +17551,20 @@ components:
       - defaulters
       type: string
       description: '* `defaulters` - defaulters'
+    Delete:
+      type: object
+      description: '`:suspend` and `:restore`: a reason is required (§11), and audited.'
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+        waive_export:
+          type: boolean
+          default: false
+          description: Delete a school that went live without a succeeded export of
+            its data.
+      required:
+      - reason
     DeliveryLog:
       type: object
       description: Read-only. `DeliveryLog` rows are written only by `core.notifications`.
@@ -22902,6 +23251,27 @@ components:
                   type: integer
                 total_pages:
                   type: integer
+    PaginatedTenantList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tenant'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                page:
+                  type: integer
+                page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
+                  type: integer
     PaginatedTermList:
       type: object
       properties:
@@ -25490,6 +25860,26 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedTenantUpdate:
+      type: object
+      description: '`PATCH`: any subset. The service refuses a slug change after `:provision`.'
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        slug:
+          type: string
+          maxLength: 63
+        contact_name:
+          type: string
+          maxLength: 200
+        contact_email:
+          type: string
+          format: email
+          maxLength: 254
+        contact_phone:
+          type: string
+          maxLength: 30
     PatchedTerm:
       type: object
       properties:
@@ -26289,6 +26679,13 @@ components:
           type: integer
       required:
       - updated
+    Provision:
+      type: object
+      properties:
+        plan_code:
+          type: string
+          nullable: true
+          description: Refused (422) until plans exist; provision without one.
     QualificationTypeEnum:
       enum:
       - degree
@@ -26534,6 +26931,15 @@ components:
         * `long_answer` - Long answer
         * `fill_blank` - Fill in the blank
         * `numerical` - Numerical
+    Reason:
+      type: object
+      description: '`:suspend` and `:restore`: a reason is required (§11), and audited.'
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - reason
     Receipt:
       type: object
       properties:
@@ -26745,6 +27151,19 @@ components:
       - roll_number
       - student_id
       - student_name
+    Reinstate:
+      type: object
+      properties:
+        trial_ends_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 'Required to reinstate on a trial: when there is no live subscription,
+            or it is trialing. Must be in the future.'
+        reason:
+          type: string
+          default: ''
+          maxLength: 500
     RelationshipEnum:
       enum:
       - father
@@ -29361,6 +29780,148 @@ components:
         * `declined` - Declined
         * `completed` - Completed
         * `cancelled` - Cancelled
+    Tenant:
+      type: object
+      description: 'A school as the console shows it: identity, contact and lifecycle
+        columns.'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          description: Wildcard subdomain label.
+          pattern: ^[-a-zA-Z0-9_]+$
+        status:
+          allOf:
+          - $ref: '#/components/schemas/TenantStatusEnum'
+          readOnly: true
+        contact_name:
+          type: string
+          readOnly: true
+          description: Primary commercial contact.
+        contact_email:
+          type: string
+          format: email
+          readOnly: true
+          description: The owner invite's target.
+        contact_phone:
+          type: string
+          readOnly: true
+        timezone:
+          type: string
+          readOnly: true
+        locale:
+          type: string
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+        trial_ends_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        provisioned_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: When `:provision`'s seed transaction committed.
+        suspended_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        deprovision_after:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: End of the retention window a deprovision starts.
+        current_plan:
+          type: string
+          readOnly: true
+          description: The live plan's code.
+        subscription_status:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - contact_email
+      - contact_name
+      - contact_phone
+      - created_at
+      - currency
+      - current_plan
+      - deprovision_after
+      - id
+      - locale
+      - name
+      - provisioned_at
+      - slug
+      - status
+      - subscription_status
+      - suspended_at
+      - timezone
+      - trial_ends_at
+      - updated_at
+    TenantCreate:
+      type: object
+      description: The slug's rules (format, reserved, unique) are the service's,
+        `services.slug_errors`.
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        slug:
+          type: string
+          description: The subdomain label. Fixed once the school is provisioned.
+          maxLength: 63
+        contact_name:
+          type: string
+          maxLength: 200
+        contact_email:
+          type: string
+          format: email
+          description: Where `:provision` invites the school's owner.
+          maxLength: 254
+        contact_phone:
+          type: string
+          maxLength: 30
+      required:
+      - contact_email
+      - contact_name
+      - name
+      - slug
+    TenantStatusEnum:
+      enum:
+      - provisioning
+      - trial
+      - active
+      - past_due
+      - suspended
+      - deprovisioned
+      type: string
+      description: |-
+        * `provisioning` - Provisioning
+        * `trial` - Trial
+        * `active` - Active
+        * `past_due` - Past due
+        * `suspended` - Suspended
+        * `deprovisioned` - Deprovisioned
     TenantSummary:
       type: object
       description: 'The caller''s school, as a client shows it: its name and subdomain
