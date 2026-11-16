@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useId, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useForm, useWatch } from "react-hook-form";
@@ -45,6 +45,7 @@ import {
 } from "@/features/website/shared/upload-tracker";
 import {
   buildSiteSettingsInput,
+  currentTheme,
   siteSettingsFields,
   siteSettingsFormValues,
   siteSettingsResolver,
@@ -86,6 +87,7 @@ export function SiteSettingsForm({ settings, themes, canUpdate }: SiteSettingsFo
   const configSchema = themeConfigSchema(themes, themeId);
   const chosen = themes.find((theme) => theme.id === themeId);
   const hasConfig = Object.keys(configSchema.properties ?? {}).length > 0;
+  const configHeadingId = useId();
   // The theme-setting inputs the last refusal named; read when that refusal is mapped.
   const configFields = useRef<string[]>([]);
 
@@ -123,7 +125,7 @@ export function SiteSettingsForm({ settings, themes, canUpdate }: SiteSettingsFo
   function chooseTheme(id: string) {
     form.setValue("theme_id", id, { shouldDirty: true });
     // A theme's settings are its own: the saved ones for the saved theme, empty for another.
-    const stored = id === settings.theme_id ? settings.theme_config : {};
+    const stored = id === currentTheme(settings, themes)?.id ? settings.theme_config : {};
     form.setValue(THEME_CONFIG, toSchemaFormValues(themeConfigSchema(themes, id), stored), {
       shouldDirty: true,
     });
@@ -168,8 +170,8 @@ export function SiteSettingsForm({ settings, themes, canUpdate }: SiteSettingsFo
                     </FormItem>
                   )}
                 />
-                <section className="space-y-3" aria-labelledby="theme-config-heading">
-                  <h3 id="theme-config-heading" className="text-sm font-semibold text-foreground">
+                <section className="space-y-3" aria-labelledby={configHeadingId}>
+                  <h3 id={configHeadingId} className="text-sm font-semibold text-foreground">
                     {t("themeConfig")}
                   </h3>
                   {hasConfig ? (

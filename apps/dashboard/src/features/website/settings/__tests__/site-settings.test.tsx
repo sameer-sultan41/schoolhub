@@ -52,6 +52,26 @@ const THEME: ThemeRecord = {
   section_types: {},
 };
 
+const CLASSIC_ID = "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d";
+
+/** A second theme whose settings share no key with the first: a required motto and an accent. */
+const CLASSIC: ThemeRecord = {
+  id: CLASSIC_ID,
+  code: "classic",
+  name: "Classic",
+  version: "2.0.0",
+  description: "",
+  config_schema: {
+    type: "object",
+    properties: {
+      motto: { type: "string", maxLength: 60, "x-widget": "text" },
+      accent: { type: "string", enum: ["blue", "green"] },
+    },
+    required: ["motto"],
+  },
+  section_types: {},
+};
+
 function settingsRecord(overrides: Partial<WebsiteSettingsRecord> = {}): WebsiteSettingsRecord {
   return {
     exists: true,
@@ -120,7 +140,7 @@ beforeEach(() => {
   asUser();
   current = settingsRecord();
   fetchSettings.mockImplementation(() => Promise.resolve(current));
-  fetchThemes.mockResolvedValue([THEME]);
+  fetchThemes.mockResolvedValue([THEME, CLASSIC]);
   fetchPage.mockResolvedValue(HOME_PAGE);
   updateSettings.mockImplementation((input) => {
     current = { ...current, ...input, exists: true };
@@ -236,6 +256,50 @@ describe("site settings: form", () => {
       ),
     ).toBeVisible();
     expect(updateSettings).not.toHaveBeenCalled();
+  });
+
+  it("starts another theme's settings afresh: its required one blocks Save, and only its keys are sent", async () => {
+    const user = await renderScreen();
+
+    await user.click(screen.getByRole("combobox", { name: "Theme" }));
+    await user.click(await screen.findByRole("option", { name: "Classic (2.0.0)" }));
+    expect(screen.queryByLabelText("Tagline")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await fieldOf("Motto").findByText("This field is required.")).toBeVisible();
+    expect(updateSettings).not.toHaveBeenCalled();
+
+    await user.type(screen.getByLabelText("Motto"), "Onward");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(updateSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ theme_id: CLASSIC_ID, theme_config: { motto: "Onward" } }),
+      );
+    });
+  });
+
+  it("restores the saved settings when the saved theme is chosen again", async () => {
+    const user = await renderScreen();
+
+    await user.click(screen.getByRole("combobox", { name: "Theme" }));
+    await user.click(await screen.findByRole("option", { name: "Classic (2.0.0)" }));
+    await user.type(await screen.findByLabelText("Motto"), "Onward");
+    await user.click(screen.getByRole("combobox", { name: "Theme" }));
+    await user.click(await screen.findByRole("option", { name: "Default (1.0.0)" }));
+
+    expect(await screen.findByLabelText("Tagline")).toHaveValue("Learning together");
+    expect(screen.queryByLabelText("Motto")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(updateSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          theme_id: THEME_ID,
+          theme_config: { tagline: "Learning together" },
+        }),
+      );
+    });
   });
 
   it("puts a theme setting's server error under that setting", async () => {
