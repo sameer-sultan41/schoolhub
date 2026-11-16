@@ -15,6 +15,7 @@ import { EntryCallout } from "@/app/(app)/shell/dashboard/entry-callout";
 import { Highlights } from "@/app/(app)/shell/dashboard/highlights";
 import { TeamMeeting } from "@/app/(app)/shell/dashboard/team-meeting";
 import { Teams } from "@/app/(app)/shell/dashboard/teams";
+import { SetupCard } from "@/features/onboarding/setup-card";
 
 // Combines the vendor Metronic Next.js template's own
 // demo1-light-sidebar-page.tsx (toolbar + date-range picker) and
@@ -81,6 +82,9 @@ export function DashboardPageContent() {
       </Container>
       <Container>
         <div className="grid gap-5 lg:gap-7.5">
+          {/* Onboarding's "Finish setting up" card, first on the page while setup is unfinished
+              (platform-admin §20: a rebuilt home page keeps it). It renders nothing otherwise. */}
+          <SetupCard />
           <div className="grid items-stretch gap-y-5 lg:grid-cols-3 lg:gap-7.5">
             <div className="lg:col-span-1">
               <div className="grid h-full grid-cols-2 items-stretch gap-5 lg:gap-7.5">

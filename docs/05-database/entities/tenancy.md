@@ -23,8 +23,13 @@
 | provisioned_at | timestamptz | yes | — | Seed transaction completed |
 | suspended_at | timestamptz | yes | — | With reason in `audit_logs` |
 | deprovision_after | timestamptz | yes | — | End of 90-day retention window |
+| current_plan | varchar(50) | no | `''` | The live plan's `code`; blank without one. Denormalised read model |
+| subscription_status | varchar(20) | no | `''` | The live subscription's `status`; blank without one. Denormalised read model |
+| billing_provider_ref | varchar(120) | no | `''` | The billing provider's reference; unique when set. Denormalised read model |
 
-Indexes: unique(slug); (status).
+Indexes: unique(slug); (status); unique(billing_provider_ref) where not blank.
+
+The last three columns let a platform-wide lookup (the billing webhook, "is this plan in use?") read subscription state with no tenant bound, which the RLS-bound `subscriptions` table cannot answer. The subscription services write them in the same transaction as the `subscriptions` row, which stays the source of truth. They are plain columns, not a foreign key to `plans`, because `core` never references the platform console's app (ADR-0013). `contact_email` is stored blank (not null) on rows older than the column; the console requires it, since `:provision` invites the owner there.
 Relationships: 1:1 `tenant_settings`; 1:N `subscriptions`, `custom_domains`, `users`, and every tenant-owned table platform-wide.
 
 ### tenant_settings
@@ -149,13 +154,27 @@ All user accounts — tenant members **and** platform staff. **Exception:** `ten
 | status | varchar(20) | no | `'invited'` | Enum: `invited` `active` `disabled` `locked` |
 | locale | varchar(10) | yes | — | Falls back to tenant locale |
 | timezone | varchar(50) | yes | — | Falls back to tenant timezone |
-| mfa_enabled | boolean | no | `false` | TOTP (auth-and-rbac §1) |
-| mfa_secret | varchar(255) | yes | — | Encrypted at rest |
+| mfa_enabled | boolean | no | `false` | TOTP (auth-and-rbac §1); true only once a first code is confirmed |
+| mfa_secret | bytea | yes | — | The TOTP secret, Fernet-encrypted with `INTEGRATIONS_ENCRYPTION_KEYS` (`core.integrations.crypto`); set at enrolment |
+| mfa_last_timecode | bigint | yes | — | TOTP time step of the last accepted code; an equal or older one is a replay |
 | last_login_at | timestamptz | yes | — | |
 | password_changed_at | timestamptz | yes | — | |
 
 Indexes: unique(tenant_id, email) [partial: email not null]; unique(tenant_id, username) [partial]; partial unique(email) where tenant_id is null (platform staff); (tenant_id, status).
-Relationships: 1:N `user_roles`, `audit_logs` (as actor); 1:1 optional links from `students`/`staff`/guardians in [`people.md`](people.md).
+Relationships: 1:N `user_roles`, `mfa_recovery_codes`, `audit_logs` (as actor); 1:1 optional links from `students`/`staff`/guardians in [`people.md`](people.md).
+
+### mfa_recovery_codes
+Single-use fallbacks for a lost authenticator, issued ten at a time when MFA is confirmed (auth-and-rbac §1). **Exception:** no `tenant_id` and no RLS, like `users`; no `updated_at`/actor/soft-delete columns. A new set replaces the old one.
+
+| Column | Type | Null | Default | Notes |
+| ------ | ---- | ---- | ------- | ----- |
+| user_id | uuid | no | — | FK → users, cascade |
+| code_hash | varchar(64) | no | — | SHA-256 hex of the normalised code (80 random bits); the code itself is never stored |
+| used_at | timestamptz | yes | — | Set once, by a conditional update, when the code signs someone in |
+| created_at | timestamptz | no | now() | |
+
+Indexes: unique(user_id, code_hash).
+Relationships: N:1 `users`.
 
 ### roles
 Named permission sets. **Exception:** `tenant_id` nullable — `NULL` = platform-seeded default role (visible to all tenants, release-managed); non-null = tenant custom role.

@@ -27,6 +27,57 @@ either this file or `project-status.md`.
   each environment (the load balancer, plus any CDN), and test that a spoofed header does not
   change the throttle key.
 
+- **TOTP MFA, what platform-admin PR A leaves out** (Task 2, `apps/api/core/rbac/mfa.py`,
+  auth-and-rbac §1). v1 builds the shared TOTP machinery and enforces it for platform users only.
+  - **MFA for tenant owners and admins, and per-tenant enforcement** (SEC-06 asks for both at
+    launch). The login challenge and `:verify` already work for any user with `mfa_enabled`, but
+    `/auth/mfa:enroll`, `:confirm` and `:disable` answer 404 to a tenant principal. Turning it on
+    means: opening enrolment to tenant roles, a `:disable` that re-checks a current code, a
+    per-tenant policy setting and its check at login, and dashboard screens.
+  - **Enrolment trusts the password.** A new operator's first sign-in is password-only, and
+    `:enroll` accepts that token, so whoever holds the password first can enrol. Accounts exist
+    only through `create_platform_admin`, run by an operator who enrols at once; a one-time
+    enrolment link from the command would close the gap.
+  - **The wrong-code counter lives in the cache.** A cache flush resets a challenge's count;
+    `AuthEndpointThrottle` and the five-minute challenge lifetime still bound guessing. There is
+    no per-account lockout yet (auth-and-rbac §1's password-policy line applies to MFA too).
+  - **`packages/types` `LoginResponse` does not model the challenge.** The dashboard's login
+    form expects tokens; no tenant user can have MFA on yet, and the platform console (PR D)
+    handles `mfa_required`.
+
+- **The tenant lifecycle, what platform-admin PR A leaves out** (Task 3,
+  `apps/api/apps/platform_admin/tenants/`, platform-admin §7.4).
+  - **The owner's read-only billing login while suspended** (multi-tenancy §7, platform-admin
+    §7.2). A suspended school refuses every login today, owner included
+    (`core.tenancy.access.operational_tenant`), so the owner cannot see the billing state that
+    explains the suspension. It needs a scoped exception at sign-in and refresh for
+    `school_owner`, limited to the tenant-facing subscription route PR B adds, and a test that
+    no other route answers that session.
+  - **The public website's suspension notice** (platform-admin §6, §18). A suspended school's
+    website should show a neutral notice. `apps/website` resolves tenants by host, but the API
+    has no `/public/tenants/by-host` route yet (the website-cms module), so there is nowhere to
+    read the status from; it lands with that route.
+  - **Platform-ops copies of the lifecycle notices.** `notify()` is per tenant, so
+    `platform.tenant-suspended`/`-reinstated` reach the school's owners only; §12's copy to
+    platform ops waits for the platform-ops channel (PR B).
+
+- **The onboarding wizard, what platform-admin PR H leaves out** (`apps/platform_admin/onboarding/`,
+  `apps/dashboard/src/features/onboarding/`, platform-admin §5.6, §20).
+  - **`AI-PLA-03`, the onboarding assistant** (platform-admin §14, a *recommendation*): a
+    conversational helper that turns a school's description into a draft structure for review.
+    It needs the AI gateway's draft-and-approve flow (invariant 5) wired to the School module's
+    writes, and its own plan.
+  - **The school's contact details and address on the profile step** (school-organization §5.1,
+    §6: "multiple contact points", address). Nothing stores them yet: the `tenants.contact_*`
+    columns are the platform's commercial contact, edited in the console, not the school's public
+    ones. Going live does not need them, so the profile step confirms the name, logo, colour,
+    timezone, locale and currency only. They land with their own columns or table, an entity-spec
+    entry and a part of the School module's profile form.
+  - **The uploaded logo on the public website.** Still the School module entry below: the
+    website reads `branding.logo_url`, and the API has no `/public/tenants/by-host` route to serve
+    a public logo from. The wizard's profile step uploads the logo, so a school that finishes
+    setup still shows no logo publicly until that route lands.
+
 - **AI gateway and AI-FEE-02 follow-ups** (`feat/ai-gateway`, plan
   `docs/superpowers/plans/2026-11-07-ai-gateway.md`, [ADR-0035](decisions/0035-ai-gateway-shape.md)).
   The gateway and the on-demand finance report summary shipped backend only. Left out on purpose:
@@ -1277,7 +1328,8 @@ period_id)` — a cell in a weekly grid whose times come from the period it
 - **Communication PR C left these out** (`docs/03-modules/communication.md` §20, "Built (PR C)"):
   - **A per-broadcast live delivery board** (§7). The delivery dashboard can filter by
     `notification_id` and date, not by broadcast; the job's result carries only the counts.
-  - **MFA step-up on `:emergency`** (§4's "MFA-recommended"). There is no MFA yet. The digest
+  - **MFA step-up on `:emergency`** (§4's "MFA-recommended"). TOTP exists for platform users
+    only; tenant MFA is deferred (the TOTP MFA entry near the top of this file). The digest
     proves the audience, not that a person read the confirmation (ADR-0029).
   - **Quiet hours.** No quiet-hours setting exists, so there is nothing for the emergency
     category to bypass yet.
@@ -1638,23 +1690,6 @@ first_name, id) > (<previous chunk's last row>) ORDER BY last_name, first_name, 
   shared `BulkImportDialog`). The fix is the same
   guard students' own version now has: add `populatedStaffId !== staffDetailQuery.data.id`
   to the `if`, and add `populatedStaffId` to the effect's dependency array.
-
-- **No production mechanism provisions a tenant's default roles.** `principal`'s new
-  `students.document.view` grant (`apps/api/apps/student_management/permissions.py`,
-  students Phase 2) reaches a `principal` role only when one is created via
-  `seed_all_roles`/`seed_e2e_data` (dev/e2e tooling) — both derive the role's permission
-  set from the registry's `default_roles` on every run. Reading `core/rbac/seeding.py`
-  and `apps/staff_management/staff/services/invite.py` in full confirms there is no
-  production code anywhere that creates a platform-default (`tenant=None`) `Role` row for
-  any role except `school_owner` (`ensure_school_owner_role`) — not `principal`, not
-  `teacher`, not `school_admin`. The staff invite flow is written to let an admin assign a
-  `tenant=None` default role, but nothing ever creates one for a real tenant. A migration
-  "backfilling existing tenants' `principal` role" was considered during this phase's plan
-  review and rejected for exactly this reason — it would only ever touch dev/e2e seed
-  fixtures, giving false confidence that production tenants are covered when none are.
-  This is a pre-existing, platform-wide gap in `core.rbac`/`core.tenancy` — building a
-  real tenant-provisioning system for default roles is its own spec and plan, not a
-  one-permission backfill inside a dashboard-tabs PR.
 
 - **`core/files`' generic `GET /files` and `POST /files/{id}:download` remain open to
   any `platform.file.view` holder, including for student documents.** `platform.file.view`

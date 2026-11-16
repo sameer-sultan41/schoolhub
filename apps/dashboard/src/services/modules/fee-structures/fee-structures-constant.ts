@@ -88,3 +88,6 @@ export const FEE_STRUCTURE_ERROR_FIELDS = [
 export const FEES_TAB_URL_KEY = "tab";
 export const STRUCTURES_TAB_ID = "structures";
 export const HEADS_TAB_ID = "heads";
+
+/** The key creating a structure needs (`fees.fee-structure.create`, `fees_finance/permissions.py`). */
+export const FEE_STRUCTURE_CREATE_PERMISSION = "fees.fee-structure.create";

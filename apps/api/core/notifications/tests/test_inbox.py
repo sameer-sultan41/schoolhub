@@ -18,7 +18,7 @@ from apps.communication.threads.tests.base import ThreadAPITestCase
 from apps.school_organization.tests.factories import TenantFactory, UserFactory, authenticate, grant
 from core.notifications.models import Notification, NotificationCategory
 from core.rbac.models import RecordScope
-from core.rbac.registry import registry
+from core.rbac.registry import PermissionScope, registry
 from core.rbac.roles import ALL_TENANT_ROLES
 from core.tenancy.context import tenant_context
 
@@ -264,10 +264,12 @@ class NotificationViewKeyRegistryTests(APITestCase):
         spec = next(s for s in registry.all() if s.key == VIEW_KEY)
         self.assertEqual(spec.default_roles, ALL_TENANT_ROLES)
 
-        # A role added to any key without joining ALL_TENANT_ROLES would miss the inbox.
+        # A role added to any key without joining ALL_TENANT_ROLES would miss the inbox. The
+        # platform roles hold platform-scope keys only and have no school inbox (ADR-0036).
         unknown = {
             (s.key, role)
             for s in registry.all()
+            if s.scope == PermissionScope.TENANT
             for role in s.default_roles
             if role not in ALL_TENANT_ROLES
         }

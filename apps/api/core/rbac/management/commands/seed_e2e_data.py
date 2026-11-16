@@ -11,6 +11,7 @@ Password comes from ``E2E_LIVE_ADMIN_PASSWORD`` so it can never drift from
 ``e2e/src/env.ts``'s zod default, which reads the same env var.
 """
 
+import base64
 import os
 import uuid
 from datetime import time, timedelta
@@ -51,8 +52,9 @@ from apps.timetable.models import (
     TeacherSubstitution,
     TimetableSlot,
 )
+from core.integrations import crypto
 from core.notifications.permissions import NOTIFICATION_VIEW
-from core.rbac.models import RecordScope, User
+from core.rbac.models import RecordScope, Role, User, UserRole
 from core.rbac.registry import registry
 from core.rbac.seeding import (
     ensure_role_with_permissions,
@@ -65,6 +67,15 @@ from core.tenancy.models import FeatureFlag, Tenant, TenantFeatureOverride, Tena
 
 E2E_TENANT_SLUG = "e2e-school"
 E2E_OTHER_TENANT_SLUG = "e2e-other-school"
+# A third school holding nothing but its owner (and the system ledger accounts provisioning
+# gives it): `e2e/tests/live/onboarding-journey.spec.ts` sets it up from nothing and takes it
+# live. Going live is permanent, so that journey needs a fresh database. The owner's email is
+# used nowhere else, so signing in by email lands in this school.
+E2E_FRESH_TENANT_SLUG = "fresh-school"
+E2E_FRESH_TENANT_NAME = "E2E Fresh School"
+E2E_FRESH_OWNER_EMAIL = "e2e-fresh-owner@schoolhub.test"
+# The modules the journey's optional steps live in, all default off.
+E2E_FRESH_MODULES = ("module.fees_finance", "module.staff", "module.students")
 E2E_ADMIN_EMAIL = "e2e-admin@schoolhub.test"
 # A distinct email, not the same one disambiguated by `school`: the dashboard's login
 # form never sends `school` (it derives it from the subdomain, and the dashboard itself
@@ -76,6 +87,13 @@ E2E_OTHER_ADMIN_EMAIL = "e2e-admin-other@schoolhub.test"
 # `.get(key, default)`: an unset CI secret still sets the env var to an empty
 # string via `-e VAR` in the workflow, which `.get` would happily return.
 E2E_ADMIN_PASSWORD = os.environ.get("E2E_LIVE_ADMIN_PASSWORD") or "e2e-not-a-real-password"  # noqa: TID251
+
+# The live lane's console operator (platform-admin.md §4). Its TOTP key is RFC 6238's own test
+# key, a dummy for dev and CI only; the stored secret is its base32 form, as pyotp reads it.
+# e2e/src/lib/seed-constants.ts mirrors the email and the key.
+E2E_PLATFORM_OPERATOR_EMAIL = "e2e-platform-operator@schoolhub.test"
+E2E_PLATFORM_TOTP_KEY = b"12345678901234567890"
+E2E_PLATFORM_TOTP_SECRET = base64.b32encode(E2E_PLATFORM_TOTP_KEY).decode()
 
 E2E_CAMPUS_CODE = "MAIN"
 E2E_CLASS_NAME = "Grade 1"
@@ -793,6 +811,9 @@ class Command(BaseCommand):
         # structure shares the baseline class.
         call_command("seed_e2e_fees", stdout=self.stdout)
 
+        self._ensure_platform_operator()
+        self._ensure_fresh_school(role)
+
         # TODO(website-cms): no public-content/CMS backend module exists yet
         # (apps/api/config/api_v1.py routes only core.rbac and
         # apps.school_organization) — there is nothing here to seed real tenant
@@ -807,9 +828,60 @@ class Command(BaseCommand):
                 f"{E2E_STUDENT_EMAIL}, guardians {E2E_GUARDIAN_EMAIL} and "
                 f"{E2E_COMMS_GUARDIAN_EMAIL}, and class teacher "
                 f"{E2E_COMMS_CLASS_TEACHER_EMAIL}; tenant "
-                f"'{E2E_OTHER_TENANT_SLUG}' with admin {E2E_OTHER_ADMIN_EMAIL}"
+                f"'{E2E_OTHER_TENANT_SLUG}' with admin {E2E_OTHER_ADMIN_EMAIL}; tenant "
+                f"'{E2E_FRESH_TENANT_SLUG}' with owner {E2E_FRESH_OWNER_EMAIL}; platform "
+                f"operator {E2E_PLATFORM_OPERATOR_EMAIL}"
             )
         )
+
+    def _ensure_fresh_school(self, owner_role: Role) -> Tenant:
+        """The onboarding journey's school: an owner, the modules on, no structure at all.
+
+        Only the system ledger accounts are seeded, as `seed_finance_accounts` does for any
+        school starting on fees (fees-finance §6, "seeded at provisioning"): a fee head needs
+        an income account, and no screen creates the system ones.
+        """
+        fresh = ensure_tenant(E2E_FRESH_TENANT_SLUG, E2E_FRESH_TENANT_NAME)
+        ensure_seed_user(
+            fresh,
+            owner_role,
+            email=E2E_FRESH_OWNER_EMAIL,
+            password=E2E_ADMIN_PASSWORD,
+            first_name="E2E",
+            last_name="Fresh Owner",
+        )
+        with tenant_context(fresh.id):
+            for key in E2E_FRESH_MODULES:
+                self._ensure_feature_enabled(fresh, key)
+        call_command("seed_finance_accounts", tenant_slug=fresh.slug, stdout=self.stdout)
+        return fresh
+
+    def _ensure_platform_operator(self) -> User:
+        """A `platform_super_admin` with TOTP on, whose secret the live lane knows.
+
+        The console refuses a token without a second factor, so the live spec signs in as
+        a real operator does: password, then a code computed from this secret. The secret
+        is re-set on every run, which also clears the last accepted time step.
+        """
+        operator, created = User.objects.get_or_create(
+            email=E2E_PLATFORM_OPERATOR_EMAIL,
+            tenant=None,
+            defaults={
+                "first_name": "E2E",
+                "last_name": "Platform Operator",
+                "is_platform": True,
+                "is_active": True,
+            },
+        )
+        if created:
+            operator.set_password(E2E_ADMIN_PASSWORD)
+        operator.mfa_secret = crypto.encrypt({"secret": E2E_PLATFORM_TOTP_SECRET})
+        operator.mfa_last_timecode = None
+        operator.mfa_enabled = True
+        operator.save()
+        role = Role.objects.get(tenant=None, slug="platform_super_admin", deleted_at__isnull=True)
+        UserRole.objects.get_or_create(user=operator, role=role, scope=RecordScope.ALL)
+        return operator
 
     def _ensure_seven_day_week(self, tenant: Tenant) -> None:
         """The live lane marks attendance for *today*, and today is not always a weekday.

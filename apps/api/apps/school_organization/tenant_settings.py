@@ -1,8 +1,9 @@
 """Shared `TenantSettings` row access: `get_settings_row` for the `school_settings/` and
 `holiday_calendar/` reads, which project different slices of the same one-row-per-tenant
 `TenantSettings` (branding/academic JSONB), and `lock_settings_row`, the row lock every writer
-that merges into that JSON takes — the `/school-settings` PATCH, the `/holiday-calendar` PUT
-and `attendance`'s `/attendance-settings` PATCH (through `services.py`, per ADR-0013).
+that merges into that JSON takes — the `/school-settings` PATCH, the `/holiday-calendar` PUT,
+`attendance`'s `/attendance-settings` PATCH and `platform_admin`'s `/onboarding` PATCH (the last
+two through `services.py`, per ADR-0013).
 """
 
 from __future__ import annotations

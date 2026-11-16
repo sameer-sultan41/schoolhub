@@ -57,8 +57,33 @@ class Tenant(TimestampedModel):
     timezone = models.CharField(max_length=64, default="UTC")
     locale = models.CharField(max_length=10, default="en")
     currency = models.CharField(max_length=3, default="USD")
+    contact_name = models.CharField(
+        max_length=200, blank=True, default="", help_text="Primary commercial contact."
+    )
+    # Blank only on rows that predate the column; the console requires it, since
+    # `:provision` invites the owner at this address.
+    contact_email = models.EmailField(
+        max_length=254, blank=True, default="", help_text="The owner invite's target."
+    )
+    contact_phone = models.CharField(max_length=30, blank=True, default="")
     trial_ends_at = models.DateTimeField(null=True, blank=True)
+    provisioned_at = models.DateTimeField(
+        null=True, blank=True, help_text="When `:provision`'s seed transaction committed."
+    )
     suspended_at = models.DateTimeField(null=True, blank=True)
+    deprovision_after = models.DateTimeField(
+        null=True, blank=True, help_text="End of the retention window a deprovision starts."
+    )
+    # A denormalised read model of the live subscription, for platform-wide lookups that
+    # have no tenant bound and so cannot read the RLS-bound `subscriptions` table. The
+    # platform console's subscription services write these in the same transaction as the
+    # subscription row, which stays the source of truth. Plain columns, not a foreign key:
+    # `core` never references `apps.platform_admin` (ADR-0013).
+    current_plan = models.CharField(
+        max_length=50, blank=True, default="", help_text="The live plan's code."
+    )
+    subscription_status = models.CharField(max_length=20, blank=True, default="")
+    billing_provider_ref = models.CharField(max_length=120, blank=True, default="")
 
     # Platform-scope table: the unfiltered manager is the only manager.
     objects = models.Manager()
@@ -66,6 +91,14 @@ class Tenant(TimestampedModel):
     class Meta:
         db_table = "tenants"
         ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["billing_provider_ref"],
+                name="tenants_unique_billing_provider_ref",
+                condition=~models.Q(billing_provider_ref=""),
+            ),
+        ]
+        indexes = [models.Index(fields=["status"], name="tenants_status_idx")]
 
     def __str__(self) -> str:
         return f"{self.name} ({self.slug})"
@@ -113,6 +146,13 @@ class TenantSettings(TimestampedModel):
         help_text="AI gateway config, e.g. monthly_token_budget. Platform-set (SEC-16): "
         "no tenant-facing endpoint writes it, because the quota is what the school's "
         "plan pays for.",
+    )
+    onboarding = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="The setup wizard's stored choices: `profile_confirmed_at`, `skipped` (step "
+        "keys) and `completed_at`. Every other step's progress is computed from the school's "
+        "own rows (platform-admin §5.6), never stored.",
     )
     # A real column, as the entity spec defines (tenancy.md), not a `branding` JSON key: the
     # foreign key clears it when the file goes, where a JSON id would dangle.

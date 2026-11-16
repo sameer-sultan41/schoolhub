@@ -25,6 +25,8 @@ export const Paths = {
   STUDENTS: "/students",
   STAFF: "/staff",
   SCHOOL: "/school",
+  /** The onboarding wizard (`?step=` picks the step). */
+  SETUP: "/setup",
   SCHOOL_PROFILE: "/school/profile",
   SCHOOL_CAMPUSES: "/school/campuses",
   SCHOOL_SESSIONS: "/school/sessions",

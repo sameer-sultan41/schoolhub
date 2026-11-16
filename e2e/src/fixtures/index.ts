@@ -50,6 +50,7 @@ import {
   QuestionBanksPage,
   ResetPasswordPage,
   SchoolSetupPage,
+  SetupWizardPage,
   StaffAttendancePage,
   StaffPage,
   StudentCreateStepperPage,
@@ -122,6 +123,7 @@ export interface E2EFixtures {
   timetablePeriodsPage: TimetablePeriodsPage;
   timetableRoomsPage: TimetableRoomsPage;
   schoolSetupPage: SchoolSetupPage;
+  setupWizardPage: SetupWizardPage;
   timetableSubstitutionsPage: TimetableSubstitutionsPage;
   myTimetablePage: MyTimetablePage;
   attendanceRegisterPage: AttendanceRegisterPage;
@@ -311,6 +313,10 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
 
   schoolSetupPage: async ({ page }, use) => {
     await use(new SchoolSetupPage(page));
+  },
+
+  setupWizardPage: async ({ page }, use) => {
+    await use(new SetupWizardPage(page));
   },
 
   timetableRoomsPage: async ({ page }, use) => {

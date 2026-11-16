@@ -22,4 +22,8 @@ urlpatterns = [
     path("", include("apps.fees_finance.urls")),
     path("", include("apps.communication.urls")),
     path("", include("apps.parent_portal.urls")),
+    # platform_admin's tenant-facing routes (onboarding): school staff, tenant RBAC.
+    path("", include("apps.platform_admin.tenant_urls")),
+    # The platform console: platform users only (ADR-0036).
+    path("platform/", include("apps.platform_admin.urls")),
 ]

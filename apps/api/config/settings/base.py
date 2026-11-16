@@ -117,6 +117,7 @@ MODULE_APPS = [
     "apps.fees_finance",
     "apps.communication",
     "apps.parent_portal",
+    "apps.platform_admin",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + CORE_APPS + MODULE_APPS
@@ -293,6 +294,9 @@ SPECTACULAR_SETTINGS = {
     # everything a TypeScript consumer needs.
     "ENUM_ADD_EXPLICIT_BLANK_NULL_CHOICE": False,
     "ENUM_NAME_OVERRIDES": {
+        # The onboarding checklist's step keys, shared by the step's `key` and the PATCH body's
+        # `confirm`/`skip`/`unskip`; named so it never takes a bare `KeyEnum`.
+        "OnboardingStepKeyEnum": "apps.platform_admin.onboarding.services.OnboardingStepKey",
         "PromotionDecisionEnum": "apps.academics.models.PromotionDecision",
         # One name for the batch summary's `status` and the decision rows' `status`.
         "PromotionStatusEnum": "apps.academics.models.PromotionStatus",
@@ -596,6 +600,31 @@ AI_MODEL_FAST = env("AI_MODEL_FAST", default="claude-haiku-5-5")
 AI_MODEL_STANDARD = env("AI_MODEL_STANDARD", default="claude-sonnet-5-5")
 # The whole provider call, its one retry included, finishes inside this (ai-architecture.md §3).
 AI_REQUEST_DEADLINE_SECONDS = env.int("AI_REQUEST_DEADLINE_SECONDS", default=30)
+
+# The platform console (docs/03-modules/platform-admin.md, ADR-0036).
+# Days before a trial ends on which the school owner is reminded (§12).
+PLATFORM_TRIAL_REMINDER_DAYS = tuple(
+    env.list("PLATFORM_TRIAL_REMINDER_DAYS", cast=int, default=[7, 3, 1])
+)
+# Trial length when the plan names none.
+PLATFORM_DEFAULT_TRIAL_DAYS = env.int("PLATFORM_DEFAULT_TRIAL_DAYS", default=14)
+# Days a past-due school keeps access before the grace sweep suspends it.
+PLATFORM_DUNNING_GRACE_DAYS = env.int("PLATFORM_DUNNING_GRACE_DAYS", default=14)
+# Days a deprovisioned school's data is kept, restorable, before purge.
+PLATFORM_RETENTION_DAYS = env.int("PLATFORM_RETENTION_DAYS", default=90)
+# Usage share of a plan limit from which responses carry a quota warning.
+PLATFORM_QUOTA_WARN_RATIO = env.float("PLATFORM_QUOTA_WARN_RATIO", default=0.9)
+# Longest impersonation grant an operator may request.
+PLATFORM_IMPERSONATION_MAX_MINUTES = env.int("PLATFORM_IMPERSONATION_MAX_MINUTES", default=60)
+# Lifetime of the single-use code that hands an impersonation session to the dashboard.
+PLATFORM_HANDOFF_CODE_TTL_SECONDS = env.int("PLATFORM_HANDOFF_CODE_TTL_SECONDS", default=120)
+# Shared secret of the billing provider's webhook. Empty = the webhook answers 503.
+PLATFORM_BILLING_WEBHOOK_SECRET = env("PLATFORM_BILLING_WEBHOOK_SECRET", default="")
+
+# TOTP MFA (core/rbac/mfa.py, auth-and-rbac §1). Seconds a sign-in's MFA challenge stays valid.
+MFA_CHALLENGE_TTL_SECONDS = env.int("MFA_CHALLENGE_TTL_SECONDS", default=300)
+# The issuer an authenticator app shows beside the account.
+MFA_ISSUER_NAME = env("MFA_ISSUER_NAME", default="SchoolHub")
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"

@@ -45,16 +45,18 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 | `platform.migration.import` | Run legacy-data imports into a tenant | `platform_super_admin` |
 | `platform.report.view` | Platform aggregate reporting | `platform_super_admin`, `platform_support` |
 
-Tenant users can never hold `platform.*` keys; the seed matrix forbids it structurally (platform permissions attach only to platform-scope roles).
+Every key above is **platform-scope** ([ADR-0036](../decisions/0036-platform-scope-and-cross-tenant-access.md)): only the two platform roles hold them, and no school's role ever can. The scope, not the module name, decides it: the tenant-side `platform.file.*`, `platform.job.view` and `platform.notification.view` keys stay tenant-scope. `registry.register(..., scope="platform")` refuses a tenant default role, every grant path filters on `Permission.scope`, and only a platform user may hold a platform role (a trigger on `user_roles`). Both roles are synced as shared `tenant=None` rows on every migrate (`core.rbac.sync.sync_default_roles`), and an operator account is created with `manage.py create_platform_admin --email --first-name [--role]`.
+
+Every operator signs in with password **and** TOTP ([auth-and-rbac §1](../02-architecture/auth-and-rbac.md), SEC-06). A new account starts with MFA off: its first password sign-in gets an `amr=["pwd"]` token, which the console refuses (403 `mfa_required`) but which can call `POST /auth/mfa:enroll` and `:confirm`; confirming returns ten recovery codes and an `amr=["pwd","otp"]` pair. From then on login answers with a challenge that `POST /auth/mfa:verify` completes. An operator cannot turn MFA off (`/auth/mfa:disable` is 403); one who lost their authenticator and recovery codes is reset with `manage.py create_platform_admin --email … --reset-mfa`, which also ends their sessions.
 
 ## 5. Main Features
 
-1. **Tenant lifecycle management** — create, provision (idempotent seed transaction), trial, activate, suspend, reinstate, export, and delete tenants per the state machine in multi-tenancy §7.
+1. **Tenant lifecycle management** — create, provision (idempotent seed transaction), trial, activate, suspend, reinstate, export, and delete tenants per the state machine in multi-tenancy §7. *Built:* create, edit, `:provision`, `:suspend`, `:reinstate`, `:delete` and `:restore` (§7.4, §20); export arrives with the usage PR.
 2. **Plans & subscriptions** — plan catalog (modules enabled, usage limits, price, trial length); per-tenant subscription with period tracking; plan upgrades/downgrades with proration rules *(recommendation)*.
 3. **Billing of schools** — invoicing tenants for their subscription via a billing provider; dunning on failed payment → `past_due` → grace → suspension. (This bills *schools*; student fee billing is the tenant-side fees-finance module.)
 4. **Feature flags** — platform flag registry with per-plan defaults and per-tenant overrides, kill-switch capable; every tenant module checks its flag server-side (multi-tenancy §5).
 5. **Usage tracking & quotas** — metered counters per tenant (active students, staff, storage GB, SMS credits, AI tokens, API rate) vs. plan limits; soft-warn then hard-enforce.
-6. **Onboarding wizard** — guided tenant setup: school profile → campuses → academic session → classes/sections → fee structures → staff invites → student import; resumable, with progress tracking.
+6. **Onboarding wizard** — guided tenant setup: school profile → campuses → academic session → classes/sections → fee structures → staff invites → student import; resumable, with progress tracking. *Built (PR H):* nine steps (profile, campuses, session and terms, classes and sections, subjects, fee structures, staff invitations, students, go live), each computed from the school's own rows, at `/setup` with a "Finish setting up" card on the home page (§16, §20).
 7. **Data migration / legacy import** — Excel/CSV import pipelines (students, guardians, staff, fee balances, marks history) with mapping templates, dry-run validation, error reports, and rollback of a failed batch.
 8. **Platform-level reporting** — aggregates only: tenant counts by state, MRR/ARR, usage/adoption per module, churn, support-load; never row-level school data.
 9. **Impersonation with audit** — elevation grant (≤ 1 h, reason required, banner shown); every action tagged `impersonated_by` in `audit_logs` (RBAC §1).
@@ -97,6 +99,29 @@ flowchart TD
 
 Support agent requests elevation (tenant, target user, reason) → grant issued (≤ 1 h, auto-expiring) → agent operates the tenant dashboard with a persistent banner, target-user permissions apply (never superuser) → every mutation audit-tagged `impersonated_by` → grant expiry or manual release ends the session → tenant owner can view an impersonation log *(recommendation)*.
 
+### 7.4 Tenant lifecycle, as built
+
+`apps/platform_admin/tenants/lifecycle.py` is the only writer of `tenants.status` after creation, and it allows these edges and no others (any other is a 409 `invalid_transition`):
+
+| From | To | Trigger |
+| ---- | -- | ------- |
+| `provisioning` | `trial` | `:provision` |
+| `provisioning` | `deprovisioned` | `:delete` of a school created by mistake (nothing to export) |
+| `trial` | `active` | Subscription activated (PR B) |
+| `active` | `past_due` | Payment failed (PR B) |
+| `past_due` | `active` | Payment recorded (PR B) |
+| `trial`, `active`, `past_due` | `suspended` | `:suspend`, or the trial-expiry / grace sweeps (PR B) |
+| `suspended` | the status the live subscription implies | `:reinstate` |
+| `active`, `suspended` | `deprovisioned` | `:delete` |
+| `deprovisioned` | `suspended` | `:restore`, only while `now < deprovision_after` (else 409 `retention_expired`) |
+
+- **`:provision`** runs in one transaction with the school bound: it creates `tenant_settings`, creates the owner's inactive account from `contact_name` (split on the first space) and `contact_email`, gives it the shared `school_owner` default role, invites it (ADR-0033, kind `owner`, linking to `<slug>.app.<domain>`), sets `trial_ends_at` (`PLATFORM_DEFAULT_TRIAL_DAYS`) and `provisioned_at`, and moves the school to `trial`. The owner invite therefore starts the trial (§7.1), not the onboarding wizard. A second `:provision` is a 409; the same `Idempotency-Key` replays the first answer. Until plans exist (PR B), a `plan_code` is refused with a 422.
+- **`:reinstate`** asks the `subscription_state` hook (`core/tenancy/subscription_state.py`, registered by PR B) for the live subscription: `active` → `active`, `past_due` → `past_due`. A `trialing` one, or none, reinstates to `trial` only with a future `trial_ends_at` in the body; with neither a subscription nor a date it is a 409 `no_live_subscription`.
+- **`:delete`** of a school that went live (`active`, `suspended`) needs a succeeded `tenant_export` job or `waive_export: true`, else a 409 `export_required`. It sets `deprovision_after = now + PLATFORM_RETENTION_DAYS`.
+- **Reasons:** `:suspend`, `:delete` and `:restore` require a non-blank `reason`, stored in the audit row.
+- **Timestamps:** entering `suspended` stamps `suspended_at`; leaving it for an operational status clears it.
+- **Audit:** a person's action is audited by the view (`record_audit`, with the operator as actor and the school as tenant, before and after). A system caller (sweep, webhook) passes `actor_id=None` and the transition audits itself through `record_system_audit`.
+
 ## 8. User Journeys
 
 - **`platform_super_admin`:** morning console review → two trials expiring this week (nudge emails) → one past-due tenant recovered via dunning → provisions a new school from a sales order → creates a per-tenant flag override to pilot the new transport module.
@@ -131,15 +156,15 @@ Support agent requests elevation (tenant, target user, reason) → grant issued 
 
 | Event | Recipients | Channels | Template ref |
 | ----- | ---------- | -------- | ------------ |
-| Tenant provisioned / owner invite | School owner | Email | `pla-owner-invite` |
-| Trial expiring (7/3/1 days) | School owner | Email, in-app | `pla-trial-expiring` |
-| Payment failed / dunning sequence | School owner, `platform_super_admin` | Email | `pla-payment-failed` |
-| Tenant suspended / reinstated | School owner; platform ops | Email, in-app | `pla-tenant-suspended` |
-| Quota threshold reached (80% / 100%) | School owner, `it_admin`; platform ops | Email, in-app | `pla-quota-threshold` |
-| Import completed / failed | Initiating admin | In-app, email | `pla-import-result` |
-| Impersonation grant issued/expired | Platform ops log; tenant owner *(recommendation)* | In-app | `pla-impersonation` |
+| Tenant provisioned / owner invite | School owner | Email | ADR-0033's invitation email, kind `owner` (not `notify()`) |
+| Trial expiring (7/3/1 days) | School owner | Email, in-app | `platform.trial-expiring` |
+| Payment failed / dunning sequence | School owner, `platform_super_admin` | Email | `platform.payment-failed` |
+| Tenant suspended / reinstated | School owner; platform ops | Email, in-app | `platform.tenant-suspended` / `platform.tenant-reinstated` |
+| Quota threshold reached (80% / 100%) | School owner, `it_admin`; platform ops | Email, in-app | `platform.quota-threshold` |
+| Import completed / failed | Initiating admin | In-app, email | `platform.import-result` |
+| Impersonation grant issued/expired | Platform ops log; tenant owner *(recommendation)* | In-app | `platform.impersonation` |
 
-Channels and delivery behavior follow [`notifications.md`](../02-architecture/notifications.md).
+Channels and delivery behavior follow [`notifications.md`](../02-architecture/notifications.md). Codes are dotted `<module>.<event>` triggers in `apps/platform_admin/notifications.py`. *Built:* `platform.tenant-suspended` and `platform.tenant-reinstated`, sent to the school's active owners when a school leaves or returns to an operational status (a `:restore` sends neither). `notify()` is per tenant, so the platform-ops copies wait for a platform-ops channel.
 
 ## 13. Reports
 
@@ -170,15 +195,36 @@ Full column specs in [`../05-database/entities/tenancy.md`](../05-database/entit
 
 ## 16. API Requirements
 
-Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md). Platform-console resources are namespaced under `/api/v1/platform/...` and require platform-scope JWTs *(recommendation)*; tenant-facing touchpoints (billing view, onboarding) are normal tenant endpoints.
+Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md). Platform-console resources are namespaced under `/api/v1/platform/...` and built on `core.api.platform.PlatformViewSet` ([ADR-0036](../decisions/0036-platform-scope-and-cross-tenant-access.md)): an anonymous caller gets 401, any tenant principal **404**, a platform token without `"otp"` in its `amr` claim 403 `mfa_required`, and a platform user without the route's key 403. A route that touches one school's rows is nested under `tenants/{tenant_pk}/` and binds that school for the whole request (`PlatformTenantNestedMixin`). Tenant-facing touchpoints (billing view, onboarding) are normal tenant endpoints.
 
-- `GET/POST /api/v1/platform/tenants` · `GET/PATCH /api/v1/platform/tenants/{id}` · `POST .../tenants/{id}:provision` / `:suspend` / `:reinstate` / `:export` / `:delete` (all with `Idempotency-Key`)
+- `GET/POST /api/v1/platform/tenants` · `GET/PATCH /api/v1/platform/tenants/{id}` · `POST .../tenants/{id}:provision` / `:suspend` / `:reinstate` / `:export` / `:delete` / `:restore` (all with `Idempotency-Key`). *Built* (except `:export`):
+  - `GET /platform/tenants` (`platform.tenant.view`): page-numbered; `?status=`, `?current_plan=`, `?subscription_status=`, `?search=` (name, slug, contact email), `?ordering=` (name, slug, status, trial_ends_at, created_at).
+  - `POST /platform/tenants` (`platform.tenant.provision`): `{name, slug, contact_name, contact_email, contact_phone?}` → 201, status `provisioning`. The slug is one DNS label (`^[a-z0-9]` then `(?:[a-z0-9-]{1,61}[a-z0-9])?$`), not in `RESERVED_SLUGS` (pinned to the website's `RESERVED_LABELS`) and unused, else 400 on `slug`. Idempotent by the unique slug.
+  - `GET /platform/tenants/{id}` (`.view`); `PATCH` (`.update`): name and contact fields; `slug` only while `provisioning` (else 400 on `slug`).
+  - `:provision` (`.provision`, body `{plan_code?: null}`), `:suspend` (`.suspend`, `{reason}`), `:reinstate` (`.reinstate`, `{trial_ends_at?, reason?}`), `:delete` (`.delete`, `{reason, waive_export?}`), `:restore` (`.delete`, `{reason}`): each answers the tenant, and refuses with the 409 codes of §7.4.
 - `POST /api/v1/platform/tenants/{id}:impersonate` — returns a time-boxed elevated token; `DELETE /api/v1/platform/impersonation-grants/{id}` releases it
 - `GET/POST/PATCH /api/v1/platform/plans` · `GET/PATCH /api/v1/platform/subscriptions/{id}` · billing webhooks at `POST /api/v1/platform/billing-events` (HMAC-verified)
 - `GET/POST/PATCH /api/v1/platform/feature-flags` · `GET/POST/DELETE /api/v1/platform/tenants/{id}/feature-overrides`
 - `GET /api/v1/platform/tenants/{id}/usage` · `GET /api/v1/platform/reports/{key}` (aggregate read path)
 - `POST /api/v1/platform/tenants/{id}/imports` (`202` + job, dry-run flag) · `GET /api/v1/platform/imports/{id}`
-- Tenant-facing: `GET /api/v1/subscription` (own billing state, `school_owner`) · `GET/PATCH /api/v1/onboarding` (wizard progress).
+- Tenant-facing: `GET /api/v1/subscription` (own billing state, `school_owner`) · `GET/PATCH /api/v1/onboarding` (wizard progress). Both mount through `apps.platform_admin.tenant_urls` (`/subscription` lands with PR B), a separate include in `config/api_v1.py`, never under `/platform/`: the school's own staff call them with tenant RBAC. *Built:*
+  - `GET /onboarding` (`school.settings.view`, `module.school`): `{steps: [{key, done, skipped, skippable, count?}], completed, completed_at}`. The steps, in order, and when each is done:
+
+    | Step | Done when | Skippable | Omitted when |
+    | ---- | --------- | --------- | ------------ |
+    | `profile` | The profile was confirmed (`PATCH {"confirm": "profile"}`) | No | — |
+    | `campuses` | An active campus exists | No | — |
+    | `academic_session` | A planned or active session has terms covering it (`term_coverage_errors` is empty), with or without classes | No | — |
+    | `classes` | An active class has an active section | No | — |
+    | `subjects` | An active subject exists | No | — |
+    | `fee_structures` | An active fee structure exists | Yes | `module.fees_finance` is off |
+    | `staff_invites` | A **staff** invitation was accepted, or sent and neither revoked nor failed; the owner's own invitation never counts | Yes | `module.staff` is off |
+    | `students` | A non-deleted student exists | Yes | `module.students` is off |
+    | `go_live` | A session is active | No | — |
+
+    `count` is the number of rows meeting the step's rule; `profile` and `go_live` have none. `completed` holds when every step present is done or skipped; the first read that finds it so stamps `completed_at`, once.
+  - `PATCH /onboarding` (`school.settings.update`): exactly one of `{"confirm": "profile"}`, `{"skip": key}` or `{"unskip": key}` (else 400). Confirming any other step, or skipping a step that is not skippable or undoing its skip, is a 422. Answers the updated checklist; audited as an `update` of the settings row.
+- Operator sign-in (built, `core/rbac`, under `/api/v1/auth/`, §4): `POST /auth/login` → `{mfa_required, mfa_token}` · `POST /auth/mfa:verify` · `POST /auth/mfa:enroll` · `POST /auth/mfa:confirm` · `POST /auth/mfa:disable` (always 403 for an operator).
 
 ## 17. Integration Requirements
 
@@ -203,3 +249,30 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - Self-service signup vs. sales-assisted provisioning (or both) needs a client decision; the API supports both.
 - Tenant-visible impersonation log and `AI-PLA-*` features are **recommendations**.
 - Data residency/region pinning per tenant is out of initial scope; flagged for the compliance review (scope §22).
+
+## 20. Implementation status
+
+**Built (PR A — platform scope, MFA and the tenant lifecycle):**
+
+- **Platform scope and sign-in:** scoped permission keys, the shared default roles, `PlatformViewSet` and TOTP MFA (§4, §16, [ADR-0036](../decisions/0036-platform-scope-and-cross-tenant-access.md)).
+- **Tenants** (`apps/platform_admin/tenants/`, ADR-0010 layout): `viewset.py` (two viewsets: the list and create bind no tenant; `tenants/{tenant_pk}` and its colon-actions bind that school through `PlatformTenantNestedMixin`), `serializers.py`, `filters.py`, `services.py` (create, edit, provision, reinstate, delete, restore, the slug rules and the `owner` invitation's eligibility hook) and `lifecycle.py` (the state machine of §7.4: `ALLOWED_TRANSITIONS`, `transition(tenant, to, *, actor_id: UUID | None, reason="")`, `InvalidTransition`, `RetentionExpired`). `:delete` routes to the `deprovision` action, since a viewset method named `delete` would also answer the HTTP `DELETE` verb.
+- **`tenants` columns** (`core/tenancy` migration `0010`): `contact_name`, `contact_email`, `contact_phone`, `provisioned_at`, `deprovision_after`, and the denormalised subscription read model `current_plan` (a plan code), `subscription_status` and `billing_provider_ref` (unique when set). They are plain columns, not a foreign key to `plans`: `core` never references this app (ADR-0013). PR B's subscription services write them with each subscription change.
+- **Hooks** (`apps/platform_admin/hooks.py`, called from `PlatformAdminConfig.ready()`): every seam this app fills in `core` is registered there. PR A registers the `owner` invitation eligibility check (the account still holds `school_owner`). `core/tenancy/subscription_state.py` is the seam `:reinstate` reads; PR B registers its resolver.
+- **Notifications** (`apps/platform_admin/notifications.py`): `platform.tenant-suspended` and `platform.tenant-reinstated`, in-app and email, to the school's active owners (§12).
+- **Constants** (`apps/platform_admin/constants.py`): `SLUG_PATTERN`, `RESERVED_SLUGS` (pinned to `apps/website/src/lib/host.ts` by `test_reserved_labels_match_website`) and `TENANT_EXPORT_JOB_TYPE = "tenant_export"`, the job a later PR's `:export` creates.
+- **Tests:** `apps/platform_admin/tests/test_lifecycle.py` (every status pair, timestamps, system audit, notices) and `test_tenants_api.py` (create, edit, provision, the lifecycle actions, gates); the live lane's `e2e/tests/live/api/platform-tenants.spec.ts` signs in as the seeded TOTP operator (`seed_e2e_data`) and runs create → provision → suspend → reinstate.
+
+**Built (PR H — the onboarding wizard, `feat/onboarding-wizard`):**
+
+- **Backend** (`apps/platform_admin/onboarding/`: `services.py`, `serializers.py`, `view.py`; routed by `apps/platform_admin/tenant_urls.py`): `GET/PATCH /onboarding` (§16). It reads the other modules' models directly (ADR-0013 allows reads) and reuses the activation check's term rule through `apps.school_organization.services.term_coverage_errors`.
+- **Progress is computed, not stored.** Each step is worked out from the school's rows under its own tenant binding (RLS) on every read, so a campus deleted after its step was done makes the step undone again, and the wizard resumes from whatever the data says. A stored per-step record was rejected: it drifts from the data. Only what no row records is kept, on `tenant_settings.onboarding` (`core/tenancy` migration `0011`): `profile_confirmed_at`, `skipped` (step keys) and `completed_at`.
+- **Concurrency.** `PATCH` takes the settings row lock (`lock_settings_row`, the one every `tenant_settings` JSON writer takes) and merges into the stored document. `completed_at` is written only by a conditional `UPDATE … SET onboarding = onboarding || {completed_at} WHERE onboarding->>'completed_at' IS NULL`, so two reads that both find the checklist complete keep the first stamp (`tests/test_concurrency.py`).
+- **The wizard embeds the School module's own sections** (`apps/dashboard/src/features/onboarding/`, route `/setup`): profile, campuses, sessions and terms, classes and sections, and subjects are the same table, toolbar and dialog units as `/school`, so the wizard has no forms or validation of its own; a wizard with its own forms was rejected because it would duplicate PR F/G's validation and error handling. Fee structures, staff invitations and students link out (`/fees/structures`, `/staff`, `/students?import=1`, whose toolbar opens the import dialog for an import-key holder and drops the key from the URL). Go live lists the planned sessions and activates one through the School module's activation dialog (`:activate`).
+- **Two seams the embedded units needed, both kept out of the units.** The step is in the URL (`?step=`), and the units keep their list state (search, sort, page, filters) in the same query string under unprefixed keys, so opening another step writes `?step=` alone and drops every other key. The units have no "saved" callback, so while the wizard is mounted a TanStack `MutationCache` subscription refreshes the checklist after every successful mutation; the wizard and the card also read it afresh on mount, since the linked steps change it on other screens.
+- **Who sees what.** Each step's action shows only to holders of that step's own key (`school.settings.update`, `school.campus.create`, `school.academic-session.create`, `school.class.create`/`school.section.create`, `school.subject.create`, `fees.fee-structure.create`, `staff.staff.update`, `students.student.import`, `school.academic-session.activate`); Skip needs `school.settings.update`. The wizard and the card appear only for someone who can act on at least one remaining step.
+- **The "Finish setting up" card** sits first in the home page's widget grid (`shell/dashboard/dashboard-page-content.tsx`), with a progress bar and a link to the first step the viewer can act on. A rebuilt home page must keep it. It disappears once `completed_at` is stamped, even if a step later comes undone.
+- **Tests:** `apps/platform_admin/onboarding/tests/` (each step's rule, module omission, the owner invitation, skips, the 422s, another school's rows, `school.settings.update` on `PATCH`, and the two-thread `completed_at` race); Jest for the card, the wizard and `?import=1`; the mocked `e2e/tests/dashboard/onboarding-wizard.spec.ts`; and the live `e2e/tests/live/onboarding-journey.spec.ts`, which walks a seeded empty school (`fresh-school`) from nothing to live and needs a fresh database, since going live is permanent.
+
+These decisions are this module's own, so they are recorded here rather than in an ADR.
+
+**Not yet built:** plans, subscriptions and billing (PR B); usage, quotas, reports and `:export` (PR C); the console screens (PR D); impersonation (PR E). Deferred items are in [`deferred-work.md`](../deferred-work.md).

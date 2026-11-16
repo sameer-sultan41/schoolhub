@@ -163,6 +163,8 @@ def _fallback_role(*, tenant_id: uuid.UUID) -> str:
         slug=slug,
         deleted_at__isnull=True,
         is_restricted_principal=False,
+        # A platform role is a default (`tenant=None`) row too, but never a school's.
+        is_platform=False,
     ).exists()
     if not is_staff_role:
         logger.warning(

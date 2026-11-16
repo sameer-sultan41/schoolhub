@@ -88,6 +88,8 @@ flowchart TD
 
 Steps: the onboarding wizard (platform-admin module) drives this module's APIs in order; activation runs a completeness check (≥1 campus, ≥1 class with ≥1 section, term dates covering the session) before flipping `is_current`.
 
+*Built (platform-admin PR H):* the wizard at `/setup` embeds this module's own Profile, Campuses, Sessions & terms, Classes & sections and Subjects sections, then links to fee structures, staff and the student import, and ends by activating a session through this module's activation dialog. Its checklist (`GET /onboarding`, platform-admin §16) is computed from this module's rows: the session step is done once a planned or active session's terms cover it, read through `services.term_coverage_errors` (the activation check's term rule on its own), so it can be done before any campus or class exists. The school runs its own setup; the platform console has no setup screens. The calendar (step D above) and departments are not wizard steps: neither is needed to go live, and both stay on `/school`.
+
 ### 7.2 Session rollover
 
 ```mermaid

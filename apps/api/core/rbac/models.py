@@ -13,6 +13,7 @@ from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, Permis
 from django.db import models
 from django.utils import timezone
 
+from core.rbac.registry import PermissionScope
 from core.tenancy.managers import AllTenantsManager
 from core.tenancy.models import TenantOwnedModel, TimestampedModel
 
@@ -84,6 +85,11 @@ class User(AbstractBaseUser, PermissionsMixin, TimestampedModel):
         default=False, help_text="Platform-scope principal (no tenant)."
     )
     mfa_enabled = models.BooleanField(default=False)
+    # The TOTP secret, encrypted with core.integrations.crypto (never stored in clear). Set at
+    # enrolment; ``mfa_enabled`` turns on only once a code from it is confirmed.
+    mfa_secret = models.BinaryField(null=True, blank=True, editable=False)
+    # The TOTP time step of the last accepted code; an equal or older one is a replay.
+    mfa_last_timecode = models.BigIntegerField(null=True, blank=True)
     last_login_ip = models.GenericIPAddressField(null=True, blank=True)
 
     objects = UserManager()
@@ -123,7 +129,11 @@ class User(AbstractBaseUser, PermissionsMixin, TimestampedModel):
 
 
 class Permission(models.Model):
-    """A static permission key. Platform-scope: seeded by migrations, never tenant-editable."""
+    """A static permission key. Platform-owned: synced from the registry, never tenant-editable.
+
+    ``scope`` says who may hold the key (ADR-0036): a school's roles (``tenant``) or the
+    platform roles (``platform``). Every grant path filters on it.
+    """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     key = models.CharField(max_length=120, unique=True, help_text="module.resource.action")
@@ -131,6 +141,9 @@ class Permission(models.Model):
     resource = models.CharField(max_length=60)
     action = models.CharField(max_length=30)
     description = models.CharField(max_length=255, blank=True)
+    scope = models.CharField(
+        max_length=10, choices=PermissionScope.choices, default=PermissionScope.TENANT
+    )
 
     objects = models.Manager()
 
@@ -166,6 +179,10 @@ class Role(TimestampedModel):
         default=False,
         help_text="Student/guardian role: can never hold staff permission keys.",
     )
+    is_platform = models.BooleanField(
+        default=False,
+        help_text="Platform role: holds platform-scope keys, held by platform users only.",
+    )
     permissions = models.ManyToManyField(Permission, through="RolePermission", related_name="roles")
 
     objects = AllTenantsManager()
@@ -177,6 +194,11 @@ class Role(TimestampedModel):
                 fields=["tenant", "slug"],
                 name="roles_unique_slug_per_tenant",
                 condition=models.Q(deleted_at__isnull=True),
+            ),
+            # A platform role belongs to no school.
+            models.CheckConstraint(
+                condition=models.Q(is_platform=False) | models.Q(tenant__isnull=True),
+                name="roles_platform_has_no_tenant",
             ),
         ]
 
@@ -203,7 +225,11 @@ class RolePermission(models.Model):
 
 
 class UserRole(TimestampedModel):
-    """Assignment of a role to a user, optionally narrowed by a record scope."""
+    """Assignment of a role to a user, optionally narrowed by a record scope.
+
+    ``role.is_platform`` must equal ``user.is_platform``. A database trigger enforces it
+    (rbac migration 0003), so a bulk insert cannot slip a tenant user a platform role.
+    """
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="user_roles")
     role = models.ForeignKey(Role, on_delete=models.PROTECT, related_name="user_roles")
@@ -226,12 +252,43 @@ class UserRole(TimestampedModel):
         indexes = [models.Index(fields=["user", "tenant"])]
 
 
+class MfaRecoveryCode(models.Model):
+    """A single-use fallback for a lost authenticator, issued ten at a time at enrolment.
+
+    Only the SHA-256 of the code is stored: each code carries 80 random bits, so a fast hash
+    is enough, as for invitation tokens. ``used_at`` is set by a conditional update, so two
+    concurrent sign-ins cannot both spend one code. Not tenant-owned: a platform user has no
+    tenant, and ``users`` itself carries no RLS policy.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="mfa_recovery_codes")
+    code_hash = models.CharField(max_length=64)
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = models.Manager()
+
+    class Meta:
+        db_table = "mfa_recovery_codes"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "code_hash"], name="mfa_recovery_codes_unique_per_user"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"recovery code for {self.user_id}"
+
+
 class InvitationKind(models.TextChoices):
     """Who an account invitation is for; each kind has its own eligibility hook."""
 
     STAFF = "staff", "Staff"
     GUARDIAN = "guardian", "Guardian"
     STUDENT = "student", "Student"
+    # A school's first owner, invited by the platform console's `:provision`.
+    OWNER = "owner", "Owner"
 
 
 class InvitationStatus(models.TextChoices):

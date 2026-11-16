@@ -66,6 +66,7 @@ describe("Services", () => {
       "notices",
       "notificationPreferences",
       "notifications",
+      "onboarding",
       "parentPortal",
       "payments",
       "periods",
@@ -209,6 +210,8 @@ describe("Services", () => {
     expect(typeof Services.schoolOrganization.deleteSubject).toBe("function");
     expect(typeof Services.schoolSettings.fetchSchoolSettings).toBe("function");
     expect(typeof Services.schoolSettings.updateSchoolSettings).toBe("function");
+    expect(typeof Services.onboarding.fetchOnboarding).toBe("function");
+    expect(typeof Services.onboarding.updateOnboarding).toBe("function");
     expect(typeof Services.questionBanks.fetchBanksPage).toBe("function");
     expect(typeof Services.questionBanks.fetchBank).toBe("function");
     expect(typeof Services.questionBanks.createBank).toBe("function");
