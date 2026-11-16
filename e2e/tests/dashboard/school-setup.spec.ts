@@ -197,7 +197,6 @@ test.describe("school sections", () => {
       name: "City School North",
       branding: { primary_color: "#123ABC" },
       timezone: "Asia/Karachi",
-      locale: "en",
       currency: "PKR",
     });
     await expect(schoolSetupPage.button("Save")).toBeDisabled();

@@ -30,9 +30,25 @@ describe("school-settings helpers", () => {
       name: "City School",
       branding: { primary_color: null },
       timezone: "Asia/Karachi",
-      locale: "en",
       currency: "PKR",
     });
+  });
+
+  it("leaves an untouched locale out, so one the picker can't show survives a rename", () => {
+    const record = schoolSettingsRecord({ locale: "en-GB" });
+    const values = { ...settingsToProfileValues(record), name: "City School North" };
+
+    const body = buildSchoolProfileBody(values, record);
+
+    expect(body.name).toBe("City School North");
+    expect(body).not.toHaveProperty("locale");
+  });
+
+  it("sends the locale the user picked", () => {
+    const record = schoolSettingsRecord({ locale: "en-GB" });
+    const values = { ...settingsToProfileValues(record), locale: "ur" as const };
+
+    expect(buildSchoolProfileBody(values, record).locale).toBe("ur");
   });
 
   it("sends a new logo, and null when the logo is removed", () => {

@@ -13,36 +13,45 @@ export function brandingOf(record: Pick<SchoolSettingsRecord, "branding">): Tena
   return branding !== null && typeof branding === "object" ? branding : {};
 }
 
+/** The picker's value for the stored locale: a locale the dashboard has no UI for shows as the
+ * default. */
+function profileLocaleOf(record: Pick<SchoolSettingsRecord, "locale">) {
+  return isSupportedLocale(record.locale) ? record.locale : SUPPORTED_LOCALES[0];
+}
+
 export function settingsToProfileValues(record: SchoolSettingsRecord): SchoolProfileFormValues {
   return {
     name: record.name,
     logo_file_id: record.logo_file_id ?? "",
     primary_color: brandingOf(record)[PRIMARY_COLOR_KEY] ?? "",
     timezone: record.timezone,
-    locale: isSupportedLocale(record.locale) ? record.locale : SUPPORTED_LOCALES[0],
+    locale: profileLocaleOf(record),
     currency: record.currency,
   };
 }
 
 /**
  * Form values -> the `PATCH` body. Branding sends only the colour, which the server merges into
- * the stored keys; a blank colour is `null`. The logo is sent only when it changed, so an
- * untouched form never re-validates the saved file.
+ * the stored keys; a blank colour is `null`. The logo and the locale are sent only when they
+ * changed: an untouched logo would re-validate the saved file, and an untouched locale the
+ * picker can't show (`ar`, `en-GB`) would be overwritten with the default it displays.
  */
 export function buildSchoolProfileBody(
   values: SchoolProfileFormValues,
-  record: Pick<SchoolSettingsRecord, "logo_file_id">,
+  record: Pick<SchoolSettingsRecord, "logo_file_id" | "locale">,
 ): SchoolSettingsUpdate {
   const color = values.primary_color.trim();
   const body: SchoolSettingsUpdate = {
     name: values.name.trim(),
     branding: { [PRIMARY_COLOR_KEY]: color === "" ? null : color },
     timezone: values.timezone.trim(),
-    locale: values.locale,
     currency: values.currency.trim().toUpperCase(),
   };
   if (values.logo_file_id !== (record.logo_file_id ?? "")) {
     body.logo_file_id = values.logo_file_id || null;
+  }
+  if (values.locale !== profileLocaleOf(record)) {
+    body.locale = values.locale;
   }
   return body;
 }
