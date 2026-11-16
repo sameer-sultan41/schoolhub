@@ -677,6 +677,9 @@ PUBLIC_ANONYMOUS_ROUTES = {
     "api/v1/public/files/<uuid:tenant_id>/<uuid:file_id>": (
         "the anonymous redirect to a public file; throttled per (IP, file)"
     ),
+    "api/v1/public/contact-submissions": (
+        "the public contact form; throttled per IP and per school, honeypot, Origin check"
+    ),
 }
 
 

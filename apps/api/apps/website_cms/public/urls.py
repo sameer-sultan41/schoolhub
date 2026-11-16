@@ -6,6 +6,7 @@
 from django.urls import URLPattern, path
 
 from apps.website_cms.media import PUBLIC_FILE_PATH
+from apps.website_cms.public.contact_views import PublicContactSubmissionView
 from apps.website_cms.public.content_views import (
     PublicClassListView,
     PublicDepartmentListView,
@@ -52,5 +53,10 @@ urlpatterns: list[URLPattern] = [
     path("departments", PublicDepartmentListView.as_view(), name="public-departments"),
     path("classes", PublicClassListView.as_view(), name="public-classes"),
     path("notices", PublicNoticeListView.as_view(), name="public-notices"),
+    path(
+        "contact-submissions",
+        PublicContactSubmissionView.as_view(),
+        name="public-contact-submissions",
+    ),
     path(FILE_ROUTE, PublicFileView.as_view(), name="public-file"),
 ]

@@ -58,6 +58,21 @@ class PublicFormThrottle(SimpleRateThrottle):
         return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
 
 
+class PublicFormTenantThrottle(SimpleRateThrottle):
+    """The public contact form, per school (the `X-Tenant-Slug` it names).
+
+    Stacked after `PublicFormThrottle`: the IP bucket stops one sender, this one caps what
+    many addresses can push at one school's inbox. Keyed on the header so it runs before the
+    view resolves the school; a made-up slug only fills its own bucket and answers 404.
+    """
+
+    scope = "public_form_tenant"
+
+    def get_cache_key(self, request, view):
+        slug = request.headers.get("X-Tenant-Slug", "").strip().lower()[:63]
+        return self.cache_format % {"scope": self.scope, "ident": slug or "none"}
+
+
 class AIRequestThrottle(UserRateThrottle):
     """Per-user bucket for endpoints that call the AI provider (scope ``ai``).
 

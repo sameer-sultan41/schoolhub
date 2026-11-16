@@ -4419,6 +4419,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/contact-submissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Store a contact message for a live site and notify its staff; 404 for any refusal. */
+        post: operations["public_contact_submissions_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/departments": {
         parameters: {
             query?: never;
@@ -8555,6 +8572,14 @@ export interface components {
          * @enum {string}
          */
         ConflictSeverityEnum: "hard" | "soft";
+        ContactReceived: {
+            status: components["schemas"]["ContactReceivedStatusEnum"];
+        };
+        /**
+         * @description * `received` - received
+         * @enum {string}
+         */
+        ContactReceivedStatusEnum: "received";
         ContactSubmission: {
             /** Format: uuid */
             readonly id: string;
@@ -13405,6 +13430,17 @@ export interface components {
             id: string;
             name: string;
             level: number;
+        };
+        /** @description Shape only; `create_contact_submission` owns every field rule (field-keyed 422s). */
+        PublicContactSubmission: {
+            name?: string | null;
+            email?: string | null;
+            phone?: string | null;
+            subject?: string | null;
+            message?: string | null;
+            /** Format: uuid */
+            source_page_id?: string | null;
+            company_website?: string | null;
         };
         PublicDepartment: {
             /** Format: uuid */
@@ -22857,6 +22893,57 @@ export interface operations {
             };
             /** @description No live site, page or tenant answers on this host. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_contact_submissions_create: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A retry with the same key replays the first response. */
+                "Idempotency-Key"?: string;
+                /** @description The school's slug. */
+                "X-Tenant-Slug": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PublicContactSubmission"];
+                "application/x-www-form-urlencoded": components["schemas"]["PublicContactSubmission"];
+                "multipart/form-data": components["schemas"]["PublicContactSubmission"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactReceived"];
+                };
+            };
+            /** @description No live site for this school (the same for every refusal). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A field broke a rule; keyed by field. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many submissions. */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

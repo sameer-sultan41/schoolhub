@@ -15,6 +15,7 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction
 
 from core.audit.models import AuditLog
+from core.rbac.machine import client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -69,11 +70,8 @@ def _json_safe(payload: Any) -> Any:
 
 
 def _client_ip(request) -> str | None:
-    forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
-    if forwarded:
-        # Left-most entry is the originating client.
-        return forwarded.split(",")[0].strip()
-    return request.META.get("REMOTE_ADDR")
+    # Trusts X-Forwarded-For only as far as NUM_PROXIES says; the left-most entry is spoofable.
+    return client_ip(request)
 
 
 def record_audit(

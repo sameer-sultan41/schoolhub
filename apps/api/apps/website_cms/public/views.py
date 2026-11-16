@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import contextlib
 from collections.abc import Iterator
+from contextlib import AbstractContextManager
 from uuid import UUID
 
 from django.core.signing import BadSignature
@@ -62,6 +63,24 @@ PAGE_SIZE_PARAMETER = OpenApiParameter(
 NOT_FOUND = OpenApiResponse(description="No live site, page or tenant answers on this host.")
 
 
+@contextlib.contextmanager
+def bound_website_tenant(tenant: Tenant, *, require_live: bool = True) -> Iterator[Tenant]:
+    """Yield `tenant` bound with `tenant_atomic`, or raise 404.
+
+    404 unless the tenant is operational (`Tenant.is_operational`, the rule
+    `operational_tenant` applies), `module.website` is on for it and, when `require_live`,
+    its site is live. Each refusal is the same 404, so a caller learns nothing about why.
+    """
+    if not tenant.is_operational:
+        raise NotFound
+    with tenant_atomic(tenant.pk):
+        if not is_feature_enabled(FEATURE, tenant_id=tenant.pk):
+            raise NotFound
+        if require_live and website_status(tenant) != WebsiteStatus.LIVE:
+            raise NotFound
+        yield tenant
+
+
 class PublicContentView(APIView):
     """Base of every machine-client read: auth, scope and the per-host throttle (decision 2a).
 
@@ -90,22 +109,9 @@ class PublicContentView(APIView):
             raise NotFound
         return tenant
 
-    @contextlib.contextmanager
-    def bound(self, tenant: Tenant, *, require_live: bool = True) -> Iterator[Tenant]:
-        """Yield `tenant` bound with `tenant_atomic`, or raise 404.
-
-        404 unless the tenant is operational (`Tenant.is_operational`, the rule
-        `operational_tenant` applies), `module.website` is on for it and, when `require_live`,
-        its site is live. Each refusal is the same 404, so a caller learns nothing about why.
-        """
-        if not tenant.is_operational:
-            raise NotFound
-        with tenant_atomic(tenant.pk):
-            if not is_feature_enabled(FEATURE, tenant_id=tenant.pk):
-                raise NotFound
-            if require_live and website_status(tenant) != WebsiteStatus.LIVE:
-                raise NotFound
-            yield tenant
+    def bound(self, tenant: Tenant, *, require_live: bool = True) -> AbstractContextManager[Tenant]:
+        """`bound_website_tenant`: yield `tenant` bound with `tenant_atomic`, or raise 404."""
+        return bound_website_tenant(tenant, require_live=require_live)
 
     def preview_page_id(self, request: Request, tenant: Tenant) -> UUID | None:
         """The page a `X-Preview-Token` header names, `None` without one; 404 if it is bad.

@@ -34,3 +34,11 @@ class WebsiteCmsConfig(AppConfig):
             sender=TenantFeatureOverride,
             dispatch_uid="website_cms.module_flag_deleted",
         )
+
+        from corsheaders.signals import check_request_enabled
+
+        from apps.website_cms.cors import allow_tenant_origin
+
+        # Tenant sites (custom domains too) are not enumerable in settings: let a school's own
+        # origin call the public API, on top of `CORS_ALLOWED_ORIGINS`.
+        check_request_enabled.connect(allow_tenant_origin, dispatch_uid="website_cms.cors")

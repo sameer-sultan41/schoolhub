@@ -134,3 +134,24 @@ class PublicPageSerializer(serializers.Serializer):
 class PublicSitemapEntrySerializer(serializers.Serializer):
     path = serializers.CharField()
     updated_at = serializers.DateTimeField()
+
+
+class PublicContactSubmissionSerializer(serializers.Serializer):
+    """Shape only; `create_contact_submission` owns every field rule (field-keyed 422s)."""
+
+    name = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True, trim_whitespace=False
+    )
+    email = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    phone = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    subject = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    message = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True, trim_whitespace=False
+    )
+    source_page_id = serializers.UUIDField(required=False, allow_null=True)
+    # Honeypot: hidden in the form, so a human leaves it empty.
+    company_website = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+
+class ContactReceivedSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=["received"])

@@ -9883,6 +9883,49 @@ paths:
           description: ''
         '404':
           description: No live site, page or tenant answers on this host.
+  /api/v1/public/contact-submissions:
+    post:
+      operationId: public_contact_submissions_create
+      description: Store a contact message for a live site and notify its staff; 404
+        for any refusal.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: A retry with the same key replays the first response.
+      - in: header
+        name: X-Tenant-Slug
+        schema:
+          type: string
+        description: The school's slug.
+        required: true
+      tags:
+      - public
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublicContactSubmission'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PublicContactSubmission'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PublicContactSubmission'
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactReceived'
+          description: ''
+        '404':
+          description: No live site for this school (the same for every refusal).
+        '422':
+          description: A field broke a rule; keyed by field.
+        '429':
+          description: Too many submissions.
   /api/v1/public/departments:
     get:
       operationId: public_departments
@@ -18961,6 +19004,18 @@ components:
       description: |-
         * `hard` - hard
         * `soft` - soft
+    ContactReceived:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/ContactReceivedStatusEnum'
+      required:
+      - status
+    ContactReceivedStatusEnum:
+      enum:
+      - received
+      type: string
+      description: '* `received` - received'
     ContactSubmission:
       type: object
       properties:
@@ -29090,6 +29145,33 @@ components:
       - id
       - level
       - name
+    PublicContactSubmission:
+      type: object
+      description: Shape only; `create_contact_submission` owns every field rule (field-keyed
+        422s).
+      properties:
+        name:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        subject:
+          type: string
+          nullable: true
+        message:
+          type: string
+          nullable: true
+        source_page_id:
+          type: string
+          format: uuid
+          nullable: true
+        company_website:
+          type: string
+          nullable: true
     PublicDepartment:
       type: object
       properties:

@@ -49,9 +49,11 @@ class PublicFileView(APIView):
         if tenant is None or refusal is not None:
             raise NotFound()
         with tenant_atomic(tenant.pk):
-            file = File.objects.filter(
-                pk=file_id, status=FileStatus.READY, visibility=FileVisibility.PUBLIC
-            ).first()
+            file = (
+                File.objects.alive()
+                .filter(pk=file_id, status=FileStatus.READY, visibility=FileVisibility.PUBLIC)
+                .first()
+            )
         url = get_display_url(file) if file is not None else None
         if url is None:
             raise NotFound()

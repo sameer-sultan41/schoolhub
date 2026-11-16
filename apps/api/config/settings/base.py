@@ -164,8 +164,9 @@ MIDDLEWARE = [
 ]
 
 # The dashboard calls the API cross-origin, so a request header the preflight doesn't allow
-# never reaches it. `Idempotency-Key` is the one custom header the dashboard sends (§2.5).
-CORS_ALLOW_HEADERS = (*default_headers, "idempotency-key")
+# never reaches it. `Idempotency-Key` is the one custom header the dashboard sends (§2.5);
+# `X-Tenant-Slug` is the renderer's browser-side contact form's (website_cms public API).
+CORS_ALLOW_HEADERS = (*default_headers, "idempotency-key", "x-tenant-slug")
 
 ROOT_URLCONF = "config.urls"
 WSGI_APPLICATION = "config.wsgi.application"
@@ -247,6 +248,8 @@ THROTTLE_RATES: dict[str, str] = {
     "anon": "20/min",
     "auth": "10/min",
     "public_form": "5/min",
+    # The public contact form, per school: bounds spam from many IPs at one school.
+    "public_form_tenant": "200/hour",
     # Endpoints that call the AI provider (core.api.throttling.AIRequestThrottle).
     "ai": "10/min",
     # The public payment callback: per (school, callback token), and failed signatures per IP.
