@@ -11,6 +11,7 @@ from core.rbac.backends import AmbiguousPrincipal
 from core.rbac.models import User
 from core.rbac.permissions import effective_permission_keys, is_restricted_principal
 from core.tenancy.access import operational_tenant
+from core.tenancy.models import Tenant
 
 
 class LoginSerializer(TokenObtainPairSerializer):
@@ -82,11 +83,23 @@ class LoginSerializer(TokenObtainPairSerializer):
         return token
 
 
+class TenantSummarySerializer(serializers.ModelSerializer):
+    """The caller's school, as a client shows it: its name and subdomain label."""
+
+    class Meta:
+        model = Tenant
+        fields = ("name", "slug")
+        read_only_fields = fields
+
+
 class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source="get_full_name", read_only=True)
     permissions = serializers.SerializerMethodField()
     roles = serializers.SerializerMethodField()
     is_restricted_principal = serializers.SerializerMethodField()
+    # Beside `tenant` (the UUID), never in place of it: clients already read that field.
+    # Null for a platform user, who belongs to no school.
+    tenant_summary = TenantSummarySerializer(source="tenant", read_only=True, allow_null=True)
 
     class Meta:
         model = User
@@ -99,6 +112,7 @@ class UserSerializer(serializers.ModelSerializer):
             "full_name",
             "phone",
             "tenant",
+            "tenant_summary",
             "is_platform",
             "mfa_enabled",
             "permissions",

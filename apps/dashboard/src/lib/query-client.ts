@@ -57,7 +57,8 @@ export function getQueryClient(): QueryClient {
  */
 export const queryKeys = {
   session: () => ["session"] as const,
-  tenant: () => ["tenant"] as const,
+  /** The school profile and configuration (`/school-settings`), one entry per tenant session. */
+  schoolSettings: () => ["school-settings"] as const,
   currentUser: () => ["dashboard", "current-user"] as const,
   /** The home screen's read of `/timetables/my` for one date; with no date, every date's
    * entry (a timetable publish refreshes them all). */

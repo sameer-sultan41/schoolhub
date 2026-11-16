@@ -967,9 +967,8 @@ paths:
 
         A projection of three keys in ``tenant_settings.academic``, the same shape
         `holiday_calendar/view.py` gives its slice, under the settings keys §4
-        already describes as covering academic configuration. Not `/school-settings`:
-        its PATCH replaces the whole `academic` JSON, so a client read-modify-write
-        would lose a concurrent change. This writes only its own keys, under a row
+        already describes as covering academic configuration. Not `/school-settings`,
+        which does not write `academic`: this writes only its own keys, under a row
         lock, and merges the nested `student_leave_approval` dict rather than
         replacing it.
 
@@ -994,9 +993,8 @@ paths:
 
         A projection of three keys in ``tenant_settings.academic``, the same shape
         `holiday_calendar/view.py` gives its slice, under the settings keys §4
-        already describes as covering academic configuration. Not `/school-settings`:
-        its PATCH replaces the whole `academic` JSON, so a client read-modify-write
-        would lose a concurrent change. This writes only its own keys, under a row
+        already describes as covering academic configuration. Not `/school-settings`,
+        which does not write `academic`: this writes only its own keys, under a row
         lock, and merges the nested `student_leave_approval` dict rather than
         replacing it.
 
@@ -11008,10 +11006,13 @@ paths:
       description: |-
         Singleton school profile and academic configuration (module doc §16).
 
-        A singleton rather than a collection because a tenant is one school; the
-        branding/academic payloads live in ``tenant_settings`` JSONB while timezone,
-        locale and currency stay on the tenant row, which is where the request
-        middleware and every other module already read them from.
+        A singleton rather than a collection because a tenant is one school. `name`,
+        timezone, locale and currency stay on the tenant row, which is where the request
+        middleware and every other module already read them from; the logo, branding and
+        academic payloads live on ``tenant_settings``.
+
+        `Tenant.name` has a second writer, the platform console's tenant PATCH: the last write
+        wins and both are audited (school-organization §20).
 
         Mixes in ``TenantScopedViewSetMixin`` purely for its ``initial()``/
         ``finalize_response()`` tenant binding — this is a plain ``APIView``, not a
@@ -11035,10 +11036,13 @@ paths:
       description: |-
         Singleton school profile and academic configuration (module doc §16).
 
-        A singleton rather than a collection because a tenant is one school; the
-        branding/academic payloads live in ``tenant_settings`` JSONB while timezone,
-        locale and currency stay on the tenant row, which is where the request
-        middleware and every other module already read them from.
+        A singleton rather than a collection because a tenant is one school. `name`,
+        timezone, locale and currency stay on the tenant row, which is where the request
+        middleware and every other module already read them from; the logo, branding and
+        academic payloads live on ``tenant_settings``.
+
+        `Tenant.name` has a second writer, the platform console's tenant PATCH: the last write
+        wins and both are audited (school-organization §20).
 
         Mixes in ``TenantScopedViewSetMixin`` purely for its ``initial()``/
         ``finalize_response()`` tenant binding — this is a plain ``APIView``, not a
@@ -11052,13 +11056,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedSchoolSettings'
+              $ref: '#/components/schemas/PatchedSchoolSettingsUpdate'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedSchoolSettings'
+              $ref: '#/components/schemas/PatchedSchoolSettingsUpdate'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedSchoolSettings'
+              $ref: '#/components/schemas/PatchedSchoolSettingsUpdate'
       security:
       - jwtAuth: []
       responses:
@@ -24827,17 +24831,24 @@ components:
           type: string
           format: date-time
           readOnly: true
-    PatchedSchoolSettings:
+    PatchedSchoolSettingsUpdate:
       type: object
       description: |-
-        School profile and academic configuration (module doc §16, singleton resource).
-
-        Backed by ``tenant_settings`` JSONB rather than its own table: the shape is
-        tenant-configurable (accreditation fields, holiday calendar, weekend definition)
-        and columns would force a migration per school that wants one more field.
+        `PATCH /school-settings`: every field optional. `slug`, `status` and `academic` are not
+        fields, so a body that sends them is ignored rather than written. `academic` is written only
+        by `/holiday-calendar` and `/attendance-settings`, each of which validates its own keys.
       properties:
-        branding: {}
-        academic: {}
+        name:
+          type: string
+          maxLength: 200
+        logo_file_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: A ready `school.logo` upload of this school; null removes the
+            logo.
+        branding:
+          description: Merged into the stored branding, key by key.
         timezone:
           type: string
           maxLength: 64
@@ -27256,24 +27267,47 @@ components:
     SchoolSettings:
       type: object
       description: |-
-        School profile and academic configuration (module doc §16, singleton resource).
+        School profile and academic configuration, as `GET` and `PATCH` return it.
 
-        Backed by ``tenant_settings`` JSONB rather than its own table: the shape is
-        tenant-configurable (accreditation fields, holiday calendar, weekend definition)
-        and columns would force a migration per school that wants one more field.
+        `name` is the tenant's own name and `logo_file_id` a real column; `branding` and
+        `academic` live in `tenant_settings` JSONB, because their shape is tenant-configurable and
+        columns would force a migration per school that wants one more field.
       properties:
-        branding: {}
-        academic: {}
+        name:
+          type: string
+          readOnly: true
+        logo_file_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        logo_url:
+          type: string
+          readOnly: true
+          nullable: true
+          description: A short-lived signed link to the logo.
+        branding:
+          readOnly: true
+        academic:
+          readOnly: true
         timezone:
           type: string
-          maxLength: 64
+          readOnly: true
         locale:
           type: string
-          maxLength: 10
+          readOnly: true
         currency:
           type: string
-          maxLength: 3
-          minLength: 3
+          readOnly: true
+      required:
+      - academic
+      - branding
+      - currency
+      - locale
+      - logo_file_id
+      - logo_url
+      - name
+      - timezone
     Section:
       type: object
       properties:
@@ -29133,6 +29167,22 @@ components:
         * `declined` - Declined
         * `completed` - Completed
         * `cancelled` - Cancelled
+    TenantSummary:
+      type: object
+      description: 'The caller''s school, as a client shows it: its name and subdomain
+        label.'
+      properties:
+        name:
+          type: string
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          description: Wildcard subdomain label.
+          pattern: ^[-a-zA-Z0-9_]+$
+      required:
+      - name
+      - slug
     Term:
       type: object
       properties:
@@ -29667,6 +29717,11 @@ components:
           format: uuid
           readOnly: true
           nullable: true
+        tenant_summary:
+          allOf:
+          - $ref: '#/components/schemas/TenantSummary'
+          readOnly: true
+          nullable: true
         is_platform:
           type: boolean
           readOnly: true
@@ -29702,6 +29757,7 @@ components:
       - phone
       - roles
       - tenant
+      - tenant_summary
       - username
     VerificationStatusEnum:
       enum:

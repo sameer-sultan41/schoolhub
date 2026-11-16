@@ -28,9 +28,9 @@ export const endpoints = {
     passwordReset: "/auth/password-reset",
     passwordResetConfirm: "/auth/password-reset:confirm",
   },
-  tenant: {
-    /** The authenticated user's own tenant — name, branding, locale, contact. */
-    current: "/tenant",
+  /** The school's profile and configuration: a singleton (`GET`/`PATCH`). */
+  schoolSettings: {
+    detail: "/school-settings",
   },
   dashboard: {
     students: "/students",
@@ -83,6 +83,13 @@ export const endpoints = {
   },
   schoolOrganization: {
     houses: "/houses",
+    house: (id: string) => `/houses/${id}`,
+    campuses: "/campuses",
+    campus: (id: string) => `/campuses/${id}`,
+    departments: "/departments",
+    department: (id: string) => `/departments/${id}`,
+    /** A singleton document: `PUT` replaces each list it names. */
+    holidayCalendar: "/holiday-calendar",
     /**
      * Separate from `dashboard.classes`/`.sections`/`.academicSessions` above: those are
      * read only for `fetchDashboardOverview`'s counts, these are read for option-list

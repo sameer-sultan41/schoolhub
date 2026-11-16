@@ -9,6 +9,7 @@ import {
   LayoutGrid,
   MessagesSquare,
   Package,
+  School,
   ScrollText,
   Settings,
   Shield,
@@ -27,6 +28,7 @@ import { ATTENDANCE_SECTIONS } from "@/features/attendance/attendance-sections";
 import { COMMUNICATION_SECTIONS } from "@/features/communication/communication-sections";
 import { EXAMS_SECTIONS } from "@/features/exams/exams-sections";
 import { FEES_SECTIONS } from "@/features/fees/fees-sections";
+import { SCHOOL_SECTIONS } from "@/features/school/school-sections";
 import { TIMETABLE_SECTIONS } from "@/features/timetable/timetable-sections";
 
 import { Paths } from "./paths";
@@ -57,6 +59,13 @@ export const MENU_SIDEBAR: MenuConfig = [
     ],
   },
   { heading: "School" },
+  {
+    title: "School",
+    icon: School,
+    module: "school",
+    // Shared with the School tabs and landing; each child is gated on its resource's write keys.
+    children: sectionMenuItems(SCHOOL_SECTIONS),
+  },
   { title: "Students", icon: GraduationCap, path: Paths.STUDENTS, module: "students" },
   { title: "Staff", icon: IdCard, path: Paths.STAFF, module: "staff" },
   {

@@ -473,9 +473,8 @@ export interface paths {
          *
          *     A projection of three keys in ``tenant_settings.academic``, the same shape
          *     `holiday_calendar/view.py` gives its slice, under the settings keys §4
-         *     already describes as covering academic configuration. Not `/school-settings`:
-         *     its PATCH replaces the whole `academic` JSON, so a client read-modify-write
-         *     would lose a concurrent change. This writes only its own keys, under a row
+         *     already describes as covering academic configuration. Not `/school-settings`,
+         *     which does not write `academic`: this writes only its own keys, under a row
          *     lock, and merges the nested `student_leave_approval` dict rather than
          *     replacing it.
          *
@@ -494,9 +493,8 @@ export interface paths {
          *
          *     A projection of three keys in ``tenant_settings.academic``, the same shape
          *     `holiday_calendar/view.py` gives its slice, under the settings keys §4
-         *     already describes as covering academic configuration. Not `/school-settings`:
-         *     its PATCH replaces the whole `academic` JSON, so a client read-modify-write
-         *     would lose a concurrent change. This writes only its own keys, under a row
+         *     already describes as covering academic configuration. Not `/school-settings`,
+         *     which does not write `academic`: this writes only its own keys, under a row
          *     lock, and merges the nested `student_leave_approval` dict rather than
          *     replacing it.
          *
@@ -4858,10 +4856,13 @@ export interface paths {
         /**
          * @description Singleton school profile and academic configuration (module doc §16).
          *
-         *     A singleton rather than a collection because a tenant is one school; the
-         *     branding/academic payloads live in ``tenant_settings`` JSONB while timezone,
-         *     locale and currency stay on the tenant row, which is where the request
-         *     middleware and every other module already read them from.
+         *     A singleton rather than a collection because a tenant is one school. `name`,
+         *     timezone, locale and currency stay on the tenant row, which is where the request
+         *     middleware and every other module already read them from; the logo, branding and
+         *     academic payloads live on ``tenant_settings``.
+         *
+         *     `Tenant.name` has a second writer, the platform console's tenant PATCH: the last write
+         *     wins and both are audited (school-organization §20).
          *
          *     Mixes in ``TenantScopedViewSetMixin`` purely for its ``initial()``/
          *     ``finalize_response()`` tenant binding — this is a plain ``APIView``, not a
@@ -4879,10 +4880,13 @@ export interface paths {
         /**
          * @description Singleton school profile and academic configuration (module doc §16).
          *
-         *     A singleton rather than a collection because a tenant is one school; the
-         *     branding/academic payloads live in ``tenant_settings`` JSONB while timezone,
-         *     locale and currency stay on the tenant row, which is where the request
-         *     middleware and every other module already read them from.
+         *     A singleton rather than a collection because a tenant is one school. `name`,
+         *     timezone, locale and currency stay on the tenant row, which is where the request
+         *     middleware and every other module already read them from; the logo, branding and
+         *     academic payloads live on ``tenant_settings``.
+         *
+         *     `Tenant.name` has a second writer, the platform console's tenant PATCH: the last write
+         *     wins and both are audited (school-organization §20).
          *
          *     Mixes in ``TenantScopedViewSetMixin`` purely for its ``initial()``/
          *     ``finalize_response()`` tenant binding — this is a plain ``APIView``, not a
@@ -11390,15 +11394,19 @@ export interface components {
             readonly updated_at?: string;
         };
         /**
-         * @description School profile and academic configuration (module doc §16, singleton resource).
-         *
-         *     Backed by ``tenant_settings`` JSONB rather than its own table: the shape is
-         *     tenant-configurable (accreditation fields, holiday calendar, weekend definition)
-         *     and columns would force a migration per school that wants one more field.
+         * @description `PATCH /school-settings`: every field optional. `slug`, `status` and `academic` are not
+         *     fields, so a body that sends them is ignored rather than written. `academic` is written only
+         *     by `/holiday-calendar` and `/attendance-settings`, each of which validates its own keys.
          */
-        PatchedSchoolSettings: {
+        PatchedSchoolSettingsUpdate: {
+            name?: string;
+            /**
+             * Format: uuid
+             * @description A ready `school.logo` upload of this school; null removes the logo.
+             */
+            logo_file_id?: string | null;
+            /** @description Merged into the stored branding, key by key. */
             branding?: unknown;
-            academic?: unknown;
             timezone?: string;
             locale?: string;
             currency?: string;
@@ -12509,18 +12517,23 @@ export interface components {
          */
         ScholarshipTypeEnum: "merit" | "need" | "sports" | "staff_ward" | "other";
         /**
-         * @description School profile and academic configuration (module doc §16, singleton resource).
+         * @description School profile and academic configuration, as `GET` and `PATCH` return it.
          *
-         *     Backed by ``tenant_settings`` JSONB rather than its own table: the shape is
-         *     tenant-configurable (accreditation fields, holiday calendar, weekend definition)
-         *     and columns would force a migration per school that wants one more field.
+         *     `name` is the tenant's own name and `logo_file_id` a real column; `branding` and
+         *     `academic` live in `tenant_settings` JSONB, because their shape is tenant-configurable and
+         *     columns would force a migration per school that wants one more field.
          */
         SchoolSettings: {
-            branding?: unknown;
-            academic?: unknown;
-            timezone?: string;
-            locale?: string;
-            currency?: string;
+            readonly name: string;
+            /** Format: uuid */
+            readonly logo_file_id: string | null;
+            /** @description A short-lived signed link to the logo. */
+            readonly logo_url: string | null;
+            readonly branding: unknown;
+            readonly academic: unknown;
+            readonly timezone: string;
+            readonly locale: string;
+            readonly currency: string;
         };
         Section: {
             /** Format: uuid */
@@ -13381,6 +13394,12 @@ export interface components {
          * @enum {string}
          */
         TeacherSubstitutionStatusEnum: "proposed" | "confirmed" | "declined" | "completed" | "cancelled";
+        /** @description The caller's school, as a client shows it: its name and subdomain label. */
+        TenantSummary: {
+            readonly name: string;
+            /** @description Wildcard subdomain label. */
+            readonly slug: string;
+        };
         Term: {
             /** Format: uuid */
             readonly id: string;
@@ -13648,6 +13667,7 @@ export interface components {
             readonly phone: string;
             /** Format: uuid */
             readonly tenant: string | null;
+            readonly tenant_summary: components["schemas"]["TenantSummary"] | null;
             /** @description Platform-scope principal (no tenant). */
             readonly is_platform: boolean;
             readonly mfa_enabled: boolean;
@@ -21640,9 +21660,9 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": components["schemas"]["PatchedSchoolSettings"];
-                "application/x-www-form-urlencoded": components["schemas"]["PatchedSchoolSettings"];
-                "multipart/form-data": components["schemas"]["PatchedSchoolSettings"];
+                "application/json": components["schemas"]["PatchedSchoolSettingsUpdate"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedSchoolSettingsUpdate"];
+                "multipart/form-data": components["schemas"]["PatchedSchoolSettingsUpdate"];
             };
         };
         responses: {

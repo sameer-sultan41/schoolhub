@@ -77,6 +77,7 @@ const PERMITTED_USER: AuthenticatedUser = {
   avatar_url: null,
   locale: "en",
   tenant_id: "tenant-1",
+  tenant_summary: { name: "City School", slug: "city-school" },
   roles: [],
   permissions: ["staff.staff.view", "staff.staff.export", "staff.staff.import"],
 };
@@ -284,6 +285,7 @@ describe("StaffToolbar", () => {
       avatar_url: null,
       locale: "en",
       tenant_id: "tenant-1",
+      tenant_summary: { name: "City School", slug: "city-school" },
       roles: [],
       // school_admin: RECORD_MANAGERS, not STAFF_IO — sees everything else on this
       // screen but not these two.

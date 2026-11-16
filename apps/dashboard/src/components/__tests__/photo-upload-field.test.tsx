@@ -21,11 +21,14 @@ function TestHost({
   savedPhotoFileId,
   savedPhotoUrl,
   onUploadingChange = jest.fn(),
+  removable = false,
 }: {
   uploadPurpose?: string;
   savedPhotoFileId?: string | null;
   savedPhotoUrl?: string | null;
   onUploadingChange?: (uploading: boolean) => void;
+  /** Adds a host-owned Remove button that clears the field, as the school profile's does. */
+  removable?: boolean;
 }) {
   const form = useForm<PhotoUploadFieldValues>({
     defaultValues: {
@@ -44,6 +47,16 @@ function TestHost({
         onUploadStart={() => () => true}
         onUploadingChange={onUploadingChange}
       />
+      {removable ? (
+        <button
+          type="button"
+          onClick={() => {
+            form.setValue("photo_file_id", "", { shouldDirty: true });
+          }}
+        >
+          Remove
+        </button>
+      ) : null}
     </Form>
   );
 }
@@ -55,11 +68,9 @@ describe("PhotoUploadField", () => {
 
   it("uploads the picked file with the given purpose and sets photo_file_id on success", async () => {
     mockUploadFile.mockResolvedValue("file-123");
+    // The restore unmounts the field first, as it revokes its object URL on unmount.
     const restoreObjectUrls = stubObjectUrls("blob:new-photo");
-    // Unmounted before the stubs are restored: the field revokes its object URL on
-    // unmount, and jsdom has no native revokeObjectURL for the restore to fall back to
-    // (same ordering student-form-dialog.test.tsx's own `stubObjectUrls` cases use).
-    const { unmount } = renderWithProviders(<TestHost uploadPurpose="guardian.photo" />);
+    renderWithProviders(<TestHost uploadPurpose="guardian.photo" />);
     try {
       await userEvent.upload(
         screen.getByLabelText(/photo/i),
@@ -70,7 +81,6 @@ describe("PhotoUploadField", () => {
         expect(mockUploadFile).toHaveBeenCalledWith(expect.any(File), "guardian.photo");
       });
     } finally {
-      unmount();
       restoreObjectUrls();
     }
   });
@@ -80,7 +90,7 @@ describe("PhotoUploadField", () => {
       new Error("'image/gif' is not allowed for 'guardian.photo' uploads."),
     );
     const restoreObjectUrls = stubObjectUrls("blob:rejected-photo");
-    const { unmount } = renderWithProviders(<TestHost uploadPurpose="guardian.photo" />);
+    renderWithProviders(<TestHost uploadPurpose="guardian.photo" />);
     try {
       // applyAccept: false — the input's own `accept="image/jpeg,image/png"` would
       // otherwise make userEvent silently drop a .gif file before it ever reaches
@@ -98,8 +108,30 @@ describe("PhotoUploadField", () => {
         await screen.findByText("'image/gif' is not allowed for 'guardian.photo' uploads."),
       ).toBeInTheDocument();
     } finally {
-      unmount();
       restoreObjectUrls();
+    }
+  });
+
+  it("drops the uploaded file's preview once the host clears the field", async () => {
+    mockUploadFile.mockResolvedValue("file-123");
+    const restoreImageLoading = stubImageLoading();
+    const restoreObjectUrls = stubObjectUrls("blob:new-logo");
+    const { container } = renderWithProviders(<TestHost removable />);
+    try {
+      await userEvent.upload(
+        screen.getByLabelText(/photo/i),
+        new File(["x"], "logo.png", { type: "image/png" }),
+      );
+      await waitFor(() => {
+        expect(container.querySelector('img[src="blob:new-logo"]')).toBeInTheDocument();
+      });
+
+      await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+
+      expect(container.querySelector('img[src="blob:new-logo"]')).not.toBeInTheDocument();
+    } finally {
+      restoreObjectUrls();
+      restoreImageLoading();
     }
   });
 

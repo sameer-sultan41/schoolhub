@@ -360,3 +360,8 @@ blacklistedtoken
 harfbuzz
 pseudonymizer
 Safepay
+allauth
+otpauth
+timecode
+unskip
+unskipped

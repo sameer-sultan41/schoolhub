@@ -17,6 +17,9 @@ that app), several functions here are imported directly by other apps:
 - `SECTION_SCOPE` — `SectionViewSet`'s record-scope settings, read by
   `apps/student_management/views.py` for a check on a section row (ADR-0013
   keeps another app out of `sections/viewset.py`)
+- `lock_settings_row` — re-exported (the `as` alias marks it explicit) from `tenant_settings.py` for
+  `apps/attendance/services.py`, which merges its keys into the same
+  `tenant_settings.academic` under the same row lock
 
 Moving them into a resource package would mean editing import lines in
 other apps for a purely internal reorganization — a bigger, riskier blast
@@ -61,6 +64,7 @@ from apps.school_organization.models import (
     SessionStatus,
     Subject,
 )
+from apps.school_organization.tenant_settings import lock_settings_row as lock_settings_row
 from core.api.exceptions import Conflict, DomainRuleViolation
 from core.rbac.permissions import ScopeKwargs
 from core.tenancy.context import tenant_atomic

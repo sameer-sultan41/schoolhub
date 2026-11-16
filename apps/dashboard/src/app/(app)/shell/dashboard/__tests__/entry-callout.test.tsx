@@ -41,6 +41,7 @@ describe("EntryCallout", () => {
       avatar_url: null,
       locale: "en",
       tenant_id: "t1",
+      tenant_summary: { name: "City School", slug: "city-school" },
       roles: [],
       permissions: [],
     });

@@ -9,6 +9,7 @@ import { FormControl, FormField, FormItem, FormLabel, FormMessage, Input } from 
 
 import { FormDialogLayout } from "@/components/form-dialog-layout";
 import { FormSelectField } from "@/components/form-select-field";
+import { FormSwitchField } from "@/components/form-switch-field";
 import { useFormDialogSubmit } from "@/hooks/use-form-dialog-submit";
 import { useInvalidateModule } from "@/hooks/use-invalidate-module";
 import { activeOrCurrent } from "@/features/fees/shared/option-helpers";
@@ -28,7 +29,6 @@ import {
   createExpenseCategoryFormSchema,
   type ExpenseCategoryFormValues,
 } from "@/services/modules/expense-categories/expense-categories.schema";
-import { FormSwitchField } from "@/features/fees/shared/form-switch-field";
 import { useLedgerAccountOptions } from "@/features/fees/shared/use-fee-options";
 
 export interface CategoryFormDialogProps {

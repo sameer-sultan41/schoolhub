@@ -178,7 +178,7 @@ Full column-level specs live in [`../05-database/entities/academics.md`](../05-d
 
 Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md) (pagination, filtering, envelope, errors).
 
-- `GET/PATCH /api/v1/school-settings` — profile + academic configuration (singleton resource).
+- `GET/PATCH /api/v1/school-settings` — profile + academic configuration (singleton resource). `name` writes the tenant's name; `slug` and `status` are not fields, so a body that sends them is ignored. `logo_file_id` takes a ready `school.logo` upload of the caller's own school, and any other id (unknown, another school's, another purpose, still pending) gets the same 422; `GET` returns a signed `logo_url`. `branding` is merged key by key, never replaced, and its `primary_color` is a hex string. `academic` is returned but not writable here: a body that sends it is ignored, because `/holiday-calendar` and `/attendance-settings` are its writers and each validates its own keys (a whole document through this PATCH would skip `attendance_mode`'s switch guard, for one).
 - `GET/POST /api/v1/campuses` · `GET/PATCH/DELETE /api/v1/campuses/{id}` — filters: `is_active`.
 - `GET/POST /api/v1/departments`, `/api/v1/classes`, `/api/v1/sections`, `/api/v1/subjects`, `/api/v1/houses` + `{id}` detail routes — filters: `campus_id`, `class_id`, `is_active`, `search`.
 - `GET/POST /api/v1/academic-sessions` · `PATCH /api/v1/academic-sessions/{id}` · `POST /api/v1/academic-sessions/{id}:activate` · `POST /api/v1/academic-sessions/{id}:close` · `POST /api/v1/academic-sessions/{id}:clone` (colon-actions, audited).
@@ -245,3 +245,67 @@ one disclosed docstring-only `description` field (a stale cross-reference
 from `HolidayCalendarView`'s docstring to a class that had moved out of its
 file), fixed in the same commit that caused it. No endpoint, permission, or
 response shape changed anywhere in the module.
+
+### Settings fixes and the School module (PR F, `feat/school-setup`)
+
+**Backend.**
+
+- `TenantSettings.logo_file_id` is a real nullable foreign key to `files`, as
+  [`tenancy.md`](../05-database/entities/tenancy.md) defines it, not a `branding` JSON key: the
+  foreign key clears itself when the file goes, where a JSON id would dangle. The upload purpose
+  is `school.logo` (PNG, JPEG or WebP, at most 2 MB), declared in
+  `apps/school_organization/uploads.py`. It is not module-gated: a logo is public to everyone who
+  sees the school.
+- `PATCH /school-settings` lives in `school_settings/services.py`. The audited `before`/`after`
+  (`services.represent`) carry `name` and `logo_file_id` and never the signed `logo_url`, which
+  would change on every read. It reads the settings row under `SELECT ... FOR UPDATE`
+  (`tenant_settings.lock_settings_row`, which the `/holiday-calendar` PUT and the attendance
+  settings take too) and saves only the columns it changed, so an overlapping write to
+  `academic` or `ai` is neither lost nor reverted.
+- `Tenant.name` has two writers: this `PATCH`, and the platform console's tenant `PATCH`. The last
+  write wins, and both are audited. A billing legal name, if one is ever needed, is a separate
+  field.
+- `/auth/me` keeps `tenant` (the UUID clients already read) and adds a read-only
+  `tenant_summary: {name, slug}`, null for a platform user.
+
+**Built (dashboard).** A **School** module at `/school`: a sidebar group, a tab bar and a landing
+that sends the viewer to their first permitted section, all from `features/school/school-sections.ts`
+(permission prefix `school`). Its sections are setup screens, so each is gated on its resource's
+**write** keys (`school.settings.update` for Profile & settings and Calendar; any of a resource's
+create/update/delete keys for Campuses, Departments and Houses). Every staff role holds the
+`.view` keys, which would otherwise put a read-only School module in front of every teacher. The
+API enforces either way.
+
+- **Profile & settings** (`features/school/profile/`): name, logo (the shared `PhotoUploadField`,
+  now taking the field name, label, accepted types and fallback text), brand colour (hex, with a
+  swatch), timezone, language and currency. The logo is sent only when it changed, and a cleared
+  logo is sent as `null`. The colour's server error, which the API nests under
+  `branding.primary_color`, lands under the colour input. A rename stales `/auth/me`, which names
+  the school. Without `school.settings.update` every control is disabled (the logo picker
+  included, so a viewer can't upload) and Save and Remove logo are hidden.
+- **Campuses, Departments, Houses** (`features/school/{campuses,departments,houses}/`): each a
+  server-paged list with search, status (and for departments campus and type) filters in the URL,
+  an add/edit dialog on `FormDialogLayout` + `useFormDialogSubmit`, and `RowEditRemoveActions`. The
+  shared `features/school/shared/` holds the list read (`use-structure-list.ts`, over
+  `useDataGridUrlState` and `usePageClamp`), its grid card, the status badge and filter, the
+  toolbar, and the remove dialog, which shows `assert_deletable`'s 422 ("Cannot delete while
+  dependent records exist (…). Deactivate it instead.") inline and stays open. A department's
+  campus is shown by name from the campus list; a department or holiday with no campus spans every
+  campus.
+- **Calendar** (`features/school/calendar/`): the working week as day toggles (Save holds until
+  one day is picked) and the holidays in date order. Each holiday add, edit or remove `PUT`s the
+  whole list with the one change, since the calendar is one document. DRF keys a list entry's
+  error by index (`holidays.2.end_date`), so the dialog maps its own entry's errors onto its
+  inputs. Removing a holiday says its days become school days again, not the structure
+  records' "deactivate it instead".
+- Each section is one exported unit (`CampusesSection`, `DepartmentsSection`, `HousesSection`,
+  `ProfileSection`, `CalendarSection`): toolbar, list and dialogs, each dialog mounted only while
+  open. The `/school/*` pages wrap them in the shell's `Container`, and the onboarding wizard
+  (PR H) embeds the same units rather than forms of its own.
+- Every structure write invalidates the `school-organization` query module, which the reference
+  pickers other screens use (`useCampuses` and the rest) live under too.
+- Tests: Jest per section (`features/school/**/__tests__/`), including each dialog's server field
+  errors, and the mocked e2e spec `e2e/tests/dashboard/school-setup.spec.ts` over
+  `schoolOrganizationModule`, whose writes, `/school-settings` and `/holiday-calendar` stubs live
+  in `e2e/src/mocks/domains/school-setup.ts`.
+

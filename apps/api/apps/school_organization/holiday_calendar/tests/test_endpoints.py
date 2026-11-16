@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APITestCase
 
 from apps.school_organization import calendar
@@ -61,6 +63,27 @@ class HolidayCalendarEndpointTests(APITestCase):
         response = self.client.get(self.url)
         names = [entry["name"] for entry in response.data["data"]["holidays"]]
         self.assertEqual(names, ["Republic Day"])
+
+    def test_put_locks_the_settings_row_before_it_writes(self) -> None:
+        """The PUT's read-modify-write of `academic` takes the shared row lock, so a concurrent
+        `/attendance-settings` or `/school-settings` write is serialised, not saved over."""
+        # The row exists first, so the PUT's own write is the UPDATE, not a create.
+        self.client.put(self.url, {"working_days": [0, 1, 2, 3, 4]}, format="json")
+
+        with CaptureQueriesContext(connection) as captured:
+            response = self.client.put(self.url, {"working_days": [0, 1, 2]}, format="json")
+        sql = [query["sql"] for query in captured.captured_queries]
+
+        self.assertEqual(response.status_code, 200)
+        lock = next(
+            (i for i, q in enumerate(sql) if "FOR UPDATE" in q and '"tenant_settings"' in q), None
+        )
+        update = next(
+            (i for i, q in enumerate(sql) if q.startswith('UPDATE "tenant_settings"')), None
+        )
+        self.assertIsNotNone(lock, "settings row not locked")
+        self.assertIsNotNone(update, "settings row not updated")
+        self.assertLess(lock, update, "row locked only after it was written")
 
     def test_the_calendar_the_endpoint_wrote_is_the_one_marking_reads(self) -> None:
         """The point of the whole task: what an admin saves is what

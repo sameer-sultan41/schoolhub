@@ -114,6 +114,17 @@ class TenantSettings(TimestampedModel):
         "no tenant-facing endpoint writes it, because the quota is what the school's "
         "plan pays for.",
     )
+    # A real column, as the entity spec defines (tenancy.md), not a `branding` JSON key: the
+    # foreign key clears it when the file goes, where a JSON id would dangle.
+    logo_file = models.ForeignKey(
+        "files.File",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        db_column="logo_file_id",
+        help_text="The school's logo, a `school.logo` upload.",
+    )
 
     objects = TenantScopedManager()
     all_tenants = AllTenantsManager()

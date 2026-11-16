@@ -231,6 +231,218 @@
       "reviewPromotions": "Review promotions"
     }
   },
+  "school": {
+    "nav": {
+      "label": "School sections",
+      "profile": "Profile & settings",
+      "campuses": "Campuses",
+      "departments": "Departments",
+      "houses": "Houses",
+      "calendar": "Calendar"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "filters": {
+      "status": "Status",
+      "all": "All",
+      "search": "Search",
+      "clearSearch": "Clear search"
+    },
+    "fields": {
+      "code": "Code",
+      "name": "Name",
+      "status": "Status",
+      "campus": "Campus",
+      "phone": "Phone",
+      "email": "Email",
+      "timezone": "Timezone",
+      "isActive": "Active"
+    },
+    "actions": {
+      "editRow": "Edit {name}",
+      "removeRow": "Remove {name}",
+      "remove": "Remove"
+    },
+    "list": {
+      "noMatches": "Nothing matches these filters",
+      "noMatchesDescription": "Try another search, or clear a filter."
+    },
+    "allCampuses": "All campuses",
+    "unknownCampus": "Unknown campus",
+    "remove": {
+      "title": "Remove {name}?",
+      "description": "This can't be undone. Something still in use can't be removed; deactivate it instead.",
+      "removed": "{name} removed."
+    },
+    "form": {
+      "codeHint": "A short code, unique in the school, e.g. MAIN.",
+      "timezonePlaceholder": "e.g. Asia/Karachi",
+      "isActiveHint": "An inactive record stays on old records but isn't offered for new ones.",
+      "emailInvalid": "Enter a valid email address.",
+      "colorInvalid": "Enter a hex colour such as #1E88E5.",
+      "colorPlaceholder": "#1E88E5",
+      "colorHint": "A hex colour, e.g. #D32F2F."
+    },
+    "weekdays": {
+      "0": "Monday",
+      "1": "Tuesday",
+      "2": "Wednesday",
+      "3": "Thursday",
+      "4": "Friday",
+      "5": "Saturday",
+      "6": "Sunday"
+    },
+    "weekdaysShort": {
+      "0": "Mon",
+      "1": "Tue",
+      "2": "Wed",
+      "3": "Thu",
+      "4": "Fri",
+      "5": "Sat",
+      "6": "Sun"
+    },
+    "campuses": {
+      "title": "Campuses",
+      "summary": "The school's branches. One is primary; the others inherit its settings.",
+      "saved": "Campus saved.",
+      "primary": "Primary",
+      "columns": {
+        "primary": "Primary",
+        "contact": "Contact"
+      },
+      "actions": {
+        "create": "Add campus"
+      },
+      "list": {
+        "caption": "Campuses",
+        "loadError": "The campuses couldn't be loaded.",
+        "searchPlaceholder": "Search by name or code",
+        "emptyTitle": "No campuses yet",
+        "emptyDescription": "Add the school's first campus; classes, staff and rooms all sit on one."
+      },
+      "form": {
+        "createTitle": "Add a campus",
+        "editTitle": "Edit this campus",
+        "description": "A campus code is unique in the school.",
+        "timezoneHint": "Leave blank to use the school's timezone.",
+        "isPrimary": "Primary campus",
+        "isPrimaryHint": "Making this campus primary makes the current primary an ordinary campus."
+      }
+    },
+    "departments": {
+      "title": "Departments",
+      "summary": "Academic and administrative departments, for one campus or all of them.",
+      "saved": "Department saved.",
+      "fields": {
+        "type": "Type",
+        "description": "Description"
+      },
+      "types": {
+        "academic": "Academic",
+        "administrative": "Administrative"
+      },
+      "actions": {
+        "create": "Add department"
+      },
+      "list": {
+        "caption": "Departments",
+        "loadError": "The departments couldn't be loaded.",
+        "searchPlaceholder": "Search by name or code",
+        "emptyTitle": "No departments yet",
+        "emptyDescription": "Add departments to group staff, such as Science or Accounts."
+      },
+      "form": {
+        "createTitle": "Add a department",
+        "editTitle": "Edit this department",
+        "description": "A department code is unique in the school. Leave the campus as all campuses for one that spans the school."
+      }
+    },
+    "houses": {
+      "title": "Houses",
+      "summary": "The houses students are placed in for sport and other competitions.",
+      "saved": "House saved.",
+      "fields": {
+        "color": "Colour",
+        "motto": "Motto"
+      },
+      "actions": {
+        "create": "Add house"
+      },
+      "list": {
+        "caption": "Houses",
+        "loadError": "The houses couldn't be loaded.",
+        "searchPlaceholder": "Search by name or code",
+        "emptyTitle": "No houses yet",
+        "emptyDescription": "Add houses if the school places students in them."
+      },
+      "form": {
+        "createTitle": "Add a house",
+        "editTitle": "Edit this house",
+        "description": "A house name is unique in the school."
+      }
+    },
+    "calendar": {
+      "title": "Calendar",
+      "summary": "The school's working week and holidays; attendance is marked only on a working day.",
+      "loading": "Loading the calendar",
+      "loadError": "The calendar couldn't be loaded.",
+      "fields": {
+        "startDate": "First day",
+        "endDate": "Last day"
+      },
+      "workingDays": {
+        "title": "Working week",
+        "description": "The days the school is open.",
+        "saved": "Working week saved.",
+        "atLeastOne": "Pick at least one day the school is open.",
+        "save": "Save working week"
+      },
+      "holidays": {
+        "title": "Holidays",
+        "description": "Days the school is closed, for every campus or one.",
+        "create": "Add holiday",
+        "emptyTitle": "No holidays yet",
+        "emptyDescription": "Add the year's holidays so attendance isn't taken on them.",
+        "caption": "Holidays",
+        "days": "Days",
+        "range": "{start} to {end}",
+        "saved": "Holidays saved.",
+        "removeDescription": "Its days count as school days again."
+      },
+      "form": {
+        "createTitle": "Add a holiday",
+        "editTitle": "Edit this holiday",
+        "description": "A holiday closes every campus unless you pick one.",
+        "endDateHint": "Leave blank for a one-day holiday.",
+        "endBeforeStart": "The last day can't be before the first."
+      }
+    },
+    "profile": {
+      "title": "Profile & settings",
+      "summary": "The school's name, logo and colour, and the timezone, language and currency it works in.",
+      "loading": "Loading the school profile",
+      "loadError": "The school profile couldn't be loaded.",
+      "readOnly": "You can view these settings but not change them.",
+      "saved": "School profile saved.",
+      "removeLogo": "Remove logo",
+      "primaryColorHint": "Leave blank to use the default theme colour.",
+      "currencyHint": "A three-letter ISO 4217 code, e.g. PKR.",
+      "currencyInvalid": "Enter a three-letter currency code.",
+      "fields": {
+        "name": "School name",
+        "logo": "Logo",
+        "primaryColor": "Brand colour",
+        "locale": "Language",
+        "currency": "Currency"
+      },
+      "locales": {
+        "en": "English",
+        "ur": "Urdu"
+      }
+    }
+  },
   "students": {
     "title": "Students",
     "summary": "Student profiles, guardians, and enrollment.",

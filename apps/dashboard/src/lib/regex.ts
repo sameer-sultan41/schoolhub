@@ -20,4 +20,9 @@ export const Regex = {
   POSITIVE_INTEGER: /^[1-9]\d*$/,
   /** A calendar date as the API and a date input write it, `YYYY-MM-DD`. */
   ISO_DATE: /^\d{4}-\d{2}-\d{2}$/,
+  /** A colour as data stores it, `#RGB` or `#RRGGBB` — mirrors the API's `HEX_COLOR`
+   * (`school_settings/serializers.py`). */
+  HEX_COLOR: /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/,
+  /** Letters only, e.g. an ISO 4217 currency code. */
+  LETTERS: /^[A-Za-z]+$/,
 } as const;
