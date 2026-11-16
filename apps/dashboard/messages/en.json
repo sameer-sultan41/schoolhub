@@ -4554,7 +4554,8 @@
       },
       "preview": {
         "opening": "Opening the preview…",
-        "failed": "The preview couldn't be opened."
+        "failed": "The preview couldn't be opened.",
+        "popupBlocked": "Your browser blocked the preview tab. Allow pop-ups for this site, then try again."
       },
       "editor": {
         "summary": "{path} · {type}",
@@ -4590,7 +4591,9 @@
         "saveFailed": "The sections couldn't be saved. Please try again.",
         "fixSections": "Some sections need attention; they are marked in the list.",
         "publishNeedsSave": "Save your changes before publishing.",
-        "publishNeedsVisible": "Add a visible section and save it before publishing."
+        "publishNeedsVisible": "Add a visible section and save it before publishing.",
+        "sortableRole": "sortable section",
+        "previewSavedOnly": "Preview shows the last saved version."
       },
       "sectionTypes": {
         "hero": "Hero",
@@ -4658,7 +4661,8 @@
       "unsupported": {
         "label": "Unsupported block ({type})",
         "description": "This block can't be edited here. It is kept as it is when you save; remove it if you no longer want it."
-      }
+      },
+      "sortableRole": "sortable block"
     },
     "schemaFields": {
       "labels": {

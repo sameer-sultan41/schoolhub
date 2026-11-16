@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type SyntheticEvent } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useFieldArray, useForm, useWatch, type FieldErrors, type Path } from "react-hook-form";
 import { toast } from "sonner";
@@ -9,7 +9,9 @@ import { toast } from "sonner";
 import { useInvalidateModule } from "@/hooks/use-invalidate-module";
 import { useSubmitGuard } from "@/hooks/use-submit-guard";
 import { resolveErrorMessage } from "@/lib/error-message";
+import { queryKeys } from "@/lib/query-client";
 import { ApiError, Services, type SectionType, type WebsitePageDetail } from "@/services";
+import { WEBSITE_PAGE_DETAIL_RESOURCE } from "@/services/modules/website/website-pages/website-pages-constant";
 import { WEBSITE_QUERY_MODULE } from "@/services/shared/website-content";
 import { reasonText, withReasonText } from "@/features/website/shared/reason-message";
 import { useSchemaMessages } from "@/features/website/shared/schema-fields";
@@ -39,6 +41,7 @@ export function useSectionsForm(page: WebsitePageDetail, types: SectionTypes) {
   const tErrors = useTranslations("errors");
   const messages = useSchemaMessages();
   const invalidateWebsite = useInvalidateModule(WEBSITE_QUERY_MODULE);
+  const queryClient = useQueryClient();
   const tracker = useUploadTracker();
   const submitGuard = useSubmitGuard();
 
@@ -109,6 +112,12 @@ export function useSectionsForm(page: WebsitePageDetail, types: SectionTypes) {
       );
       form.reset(toSectionsFormValues(saved, types));
       setSelectedKey(saved[keepIndex]?.id ?? saved[0]?.id ?? null);
+      // The header reads the saved sections (Publish needs a visible one): give it these now,
+      // rather than after the refetch the invalidation starts.
+      queryClient.setQueryData<WebsitePageDetail>(
+        queryKeys.detail(WEBSITE_QUERY_MODULE, WEBSITE_PAGE_DETAIL_RESOURCE, page.id),
+        (current) => (current ? { ...current, sections: saved } : current),
+      );
       invalidateWebsite();
       toast.success(t("saved"));
     } catch (error) {
@@ -143,6 +152,13 @@ export function useSectionsForm(page: WebsitePageDetail, types: SectionTypes) {
     }
   }
 
+  /** Selects a section, unless an upload or save is running: leaving the edited section then
+   * would unmount its image field and drop the upload's result. */
+  function select(key: string) {
+    if (isLocked && key !== selectedKey) return;
+    setSelectedKey(key);
+  }
+
   function add(type: SectionType) {
     const section = newSection(type, types);
     append(section);
@@ -163,7 +179,7 @@ export function useSectionsForm(page: WebsitePageDetail, types: SectionTypes) {
     tracker,
     selectedKey,
     selectedIndex,
-    select: setSelectedKey,
+    select,
     sectionMessages,
     errorKeys,
     formError,

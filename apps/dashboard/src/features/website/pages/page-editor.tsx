@@ -36,16 +36,32 @@ export function PageEditor({ pageId }: { pageId: string }) {
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const theme = useActiveTheme();
-  const { data: user } = useCurrentUser();
+  const userQuery = useCurrentUser();
+  const user = userQuery.data;
+  // Set once the page is deleted: the refetch its deletion starts answers 404, which must not
+  // show "Page not found" while the list loads.
+  const [isLeaving, setIsLeaving] = useState(false);
   const query = useQuery({
     queryKey: queryKeys.detail(WEBSITE_QUERY_MODULE, WEBSITE_PAGE_DETAIL_RESOURCE, pageId),
     queryFn: () => Services.websitePages.fetchWebsitePage(pageId),
+    enabled: !isLeaving,
   });
 
   // Waits for the viewer too, so a writer never sees the read-only state flash first.
-  if (query.data && theme.sectionTypes && user) {
-    return <PageEditorBody page={query.data} types={theme.sectionTypes} user={user} />;
+  if (!isLeaving && query.data && theme.sectionTypes && user) {
+    return (
+      <PageEditorBody
+        page={query.data}
+        types={theme.sectionTypes}
+        user={user}
+        onLeave={() => {
+          setIsLeaving(true);
+        }}
+      />
+    );
   }
+
+  if (isLeaving) return <EditorSkeleton label={tCommon("loading")} />;
 
   if (query.error instanceof ApiError && query.error.isNotFound) {
     return (
@@ -73,6 +89,17 @@ export function PageEditor({ pageId }: { pageId: string }) {
     );
   }
 
+  if (userQuery.isError) {
+    return (
+      <LoadErrorCard
+        message={tCommon("permissionsLoadFailed")}
+        onRetry={() => {
+          void userQuery.refetch();
+        }}
+      />
+    );
+  }
+
   if (theme.error || theme.missing) {
     return (
       <LoadErrorCard
@@ -86,22 +113,28 @@ export function PageEditor({ pageId }: { pageId: string }) {
     );
   }
 
-  return (
-    <div role="status" className="space-y-4">
-      <span className="sr-only">{tCommon("loading")}</span>
-      <Skeleton className="h-10 w-72" />
-      <Skeleton className="h-96 w-full" />
-    </div>
-  );
+  return <EditorSkeleton label={tCommon("loading")} />;
 }
 
 interface PageEditorBodyProps {
   page: WebsitePageDetail;
   types: SectionTypes;
   user: AuthenticatedUser;
+  /** The page was deleted: the editor is leaving for the list. */
+  onLeave: () => void;
 }
 
-function PageEditorBody({ page, types, user }: PageEditorBodyProps) {
+function EditorSkeleton({ label }: { label: string }) {
+  return (
+    <div role="status" className="space-y-4">
+      <span className="sr-only">{label}</span>
+      <Skeleton className="h-10 w-72" />
+      <Skeleton className="h-96 w-full" />
+    </div>
+  );
+}
+
+function PageEditorBody({ page, types, user, onLeave }: PageEditorBodyProps) {
   const router = useRouter();
   const editor = useSectionsForm(page, types);
   const labelOf = useSectionTypeLabel(types);
@@ -134,6 +167,7 @@ function PageEditorBody({ page, types, user }: PageEditorBodyProps) {
           onOpenChange={closeDialog}
           page={page}
           onDeleted={() => {
+            onLeave();
             router.push(Paths.WEBSITE_PAGES);
           }}
         />

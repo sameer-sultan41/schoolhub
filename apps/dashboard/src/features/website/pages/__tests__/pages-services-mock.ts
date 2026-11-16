@@ -19,5 +19,6 @@ export function pagesServicesMock() {
     ],
     websiteSettings: ["fetchWebsiteSettings"],
     themes: ["fetchThemes"],
+    files: ["uploadFile"],
   });
 }

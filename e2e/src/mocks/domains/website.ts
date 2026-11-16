@@ -42,6 +42,7 @@ const ORDERING_FIELDS = [
   "status",
   "page_type",
   "published_at",
+  "created_at",
   "updated_at",
 ] as const satisfies readonly (keyof WebsitePage)[];
 /** `PREVIEW_TOKEN_MAX_AGE`. */

@@ -88,7 +88,9 @@ export function SectionsPanel({ editor, types, labelOf, canUpdate }: SectionsPan
               <CardContent className="pt-5">
                 {selected ? (
                   <SectionEditor
-                    key={selected.key}
+                    // Keyed by position too: a move renames every nested field path, so the
+                    // editor (and its field arrays) start over on the section's new path.
+                    key={`${selected.key}:${selectedIndex}`}
                     form={form}
                     index={selectedIndex}
                     sectionKey={selected.key}

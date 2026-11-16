@@ -15,7 +15,7 @@ export interface SectionListItemProps {
   isVisible: boolean;
   isSelected: boolean;
   hasError: boolean;
-  /** Holds drag, move and remove while an upload or a save is running. */
+  /** Holds drag, move, remove and selecting another section while an upload or a save runs. */
   locked: boolean;
   /** The viewer can't edit: no drag, move or remove at all. */
   readOnly: boolean;
@@ -44,6 +44,7 @@ export function SectionListItem({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
     disabled: locked || readOnly,
+    attributes: { roleDescription: t("sortableRole") },
   });
   const position = index + 1;
   const style: CSSProperties = {
@@ -79,8 +80,11 @@ export function SectionListItem({
       <button
         type="button"
         aria-pressed={isSelected}
+        // While an upload runs, leaving the section would unmount its image field and drop the
+        // upload's result, so only the section being edited stays selectable.
+        disabled={locked && !isSelected}
         onClick={onSelect}
-        className="flex min-w-0 flex-1 items-center gap-2 rounded-sm px-1.5 py-1 text-start text-sm font-medium hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
+        className="flex min-w-0 flex-1 items-center gap-2 rounded-sm px-1.5 py-1 text-start text-sm font-medium hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-60"
       >
         <span className="truncate">{t("sectionName", { index: position, type: label })}</span>
         {isVisible ? null : (

@@ -26,11 +26,14 @@ export const publishPage = mocked(Services.websitePages.publishWebsitePage);
 export const previewPage = mocked(Services.websitePages.previewWebsitePage);
 export const fetchSettings = mocked(Services.websiteSettings.fetchWebsiteSettings);
 export const fetchThemes = mocked(Services.themes.fetchThemes);
+export const uploadFile = mocked(Services.files.uploadFile);
+export const fetchCurrentUser = mocked(Services.auth.fetchCurrentUser);
 
 export const PAGE_ID = "5d0c8a1e-2b3f-4c5d-8e9f-0a1b2c3d4e5f";
 export const HOME_ID = "6e1d9b2f-3c4a-4d5e-9f0a-1b2c3d4e5f60";
 export const HERO_ID = "7f2e0c3a-4d5b-4e6f-8a1b-2c3d4e5f6071";
 export const FAQ_ID = "8a3f1d4b-5e6c-4f7a-9b2c-3d4e5f607182";
+export const IMAGE_ID = "1d5c3a7e-8f9b-4c0d-9e2f-3a4b5c6d7e8f";
 const STAMP = "2026-11-01T00:00:00Z";
 
 /** Every page key a `school_owner` holds (module doc §4). */

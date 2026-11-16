@@ -106,6 +106,11 @@ export function PageEditorHeader({
           {publishHold}
         </p>
       ) : null}
+      {isDirty ? (
+        <p className="text-sm text-muted-foreground" aria-live="polite">
+          {t("editor.previewSavedOnly")}
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -3,15 +3,17 @@ import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
 
 import { ApiError } from "@schoolhub/api-client";
-import { renderWithProviders } from "@/test-utils";
+import { renderWithProviders, stubObjectUrls } from "@/test-utils";
 
 import { PageEditor } from "../page-editor";
 import {
   asUser,
   deletePage,
   FAQ_ID,
+  fetchCurrentUser,
   fetchPage,
   HERO_ID,
+  IMAGE_ID,
   PAGE_ID,
   PAGE_KEYS,
   pageDetail,
@@ -21,6 +23,7 @@ import {
   replaceSections,
   sectionRecord,
   stubPagesServices,
+  uploadFile,
 } from "./pages-test-support";
 
 jest.mock("next/navigation", () =>
@@ -144,6 +147,87 @@ describe("page editor", () => {
     expect(screen.getByLabelText("Answer")).toHaveAccessibleDescription("'' is too short");
   });
 
+  it("keeps the edited section while its image uploads, so the upload is saved", async () => {
+    const restoreUrls = stubObjectUrls("blob:hero");
+    let finish: (id: string) => void = () => undefined;
+    uploadFile.mockReturnValue(
+      new Promise<string>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    replaceSections.mockResolvedValue([]);
+    const user = await renderEditor();
+
+    await user.upload(
+      screen.getByLabelText("Image"),
+      new File(["x"], "hero.png", { type: "image/png" }),
+    );
+    // Leaving the hero now would unmount its image field and drop the upload.
+    const faq = screen.getByRole("button", { name: "2. FAQ" });
+    expect(faq).toBeDisabled();
+    await user.click(faq);
+    expect(screen.getByRole("button", { name: "1. Hero" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Save sections" })).toBeDisabled();
+
+    finish(IMAGE_ID);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "2. FAQ" })).toBeEnabled();
+    });
+    await user.click(screen.getByRole("button", { name: "Save sections" }));
+
+    await waitFor(() => {
+      expect(replaceSections).toHaveBeenCalled();
+    });
+    expect(replaceSections.mock.calls[0]?.[1][0]).toEqual(
+      expect.objectContaining({ content: { heading: "Welcome", image_file_id: IMAGE_ID } }),
+    );
+    restoreUrls();
+  });
+
+  it("puts a 422 for a moved section on that section's input", async () => {
+    replaceSections.mockRejectedValue(
+      refusal([{ field: "sections.0.items.0.answer", issue: "'' is too short" }]),
+    );
+    const user = await renderEditor();
+
+    await user.click(screen.getByRole("button", { name: "Move section 2 up" }));
+    await user.click(screen.getByRole("button", { name: "Save sections" }));
+
+    const faq = await screen.findByRole("button", { name: /^1\. FAQ/ });
+    expect(faq).toHaveAttribute("aria-pressed", "true");
+    expect(await screen.findByLabelText("Answer")).toHaveAccessibleDescription("'' is too short");
+  });
+
+  it("enables Publish from the saved sections as soon as they are saved", async () => {
+    // The refetch the save starts never answers: only the cache the save seeds can move Publish.
+    fetchPage
+      .mockResolvedValueOnce(pageDetail({ sections: [sectionRecord({ is_visible: false })] }))
+      .mockReturnValue(new Promise(() => undefined));
+    replaceSections.mockResolvedValue([sectionRecord({ is_visible: true })]);
+    const user = await renderEditor();
+    expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
+
+    await user.click(screen.getByRole("switch", { name: "Show this section on the page" }));
+    expect(screen.getByText("Preview shows the last saved version.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save sections" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Publish" })).toBeEnabled();
+    });
+    expect(screen.queryByText("Preview shows the last saved version.")).not.toBeInTheDocument();
+  });
+
+  it("offers a retry when the viewer can't be loaded", async () => {
+    fetchCurrentUser.mockRejectedValue(
+      new ApiError({ code: "server_error", message: "Down.", status: 500, url: "/auth/me" }),
+    );
+    renderWithProviders(<PageEditor pageId={PAGE_ID} />);
+
+    expect(
+      await screen.findByText("Your permissions couldn't be loaded.", { exact: false }),
+    ).toBeInTheDocument();
+  });
+
   it("shows a refusal about a whole section on that section, and selects it", async () => {
     replaceSections.mockRejectedValue(
       refusal([{ field: "sections.0.section_type", issue: "Unknown section type 'video'." }]),
@@ -222,6 +306,19 @@ describe("page editor", () => {
     expect(open).toHaveBeenCalledWith("", "_blank");
     expect(tab.opener).toBeNull();
     expect(previewPage).toHaveBeenCalledWith(PAGE_ID);
+    open.mockRestore();
+  });
+
+  it("asks for pop-ups to be allowed when the browser gives no tab, and asks the API nothing", async () => {
+    const open = jest.spyOn(window, "open").mockReturnValue(null);
+    const user = await renderEditor();
+
+    await user.click(screen.getByRole("button", { name: "Preview" }));
+
+    expect(toast.error).toHaveBeenCalledWith(
+      "Your browser blocked the preview tab. Allow pop-ups for this site, then try again.",
+    );
+    expect(previewPage).not.toHaveBeenCalled();
     open.mockRestore();
   });
 
