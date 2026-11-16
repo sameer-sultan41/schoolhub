@@ -146,10 +146,6 @@ class PublicContactSubmissionView(APIView):
             if data.pop("company_website", ""):
                 # Honeypot: a bot filled the hidden field; look like success, store nothing.
                 return Response(RECEIVED, status=201)
-            # Only a request that would store a message spends the school's hourly budget.
-            tenant_throttle = PublicFormTenantThrottle()
-            if not tenant_throttle.allow_request(request, self):
-                raise Throttled(wait=tenant_throttle.wait())
             source_page_id: UUID | None = data.pop("source_page_id", None)
             ip = client_ip(request)
 
@@ -161,6 +157,11 @@ class PublicContactSubmissionView(APIView):
                         raise violation(
                             "source_page", "invalid_source_page", "the page is not published."
                         )
+                # Only a request that would store a message spends the school's hourly budget:
+                # a replay never reaches this point.
+                tenant_throttle = PublicFormTenantThrottle()
+                if not tenant_throttle.allow_request(request, self):
+                    raise Throttled(wait=tenant_throttle.wait())
                 create_contact_submission(tenant, data, ip, page)
                 return Response(RECEIVED, status=201)
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 import warnings
 from unittest import mock
 
@@ -251,11 +252,18 @@ class ContactPostTests(ContactPostCase):
         self.make_live_tenant("other")
         self.post(origin=f"https://other.{PLATFORM}")  # Origin of another school: 404
         self.post(origin="https://evil.example")  # unknown Origin: 404
-        self.post(self.body(email="", phone=""))  # service 422
+        self.post(self.body(source_page_id=str(uuid.uuid4())))  # unknown page: 422
         self.post({"name": "Amina"} | {"message": "x" * (CONTACT_BODY_MAX_BYTES + 1)})  # 413
         self.post(self.body(company_website="spam"))  # honeypot
 
         self.assertEqual(self.tenant_history(), [])
+
+    def test_a_replay_does_not_spend_the_tenant_bucket(self) -> None:
+        self.post(HTTP_IDEMPOTENCY_KEY="key-1")
+        self.post(HTTP_IDEMPOTENCY_KEY="key-1")
+
+        self.assertEqual(len(self.tenant_history()), 1)
+        self.assertEqual(self.stored(), 1)
 
     def test_tenant_throttle_429(self) -> None:
         with mock.patch(
@@ -264,6 +272,16 @@ class ContactPostTests(ContactPostCase):
             statuses = [self.post(REMOTE_ADDR=f"10.0.0.{n}").status_code for n in range(3)]
 
         self.assertEqual(statuses, [201, 201, 429])
+
+    def test_tenant_throttle_refusal_carries_retry_after(self) -> None:
+        with mock.patch(
+            "core.api.throttling.PublicFormTenantThrottle.get_rate", return_value="1/hour"
+        ):
+            self.post(REMOTE_ADDR="10.0.0.1")
+            response = self.post(REMOTE_ADDR="10.0.0.2")
+
+        self.assertEqual(response.status_code, 429)
+        self.assertGreater(int(response["Retry-After"]), 0)
 
 
 @override_settings(PLATFORM_DOMAIN=PLATFORM)

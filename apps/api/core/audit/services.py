@@ -69,11 +69,6 @@ def _json_safe(payload: Any) -> Any:
     return json.loads(json.dumps(payload, cls=DjangoJSONEncoder))
 
 
-def _client_ip(request) -> str | None:
-    # Trusts X-Forwarded-For only as far as NUM_PROXIES says; the left-most entry is spoofable.
-    return client_ip(request)
-
-
 def record_audit(
     request,
     action: str,
@@ -104,7 +99,7 @@ def record_audit(
                 before=_json_safe(_redact(before)) if before is not None else None,
                 after=_json_safe(_redact(after)) if after is not None else None,
                 request_id=getattr(request, "request_id", "") or "",
-                ip_address=_client_ip(request),
+                ip_address=client_ip(request),
                 user_agent=request.META.get("HTTP_USER_AGENT", "")[:400],
             )
     except Exception:
@@ -154,7 +149,7 @@ def record_security_event(request, action: str, *, tenant=None, **context) -> No
                 resource_type="security.event",
                 after=_json_safe(_redact(context)) or None,
                 request_id=getattr(request, "request_id", "") or "",
-                ip_address=_client_ip(request),
+                ip_address=client_ip(request),
                 user_agent=request.META.get("HTTP_USER_AGENT", "")[:400],
             )
     except Exception:

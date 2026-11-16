@@ -1,22 +1,13 @@
-"""The audit row's IP follows `NUM_PROXIES`, never the spoofable left-most `X-Forwarded-For`."""
+"""The audit log takes its IP from `client_ip`, which follows `NUM_PROXIES`."""
 
 from __future__ import annotations
 
-from django.conf import settings
-from django.test import RequestFactory, SimpleTestCase, override_settings
+from django.test import SimpleTestCase
 
-from core.audit.services import _client_ip
+from core.api.client_ip import client_ip
+from core.audit import services
 
 
 class AuditClientIpTests(SimpleTestCase):
-    def request(self):
-        return RequestFactory().get(
-            "/", HTTP_X_FORWARDED_FOR="6.6.6.6, 10.0.0.9", REMOTE_ADDR="10.0.0.1"
-        )
-
-    def test_forwarded_for_ignored_without_proxies(self) -> None:
-        self.assertEqual(_client_ip(self.request()), "10.0.0.1")
-
-    @override_settings(REST_FRAMEWORK={**settings.REST_FRAMEWORK, "NUM_PROXIES": 1})
-    def test_forwarded_for_trusted_only_as_far_as_num_proxies(self) -> None:
-        self.assertEqual(_client_ip(self.request()), "10.0.0.9")
+    def test_audit_uses_the_shared_client_ip_derivation(self) -> None:
+        self.assertIs(services.client_ip, client_ip)

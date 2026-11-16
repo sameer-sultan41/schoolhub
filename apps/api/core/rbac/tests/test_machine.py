@@ -12,6 +12,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase, override_settings
 from rest_framework.response import Response
+from rest_framework.settings import api_settings
 from rest_framework.test import APIClient, APIRequestFactory
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import AccessToken
@@ -216,7 +217,7 @@ class ClientIpTests(SimpleTestCase):
         self.assertEqual(client_ip(self._request()), "10.0.0.9")
 
 
-@override_settings(REST_FRAMEWORK={**settings.REST_FRAMEWORK, "NUM_PROXIES": 1})
+@override_settings(REST_FRAMEWORK={**settings.REST_FRAMEWORK, "NUM_PROXIES": None})
 class UnsetNumProxiesThrottleTests(SimpleTestCase):
     """`NUM_PROXIES` unset: `get_ident` would key on the whole header, and rotating it escape."""
 
@@ -224,7 +225,7 @@ class UnsetNumProxiesThrottleTests(SimpleTestCase):
         cache.clear()
 
     def test_rotating_xff_does_not_reset_public_form_throttle(self) -> None:
-        self.assertIsNone(settings.NUM_PROXIES)
+        self.assertIsNone(api_settings.NUM_PROXIES)
         limit = PublicFormThrottle().num_requests
         allowed = []
         for n in range(limit + 1):
