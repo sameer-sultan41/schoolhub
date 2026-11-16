@@ -187,6 +187,7 @@ export function ContactDetailSheet({
                 type="button"
                 variant={status === "spam" ? "outline" : "primary"}
                 isLoading={triage.isPending && triage.variables === status}
+                loadingLabel={tCommon("saving")}
                 disabled={triage.isPending}
                 onClick={() => {
                   setError(null);

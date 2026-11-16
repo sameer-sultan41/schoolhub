@@ -118,6 +118,21 @@ describe("custom domains: instructions", () => {
     expect(toast.success).toHaveBeenCalledWith("Copied.");
   });
 
+  it("says to copy by hand when the browser refuses the clipboard", async () => {
+    const user = await renderScreen();
+    await screen.findByRole("heading", { name: DOMAIN });
+    jest.spyOn(navigator.clipboard, "writeText").mockRejectedValueOnce(new Error("denied"));
+
+    await user.click(card().getByRole("button", { name: "Copy the CNAME record's value" }));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(
+        "Couldn't copy. Select the text and copy it instead.",
+      );
+    });
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
   it("says when there are no domains yet", async () => {
     serve();
     await renderScreen();
@@ -183,6 +198,26 @@ describe("custom domains: verify", () => {
     expect(await card().findByText("Failed")).toBeInTheDocument();
     // `getByText` throws on two matches: the refusal and the stored code read as one message.
     expect(card().getByText("Another school already uses this domain.")).toBeInTheDocument();
+  });
+
+  it("holds every action while a check is running", async () => {
+    let finish: (saved: CustomDomainRecord) => void = () => undefined;
+    verifyDomain.mockImplementation(
+      () =>
+        new Promise<CustomDomainRecord>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const user = await renderScreen();
+
+    await user.click(await screen.findByRole("button", { name: "Check DNS" }));
+
+    expect(card().getByRole("button", { name: /Check DNS/ })).toBeDisabled();
+    expect(card().getByRole("button", { name: "Remove" })).toBeDisabled();
+    finish(domainRecord({ last_error_code: "lookup_timeout" }));
+    await waitFor(() => {
+      expect(card().getByRole("button", { name: "Check DNS" })).toBeEnabled();
+    });
   });
 
   it("offers no check on an active domain", async () => {

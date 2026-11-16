@@ -22,7 +22,7 @@ import { Services, type CustomDomainRecord } from "@/services";
 import { isVerifiable } from "@/services/modules/website/custom-domains/custom-domains-constant";
 import { primaryBlocker } from "@/services/modules/website/custom-domains/custom-domains-helper";
 import { WEBSITE_QUERY_MODULE } from "@/services/shared/website-content";
-import { withReasonText } from "@/features/website/shared/reason-message";
+import { refusalReason, withReasonText } from "@/features/website/shared/reason-message";
 import { DnsRecords } from "./dns-records";
 import { DomainBadges } from "./domain-badges";
 import { DOMAIN_ERROR_KEY, DOMAIN_REASON_SCOPE } from "./domain-labels";
@@ -54,6 +54,8 @@ export function DomainCard({
   const queryClient = useQueryClient();
   const invalidateWebsite = useInvalidateModule(WEBSITE_QUERY_MODULE);
   const [removing, setRemoving] = useState(false);
+  // The last verify refusal's `meta.reason`, to tell it apart from the stored check's code.
+  const [verifyReason, setVerifyReason] = useState<string | null>(null);
   const headingId = useId();
   const blockerId = useId();
   const blocker = primaryBlocker(domain);
@@ -72,6 +74,7 @@ export function DomainCard({
       } catch (refusal) {
         // A 409 stored the claim `failed` before answering: read it again.
         invalidateWebsite();
+        setVerifyReason(refusalReason(refusal));
         throw withReasonText(refusal, tReasons, DOMAIN_REASON_SCOPE);
       }
     },
@@ -106,8 +109,10 @@ export function DomainCard({
     ? enumLabel(t, DOMAIN_ERROR_KEY, domain.last_error_code)
     : domain.last_error;
   // A 409 `domain_taken` is also stored as the last check's code: say it once.
-  const actionErrors = [verify.error, makePrimary.error].filter(
-    (message): message is string => message !== null && message !== lastError,
+  const verifyError =
+    verifyReason !== null && verifyReason === domain.last_error_code ? null : verify.error;
+  const actionErrors = [verifyError, makePrimary.error].filter(
+    (message): message is string => message !== null,
   );
   const busy = verify.isPending || makePrimary.isPending;
 
@@ -153,8 +158,12 @@ export function DomainCard({
             <Button
               type="button"
               isLoading={verify.isPending}
+              loadingLabel={t("status.verifying")}
               disabled={busy}
-              onClick={verify.confirm}
+              onClick={() => {
+                setVerifyReason(null);
+                verify.confirm();
+              }}
             >
               {t("actions.verify")}
             </Button>
@@ -164,6 +173,7 @@ export function DomainCard({
               type="button"
               variant="outline"
               isLoading={makePrimary.isPending}
+              loadingLabel={tCommon("saving")}
               disabled={busy || blocker !== null}
               aria-describedby={blocker ? blockerId : undefined}
               onClick={makePrimary.confirm}
