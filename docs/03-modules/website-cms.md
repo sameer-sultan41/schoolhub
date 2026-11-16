@@ -250,7 +250,7 @@ PR A of [`docs/superpowers/plans/2026-11-15-website-cms.md`](../superpowers/plan
 
 ### Built (PR C5: public contact form)
 
-- `POST /api/v1/public/contact-submissions` reads at most 16 KB of JSON (413 above, 415 for any
+- `POST /api/v1/public/contact-submissions` reads at most 32 KB of JSON (413 above, 415 for any
   other content type) and checks `X-Tenant-Slug` and `Origin` (https only unless `DEBUG`) before parsing the body.
   Throttles: 5/min per client IP and 200/hour per school.
 - The renderer must send a random `Idempotency-Key` per submission (at most 255 characters, else 422): the key is scoped to the school and endpoint, so a guessable one lets a later visitor replay an earlier visitor's response.

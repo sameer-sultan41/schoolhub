@@ -188,8 +188,9 @@ CONTACT_MESSAGE_MAX = 5000
 #: Digits, spaces and `+-()`, between 7 and 30 characters.
 CONTACT_PHONE_RE = re.compile(rf"^[0-9 +\-()]{{{CONTACT_PHONE_MIN},{CONTACT_PHONE_MAX}}}$")
 
-#: The public contact POST's body cap in bytes; a real message is under 6 KB of JSON.
-CONTACT_BODY_MAX_BYTES = 16 * 1024
+#: The public contact POST's body cap in bytes: a 5000-character message of 4-byte characters
+#: (20 KB) plus the other fields always fits.
+CONTACT_BODY_MAX_BYTES = 32 * 1024
 
 #: How long the CORS receiver remembers whether a host serves an operational school.
 CORS_TENANT_CACHE_SECONDS = 60

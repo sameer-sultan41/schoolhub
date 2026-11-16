@@ -22933,7 +22933,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description The body is over 16 KB. */
+            /** @description The body is over 32 KB. */
             413: {
                 headers: {
                     [name: string]: unknown;

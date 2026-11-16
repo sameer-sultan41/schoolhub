@@ -38,6 +38,7 @@ from core.tenancy.models import Tenant
 
 TENANT_SLUG_HEADER = "X-Tenant-Slug"
 RECEIVED = {"status": "received"}
+TOO_LARGE = f"The body is over {CONTACT_BODY_MAX_BYTES // 1024} KB."
 IDEMPOTENCY_KEY_MAX = IdempotencyRecord._meta.get_field("key").max_length
 
 
@@ -110,7 +111,7 @@ class PublicContactSubmissionView(APIView):
         ],
         responses={
             201: ContactReceivedSerializer,
-            413: OpenApiResponse(description="The body is over 16 KB."),
+            413: OpenApiResponse(description=TOO_LARGE),
             415: OpenApiResponse(description="The body is not JSON."),
             404: OpenApiResponse(
                 description="No live site for this school (the same for every refusal)."

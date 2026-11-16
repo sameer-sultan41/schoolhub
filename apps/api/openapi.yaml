@@ -9915,7 +9915,7 @@ paths:
                 $ref: '#/components/schemas/ContactReceived'
           description: ''
         '413':
-          description: The body is over 16 KB.
+          description: The body is over 32 KB.
         '415':
           description: The body is not JSON.
         '404':
