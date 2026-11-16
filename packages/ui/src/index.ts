@@ -380,7 +380,12 @@ export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./comp
 export { THEME_PRESETS } from "./styles/presets";
 export type { ThemePreset } from "./styles/presets";
 
-export { brandingToCssText, brandingToCssVariables, sanitizeCssValue } from "./lib/branding";
+export {
+  brandingToCssText,
+  brandingToCssVariables,
+  sanitizeCssColour,
+  sanitizeCssValue,
+} from "./lib/branding";
 export { cn } from "./lib/cn";
 
 export { useIsMobile } from "./hooks/use-mobile";

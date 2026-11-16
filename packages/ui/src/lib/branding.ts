@@ -17,12 +17,33 @@ import type { CSSProperties } from "react";
 /** Rejects the characters that could break out of a custom-property declaration. */
 const UNSAFE_CSS_VALUE = /[;{}<>()\\]|\/\*|url\s*\(/i;
 
-export function sanitizeCssValue(value: string | null | undefined): string | null {
+/**
+ * A functional colour in the grammar the API emits (`BRANDING_COLOUR_RE` in
+ * `apps/api/apps/website_cms/constants.py`): only digits, `.`, `%`, spaces, commas and `/`
+ * inside the parentheses, so it cannot close the declaration or open another.
+ */
+export const FUNCTIONAL_COLOUR_PATTERN = /^(?:rgba?|hsla?|oklch)\([0-9.%, /]+\)$/;
+
+const MAX_CSS_VALUE_LENGTH = 120;
+
+function trimmedValue(value: string | null | undefined): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
-  if (trimmed.length === 0 || trimmed.length > 120) return null;
-  if (UNSAFE_CSS_VALUE.test(trimmed)) return null;
+  if (trimmed.length === 0 || trimmed.length > MAX_CSS_VALUE_LENGTH) return null;
   return trimmed;
+}
+
+export function sanitizeCssValue(value: string | null | undefined): string | null {
+  const trimmed = trimmedValue(value);
+  if (trimmed === null || UNSAFE_CSS_VALUE.test(trimmed)) return null;
+  return trimmed;
+}
+
+/** Like `sanitizeCssValue`, but also accepts `rgb()`/`hsl()`/`oklch()` in the anchored grammar above. */
+export function sanitizeCssColour(value: string | null | undefined): string | null {
+  const trimmed = trimmedValue(value);
+  if (trimmed !== null && FUNCTIONAL_COLOUR_PATTERN.test(trimmed)) return trimmed;
+  return sanitizeCssValue(value);
 }
 
 /**
@@ -39,15 +60,17 @@ export function sanitizeCssValue(value: string | null | undefined): string | nul
  * decision (e.g. validate `body_font` against a font that covers the tenant's own locales
  * at branding-save time), not something to paper over here.
  */
-const TOKEN_MAP: ReadonlyArray<[keyof TenantBranding, string]> = [
-  ["primary_color", "--sh-color-primary"],
-  ["secondary_color", "--sh-color-secondary"],
-  ["accent_color", "--sh-color-accent"],
-  ["background_color", "--sh-color-background"],
-  ["foreground_color", "--sh-color-foreground"],
-  ["heading_font", "--sh-font-heading"],
-  ["body_font", "--sh-font-body"],
-  ["radius", "--sh-radius"],
+const TOKEN_MAP: ReadonlyArray<
+  [keyof TenantBranding, string, (value: string | null | undefined) => string | null]
+> = [
+  ["primary_color", "--sh-color-primary", sanitizeCssColour],
+  ["secondary_color", "--sh-color-secondary", sanitizeCssColour],
+  ["accent_color", "--sh-color-accent", sanitizeCssColour],
+  ["background_color", "--sh-color-background", sanitizeCssColour],
+  ["foreground_color", "--sh-color-foreground", sanitizeCssColour],
+  ["heading_font", "--sh-font-heading", sanitizeCssValue],
+  ["body_font", "--sh-font-body", sanitizeCssValue],
+  ["radius", "--sh-radius", sanitizeCssValue],
 ];
 
 /**
@@ -58,8 +81,8 @@ export function brandingToCssVariables(branding: TenantBranding | null | undefin
   const style: Record<string, string> = {};
   if (!branding) return style;
 
-  for (const [field, token] of TOKEN_MAP) {
-    const value = sanitizeCssValue(branding[field]);
+  for (const [field, token, sanitize] of TOKEN_MAP) {
+    const value = sanitize(branding[field]);
     if (value) style[token] = value;
   }
 
