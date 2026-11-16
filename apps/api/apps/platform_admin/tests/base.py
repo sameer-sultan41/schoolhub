@@ -15,6 +15,7 @@ from core.rbac.tests.link_helpers import LINK_SETTINGS
 from core.tenancy.models import Tenant, TenantStatus
 
 TENANTS_URL = "/api/v1/platform/tenants"
+PLANS_URL = "/api/v1/platform/plans"
 
 _sequence = itertools.count()
 
@@ -56,6 +57,27 @@ def make_tenant(*, status: str = TenantStatus.PROVISIONING, **fields) -> Tenant:
 
 def tenant_url(tenant: Tenant, action: str = "") -> str:
     return f"{TENANTS_URL}/{tenant.pk}{action}"
+
+
+def subscription_url(tenant: Tenant, action: str = "") -> str:
+    return f"{TENANTS_URL}/{tenant.pk}/subscription{action}"
+
+
+def make_plan(**fields):
+    """An active plan in the catalog, enabling ``enabled_modules`` (none by default)."""
+    from apps.platform_admin.models import Plan
+
+    n = next(_sequence)
+    defaults = {
+        "name": f"Plan {n}",
+        "code": f"plan-{n}",
+        "price_amount": "5000.00",
+        "currency": "PKR",
+        "trial_days": 14,
+        "enabled_modules": [],
+        "limits": {},
+    }
+    return Plan.objects.create(**{**defaults, **fields})
 
 
 @override_settings(**LINK_SETTINGS)
