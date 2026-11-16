@@ -45,6 +45,17 @@ export class WebsitePagesPage extends BasePage {
     return this.page.getByRole("list", { name: "Sections", exact: true }).getByRole("listitem");
   }
 
+  /** The selected section's editor: a fieldset named by its legend, the section's type. */
+  sectionEditor(type: string): Locator {
+    return this.page.getByRole("group", { name: type, exact: true });
+  }
+
+  /** An input of the selected section, by its exact label: "Heading" alone would also match
+   * "Subheading" (`getByLabel` matches a substring by default). */
+  sectionField(type: string, label: string): Locator {
+    return this.sectionEditor(type).getByLabel(label, { exact: true });
+  }
+
   get addSectionButton(): Locator {
     return this.page.getByRole("button", { name: "Add section", exact: true });
   }

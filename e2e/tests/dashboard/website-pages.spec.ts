@@ -145,10 +145,10 @@ test.describe("the website pages", () => {
 
     await websitePagesPage.addSectionButton.click();
     await websitePagesPage.sectionType("News").click();
-    await page.getByLabel("Heading").fill("Uniform news");
+    await websitePagesPage.sectionField("News", "Heading").fill("Uniform news");
     await websitePagesPage.addSectionButton.click();
     await websitePagesPage.sectionType("Hero").click();
-    await page.getByLabel("Heading").fill("Our uniform");
+    await websitePagesPage.sectionField("Hero", "Heading").fill("Our uniform");
     await expect(websitePagesPage.sectionRows).toHaveCount(2);
     await websitePagesPage.moveDown(1).click();
 
@@ -279,6 +279,6 @@ test.describe("an editor without the publish key", () => {
       ),
     ).toBeVisible();
     await expect(websitePagesPage.saveSectionsButton).toHaveCount(0);
-    await expect(page.getByLabel("Heading")).toBeDisabled();
+    await expect(websitePagesPage.sectionField("Hero", "Heading")).toBeDisabled();
   });
 });
