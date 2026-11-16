@@ -70,7 +70,8 @@ describe("uploadFile", () => {
   });
 
   it("throws a create-step error and never PUTs or confirms when POST /files fails", async () => {
-    const { uploadFile, FileUploadError } = await import("../files-service");
+    const { uploadFile } = await import("../files-service");
+    const { FileUploadError } = await import("../files-errors");
     mockPost.mockRejectedValue(new Error("boom"));
     const fetchMock = jest.fn();
     global.fetch = fetchMock;

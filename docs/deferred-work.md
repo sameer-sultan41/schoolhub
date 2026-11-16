@@ -25,6 +25,13 @@ either this file or `project-status.md`.
   - **Contact-notification email batching.** One email per submission in v1.
   - **`provision_tenant` calling `ensure_default_site`.** Until platform-admin ships it, the default site is created on the first CMS write.
   - **Editable SEO `structured_data` (JSON-LD).** Read-only through the API until the renderer task defines its shape. Making it writable needs a JSON Schema for the allowed JSON-LD types and, in the renderer, escaping of `<`, `>` and `&` when it is emitted inside `<script type="application/ld+json">`; free JSON there is stored XSS.
+  - **Dashboard news, events and gallery screens (PR G)**:
+    - **Wall-clock times are read in the browser's time zone.** An event's start and end, and an all-day event's day, are entered and shown in the viewer's own zone (`apps/dashboard/src/lib/date-time-input.ts`) because the dashboard does not yet know the school's zone. An event entered from another zone shifts by the difference, and an all-day event can land on the adjacent day. Read the tenant's time zone once the dashboard has it, and convert with it.
+    - **An upload whose item create fails leaves a private file behind.** A gallery photo is uploaded (`POST /files`, PUT, `:confirm`) before its item is created; if the create is refused, the confirmed file stays, private and unreferenced. Sweep unreferenced `website.media` files on a schedule, or create the item from a pending upload in one call.
+    - **A photo's description is required only by the dashboard.** `gallery/item_services.py::_validate_item` accepts an empty `alt_text`; a server rule (422) would hold every client to it.
+    - **An album's items are read as one `MAX_PAGE_SIZE` page.** A larger album could not be reordered (the reorder must list every item, else `invalid_item_ids`). Cap album size or read every page.
+    - **Linking an album to an event** (`school_event_id`) is not offered in the album form; the API supports it (`invalid_event`).
+    - **No image previews in the CMS.** The CMS API returns only file ids, so gallery tiles and cover fields show an icon, not a thumbnail. Needs a preview URL (or a signed read) on the CMS payloads.
   - **PR A follow-ups** (minor review findings, each left for the PR that next touches its file):
     - The `post_migrate` theme sync is not guarded for `migrate website_cms zero`, where the `themes` table no longer exists when the signal fires. Harmless until someone reverses the app.
     - `tests/test_registry.py` repeats constants it should import (`"safe-url"` instead of `SAFE_URL_FORMAT`, a third copy of the 14 section types instead of `SectionType.values`). Test-only duplication.

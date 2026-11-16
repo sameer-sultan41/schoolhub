@@ -4444,12 +4444,210 @@
     "nav": {
       "label": "Website sections",
       "overview": "Overview",
-      "pages": "Pages"
+      "pages": "Pages",
+      "news": "News",
+      "events": "Events",
+      "gallery": "Gallery"
     },
     "status": {
       "draft": "Draft",
       "published": "Published",
       "archived": "Archived"
+    },
+    "directory": {
+      "search": "Search",
+      "clearSearch": "Clear search",
+      "status": "Status",
+      "allStatuses": "All statuses",
+      "noMatches": "Nothing matches",
+      "noMatchesDescription": "Try another search or status."
+    },
+    "content": {
+      "fields": {
+        "title": "Title",
+        "slug": "Address",
+        "slugHint": "Shown on the website as {prefix}<address>. Lowercase letters, digits and hyphens.",
+        "coverImage": "Cover image"
+      },
+      "validation": {
+        "required": "This field is required.",
+        "tooLong": "Keep this to {max} characters or fewer.",
+        "imageRequired": "Choose an image.",
+        "slug": "Use lowercase letters, digits and single hyphens, such as sports-day-2026."
+      },
+      "richText": {
+        "empty": "No content yet.",
+        "image": "Image",
+        "imageWithAlt": "Image: {alt}"
+      },
+      "delete": "Delete",
+      "deleted": "Deleted.",
+      "loadingTitle": "Loading…",
+      "detailLoadError": "This item couldn't be loaded.",
+      "lastUpdated": "Updated {when}",
+      "imageOnFile": "On file"
+    },
+    "news": {
+      "title": "News",
+      "summary": "Posts for the school's public website: write, publish, unpublish and archive them.",
+      "actions": {
+        "create": "New post",
+        "edit": "Edit",
+        "editRow": "Edit {title}"
+      },
+      "columns": {
+        "title": "Title",
+        "status": "Status",
+        "publishedAt": "Published",
+        "updatedAt": "Last updated"
+      },
+      "list": {
+        "caption": "News posts",
+        "searchPlaceholder": "Search by title or address",
+        "loadError": "The news posts couldn't be loaded.",
+        "emptyTitle": "No news posts yet",
+        "emptyDescription": "Write the first post; it stays a draft until you publish it."
+      },
+      "form": {
+        "createTitle": "New post",
+        "editTitle": "Edit post",
+        "intro": "A post stays a draft until it is published; saving a published post updates the website.",
+        "excerpt": "Summary",
+        "body": "Body"
+      },
+      "created": "Post saved as a draft.",
+      "saved": "Post saved.",
+      "delete": {
+        "title": "Delete “{title}”?",
+        "description": "The post is removed from the dashboard. This can't be undone."
+      }
+    },
+    "events": {
+      "title": "Events",
+      "summary": "Events for the school's public website, with their dates and place.",
+      "actions": {
+        "create": "New event",
+        "edit": "Edit",
+        "editRow": "Edit {title}"
+      },
+      "columns": {
+        "title": "Title",
+        "status": "Status",
+        "startsAt": "Starts",
+        "location": "Location",
+        "updatedAt": "Last updated"
+      },
+      "list": {
+        "caption": "Events",
+        "searchPlaceholder": "Search by title, address or location",
+        "loadError": "The events couldn't be loaded.",
+        "emptyTitle": "No events yet",
+        "emptyDescription": "Add the first event; it stays a draft until you publish it."
+      },
+      "form": {
+        "createTitle": "New event",
+        "editTitle": "Edit event",
+        "intro": "Events can't be deleted: archive one to take it off the website for good.",
+        "allDay": "All day",
+        "startsAt": "Starts",
+        "endsAt": "Ends",
+        "endsAtHint": "Optional.",
+        "location": "Location",
+        "description": "Description"
+      },
+      "validation": {
+        "startRequired": "Enter when the event starts."
+      },
+      "when": {
+        "allDay": "{start} (all day)",
+        "allDayRange": "{start} to {end} (all day)",
+        "range": "{start} to {end}"
+      },
+      "created": "Event saved as a draft.",
+      "saved": "Event saved."
+    },
+    "gallery": {
+      "title": "Gallery",
+      "summary": "Photo and video albums for the school's public website.",
+      "actions": {
+        "create": "New album",
+        "edit": "Edit album",
+        "editRow": "Edit {title}",
+        "back": "All albums"
+      },
+      "columns": {
+        "title": "Title",
+        "status": "Status",
+        "publishedAt": "Published",
+        "updatedAt": "Last updated"
+      },
+      "list": {
+        "caption": "Gallery albums",
+        "searchPlaceholder": "Search by title or address",
+        "loadError": "The albums couldn't be loaded.",
+        "emptyTitle": "No albums yet",
+        "emptyDescription": "Create an album, add photos or videos, then publish it."
+      },
+      "form": {
+        "createTitle": "New album",
+        "editTitle": "Edit album",
+        "intro": "An album needs at least one photo or video before it can be published.",
+        "description": "Description"
+      },
+      "created": "Album created.",
+      "saved": "Album saved.",
+      "notFound": "This album couldn't be found.",
+      "notFoundDescription": "It may have been deleted, or the link is wrong.",
+      "loadError": "This album couldn't be loaded.",
+      "publishHint": "Albums are published or unpublished; there is no archive.",
+      "delete": {
+        "title": "Delete “{title}”?",
+        "description": "The album and all its items are removed. This can't be undone."
+      },
+      "items": {
+        "title": "Photos and videos",
+        "description": "Drag a tile, or use its arrows, to change the order the website shows.",
+        "caption": "Album items",
+        "empty": "No photos or videos yet. Upload photos or add a video to start.",
+        "loadError": "The album's items couldn't be loaded.",
+        "upload": "Upload photos",
+        "uploading": "Uploading {done} of {total}…",
+        "uploadFailed": "{name}: {reason}",
+        "uploadDone": "{count, plural, one {# photo added.} other {# photos added.}}",
+        "uploadFailedAfterLeave": "{count, plural, one {# photo couldn't be added} other {# photos couldn't be added}} after you left the album: {names}.",
+        "addVideo": "Add video",
+        "image": "Photo",
+        "video": "Video",
+        "untitled": "No caption",
+        "needsAlt": "Needs a description",
+        "position": "Item {index}",
+        "moveEarlier": "Move item {index} earlier",
+        "moveLater": "Move item {index} later",
+        "dragHandle": "Drag item {index} to reorder",
+        "edit": "Edit item {index}",
+        "remove": "Remove item {index}",
+        "reordered": "Order saved.",
+        "dragInstructions": "To reorder, press space or enter on the handle, move with the arrow keys, then press space or enter to drop, or escape to cancel.",
+        "dragStart": "Picked up item {index}.",
+        "dragOver": "Item {index} is over position {position}.",
+        "dragEnd": "Item {index} dropped at position {position}.",
+        "dragCancel": "Reordering cancelled.",
+        "removeTitle": "Remove item {index}?",
+        "removeDescription": "It is taken out of the album. This can't be undone.",
+        "removeConfirm": "Remove",
+        "removed": "Item removed.",
+        "form": {
+          "editTitle": "Edit item",
+          "videoTitle": "Add a video",
+          "embedUrl": "Video link",
+          "embedUrlHint": "Paste a video link, starting with https://.",
+          "caption": "Caption",
+          "altText": "Description for screen readers",
+          "altTextHint": "Say what the photo shows, for visitors who can't see it.",
+          "saved": "Item saved.",
+          "added": "Video added."
+        }
+      }
     },
     "inventory": {
       "title": "Website",
@@ -4625,14 +4823,34 @@
       "home_exists": "The website already has a home page.",
       "too_many_sections": "This page has more sections than a page may hold. Remove some, then save.",
       "invalid_section_id": "The page changed since you opened it. Reload it and try again.",
-      "publish_required": "This page is live — only a publisher can change it. Ask a publisher, or unpublish it first."
+      "publish_required": "This page is live — only a publisher can change it. Ask a publisher, or unpublish it first.",
+      "empty_album": "Add at least one photo or video before publishing this album.",
+      "end_before_start": "The event can't end before it starts.",
+      "invalid_url": "Use an https:// link of at most 500 characters.",
+      "embed_host_not_allowed": "This video site isn't supported.",
+      "embed_required": "Enter the video's link.",
+      "file_required": "Choose an image.",
+      "invalid_event": "That event no longer exists.",
+      "invalid_item_ids": "The album changed while you were reordering. Reload it and try again.",
+      "position_conflict": "Someone else added an item at the same time. Please try again.",
+      "content": {
+        "slug_taken": "Another item already uses this address.",
+        "invalid_slug": "Use lowercase letters, digits and single hyphens.",
+        "publish_required": "This is live: only a publisher can change it. Ask a publisher, or have it unpublished first."
+      }
     },
     "imageField": {
       "uploading": "Uploading…",
       "onFile": "An image is on file.",
       "none": "No image.",
       "remove": "Remove image",
-      "uploadFailed": "The image couldn't be uploaded."
+      "uploadFailed": "The image couldn't be uploaded.",
+      "steps": {
+        "create": "The upload couldn't be started.",
+        "createRefused": "The image was refused: {reason}",
+        "put": "The image couldn't be sent to storage. Check the connection and try again.",
+        "confirm": "The image was sent but couldn't be confirmed. Please try again."
+      }
     },
     "richText": {
       "empty": "No content yet. Add a block to start.",

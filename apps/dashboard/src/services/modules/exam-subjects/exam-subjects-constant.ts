@@ -11,9 +11,6 @@ export const EXAM_SUBJECTS_LIST_RESOURCE = "subjects";
 export const MARKS_PATTERN = /^\d{1,4}(\.\d{1,2})?$/;
 export const DEFAULT_SUBJECT_WEIGHTAGE = "100";
 
-/** The browser's `datetime-local` value is `YYYY-MM-DDTHH:mm`: its first 16 characters. */
-export const DATETIME_LOCAL_LENGTH = 16;
-
 /** camelCase `ExamSubjectInput` key -> the API's body key. */
 export const EXAM_SUBJECTS_BODY_FIELDS: ReadonlyArray<readonly [keyof ExamSubjectInput, string]> = [
   ["examId", "exam_id"],

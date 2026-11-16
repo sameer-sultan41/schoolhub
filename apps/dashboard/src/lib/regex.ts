@@ -23,4 +23,13 @@ export const Regex = {
   /** A website page's address: lowercase segments of letters, digits and single hyphens, joined
    * by `/` (mirrors `PAGE_SLUG_PATTERN`, `apps/api/apps/website_cms/constants.py`). */
   WEBSITE_PAGE_SLUG: /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*$/,
+  /** A news, event or album slug: one lowercase segment of letters and digits joined by single
+   * hyphens (`website_cms/constants.py::CONTENT_SLUG_PATTERN`). */
+  WEBSITE_CONTENT_SLUG: /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+  /** A combining mark (an accent after NFKD), dropped from a slug. Global: use with `replace`. */
+  COMBINING_MARKS: /\p{M}/gu,
+  /** Every run of characters a slug cannot hold. Global: use with `replace`. */
+  NON_SLUG_CHARACTERS: /[^a-z0-9]+/g,
+  /** A hyphen at either end. Global: use with `replace`. */
+  EDGE_HYPHENS: /^-+|-+$/g,
 } as const;

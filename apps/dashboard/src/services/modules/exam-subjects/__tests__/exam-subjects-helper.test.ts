@@ -2,8 +2,6 @@ import {
   buildExamSubjectInput,
   defaultExamSubjectFormValues,
   groupByClass,
-  isoToLocalInput,
-  localInputToIso,
   recordToExamSubjectFormValues,
 } from "../exam-subjects-helper";
 import { createExamSubjectFormSchema } from "../exam-subjects.schema";
@@ -126,13 +124,5 @@ describe("exam subject form", () => {
       practicalMaxMarks: "30.00",
       practicalPassMarks: "12.00",
     });
-  });
-
-  it("carries an entry window through a datetime-local input unchanged", () => {
-    const iso = "2026-10-05T09:30:00.000Z";
-
-    expect(localInputToIso(isoToLocalInput(iso))).toBe(iso);
-    expect(isoToLocalInput(null)).toBe("");
-    expect(localInputToIso("")).toBeNull();
   });
 });

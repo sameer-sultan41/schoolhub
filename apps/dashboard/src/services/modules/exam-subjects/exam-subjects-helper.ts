@@ -1,9 +1,6 @@
+import { isoToLocalInput, localInputToIso } from "@/lib/date-time-input";
 import { copyMappedFields } from "@/lib/helpers";
-import {
-  DATETIME_LOCAL_LENGTH,
-  DEFAULT_SUBJECT_WEIGHTAGE,
-  EXAM_SUBJECTS_BODY_FIELDS,
-} from "./exam-subjects-constant";
+import { DEFAULT_SUBJECT_WEIGHTAGE, EXAM_SUBJECTS_BODY_FIELDS } from "./exam-subjects-constant";
 import type { ExamSubjectFormValues } from "./exam-subjects.schema";
 import type { ExamSubjectGroup, ExamSubjectInput, ExamSubjectRecord } from "./exam-subjects-type";
 
@@ -18,22 +15,6 @@ export function toExamSubjectBody(input: Partial<ExamSubjectInput>): Record<stri
 function blankToNull(value: string): string | null {
   const trimmed = value.trim();
   return trimmed === "" ? null : trimmed;
-}
-
-/** An API timestamp -> a `datetime-local` input's value, in the viewer's own time zone. */
-export function isoToLocalInput(value: string | null | undefined): string {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const offsetMs = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - offsetMs).toISOString().slice(0, DATETIME_LOCAL_LENGTH);
-}
-
-/** A `datetime-local` value (local time) -> the API's timestamp; blank clears it. */
-export function localInputToIso(value: string): string | null {
-  if (value === "") return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 export function defaultExamSubjectFormValues(): ExamSubjectFormValues {

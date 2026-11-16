@@ -76,6 +76,9 @@ export const Paths = {
   EXAMS_QUESTION_BANKS: "/exams/question-banks",
   WEBSITE: "/website",
   WEBSITE_PAGES: "/website/pages",
+  WEBSITE_NEWS: "/website/news",
+  WEBSITE_EVENTS: "/website/events",
+  WEBSITE_GALLERY: "/website/gallery",
   LOGIN: "/login",
   FORGOT_PASSWORD: "/forgot-password",
   RESET_PASSWORD: "/reset-password",
@@ -100,6 +103,9 @@ export const feeInvoicePath = (invoiceId: string) => `${Paths.FEES_INVOICES}/${i
 /** One student's fee statement (`GET /students/{id}/ledger`), under Fees & Finance. */
 export const studentStatementPath = (studentId: string) =>
   `${Paths.FEES}/students/${studentId}/ledger`;
+
+/** One gallery album's page (its items), under the albums list. */
+export const galleryAlbumPath = (albumId: string) => `${Paths.WEBSITE_GALLERY}/${albumId}`;
 
 /** One fee structure's page, under the structures list. */
 export const feeStructurePath = (structureId: string) => `${Paths.FEES_STRUCTURES}/${structureId}`;

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Form } from "@schoolhub/ui";
 
-import { Services, type JsonSchema } from "@/services";
+import { ApiError, FileUploadError, Services, type JsonSchema } from "@/services";
 import { mocked } from "@/test-fixtures/list-screen";
 import { renderWithProviders, stubObjectUrls } from "@/test-utils";
 
@@ -96,7 +96,7 @@ describe("ImageFileField", () => {
     unmount();
   });
 
-  it("shows the upload's own error and keeps no file id", async () => {
+  it("names the failed upload's step, with the server's reason, and keeps no file id", async () => {
     const user = userEvent.setup();
     const upload = pendingUpload();
     const onSave = jest.fn().mockResolvedValue(undefined);
@@ -105,9 +105,17 @@ describe("ImageFileField", () => {
     );
 
     await user.upload(screen.getByLabelText("Image"), PICKED);
-    upload.fail(new Error("'image/png' is too large."));
+    const refusal = new ApiError({
+      code: "validation_error",
+      message: "'image/png' is too large.",
+      status: 400,
+      url: "/api/v1/files",
+    });
+    upload.fail(new FileUploadError("create", refusal.message, refusal));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("'image/png' is too large.");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The image was refused: 'image/png' is too large.",
+    );
     expect(screen.getByText("No image.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => {

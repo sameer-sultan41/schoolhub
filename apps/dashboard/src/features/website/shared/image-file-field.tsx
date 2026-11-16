@@ -27,6 +27,7 @@ import {
   WEBSITE_MEDIA_PURPOSE,
 } from "@/services/modules/files/files-constant";
 import { useUploadTrackerContext } from "./upload-tracker";
+import { useUploadErrorText } from "./use-upload-error-text";
 
 const ACCEPT = WEBSITE_MEDIA_MIME_TYPES.join(",");
 
@@ -54,6 +55,7 @@ export function ImageFileField<TFieldValues extends FieldValues>({
 }: ImageFileFieldProps<TFieldValues>) {
   const t = useTranslations("website.imageField");
   const tracker = useUploadTrackerContext();
+  const uploadErrorText = useUploadErrorText();
   const fileId = useWatch({ control: form.control, name }) as string | undefined;
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle");
@@ -95,8 +97,7 @@ export function ImageFileField<TFieldValues extends FieldValues>({
       setStatus("idle");
     } catch (error) {
       if (!mountedRef.current) return;
-      // `FileUploadError`'s message is already specific: the server's refusal or the failed step.
-      setUploadError(error instanceof Error ? error.message : t("uploadFailed"));
+      setUploadError(uploadErrorText(error));
       setStatus("error");
       setPreviewUrl(null);
     }

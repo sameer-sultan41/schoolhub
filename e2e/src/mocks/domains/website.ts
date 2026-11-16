@@ -152,8 +152,14 @@ export function pagePreviewUrl(pageId: string): string {
   return `https://greenfield.e2e.test/api/preview?token=e2e-${pageId}`;
 }
 
-/** A 422 as `website_cms.errors.violation` raises it: `<reason>: <sentence>` under `field`. */
-function refuse(field: string, reason: string, sentence: string, withMeta = true): MockResponse {
+/** A 422 as `website_cms.errors.violation` raises it: `<reason>: <sentence>` under `field`.
+ * Shared with `website-content.ts`, the news, events and gallery stub. */
+export function refuse(
+  field: string,
+  reason: string,
+  sentence: string,
+  withMeta = true,
+): MockResponse {
   const issue = `${reason}: ${sentence}`;
   return fail(422, issue, {
     code: "domain_rule_violation",
