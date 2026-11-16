@@ -6,7 +6,9 @@ from datetime import timedelta
 from urllib.parse import quote
 
 from django.db import IntegrityError, transaction
+from django.test import TestCase
 from django.utils import timezone
+from drf_spectacular.generators import SchemaGenerator
 
 from apps.school_organization.tests.factories import grant_default_role
 from apps.website_cms.constants import (
@@ -30,6 +32,14 @@ LIST = "/api/v1/contact-submissions"
 
 def detail(row) -> str:
     return f"{LIST}/{row.id}"
+
+
+class ContactSubmissionContractTests(TestCase):
+    def test_schema_marks_the_page_and_handler_ids_nullable(self) -> None:
+        schema = SchemaGenerator().get_schema(request=None, public=True)
+        fields = schema["components"]["schemas"]["ContactSubmission"]["properties"]
+        for name in ("source_page_id", "handled_by_id"):
+            self.assertIs(fields[name].get("nullable"), True, name)
 
 
 class ContactInboxTests(WebsiteAPITestCase):
