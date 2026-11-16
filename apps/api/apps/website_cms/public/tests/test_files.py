@@ -96,7 +96,7 @@ class PublicFileTests(PublicFileCase):
                 tenant=self.tenant,
                 status=ContentStatus.PUBLISHED,
                 published_at=timezone.now() - timedelta(days=1),
-                cover_image_file=file,
+                cover_image_file_id=file.id,
             )
             sync_file_visibility({file.id})
         self.assertEqual(self.fetch(file).status_code, 302)
@@ -140,7 +140,12 @@ class PublicFileTests(PublicFileCase):
         ]
 
         self.assertEqual({response.status_code for response in misses}, {404})
-        self.assertEqual(len({response.content for response in misses}), 1)
+        bodies = []
+        for response in misses:
+            body = response.json()
+            body["error"].pop("request_id", None)  # unique per request by design
+            bodies.append(body)
+        self.assertTrue(all(body == bodies[0] for body in bodies), bodies)
 
     def test_ignores_any_credentials(self) -> None:
         response = self.fetch(self.make_file(), HTTP_AUTHORIZATION="Bearer not-a-token")

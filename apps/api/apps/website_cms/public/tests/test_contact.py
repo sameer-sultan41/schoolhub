@@ -14,6 +14,7 @@ from rest_framework.test import APIClient, APIRequestFactory, APITestCase
 from apps.website_cms.constants import CONTACT_BODY_MAX_BYTES, CONTACT_MESSAGE_MAX
 from apps.website_cms.hosts import resolve_host
 from apps.website_cms.models import ContactSubmission, ContentStatus, CustomDomainStatus
+from apps.website_cms.public.contact_views import IDEMPOTENCY_KEY_MAX
 from apps.website_cms.tests.factories import (
     TenantFactory,
     WebsitePageFactory,
@@ -22,7 +23,6 @@ from apps.website_cms.tests.factories import (
     make_custom_domain,
 )
 from core.api.throttling import PublicFormTenantThrottle
-from core.idempotency.models import IdempotencyRecord
 from core.tenancy.context import tenant_context
 from core.tenancy.models import TenantStatus
 
@@ -77,7 +77,7 @@ class ContactPostTests(ContactPostCase):
             response = self.post(HTTP_X_FORWARDED_FOR="9.9.9.9", REMOTE_ADDR="10.1.2.3")
 
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.json(), {"status": "received"})
+        self.assertEqual(response.json()["data"], {"status": "received"})
         with tenant_context(self.tenant.id):
             row = ContactSubmission.objects.get()
         self.assertEqual((row.name, row.status, row.ip), ("Amina Khan", "new", "10.1.2.3"))
@@ -123,7 +123,7 @@ class ContactPostTests(ContactPostCase):
             response = self.post(self.body(company_website="http://spam.example"))
 
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.json(), {"status": "received"})
+        self.assertEqual(response.json()["data"], {"status": "received"})
         self.assertEqual(self.stored(), 0)
         notify.delay.assert_not_called()
 
@@ -170,7 +170,7 @@ class ContactPostTests(ContactPostCase):
         second = self.post(HTTP_IDEMPOTENCY_KEY="key-1")
 
         self.assertEqual((first.status_code, second.status_code), (201, 201))
-        self.assertEqual(first.json(), second.json())
+        self.assertEqual(first.json()["data"], second.json()["data"])
         self.assertEqual(self.stored(), 1)
 
     def test_ip_throttle_429(self) -> None:
@@ -218,9 +218,7 @@ class ContactPostTests(ContactPostCase):
             self.assertEqual(self.post(origin=http_origin).status_code, 201)
 
     def test_overlong_idempotency_key_is_422(self) -> None:
-        max_length = IdempotencyRecord._meta.get_field("key").max_length
-
-        response = self.post(HTTP_IDEMPOTENCY_KEY="k" * (max_length + 1))
+        response = self.post(HTTP_IDEMPOTENCY_KEY="k" * (IDEMPOTENCY_KEY_MAX + 1))
 
         self.assertEqual(response.status_code, 422)
         self.assertIn("idempotency_key", fields(response))
