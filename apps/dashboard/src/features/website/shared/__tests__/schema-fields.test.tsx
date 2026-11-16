@@ -238,6 +238,35 @@ describe("schema-model", () => {
     });
   });
 
+  it("keeps stored keys the schema doesn't declare, at every level", () => {
+    // Content saved under an older theme version: `layout` and `note` are no longer declared.
+    const stored = {
+      heading: "FAQ",
+      layout: "two-column",
+      items: [{ question: "Q", answer: "A", note: "internal" }],
+    };
+
+    expect(fromSchemaFormValues(FAQ, toSchemaFormValues(FAQ, stored))).toEqual(stored);
+  });
+
+  it("sends an undeclared stored key back through a form's own resolver", async () => {
+    const user = userEvent.setup();
+    const onSave = jest.fn().mockResolvedValue(undefined);
+    renderWithProviders(
+      <SchemaHost
+        schema={HERO}
+        content={{ heading: "Hi", legacy_layout: "wide" }}
+        onSave={onSave}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith({ heading: "Hi", legacy_layout: "wide" });
+    });
+  });
+
   it("resolves a server path to the input it belongs under", () => {
     const values = toSchemaFormValues(FAQ, { items: [{ question: "Q", answer: "A" }] });
 

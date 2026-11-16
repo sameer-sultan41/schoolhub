@@ -110,13 +110,25 @@ function toFormValue(prop: JsonSchema, value: unknown): unknown {
   }
 }
 
+/** The stored keys `schema` doesn't declare (content from an older theme version), kept as
+ * they are so a save never erases them. */
+function undeclared(schema: JsonSchema, source: Record<string, unknown>): SchemaFormValues {
+  const declared = schema.properties ?? {};
+  return Object.fromEntries(
+    Object.entries(source).filter(([key]) => !Object.hasOwn(declared, key)),
+  );
+}
+
 /** Stored content as form values: every property present, empty ones as `""`, `false`, `[]`
- * or the empty rich-text document. */
+ * or the empty rich-text document; a stored key the schema doesn't declare rides along. */
 export function toSchemaFormValues(schema: JsonSchema, content: unknown): SchemaFormValues {
   const source = isRecord(content) ? content : {};
-  return Object.fromEntries(
-    properties(schema).map(([key, prop]) => [key, toFormValue(prop, source[key])]),
-  );
+  return {
+    ...undeclared(schema, source),
+    ...Object.fromEntries(
+      properties(schema).map(([key, prop]) => [key, toFormValue(prop, source[key])]),
+    ),
+  };
 }
 
 function fromFormValue(prop: JsonSchema, value: unknown, isRequired: boolean): unknown {
@@ -152,13 +164,14 @@ function fromFormValue(prop: JsonSchema, value: unknown, isRequired: boolean): u
   }
 }
 
-/** Form values as the content the API takes: an empty optional value is left out. */
+/** Form values as the content the API takes: an empty optional value is left out, and a stored
+ * key the schema doesn't declare is merged back untouched (a theme change never erases data). */
 export function fromSchemaFormValues(
   schema: JsonSchema,
   values: SchemaFormValues,
 ): SchemaFormValues {
   const required = new Set(schema.required ?? []);
-  const out: SchemaFormValues = {};
+  const out: SchemaFormValues = undeclared(schema, values);
   for (const [key, prop] of properties(schema)) {
     const value = fromFormValue(prop, values[key], required.has(key));
     if (value !== undefined) out[key] = value;
