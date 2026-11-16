@@ -44,6 +44,10 @@ CLIENT_KNOWN_SERVER_CODES = {
     "invalid_mfa_code",
     "mfa_challenge_invalid",
     "mfa_already_enabled",
+    "invalid_transition",
+    "retention_expired",
+    "no_live_subscription",
+    "export_required",
 }
 
 
@@ -148,6 +152,8 @@ class OffsetEnvelopeTests(APITestCase):
 class ErrorCodeContractTests(APITestCase):
     def test_the_client_knows_every_code_the_server_can_emit(self):
         from apps.examinations.processing import MarksOutstanding
+        from apps.platform_admin.tenants.lifecycle import InvalidTransition, RetentionExpired
+        from apps.platform_admin.tenants.services import ExportRequired, NoLiveSubscription
         from core.ai.exceptions import AIQuotaExceeded, AIUnavailable
         from core.api.exceptions import (
             Conflict,
@@ -178,6 +184,11 @@ class ErrorCodeContractTests(APITestCase):
             InvalidMfaCode.default_code,
             MfaChallengeInvalid.default_code,
             MfaAlreadyEnabled.default_code,
+            # The tenant lifecycle (platform console).
+            InvalidTransition.default_code,
+            RetentionExpired.default_code,
+            NoLiveSubscription.default_code,
+            ExportRequired.default_code,
         }
         self.assertEqual(
             emitted - CLIENT_KNOWN_SERVER_CODES,

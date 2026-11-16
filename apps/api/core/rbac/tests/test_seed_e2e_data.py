@@ -52,6 +52,7 @@ from apps.staff_management.models import EmploymentStatus, Staff, StaffType
 from apps.student_management.models import Guardian, Student, StudentGuardian
 from core.notifications.models import Notification
 from core.notifications.permissions import NOTIFICATION_VIEW
+from core.rbac import mfa
 from core.rbac.management.commands.seed_e2e_data import (
     E2E_ACCOUNTANT_APPROVER_EMAIL,
     E2E_ACCOUNTANT_EMAIL,
@@ -70,6 +71,8 @@ from core.rbac.management.commands.seed_e2e_data import (
     E2E_GUARDIAN_PHONE,
     E2E_OTHER_ADMIN_EMAIL,
     E2E_OTHER_TENANT_SLUG,
+    E2E_PLATFORM_OPERATOR_EMAIL,
+    E2E_PLATFORM_TOTP_SECRET,
     E2E_PRINCIPAL_PERMISSIONS,
     E2E_SCHOOL_ADMIN_PERMISSIONS,
     E2E_TEACHER_EMAIL,
@@ -100,6 +103,23 @@ class SeedE2EDataTests(TestCase):
             user = User.objects.get(tenant=row, email=email)
             self.assertTrue(user.check_password(E2E_ADMIN_PASSWORD))
             self.assertTrue(UserRole.objects.filter(user=user, role=role).exists())
+
+    def test_seeds_a_platform_operator_with_a_fixed_totp_secret(self) -> None:
+        """The live lane signs the operator in with password + TOTP (platform-admin.md §4)."""
+        call_command("seed_e2e_data")
+        call_command("seed_e2e_data")
+
+        operator = User.objects.get(email=E2E_PLATFORM_OPERATOR_EMAIL, tenant=None)
+        self.assertTrue(operator.is_platform)
+        self.assertTrue(operator.is_active)
+        self.assertTrue(operator.mfa_enabled)
+        self.assertTrue(operator.check_password(E2E_ADMIN_PASSWORD))
+        self.assertEqual(mfa.secret_for(operator), E2E_PLATFORM_TOTP_SECRET)
+        role = Role.objects.get(tenant=None, slug="platform_super_admin")
+        self.assertEqual(
+            list(UserRole.objects.filter(user=operator).values_list("role_id", flat=True)),
+            [role.pk],
+        )
 
     def test_the_school_admin_can_poll_the_jobs_it_starts(self) -> None:
         """It starts promotion execute; a 403 on `GET /jobs/{id}` reads as a failed job."""
