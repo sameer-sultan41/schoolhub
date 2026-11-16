@@ -1180,9 +1180,8 @@ class AttendanceSettingsView(TenantScopedViewSetMixin, APIView):
 
     A projection of three keys in ``tenant_settings.academic``, the same shape
     `holiday_calendar/view.py` gives its slice, under the settings keys §4
-    already describes as covering academic configuration. Not `/school-settings`:
-    its PATCH replaces the whole `academic` JSON, so a client read-modify-write
-    would lose a concurrent change. This writes only its own keys, under a row
+    already describes as covering academic configuration. Not `/school-settings`,
+    which does not write `academic`: this writes only its own keys, under a row
     lock, and merges the nested `student_leave_approval` dict rather than
     replacing it.
 

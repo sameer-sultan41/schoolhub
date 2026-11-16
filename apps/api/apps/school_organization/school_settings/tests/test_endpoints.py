@@ -77,6 +77,24 @@ class SchoolSettingsProfileTests(SchoolOrganizationAPITestCase):
         self.assertEqual(self.tenant.status, tenant_status)
         self.assertEqual(self.tenant.locale, "ur")
 
+    def test_patch_ignores_academic_which_only_its_own_endpoints_write(self) -> None:
+        """`/holiday-calendar` and `/attendance-settings` validate their keys; a whole `academic`
+        document through this PATCH would bypass them, so it is not a field."""
+        with tenant_context(self.tenant.id):
+            TenantSettings.objects.update_or_create(
+                tenant=self.tenant, defaults={"academic": {"attendance_mode": "daily"}}
+            )
+
+        response = self._patch({"academic": {"attendance_mode": "period"}, "locale": "ur"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.json())
+        self.assertEqual(response.json()["data"]["academic"], {"attendance_mode": "daily"})
+        with tenant_context(self.tenant.id):
+            row = TenantSettings.objects.get(tenant=self.tenant)
+        self.assertEqual(row.academic, {"attendance_mode": "daily"})
+        self.tenant.refresh_from_db()
+        self.assertEqual(self.tenant.locale, "ur")
+
     def test_logo_is_set_and_returned_as_a_signed_link(self) -> None:
         logo = self._file()
 
