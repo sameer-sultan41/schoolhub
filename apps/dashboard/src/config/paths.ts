@@ -76,6 +76,7 @@ export const Paths = {
   EXAMS_QUESTION_BANKS: "/exams/question-banks",
   WEBSITE: "/website",
   WEBSITE_PAGES: "/website/pages",
+  WEBSITE_NEWS: "/website/news",
   LOGIN: "/login",
   FORGOT_PASSWORD: "/forgot-password",
   RESET_PASSWORD: "/reset-password",

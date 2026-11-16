@@ -20,4 +20,10 @@ export const WEBSITE_SECTIONS = [
     menuTitle: "Pages",
     permission: "website.page.view",
   },
+  {
+    href: Paths.WEBSITE_NEWS,
+    labelKey: "nav.news",
+    menuTitle: "News",
+    permission: "website.page.view",
+  },
 ] as const satisfies readonly ModuleSection[];

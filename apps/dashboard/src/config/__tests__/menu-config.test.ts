@@ -11,12 +11,13 @@ function websiteGroup(menu: MenuConfig) {
 }
 
 describe("MENU_SIDEBAR's Website group", () => {
-  it("shows the overview and Pages to a user who can read website content", () => {
+  it("shows every content section to a user who can read website content", () => {
     const group = websiteGroup(filterMenuByAccess(MENU_SIDEBAR, buildUser(["website.page.view"])));
 
     expect(group?.children?.map((child) => [child.title, child.path])).toEqual([
       ["Overview", Paths.WEBSITE],
       ["Pages", Paths.WEBSITE_PAGES],
+      ["News", Paths.WEBSITE_NEWS],
     ]);
   });
 

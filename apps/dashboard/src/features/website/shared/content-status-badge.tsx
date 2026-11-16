@@ -6,7 +6,7 @@ import { Badge } from "@schoolhub/ui";
 import { enumBadge, enumLabel } from "@/lib/enum-label";
 import type { WebsiteContentStatus } from "@/services";
 
-const STATUS_LABEL_KEY: Readonly<Record<WebsiteContentStatus, string>> = {
+export const STATUS_LABEL_KEY: Readonly<Record<WebsiteContentStatus, string>> = {
   draft: "status.draft",
   published: "status.published",
   archived: "status.archived",

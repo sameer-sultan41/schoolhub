@@ -4444,12 +4444,95 @@
     "nav": {
       "label": "Website sections",
       "overview": "Overview",
-      "pages": "Pages"
+      "pages": "Pages",
+      "news": "News"
     },
     "status": {
       "draft": "Draft",
       "published": "Published",
       "archived": "Archived"
+    },
+    "contentErrors": {
+      "unpublish_first": "Unpublish it first: published content can't be deleted.",
+      "empty_album": "Add at least one photo or video before publishing this album.",
+      "end_before_start": "The event can't end before it starts.",
+      "invalid_url": "Use an https:// link of at most 500 characters.",
+      "embed_host_not_allowed": "Only YouTube and Vimeo videos can be embedded.",
+      "embed_required": "Enter the video's link.",
+      "file_required": "Choose an image.",
+      "slug_taken": "Another item already uses this address.",
+      "invalid_slug": "Use lowercase letters, digits and single hyphens.",
+      "invalid_event": "That event no longer exists.",
+      "invalid_item_ids": "The album changed while you were reordering. Reload it and try again.",
+      "position_conflict": "Someone else added an item at the same time. Please try again."
+    },
+    "directory": {
+      "search": "Search",
+      "clearSearch": "Clear search",
+      "status": "Status",
+      "allStatuses": "All statuses",
+      "noMatches": "Nothing matches",
+      "noMatchesDescription": "Try another search or status."
+    },
+    "content": {
+      "fields": {
+        "title": "Title",
+        "slug": "Address",
+        "slugHint": "Shown on the website as {prefix}<address>. Lowercase letters, digits and hyphens.",
+        "coverImage": "Cover image"
+      },
+      "validation": {
+        "required": "This field is required.",
+        "tooLong": "Keep this to {max} characters or fewer.",
+        "imageRequired": "Choose an image.",
+        "slug": "Use lowercase letters, digits and single hyphens, such as sports-day-2026."
+      },
+      "richText": {
+        "empty": "No content yet.",
+        "image": "Image",
+        "imageWithAlt": "Image: {alt}"
+      },
+      "delete": "Delete",
+      "deleted": "Deleted.",
+      "loadingTitle": "Loading…",
+      "detailLoadError": "This item couldn't be loaded.",
+      "lastUpdated": "Updated {when}",
+      "imageOnFile": "On file"
+    },
+    "news": {
+      "title": "News",
+      "summary": "Posts for the school's public website: write, publish, unpublish and archive them.",
+      "actions": {
+        "create": "New post",
+        "edit": "Edit",
+        "editRow": "Edit {title}"
+      },
+      "columns": {
+        "title": "Title",
+        "status": "Status",
+        "publishedAt": "Published",
+        "updatedAt": "Last updated"
+      },
+      "list": {
+        "caption": "News posts",
+        "searchPlaceholder": "Search by title or address",
+        "loadError": "The news posts couldn't be loaded.",
+        "emptyTitle": "No news posts yet",
+        "emptyDescription": "Write the first post; it stays a draft until you publish it."
+      },
+      "form": {
+        "createTitle": "New post",
+        "editTitle": "Edit post",
+        "intro": "A post stays a draft until it is published; saving a published post updates the website.",
+        "excerpt": "Summary",
+        "body": "Body"
+      },
+      "created": "Post saved as a draft.",
+      "saved": "Post saved.",
+      "delete": {
+        "title": "Delete “{title}”?",
+        "description": "The post is removed from the dashboard. This can't be undone."
+      }
     },
     "inventory": {
       "title": "Website",

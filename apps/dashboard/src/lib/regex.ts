@@ -20,4 +20,11 @@ export const Regex = {
   POSITIVE_INTEGER: /^[1-9]\d*$/,
   /** A calendar date as the API and a date input write it, `YYYY-MM-DD`. */
   ISO_DATE: /^\d{4}-\d{2}-\d{2}$/,
+  /** A news, event or album slug: one lowercase segment of letters and digits joined by single
+   * hyphens (`website_cms/constants.py::CONTENT_SLUG_PATTERN`). */
+  CONTENT_SLUG: /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+  /** Every run of characters a slug cannot hold. Global: use with `replace`. */
+  NON_SLUG_CHARACTERS: /[^a-z0-9]+/g,
+  /** A hyphen at either end. Global: use with `replace`. */
+  EDGE_HYPHENS: /^-+|-+$/g,
 } as const;
