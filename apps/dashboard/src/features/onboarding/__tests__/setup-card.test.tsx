@@ -4,7 +4,7 @@ import { screen, waitFor } from "@testing-library/react";
 import { Services } from "@/services";
 import { onboardingRecord } from "@/test-fixtures/onboarding";
 import { USER_LOADED, UserLoaded } from "@/test-fixtures/user-loaded";
-import { buildUser, renderWithProviders } from "@/test-utils";
+import { buildUser, renderWithClient, renderWithProviders } from "@/test-utils";
 
 import { SetupCard } from "../setup-card";
 
@@ -125,5 +125,19 @@ describe("setup card", () => {
     await screen.findByText(USER_LOADED);
     expect(mockFetchOnboarding).not.toHaveBeenCalled();
     expect(screen.queryByText("Finish setting up")).not.toBeInTheDocument();
+  });
+
+  it("reads the checklist afresh each time it mounts, since other screens change it", async () => {
+    mockFetchOnboarding.mockResolvedValue(onboardingRecord({ done: ["profile"] }));
+    const { rerender } = renderWithClient(<SetupCard />);
+    expect(await screen.findByText("1 of 9 steps done")).toBeInTheDocument();
+
+    // A linked step (fees, staff, students) was finished elsewhere; the card comes back.
+    mockFetchOnboarding.mockResolvedValue(onboardingRecord({ done: ["profile", "campuses"] }));
+    rerender(<></>);
+    rerender(<SetupCard />);
+
+    expect(await screen.findByText("2 of 9 steps done")).toBeInTheDocument();
+    expect(mockFetchOnboarding).toHaveBeenCalledTimes(2);
   });
 });

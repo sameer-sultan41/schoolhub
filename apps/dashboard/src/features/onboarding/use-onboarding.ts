@@ -9,7 +9,9 @@ import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
 import { ONBOARDING_VIEW_PERMISSION } from "@/services/modules/onboarding/onboarding-constant";
 
-/** The checklist, read only by someone who may read it: anyone else would get a 403. */
+/** The checklist, read only by someone who may read it: anyone else would get a 403. It is read
+ * afresh each time the wizard or the card mounts, since the linked steps (fees, staff, students)
+ * change it on other screens, where nothing refreshes it. */
 export function useOnboarding() {
   const { data: user } = useCurrentUser();
   const canView = hasPermission(user, ONBOARDING_VIEW_PERMISSION);
@@ -17,6 +19,7 @@ export function useOnboarding() {
     queryKey: queryKeys.onboarding(),
     queryFn: () => Services.onboarding.fetchOnboarding(),
     enabled: canView,
+    refetchOnMount: "always",
   });
   return { user, canView, query };
 }
