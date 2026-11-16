@@ -39,3 +39,9 @@ export function isoToLocalDate(value: string | null | undefined): string {
 export function localDateToIso(value: string): string | null {
   return value === "" ? null : localInputToIso(`${value}T00:00`);
 }
+
+/** A `date` value -> the API's timestamp of that day's last local millisecond, for an inclusive
+ * "on or before" bound; blank clears it. */
+export function localDayEndToIso(value: string): string | null {
+  return value === "" ? null : localInputToIso(`${value}T23:59:59.999`);
+}

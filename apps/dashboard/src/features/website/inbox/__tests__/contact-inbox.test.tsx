@@ -1,0 +1,206 @@
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import type { PermissionKey } from "@schoolhub/types";
+import { toast } from "sonner";
+
+import { Services, type ContactSubmissionRecord } from "@/services";
+import { mocked, rowOf, urlParam } from "@/test-fixtures/list-screen";
+import { USER_LOADED, UserLoaded } from "@/test-fixtures/user-loaded";
+import { buildUser, renderWithProviders, setUrl } from "@/test-utils";
+
+import { pageOf, STAMP, violation } from "@/features/website/shared/__tests__/content-fixtures";
+import { ContactInbox } from "../contact-inbox";
+
+jest.mock("next/navigation", () =>
+  jest
+    .requireActual<{ createNavigationMock: () => unknown }>("@/test-utils")
+    .createNavigationMock(),
+);
+
+jest.mock("sonner", () => ({
+  toast: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
+}));
+
+jest.mock("@/services", () =>
+  jest
+    .requireActual<{ inboxServicesMock: () => unknown }>("./inbox-services-mock")
+    .inboxServicesMock(),
+);
+
+const fetchPage = mocked(Services.contactSubmissions.fetchContactSubmissionPage);
+const fetchOne = mocked(Services.contactSubmissions.fetchContactSubmission);
+const setStatus = mocked(Services.contactSubmissions.setContactSubmissionStatus);
+
+/** `reception`'s keys (`website_cms/permissions.py`: `INBOX_STAFF`). */
+const RECEPTION_KEYS: PermissionKey[] = [
+  "website.contact-submission.view",
+  "website.contact-submission.update",
+];
+
+function submission(overrides: Partial<ContactSubmissionRecord> = {}): ContactSubmissionRecord {
+  return {
+    id: "3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f",
+    name: "Ayesha Khan",
+    email: "ayesha@example.com",
+    phone: "",
+    subject: "Admissions for grade 3",
+    message: "Is there a place in grade 3?\nWe are moving in March.",
+    source_page_id: "4d5e6f7a-8b9c-4d0e-9f1a-2b3c4d5e6f7a",
+    status: "new",
+    handled_by_id: "5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b",
+    created_at: STAMP,
+    updated_at: STAMP,
+    ...overrides,
+  };
+}
+
+const spam = submission({
+  id: "6f7a8b9c-0d1e-4f2a-9b3c-4d5e6f7a8b9c",
+  name: "Prize Desk",
+  email: "",
+  phone: "+92 300 0000000",
+  subject: "",
+  status: "spam",
+});
+
+/** The message as the server holds it: a PATCH changes what the next GET reads. */
+let current: ContactSubmissionRecord;
+
+async function renderInbox(keys: PermissionKey[] = RECEPTION_KEYS) {
+  mocked(Services.auth.fetchCurrentUser).mockResolvedValue(buildUser(keys));
+  renderWithProviders(
+    <>
+      <UserLoaded />
+      <ContactInbox />
+    </>,
+  );
+  await screen.findByText(USER_LOADED);
+  return userEvent.setup();
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  setUrl("/website/inbox");
+  current = submission();
+  fetchPage.mockImplementation(() => Promise.resolve(pageOf([current, spam])));
+  fetchOne.mockImplementation(() => Promise.resolve(current));
+  setStatus.mockImplementation((_id, status) => {
+    current = { ...current, status, updated_at: "2026-11-16T09:00:00Z" };
+    return Promise.resolve(current);
+  });
+});
+
+describe("contact inbox", () => {
+  it("lists each message with its sender, subject, contact and status", async () => {
+    await renderInbox();
+
+    expect(await screen.findByRole("table", { name: "Contact messages" })).toBeInTheDocument();
+    const ayesha = rowOf("Ayesha Khan");
+    expect(ayesha.getByText("Admissions for grade 3")).toBeInTheDocument();
+    expect(ayesha.getByText("ayesha@example.com")).toBeInTheDocument();
+    expect(ayesha.getByText("New")).toBeInTheDocument();
+    const prize = rowOf("Prize Desk");
+    expect(prize.getByText("(No subject)")).toBeInTheDocument();
+    expect(prize.getByText("+92 300 0000000")).toBeInTheDocument();
+    expect(prize.getByText("Spam")).toBeInTheDocument();
+  });
+
+  it("filters by status and an inclusive received-date range through the URL", async () => {
+    const user = await renderInbox();
+    await screen.findByText("Ayesha Khan");
+
+    await user.click(screen.getByRole("combobox", { name: "Status" }));
+    await user.click(await screen.findByRole("option", { name: "Spam" }));
+    fireEvent.change(screen.getByLabelText("Received from"), { target: { value: "2026-11-01" } });
+    fireEvent.change(screen.getByLabelText("Received to"), { target: { value: "2026-11-30" } });
+
+    await waitFor(() => {
+      expect(urlParam("to")).toBe("2026-11-30");
+    });
+    expect(urlParam("status")).toBe("spam");
+    expect(urlParam("from")).toBe("2026-11-01");
+    expect(fetchPage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        status: "spam",
+        createdFrom: new Date(2026, 10, 1).toISOString(),
+        createdTo: new Date(2026, 10, 30, 23, 59, 59, 999).toISOString(),
+      }),
+    );
+  });
+
+  it("reads the filters back from a shared link", async () => {
+    setUrl("/website/inbox?status=responded&from=2026-10-01");
+    await renderInbox();
+
+    await waitFor(() => {
+      expect(fetchPage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: "responded",
+          createdFrom: new Date(2026, 9, 1).toISOString(),
+          createdTo: undefined,
+        }),
+      );
+    });
+  });
+
+  it("opens a new message without changing it, then marks it read and responded", async () => {
+    const user = await renderInbox();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Open the message from Ayesha Khan" }),
+    );
+    const sheet = await screen.findByRole("dialog", { name: "Ayesha Khan" });
+    expect(await within(sheet).findByText(/We are moving in March/)).toBeInTheDocument();
+    expect(within(sheet).getByRole("link", { name: "ayesha@example.com" })).toHaveAttribute(
+      "href",
+      "mailto:ayesha@example.com",
+    );
+    expect(within(sheet).getByText("New")).toBeInTheDocument();
+    expect(setStatus).not.toHaveBeenCalled();
+
+    await user.click(within(sheet).getByRole("button", { name: "Mark read" }));
+    expect(await within(sheet).findByText("Read")).toBeInTheDocument();
+    expect(setStatus).toHaveBeenCalledWith(current.id, "read");
+    expect(toast.success).toHaveBeenCalledWith("Marked read.");
+    expect(within(sheet).queryByRole("button", { name: "Mark read" })).not.toBeInTheDocument();
+
+    await user.click(within(sheet).getByRole("button", { name: "Mark responded" }));
+    expect(await within(sheet).findByText("Responded")).toBeInTheDocument();
+    expect(setStatus).toHaveBeenLastCalledWith(current.id, "responded");
+  });
+
+  it("shows a refused status change in the sheet", async () => {
+    setStatus.mockRejectedValue(
+      violation("status", "invalid_status", "that status is not allowed."),
+    );
+    const user = await renderInbox();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Open the message from Ayesha Khan" }),
+    );
+    const sheet = await screen.findByRole("dialog", { name: "Ayesha Khan" });
+    await user.click(await within(sheet).findByRole("button", { name: "Mark as spam" }));
+
+    expect(await within(sheet).findByText("That status is not allowed.")).toBeInTheDocument();
+    expect(within(sheet).getByText("New")).toBeInTheDocument();
+  });
+
+  it("offers no triage to a viewer with only the read key", async () => {
+    const user = await renderInbox(["website.contact-submission.view"]);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Open the message from Ayesha Khan" }),
+    );
+    const sheet = await screen.findByRole("dialog", { name: "Ayesha Khan" });
+    await within(sheet).findByText(/We are moving in March/);
+
+    expect(within(sheet).queryByRole("button", { name: "Mark read" })).not.toBeInTheDocument();
+    expect(within(sheet).queryByRole("button", { name: "Mark as spam" })).not.toBeInTheDocument();
+  });
+
+  it("says when the inbox is empty", async () => {
+    fetchPage.mockResolvedValue(pageOf([]));
+    await renderInbox();
+    expect(await screen.findByText("No messages yet")).toBeInTheDocument();
+  });
+});
