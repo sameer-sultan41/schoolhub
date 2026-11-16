@@ -66,6 +66,11 @@ export type NamedFileFieldProps<TFieldValues extends FieldValues> = [TFieldValue
   ? object
   : Required<Pick<PhotoUploadFieldProps<TFieldValues>, "fileIdField" | "fallbackName">>;
 
+interface LocalPreview {
+  url: string;
+  fileId: string | null;
+}
+
 const DEFAULT_FILE_ID_FIELD = "photo_file_id";
 const DEFAULT_ACCEPT = "image/jpeg,image/png";
 
@@ -97,7 +102,9 @@ export function PhotoUploadField<TFieldValues extends FieldValues>(
     accept = DEFAULT_ACCEPT,
   }: PhotoUploadFieldProps<TFieldValues> = props;
   const t = useTranslations("common.photoUpload");
-  const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
+  // The picked file's preview, with the id its upload landed as (`null` while uploading).
+  const [localPreview, setLocalPreview] = useState<LocalPreview | null>(null);
+  const localPreviewUrl = localPreview?.url ?? null;
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "error">("idle");
   const [uploadError, setUploadError] = useState<string | null>(null);
   // Cast to a 3-tuple of `Path<TFieldValues>`, not `Path<TFieldValues>[]`: an array type
@@ -112,6 +119,13 @@ export function PhotoUploadField<TFieldValues extends FieldValues>(
       Path<TFieldValues>,
     ],
   }) as [string, string, string | undefined];
+
+  // A long-lived form (the school profile) can clear or replace the field after an upload
+  // (Remove logo, a reset); the preview then shows a file the form no longer holds, so drop it.
+  // Adjusted during render, React's pattern for state derived from a changed input.
+  if (localPreview?.fileId != null && localPreview.fileId !== photoFileId) {
+    setLocalPreview(null);
+  }
 
   // Only a still-mounted instance may report back to the dialog: an upload from a closed
   // session settling late must not re-enable Save while the next session's own upload is in
@@ -140,7 +154,8 @@ export function PhotoUploadField<TFieldValues extends FieldValues>(
     if (!file) return;
 
     const isCurrentSession = onUploadStart();
-    setLocalPreviewUrl(URL.createObjectURL(file));
+    const url = URL.createObjectURL(file);
+    setLocalPreview({ url, fileId: null });
     setUploadStatus("uploading");
     setUploadError(null);
     onUploadingChange(true);
@@ -161,19 +176,21 @@ export function PhotoUploadField<TFieldValues extends FieldValues>(
     // never shown as this session's error.
     if (!isCurrentSession()) {
       setUploadStatus("idle");
-      setLocalPreviewUrl(null);
+      setLocalPreview(null);
       return;
     }
     if ("fileId" in outcome) {
+      // The field first, so no render sees the preview's id ahead of the form's.
       form.setValue(fileIdField, outcome.fileId as never, {
         shouldDirty: true,
       });
+      setLocalPreview({ url, fileId: outcome.fileId });
       setUploadStatus("idle");
     } else {
       setUploadStatus("error");
       setUploadError(outcome.error);
       // The picked file never landed, so the preview goes back to what Save would keep.
-      setLocalPreviewUrl(null);
+      setLocalPreview(null);
     }
   }
 
