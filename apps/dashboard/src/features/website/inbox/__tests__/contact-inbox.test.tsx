@@ -47,7 +47,8 @@ function submission(overrides: Partial<ContactSubmissionRecord> = {}): ContactSu
     message: "Is there a place in grade 3?\nWe are moving in March.",
     source_page_id: "4d5e6f7a-8b9c-4d0e-9f1a-2b3c4d5e6f7a",
     status: "new",
-    handled_by_id: "5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b",
+    // Nobody has triaged a new message yet.
+    handled_by_id: null,
     created_at: STAMP,
     updated_at: STAMP,
     ...overrides,
@@ -60,8 +61,14 @@ const spam = submission({
   email: "",
   phone: "+92 300 0000000",
   subject: "",
+  // Sent with no page named, and triaged by a member of staff.
+  source_page_id: null,
   status: "spam",
+  handled_by_id: "5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b",
 });
+
+/** Whoever triaged a message: the server sets `handled_by_id` to the caller on a PATCH. */
+const STAFF_ID = "7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d";
 
 /** The message as the server holds it: a PATCH changes what the next GET reads. */
 let current: ContactSubmissionRecord;
@@ -85,7 +92,7 @@ beforeEach(() => {
   fetchPage.mockImplementation(() => Promise.resolve(pageOf([current, spam])));
   fetchOne.mockImplementation(() => Promise.resolve(current));
   setStatus.mockImplementation((_id, status) => {
-    current = { ...current, status, updated_at: "2026-11-16T09:00:00Z" };
+    current = { ...current, status, handled_by_id: STAFF_ID, updated_at: "2026-11-16T09:00:00Z" };
     return Promise.resolve(current);
   });
 });

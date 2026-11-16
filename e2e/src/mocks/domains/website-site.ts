@@ -66,9 +66,14 @@ export function buildCustomDomain(overrides: Partial<CustomDomain> = {}): Custom
   };
 }
 
+/** Whoever triages in the stub: the server sets `handled_by_id` to the caller on a PATCH. */
+const HANDLER_ID = "00000000-0000-4000-b000-000000000001";
+
+/** A message sent with no page named; `handled_by_id` is null until someone triages it. */
 export function buildContactSubmission(
   overrides: Partial<ContactSubmission> = {},
 ): ContactSubmission {
+  const status = overrides.status ?? "new";
   return {
     id: uuid(),
     name: "Ayesha Khan",
@@ -76,9 +81,9 @@ export function buildContactSubmission(
     phone: "",
     subject: "Admissions for grade 3",
     message: "Is there a place in grade 3?",
-    source_page_id: uuid(),
-    status: "new",
-    handled_by_id: uuid(),
+    source_page_id: null,
+    status,
+    handled_by_id: status === "new" ? null : HANDLER_ID,
     created_at: STAMP,
     updated_at: STAMP,
     ...overrides,
@@ -295,7 +300,7 @@ function stubInbox(api: MockApi, submissions: ContactSubmission[]) {
     if (!entry) return fail(404, "Not found.");
     const status = (request.json() as { status?: ContactSubmission["status"] } | null)?.status;
     if (!status) return fail(400, "This field is required.");
-    Object.assign(entry, { status, updated_at: ACTED_AT });
+    Object.assign(entry, { status, handled_by_id: HANDLER_ID, updated_at: ACTED_AT });
     return ok(entry);
   });
 }

@@ -39,6 +39,12 @@ class ContactInboxTests(WebsiteAPITestCase):
         self.assertEqual(self.client.get(LIST).status_code, 200)
         self.assertEqual(self.client.get(detail(row)).status_code, 200)
 
+    def test_a_new_row_without_a_page_reads_null_ids(self) -> None:
+        row = self.make_contact()
+        data = self.client.get(detail(row)).json()["data"]
+        self.assertIsNone(data["handled_by_id"])
+        self.assertIsNone(data["source_page_id"])
+
     def test_list_without_the_key_is_403(self) -> None:
         self.sign_in_reader()
         self.assertEqual(self.client.get(LIST).status_code, 403)

@@ -19143,6 +19143,7 @@ components:
           type: string
           format: uuid
           readOnly: true
+          nullable: true
         status:
           allOf:
           - $ref: '#/components/schemas/ContactSubmissionStatusEnum'
@@ -19151,6 +19152,7 @@ components:
           type: string
           format: uuid
           readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time

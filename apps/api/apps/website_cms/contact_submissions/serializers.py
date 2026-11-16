@@ -8,8 +8,9 @@ from apps.website_cms.models import ContactStatus, ContactSubmission
 
 
 class ContactSubmissionSerializer(serializers.ModelSerializer):
-    source_page_id = serializers.UUIDField(read_only=True)
-    handled_by_id = serializers.UUIDField(read_only=True)
+    # Null until a page is named or someone triages it; `allow_null` puts that in the contract.
+    source_page_id = serializers.UUIDField(read_only=True, allow_null=True)
+    handled_by_id = serializers.UUIDField(read_only=True, allow_null=True)
 
     class Meta:
         model = ContactSubmission

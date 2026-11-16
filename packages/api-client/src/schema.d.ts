@@ -8592,10 +8592,10 @@ export interface components {
             readonly subject: string;
             readonly message: string;
             /** Format: uuid */
-            readonly source_page_id: string;
+            readonly source_page_id: string | null;
             readonly status: components["schemas"]["ContactSubmissionStatusEnum"];
             /** Format: uuid */
-            readonly handled_by_id: string;
+            readonly handled_by_id: string | null;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
