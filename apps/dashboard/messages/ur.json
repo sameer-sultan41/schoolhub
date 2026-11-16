@@ -4440,6 +4440,126 @@
       }
     }
   },
+  "website": {
+    "nav": {
+      "label": "ویب سائٹ کے حصے",
+      "overview": "جائزہ",
+      "pages": "صفحات"
+    },
+    "status": {
+      "draft": "مسودہ",
+      "published": "شائع شدہ",
+      "archived": "محفوظ شدہ"
+    },
+    "inventory": {
+      "title": "ویب سائٹ",
+      "summary": "اسکول کی عوامی ویب سائٹ پر کیا ہے، حیثیت کے لحاظ سے، اور کیا کافی عرصے سے اپ ڈیٹ نہیں ہوا۔",
+      "kinds": {
+        "pages": "صفحات",
+        "newsPosts": "خبریں",
+        "schoolEvents": "تقریبات",
+        "galleryAlbums": "گیلری البم"
+      },
+      "unavailable": "یہ تعداد لوڈ نہیں ہو سکی۔",
+      "stale": {
+        "title": "پرانا مواد",
+        "description": "{days} دن سے زیادہ عرصے سے اپ ڈیٹ نہیں ہوا، سب سے پرانا پہلے۔",
+        "empty": "کوئی مواد پرانا نہیں۔",
+        "lastUpdated": "{when} اپ ڈیٹ ہوا",
+        "more": "ہر قسم کی صرف سب سے پرانی چیزیں دکھائی گئی ہیں؛ مزید بھی ہو سکتی ہیں۔",
+        "unavailable": "پرانا مواد لوڈ نہیں ہو سکا۔"
+      }
+    },
+    "publishActions": {
+      "publish": "شائع کریں",
+      "unpublish": "اشاعت واپس لیں",
+      "archive": "محفوظ کریں",
+      "done": {
+        "publish": "شائع ہو گیا۔",
+        "unpublish": "واپس مسودے میں چلا گیا۔",
+        "archive": "محفوظ ہو گیا۔"
+      },
+      "failed": "یہ کام نہیں ہو سکا۔ براہ کرم دوبارہ کوشش کریں۔"
+    },
+    "imageField": {
+      "uploading": "اپ لوڈ ہو رہا ہے…",
+      "onFile": "ایک تصویر محفوظ ہے۔",
+      "none": "کوئی تصویر نہیں۔",
+      "remove": "تصویر ہٹائیں",
+      "uploadFailed": "تصویر اپ لوڈ نہیں ہو سکی۔"
+    },
+    "richText": {
+      "empty": "ابھی کوئی مواد نہیں۔ شروع کرنے کے لیے ایک بلاک شامل کریں۔",
+      "add": "بلاک شامل کریں",
+      "addBlock": "{type} شامل کریں",
+      "types": {
+        "paragraph": "پیراگراف",
+        "heading": "سرخی",
+        "list": "فہرست",
+        "quote": "اقتباس",
+        "image": "تصویر"
+      },
+      "text": "متن",
+      "level": "درجہ",
+      "levelOption": "سرخی {level}",
+      "ordered": "نمبر وار فہرست",
+      "items": "اشیاء (ہر سطر میں ایک)",
+      "image": "تصویر",
+      "alt": "متبادل متن",
+      "moveUp": "بلاک {index} اوپر کریں",
+      "moveDown": "بلاک {index} نیچے کریں",
+      "remove": "بلاک {index} ہٹائیں",
+      "dragHandle": "ترتیب بدلنے کے لیے بلاک {index} گھسیٹیں",
+      "blockLabel": "بلاک {index}: {type}",
+      "dragInstructions": "ترتیب بدلنے کے لیے ہینڈل پر اسپیس یا انٹر دبائیں، تیر والی کلیدوں سے منتقل کریں، پھر رکھنے کے لیے اسپیس یا انٹر دبائیں، یا منسوخ کرنے کے لیے ایسکیپ دبائیں۔",
+      "dragStart": "بلاک {index} اٹھا لیا گیا۔",
+      "dragOver": "بلاک {index} مقام {position} پر ہے۔",
+      "dragEnd": "بلاک {index} مقام {position} پر رکھ دیا گیا۔",
+      "dragCancel": "ترتیب کی تبدیلی منسوخ ہو گئی۔"
+    },
+    "schemaFields": {
+      "labels": {
+        "heading": "سرخی",
+        "subheading": "ذیلی سرخی",
+        "body": "متن",
+        "message": "پیغام",
+        "intro": "تعارف",
+        "image_file_id": "تصویر",
+        "photo_file_id": "فوٹو",
+        "image_alt": "تصویر کی وضاحت",
+        "cta_label": "بٹن کا عنوان",
+        "cta_href": "بٹن کا لنک",
+        "limit": "کتنے دکھائیں",
+        "form": "فارم",
+        "items": "اشیاء",
+        "question": "سوال",
+        "answer": "جواب",
+        "principal_name": "پرنسپل کا نام",
+        "principal_title": "پرنسپل کا عہدہ"
+      },
+      "options": {
+        "contact": "رابطہ فارم",
+        "admission_enquiry": "داخلے کی معلومات"
+      },
+      "selectPlaceholder": "منتخب کریں…",
+      "addItem": "آئٹم شامل کریں",
+      "itemHeading": "آئٹم {index}",
+      "removeItem": "آئٹم {index} ہٹائیں",
+      "moveUp": "آئٹم {index} اوپر کریں",
+      "moveDown": "آئٹم {index} نیچے کریں",
+      "errors": {
+        "tooLong": "اسے {max} حروف یا اس سے کم رکھیں۔",
+        "tooShort": "کم از کم {min} حروف استعمال کریں۔",
+        "notANumber": "ایک عدد درج کریں۔",
+        "notAWholeNumber": "ایک مکمل عدد درج کریں۔",
+        "tooSmall": "{min} یا اس سے زیادہ درج کریں۔",
+        "tooLarge": "{max} یا اس سے کم درج کریں۔",
+        "unsafeUrl": "https:// والا لنک استعمال کریں، یا اس سائٹ کا ایسا راستہ جو / سے شروع ہو۔",
+        "notAnOption": "دیے گئے اختیارات میں سے ایک منتخب کریں۔",
+        "imageRequired": "ایک تصویر منتخب کریں۔"
+      }
+    }
+  },
   "reports": {
     "caption": "{report} رپورٹ",
     "rowCount": "{count, plural, one {# قطار} other {# قطاریں}}",

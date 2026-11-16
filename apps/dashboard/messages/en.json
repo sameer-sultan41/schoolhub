@@ -4440,6 +4440,126 @@
       }
     }
   },
+  "website": {
+    "nav": {
+      "label": "Website sections",
+      "overview": "Overview",
+      "pages": "Pages"
+    },
+    "status": {
+      "draft": "Draft",
+      "published": "Published",
+      "archived": "Archived"
+    },
+    "inventory": {
+      "title": "Website",
+      "summary": "What is on the school's public website, by status, and what hasn't been updated in a while.",
+      "kinds": {
+        "pages": "Pages",
+        "newsPosts": "News posts",
+        "schoolEvents": "Events",
+        "galleryAlbums": "Gallery albums"
+      },
+      "unavailable": "These counts couldn't be loaded.",
+      "stale": {
+        "title": "Stale content",
+        "description": "Not updated in more than {days} days, oldest first.",
+        "empty": "Nothing is stale.",
+        "lastUpdated": "Updated {when}",
+        "more": "Only the oldest items of each kind are shown; there may be more.",
+        "unavailable": "Stale content couldn't be loaded."
+      }
+    },
+    "publishActions": {
+      "publish": "Publish",
+      "unpublish": "Unpublish",
+      "archive": "Archive",
+      "done": {
+        "publish": "Published.",
+        "unpublish": "Moved back to draft.",
+        "archive": "Archived."
+      },
+      "failed": "That didn't work. Please try again."
+    },
+    "imageField": {
+      "uploading": "Uploading…",
+      "onFile": "An image is on file.",
+      "none": "No image.",
+      "remove": "Remove image",
+      "uploadFailed": "The image couldn't be uploaded."
+    },
+    "richText": {
+      "empty": "No content yet. Add a block to start.",
+      "add": "Add a block",
+      "addBlock": "Add {type}",
+      "types": {
+        "paragraph": "Paragraph",
+        "heading": "Heading",
+        "list": "List",
+        "quote": "Quote",
+        "image": "Image"
+      },
+      "text": "Text",
+      "level": "Level",
+      "levelOption": "Heading {level}",
+      "ordered": "Numbered list",
+      "items": "Items (one per line)",
+      "image": "Image",
+      "alt": "Alternative text",
+      "moveUp": "Move block {index} up",
+      "moveDown": "Move block {index} down",
+      "remove": "Remove block {index}",
+      "dragHandle": "Drag block {index} to reorder",
+      "blockLabel": "Block {index}: {type}",
+      "dragInstructions": "To reorder, press space or enter on the handle, move with the arrow keys, then press space or enter to drop, or escape to cancel.",
+      "dragStart": "Picked up block {index}.",
+      "dragOver": "Block {index} is over position {position}.",
+      "dragEnd": "Block {index} dropped at position {position}.",
+      "dragCancel": "Reordering cancelled."
+    },
+    "schemaFields": {
+      "labels": {
+        "heading": "Heading",
+        "subheading": "Subheading",
+        "body": "Body",
+        "message": "Message",
+        "intro": "Introduction",
+        "image_file_id": "Image",
+        "photo_file_id": "Photo",
+        "image_alt": "Image description",
+        "cta_label": "Button label",
+        "cta_href": "Button link",
+        "limit": "How many to show",
+        "form": "Form",
+        "items": "Items",
+        "question": "Question",
+        "answer": "Answer",
+        "principal_name": "Principal's name",
+        "principal_title": "Principal's title"
+      },
+      "options": {
+        "contact": "Contact form",
+        "admission_enquiry": "Admission enquiry"
+      },
+      "selectPlaceholder": "Choose…",
+      "addItem": "Add item",
+      "itemHeading": "Item {index}",
+      "removeItem": "Remove item {index}",
+      "moveUp": "Move item {index} up",
+      "moveDown": "Move item {index} down",
+      "errors": {
+        "tooLong": "Keep this to {max} characters or fewer.",
+        "tooShort": "Use at least {min} characters.",
+        "notANumber": "Enter a number.",
+        "notAWholeNumber": "Enter a whole number.",
+        "tooSmall": "Enter {min} or more.",
+        "tooLarge": "Enter {max} or less.",
+        "unsafeUrl": "Use an https:// link, or a path on this site starting with /.",
+        "notAnOption": "Choose one of the options.",
+        "imageRequired": "Choose an image."
+      }
+    }
+  },
   "reports": {
     "caption": "{report} report",
     "rowCount": "{count, plural, one {# row} other {# rows}}",
