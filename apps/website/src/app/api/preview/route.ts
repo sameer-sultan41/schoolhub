@@ -4,6 +4,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { readJson } from "@/lib/api";
 import { normalizeHost } from "@/lib/host";
 import { PREVIEW_COOKIE, PREVIEW_COOKIE_OPTIONS, PREVIEW_MAX_AGE_SECONDS } from "@/lib/preview";
+import { PAGE_PATH_PATTERN } from "@/lib/regex";
 
 /**
  * Preview entry (website-cms plan decision 9, ADR-0039). The dashboard's preview link lands here,
@@ -29,11 +30,6 @@ function errorResponse(status: 400 | 404, code: string, message: string) {
   );
 }
 
-/** A site path from the API: `/` or `/<slug>`, never `//host` or `/\host`. */
-function isSitePath(path: string): boolean {
-  return path.startsWith("/") && !path.startsWith("//") && !path.startsWith("/\\");
-}
-
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get("token");
   if (!token || token.length > TOKEN_MAX_LENGTH) {
@@ -48,7 +44,8 @@ export async function GET(request: NextRequest) {
     host,
     previewToken: token,
   });
-  if (!page || !isSitePath(page.path)) {
+  // Only a path the page-slug grammar allows, so nothing a browser could read as another host.
+  if (!page || !PAGE_PATH_PATTERN.test(page.path)) {
     return errorResponse(404, "not_found", "Preview not found.");
   }
 

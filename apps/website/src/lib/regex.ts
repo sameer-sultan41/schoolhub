@@ -16,5 +16,11 @@ export const HOSTNAME_PATTERN = /^[a-z0-9.-]+$/;
 /** Strips the "sha256=" scheme prefix HMAC signature headers are conventionally sent with. */
 export const SHA256_PREFIX_PATTERN = /^sha256=/;
 
-/** A news, event or album slug: one lowercase kebab-case segment (website-cms plan decision 14). */
-export const CONTENT_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+/** One slug segment: lowercase kebab-case (website-cms plan decision 14). */
+const SLUG_SEGMENT = "[a-z0-9]+(?:-[a-z0-9]+)*";
+
+/** A news, event or album slug: exactly one segment. */
+export const CONTENT_SLUG_PATTERN = new RegExp(`^${SLUG_SEGMENT}$`);
+
+/** A CMS page path as the API returns it: `/` (the homepage) or `/<segment>[/<segment>…]`. */
+export const PAGE_PATH_PATTERN = new RegExp(`^/(?:${SLUG_SEGMENT}(?:/${SLUG_SEGMENT})*)?$`);

@@ -97,15 +97,28 @@ describe("GET /api/preview", () => {
     expect(response.headers.get("location")).toBe("/");
   });
 
-  it.each(["//evil.example", "/\\evil.example", "https://evil.example/"])(
-    "refuses a page path that would leave the site (%s)",
-    async (path) => {
-      mockReadJson.mockResolvedValue(makePage({ path }));
-      const response = await GET(makeRequest("?token=tok-1"));
+  it("redirects a nested page to its full path", async () => {
+    mockReadJson.mockResolvedValue(makePage({ slug: "about/history", path: "/about/history" }));
+    const response = await GET(makeRequest("?token=tok-1"));
+    expect(response.headers.get("location")).toBe("/about/history");
+  });
 
-      expect(response.status).toBe(404);
-      expect(response.headers.get("set-cookie")).toBeNull();
-      expect(enable).not.toHaveBeenCalled();
-    },
-  );
+  it.each([
+    "//evil.example",
+    "/\\evil.example",
+    // Browsers strip tabs and newlines from URLs, so these would read as `//evil.example`.
+    "/\t/evil.example",
+    "/\n/evil.example",
+    "https://evil.example/",
+    "/About",
+    "/about/",
+    "",
+  ])("refuses a page path outside the page-slug grammar (%p)", async (path) => {
+    mockReadJson.mockResolvedValue(makePage({ path }));
+    const response = await GET(makeRequest("?token=tok-1"));
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("set-cookie")).toBeNull();
+    expect(enable).not.toHaveBeenCalled();
+  });
 });
