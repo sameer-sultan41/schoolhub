@@ -8750,6 +8750,56 @@ paths:
               schema:
                 $ref: '#/components/schemas/UnreadCount'
           description: ''
+  /api/v1/onboarding:
+    get:
+      operationId: onboarding_retrieve
+      description: |-
+        The school's setup checklist, computed from its own rows (§5.6).
+
+        Gated on the school-settings keys and `module.school`, the module whose structure it
+        walks. `TenantScopedViewSetMixin` is mixed in for its tenant binding only, as on
+        `SchoolSettingsView`.
+      tags:
+      - onboarding
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Onboarding'
+          description: ''
+    patch:
+      operationId: onboarding_partial_update
+      description: |-
+        The school's setup checklist, computed from its own rows (§5.6).
+
+        Gated on the school-settings keys and `module.school`, the module whose structure it
+        walks. `TenantScopedViewSetMixin` is mixed in for its tenant binding only, as on
+        `SchoolSettingsView`.
+      tags:
+      - onboarding
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOnboardingUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOnboardingUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOnboardingUpdate'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Onboarding'
+          description: ''
   /api/v1/parent-portal/dashboard:
     get:
       operationId: parent_portal_dashboard_retrieve
@@ -21855,6 +21905,79 @@ components:
       required:
       - body
       - subject
+    Onboarding:
+      type: object
+      description: 'The checklist: the school''s steps (omitting any whose module
+        is off) and completion.'
+      properties:
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/OnboardingStep'
+          readOnly: true
+        completed:
+          type: boolean
+          readOnly: true
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - completed
+      - completed_at
+      - steps
+    OnboardingStep:
+      type: object
+      description: |-
+        One step. Response only.
+
+        `count` is not read-only so that the schema marks it optional: it is the number of rows
+        meeting the step's rule, and the `profile` and `go_live` steps, which count nothing, omit it.
+      properties:
+        key:
+          allOf:
+          - $ref: '#/components/schemas/OnboardingStepKeyEnum'
+          readOnly: true
+        done:
+          type: boolean
+          readOnly: true
+        skipped:
+          type: boolean
+          readOnly: true
+        skippable:
+          type: boolean
+          readOnly: true
+        count:
+          type: integer
+          minimum: 0
+      required:
+      - done
+      - key
+      - skippable
+      - skipped
+    OnboardingStepKeyEnum:
+      enum:
+      - profile
+      - campuses
+      - academic_session
+      - classes
+      - subjects
+      - fee_structures
+      - staff_invites
+      - students
+      - go_live
+      type: string
+      description: |-
+        * `profile` - School profile
+        * `campuses` - Campuses
+        * `academic_session` - Academic session and terms
+        * `classes` - Classes and sections
+        * `subjects` - Subjects
+        * `fee_structures` - Fee structures
+        * `staff_invites` - Staff invitations
+        * `students` - Students
+        * `go_live` - Go live
     OutstandingAgingReportRow:
       type: object
       description: '`reports.outstanding_and_aging`: one student''s balance, bucketed
@@ -24914,6 +25037,20 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedOnboardingUpdate:
+      type: object
+      description: |-
+        `PATCH /onboarding`: exactly one of `confirm`, `skip` or `unskip`.
+
+        A known step the action does not apply to (confirming anything but `profile`, skipping a
+        step that is not skippable) is a 422 from the service, not a 400 here.
+      properties:
+        confirm:
+          $ref: '#/components/schemas/OnboardingStepKeyEnum'
+        skip:
+          $ref: '#/components/schemas/OnboardingStepKeyEnum'
+        unskip:
+          $ref: '#/components/schemas/OnboardingStepKeyEnum'
     PatchedPeriod:
       type: object
       description: |-

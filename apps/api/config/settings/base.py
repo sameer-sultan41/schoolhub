@@ -294,6 +294,9 @@ SPECTACULAR_SETTINGS = {
     # everything a TypeScript consumer needs.
     "ENUM_ADD_EXPLICIT_BLANK_NULL_CHOICE": False,
     "ENUM_NAME_OVERRIDES": {
+        # The onboarding checklist's step keys, shared by the step's `key` and the PATCH body's
+        # `confirm`/`skip`/`unskip`; named so it never takes a bare `KeyEnum`.
+        "OnboardingStepKeyEnum": "apps.platform_admin.onboarding.services.OnboardingStepKey",
         "PromotionDecisionEnum": "apps.academics.models.PromotionDecision",
         # One name for the batch summary's `status` and the decision rows' `status`.
         "PromotionStatusEnum": "apps.academics.models.PromotionStatus",

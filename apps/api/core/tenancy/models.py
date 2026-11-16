@@ -147,6 +147,13 @@ class TenantSettings(TimestampedModel):
         "no tenant-facing endpoint writes it, because the quota is what the school's "
         "plan pays for.",
     )
+    onboarding = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="The setup wizard's stored choices: `profile_confirmed_at`, `skipped` (step "
+        "keys) and `completed_at`. Every other step's progress is computed from the school's "
+        "own rows (platform-admin §5.6), never stored.",
+    )
     # A real column, as the entity spec defines (tenancy.md), not a `branding` JSON key: the
     # foreign key clears it when the file goes, where a JSON id would dangle.
     logo_file = models.ForeignKey(

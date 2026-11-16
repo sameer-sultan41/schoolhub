@@ -3987,6 +3987,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/onboarding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The school's setup checklist, computed from its own rows (§5.6).
+         *
+         *     Gated on the school-settings keys and `module.school`, the module whose structure it
+         *     walks. `TenantScopedViewSetMixin` is mixed in for its tenant binding only, as on
+         *     `SchoolSettingsView`.
+         */
+        get: operations["onboarding_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description The school's setup checklist, computed from its own rows (§5.6).
+         *
+         *     Gated on the school-settings keys and `module.school`, the module whose structure it
+         *     walks. `TenantScopedViewSetMixin` is mixed in for its tenant binding only, as on
+         *     `SchoolSettingsView`.
+         */
+        patch: operations["onboarding_partial_update"];
+        trace?: never;
+    };
     "/api/v1/parent-portal/dashboard": {
         parameters: {
             query?: never;
@@ -9915,6 +9945,39 @@ export interface components {
             subject: string | null;
             body: string;
         };
+        /** @description The checklist: the school's steps (omitting any whose module is off) and completion. */
+        Onboarding: {
+            readonly steps: components["schemas"]["OnboardingStep"][];
+            readonly completed: boolean;
+            /** Format: date-time */
+            readonly completed_at: string | null;
+        };
+        /**
+         * @description One step. Response only.
+         *
+         *     `count` is not read-only so that the schema marks it optional: it is the number of rows
+         *     meeting the step's rule, and the `profile` and `go_live` steps, which count nothing, omit it.
+         */
+        OnboardingStep: {
+            readonly key: components["schemas"]["OnboardingStepKeyEnum"];
+            readonly done: boolean;
+            readonly skipped: boolean;
+            readonly skippable: boolean;
+            count?: number;
+        };
+        /**
+         * @description * `profile` - School profile
+         *     * `campuses` - Campuses
+         *     * `academic_session` - Academic session and terms
+         *     * `classes` - Classes and sections
+         *     * `subjects` - Subjects
+         *     * `fee_structures` - Fee structures
+         *     * `staff_invites` - Staff invitations
+         *     * `students` - Students
+         *     * `go_live` - Go live
+         * @enum {string}
+         */
+        OnboardingStepKeyEnum: "profile" | "campuses" | "academic_session" | "classes" | "subjects" | "fee_structures" | "staff_invites" | "students" | "go_live";
         /** @description `reports.outstanding_and_aging`: one student's balance, bucketed by days past due. */
         OutstandingAgingReportRow: {
             /**
@@ -11444,6 +11507,17 @@ export interface components {
             readonly created_at?: string;
             /** Format: date-time */
             readonly updated_at?: string;
+        };
+        /**
+         * @description `PATCH /onboarding`: exactly one of `confirm`, `skip` or `unskip`.
+         *
+         *     A known step the action does not apply to (confirming anything but `profile`, skipping a
+         *     step that is not skippable) is a 422 from the service, not a 400 here.
+         */
+        PatchedOnboardingUpdate: {
+            confirm?: components["schemas"]["OnboardingStepKeyEnum"];
+            skip?: components["schemas"]["OnboardingStepKeyEnum"];
+            unskip?: components["schemas"]["OnboardingStepKeyEnum"];
         };
         /**
          * @description `periods` — one slot of the bell schedule (§5.1).
@@ -20540,6 +20614,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UnreadCount"];
+                };
+            };
+        };
+    };
+    onboarding_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Onboarding"];
+                };
+            };
+        };
+    };
+    onboarding_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedOnboardingUpdate"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedOnboardingUpdate"];
+                "multipart/form-data": components["schemas"]["PatchedOnboardingUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Onboarding"];
                 };
             };
         };

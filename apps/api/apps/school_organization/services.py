@@ -19,12 +19,12 @@ that app), several functions here are imported directly by other apps:
   keeps another app out of `sections/viewset.py`)
 - `lock_settings_row` — re-exported (the `as` alias marks it explicit) from `tenant_settings.py` for
   `apps/attendance/services.py`, which merges its keys into the same
-  `tenant_settings.academic` under the same row lock
-
-`term_coverage_errors` is not in that list: no app imports it yet. It lives in
-`academic_sessions/services/validate.py` beside the activation check that
-calls it, and is re-exported here for the onboarding wizard (PR H, Task 15) to
-read through this entry point (ADR-0013) rather than the package.
+  `tenant_settings.academic` under the same row lock, and for
+  `apps/platform_admin/onboarding/services.py`, which merges `tenant_settings.onboarding`
+- `term_coverage_errors` — re-exported from `academic_sessions/services/validate.py`, where it
+  sits beside the activation check that calls it, for
+  `apps/platform_admin/onboarding/services.py`: the wizard's session step uses the activation
+  check's term rule on its own, through this entry point (ADR-0013) rather than the package
 
 Moving them into a resource package would mean editing import lines in
 other apps for a purely internal reorganization — a bigger, riskier blast
