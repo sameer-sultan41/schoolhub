@@ -262,7 +262,10 @@ class ProvisionTests(PlatformAPITestCase):
 
         self.assertEqual(first.status_code, status.HTTP_200_OK, first.content)
         self.assertEqual(second.status_code, first.status_code)
-        self.assertEqual(second.json(), first.json())
+        # The replayed body, not the envelope: the renderer stamps each response's own
+        # `meta.request_id`.
+        self.assertEqual(second.json()["data"], first.json()["data"])
+        self.assertEqual(second.json()["meta"]["message"], first.json()["meta"]["message"])
         self.assertEqual(self.seeded(tenant), (1, 1, 1))
         with tenant_context(tenant.pk):
             self.assertTrue(IdempotencyRecord.objects.filter(key="provision-1").exists())
