@@ -9,12 +9,22 @@ import { proxy } from "../proxy";
 
 // The proxy reads the platform domain from the validated server env module (ADR-0014), which
 // is parsed once at import — so the test pins it by mocking the module, not process.env.
+// A getter, read when the proxy runs: the factory is hoisted above this `const`.
+const mockEnv = { NEXT_PUBLIC_PLATFORM_DOMAIN: "schoolhub.pk" };
 jest.mock("../lib/env", () => ({
-  env: { NEXT_PUBLIC_PLATFORM_DOMAIN: "schoolhub.pk" },
+  get env() {
+    return mockEnv;
+  },
 }));
 
-function makeRequest(host: string, path = "/", extraHeaders: Record<string, string> = {}) {
-  return new NextRequest(`https://${host}${path}`, {
+function makeRequest(
+  host: string,
+  path = "/",
+  extraHeaders: Record<string, string> = {},
+  init: { method?: string; protocol?: string } = {},
+) {
+  return new NextRequest(`${init.protocol ?? "https"}://${host}${path}`, {
+    method: init.method ?? "GET",
     headers: { host, ...extraHeaders },
   });
 }
@@ -87,5 +97,56 @@ describe("proxy", () => {
     );
     expect(response.headers.get("x-middleware-rewrite")).toBeNull();
     expect(response.headers.get("x-middleware-request-x-schoolhub-tenant-slug")).toBeNull();
+  });
+
+  it("forwards the request path and query for the layout's custom-domain redirect", () => {
+    const response = proxy(makeRequest("cityschool.schoolhub.pk", "/about?tab=history"));
+    expect(response.headers.get("x-middleware-request-x-schoolhub-path")).toBe(
+      "/about?tab=history",
+    );
+  });
+
+  it("strips a client-supplied path header", () => {
+    const response = proxy(
+      makeRequest("schoolhub.pk", "/", { "x-schoolhub-path": "//evil.test/" }),
+    );
+    expect(response.headers.get("x-middleware-request-x-schoolhub-path")).toBeNull();
+  });
+
+  // The API's revalidation webhook targets the renderer's internal origin, and a preview link
+  // may land anywhere: neither may be rewritten to the landing page (plan decisions 8 and 9).
+  describe.each([
+    ["the platform apex", "schoolhub.pk", "schoolhub.pk", "https"],
+    ["localhost as the dev and e2e apex", "localhost:3001", "localhost", "http"],
+  ])("host-independent routes on %s", (_label, host, platformDomain, protocol) => {
+    beforeEach(() => {
+      mockEnv.NEXT_PUBLIC_PLATFORM_DOMAIN = platformDomain;
+    });
+    afterEach(() => {
+      mockEnv.NEXT_PUBLIC_PLATFORM_DOMAIN = "schoolhub.pk";
+    });
+
+    it.each([
+      ["POST", "/api/revalidate"],
+      ["GET", "/api/preview?token=abc"],
+    ])("%s %s reaches its route handler", (method, path) => {
+      const response = proxy(
+        makeRequest(
+          host,
+          path,
+          { "x-schoolhub-host": "spoofed.schoolhub.pk" },
+          { method, protocol },
+        ),
+      );
+      expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+      expect(response.headers.get("x-middleware-next")).toBe("1");
+      // Still stripped: a route that resolves no school must not inherit a spoofed one.
+      expect(response.headers.get("x-middleware-request-x-schoolhub-host")).toBeNull();
+    });
+
+    it("still rewrites any other path to the landing page", () => {
+      const response = proxy(makeRequest(host, "/api/other", {}, { protocol }));
+      expect(response.headers.get("x-middleware-rewrite")).toContain("/platform-landing");
+    });
   });
 });

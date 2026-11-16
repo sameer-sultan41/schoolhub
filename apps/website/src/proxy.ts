@@ -1,6 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { env } from "@/lib/env";
-import { TENANT_HOST_HEADER, TENANT_KIND_HEADER, TENANT_SLUG_HEADER, parseHost } from "@/lib/host";
+import {
+  HOST_INDEPENDENT_PATHS,
+  TENANT_HOST_HEADER,
+  TENANT_KIND_HEADER,
+  TENANT_PATH_HEADER,
+  TENANT_SLUG_HEADER,
+  parseHost,
+} from "@/lib/host";
 
 /**
  * Resolves the tenant host on every request (website-builder.md §1).
@@ -13,6 +20,9 @@ import { TENANT_HOST_HEADER, TENANT_KIND_HEADER, TENANT_SLUG_HEADER, parseHost }
  *
  * Security: inbound `x-schoolhub-*` headers are **deleted** before ours are set. Without
  * that, a client could hand us a header and read another school's site.
+ *
+ * The proxy stays I/O-free: the custom-domain 301 needs the tenant lookup, so it happens in the
+ * root layout after the cached `resolveTenant()`, never here.
  */
 export function proxy(request: NextRequest): NextResponse {
   const resolved = parseHost(request.headers.get("host"), env.NEXT_PUBLIC_PLATFORM_DOMAIN);
@@ -21,8 +31,15 @@ export function proxy(request: NextRequest): NextResponse {
   headers.delete(TENANT_HOST_HEADER);
   headers.delete(TENANT_SLUG_HEADER);
   headers.delete(TENANT_KIND_HEADER);
+  headers.delete(TENANT_PATH_HEADER);
 
   if (!resolved) {
+    // The revalidation webhook and preview entry are host-independent: the API calls the
+    // renderer's internal origin (an apex or `localhost`), which resolves to no school.
+    if (HOST_INDEPENDENT_PATHS.has(request.nextUrl.pathname)) {
+      return NextResponse.next({ request: { headers } });
+    }
+
     // Unknown host → the platform landing page. Never fall back to another tenant.
     //
     // Not `/_platform`: Next.js treats an underscore-prefixed segment as a private
@@ -47,6 +64,7 @@ export function proxy(request: NextRequest): NextResponse {
   headers.set(TENANT_HOST_HEADER, resolved.host);
   headers.set(TENANT_KIND_HEADER, resolved.kind);
   if (resolved.slug) headers.set(TENANT_SLUG_HEADER, resolved.slug);
+  headers.set(TENANT_PATH_HEADER, `${request.nextUrl.pathname}${request.nextUrl.search}`);
 
   return NextResponse.next({ request: { headers } });
 }
