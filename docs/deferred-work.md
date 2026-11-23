@@ -99,16 +99,29 @@ either this file or `project-status.md`.
     created school before auditing (platform-admin §7.4 documents the current behaviour).
   - **Platform-ops copies of the lifecycle notices.** `notify()` is per tenant, so
     `platform.tenant-suspended`/`-reinstated` reach the school's owners only; §12's copy to
-    platform ops waits for the platform-ops channel (PR B).
+    platform ops waits for the platform-ops channel (still open after PR B; see below).
   - **The owner's billing view now exists** (`GET /api/v1/subscription`, PR B), but the
     suspended-owner login exception above is still to build.
 
 - **Plans and subscriptions, what platform-admin PR B leaves out** (Task 4,
   `apps/api/apps/platform_admin/{plans,subscriptions}/`, platform-admin §7.5).
   - **A real billing provider.** Schools are billed manually from the console (`:activate`,
-    `:record-payment`, `:mark-payment-failed`), with a fake adapter behind the webhook later in
-    this PR. The launch market is Pakistan, where Stripe does not onboard merchants, and §19
-    leaves the provider open; a real adapter needs that commercial decision.
+    `:record-payment`, `:mark-payment-failed`). The webhook
+    (`POST /platform/billing-events/{provider}`) is built against the `BillingAdapter`
+    protocol (`apps/platform_admin/billing/base.py`), with only the fake adapter able to
+    receive events. The launch market is Pakistan, where Stripe does not onboard merchants,
+    and §19 leaves the provider open; a real adapter needs that commercial decision. A
+    payment event for a `trialing` subscription is recorded `ignored`: converting a trial
+    from a webhook waits for a provider whose events say which period was bought.
+  - **The platform-ops notification channel.** `notify()` is per tenant, so
+    `platform.payment-failed` and `platform.trial-expiring` reach the school's owners only;
+    §12's copy to `platform_super_admin` and the lifecycle notices' copy to platform ops wait
+    for a platform-scope channel (an ops inbox, or an email list in settings).
+  - **No guard on a flag's platform default.** `PATCH /platform/feature-flags/{id}` changes
+    every school at once and asks no disable guard: a guard answers for one school, and asking
+    it for every school is a sweep the console has no shape for yet. Switching
+    `module.timetable`'s default off still leaves period-mode schools refused at the register
+    (attendance's `assert_register_period`), as before.
   - **Proration.** `:change-plan` moves the live subscription to the new plan at once and
     leaves its period and price untouched; nothing credits or charges the difference (§5,
     §19 recommendation).
@@ -423,13 +436,6 @@ either this file or `project-status.md`.
     nearest thing to "the covered period ran" the system records. It is not wired: a
     register says who marked the period, not that the lesson was taught, and deciding
     what evidence counts is a module-doc decision (`attendance.md` §20).
-  - **Turning `module.timetable` off while a tenant is in period mode is not refused.**
-    The flag is toggled in platform admin, outside this module, so the toggle does not
-    check the mode first. What happens next is enforced: `assert_register_period`
-    refuses every period register, on the read and at `:bulk-mark` (422 on
-    `period_id`), until the timetable is back on or the school switches to daily; the
-    Settings tab's help text says so. Still open: refusing, or warning on, the toggle
-    itself.
   - **Two simultaneous period submissions can both alert.** The per-(student, date,
     event) dedupe reads committed rows, so P1 and P2 marked absent in the same instant
     each send an absence alert. The cost is a duplicate alert, never a missing one;

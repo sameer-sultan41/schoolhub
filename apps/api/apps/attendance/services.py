@@ -55,6 +55,7 @@ from core.files.services import assert_file_usable, get_download_url
 from core.imports.tabular import parse_rows
 from core.rbac.models import RecordScope
 from core.rbac.permissions import is_restricted_principal, scopes_for
+from core.tenancy.context import tenant_atomic
 from core.tenancy.features import is_feature_enabled
 from core.tenancy.models import TenantSettings
 
@@ -165,6 +166,23 @@ def attendance_settings_from(academic: dict) -> dict:
         "lock_window_days": lock_window_days_from(academic),
         "leave_escalation_threshold_days": escalation_threshold_days_from(academic),
     }
+
+
+TIMETABLE_NEEDED = (
+    "This school takes attendance by period, which reads the timetable. Switch attendance "
+    "to daily before turning the timetable off."
+)
+
+
+def timetable_disable_refusal(tenant_id: uuid.UUID) -> str | None:
+    """The `module.timetable` disable guard (`core.tenancy.features.register_disable_guard`).
+
+    Period mode marks attendance against timetable periods, so a school in it cannot lose
+    the timetable: every period register would be refused until it came back.
+    """
+    with tenant_atomic(tenant_id):
+        mode = read_attendance_settings(tenant_id=tenant_id)["attendance_mode"]
+    return TIMETABLE_NEEDED if mode == ATTENDANCE_MODE_PERIOD else None
 
 
 def read_attendance_settings(*, tenant_id: uuid.UUID) -> dict:

@@ -95,6 +95,31 @@ def _plan_enables(key: str, *, tenant_id: uuid.UUID) -> bool | None:
     return key in modules
 
 
+# Guards on switching a flag off for one school. A module that cannot run without another
+# registers one from its `ready()` (ADR-0013): it answers why the school still needs the flag,
+# or None. The console refuses a disable any guard objects to (409 `toggle_refused`).
+type DisableGuard = Callable[[uuid.UUID], str | None]
+
+# Keyed by flag, so a test can swap the registry with `mock.patch.dict`.
+_disable_guards: dict[str, list[DisableGuard]] = {}
+
+
+def register_disable_guard(key: str, fn: DisableGuard) -> None:
+    """Ask ``fn`` before ``key`` is switched off for a school. Registering twice is a no-op."""
+    guards = _disable_guards.setdefault(key, [])
+    if fn not in guards:
+        guards.append(fn)
+
+
+def disable_refusal(key: str, tenant_id: uuid.UUID) -> str | None:
+    """Why ``key`` may not be switched off for the school, or None when nothing objects."""
+    for guard in _disable_guards.get(key, ()):
+        reason = guard(tenant_id)
+        if reason:
+            return reason
+    return None
+
+
 @dataclass(frozen=True)
 class FeatureSpec:
     key: str
@@ -149,6 +174,11 @@ def load_module_features() -> None:
 def sync_feature_flags() -> dict[str, int]:
     """Upsert every registered flag key. Returns a small change summary.
 
+    A new key takes the code's default and kill-switch setting. An existing row keeps its
+    own: once a flag exists, the platform console owns ``default_enabled`` and
+    ``is_kill_switch`` (`PATCH /platform/feature-flags/{id}`), and a deploy must not undo a
+    kill switch an operator just threw. Only the description follows the code.
+
     Removal is not automatic, for the same reason core.rbac.sync leaves stale
     permission rows alone: a key missing from the registry may be a rename in
     progress, and silently deleting the row would drop every tenant override
@@ -161,6 +191,7 @@ def sync_feature_flags() -> dict[str, int]:
 
     to_create = []
     to_update = []
+    drifted: list[str] = []
 
     for spec in specs:
         current = existing.get(spec.key)
@@ -173,27 +204,30 @@ def sync_feature_flags() -> dict[str, int]:
                     is_kill_switch=spec.is_kill_switch,
                 )
             )
-        elif (
-            current.description != spec.description
-            or current.default_enabled != spec.default_enabled
-            or current.is_kill_switch != spec.is_kill_switch
-        ):
-            current.description = spec.description
-            current.default_enabled = spec.default_enabled
-            current.is_kill_switch = spec.is_kill_switch
-            to_update.append(current)
+        else:
+            if (current.default_enabled, current.is_kill_switch) != (
+                spec.default_enabled,
+                spec.is_kill_switch,
+            ):
+                drifted.append(spec.key)
+            if current.description != spec.description:
+                current.description = spec.description
+                to_update.append(current)
 
     if to_create:
         FeatureFlag.objects.bulk_create(to_create, batch_size=500)
     if to_update:
-        FeatureFlag.objects.bulk_update(
-            to_update, ["description", "default_enabled", "is_kill_switch"], batch_size=500
-        )
-    if to_create or to_update:
-        # bulk_create/bulk_update don't emit post_save, so signals.evict_on_flag_change
-        # never runs — do its job here, or a flag's default flipped on deploy stays
-        # resolved from the stale cached value for up to _CACHE_TTL.
+        FeatureFlag.objects.bulk_update(to_update, ["description"], batch_size=500)
+    if to_create:
+        # bulk_create doesn't emit post_save, so signals.evict_on_flag_change never runs:
+        # do its job here, or a new key stays resolved from a cached miss for _CACHE_TTL.
         bump_feature_cache_generation()
+
+    if drifted:
+        logger.info(
+            "feature flags whose console setting differs from the code's default: %s",
+            ", ".join(sorted(drifted)),
+        )
 
     stale = sorted(set(existing) - registry.keys())
     if stale:
@@ -242,7 +276,16 @@ def is_feature_enabled(key: str, *, tenant_id: uuid.UUID) -> bool:
     return resolved
 
 
-def _resolve_feature(key: str, *, tenant_id: uuid.UUID) -> bool:
+def resolve_without_override(key: str, *, tenant_id: uuid.UUID) -> bool:
+    """What ``key`` resolves to for the school once its override is gone. Uncached.
+
+    The console asks this before removing an override, to know whether removing it is a
+    disable that a guard must allow (`disable_refusal`).
+    """
+    return _resolve_feature(key, tenant_id=tenant_id, ignore_override=True)
+
+
+def _resolve_feature(key: str, *, tenant_id: uuid.UUID, ignore_override: bool = False) -> bool:
     from core.tenancy.models import FeatureFlag, TenantFeatureOverride
 
     flag = FeatureFlag.objects.filter(key=key).first()
@@ -251,7 +294,9 @@ def _resolve_feature(key: str, *, tenant_id: uuid.UUID) -> bool:
         return False
 
     override = (
-        TenantFeatureOverride.all_tenants.filter(
+        None
+        if ignore_override
+        else TenantFeatureOverride.all_tenants.filter(
             tenant_id=tenant_id, feature_flag=flag, deleted_at__isnull=True
         )
         .order_by("-created_at")

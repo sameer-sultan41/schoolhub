@@ -49,6 +49,12 @@ def live_overrides(tenant: Tenant) -> list[TenantFeatureOverride]:
         )
 
 
+def resolved(tenant: Tenant) -> bool:
+    """`module.timetable` for ``tenant``, resolved with that school bound as a request is."""
+    with tenant_context(tenant.pk):
+        return features.is_feature_enabled(TIMETABLE, tenant_id=tenant.pk)
+
+
 def kill_switch() -> FeatureFlag:
     """A registered flag turned into a kill switch, defaulting off."""
     flag = FeatureFlag.objects.get(key=TIMETABLE)
@@ -136,7 +142,7 @@ class FeatureOverrideTests(PlatformAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
         listed = self.client.get(overrides_url(self.tenant)).json()["data"]
         self.assertEqual([(row["flag"], row["enabled"]) for row in listed], [(TIMETABLE, True)])
-        self.assertTrue(features.is_feature_enabled(TIMETABLE, tenant_id=self.tenant.pk))
+        self.assertTrue(resolved(self.tenant))
         audit = AuditLog.objects.get(action="create", resource_id=response.json()["data"]["id"])
         self.assertEqual(audit.tenant_id, self.tenant.pk)
 
@@ -147,7 +153,7 @@ class FeatureOverrideTests(PlatformAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
         self.assertEqual([o.enabled for o in live_overrides(self.tenant)], [False])
-        self.assertFalse(features.is_feature_enabled(TIMETABLE, tenant_id=self.tenant.pk))
+        self.assertFalse(resolved(self.tenant))
 
     def test_an_unknown_flag_or_a_past_expiry_is_400(self) -> None:
         unknown = self.client.post(

@@ -119,3 +119,48 @@ class Subscription(TenantOwnedModel):
 
     def __str__(self) -> str:
         return f"{self.tenant_id}: {self.plan_id} ({self.status})"
+
+
+class BillingOutcome(models.TextChoices):
+    APPLIED = "applied", "Applied"
+    # Verified, but the subscription could not take it (out of order, or a state it has left).
+    IGNORED = "ignored", "Ignored"
+    # Verified, but no school carries the event's provider reference.
+    UNKNOWN_REF = "unknown_ref", "Unknown reference"
+    NO_SUBSCRIPTION = "no_subscription", "No live subscription"
+
+
+class BillingEventReceipt(TimestampedModel):
+    """One billing-provider event, received once: the webhook's idempotency record.
+
+    Platform scope (no RLS): it is claimed before the school is known, and an event whose
+    reference names no school is still recorded. ``(provider, event_id)`` is unique, so a
+    replayed or concurrent duplicate finds the row and does nothing.
+    """
+
+    provider = models.CharField(max_length=30)
+    event_id = models.CharField(max_length=200)
+    kind = models.CharField(max_length=40)
+    provider_ref = models.CharField(max_length=120)
+    tenant = models.ForeignKey(
+        "tenancy.Tenant",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        help_text="The school the reference named, if any.",
+    )
+    outcome = models.CharField(max_length=20, choices=BillingOutcome.choices)
+
+    objects = models.Manager()
+
+    class Meta:
+        db_table = "billing_event_receipts"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "event_id"], name="billing_event_receipts_unique_event"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.provider}:{self.event_id} ({self.outcome})"

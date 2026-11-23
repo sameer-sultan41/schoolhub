@@ -437,11 +437,12 @@ rather than worked around, because the workaround would be a key nobody declared
   ([ADR-0028](../decisions/0028-one-attendance-mode-per-tenant.md)): one mode per
   tenant, switched through `PATCH /attendance-settings` and the dashboard's Settings
   tab. Still open, in `docs/deferred-work.md`: mapping a half-day leave to periods
-  (a half-day leave writes a daily row and blocks every period that day); refusing
-  the platform-admin toggle that turns `module.timetable` off while a tenant is in
-  period mode (the registers themselves are enforced: every period register is a 422
-  on `period_id` until it is back on or the mode is daily); and two
-  simultaneous period submissions for one student, which can each send an alert.
+  (a half-day leave writes a daily row and blocks every period that day), and two
+  simultaneous period submissions for one student, which can each send an alert. The
+  platform console now refuses a per-school `module.timetable` override that would switch
+  it off while the school is in period mode (409 `toggle_refused`): attendance registers
+  `services.timetable_disable_refusal` as the flag's disable guard from
+  `AttendanceConfig.ready()`.
 - **The staff register's department filter, a report viewer's mode read, and a `holiday`
   staff correction.** The API takes `department_id`, but the dashboard has no departments
   reference list yet; the Reports tab learns the tenant's mode only from a report's response;

@@ -227,6 +227,9 @@ THROTTLE_RATES: dict[str, str] = {
     # The public payment callback: per (school, callback token), and failed signatures per IP.
     "payment_callback": "600/min",
     "payment_callback_failure": "30/min",
+    # The platform's billing webhook: per provider, and failed signatures per IP.
+    "billing_event": "600/min",
+    "billing_event_failure": "30/min",
     # Emailed-link endpoints (ADR-0033): reset per account and per IP, and a roomier
     # per-IP bucket for invitations so onboarding behind one NAT is not starved.
     "password_reset_email": "5/hour",
@@ -343,6 +346,8 @@ SPECTACULAR_SETTINGS = {
         "MarksStatusEnum": "apps.examinations.models.MarksStatus",
         "ResultStatusEnum": "apps.examinations.models.ResultStatus",
         "ResultOutcomeEnum": "apps.examinations.models.ResultOutcome",
+        # The billing webhook's `outcome`, distinct from a result's.
+        "BillingOutcomeEnum": "apps.platform_admin.models.BillingOutcome",
         "ReportCardStatusEnum": "apps.examinations.models.ReportCardStatus",
         "QuestionBankStatusEnum": "apps.examinations.models.QuestionBankStatus",
         "QuestionTypeEnum": "apps.examinations.models.QuestionType",
@@ -500,6 +505,14 @@ CELERY_TASK_ROUTES = {
     # notifications.md §5's always-warm lane: a school-closure broadcast must not
     # queue behind a term's invoice run or a morning of absence alerts.
     "apps.communication.tasks.send_emergency_broadcast_task": {"queue": EMERGENCY_QUEUE},
+    # The platform console's sweeps: nobody waits on them. Their two notices are what a
+    # school owner acts on (a trial ending, a failed payment), so they are transactional.
+    "apps.platform_admin.tasks.trial_reminders": {"queue": "bulk"},
+    "apps.platform_admin.tasks.expire_trials": {"queue": "bulk"},
+    "apps.platform_admin.tasks.dunning_sweep": {"queue": "bulk"},
+    "apps.platform_admin.tasks.lapse_overrides": {"queue": "bulk"},
+    "apps.platform_admin.tasks.send_trial_expiring_notice": {"queue": "transactional"},
+    "apps.platform_admin.tasks.send_payment_failed_notice": {"queue": "transactional"},
 }
 # An unrouted task goes to a queue the workers consume. Celery's own default, "celery",
 # is consumed by nothing here, so an unrouted task would wait on it forever.
@@ -583,6 +596,26 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.fees_finance.tasks.reconcile_gateway_payments",
         "schedule": crontab(hour="5", minute="40"),
     },
+    # The platform console (platform-admin.md §7.2). Expiry and dunning first, so a school
+    # suspended tonight is not also reminded; reminders before a school day starts.
+    "platform-expire-trials": {
+        "task": "apps.platform_admin.tasks.expire_trials",
+        "schedule": crontab(hour="2", minute="10"),
+    },
+    "platform-dunning-sweep": {
+        "task": "apps.platform_admin.tasks.dunning_sweep",
+        "schedule": crontab(hour="2", minute="30"),
+    },
+    "platform-trial-reminders": {
+        "task": "apps.platform_admin.tasks.trial_reminders",
+        "schedule": crontab(hour="6", minute="0"),
+    },
+    # Hourly: an override's expiry is a time of day, and resolution already ignores it, so
+    # this only tidies the console's list and records the lapse.
+    "platform-lapse-overrides": {
+        "task": "apps.platform_admin.tasks.lapse_overrides",
+        "schedule": crontab(minute="23"),
+    },
 }
 
 # The AI gateway (core/ai). The API key is server-side only and never leaves the backend
@@ -621,6 +654,11 @@ PLATFORM_IMPERSONATION_MAX_MINUTES = env.int("PLATFORM_IMPERSONATION_MAX_MINUTES
 PLATFORM_HANDOFF_CODE_TTL_SECONDS = env.int("PLATFORM_HANDOFF_CODE_TTL_SECONDS", default=120)
 # Shared secret of the billing provider's webhook. Empty = the webhook answers 503.
 PLATFORM_BILLING_WEBHOOK_SECRET = env("PLATFORM_BILLING_WEBHOOK_SECRET", default="")
+# Billing providers whose webhook is accepted (apps/platform_admin/billing). Empty by default,
+# so the fake provider is never live unless a deployment names it.
+PLATFORM_BILLING_PROVIDERS_ENABLED: list[str] = env.list(
+    "PLATFORM_BILLING_PROVIDERS_ENABLED", default=[]
+)
 
 # TOTP MFA (core/rbac/mfa.py, auth-and-rbac §1). Seconds a sign-in's MFA challenge stays valid.
 MFA_CHALLENGE_TTL_SECONDS = env.int("MFA_CHALLENGE_TTL_SECONDS", default=300)

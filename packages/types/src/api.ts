@@ -174,6 +174,9 @@ export const API_ERROR_CODES = [
   // and starting a second live subscription for a school (both 409).
   "plan_in_use",
   "subscription_exists",
+  // The feature-flag console (apps/api/apps/platform_admin/flags): a disable the school still
+  // needs (a registered guard objects), or an override switching a kill switch on (409).
+  "toggle_refused",
   // Synthesised by this client when the request never produced an envelope.
   "network_error",
   "server_error",

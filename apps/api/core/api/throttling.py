@@ -123,6 +123,28 @@ class PaymentCallbackFailureThrottle(SimpleRateThrottle):
         return max((self.duration or 0) - (now - history[-1]), 0.0)
 
 
+class BillingEventThrottle(SimpleRateThrottle):
+    """The platform's billing webhook, per provider (`/platform/billing-events/{provider}`).
+
+    One provider sends every school's events from a handful of addresses, so the bucket is
+    the provider, as `PaymentCallbackThrottle`'s is the school's account.
+    """
+
+    scope = "billing_event"
+
+    def get_cache_key(self, request, view):
+        kwargs = getattr(view, "kwargs", None) or {}
+        ident = str(kwargs.get("provider", ""))[:30]
+        return self.cache_format % {"scope": self.scope, "ident": ident}
+
+
+class BillingEventFailureThrottle(PaymentCallbackFailureThrottle):
+    """Failed billing-webhook signatures, per client IP; `PaymentCallbackFailureThrottle`'s
+    mechanics in a bucket of its own."""
+
+    scope = "billing_event_failure"
+
+
 class PasswordResetIPThrottle(SimpleRateThrottle):
     """Per-IP bucket for password reset and its confirm.
 
