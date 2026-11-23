@@ -13,7 +13,9 @@ would replace.
 
 ``core`` never imports an app (ADR-0013), so the models that hold ciphertext register a
 *rotator* from their ``AppConfig.ready``; ``rotate_integration_credentials`` calls each
-one inside a bound tenant transaction.
+one inside a bound tenant transaction. Ciphertext in a table without RLS (a platform
+user's TOTP secret on ``users``) registers a *global* rotator instead, which the command
+calls once with no tenant bound.
 """
 
 from __future__ import annotations
@@ -68,3 +70,16 @@ def register_rotator(fn: Callable[[], int]) -> None:
 
 def registered_rotators() -> list[Callable[[], int]]:
     return list(_ROTATORS)
+
+
+# Each global rotator re-encrypts rows of a table outside any tenant's RLS boundary.
+_GLOBAL_ROTATORS: list[Callable[[], int]] = []
+
+
+def register_global_rotator(fn: Callable[[], int]) -> None:
+    if fn not in _GLOBAL_ROTATORS:
+        _GLOBAL_ROTATORS.append(fn)
+
+
+def registered_global_rotators() -> list[Callable[[], int]]:
+    return list(_GLOBAL_ROTATORS)

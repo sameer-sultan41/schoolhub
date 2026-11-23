@@ -5,16 +5,16 @@ import { toast } from "sonner";
 
 import { Services } from "@/services";
 import type { BackgroundJobRecord } from "@/services/modules/jobs/jobs-service";
-import { renderWithProviders } from "@/test-utils";
+import { renderWithProviders, setUrl } from "@/test-utils";
 
 import { StudentToolbar } from "../student-toolbar";
 
-// `ToolbarHeading` (used inside `StudentToolbar` via `Toolbar`) calls `usePathname()` to
-// resolve the page title from `menu-config.ts` — outside a real Next.js App Router tree
-// `usePathname()` has no route to read, and `useMenu`'s own `isActive` unconditionally
-// calls `pathname.startsWith(...)`, which throws on a nullish pathname. Matches
-// `staff-toolbar.test.tsx`'s own identical mock.
-jest.mock("next/navigation", () => ({ usePathname: () => "/students" }));
+// The in-memory `next/navigation` (`createNavigationMock`): `ToolbarHeading` reads the pathname
+// for its title, and the toolbar reads and clears `?import=1`. Each test starts at `/students`.
+jest.mock("next/navigation", () => {
+  const testUtils = jest.requireActual<{ createNavigationMock: () => unknown }>("@/test-utils");
+  return testUtils.createNavigationMock();
+});
 
 jest.mock("@/services", () => ({
   Services: {
@@ -99,6 +99,7 @@ function exportJob(
 
 describe("StudentToolbar", () => {
   beforeEach(() => {
+    setUrl("/students");
     mockFetchStudentsPage.mockReset();
     mockTriggerStudentExport.mockReset();
     mockFetchJob.mockReset();
@@ -299,5 +300,46 @@ describe("StudentToolbar", () => {
     const dialog = await screen.findByRole("dialog", { name: "Import students" });
     expect(within(dialog).getByText("campus_code")).toBeInTheDocument();
     expect(within(dialog).getByText("preferred_name")).toBeInTheDocument();
+  });
+
+  it("opens the import dialog from ?import=1 for an import holder, then drops the key", async () => {
+    resolveStats();
+    mockUseCurrentUser.mockReturnValue({
+      data: userWith("students.student.import"),
+      isError: false,
+    });
+    setUrl("/students?import=1&status=active");
+
+    renderWithProviders(<StudentToolbar />);
+
+    expect(await screen.findByRole("dialog", { name: "Import students" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(window.location.search).toBe("?status=active");
+    });
+  });
+
+  it("ignores ?import=1 without the import key, and still drops it", async () => {
+    resolveStats();
+    mockUseCurrentUser.mockReturnValue({ data: userWith(), isError: false });
+    setUrl("/students?import=1");
+
+    renderWithProviders(<StudentToolbar />);
+
+    await waitFor(() => {
+      expect(window.location.search).toBe("");
+    });
+    expect(screen.queryByRole("dialog", { name: "Import students" })).not.toBeInTheDocument();
+  });
+
+  it("waits for the user's keys before acting on ?import=1", async () => {
+    resolveStats();
+    mockUseCurrentUser.mockReturnValue({ data: undefined, isError: false });
+    setUrl("/students?import=1");
+
+    renderWithProviders(<StudentToolbar />);
+
+    await screen.findByRole("button", { name: "Import CSV" });
+    expect(window.location.search).toBe("?import=1");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });

@@ -5241,5 +5241,98 @@
         }
       }
     }
+  },
+  "onboarding": {
+    "title": "Set up your school",
+    "description": "Work through each step to get your school ready. You can come back any time; your progress is saved as you go.",
+    "nav": {
+      "label": "Setup steps"
+    },
+    "status": {
+      "done": "Done",
+      "skipped": "Skipped",
+      "todo": "To do",
+      "withCount": "{status} · {count, plural, one {# record} other {# records}}"
+    },
+    "steps": {
+      "profile": {
+        "title": "School profile",
+        "description": "Check your school's name, logo, colour, timezone, language and currency, then confirm them."
+      },
+      "campuses": {
+        "title": "Campuses",
+        "description": "Add at least one active campus where teaching happens."
+      },
+      "academic_session": {
+        "title": "Session and terms",
+        "description": "Add the school year and terms that cover it from its first day to its last."
+      },
+      "classes": {
+        "title": "Classes and sections",
+        "description": "Add your classes, and at least one active section in one of them."
+      },
+      "subjects": {
+        "title": "Subjects",
+        "description": "Add the subjects you teach."
+      },
+      "fee_structures": {
+        "title": "Fee structures",
+        "description": "Set up and activate at least one fee structure. You can skip this and do it later."
+      },
+      "staff_invites": {
+        "title": "Invite staff",
+        "description": "Invite your staff so they can sign in. You can skip this and do it later."
+      },
+      "students": {
+        "title": "Import students",
+        "description": "Import your students from a spreadsheet. You can skip this and do it later."
+      },
+      "go_live": {
+        "title": "Go live",
+        "description": "Activate your school year. Once a session is active, attendance, fees and the other modules can use it."
+      }
+    },
+    "actions": {
+      "confirmProfile": "Confirm profile",
+      "profileConfirmed": "Profile confirmed",
+      "skip": "Skip this step",
+      "unskip": "Undo skip",
+      "back": "Previous step",
+      "next": "Next step",
+      "openFeeStructures": "Open fee structures",
+      "openStaff": "Open staff",
+      "openStudentImport": "Import students"
+    },
+    "toasts": {
+      "confirmed": "Profile confirmed",
+      "skipped": "Step skipped",
+      "unskipped": "Step restored",
+      "failed": "That change couldn't be saved. Try again."
+    },
+    "noAccess": "You don't have permission for this step. Ask someone who manages it to complete it.",
+    "finished": {
+      "title": "Your school is set up",
+      "description": "Every step is done. You can change anything later from the School module.",
+      "home": "Go to the dashboard"
+    },
+    "nothingToDo": {
+      "title": "Nothing for you to do here",
+      "description": "The steps left need someone with other permissions."
+    },
+    "loadFailed": "Setup progress couldn't be loaded.",
+    "goLive": {
+      "live": "Your school is live: a session is active.",
+      "noSession": "Add a session with terms that cover it before going live.",
+      "toSession": "Go to session and terms",
+      "planned": "Sessions ready to activate",
+      "activate": "Activate {name}",
+      "loadFailed": "Sessions couldn't be loaded."
+    },
+    "card": {
+      "title": "Finish setting up",
+      "progress": "{settled} of {total} steps done",
+      "progressLabel": "Setup progress",
+      "continue": "Continue setup"
+    }
   }
 }

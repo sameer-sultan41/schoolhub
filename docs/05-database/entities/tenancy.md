@@ -16,15 +16,20 @@
 | name | varchar(200) | no | — | Legal/display name |
 | slug | varchar(63) | no | — | Unique, DNS-safe; becomes `<slug>.<platform-domain>`; immutable after provisioning |
 | status | varchar(20) | no | `'provisioning'` | Enum: `provisioning` `trial` `active` `past_due` `suspended` `deprovisioned` (multi-tenancy §7) |
-| contact_name | varchar(200) | yes | — | Primary commercial contact |
-| contact_email | varchar(254) | no | — | Owner invite target |
-| contact_phone | varchar(30) | yes | — | |
+| contact_name | varchar(200) | no | `''` (database default) | Primary commercial contact; `''` when unknown |
+| contact_email | varchar(254) | no | `''` (database default) | Owner invite target; `''` only on rows that predate the column, and `:provision` refuses one |
+| contact_phone | varchar(30) | no | `''` (database default) | |
 | trial_ends_at | timestamptz | yes | — | Set at provisioning |
 | provisioned_at | timestamptz | yes | — | Seed transaction completed |
 | suspended_at | timestamptz | yes | — | With reason in `audit_logs` |
 | deprovision_after | timestamptz | yes | — | End of 90-day retention window |
+| current_plan | varchar(50) | no | `''` (database default) | The live plan's `code`; blank without one. Denormalised read model |
+| subscription_status | varchar(20) | no | `''` (database default) | The live subscription's `status`; blank without one. Denormalised read model |
+| billing_provider_ref | varchar(120) | no | `''` (database default) | The billing provider's reference; unique when set. Denormalised read model |
 
-Indexes: unique(slug); (status).
+Indexes: unique(slug); (status); unique(billing_provider_ref) where not blank.
+
+The last three columns let a platform-wide lookup (the billing webhook, "is this plan in use?") read subscription state with no tenant bound, which the RLS-bound `subscriptions` table cannot answer. The subscription services write them in the same transaction as the `subscriptions` row, which stays the source of truth. They are plain columns, not a foreign key to `plans`, because `core` never references the platform console's app (ADR-0013). `contact_email` is stored blank (not null) on rows older than the column; the console requires it, since `:provision` invites the owner there.
 Relationships: 1:1 `tenant_settings`; 1:N `subscriptions`, `custom_domains`, `users`, and every tenant-owned table platform-wide.
 
 ### tenant_settings
@@ -56,6 +61,11 @@ under the row lock; `/school-settings` returns `academic` but ignores it in a PA
 `AI_MONTHLY_TOKEN_BUDGET_DEFAULT` for one school (`core/ai/budget.py`). No tenant-facing endpoint
 writes it, because the quota is the platform's, not the school's (SEC-16); the school-settings API
 refuses the key.
+`onboarding` (jsonb, not null, database default `'{}'`) holds the setup wizard's stored choices:
+`profile_confirmed_at`, `skipped` (step keys) and `completed_at`; every other step's progress is
+computed from the school's rows (platform-admin §5.6). It has two writers: `PATCH /onboarding`,
+which merges `profile_confirmed_at` and `skipped` under the row lock, and `GET /onboarding`, which
+stamps `completed_at` once with a conditional `UPDATE … WHERE onboarding->>'completed_at' IS NULL`.
 
 ### plans
 **Platform scope — no `tenant_id`.** Subscription tier catalog controlling modules and limits (multi-tenancy §6).
@@ -149,13 +159,29 @@ All user accounts — tenant members **and** platform staff. **Exception:** `ten
 | status | varchar(20) | no | `'invited'` | Enum: `invited` `active` `disabled` `locked` |
 | locale | varchar(10) | yes | — | Falls back to tenant locale |
 | timezone | varchar(50) | yes | — | Falls back to tenant timezone |
-| mfa_enabled | boolean | no | `false` | TOTP (auth-and-rbac §1) |
-| mfa_secret | varchar(255) | yes | — | Encrypted at rest |
+| mfa_enabled | boolean | no | `false` | TOTP (auth-and-rbac §1); true only once a first code is confirmed |
+| mfa_secret | bytea | yes | — | The TOTP secret, Fernet-encrypted with `INTEGRATIONS_ENCRYPTION_KEYS` (`core.integrations.crypto`); set at enrolment |
+| mfa_last_timecode | bigint | yes | — | TOTP time step of the last accepted code; an equal or older one is a replay |
+| mfa_failed_attempts | smallint | no | `0` (database default) | Consecutive wrong second-factor codes; counted before each check, reset only on success or by `create_platform_admin --unlock-mfa`/`--reset-mfa`. At `MFA_PERMANENT_LOCKOUT_ATTEMPTS` (100) the factor stays locked until an operator lifts it |
+| mfa_locked_until | timestamptz | yes | — | Second factor refused until then; set at every `MFA_MAX_FAILED_ATTEMPTS`-th consecutive failure, doubling each time |
 | last_login_at | timestamptz | yes | — | |
 | password_changed_at | timestamptz | yes | — | |
 
 Indexes: unique(tenant_id, email) [partial: email not null]; unique(tenant_id, username) [partial]; partial unique(email) where tenant_id is null (platform staff); (tenant_id, status).
-Relationships: 1:N `user_roles`, `audit_logs` (as actor); 1:1 optional links from `students`/`staff`/guardians in [`people.md`](people.md).
+Relationships: 1:N `user_roles`, `mfa_recovery_codes`, `audit_logs` (as actor); 1:1 optional links from `students`/`staff`/guardians in [`people.md`](people.md).
+
+### mfa_recovery_codes
+Single-use fallbacks for a lost authenticator, issued ten at a time when MFA is confirmed (auth-and-rbac §1). **Exception:** no `tenant_id` and no RLS, like `users`; no `updated_at`/actor/soft-delete columns. A new set replaces the old one.
+
+| Column | Type | Null | Default | Notes |
+| ------ | ---- | ---- | ------- | ----- |
+| user_id | uuid | no | — | FK → users, cascade |
+| code_hash | varchar(64) | no | — | SHA-256 hex of the normalised code (80 random bits); the code itself is never stored |
+| used_at | timestamptz | yes | — | Set once, by a conditional update, when the code signs someone in |
+| created_at | timestamptz | no | now() | |
+
+Indexes: unique(user_id, code_hash).
+Relationships: N:1 `users`.
 
 ### roles
 Named permission sets. **Exception:** `tenant_id` nullable — `NULL` = platform-seeded default role (visible to all tenants, release-managed); non-null = tenant custom role.

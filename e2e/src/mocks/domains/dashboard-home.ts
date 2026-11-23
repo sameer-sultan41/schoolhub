@@ -1,6 +1,7 @@
 import { ORG_IDS } from "@/data/factories";
 import { ok, pagedList, paginated } from "../envelope";
 import type { MockModule } from "../router";
+import { FINISHED_ONBOARDING, onboardingModule } from "./onboarding";
 
 export interface DashboardHomeOptions {
   /** `meta.pagination.total_count` for `/students`. Omit for the default head count. */
@@ -34,6 +35,9 @@ export function dashboardHomeModule(options: DashboardHomeOptions = {}): MockMod
   const { studentTotal = 482, staffTotal = 37 } = options;
 
   return (api) => {
+    // The "Finish setting up" card's read: a school that went live, so the card stays hidden.
+    // `onboarding-wizard.spec.ts` registers its own `onboardingModule` over it.
+    onboardingModule(FINISHED_ONBOARDING)(api);
     api.get("/students", () =>
       pagedList([{ id: "student-e2e" }], { page_size: 1, total_count: studentTotal }),
     );

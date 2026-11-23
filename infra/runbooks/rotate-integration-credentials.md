@@ -1,8 +1,9 @@
 # Runbook — Rotate the integration credentials key
 
-**Purpose.** Replace the key that encrypts each school's stored payment-gateway credentials
-(`INTEGRATIONS_ENCRYPTION_KEYS`), on a schedule or because a key may have leaked, without any
-school re-entering its credentials and without a moment where stored credentials cannot be read.
+**Purpose.** Replace the key that encrypts each school's stored payment-gateway credentials and
+every platform operator's TOTP secret (`INTEGRATIONS_ENCRYPTION_KEYS`), on a schedule or because
+a key may have leaked, without any school re-entering its credentials, any operator re-enrolling,
+or a moment where a stored secret cannot be read.
 
 **How it works.** The setting is a comma-separated list of Fernet keys, **newest first**
 (`apps/api/core/integrations/crypto.py`, `MultiFernet`). The first key encrypts; every key in the
@@ -38,13 +39,15 @@ documented) and [ADR-0034](../../docs/decisions/0034-online-fee-payments.md).
    agree: a worker still on the old list cannot decrypt a row the API just re-encrypted.
    Wait until every running task has the new value.
 
-4. **Re-encrypt every tenant's rows** under the new key:
+4. **Re-encrypt every row** under the new key:
 
    ```bash
    python manage.py rotate_integration_credentials
    ```
 
-   It runs tenant by tenant (`for_each_tenant`), including soft-deleted rows, and prints
+   It first re-encrypts the TOTP secrets on `users` once, with no tenant bound (that table has
+   no RLS), and prints `Rotated N platform-wide secret(s).` It then runs tenant by tenant
+   (`for_each_tenant`), including soft-deleted rows, and prints
    `Rotated N credential(s) across T tenant(s); F failure(s).` It is safe to re-run.
 
 5. **If it reports any failure, stop.** It exits non-zero. Read the logs for the tenant and

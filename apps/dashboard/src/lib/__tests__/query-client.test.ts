@@ -73,6 +73,7 @@ describe("queryKeys", () => {
   it("builds stable, module-first keys", () => {
     expect(queryKeys.session()).toEqual(["session"]);
     expect(queryKeys.schoolSettings()).toEqual(["school-settings"]);
+    expect(queryKeys.onboarding()).toEqual(["onboarding"]);
     expect(queryKeys.module("fees")).toEqual(["fees"]);
     expect(queryKeys.list("fees", "invoices")).toEqual(["fees", "invoices", "list", {}]);
     expect(queryKeys.list("fees", "invoices", { status: "overdue" })).toEqual([

@@ -11,6 +11,7 @@ import { enumBadge, enumLabel } from "@/lib/enum-label";
 import { formatDate } from "@/lib/helpers";
 import { SESSION_STATUS_LABEL_KEY } from "@/features/school/shared/structure-enum-labels";
 import type { AcademicSessionRecord, AcademicSessionStatus } from "@/services";
+import { PLANNED_SESSION_STATUS } from "@/services/modules/school-organization/school-organization-constant";
 import {
   LOCKED_SESSION_STATUSES,
   SESSION_TERMS_COLUMN_ID,
@@ -159,7 +160,7 @@ export function useSessionColumns(
                   onEdit(session);
                 }}
               />
-              {canActivate && session.status === "planned" && (
+              {canActivate && session.status === PLANNED_SESSION_STATUS && (
                 <Button
                   size="sm"
                   variant="outline"

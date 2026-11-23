@@ -12,7 +12,10 @@ export default function StudentsPage() {
   return (
     <>
       <Container>
-        <StudentToolbar />
+        {/* The toolbar reads `?import=1` (`useSearchParams`), so it gets a boundary too. */}
+        <Suspense>
+          <StudentToolbar />
+        </Suspense>
       </Container>
       <Container>
         {/* The table reads the URL (`useSearchParams`); Next asks for a Suspense boundary

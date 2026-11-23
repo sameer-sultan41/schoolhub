@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { Button, Skeleton } from "@schoolhub/ui";
@@ -11,6 +11,7 @@ import { BulkImportDialog } from "@/components/bulk-import-dialog";
 import { StatChip } from "@/components/stat-chip";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useJobFileDownload } from "@/hooks/use-job-file-download";
+import { useUrlParams } from "@/hooks/use-url-params";
 import { hasPermission } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
@@ -18,7 +19,10 @@ import {
   STUDENT_EXPORT_FILENAME,
   STUDENT_IMPORT_JOB_STORAGE_PREFIX,
   STUDENT_IMPORT_OPTIONAL_COLUMNS,
+  STUDENT_IMPORT_PERMISSION,
   STUDENT_IMPORT_REQUIRED_COLUMNS,
+  STUDENT_IMPORT_URL_PARAM,
+  STUDENT_IMPORT_URL_VALUE,
   STUDENT_WITHDRAWABLE_STATUS,
 } from "@/services/modules/students/students-constant";
 import { StudentCreateStepper } from "./student-create-stepper";
@@ -108,7 +112,25 @@ export function StudentToolbar() {
   const { data: currentUser, isError: isCurrentUserError } = useCurrentUser();
   const canCreate = hasPermission(currentUser, "students.student.create");
   const canExport = hasPermission(currentUser, "students.student.export");
-  const canImport = hasPermission(currentUser, "students.student.import");
+  const canImport = hasPermission(currentUser, STUDENT_IMPORT_PERMISSION);
+
+  // `?import=1` (the onboarding wizard's students step) opens the import dialog, for a holder of
+  // the import key only, once the user's keys are known; then the key leaves the URL so a reload
+  // or a shared link doesn't reopen it. State is adjusted during render, not in an effect.
+  const { searchParams, setParams } = useUrlParams();
+  const importRequested =
+    searchParams.get(STUDENT_IMPORT_URL_PARAM) === STUDENT_IMPORT_URL_VALUE &&
+    currentUser !== undefined;
+  const [importParamSeen, setImportParamSeen] = useState(false);
+  if (importRequested && !importParamSeen) {
+    setImportParamSeen(true);
+    if (canImport) setImportOpen(true);
+  } else if (!importRequested && importParamSeen) {
+    setImportParamSeen(false);
+  }
+  useEffect(() => {
+    if (importRequested) setParams({ [STUDENT_IMPORT_URL_PARAM]: null });
+  }, [importRequested, setParams]);
   // Fail closed, as the sidebar's own module gate does: the button stays disabled until
   // the user's permissions are actually known (the API enforces regardless), and the
   // `title` says why rather than leaving a dead button unexplained.

@@ -51,6 +51,7 @@
 
 **Requirement:** TOTP MFA available at launch for platform roles and tenant owners/admins; per-tenant policy can enforce MFA for all staff; architecture supports adding SMS-OTP/WebAuthn without contract changes.
 **Implementation:** `second_factor` step in the login state machine (auth-and-rbac.md §1); recovery codes generated at enrollment; MFA changes are security-audited events.
+**As built (platform users):** TOTP via `pyotp` in `apps/api/core/rbac/mfa.py`; the secret encrypted with `INTEGRATIONS_ENCRYPTION_KEYS`; replay prevented by the stored last time step; a per-account lockout that doubles every `MFA_MAX_FAILED_ATTEMPTS` consecutive wrong codes and holds until an operator lifts it (`create_platform_admin --unlock-mfa`) at 100, so no more than 100 consecutive failures are possible (NIST SP 800-63B §5.2.2); ten SHA-256-hashed single-use recovery codes; tokens carry `amr` and the platform console requires `"otp"`; no self-service disable for a platform user (`create_platform_admin --reset-mfa`). Tenant owners/admins and per-tenant enforcement are deferred (`docs/deferred-work.md`).
 
 ## SEC-07 API Security
 

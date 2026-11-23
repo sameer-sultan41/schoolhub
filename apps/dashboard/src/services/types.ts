@@ -264,6 +264,12 @@ export type {
 } from "./modules/school-organization";
 export type { SchoolSettingsRecord, SchoolSettingsUpdate } from "./modules/school-settings";
 export type {
+  OnboardingRecord,
+  OnboardingStep,
+  OnboardingStepKey,
+  OnboardingUpdate,
+} from "./modules/onboarding";
+export type {
   AllocateTeacherInput,
   AllocationSaveResult,
   TeacherAllocationPageQuery,

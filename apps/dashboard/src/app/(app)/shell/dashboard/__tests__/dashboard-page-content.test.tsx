@@ -29,6 +29,8 @@ jest.mock("@/services", () => ({
   Services: {
     auth: { fetchCurrentUser: jest.fn() },
     dashboard: { fetchDashboardOverview: jest.fn() },
+    // The "Finish setting up" card's read; it waits on the current user, which never resolves.
+    onboarding: { fetchOnboarding: jest.fn() },
     timetableSlots: { fetchMyTimetable: jest.fn() },
     schoolOrganization: { fetchAcademicSessions: jest.fn() },
     staff: { fetchStaffDirectory: jest.fn() },
