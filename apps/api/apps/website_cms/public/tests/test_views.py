@@ -7,6 +7,7 @@ site's own state). Every request carries the machine token unless the test is ab
 from __future__ import annotations
 
 import time
+from datetime import UTC, datetime, timedelta
 from unittest import mock
 
 from django.core.cache import cache
@@ -487,6 +488,26 @@ class PreviewTests(PublicAPITestCase):
         self.assertEqual(response.json()["data"]["status"], "draft")
         self.assertEqual(response["Cache-Control"], "no-store")
         self.assertIn("X-Preview-Token", response["Vary"])
+
+    def test_preview_response_carries_the_tokens_expiry(self) -> None:
+        signed_at = int(time.time()) - 100
+        with mock.patch("django.core.signing.time.time", return_value=signed_at):
+            token = make_preview_token(self.draft)
+        expected = (
+            (datetime.fromtimestamp(signed_at, tz=UTC) + timedelta(seconds=PREVIEW_TOKEN_MAX_AGE))
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
+        for resource, params in (("pages", {"slug": "admissions"}), ("site", {})):
+            with self.subTest(resource=resource):
+                response = self.read(resource, meta={"HTTP_X_PREVIEW_TOKEN": token}, **params)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response["X-Preview-Expires-At"], expected)
+
+    def test_published_read_without_a_token_has_no_expiry_header(self) -> None:
+        self.make_page(slug="about", status=PUBLISHED)
+        response = self.read("pages", slug="about")
+        self.assertNotIn("X-Preview-Expires-At", response)
 
     def test_published_page_varies_on_the_preview_header_but_is_cacheable(self) -> None:
         self.make_page(slug="about", status=PUBLISHED)

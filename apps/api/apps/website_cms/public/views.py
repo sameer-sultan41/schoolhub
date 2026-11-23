@@ -10,6 +10,8 @@ from __future__ import annotations
 import contextlib
 from collections.abc import Iterator
 from contextlib import AbstractContextManager
+from dataclasses import dataclass
+from datetime import datetime
 from uuid import UUID
 
 from django.core.signing import BadSignature
@@ -24,7 +26,7 @@ from rest_framework.views import APIView
 from apps.website_cms.constants import PUBLIC_LIST_MAX, WebsiteStatus
 from apps.website_cms.features import FEATURE
 from apps.website_cms.hosts import resolve_host, website_status
-from apps.website_cms.preview import read_preview_token
+from apps.website_cms.preview import read_preview_token_with_expiry
 from apps.website_cms.public import services
 from apps.website_cms.public.serializers import (
     PublicPageSerializer,
@@ -45,6 +47,8 @@ from core.tenancy.models import Tenant, TenantStatus
 
 #: The header a draft page's preview token travels in; never a query parameter (SEC-57).
 PREVIEW_HEADER = "X-Preview-Token"
+#: Response header: when the presented preview token stops working (ISO-8601, UTC).
+PREVIEW_EXPIRES_HEADER = "X-Preview-Expires-At"
 
 HOST_PARAMETER = OpenApiParameter(
     "host", str, required=True, description="The site's host, as the visitor's browser sent it."
@@ -56,6 +60,16 @@ PREVIEW_PARAMETER = OpenApiParameter(
     required=False,
     description="A page preview token for this host's school: reads before the site is live.",
 )
+
+
+@dataclass(frozen=True)
+class PreviewGrant:
+    """What a valid `X-Preview-Token` allows: one page, until `expires_at`."""
+
+    page_id: UUID
+    expires_at: datetime
+
+
 PAGE_SIZE_PARAMETER = OpenApiParameter(
     "page_size",
     int,
@@ -123,8 +137,8 @@ class PublicContentView(APIView):
         """`bound_website_tenant`: yield `tenant` bound with `tenant_atomic`, or raise 404."""
         return bound_website_tenant(tenant, require_live=require_live)
 
-    def preview_page_id(self, request: Request, tenant: Tenant) -> UUID | None:
-        """The page a `X-Preview-Token` header names, `None` without one; 404 if it is bad.
+    def preview_grant(self, request: Request, tenant: Tenant) -> PreviewGrant | None:
+        """The page and expiry a `X-Preview-Token` header grants, `None` without one; 404 if bad.
 
         Only the header counts (SEC-57). An expired or tampered token, or one for another
         school, is 404, so the renderer's `/api/preview` can trust the status code.
@@ -133,19 +147,20 @@ class PublicContentView(APIView):
         if not token:
             return None
         try:
-            tenant_id, page_id = read_preview_token(token)
+            tenant_id, page_id, expires_at = read_preview_token_with_expiry(token)
         except BadSignature as exc:  # SignatureExpired is a BadSignature
             raise NotFound from exc
         if tenant_id != tenant.pk:
             raise NotFound
-        return page_id
+        return PreviewGrant(page_id=page_id, expires_at=expires_at)
 
     @staticmethod
-    def mark_preview(response: Response, *, preview: bool) -> Response:
-        """Mark a response a preview token can change: never cached when it did."""
+    def mark_preview(response: Response, *, grant: PreviewGrant | None) -> Response:
+        """Mark a response a preview token can change: if it did, no-store plus the token expiry."""
         patch_vary_headers(response, [PREVIEW_HEADER])
-        if preview:
+        if grant is not None:
             patch_cache_control(response, no_store=True)
+            response[PREVIEW_EXPIRES_HEADER] = grant.expires_at.isoformat().replace("+00:00", "Z")
         return response
 
 
@@ -192,10 +207,10 @@ class PublicSiteView(PublicContentView):
     )
     def get(self, request: Request) -> Response:
         tenant = self.get_tenant(request)
-        preview = self.preview_page_id(request, tenant) is not None
-        with self.bound(tenant, require_live=not preview):
+        grant = self.preview_grant(request, tenant)
+        with self.bound(tenant, require_live=grant is None):
             data = services.read_site(tenant)
-        return self.mark_preview(Response(PublicSiteSerializer(data).data), preview=preview)
+        return self.mark_preview(Response(PublicSiteSerializer(data).data), grant=grant)
 
 
 class PublicPageView(PublicContentView):
@@ -225,15 +240,17 @@ class PublicPageView(PublicContentView):
     )
     def get(self, request: Request) -> Response:
         tenant = self.get_tenant(request)
-        preview_page_id = self.preview_page_id(request, tenant)
+        grant = self.preview_grant(request, tenant)
         raw_slug = request.query_params.get("slug")
         slug = None if raw_slug is None else str(raw_slug)
-        with self.bound(tenant, require_live=preview_page_id is None):
-            data = services.read_page(tenant, slug, preview_page_id=preview_page_id)
+        with self.bound(tenant, require_live=grant is None):
+            data = services.read_page(
+                tenant, slug, preview_page_id=None if grant is None else grant.page_id
+            )
         if data is None:
             raise NotFound
         response = Response(PublicPageSerializer(data).data)
-        return self.mark_preview(response, preview=preview_page_id is not None)
+        return self.mark_preview(response, grant=grant)
 
 
 class PublicSitemapView(PublicContentView):
