@@ -93,7 +93,7 @@ either this file or `project-status.md`.
   - **The preview token is in the editor's link.** `POST …:preview` returns `/api/preview?token=…` (`pages/viewset.py`), so for its 600 s life the token can appear in the renderer's access log and the browser's history; the renderer → API hop is header-only. A POST-based hand-off (or a one-time code exchanged for the token) would keep it out of URLs.
   - **The preview banner can show for a junk or expired cookie.** The banner keys on the cookie being present, not on the API accepting it. Fix by having the API return the token's expiry and setting the cookie's `maxAge` from it.
   - **External-host logos load unoptimised.** `branding.logo_url` may be any https host, so the navigation logo bypasses `next/image`'s optimiser instead of widening its allow-list. Serving logos through the API's file route would let them be optimised.
-  - ~~**Image config is fixed at build time.**~~ **Closed by the website launch-infra PR.** The one build input is `WEBSITE_IMAGE_HOSTNAME` (e.g. `**.<prod domain>`), the same value for every environment; the contact form's origin is the runtime `API_PUBLIC_ORIGIN`, passed as a prop. The Dockerfile takes it as its one build argument and CI builds the runner image.
+  - ~~**Image config is fixed at build time.**~~ **Closed by the website launch-infra PR.** The one build input is `WEBSITE_IMAGE_HOSTNAME` (the exact list `api.<prod domain>,api.staging.<prod domain>`), the same value for every environment; the contact form's origin is the runtime `API_PUBLIC_ORIGIN`, passed as a prop. The Dockerfile takes it as its one build argument and CI builds the runner image.
   - **The custom-domain redirect is a 308**, not a 301 (`permanentRedirect` in the root layout; a layout cannot return a 301). Both are permanent; a literal 301 needs a route-level response.
   - **`header_config` and `footer_config` are not rendered.** They have no schema yet (PR A); the renderer reads menus and social links only.
   - **Duplicate menu items warn in React.** Navigation keys are `href` plus label; two identical items in one menu are not unique.
@@ -141,6 +141,13 @@ either this file or `project-status.md`.
   - **A CloudFront custom origin header** as defence in depth beside the prefix list: it would
     stop another CloudFront distribution reaching the ALB around this one's WAF, at the cost of a
     shared secret in state and a condition on every listener rule.
+  - **Tenant slugs are not validated against reserved subdomain labels.** `sites` (the
+    custom-domain CNAME target), `www`, `api` and the rest are refused only by host resolution
+    (`website_cms.hosts`, the renderer's `RESERVED_LABELS`), so a school created with such a slug
+    exists but its site never resolves. When platform-admin's provisioning lands: move
+    `RESERVED_SUBDOMAIN_LABELS` to `core/tenancy/hosts.py`, add a `Tenant.slug` validator that
+    refuses them, and have `website_cms.constants` re-export the set (`core` cannot import an app,
+    ADR-0013). `platform-admin.md` §11 already states the rule.
   - **`SizeRestrictions_BODY` (8 KB) on webhook bodies.** The production WAF's common rule set
     blocks bodies over 8 KB; a bulk publish with a long tag list could exceed it.
 
