@@ -9808,7 +9808,8 @@ paths:
         '409':
           description: 'invalid_transition: the subscription''s status does not allow
             this move; no_live_subscription: the school has none; toggle_refused:
-            the plan would switch off a module the school still needs.'
+            the plan would switch off a module the school still needs; limit_below_usage:
+            a limit would drop below the school''s latest usage (`meta.over_usage`).'
         '422':
           description: No active plan has this code, or it is the same.
   /api/v1/platform/tenants/{tenant_pk}/subscription:mark-payment-failed:
@@ -30669,6 +30670,11 @@ components:
         plan_code:
           type: string
           maxLength: 50
+        acknowledge_over_usage:
+          type: boolean
+          default: false
+          description: Move to a plan whose limits sit below the school's latest usage
+            snapshot anyway; without it that is a 409 limit_below_usage.
       required:
       - plan_code
     SubscriptionPayment:
