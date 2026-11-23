@@ -271,6 +271,8 @@ THROTTLE_RATES: dict[str, str] = {
     "machine_client": "1200/min",
     # The anonymous public file redirect, per (client IP, file).
     "public_file": "120/min",
+    # Public content reads with a page preview token (uncached), per client IP.
+    "public_preview": "60/min",
 }
 
 REST_FRAMEWORK = {

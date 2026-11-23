@@ -22,6 +22,7 @@ from core.api.throttling import (
     PublicFileThrottle,
     PublicFormTenantThrottle,
     PublicFormThrottle,
+    PublicPreviewThrottle,
     TenantRateThrottle,
     UserRateThrottle,
 )
@@ -43,6 +44,7 @@ DEFAULT_RATES = {
     "invitation_ip": "60/hour",
     "machine_client": "1200/min",
     "public_file": "120/min",
+    "public_preview": "60/min",
 }
 
 
@@ -65,6 +67,7 @@ class ThrottleRateTests(SimpleTestCase):
             InvitationIPThrottle,
             MachineClientThrottle,
             PublicFileThrottle,
+            PublicPreviewThrottle,
         ):
             with self.subTest(throttle=throttle.__name__):
                 self.assertNotIn("rate", vars(throttle))

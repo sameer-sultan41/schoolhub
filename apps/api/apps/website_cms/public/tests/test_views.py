@@ -47,6 +47,7 @@ from apps.website_cms.tests.factories import (
     enable_feature,
     make_custom_domain,
 )
+from core.api.throttling import PublicPreviewThrottle
 from core.tenancy.context import tenant_context
 from core.tenancy.models import TenantFeatureOverride, TenantSettings, TenantStatus
 
@@ -556,6 +557,47 @@ class PreviewTests(PublicAPITestCase):
         self.make_section(self.draft, position=1, is_visible=False)
         sections = self.preview(make_preview_token(self.draft)).json()["data"]["sections"]
         self.assertEqual(len(sections), 1)
+
+
+class PreviewThrottleTests(PublicAPITestCase):
+    """Preview reads are uncached, so they have their own per-IP bucket (`public_preview`)."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.draft = self.make_page(slug="admissions", status=ContentStatus.DRAFT)
+        self.make_section(self.draft, position=0, content={"heading": "Apply now"})
+        patcher = mock.patch.dict(PublicPreviewThrottle.THROTTLE_RATES, {"public_preview": "2/min"})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def preview(self, route: str = "pages", token: str | None = None, **meta):
+        # A junk token unless one is given: it still counts against the bucket.
+        header = token if token is not None else "not-a-token"
+        return self.read(route, meta={"HTTP_X_PREVIEW_TOKEN": header, **meta})
+
+    def test_preview_reads_are_throttled_per_ip(self) -> None:
+        token = make_preview_token(self.draft)
+        statuses = [self.preview(token=token).status_code for _ in range(3)]
+
+        self.assertEqual(statuses, [200, 200, 429])
+
+    def test_bad_tokens_count_too_on_pages_and_site(self) -> None:
+        statuses = [self.preview(route).status_code for route in ("pages", "site", "pages")]
+
+        self.assertEqual(statuses, [404, 404, 429])
+
+    def test_another_ip_has_its_own_bucket(self) -> None:
+        for _ in range(3):
+            self.preview()
+
+        self.assertEqual(self.preview(REMOTE_ADDR="203.0.113.9").status_code, 404)
+
+    def test_reads_without_the_header_are_not_counted(self) -> None:
+        for _ in range(3):
+            self.preview()
+
+        self.assertNotEqual(self.read("pages").status_code, 429)
+        self.assertNotEqual(self.read("site").status_code, 429)
 
 
 class SiteTests(PublicAPITestCase):

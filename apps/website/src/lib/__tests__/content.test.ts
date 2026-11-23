@@ -1,5 +1,5 @@
 import type * as ReactModule from "react";
-import { readJson } from "../api";
+import { ContentFetchError, readJson } from "../api";
 import {
   getAlbum,
   getClasses,
@@ -24,6 +24,14 @@ jest.mock("react", () => ({
   cache: (fn: unknown) => fn,
 }));
 jest.mock("../api", () => ({
+  ContentFetchError: class ContentFetchError extends Error {
+    constructor(
+      message: string,
+      readonly status: number,
+    ) {
+      super(message);
+    }
+  },
   readJson: jest.fn(),
   tenantTag: (id: string) => `tenant:${id}`,
   hostTag: (host: string) => `tenant-host:${host}`,
@@ -116,26 +124,60 @@ describe("getPage", () => {
 });
 
 describe("preview", () => {
+  const draft = { id: "draft" };
+  const published = { id: "published" };
+
   it.each([
-    ["getPage", () => getPage("t1", HOST, "about")],
-    ["getSite", () => getSite("t1", HOST)],
-  ])("%s sends the Draft Mode token", async (_name, call) => {
+    ["getPage", "/public/pages", () => getPage("t1", HOST, "about")],
+    ["getSite", "/public/site", () => getSite("t1", HOST)],
+  ])("%s reads the draft with the cookie's token, uncached", async (_name, path, call) => {
     mockGetPreviewToken.mockResolvedValue("tok-1");
-    mockReadJson.mockResolvedValue(null);
-    await call();
+    mockReadJson.mockResolvedValue(draft);
+
+    await expect(call()).resolves.toBe(draft);
+    expect(mockReadJson).toHaveBeenCalledTimes(1);
     expect(mockReadJson).toHaveBeenCalledWith(
-      expect.any(String),
+      path,
       expect.objectContaining({ previewToken: "tok-1" }),
     );
   });
 
-  it("sends no token outside Draft Mode", async () => {
-    mockReadJson.mockResolvedValue(null);
-    await getPage("t1", HOST, "about");
-    expect(mockReadJson).toHaveBeenCalledWith(
-      "/public/pages",
-      expect.objectContaining({ previewToken: null }),
-    );
+  it("stays the cached, tagged published read without a preview cookie", async () => {
+    mockReadJson.mockResolvedValue(published);
+
+    await expect(getPage("t1", HOST, "about")).resolves.toBe(published);
+    expect(mockReadJson).toHaveBeenCalledTimes(1);
+    const options = mockReadJson.mock.calls[0]?.[1];
+    expect(options).not.toHaveProperty("previewToken");
+    expect(options?.tags).toContain("tenant:t1");
+  });
+
+  it("falls back to the cached published read when the API refuses the token", async () => {
+    // An expired, forged or other page's token: the API answers 404 to the preview read.
+    mockGetPreviewToken.mockResolvedValue("junk");
+    mockReadJson.mockResolvedValueOnce(null).mockResolvedValueOnce(published);
+
+    await expect(getPage("t1", HOST, "about")).resolves.toBe(published);
+    expect(mockReadJson).toHaveBeenCalledTimes(2);
+    const fallback = mockReadJson.mock.calls[1]?.[1];
+    expect(fallback).not.toHaveProperty("previewToken");
+    expect(fallback?.tags).toContain("tenant:t1");
+  });
+
+  it("falls back to the published read when preview reads are throttled", async () => {
+    mockGetPreviewToken.mockResolvedValue("tok-1");
+    mockReadJson
+      .mockRejectedValueOnce(new ContentFetchError("throttled", 429))
+      .mockResolvedValueOnce(published);
+
+    await expect(getSite("t1", HOST)).resolves.toBe(published);
+  });
+
+  it("does not hide any other failure of the preview read", async () => {
+    mockGetPreviewToken.mockResolvedValue("tok-1");
+    mockReadJson.mockRejectedValueOnce(new ContentFetchError("down", 503));
+
+    await expect(getPage("t1", HOST, "about")).rejects.toThrow("down");
   });
 
   it("never sends it on a module read", async () => {

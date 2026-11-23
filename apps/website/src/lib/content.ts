@@ -1,6 +1,6 @@
 import type { ApiSchemas } from "@schoolhub/api-client";
 import { cache } from "react";
-import { hostTag, pageTag, readJson, tenantTag } from "./api";
+import { ContentFetchError, type ReadOptions, hostTag, pageTag, readJson, tenantTag } from "./api";
 import { getPreviewToken } from "./preview";
 import { CONTENT_SLUG_PATTERN } from "./regex";
 
@@ -47,25 +47,43 @@ export function toPageSlug(segments: string[] | undefined): string {
 }
 
 /**
- * The homepage is asked for with no slug: `slug=home` is a 404 by contract. In Draft Mode the
- * preview token goes along (uncached), so the token's own page reads in any status.
+ * A `pages` or `site` read, as a preview when the preview cookie holds a token.
+ *
+ * The preview read is uncached and sends `X-Preview-Token`. When the API refuses it (an expired,
+ * forged or other page's token: 404) or throttles it (429), the cached published read answers
+ * instead, so a bad cookie never costs more than one uncached request.
+ */
+async function readWithPreview<TData>(path: string, options: ReadOptions): Promise<TData | null> {
+  const previewToken = await getPreviewToken();
+  if (previewToken) {
+    try {
+      const draft = await readJson<TData>(path, { ...options, previewToken });
+      if (draft) return draft;
+    } catch (error) {
+      if (!(error instanceof ContentFetchError && error.status === 429)) throw error;
+    }
+  }
+  return readJson<TData>(path, options);
+}
+
+/**
+ * The homepage is asked for with no slug: `slug=home` is a 404 by contract. Under a preview
+ * cookie the token's draft page is read; any other page falls back to its published version.
  */
 export const getPage = cache(
   async (tenantId: string, host: string, slug: string): Promise<PublicPage | null> =>
-    readJson<PublicPage>("/public/pages", {
+    readWithPreview<PublicPage>("/public/pages", {
       host,
       query: { slug: slug || undefined },
       tags: [tenantTag(tenantId), hostTag(host), pageTag(tenantId, slug)],
-      previewToken: await getPreviewToken(),
     }),
 );
 
-/** In Draft Mode the preview token lets a site that is not live yet be read. */
+/** Under a preview cookie the token lets a site that is not live yet be read. */
 export const getSite = cache(async (tenantId: string, host: string): Promise<PublicSite | null> =>
-  readJson<PublicSite>("/public/site", {
+  readWithPreview<PublicSite>("/public/site", {
     host,
     tags: [tenantTag(tenantId), hostTag(host), `tenant:${tenantId}:site`],
-    previewToken: await getPreviewToken(),
   }),
 );
 

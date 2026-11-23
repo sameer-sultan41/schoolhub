@@ -110,6 +110,21 @@ class PublicFileThrottle(SimpleRateThrottle):
         return self.cache_format % {"scope": self.scope, "ident": ident}
 
 
+class PublicPreviewThrottle(SimpleRateThrottle):
+    """Public content reads carrying a page preview token, per client IP.
+
+    A preview read is never cached, so each one reaches the API. This bucket is separate from
+    the machine client's per-host quota, so a stream of preview reads (a replayed or forged
+    preview cookie) cannot spend a school's host quota. The views apply it only to a request
+    that carries the token.
+    """
+
+    scope = "public_preview"
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {"scope": self.scope, "ident": client_ip(request) or "unknown"}
+
+
 class PaymentCallbackThrottle(SimpleRateThrottle):
     """The public payment callback, per (school slug, callback token).
 

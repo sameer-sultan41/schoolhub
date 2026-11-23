@@ -4,18 +4,15 @@
  * next/server's NextRequest/NextResponse need the real Web Request/Response globals,
  * which jsdom (this project's default testEnvironment) does not provide.
  */
-import { draftMode } from "next/headers";
 import { NextRequest } from "next/server";
 import { readJson } from "@/lib/api";
 import { makePage } from "@/test-utils";
 import { GET } from "../route";
 
-jest.mock("next/headers", () => ({ draftMode: jest.fn(), cookies: jest.fn() }));
+jest.mock("next/headers", () => ({ cookies: jest.fn() }));
 jest.mock("@/lib/api", () => ({ readJson: jest.fn() }));
 
 const mockReadJson = readJson as jest.MockedFunction<typeof readJson>;
-const mockDraftMode = draftMode as jest.MockedFunction<typeof draftMode>;
-const enable = jest.fn();
 
 const HOST = "cityschool.schoolhub.pk";
 
@@ -25,8 +22,6 @@ function makeRequest(query: string, host = HOST) {
 
 beforeEach(() => {
   mockReadJson.mockReset();
-  enable.mockReset();
-  mockDraftMode.mockResolvedValue({ enable } as unknown as Awaited<ReturnType<typeof draftMode>>);
 });
 
 describe("GET /api/preview", () => {
@@ -35,7 +30,6 @@ describe("GET /api/preview", () => {
 
     expect(response.status).toBe(400);
     expect(mockReadJson).not.toHaveBeenCalled();
-    expect(enable).not.toHaveBeenCalled();
   });
 
   it("is a 400 for a token far longer than a signed one", async () => {
@@ -61,16 +55,14 @@ describe("GET /api/preview", () => {
     expect(response.status).toBe(404);
     expect(response.headers.get("location")).toBeNull();
     expect(response.headers.get("set-cookie")).toBeNull();
-    expect(enable).not.toHaveBeenCalled();
   });
 
-  it("enables Draft Mode, stores the token and redirects to the API's page path", async () => {
+  it("stores the token and redirects to the API's page path", async () => {
     mockReadJson.mockResolvedValue(makePage({ slug: "about", path: "/about", status: "draft" }));
     const response = await GET(makeRequest("?token=tok-1"));
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("/about");
-    expect(enable).toHaveBeenCalledTimes(1);
     const cookie = response.headers.get("set-cookie") ?? "";
     expect(cookie).toContain("schoolhub_preview=tok-1");
     expect(cookie).toMatch(/HttpOnly/i);
@@ -119,6 +111,16 @@ describe("GET /api/preview", () => {
 
     expect(response.status).toBe(404);
     expect(response.headers.get("set-cookie")).toBeNull();
-    expect(enable).not.toHaveBeenCalled();
+  });
+
+  it("never sets Next's build-wide Draft Mode cookie, only the school's token cookie", async () => {
+    // `__prerender_bypass` is one value per build: set here, it would open uncached renders on
+    // every school's host. The token cookie is the only preview switch.
+    mockReadJson.mockResolvedValue(makePage({ slug: "about", path: "/about" }));
+    const response = await GET(makeRequest("?token=tok-1"));
+
+    const cookie = response.headers.get("set-cookie") ?? "";
+    expect(cookie).not.toContain("__prerender_bypass");
+    expect(response.cookies.getAll().map(({ name }) => name)).toEqual(["schoolhub_preview"]);
   });
 });

@@ -1,9 +1,13 @@
 import type { ApiSchemas } from "@schoolhub/api-client";
-import { draftMode } from "next/headers";
 import { type NextRequest, NextResponse } from "next/server";
 import { readJson } from "@/lib/api";
 import { normalizeHost } from "@/lib/host";
-import { PREVIEW_COOKIE, PREVIEW_COOKIE_OPTIONS, PREVIEW_MAX_AGE_SECONDS } from "@/lib/preview";
+import {
+  PREVIEW_COOKIE,
+  PREVIEW_COOKIE_OPTIONS,
+  PREVIEW_MAX_AGE_SECONDS,
+  PREVIEW_TOKEN_MAX_LENGTH,
+} from "@/lib/preview";
 import { PAGE_PATH_PATTERN } from "@/lib/regex";
 
 /**
@@ -11,17 +15,14 @@ import { PAGE_PATH_PATTERN } from "@/lib/regex";
  * on the school's own host, with `?token=`.
  *
  * The token is validated first, by reading the token's page from the API with the token in
- * `X-Preview-Token`. Only a 200 enables Draft Mode and stores the token (httpOnly, Secure,
- * `SameSite=Lax`, 600 s, the token's own lifetime). The redirect goes to the page path the API
+ * `X-Preview-Token`. Only a 200 stores the token (httpOnly, Secure, `SameSite=Lax`, 600 s, the
+ * token's own lifetime); Next's Draft Mode is never enabled (see `lib/preview.ts`). The redirect goes to the page path the API
  * returned, never to anything in the request, so this cannot be an open redirect, and an invalid
  * token can never switch on the uncached draft path.
  */
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-/** Comfortably above a signed `tenant_id:page_id` token; anything longer is not one. */
-const TOKEN_MAX_LENGTH = 512;
 
 function errorResponse(status: 400 | 404, code: string, message: string) {
   return NextResponse.json(
@@ -32,7 +33,7 @@ function errorResponse(status: 400 | 404, code: string, message: string) {
 
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get("token");
-  if (!token || token.length > TOKEN_MAX_LENGTH) {
+  if (!token || token.length > PREVIEW_TOKEN_MAX_LENGTH) {
     return errorResponse(400, "validation_error", "A preview token is required.");
   }
 
@@ -48,8 +49,6 @@ export async function GET(request: NextRequest) {
   if (!page || !PAGE_PATH_PATTERN.test(page.path)) {
     return errorResponse(404, "not_found", "Preview not found.");
   }
-
-  (await draftMode()).enable();
 
   // A relative Location stays on the host the editor opened, whatever origin the server sees.
   const response = new NextResponse(null, {
