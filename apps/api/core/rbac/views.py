@@ -206,7 +206,9 @@ class MfaVerifyView(APIView):
     pair with ``amr=["pwd","otp"]``. A wrong code is a 400 ``invalid_mfa_code``. Every attempt
     counts against the challenge (``MFA_CHALLENGE_MAX_ATTEMPTS``; past it, or once used, a 400
     ``mfa_challenge_invalid`` and the client signs in again) and against the account
-    (``MFA_MAX_FAILED_ATTEMPTS`` consecutive failures lock it: 429 ``mfa_locked``).
+    (``MFA_MAX_FAILED_ATTEMPTS`` consecutive failures lock it: 429 ``mfa_locked``, for twice as
+    long each time; ``MFA_PERMANENT_LOCKOUT_ATTEMPTS`` failures lock it until an operator runs
+    ``create_platform_admin --unlock-mfa``).
     """
 
     permission_classes = [AllowAny]
