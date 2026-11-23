@@ -6,7 +6,7 @@ its `tenants` row locked and its state checked again: an operator may have moved
 since the candidates were read. One school failing is logged and the sweep goes on.
 
 The nightly usage snapshot (`snapshot_all`) visits every school through `for_each_tenant`,
-one bound transaction each. Sweeps and the snapshot run on the `bulk` queue; the two notices
+one bound transaction each. Sweeps and the snapshot run on the `bulk` queue; the notices
 on `transactional` (ruling C5, `CELERY_TASK_ROUTES`). Every system write passes
 ``actor_id=None`` and is audited through `record_system_audit` (ruling A3).
 """
@@ -18,6 +18,7 @@ import math
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timedelta
+from decimal import Decimal
 
 from celery import shared_task
 from django.conf import settings
@@ -26,7 +27,7 @@ from django.utils import timezone
 from apps.platform_admin import notifications
 from apps.platform_admin.flags.services import lapse_expired_overrides
 from apps.platform_admin.models import Subscription, SubscriptionStatus
-from apps.platform_admin.subscriptions.services import grace_ends
+from apps.platform_admin.subscriptions.services import grace_ends, live_subscription
 from apps.platform_admin.tenants import lifecycle
 from apps.platform_admin.usage.services import snapshot_step
 from core.tenancy.context import tenant_atomic
@@ -188,6 +189,39 @@ def send_payment_failed_notice(*, tenant_id: str) -> int:
             notifications.PAYMENT_FAILED,
             occasion=sub.current_period_end.isoformat(),
             context={"grace.ends_on": grace_ends(sub).date().isoformat()},
+        )
+
+
+# ------------------------------------------------------------------------------- quotas
+
+#: How each counted metric reads in the notice.
+_METRIC_LABELS = {"students": "students", "staff": "staff", "storage_gb": "GB of storage"}
+
+
+@shared_task
+def send_quota_threshold_notice(
+    *, tenant_id: str, metric: str, band: str, usage: str, limit: int
+) -> int:
+    """`platform.quota-threshold` to the school's owners, once per metric, band and period.
+
+    The period is the live subscription's, so the next period, or a later band, notifies
+    again. Queued by `usage.quotas.threshold_reached` when a write commits.
+    """
+    with tenant_atomic(uuid.UUID(tenant_id)):
+        tenant = _locked(uuid.UUID(tenant_id))
+        sub = live_subscription(tenant.pk)
+        if sub is None:
+            return 0
+        shown = Decimal(usage)
+        return notifications.notify_owners_once(
+            tenant,
+            notifications.QUOTA_THRESHOLD,
+            occasion=f"{metric}:{band}:{sub.current_period_start.isoformat()}",
+            context={
+                "quota.metric": _METRIC_LABELS.get(metric, metric),
+                "quota.usage": f"{shown:.2f}" if metric == "storage_gb" else str(shown),
+                "quota.limit": limit,
+            },
         )
 
 

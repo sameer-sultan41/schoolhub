@@ -10,9 +10,10 @@ No dedupe check before sending a lifecycle notice: it fires once per transition,
 tenant already moved and is refused before it gets here. Deduping on the tenant would wrongly
 silence a school's second suspension.
 
-The sweeps' notices (`platform.trial-expiring`, `platform.payment-failed`) do dedupe, through
-`notify_owners_once`, on a key more specific than the school: the trial's end and the
-threshold, or the subscription's period. A rerun sends nothing twice, and the school's next
+The sweeps' notices (`platform.trial-expiring`, `platform.payment-failed`) and
+`platform.quota-threshold` dedupe, through `notify_owners_once`, on a key more specific than the
+school: the trial's end and the threshold, the subscription's period, or the metric, band and
+period. A rerun sends nothing twice, and the school's next
 trial or next period still gets its own notice.
 """
 
@@ -41,6 +42,7 @@ TENANT_SUSPENDED = "platform.tenant-suspended"
 TENANT_REINSTATED = "platform.tenant-reinstated"
 TRIAL_EXPIRING = "platform.trial-expiring"
 PAYMENT_FAILED = "platform.payment-failed"
+QUOTA_THRESHOLD = "platform.quota-threshold"
 
 _VARIABLES = {"school.name"}
 
@@ -77,6 +79,15 @@ for _code, _description, _subject, _body, _variables in (
         "until {{ grace.ends_on }}. Please settle the payment before then, or the school will "
         "be suspended.",
         {*_VARIABLES, "grace.ends_on"},
+    ),
+    (
+        QUOTA_THRESHOLD,
+        "The school's usage reached the warn band (PLATFORM_QUOTA_WARN_RATIO) or the limit.",
+        "{{ school.name }}: {{ quota.usage }} of {{ quota.limit }} {{ quota.metric }} used",
+        "{{ school.name }} is using {{ quota.usage }} of the {{ quota.limit }} "
+        "{{ quota.metric }} its SchoolHub plan includes. At the limit, further additions are "
+        "refused until the plan or its limits change.",
+        {*_VARIABLES, "quota.metric", "quota.usage", "quota.limit"},
     ),
 ):
     catalog.register(

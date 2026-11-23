@@ -192,6 +192,20 @@ either this file or `project-status.md`.
   - **Stale snapshots.** The over-usage check and the reports are as fresh as the last
     snapshot (nightly, or `:refresh-usage`); a school that grew today is not yet seen.
 
+- **Quotas, what platform-admin PR C's Task 7 leaves out** (`apps/api/core/tenancy/quotas.py`,
+  platform-admin §7.8).
+  - **SMS-credit, AI-token and API-rate quotas.** Only `students`, `staff` and `storage_gb` are
+    enforced; the others have no counter (the AI gateway keeps its own per-school budget).
+  - **Platform-ops copies of `platform.quota-threshold`.** Owners only; `it_admin` and the
+    platform-ops channel of §12 wait for that channel. §12's 80 % is
+    `PLATFORM_QUOTA_WARN_RATIO` (0.9) as built.
+  - **A notice for a school already over its limit.** The notice fires on a crossing made by a
+    create; a school pushed over by a lowered, acknowledged limit is told nothing until it next
+    crosses a band in a new period.
+  - **Server-generated files.** `create_ready_file` (exports, receipts, ID cards) is not
+    checked: refusing a receipt would break a payment. A restore or re-activation path for a
+    student or staff member, when one is built, must call `check_quota` too.
+
 - **AI gateway and AI-FEE-02 follow-ups** (`feat/ai-gateway`, plan
   `docs/superpowers/plans/2026-11-07-ai-gateway.md`, [ADR-0035](decisions/0035-ai-gateway-shape.md)).
   The gateway and the on-demand finance report summary shipped backend only. Left out on purpose:

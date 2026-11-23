@@ -21,6 +21,7 @@ from core.files.models import File, FileStatus
 from core.files.purposes import registry as upload_purposes
 from core.files.storage import NullPresigner, get_presigner, storage_key_for
 from core.tenancy.context import tenant_atomic
+from core.tenancy.quotas import bytes_to_gb, check_quota
 
 
 def assert_upload_allowed(*, purpose: str, mime_type: str, size_bytes: int) -> None:
@@ -95,6 +96,8 @@ def create_upload(
 ) -> tuple[File, dict]:
     """Create the pending File row and return it with the presigned upload details."""
     assert_upload_allowed(purpose=purpose, mime_type=mime_type, size_bytes=size_bytes)
+    # A pending upload counts toward storage, so the quota is checked before the row exists.
+    check_quota(tenant_id, "storage_gb", adding=bytes_to_gb(size_bytes))
 
     storage_key = storage_key_for(tenant_id=tenant_id, purpose=purpose, original_name=original_name)
     file = File.objects.create(

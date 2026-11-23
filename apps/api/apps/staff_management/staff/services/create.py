@@ -17,6 +17,7 @@ from apps.staff_management.models import Designation, Gender, Staff
 from apps.staff_management.staff.services.numbering import allocate_employee_number
 from core.api.exceptions import DomainRuleViolation
 from core.files.services import assert_file_usable
+from core.tenancy.quotas import check_quota
 
 
 def assert_employee_number_immutable(*, instance: Staff, new_value: str | None) -> None:
@@ -97,7 +98,7 @@ def create_staff(
 ) -> Staff:
     """Create a staff record, allocating its employee number in the same
 
-    transaction. Order: department/designation/national-id checks -> number
+    transaction. Order: department/designation/national-id checks -> plan quota -> number
     allocation -> insert, so a rejected create never consumes a sequence value —
     mirrors create_student's ordering rule.
     """
@@ -111,6 +112,7 @@ def create_staff(
         assert_national_id_available(tenant_id=tenant_id, national_id=national_id, instance=None)
     if photo_file is not None:
         assert_file_usable(file=photo_file, purpose=uploads.STAFF_PHOTO.key)
+    check_quota(tenant_id, "staff")
 
     employee_number = allocate_employee_number(
         campus=campus, joining_date=joining_date, tenant_id=tenant_id

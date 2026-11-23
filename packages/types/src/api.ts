@@ -53,8 +53,19 @@ export function isOffsetPagination(pagination: Pagination): pagination is Offset
   return "total_pages" in pagination;
 }
 
+/**
+ * Advice on a 2xx response, in `meta.warnings` (api-architecture.md §2): the write succeeded,
+ * but the caller should know something, e.g. `quota_warning` when a school nears a plan limit.
+ */
+export interface ApiWarning {
+  code: string;
+  message: string;
+  details: Record<string, unknown>;
+}
+
 export interface ApiMeta {
   pagination?: Pagination;
+  warnings?: ApiWarning[];
   [key: string]: unknown;
 }
 
@@ -183,6 +194,9 @@ export const API_ERROR_CODES = [
   // without `acknowledge_over_usage` (409; apps/api/apps/platform_admin/usage/limits.py, each
   // breach in `meta.over_usage`).
   "limit_below_usage",
+  // A create that would take a school past its plan's students, staff or storage limit (409;
+  // apps/api/core/tenancy/quotas.py, `meta` is `{metric, limit, usage}`).
+  "quota_exceeded",
   // Synthesised by this client when the request never produced an envelope.
   "network_error",
   "server_error",

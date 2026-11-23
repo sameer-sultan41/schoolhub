@@ -133,6 +133,8 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     # Assigns X-Request-ID and binds it to logs.
     "core.api.middleware.RequestIDMiddleware",
+    # Collects the request's `meta.warnings` (core.api.warnings).
+    "core.api.warnings.ResponseWarningsMiddleware",
     # Resolves the tenant from the authenticated principal and sets app.tenant_id
     # for the transaction, which is what the RLS policies read.
     "core.tenancy.middleware.TenantMiddleware",
@@ -514,6 +516,7 @@ CELERY_TASK_ROUTES = {
     "apps.platform_admin.tasks.snapshot_all": {"queue": "bulk"},
     "apps.platform_admin.tasks.send_trial_expiring_notice": {"queue": "transactional"},
     "apps.platform_admin.tasks.send_payment_failed_notice": {"queue": "transactional"},
+    "apps.platform_admin.tasks.send_quota_threshold_notice": {"queue": "transactional"},
 }
 # An unrouted task goes to a queue the workers consume. Celery's own default, "celery",
 # is consumed by nothing here, so an unrouted task would wait on it forever.

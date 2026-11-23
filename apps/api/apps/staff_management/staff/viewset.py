@@ -43,7 +43,9 @@ from core.api.pagination import PageNumberPagination
 from core.api.viewsets import ActionResponse
 from core.audit.services import record_audit
 from core.idempotency.services import replay_or_execute
+from core.imports.tabular import count_rows
 from core.jobs.services import create_job, enqueue_job
+from core.tenancy.quotas import check_quota
 
 _MAX_IMPORT_FILE_BYTES = 5 * 1024 * 1024
 
@@ -254,6 +256,11 @@ class StaffImportViewSet(_StaffModuleViewSetMixin, viewsets.GenericViewSet):
             raise DomainRuleViolation(
                 {"file": f"Import file exceeds the {_MAX_IMPORT_FILE_BYTES}-byte limit."}
             )
+
+        rows = count_rows(filename=upload.name, data=content)
+        if rows:
+            # Refused before a job exists; each row's create checks again in the job.
+            check_quota(request.tenant.pk, "staff", adding=rows)
 
         job = create_job(
             tenant_id=request.tenant.pk,

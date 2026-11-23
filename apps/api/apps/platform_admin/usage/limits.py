@@ -16,10 +16,10 @@ from decimal import Decimal
 
 from apps.platform_admin.models import TenantUsageSnapshot
 from core.api.exceptions import CodedAPIException
+from core.tenancy.quotas import bytes_to_gb
 
 #: The quota metrics a snapshot counts, in `QUOTA_METRICS` order.
 COUNTED_METRICS = ("students", "staff", "storage_gb")
-BYTES_PER_GB = 1024**3
 
 Limits = dict[str, int | None]
 
@@ -34,8 +34,8 @@ class LimitBelowUsage(CodedAPIException):
 
 
 def storage_gb(storage_bytes: int) -> Decimal:
-    """Bytes in GiB, the unit of the `storage_gb` limit."""
-    return Decimal(storage_bytes) / BYTES_PER_GB
+    """Bytes in GiB, the unit of the `storage_gb` limit (the quota check's own conversion)."""
+    return bytes_to_gb(storage_bytes)
 
 
 def snapshot_usage(snapshot: TenantUsageSnapshot) -> dict[str, int | Decimal]:

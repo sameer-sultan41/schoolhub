@@ -94,8 +94,10 @@ from core.api.pagination import PageNumberPagination
 from core.api.viewsets import ActionResponse, TenantModelViewSet, TenantScopedViewSetMixin
 from core.files.serializers import AttachmentDownloadSerializer
 from core.idempotency.services import replay_or_execute
+from core.imports.tabular import count_rows
 from core.jobs.services import create_job, enqueue_job
 from core.rbac.permissions import holds_key_for, route_permission, scope_queryset
+from core.tenancy.quotas import check_quota
 
 # The key that lets a withdrawal waive outstanding clearance (`withdraw`).
 WITHDRAWAL_APPROVE = "students.withdrawal.approve"
@@ -977,6 +979,11 @@ class StudentImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
             raise DomainRuleViolation(
                 {"file": f"Import file exceeds the {_MAX_IMPORT_FILE_BYTES}-byte limit."}
             )
+
+        rows = count_rows(filename=upload.name, data=content)
+        if rows:
+            # Refused before a job exists; each row's create checks again in the job.
+            check_quota(request.tenant.pk, "students", adding=rows)
 
         job = create_job(
             tenant_id=request.tenant.pk,

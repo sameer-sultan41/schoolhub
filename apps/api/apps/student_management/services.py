@@ -47,6 +47,7 @@ from core.files.services import assert_file_usable
 from core.imports.tabular import ROW_NUMBER_KEY
 from core.rbac.permissions import ScopeKwargs
 from core.tenancy.context import tenant_atomic
+from core.tenancy.quotas import QuotaExceeded, check_quota
 from core.tenancy.sequences import allocate_number
 
 # `StudentViewSet`'s record-scope settings, declared once: the viewset sets its
@@ -306,7 +307,7 @@ def create_student(
 ) -> Student:
     """Create a student, allocating its admission number in the same transaction.
 
-    The order matters: duplicate check -> number allocation -> insert. Number
+    The order matters: duplicate check -> plan quota -> number allocation -> insert. Number
     allocation happens last among the checks so a rejected create never consumes a
     sequence value.
     """
@@ -319,6 +320,8 @@ def create_student(
     )
     if photo_file is not None:
         assert_file_usable(file=photo_file, purpose=uploads.STUDENT_PHOTO.key)
+    # Last check before the number: a refused create consumes no sequence value.
+    check_quota(tenant_id, "students")
 
     admission_number = allocate_admission_number(
         campus=campus, admission_date=admission_date, tenant_id=tenant_id
@@ -1121,6 +1124,9 @@ def import_student_row(
             field, issue = next(iter(detail.items()))
             return error(str(field), str(issue))
         return error("non_field", str(detail))
+    except QuotaExceeded as exc:
+        # Another create used the place since the upload's check: this row is refused.
+        return error("non_field", str(exc.detail))
     except IntegrityError:
         return error("non_field", "This row conflicts with existing data.")
     except DataError:

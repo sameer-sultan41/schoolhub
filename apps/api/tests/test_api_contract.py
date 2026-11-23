@@ -54,6 +54,7 @@ CLIENT_KNOWN_SERVER_CODES = {
     "subscription_exists",
     "toggle_refused",
     "limit_below_usage",
+    "quota_exceeded",
 }
 
 
