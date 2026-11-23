@@ -15,6 +15,10 @@ RESERVED_SLUGS = frozenset(
     {"www", "api", "app", "admin", "dashboard", "static", "cdn", "mail", "status"}
 )
 
+# The metrics a plan's `limits` (and a subscription's `limits_override`) may cap: each a
+# non-negative integer, or null for unlimited. A metric a plan leaves out is unlimited too.
+QUOTA_METRICS = ("students", "staff", "storage_gb", "sms_credits", "ai_tokens")
+
 # The `background_jobs.job_type` of a full tenant export. A succeeded one, or an explicit
 # waiver, is what lets `:delete` start the retention window of a school that ever went live.
 TENANT_EXPORT_JOB_TYPE = "tenant_export"

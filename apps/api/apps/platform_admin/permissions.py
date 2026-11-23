@@ -1,10 +1,12 @@
 """Permission keys of the platform console — docs/03-modules/platform-admin.md §4.
 
-Every key is platform-scope (ADR-0036): only `platform_super_admin` and `platform_support`
-hold them, and no school's role ever can.
+Every `platform.*` key is platform-scope (ADR-0036): only `platform_super_admin` and
+`platform_support` hold them, and no school's role ever can. The module's one tenant-scope key,
+`school.subscription.view`, lets a school's owner read the school's own subscription.
 """
 
 from core.rbac.registry import registry
+from core.rbac.roles import SCHOOL_OWNER
 
 SUPER_ADMIN = ("platform_super_admin",)
 BOTH = ("platform_super_admin", "platform_support")
@@ -30,3 +32,9 @@ for key, description, roles in (
     ("platform.report.view", "Platform aggregate reporting.", BOTH),
 ):
     registry.register(key, description, roles, scope="platform")
+
+registry.register(
+    "school.subscription.view",
+    "View the school's own plan, subscription and limits.",
+    (SCHOOL_OWNER,),
+)

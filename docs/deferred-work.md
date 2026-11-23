@@ -10,6 +10,7 @@ either this file or `project-status.md`.
 
 ## Deliberately NOT done
 
+- **The attendance period-mode switch reads `module.timetable` through the feature cache.** `assert_mode_switch_allowed` (`apps/attendance/services.py`) calls `is_feature_enabled`, whose result is cached for the TTL. A timetable disable committed moments earlier (override, plan change or console default) bumps the cache generation, but a stale entry written by a request racing that commit can let a switch to period mode pass for up to the TTL. The settings-row lock closes the guard's own race, not this one. `core/tenancy/features.py` has no public uncached resolver (`_resolve_feature` is private, `resolve_without_override` ignores overrides). Fix: expose a public uncached resolver and use it in the switch check.
 - **Terraform staging and production name settings modules that do not exist.** `infra/terraform/envs/staging/main.tf:71` sets `DJANGO_SETTINGS_MODULE` to `config.settings.staging` and `envs/production/main.tf:71` to `config.settings.production`; `apps/api/config/settings/` has only `base`, `dev`, `prod` and `test`, so those environments would fail to boot. Found in PR A's final review and left alone because it is infra, outside that PR. The follow-up points production at `config.settings.prod` and either adds a `staging` module or points staging at `prod` with its own env. `E2E_SEED_ALLOWED` now defaults to off in `base.py`, so a staging module that inherits `base` cannot seed.
 - **Online fee payments, what PR 1 leaves out** ([ADR-0034](decisions/0034-online-fee-payments.md), plan `docs/superpowers/plans/2026-11-07-fee-online-payments.md`). PR 1 runs end to end against the fake provider only.
   - **PR 2 (blocked):** the real aggregator's adapter (PayFast or Safepay, picked after the user tests both sandboxes; enable it in `PAYMENT_PROVIDERS_ENABLED` for production and set `PAYMENT_PENDING_TTL_MINUTES` from its session lifetime), the portal Pay button and result page on `PortalInvoiceDetail` (waits for the portal stack, #156 → #158 → #160), and the staff gateway-settings and reconciliation-issues screens with `:resolve`. Until then a school can be configured only through the API.
@@ -99,7 +100,81 @@ either this file or `project-status.md`.
     created school before auditing (platform-admin §7.4 documents the current behaviour).
   - **Platform-ops copies of the lifecycle notices.** `notify()` is per tenant, so
     `platform.tenant-suspended`/`-reinstated` reach the school's owners only; §12's copy to
-    platform ops waits for the platform-ops channel (PR B).
+    platform ops waits for the platform-ops channel (still open after PR B; see below).
+  - **The owner's billing view now exists** (`GET /api/v1/subscription`, PR B), but the
+    suspended-owner login exception above is still to build.
+
+- **Plans and subscriptions, what platform-admin PR B leaves out** (Task 4,
+  `apps/api/apps/platform_admin/{plans,subscriptions}/`, platform-admin §7.5).
+  - **A real billing provider.** Schools are billed manually from the console (`:activate`,
+    `:record-payment`, `:mark-payment-failed`). The webhook
+    (`POST /platform/billing-events/{provider}`) is built against the `BillingAdapter`
+    protocol (`apps/platform_admin/billing/base.py`), with only the fake adapter able to
+    receive events. The launch market is Pakistan, where Stripe does not onboard merchants,
+    and §19 leaves the provider open; a real adapter needs that commercial decision. A
+    payment event for a `trialing` subscription is recorded `ignored`: converting a trial
+    from a webhook waits for a provider whose events say which period was bought, and until
+    then a school that pays during its trial is still suspended by `expire_trials` unless an
+    operator activates it. The real adapter must also carry the invoice period or the time
+    the event occurred: a `payment_failed` carries neither today, so a delayed failure for an
+    earlier period, delivered after a later payment, still moves an `active` school to
+    `past_due`. It must ignore a failure for a period already paid
+    (`apps/platform_admin/billing/services.py`).
+  - **A school suspended by dunning that then pays by webhook stays suspended, and nobody is
+    told.** `record_payment` recovers the subscription but leaves a suspended school
+    suspended (`:reinstate` follows the subscription); the platform-ops channel below would
+    carry the "paid while suspended" alert.
+  - **The platform-ops notification channel.** `notify()` is per tenant, so
+    `platform.payment-failed` and `platform.trial-expiring` reach the school's owners only;
+    §12's copy to `platform_super_admin` and the lifecycle notices' copy to platform ops wait
+    for a platform-scope channel (an ops inbox, or an email list in settings).
+  - **No guard on a flag's platform default.** `PATCH /platform/feature-flags/{id}` changes
+    every school at once and asks no disable guard: a guard answers for one school, and asking
+    it for every school is a sweep the console has no shape for yet. Switching
+    `module.timetable`'s default off still leaves period-mode schools refused at the register
+    (attendance's `assert_register_period`), as before.
+  - **No guard on the other platform-wide disables.** Two more writes switch a `module.*`
+    key off for many schools at once and ask no guard, for the same reason:
+    `plans/services.update_plan` dropping a key from a plan's `enabled_modules` (every school
+    on the plan), and `PATCH /platform/feature-flags/{id}` with `is_kill_switch: true` on a
+    flag that defaults off (every school, overrides and plans included). The per-school plan
+    writes (`:change-plan`, `:activate`, a trial at `:provision`) do ask the guards.
+  - **Smaller items from PR B's reviews.**
+    - Two subscription tests assert `assertRaises(Exception)` where a named exception would
+      pin the failure (`test_a_payment_must_reach_past_the_paid_period`,
+      `test_a_move_the_subscription_cannot_make_is_invalid_transition`).
+    - `:provision`'s trial subscription is audited only through the tenant's provision row,
+      with no subscription row of its own for the person who provisioned.
+    - `subscriptions.services.live_subscription` binds the school for the rest of the
+      surrounding transaction (its `tenant_atomic`'s `SET LOCAL`); a caller that serves
+      several schools in one transaction (usage, PR C) must not rely on the earlier binding.
+    - `subscribable_plan` takes the plan row `FOR UPDATE`, so subscription writes onto one
+      plan run one at a time; `FOR SHARE` would let them run together while still blocking a
+      retire. Console-paced, so not changed.
+    - The billing webhook has no concurrency test for a duplicate delivery; the receipt's
+      unique index serialises it (a `TransactionTestCase` with two threads would pin it).
+    - `update_flag` reads the audit `before` without a row lock: two concurrent `PATCH`es
+      are last-writer-wins with a possibly stale `before`.
+    - The `trial_reminders` beat comment calls 06:00 UTC "the school day"; it is 11:00 in
+      Pakistan.
+    - `?search=` on a console list with no `search_fields` is silently ignored (drop
+      `SearchFilter` there, or add the field).
+    - `BillingEventReceipt.tenant` is `PROTECT`, which a future hard purge of a school must
+      delete first.
+  - **Proration.** `:change-plan` moves the live subscription to the new plan at once and
+    leaves its period and price untouched; nothing credits or charges the difference (§5,
+    §19 recommendation).
+  - **Plan versioning and grandfathering.** A plan edit reaches every school on it at once
+    (its modules on the next request, its limits and price too); §6 recommends versioned
+    plans that never change existing subscriptions retroactively. That needs a plan-version
+    row the subscription points at, not the plan itself.
+  - **No cancel route, and a deprovisioned school keeps its live subscription.** Nothing sets
+    `canceled` yet, so `plan_in_use` keeps counting a deleted school until a cancel path
+    (with `:delete`, or a console action) blanks its `current_plan`.
+  - **A reinstated trial does not move the trialing subscription's period.** `:reinstate` with
+    a new `trial_ends_at` updates the school's trial end only. `tenants.trial_ends_at` is the
+    trial end of record (the trial-expiry sweep is to read it), so the subscription's
+    `current_period_end` is informational until the two are reconciled.
 
 - **AI gateway and AI-FEE-02 follow-ups** (`feat/ai-gateway`, plan
   `docs/superpowers/plans/2026-11-07-ai-gateway.md`, [ADR-0035](decisions/0035-ai-gateway-shape.md)).
@@ -400,13 +475,6 @@ either this file or `project-status.md`.
     nearest thing to "the covered period ran" the system records. It is not wired: a
     register says who marked the period, not that the lesson was taught, and deciding
     what evidence counts is a module-doc decision (`attendance.md` §20).
-  - **Turning `module.timetable` off while a tenant is in period mode is not refused.**
-    The flag is toggled in platform admin, outside this module, so the toggle does not
-    check the mode first. What happens next is enforced: `assert_register_period`
-    refuses every period register, on the read and at `:bulk-mark` (422 on
-    `period_id`), until the timetable is back on or the school switches to daily; the
-    Settings tab's help text says so. Still open: refusing, or warning on, the toggle
-    itself.
   - **Two simultaneous period submissions can both alert.** The per-(student, date,
     event) dedupe reads committed rows, so P1 and P2 marked absent in the same instant
     each send an absence alert. The cost is a duplicate alert, never a missing one;

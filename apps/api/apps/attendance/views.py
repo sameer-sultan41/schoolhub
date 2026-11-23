@@ -1210,7 +1210,6 @@ class AttendanceSettingsView(TenantScopedViewSetMixin, APIView):
         body = AttendanceSettingsUpdateSerializer(data=request.data)
         body.is_valid(raise_exception=True)
         changes = body.validated_data
-        services.assert_mode_switch_allowed(changes=changes, tenant_id=request.tenant.pk)
 
         with transaction.atomic():
             row, before, academic = services.update_attendance_settings(

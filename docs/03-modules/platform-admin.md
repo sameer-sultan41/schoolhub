@@ -44,17 +44,18 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 | `platform.feature-flag.view` / `update` | Flag defaults and per-tenant overrides | `platform_super_admin` (view: + `platform_support`) |
 | `platform.migration.import` | Run legacy-data imports into a tenant | `platform_super_admin` |
 | `platform.report.view` | Platform aggregate reporting | `platform_super_admin`, `platform_support` |
+| `school.subscription.view` | A school's own plan, subscription and limits (`GET /api/v1/subscription`) — **tenant-scope** | `school_owner` |
 
-Every key above is **platform-scope** ([ADR-0036](../decisions/0036-platform-scope-and-cross-tenant-access.md)): only the two platform roles hold them, and no school's role ever can. The scope, not the module name, decides it: the tenant-side `platform.file.*`, `platform.job.view` and `platform.notification.view` keys stay tenant-scope. `registry.register(..., scope="platform")` refuses a tenant default role, every grant path filters on `Permission.scope`, and only a platform user may hold a platform role (a trigger on `user_roles`). Both roles are synced as shared `tenant=None` rows on every migrate (`core.rbac.sync.sync_default_roles`), and an operator account is created with `manage.py create_platform_admin --email --first-name [--role]`.
+Every `platform.*` key above is **platform-scope** ([ADR-0036](../decisions/0036-platform-scope-and-cross-tenant-access.md)): only the two platform roles hold them, and no school's role ever can. The scope, not the module name, decides it: the tenant-side `platform.file.*`, `platform.job.view` and `platform.notification.view` keys stay tenant-scope. `registry.register(..., scope="platform")` refuses a tenant default role, every grant path filters on `Permission.scope`, and only a platform user may hold a platform role (a trigger on `user_roles`). `school.subscription.view` is the module's one tenant-scope key: it is the school's own billing touchpoint (§3), registered in `apps/platform_admin/permissions.py` with the registry's default (tenant) scope. Both platform roles are synced as shared `tenant=None` rows on every migrate (`core.rbac.sync.sync_default_roles`), and an operator account is created with `manage.py create_platform_admin --email --first-name [--role]`.
 
 Every operator signs in with password **and** TOTP ([auth-and-rbac §1](../02-architecture/auth-and-rbac.md), SEC-06). A new account starts with MFA off: its first password sign-in gets an `amr=["pwd"]` token, which the console refuses (403 `mfa_required`) but which can call `POST /auth/mfa:enroll` and `:confirm`; confirming returns ten recovery codes and an `amr=["pwd","otp"]` pair. From then on login answers with a challenge that `POST /auth/mfa:verify` completes. An operator cannot turn MFA off (`/auth/mfa:disable` is 403); one who lost their authenticator and recovery codes is reset with `manage.py create_platform_admin --email … --reset-mfa`, which also ends their sessions: the console refuses their existing tokens at once. One locked out by 100 consecutive wrong codes is unlocked with `--unlock-mfa`, which keeps the factor.
 
 ## 5. Main Features
 
 1. **Tenant lifecycle management** — create, provision (idempotent seed transaction), trial, activate, suspend, reinstate, export, and delete tenants per the state machine in multi-tenancy §7. *Built:* create, edit, `:provision`, `:suspend`, `:reinstate`, `:delete` and `:restore` (§7.4, §20); export arrives with the usage PR.
-2. **Plans & subscriptions** — plan catalog (modules enabled, usage limits, price, trial length); per-tenant subscription with period tracking; plan upgrades/downgrades with proration rules *(recommendation)*.
-3. **Billing of schools** — invoicing tenants for their subscription via a billing provider; dunning on failed payment → `past_due` → grace → suspension. (This bills *schools*; student fee billing is the tenant-side fees-finance module.)
-4. **Feature flags** — platform flag registry with per-plan defaults and per-tenant overrides, kill-switch capable; every tenant module checks its flag server-side (multi-tenancy §5).
+2. **Plans & subscriptions** — plan catalog (modules enabled, usage limits, price, trial length); per-tenant subscription with period tracking; plan upgrades/downgrades with proration rules *(recommendation)*. *Built:* the catalog, one live subscription per school, trial → active → past due → recovered, plan changes and plan-based module enablement (§7.5, §20); proration and plan versioning are deferred.
+3. **Billing of schools** — invoicing tenants for their subscription via a billing provider; dunning on failed payment → `past_due` → grace → suspension. (This bills *schools*; student fee billing is the tenant-side fees-finance module.) *Built:* manual billing from the console (`:activate`, `:record-payment`, `:mark-payment-failed`), the provider webhook (a fake adapter only) and the trial and dunning sweeps (§7.6).
+4. **Feature flags** — platform flag registry with per-plan defaults and per-tenant overrides, kill-switch capable; every tenant module checks its flag server-side (multi-tenancy §5). *Built:* the console's flag list and default/kill-switch edits, per-school overrides with expiry, and disable guards (§7.6).
 5. **Usage tracking & quotas** — metered counters per tenant (active students, staff, storage GB, SMS credits, AI tokens, API rate) vs. plan limits; soft-warn then hard-enforce.
 6. **Onboarding wizard** — guided tenant setup: school profile → campuses → academic session → classes/sections → fee structures → staff invites → student import; resumable, with progress tracking.
 7. **Data migration / legacy import** — Excel/CSV import pipelines (students, guardians, staff, fee balances, marks history) with mapping templates, dry-run validation, error reports, and rollback of a failed batch.
@@ -92,10 +93,12 @@ flowchart TD
     B -- payment recovered --> A
     B -- grace period expired --> C[Suspended: logins blocked except owner<br/>read-only billing; website shows neutral notice]
     C -- ":reinstate: active subscription" --> A
-    C -- ":reinstate: past_due subscription" --> B
+    C -- ":reinstate: past_due subscription, within grace" --> B
     C -- ":reinstate with a future trial_ends_at" --> T[Trial]
     C -- ":delete by an operator (export or waiver)" --> D[Deprovisioned: 90-day retention → hard purge]
 ```
+
+A suspended school whose subscription is `past_due` is reinstated only within its grace (`current_period_end + PLATFORM_DUNNING_GRACE_DAYS`). After it, `:reinstate` is a 409 `grace_expired`: the next dunning sweep would suspend the school again at once. The operator records a payment first (`:record-payment`; a plan change leaves the period, and so the grace, as it is), and the school then reinstates to `active`. Nothing extends a grace silently.
 
 ### 7.3 Impersonation
 
@@ -109,20 +112,60 @@ Support agent requests elevation (tenant, target user, reason) → grant issued 
 | ---- | -- | ------- |
 | `provisioning` | `trial` | `:provision` |
 | `provisioning` | `deprovisioned` | `:delete` of a school created by mistake (nothing to export) |
-| `trial` | `active` | Subscription activated (PR B) |
-| `active` | `past_due` | Payment failed (PR B) |
-| `past_due` | `active` | Payment recorded (PR B) |
+| `trial` | `active` | Subscription activated (§7.5) |
+| `active` | `past_due` | Payment failed (§7.5) |
+| `past_due` | `active` | Payment recorded (§7.5) |
 | `trial`, `active`, `past_due` | `suspended` | `:suspend`, or the trial-expiry / grace sweeps (PR B) |
 | `suspended` | the status the live subscription implies | `:reinstate` |
 | `active`, `suspended` | `deprovisioned` | `:delete` |
 | `deprovisioned` | `suspended` | `:restore`, only while `now < deprovision_after` (else 409 `retention_expired`) |
 
-- **`:provision`** runs in one transaction with the school bound: it creates `tenant_settings` and the school's system ledger accounts (`fees_finance.services.ensure_system_accounts`, so its first fee head has an income account), creates the owner's inactive account from `contact_name` (split on the first space) and `contact_email`, gives it the shared `school_owner` default role, invites it (ADR-0033, kind `owner`, linking to `<slug>.app.<domain>`), sets `trial_ends_at` (`PLATFORM_DEFAULT_TRIAL_DAYS`) and `provisioned_at`, and moves the school to `trial`. The owner invite therefore starts the trial (§7.1), not the onboarding wizard. A second `:provision` is a 409; the same `Idempotency-Key` replays the first answer. Until plans exist (PR B), a `plan_code` is refused with a 422.
-- **`:reinstate`** asks the `subscription_state` hook (`core/tenancy/subscription_state.py`, registered by PR B) for the live subscription: `active` → `active`, `past_due` → `past_due`. A `trialing` one, or none, reinstates to `trial` only with a future `trial_ends_at` in the body: a past one is a 400 on `trial_ends_at`, and so is a missing one under a `trialing` subscription; with neither a subscription nor a date it is a 409 `no_live_subscription`.
+- **`:provision`** runs in one transaction with the school bound: it creates `tenant_settings` and the school's system ledger accounts (`fees_finance.services.ensure_system_accounts`, so its first fee head has an income account), creates the owner's inactive account from `contact_name` (split on the first space) and `contact_email`, gives it the shared `school_owner` default role, invites it (ADR-0033, kind `owner`, linking to `<slug>.app.<domain>`), sets `trial_ends_at` (`PLATFORM_DEFAULT_TRIAL_DAYS`) and `provisioned_at`, and moves the school to `trial`. The owner invite therefore starts the trial (§7.1), not the onboarding wizard. A second `:provision` is a 409; the same `Idempotency-Key` replays the first answer. With a `plan_code` it also starts a `trialing` subscription to that plan, and the trial lasts the plan's `trial_days` instead; an unknown or inactive code is a 422, before anything is seeded.
+- **`:reinstate`** asks the `subscription_state` hook (`core/tenancy/subscription_state.py`, registered from `apps/platform_admin/hooks.py`) for the live subscription: `active` → `active`, `past_due` → `past_due` within its grace (409 `grace_expired` after it, §7.2). A `trialing` one, or none, reinstates to `trial` only with a future `trial_ends_at` in the body: a past one is a 400 on `trial_ends_at`, and so is a missing one under a `trialing` subscription; with neither a subscription nor a date it is a 409 `no_live_subscription`. A school provisioned without a plan has no subscription, so it can only come back on a fresh trial.
 - **`:delete`** of a school that went live (`active`, `suspended`) needs a succeeded `tenant_export` job or `waive_export: true`, else a 409 `export_required`. It sets `deprovision_after = now + PLATFORM_RETENTION_DAYS`.
 - **Reasons:** `:suspend`, `:delete` and `:restore` require a non-blank `reason`, stored in the audit row.
 - **Timestamps:** entering `suspended` stamps `suspended_at`; leaving it for an operational status clears it. `:restore` keeps the original suspension time, and stamps one when the school was deleted without being suspended first.
 - **Audit:** a person's action is audited by the view (`record_audit`, with the operator as actor and the school as tenant, before and after). The exception is `POST /platform/tenants`: its audit row has no tenant (`tenant=None`), because the school is created by that same request (deferred-work.md). A system caller (sweep, webhook) passes `actor_id=None` and the transition audits itself through `record_system_audit`.
+
+### 7.5 Plans and subscriptions, as built
+
+- **Catalog.** A plan's `code` is unique and fixed once created (`tenants.current_plan` holds it). `enabled_modules` lists registered `module.*` feature keys; `limits` maps `QUOTA_METRICS` (`students`, `staff`, `storage_gb`, `sms_credits`, `ai_tokens`) to a non-negative integer or null (unlimited); a metric left out is unlimited. `DELETE` soft-deletes (and deactivates) the plan, refused with 409 `plan_in_use` while any school's `current_plan` is it. An inactive plan keeps its subscribers but takes no new one. `PATCH` accepts `acknowledge_over_usage` already; the 409 `limit_below_usage` check against usage snapshots arrives with the usage PR.
+- **One live subscription per school.** `trialing`, `active` and `past_due` are live; a partial unique index on `subscriptions(tenant_id)` allows one, and the services refuse a second with 409 `subscription_exists`.
+- **Every write is one transaction** (`apps/platform_admin/subscriptions/services.py`), with the school bound and its `tenants` row locked: it updates the subscription, mirrors it onto `tenants.current_plan`, `subscription_status` and `billing_provider_ref`, moves the school's lifecycle where the subscription implies it, and invalidates the feature cache now and again on commit. A duplicate billing reference is a 400.
+
+| Service | Subscription | School |
+| ------- | ------------ | ------ |
+| `start_trial` (`:provision` with a plan) | new, `trialing` for the plan's `trial_days`; sets `trial_ends_at` | unchanged (`:provision` moves it) |
+| `subscribe` (`:activate` with no subscription and a `plan_code`) | new, `active` for the given period | `trial` → `active` |
+| `activate` (`:activate`) | `trialing` → `active` for the given period | `trial` → `active` |
+| `mark_payment_failed` | `active` → `past_due` | `active` → `past_due` |
+| `record_payment` | `active`/`past_due` → `active`, period runs on to `paid_through` | `past_due` → `active` |
+| `change_plan` | another active plan; period and status unchanged | unchanged |
+
+  `start_trial`, `subscribe` and `change_plan` ask the disable guards before the school joins the plan (`core.tenancy.features.plan_change_refusal`): a plan without a guarded `module.*` key the school resolves on now, and that no live override keeps on, is a 409 `toggle_refused`, as the same disable through an override is (§7.6). Locks are taken school first, then plan: the routes pass a plan code, and the service locks the school's `tenants` row before `subscribable_plan` locks the plan, in the order `:provision` uses.
+
+  A suspended school stays suspended through any billing change; `:reinstate` then follows the subscription. A move the subscription's status does not allow is a 409 `invalid_transition`; a write to a school with no live subscription is a 409 `no_live_subscription`.
+- **Audit.** A person's write is audited by the view (`record_audit`, before and after). A system caller (the billing webhook, a sweep) passes `actor_id=None` and the service audits through `record_system_audit`.
+- **Module access.** Feature resolution (`core/tenancy/features.py`) is: a live override, then the school's live plan — a `module.*` key is on iff it is in the plan's `enabled_modules`, even if its default is on — then the flag's default; a kill switch stays at its default whatever the override or the plan say. Keys outside `module.*`, and a school with no live subscription, skip the plan step. The resolver (`plan_modules`) reads the platform-scope `tenants` and `plans` rows, so it answers with or without the school bound.
+
+### 7.6 Flags, billing events and sweeps, as built
+
+- **Flag defaults.** `PATCH /platform/feature-flags/{id}` changes `default_enabled` or `is_kill_switch` for every school at once and invalidates the feature cache. Once a flag row exists, the console owns those two values: the `post_migrate` sync creates a new key with the code's defaults, updates only the description of an existing one, and logs a WARNING for a flag whose console setting differs from the code. A deliberate change to a flag's code default therefore does not reach an existing row: make it in the console, or ship a data migration ([ADR-0036](../decisions/0036-platform-scope-and-cross-tenant-access.md) addendum).
+- **Overrides.** `POST .../feature-overrides` gives the school an override (`enabled`, `reason`, optional future `expires_at`), replacing any live one for that flag. `DELETE` removes it, so the plan or the default decides again. Each is audited against the school. Two first overrides racing for one flag meet the partial unique index: the second is a 409 `conflict`.
+- **Refusals (409 `toggle_refused`).** An override switching a kill switch on (forcing one off for a school stays allowed). A disable a registered guard objects to: `core.tenancy.features.register_disable_guard(key, fn)`, registered from the owning module's `AppConfig.ready()`, and asked through `disable_refusal(key, tenant_id)` both for an `enabled: false` override and for removing an `enabled: true` override that nothing else would keep on. The plan writes ask the same guards (§7.5). Attendance registers the first guard: `module.timetable` stays on while the school takes attendance by period. The guard reads the mode under the settings row's lock, and a switch to period mode checks the timetable under the same lock, so the two cannot both pass. Platform-wide disables (a plan edit, a flag default or kill switch) ask no guard yet (`docs/deferred-work.md`).
+- **Billing webhook.** `POST /platform/billing-events/{provider}` is unauthenticated: an adapter (`apps/platform_admin/billing/`, the `BillingAdapter` protocol) verifies the raw body. The fake adapter checks `X-Fake-Signature: t=<unix>,v1=<HMAC-SHA256(secret, "t.body")>` against `PLATFORM_BILLING_WEBHOOK_SECRET`, within `PAYMENT_CALLBACK_TOLERANCE_SECONDS`. The school is found from the event's `provider_ref` through `tenants.billing_provider_ref`, with nothing bound; then one transaction binds it, claims a `billing_event_receipts` row (unique per provider and event id), and applies `record_payment` or `mark_payment_failed` as a system caller. A replay, an unknown reference, a reference whose subscription bills through another provider, a school without a live subscription and an event the subscription cannot take are each a 200 that changes nothing (the receipt's `outcome` says which). Only a new receipt for an applied failure queues `platform.payment-failed`; a replay queues nothing. Failed signatures count against a per-IP budget, checked first; only verified events count against the provider's budget, so unsigned posts cannot use it up. Out-of-order delivery is not detected: a `payment_failed` carries no period (deferred with the real provider).
+- **Sweeps** (Celery beat, `bulk` queue; times UTC). Each reads candidates from `tenants`, then handles one school at a time in its own transaction, with the row locked and its state checked again.
+
+| Task | When | What |
+| ---- | ---- | ---- |
+| `expire_trials` | daily 02:10 | `trial` with `trial_ends_at` passed → `suspended` |
+| `dunning_sweep` | daily 02:30 | `past_due` → `suspended` once `current_period_end + PLATFORM_DUNNING_GRACE_DAYS` has passed; before then, makes sure the owners got `platform.payment-failed` |
+| `trial_reminders` | daily 06:00 | `platform.trial-expiring` at each `PLATFORM_TRIAL_REMINDER_DAYS` mark (the nearest one crossed) |
+| `lapse_overrides` | hourly | retires overrides past `expires_at` (resolution already ignores them) and audits each lapse |
+
+- **Trial end of record** is `tenants.trial_ends_at`, which `:reinstate` moves; the trialing subscription's period is not read.
+- **Dunning runs from the unpaid period's end**, the date the payment was due, so a failure marked mid-period still gives the school the period it paid for plus the grace.
+- **A reinstated past-due school keeps the grace it had.** `:reinstate` to `past_due` is refused with 409 `grace_expired` once the grace has run out (§7.2), so the sweep never re-suspends a school an operator just let back in; within the grace, the sweep suspends it on the original date.
 
 ## 8. User Journeys
 
@@ -150,7 +193,7 @@ Support agent requests elevation (tenant, target user, reason) → grant issued 
 - Tenant slug: globally unique, DNS-safe (it becomes the subdomain), immutable after provisioning *(recommendation: rename via support process only)*.
 - Lifecycle transitions restricted to the state machine (multi-tenancy §7); suspension and deletion require a reason; deletion requires a completed or explicitly-waived export.
 - Plan limits must not be lowered below a tenant's current usage without an explicit override acknowledgment.
-- Flag overrides must reference registered flags; kill-switch flags cannot be overridden tenant-side.
+- Flag overrides must reference registered flags; kill-switch flags cannot be overridden tenant-side. *As built:* an override for a flag no longer declared in code, or with a past `expires_at`, is a 400; switching a kill switch on for one school, or a disable a module's guard refuses, is a 409 `toggle_refused` (§7.6). Forcing a kill switch off for one school is allowed.
 - Imports: dry-run required before commit; per-row validation mirrors the owning module's rules (e.g. student rows validate like student-management creates); batch is transactional per entity type.
 - Impersonation: duration ≤ 1 h, reason mandatory, cannot impersonate platform users, cannot chain grants.
 
@@ -166,7 +209,7 @@ Support agent requests elevation (tenant, target user, reason) → grant issued 
 | Import completed / failed | Initiating admin | In-app, email | `platform.import-result` |
 | Impersonation grant issued/expired | Platform ops log; tenant owner *(recommendation)* | In-app | `platform.impersonation` |
 
-Channels and delivery behavior follow [`notifications.md`](../02-architecture/notifications.md). Codes are dotted `<module>.<event>` triggers in `apps/platform_admin/notifications.py`. *Built:* `platform.tenant-suspended` and `platform.tenant-reinstated`, sent to the school's active owners when a school leaves or returns to an operational status (a `:restore` sends neither). `notify()` is per tenant, so the platform-ops copies wait for a platform-ops channel.
+Channels and delivery behavior follow [`notifications.md`](../02-architecture/notifications.md). Codes are dotted `<module>.<event>` triggers in `apps/platform_admin/notifications.py`. *Built:* `platform.tenant-suspended` and `platform.tenant-reinstated`, sent to the school's active owners when a school leaves or returns to an operational status (a `:restore` sends neither); `platform.trial-expiring` (in-app and email, once per trial end and reminder mark) and `platform.payment-failed` (in-app and email, once per unpaid period, sent on the webhook's failure event and by the dunning sweep). The two sweep notices dedupe on a key more specific than the school, so the next trial or period notifies again; the lifecycle notices do not dedupe. `notify()` is per tenant, so the copies to `platform_super_admin` and platform ops wait for a platform-ops channel (deferred-work.md).
 
 ## 13. Reports
 
@@ -191,7 +234,7 @@ Cross-referenced to [`ai-features.md`](../04-ai/ai-features.md). Platform AI fea
 
 Full column specs in [`../05-database/entities/tenancy.md`](../05-database/entities/tenancy.md).
 
-- **Platform-scope (no `tenant_id`):** `tenants`, `plans`, `feature_flags`.
+- **Platform-scope (no `tenant_id`):** `tenants`, `plans`, `feature_flags`, `billing_event_receipts` (the webhook's idempotency record).
 - **Tenant-scoped:** `tenant_settings` (1:1 with tenant), `subscriptions`, `tenant_feature_overrides`, `custom_domains` (bound via website-cms UI, owned here for lifecycle/TLS).
 - **Shared platform primitives referenced, not owned by this module:** `users`, `roles`, `permissions`, `role_permissions`, `user_roles`, `audit_logs`, `files`, `webhooks`, `webhook_deliveries`, `background_jobs` (defined in the same entity file; owned by the auth/platform core).
 
@@ -205,16 +248,24 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
   - `GET /platform/tenants/{id}` (`.view`); `PATCH` (`.update`): name and contact fields; `slug` only while `provisioning` (else 400 on `slug`).
   - `:provision` (`.provision`, body `{plan_code?: null}`), `:suspend` (`.suspend`, `{reason}`), `:reinstate` (`.reinstate`, `{trial_ends_at?, reason?}`), `:delete` (`.delete`, `{reason, waive_export?}`), `:restore` (`.delete`, `{reason}`): each answers the tenant, and refuses with the 409 codes of §7.4.
 - `POST /api/v1/platform/tenants/{id}:impersonate` — returns a time-boxed elevated token; `DELETE /api/v1/platform/impersonation-grants/{id}` releases it
-- `GET/POST/PATCH /api/v1/platform/plans` · `GET/PATCH /api/v1/platform/subscriptions/{id}` · billing webhooks at `POST /api/v1/platform/billing-events` (HMAC-verified)
-- `GET/POST/PATCH /api/v1/platform/feature-flags` · `GET/POST/DELETE /api/v1/platform/tenants/{id}/feature-overrides`
+- `GET/POST/PATCH/DELETE /api/v1/platform/plans` · `GET/PATCH /api/v1/platform/tenants/{id}/subscription` (nested and bound to the school, since `subscriptions` is under RLS and a school has one live subscription; it replaces the spec's `/platform/subscriptions/{id}`) · billing webhooks at `POST /api/v1/platform/billing-events/{provider}` (HMAC-verified). *Built:*
+  - `GET /platform/plans` (`platform.plan.view`): page-numbered; `?is_active=`, `?billing_period=`, `?currency=`, `?search=` (name, code), `?ordering=` (name, code, price_amount, created_at). `GET /platform/plans/{id}` (`.view`).
+  - `POST /platform/plans` (`.create`): `{name, code, price_amount, currency, description?, billing_period?, trial_days?, enabled_modules?, limits?, is_active?}` → 201. A taken code, an unregistered module key, an unknown metric, a negative limit or a non-ISO currency is a 400 on its field.
+  - `PATCH /platform/plans/{id}` (`.update`): any subset, plus `acknowledge_over_usage`; a changed `code` is a 400. `DELETE` (`.delete`): 204, or 409 `plan_in_use`.
+  - `GET /platform/tenants/{id}/subscription` (`platform.subscription.view`): `{tenant_status, trial_ends_at, subscription | null, limits}`, where `subscription` carries its plan (code, name, price, modules) and `limits` every metric's effective limit. `PATCH` (`platform.subscription.update`): `{billing_provider?, billing_provider_ref?, limits_override?}`.
+  - `:activate` (`{plan_code?, current_period_start, current_period_end}`), `:record-payment` (`{paid_through}`), `:mark-payment-failed` and `:change-plan` (`{plan_code}`), all `platform.subscription.update` with `Idempotency-Key`; each answers the billing state, and refuses with the 409 codes of §7.5.
+- `GET/POST/PATCH /api/v1/platform/feature-flags` · `GET/POST/DELETE /api/v1/platform/tenants/{id}/feature-overrides`. *Built* (flags are created by code, so there is no `POST`):
+  - `GET /platform/feature-flags` (`platform.feature-flag.view`): page-numbered; `?search=` (key, description), `?ordering=` (key, updated_at). `GET /platform/feature-flags/{id}` (`.view`); `PATCH` (`.update`): `{default_enabled?, is_kill_switch?}`.
+  - `GET /platform/tenants/{id}/feature-overrides` (`.view`): the school's live overrides, unpaged. `POST` (`.update`): `{flag, enabled, reason, expires_at?}` → 201, replacing the live one; 409 `toggle_refused`. `DELETE .../feature-overrides/{override_id}` (`.update`): 204, or 409 `toggle_refused`. Another school's override is a 404.
+  - `POST /platform/billing-events/{provider}` (no login; the signature authenticates it, throttled per provider and per IP on failures): 200 `{received, outcome}` (`applied`, `ignored`, `unknown_ref`, `no_subscription`); 401 `invalid_signature`; 404 for a provider that is unknown, not in `PLATFORM_BILLING_PROVIDERS_ENABLED` or receives no webhooks (`manual`); 503 `billing_unavailable` while `PLATFORM_BILLING_WEBHOOK_SECRET` is empty.
 - `GET /api/v1/platform/tenants/{id}/usage` · `GET /api/v1/platform/reports/{key}` (aggregate read path)
 - `POST /api/v1/platform/tenants/{id}/imports` (`202` + job, dry-run flag) · `GET /api/v1/platform/imports/{id}`
-- Tenant-facing: `GET /api/v1/subscription` (own billing state, `school_owner`) · `GET/PATCH /api/v1/onboarding` (wizard progress).
+- Tenant-facing: `GET /api/v1/subscription` (own billing state, `school.subscription.view`; *built*, the same shape as the console's GET, ungated by any module flag) · `GET/PATCH /api/v1/onboarding` (wizard progress). These mount through `apps/platform_admin/tenant_urls.py`, a separate include in `config/api_v1.py` from the console's `platform/` routes.
 - Operator sign-in (built, `core/rbac`, under `/api/v1/auth/`, §4): `POST /auth/login` → `{mfa_required, mfa_token}` · `POST /auth/mfa:verify` · `POST /auth/mfa:enroll` · `POST /auth/mfa:confirm` · `POST /auth/mfa:disable` (always 403 for an operator).
 
 ## 17. Integration Requirements
 
-- **Billing provider** (e.g. Stripe or regional equivalent — *recommendation, gateway-agnostic adapter*): subscription invoicing, payment webhooks, dunning.
+- **Billing provider** (e.g. Stripe or regional equivalent — *recommendation, gateway-agnostic adapter*): subscription invoicing, payment webhooks, dunning. *Built:* the adapter seam (`apps/platform_admin/billing/`: `BillingAdapter.verify_event(headers, body) -> BillingEvent`, a `manual` adapter that receives no webhooks and a `fake` one); the real provider is deferred (deferred-work.md).
 - **DNS/TLS edge** for subdomain wildcard + custom-domain issuance (shared with website-cms).
 - **Email provider** for platform transactional mail; **object storage** for export archives and import files.
 - **Observability stack** (metrics per tenant) feeding health reports; AI gateway for `AI-PLA-*` with platform-level budgets.
@@ -248,4 +299,22 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - **Constants** (`apps/platform_admin/constants.py`): `SLUG_PATTERN`, `RESERVED_SLUGS` (pinned to `apps/website/src/lib/host.ts` by `test_reserved_labels_match_website`) and `TENANT_EXPORT_JOB_TYPE = "tenant_export"`, the job a later PR's `:export` creates.
 - **Tests:** `apps/platform_admin/tests/test_lifecycle.py` (every status pair, timestamps, system audit, notices) and `test_tenants_api.py` (create, edit, provision, the lifecycle actions, gates); the live lane's `e2e/tests/live/api/platform-tenants.spec.ts` signs in as the seeded TOTP operator (`seed_e2e_data`) and runs create → provision → suspend → reinstate.
 
-**Not yet built:** plans, subscriptions and billing (PR B); usage, quotas, reports and `:export` (PR C); the console screens (PR D); impersonation (PR E); the onboarding wizard (PR H). Deferred items are in [`deferred-work.md`](../deferred-work.md).
+**Built (PR B — plans and subscriptions):**
+
+- **Models** (`apps/platform_admin/models.py`, migration `platform_admin/0001_initial`): `Plan` (platform scope, `plans`) and `Subscription` (a `TenantOwnedModel`, `subscriptions`, RLS in the same migration). The partial unique index `subscriptions_one_live_per_tenant` keeps one live subscription per school. No `core/tenancy` migration: the read-model columns are PR A's.
+- **Plans** (`apps/platform_admin/plans/`, ADR-0010 layout): `viewset.py`, `serializers.py` (`LimitsField` and `EnabledModulesField`, shared with the subscription's `limits_override`), `filters.py` and `services.py` (`create_plan`, `update_plan`, `delete_plan`, `subscribable_plan(code)`, the one lookup that puts a school on a plan, locking the plan row against a concurrent retire).
+- **Subscriptions** (`apps/platform_admin/subscriptions/`): `services.py` (§7.5: `live_subscription(tenant_id)`, `effective_limits(tenant_id)`, `start_trial`, `subscribe`, `activate`, `record_payment`, `mark_payment_failed`, `change_plan`, `update_subscription`, and the two hooks `plan_modules` and `live_subscription_state`), `viewset.py` (the console's nested routes), `view.py` (the school's own `GET /subscription`) and `serializers.py`.
+- **Hooks** (`hooks.py`): the `subscription_state` resolver and the plan resolver (`core.tenancy.features.register_plan_resolver`) join the `owner` eligibility check.
+- **Feature resolution** (`core/tenancy/features.py`): the plan step (§7.5), and `invalidate_feature_cache()`, which bumps the generation now and on commit.
+- **`:provision`** takes a `plan_code` (§7.4).
+- **Tests:** `apps/platform_admin/tests/test_plans.py` (catalog, immutable code, `plan_in_use`, gates), `test_subscriptions.py` (one live subscription, the read model following each write, payment recovery, the nested routes and cross-tenant 404s, the school's own view, provisioning with a plan, and module access following a plan edit or a plan change) and `core/tenancy/tests/test_features.py` (the resolution order with a stand-in resolver).
+
+**Built (PR B, Task 5 — flags, billing events and sweeps):**
+
+- **Flags** (`apps/platform_admin/flags/`): `viewset.py` (`FeatureFlagViewSet`, platform scope; `TenantFeatureOverrideViewSet`, nested and bound), `serializers.py`, `services.py` (`update_flag`, `set_override`, `remove_override`, `lapse_expired_overrides`, `ToggleRefused`).
+- **Core** (`core/tenancy/features.py`): `register_disable_guard`, `disable_refusal`, `resolve_without_override`, and a sync that leaves an existing flag's default and kill switch to the console.
+- **Billing** (`apps/platform_admin/billing/`): `base.py` (the protocol and `BillingEvent`), `manual.py`, `fake.py`, `registry.py` (`webhook_adapter`), `services.py` (`handle_event`), `view.py` (the plain `APIView`, `non_atomic_requests`); `BillingEventReceipt` in the app-root `models.py` (migration `0002`, platform scope).
+- **Tasks** (`apps/platform_admin/tasks.py`): the four sweeps and the two notice tasks, routed by exact name in `CELERY_TASK_ROUTES` and scheduled in `CELERY_BEAT_SCHEDULE`.
+- **Tests:** `test_flags.py`, `test_billing_webhook.py`, `test_sweeps.py`, and `tests/test_celery_routing.py` (queues and beat entries).
+
+**Not yet built:** usage, quotas, `limit_below_usage`, reports and `:export` (PR C); the console screens (PR D); impersonation (PR E); the onboarding wizard (PR H). Deferred items are in [`deferred-work.md`](../deferred-work.md).

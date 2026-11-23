@@ -15,9 +15,11 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from django.core.cache import cache
+from django.db import transaction
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -47,6 +49,95 @@ def bump_feature_cache_generation() -> None:
         cache.incr(_CACHE_GENERATION_KEY)
     except ValueError:
         cache.set(_CACHE_GENERATION_KEY, 1)
+
+
+def invalidate_feature_cache() -> None:
+    """Bump the generation now, and again once the surrounding transaction commits.
+
+    For a write whose effect on resolution lives in rows this transaction is changing (a
+    plan's modules, a school's subscription). The first bump serves reads later in the same
+    transaction. The second closes the window in which another request resolves a flag from
+    the not-yet-committed old rows and caches that stale answer under the new generation.
+    """
+    bump_feature_cache_generation()
+    transaction.on_commit(bump_feature_cache_generation)
+
+
+# The plan step of resolution (step 3 below). Plans belong to the platform console's app, and
+# `core` imports no app (ADR-0013), so that app registers a resolver from `ready()`. It answers
+# a school's live plan's `enabled_modules`, or None when the school has no live subscription.
+type PlanResolver = Callable[[uuid.UUID], frozenset[str] | None]
+
+# At most one entry, keyed so a test can swap it with `mock.patch.dict`.
+_plan_hooks: dict[str, PlanResolver] = {}
+_PLAN_HOOK = "resolver"
+
+# The keys a plan decides. Any other flag (`ai.*`, a kill switch for a feature) ignores plans.
+_PLAN_KEY_PREFIX = "module."
+
+
+def register_plan_resolver(fn: PlanResolver) -> None:
+    """Register the plan resolver. A second, different one is a bug: two apps would disagree."""
+    existing = _plan_hooks.get(_PLAN_HOOK)
+    if existing is not None and existing is not fn:
+        raise ValueError("A plan resolver is already registered.")
+    _plan_hooks[_PLAN_HOOK] = fn
+
+
+def _plan_enables(key: str, *, tenant_id: uuid.UUID) -> bool | None:
+    """Whether the school's live plan enables ``key``; None when the plan has no say."""
+    resolver = _plan_hooks.get(_PLAN_HOOK)
+    if resolver is None or not key.startswith(_PLAN_KEY_PREFIX):
+        return None
+    modules = resolver(tenant_id)
+    if modules is None:
+        return None
+    return key in modules
+
+
+# Guards on switching a flag off for one school. A module that cannot run without another
+# registers one from its `ready()` (ADR-0013): it answers why the school still needs the flag,
+# or None. The console refuses a disable any guard objects to (409 `toggle_refused`).
+type DisableGuard = Callable[[uuid.UUID], str | None]
+
+# Keyed by flag, so a test can swap the registry with `mock.patch.dict`.
+_disable_guards: dict[str, list[DisableGuard]] = {}
+
+
+def register_disable_guard(key: str, fn: DisableGuard) -> None:
+    """Ask ``fn`` before ``key`` is switched off for a school. Registering twice is a no-op."""
+    guards = _disable_guards.setdefault(key, [])
+    if fn not in guards:
+        guards.append(fn)
+
+
+def disable_refusal(key: str, tenant_id: uuid.UUID) -> str | None:
+    """Why ``key`` may not be switched off for the school, or None when nothing objects."""
+    for guard in _disable_guards.get(key, ()):
+        reason = guard(tenant_id)
+        if reason:
+            return reason
+    return None
+
+
+def plan_change_refusal(tenant_id: uuid.UUID, modules: frozenset[str]) -> tuple[str, str] | None:
+    """The first guarded ``module.*`` key a move to a plan of ``modules`` would switch off for
+    the school, with the guard's reason; None when the move switches off nothing guarded.
+
+    A key is switched off when it resolves on now and off once ``modules`` is the plan: a
+    live override still decides, so one that keeps the module on makes the move harmless.
+    """
+    for key in sorted(_disable_guards):
+        if not key.startswith(_PLAN_KEY_PREFIX) or key in modules:
+            continue
+        if not _resolve_feature(key, tenant_id=tenant_id):
+            continue
+        if _resolve_feature(key, tenant_id=tenant_id, plan_modules=modules):
+            continue
+        reason = disable_refusal(key, tenant_id)
+        if reason:
+            return key, reason
+    return None
 
 
 @dataclass(frozen=True)
@@ -103,6 +194,11 @@ def load_module_features() -> None:
 def sync_feature_flags() -> dict[str, int]:
     """Upsert every registered flag key. Returns a small change summary.
 
+    A new key takes the code's default and kill-switch setting. An existing row keeps its
+    own: once a flag exists, the platform console owns ``default_enabled`` and
+    ``is_kill_switch`` (`PATCH /platform/feature-flags/{id}`), and a deploy must not undo a
+    kill switch an operator just threw. Only the description follows the code.
+
     Removal is not automatic, for the same reason core.rbac.sync leaves stale
     permission rows alone: a key missing from the registry may be a rename in
     progress, and silently deleting the row would drop every tenant override
@@ -115,6 +211,7 @@ def sync_feature_flags() -> dict[str, int]:
 
     to_create = []
     to_update = []
+    drifted: list[str] = []
 
     for spec in specs:
         current = existing.get(spec.key)
@@ -127,27 +224,32 @@ def sync_feature_flags() -> dict[str, int]:
                     is_kill_switch=spec.is_kill_switch,
                 )
             )
-        elif (
-            current.description != spec.description
-            or current.default_enabled != spec.default_enabled
-            or current.is_kill_switch != spec.is_kill_switch
-        ):
-            current.description = spec.description
-            current.default_enabled = spec.default_enabled
-            current.is_kill_switch = spec.is_kill_switch
-            to_update.append(current)
+        else:
+            if (current.default_enabled, current.is_kill_switch) != (
+                spec.default_enabled,
+                spec.is_kill_switch,
+            ):
+                drifted.append(spec.key)
+            if current.description != spec.description:
+                current.description = spec.description
+                to_update.append(current)
 
     if to_create:
         FeatureFlag.objects.bulk_create(to_create, batch_size=500)
     if to_update:
-        FeatureFlag.objects.bulk_update(
-            to_update, ["description", "default_enabled", "is_kill_switch"], batch_size=500
-        )
-    if to_create or to_update:
-        # bulk_create/bulk_update don't emit post_save, so signals.evict_on_flag_change
-        # never runs — do its job here, or a flag's default flipped on deploy stays
-        # resolved from the stale cached value for up to _CACHE_TTL.
+        FeatureFlag.objects.bulk_update(to_update, ["description"], batch_size=500)
+    if to_create:
+        # bulk_create doesn't emit post_save, so signals.evict_on_flag_change never runs:
+        # do its job here, or a new key stays resolved from a cached miss for _CACHE_TTL.
         bump_feature_cache_generation()
+
+    if drifted:
+        # WARNING: the code's new default does not apply here. A deliberate default change
+        # needs a console edit or a data migration (platform-admin §7.6).
+        logger.warning(
+            "feature flags whose console setting differs from the code's default: %s",
+            ", ".join(sorted(drifted)),
+        )
 
     stale = sorted(set(existing) - registry.keys())
     if stale:
@@ -175,9 +277,16 @@ def is_feature_enabled(key: str, *, tenant_id: uuid.UUID) -> bool:
     2. A live, non-expired tenant override -> its value, EXCEPT a kill-switch flag
        ignores an override that tries to turn it on — only the platform default can
        enable a kill switch; an override may still force it off.
-    3. Plan-level enablement -> skipped here, deliberately: `plans`/`subscriptions`
-       arrive with platform-admin (Tier 5). This is the documented insertion point.
+    3. The school's live plan, through the resolver the platform console registers
+       (`register_plan_resolver`): a ``module.*`` key is enabled iff it is in the plan's
+       ``enabled_modules``, so a module the plan lacks is off even if its default is on.
+       A kill switch again stays at its default if the plan would turn it on. Keys outside
+       ``module.*`` skip this step, and so does a school with no live subscription (the
+       resolver answers None) or a deployment with no resolver.
     4. The flag's own default.
+
+    A plan or subscription write calls `invalidate_feature_cache`, so a change reaches every
+    school's next request rather than waiting out the cache TTL.
     """
     cache_key = f"feature:{feature_cache_generation()}:{tenant_id}:{key}"
     cached = cache.get(cache_key)
@@ -189,7 +298,23 @@ def is_feature_enabled(key: str, *, tenant_id: uuid.UUID) -> bool:
     return resolved
 
 
-def _resolve_feature(key: str, *, tenant_id: uuid.UUID) -> bool:
+def resolve_without_override(key: str, *, tenant_id: uuid.UUID) -> bool:
+    """What ``key`` resolves to for the school once its override is gone. Uncached.
+
+    The console asks this before removing an override, to know whether removing it is a
+    disable that a guard must allow (`disable_refusal`).
+    """
+    return _resolve_feature(key, tenant_id=tenant_id, ignore_override=True)
+
+
+def _resolve_feature(
+    key: str,
+    *,
+    tenant_id: uuid.UUID,
+    ignore_override: bool = False,
+    plan_modules: frozenset[str] | None = None,
+) -> bool:
+    """Resolve uncached. ``plan_modules`` stands in for the live plan's modules (a plan move)."""
     from core.tenancy.models import FeatureFlag, TenantFeatureOverride
 
     flag = FeatureFlag.objects.filter(key=key).first()
@@ -198,7 +323,9 @@ def _resolve_feature(key: str, *, tenant_id: uuid.UUID) -> bool:
         return False
 
     override = (
-        TenantFeatureOverride.all_tenants.filter(
+        None
+        if ignore_override
+        else TenantFeatureOverride.all_tenants.filter(
             tenant_id=tenant_id, feature_flag=flag, deleted_at__isnull=True
         )
         .order_by("-created_at")
@@ -214,5 +341,16 @@ def _resolve_feature(key: str, *, tenant_id: uuid.UUID) -> bool:
         if flag.is_kill_switch and override.enabled:
             return flag.default_enabled
         return override.enabled
+
+    planned = (
+        _plan_enables(key, tenant_id=tenant_id)
+        if plan_modules is None
+        else (key in plan_modules if key.startswith(_PLAN_KEY_PREFIX) else None)
+    )
+    if planned is not None:
+        # The same rule as an override: a plan can switch a kill switch off, never on.
+        if flag.is_kill_switch and planned:
+            return flag.default_enabled
+        return planned
 
     return flag.default_enabled

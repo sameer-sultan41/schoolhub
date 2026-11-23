@@ -19,6 +19,10 @@ from rest_framework import serializers
 
 from apps.fees_finance.services import ensure_system_accounts
 from apps.platform_admin.constants import RESERVED_SLUGS, SLUG_PATTERN, TENANT_EXPORT_JOB_TYPE
+from apps.platform_admin.plans.services import subscribable_plan
+
+# A module reference, not its names: it imports this module back (`NoLiveSubscription`).
+from apps.platform_admin.subscriptions import services as subscription_services
 from apps.platform_admin.tenants import lifecycle
 from core.api.exceptions import CodedAPIException, DomainRuleViolation
 from core.jobs.models import BackgroundJob, JobStatus
@@ -56,6 +60,14 @@ class NoLiveSubscription(CodedAPIException):
         "trial_ends_at to reinstate it on a trial."
     )
     default_code = "no_live_subscription"
+
+
+class GraceExpired(CodedAPIException):
+    status_code = 409
+    default_detail = (
+        "This school's payment grace has run out. Record a payment before reinstating it."
+    )
+    default_code = "grace_expired"
 
 
 class ExportRequired(CodedAPIException):
@@ -145,26 +157,23 @@ def provision_tenant(
     - creates the owner's account from the contact details (inactive, no password), gives
       it the shared `school_owner` default role, and invites it (`InvitationKind.OWNER`,
       emailed once this commits, linking to the school's own dashboard host);
-    - sets ``trial_ends_at`` (``PLATFORM_DEFAULT_TRIAL_DAYS``) and ``provisioned_at``;
-    - moves the school to ``trial``.
+    - with a ``plan_code``, starts a ``trialing`` subscription to that plan, whose trial
+      length (the plan's ``trial_days``) sets ``trial_ends_at``; without one, the school
+      trials with no plan for ``PLATFORM_DEFAULT_TRIAL_DAYS``;
+    - sets ``provisioned_at`` and moves the school to ``trial``.
 
     The tenant row is locked first and must still be ``provisioning``, so a second call,
     concurrent or not, is a 409 ``invalid_transition`` with nothing seeded twice. The default
     staff roles need no seeding: they are shared ``tenant=None`` rows (`sync_default_roles`).
-
-    ``plan_code`` is refused (422) until plans exist (PR B), so no caller relies on a plan
-    being silently ignored.
+    An unknown or inactive ``plan_code`` is a 422, judged before anything is seeded.
     """
-    if plan_code is not None:
-        raise DomainRuleViolation(
-            {"plan_code": "Plans are not available yet. Provision without a plan."}
-        )
     locked = Tenant.objects.select_for_update().get(pk=tenant.pk)
     lifecycle.assert_can_transition(locked, S.TRIAL)
     if not locked.contact_email:
         raise DomainRuleViolation(
             {"contact_email": "The owner is invited at the contact email; add one first."}
         )
+    plan = subscribable_plan(plan_code) if plan_code is not None else None
 
     with tenant_context(locked.pk):
         TenantSettings.objects.get_or_create(tenant=locked)
@@ -173,7 +182,11 @@ def provision_tenant(
         create_invitation(user=owner, kind=InvitationKind.OWNER, actor_id=actor_id)
 
         now = timezone.now()
-        locked.trial_ends_at = now + timedelta(days=settings.PLATFORM_DEFAULT_TRIAL_DAYS)
+        if plan is not None:
+            # Sets `trial_ends_at` to the trial's end, and the plan columns, on `locked`.
+            subscription_services.start_trial(locked, plan, actor_id=actor_id)
+        else:
+            locked.trial_ends_at = now + timedelta(days=settings.PLATFORM_DEFAULT_TRIAL_DAYS)
         locked.provisioned_at = now
         locked.save(update_fields=["trial_ends_at", "provisioned_at", "updated_at"])
         return lifecycle.transition(locked, S.TRIAL, actor_id=actor_id)
@@ -227,13 +240,15 @@ def reinstate_tenant(
 ) -> Tenant:
     """Return a suspended school to the status its live subscription implies.
 
-    - an ``active`` subscription: ``active``; a ``past_due`` one: ``past_due``;
+    - an ``active`` subscription: ``active``; a ``past_due`` one: ``past_due``, but only
+      within its grace (409 ``grace_expired`` after it, or the next dunning sweep would
+      suspend the school again at once): the operator records a payment first;
     - a ``trialing`` one, or none: ``trial``, and only with a future ``trial_ends_at``,
       which becomes the school's trial end;
     - no live subscription and no ``trial_ends_at``: 409 ``no_live_subscription``.
 
-    The live subscription comes from the registered ``subscription_state`` hook; with none
-    registered (before plans exist) every school counts as having none.
+    The live subscription comes from the ``subscription_state`` hook, which this app
+    registers (`hooks.register`); a school provisioned without a plan has none.
     """
     if tenant.status != S.SUSPENDED:
         # Judged before the subscription, so reinstating a live school is a plain 409.
@@ -243,6 +258,9 @@ def reinstate_tenant(
     if state == subscription_state.ACTIVE:
         target = S.ACTIVE
     elif state == subscription_state.PAST_DUE:
+        sub = subscription_services.live_subscription(tenant.pk)
+        if sub is not None and timezone.now() >= subscription_services.grace_ends(sub):
+            raise GraceExpired()
         target = S.PAST_DUE
     else:
         _check_trial_end(trial_ends_at, trialing=state == subscription_state.TRIALING)

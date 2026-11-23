@@ -64,7 +64,8 @@ class ProvisionSerializer(serializers.Serializer):
         required=False,
         allow_null=True,
         default=None,
-        help_text="Refused (422) until plans exist; provision without one.",
+        help_text="An active plan's code: the school trials on it, for the plan's trial "
+        "length. Without one it trials with no plan. Unknown or inactive: 422.",
     )
 
 

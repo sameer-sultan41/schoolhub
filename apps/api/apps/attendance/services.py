@@ -55,6 +55,7 @@ from core.files.services import assert_file_usable, get_download_url
 from core.imports.tabular import parse_rows
 from core.rbac.models import RecordScope
 from core.rbac.permissions import is_restricted_principal, scopes_for
+from core.tenancy.context import tenant_atomic
 from core.tenancy.features import is_feature_enabled
 from core.tenancy.models import TenantSettings
 
@@ -167,6 +168,29 @@ def attendance_settings_from(academic: dict) -> dict:
     }
 
 
+TIMETABLE_NEEDED = (
+    "This school takes attendance by period, which reads the timetable. Switch attendance "
+    "to daily before turning the timetable off."
+)
+
+
+def timetable_disable_refusal(tenant_id: uuid.UUID) -> str | None:
+    """The `module.timetable` disable guard (`core.tenancy.features.register_disable_guard`).
+
+    Period mode marks attendance against timetable periods, so a school in it cannot lose
+    the timetable: every period register would be refused until it came back.
+
+    Reads the mode under the settings row's lock (`lock_settings_row`), held until the
+    caller's transaction ends, and a mode switch checks the timetable under the same lock
+    (`update_attendance_settings`): a disable and a switch to period mode cannot both pass.
+    """
+    with tenant_atomic(tenant_id):
+        row = lock_settings_row(tenant_id=tenant_id, actor_id=None)
+        academic = row.academic if isinstance(row.academic, dict) else {}
+        mode = attendance_settings_from(academic)["attendance_mode"]
+    return TIMETABLE_NEEDED if mode == ATTENDANCE_MODE_PERIOD else None
+
+
 def read_attendance_settings(*, tenant_id: uuid.UUID) -> dict:
     """The tenant's attendance settings, defaults applied. One query."""
     row = TenantSettings.objects.filter(tenant_id=tenant_id).first()
@@ -188,12 +212,15 @@ def update_attendance_settings(
     """Merge `changes` into the tenant's `academic` under a row lock: `(row, before, after)`.
 
     Fetch-or-create under a lock (`school_organization.services.lock_settings_row`;
-    provisioning may not have made the row yet), so the row is read once. Only the
+    provisioning may not have made the row yet), so the row is read once. A switch to
+    period mode is checked against the timetable under that lock, which the timetable's
+    disable guard also takes (`timetable_disable_refusal`). Only the
     changed keys are written, so sibling keys survive, and the nested
     `student_leave_approval` dict is merged rather than replaced. Two queries when the
     row exists (the locked read and the update); the caller holds the transaction.
     """
     locked = lock_settings_row(tenant_id=tenant_id, actor_id=actor_id)
+    assert_mode_switch_allowed(changes=changes, tenant_id=tenant_id)
     before = dict(locked.academic) if isinstance(locked.academic, dict) else {}
     after = dict(before)
     if "attendance_mode" in changes:

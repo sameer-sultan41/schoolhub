@@ -81,6 +81,8 @@ refuses the key.
 Indexes: unique(code); (is_active).
 Relationships: 1:N `subscriptions`.
 
+As built (`apps/platform_admin/models.py`): `description` is stored blank, not null. Deleting a plan soft-deletes it (`deleted_at`, `is_active=false`) and keeps its `code` reserved, since `tenants.current_plan` may name it; it is refused while any school is on the plan. `code` cannot change once created. `trial_days` defaults to `PLATFORM_DEFAULT_TRIAL_DAYS`. `enabled_modules` holds registered `module.*` flag keys; `limits` keys come from `QUOTA_METRICS` (`students`, `staff`, `storage_gb`, `sms_credits`, `ai_tokens`), each a non-negative integer or null (unlimited).
+
 ### subscriptions
 A tenant's subscription to a plan; billing state drives the tenant lifecycle.
 
@@ -98,6 +100,8 @@ A tenant's subscription to a plan; billing state drives the tenant lifecycle.
 Indexes: (tenant_id, status); unique(tenant_id) where status in (`trialing`,`active`,`past_due`) — one live subscription per tenant.
 Relationships: N:1 `tenants`, `plans`.
 
+As built: `billing_provider` and `billing_provider_ref` are stored blank, not null; the reference is mirrored onto `tenants.billing_provider_ref`, which is unique when set. The one-live index also requires `deleted_at IS NULL` (`subscriptions_one_live_per_tenant`). `plan_id` is `ON DELETE PROTECT`; plans are only ever soft-deleted.
+
 ### feature_flags
 **Platform scope — no `tenant_id`.** Registry of feature flags with per-plan defaults; kill-switch capable.
 
@@ -111,6 +115,8 @@ Relationships: N:1 `tenants`, `plans`.
 Indexes: unique(key).
 Relationships: 1:N `tenant_feature_overrides`; referenced by plan `enabled_modules` resolution.
 
+*As built:* rows come from code (`core.tenancy.features`'s registry, synced on `post_migrate`). A new key takes the code's `default_enabled` and `is_kill_switch`; after that the platform console owns both (`PATCH /platform/feature-flags/{id}`), and the sync updates only `description`.
+
 ### tenant_feature_overrides
 Per-tenant flag override on top of plan defaults.
 
@@ -123,6 +129,22 @@ Per-tenant flag override on top of plan defaults.
 
 Indexes: unique(tenant_id, feature_flag_id).
 Relationships: N:1 `tenants`, `feature_flags`.
+
+*As built:* the unique index is partial (`deleted_at IS NULL`): replacing or removing an override soft-deletes the old row, and the hourly `lapse_overrides` sweep soft-deletes expired ones.
+
+### billing_event_receipts
+**Platform scope — no RLS.** One row per billing-provider event received: the webhook's idempotency record (platform-admin §7.6). It is claimed before the school is known, so it cannot be tenant-owned.
+
+| Column | Type | Null | Default | Notes |
+| ------ | ---- | ---- | ------- | ----- |
+| provider | varchar(30) | no | — | The adapter's key, e.g. `fake` |
+| event_id | varchar(200) | no | — | The provider's event id |
+| kind | varchar(40) | no | — | `payment_succeeded` / `payment_failed` |
+| provider_ref | varchar(120) | no | — | The reference the event named |
+| tenant_id | uuid | yes | — | FK → tenants; null when no school carries the reference |
+| outcome | varchar(20) | no | — | Enum: `applied` `ignored` `unknown_ref` `no_subscription` |
+
+Indexes: unique(provider, event_id).
 
 ### custom_domains
 A tenant's custom domain(s) for its public website (multi-tenancy §4; bound via website-cms).
@@ -355,4 +377,4 @@ Relationships: N:1 `saved_reports`; executions recorded as `background_jobs`.
 
 - `tenants` 1:1 `tenant_settings`; 1:N `subscriptions` (one live), `custom_domains`, `tenant_feature_overrides`, `users` (nullable for platform staff).
 - Identity: `users` N:M `roles` via `user_roles` (with record scope); `roles` N:M `permissions` via `role_permissions`.
-- Platform-scope tables (`tenants`, `plans`, `feature_flags`, `permissions`, plus `themes` in [`website-cms.md`](website-cms.md)) carry no `tenant_id` and are exempt from RLS; every other table here participates in the RLS policy from [`multi-tenancy.md`](../../02-architecture/multi-tenancy.md) §3.
+- Platform-scope tables (`tenants`, `plans`, `feature_flags`, `billing_event_receipts`, `permissions`, plus `themes` in [`website-cms.md`](website-cms.md)) carry no `tenant_id` and are exempt from RLS; every other table here participates in the RLS policy from [`multi-tenancy.md`](../../02-architecture/multi-tenancy.md) §3.

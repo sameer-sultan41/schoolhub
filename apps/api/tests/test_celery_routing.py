@@ -68,3 +68,25 @@ class CeleryRoutingTests(SimpleTestCase):
             with self.subTest(task=task):
                 self.assertIn(task, app.tasks)
                 self.assertEqual(routed_queue(task), "transactional")
+
+    def test_the_platform_sweeps_run_on_bulk_and_their_notices_on_transactional(self) -> None:
+        app.loader.import_default_modules()
+        for task, queue in (
+            ("apps.platform_admin.tasks.trial_reminders", "bulk"),
+            ("apps.platform_admin.tasks.expire_trials", "bulk"),
+            ("apps.platform_admin.tasks.dunning_sweep", "bulk"),
+            ("apps.platform_admin.tasks.lapse_overrides", "bulk"),
+            ("apps.platform_admin.tasks.send_trial_expiring_notice", "transactional"),
+            ("apps.platform_admin.tasks.send_payment_failed_notice", "transactional"),
+        ):
+            with self.subTest(task=task):
+                self.assertIn(task, app.tasks)
+                self.assertEqual(routed_queue(task), queue)
+
+    def test_every_platform_sweep_is_on_the_beat_schedule(self) -> None:
+        from django.conf import settings
+
+        scheduled = {entry["task"] for entry in settings.CELERY_BEAT_SCHEDULE.values()}
+        for task in ("trial_reminders", "expire_trials", "dunning_sweep", "lapse_overrides"):
+            with self.subTest(task=task):
+                self.assertIn(f"apps.platform_admin.tasks.{task}", scheduled)

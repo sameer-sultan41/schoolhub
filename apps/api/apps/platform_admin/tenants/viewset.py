@@ -115,7 +115,7 @@ class TenantDetailViewSet(PlatformTenantNestedMixin, PlatformViewSet):
         responses={
             200: TenantSerializer,
             409: _CONFLICT,
-            422: OpenApiResponse(description="A plan_code before plans exist, or no contact"),
+            422: OpenApiResponse(description="An unknown or inactive plan_code, or no contact"),
         },
     )
     def provision(self, request: Request, tenant_pk=None) -> Response:
@@ -164,7 +164,9 @@ class TenantDetailViewSet(PlatformTenantNestedMixin, PlatformViewSet):
         request=ReinstateSerializer,
         responses={
             200: TenantSerializer,
-            409: OpenApiResponse(description="invalid_transition, or no_live_subscription"),
+            409: OpenApiResponse(
+                description="invalid_transition, no_live_subscription, or grace_expired"
+            ),
         },
     )
     def reinstate(self, request: Request, tenant_pk=None) -> Response:

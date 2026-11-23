@@ -5,15 +5,21 @@ v1 notifies the school's owners only: `notify()` is per tenant, so §12's copies
 (docs/deferred-work.md). The owner invite itself is not here: it is ADR-0033's invitation
 email (`InvitationKind.OWNER`), sent through `core.rbac.auth_emails`.
 
-No dedupe check before sending, unlike the sweeps' notices: a lifecycle notice fires once per
-transition, and `lifecycle.transition` makes each transition under the tenant row's lock, so a
-retry finds the tenant already moved and is refused before it gets here. Deduping on the
-tenant would wrongly silence a school's second suspension.
+No dedupe check before sending a lifecycle notice: it fires once per transition, and
+`lifecycle.transition` makes each transition under the tenant row's lock, so a retry finds the
+tenant already moved and is refused before it gets here. Deduping on the tenant would wrongly
+silence a school's second suspension.
+
+The sweeps' notices (`platform.trial-expiring`, `platform.payment-failed`) do dedupe, through
+`notify_owners_once`, on a key more specific than the school: the trial's end and the
+threshold, or the subscription's period. A rerun sends nothing twice, and the school's next
+trial or next period still gets its own notice.
 """
 
 from __future__ import annotations
 
 import logging
+import uuid
 
 from django.db import transaction
 
@@ -33,22 +39,44 @@ logger = logging.getLogger(__name__)
 
 TENANT_SUSPENDED = "platform.tenant-suspended"
 TENANT_REINSTATED = "platform.tenant-reinstated"
+TRIAL_EXPIRING = "platform.trial-expiring"
+PAYMENT_FAILED = "platform.payment-failed"
 
 _VARIABLES = {"school.name"}
 
-for _code, _description, _subject, _body in (
+for _code, _description, _subject, _body, _variables in (
     (
         TENANT_SUSPENDED,
         "The school's account was suspended.",
         "{{ school.name }} has been suspended",
         "Access to {{ school.name }} on SchoolHub has been suspended. Your data is kept "
         "unchanged. Please contact SchoolHub support to restore access.",
+        _VARIABLES,
     ),
     (
         TENANT_REINSTATED,
         "The school's account was reinstated after a suspension.",
         "{{ school.name }} has been reinstated",
         "Access to {{ school.name }} on SchoolHub has been restored. Everyone can sign in again.",
+        _VARIABLES,
+    ),
+    (
+        TRIAL_EXPIRING,
+        "The school's trial ends soon (PLATFORM_TRIAL_REMINDER_DAYS).",
+        "{{ school.name }}: your trial ends in {{ trial.days_left }} days",
+        "The SchoolHub trial for {{ school.name }} ends on {{ trial.ends_on }}, in "
+        "{{ trial.days_left }} days. Choose a plan before then to keep access; after it, the "
+        "school is suspended until a plan starts.",
+        {*_VARIABLES, "trial.days_left", "trial.ends_on"},
+    ),
+    (
+        PAYMENT_FAILED,
+        "The school's subscription payment failed; access continues through the grace period.",
+        "{{ school.name }}: your SchoolHub payment failed",
+        "We could not collect the SchoolHub payment for {{ school.name }}. Access continues "
+        "until {{ grace.ends_on }}. Please settle the payment before then, or the school will "
+        "be suspended.",
+        {*_VARIABLES, "grace.ends_on"},
     ),
 ):
     catalog.register(
@@ -58,12 +86,12 @@ for _code, _description, _subject, _body in (
         priority=NotificationPriority.HIGH,
         # Email as well: while suspended, nobody at the school can sign in to read the inbox.
         channels={NotificationChannel.EMAIL},
-        variables=_VARIABLES,
+        variables=_variables,
         description=_description,
     )
     for _channel in (NotificationChannel.IN_APP, NotificationChannel.EMAIL):
         templates.register(
-            _code, channel=_channel, subject=_subject, body=_body, variables=_VARIABLES
+            _code, channel=_channel, subject=_subject, body=_body, variables=_variables
         )
 
 
@@ -81,11 +109,19 @@ def school_owners(tenant: Tenant) -> list[User]:
     )
 
 
-def notify_owners(tenant: Tenant, event_key: str) -> None:
-    """Send ``event_key`` to the school's owners. Never lets a failure undo the transition.
+def notify_owners(
+    tenant: Tenant,
+    event_key: str,
+    *,
+    context: dict[str, object] | None = None,
+    source_type: str = "tenant",
+    source_id: uuid.UUID | None = None,
+) -> int:
+    """Send ``event_key`` to the school's owners; returns how many. Never raises.
 
-    The tenant is bound for the write (`notifications` has an RLS policy), and the send is
-    savepointed for the reason `core.audit.services.record_audit` gives.
+    A failure never undoes the transition or the sweep step that sent it. The tenant is
+    bound for the write (`notifications` has an RLS policy), and the send is savepointed for
+    the reason `core.audit.services.record_audit` gives.
     """
     from core.notifications.services import Recipient, notify
 
@@ -93,14 +129,46 @@ def notify_owners(tenant: Tenant, event_key: str) -> None:
         with transaction.atomic(), tenant_context(tenant.pk):
             owners = school_owners(tenant)
             if not owners:
-                return
+                return 0
             notify(
                 event_key,
                 tenant_id=tenant.pk,
                 recipients=[Recipient(user_id=owner.pk) for owner in owners],
-                context={"school.name": tenant.name},
-                source_type="tenant",
-                source_id=tenant.pk,
+                context={"school.name": tenant.name, **(context or {})},
+                source_type=source_type,
+                source_id=source_id or tenant.pk,
             )
+            return len(owners)
     except Exception:
         logger.exception("%s notification failed for tenant %s", event_key, tenant.pk)
+        return 0
+
+
+# The namespace of the sweeps' dedupe keys: a stable UUID per (school, notice, occasion).
+_DEDUPE_NAMESPACE = uuid.UUID("6f1d3c2a-5b0e-4d8a-9c7e-2a4b8e1f0d35")
+
+
+def dedupe_key(tenant: Tenant, event_key: str, occasion: str) -> uuid.UUID:
+    """The `source_id` a sweep's notice carries: one per school, notice and occasion."""
+    return uuid.uuid5(_DEDUPE_NAMESPACE, f"{tenant.pk}:{event_key}:{occasion}")
+
+
+def notify_owners_once(
+    tenant: Tenant, event_key: str, *, occasion: str, context: dict[str, object]
+) -> int:
+    """`notify_owners`, unless this school already got ``event_key`` for ``occasion``.
+
+    ``occasion`` is what makes the notice new: the trial's end and the threshold, or the
+    unpaid period's end. `notify()` does not dedupe, so the check is here; the caller holds
+    the tenant row's lock, so two runs cannot both pass it.
+    """
+    from core.notifications.models import Notification
+
+    key = dedupe_key(tenant, event_key, occasion)
+    with tenant_context(tenant.pk):
+        sent = Notification.objects.filter(
+            event_key=event_key, source_type="platform", source_id=key
+        ).exists()
+    if sent:
+        return 0
+    return notify_owners(tenant, event_key, context=context, source_type="platform", source_id=key)
