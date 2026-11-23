@@ -93,6 +93,12 @@
 - **Mistake (again, account-invitations PR A, Task A2 fix round 3).** While clearing hook
   rejections a subagent ran `ruff check`/`ruff format` by hand instead of letting the commit
   hooks report and fixing the named files, which is the local lint run ADR-0007 forbids.
+- **Recurred (platform-admin PR B, Task 4).** `uv run` (from `makemigrations` and
+  `generate-openapi.sh`) created `apps/api/.venv`, which switched on the pre-push mypy check;
+  its output is discarded, so the push failed with no detail. A guessed fix (literal
+  `TextChoices` values) did not clear it. CI's `typecheck` log named the real error at once:
+  an unannotated `extra_kwargs = {"code": {"validators": []}}` (`[var-annotated]`). Read the
+  error from CI (`gh run view <id> --log-failed`) rather than guessing.
 - **Check.** Apply the fix the hook prints, on exactly the files it lists. The hooks run ruff,
   eslint and prettier; never run them yourself. The pre-commit checks only report, so edit the
   named files by hand, re-stage them and commit again. Delete an unused `noqa` rather than re-adding it, reword a flagged word rather than growing `.cspell/project-words.txt`, and never use `--no-verify`. Keep the reason a removed `noqa` carried as a plain comment. When a hook prints no detail (the pre-push mypy check), run the command it names once and read the error before editing; two guessed fixes in a row failed before the real cause (a class variable overridden by an annotated attribute) was read.

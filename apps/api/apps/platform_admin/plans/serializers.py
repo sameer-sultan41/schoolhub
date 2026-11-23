@@ -8,7 +8,7 @@ from rest_framework import serializers
 
 from apps.platform_admin.constants import QUOTA_METRICS
 from apps.platform_admin.models import Plan
-from apps.platform_admin.plans.services import CODE_FROZEN, CODE_TAKEN
+from apps.platform_admin.plans.services import CODE_FROZEN
 from core.tenancy.features import registry as feature_registry
 
 _CURRENCY = re.compile(r"^[A-Z]{3}$")
@@ -102,16 +102,11 @@ class PlanWriteSerializer(serializers.ModelSerializer):
             "is_active",
             "acknowledge_over_usage",
         ]
-        extra_kwargs = {"code": {"validators": []}}
 
     def validate_code(self, value: str) -> str:
-        if self.instance is not None:
-            if value != self.instance.code:
-                raise serializers.ValidationError(CODE_FROZEN)
-            return value
-        # Retired plans keep their code: `tenants.current_plan` history may still name it.
-        if Plan.objects.filter(code=value).exists():
-            raise serializers.ValidationError(CODE_TAKEN)
+        # Uniqueness is the model's `unique=True` validator; retired plans keep their code.
+        if self.instance is not None and value != self.instance.code:
+            raise serializers.ValidationError(CODE_FROZEN)
         return value
 
     def validate_currency(self, value: str) -> str:
