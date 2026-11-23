@@ -115,7 +115,7 @@ variable "health_check_path" {
 }
 
 variable "writable_paths" {
-  description = "Absolute container paths that get their own writable, non-persistent volume, like /tmp. For an app cache that must not fail on the read-only root (the renderer's .next/cache)."
+  description = "Absolute container paths that get their own writable, non-persistent volume, like /tmp. For an app cache that must not fail on the read-only root (the renderer's .next/cache). A non-root image must declare a Dockerfile VOLUME at each path, or the mount is root-owned 0755."
   type        = list(string)
   default     = []
 

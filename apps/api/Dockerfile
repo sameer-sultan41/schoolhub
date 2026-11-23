@@ -87,6 +87,10 @@ COPY . .
 
 # Run as a non-root user: a container compromise should not be a root compromise.
 RUN useradd --create-home --uid 10001 appuser && chown -R appuser:appuser /app
+# ECS mounts a writable volume at /tmp (the root is read-only), where gunicorn keeps its worker
+# heartbeat files. Without a VOLUME at the same path it is root-owned 0755 and appuser cannot
+# write it; with one, ECS seeds it from the image as 1777.
+VOLUME ["/tmp"]
 USER appuser
 
 EXPOSE 8000

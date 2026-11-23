@@ -70,9 +70,12 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=builder --chown=node:node /app/apps/website/.next/standalone ./
 COPY --from=builder --chown=node:node /app/apps/website/.next/static ./apps/website/.next/static
 COPY --from=builder --chown=node:node /app/apps/website/public ./apps/website/public
-# Next's disk cache. ECS mounts a writable volume here (the root is read-only); the directory
-# exists, owned by node, so the volume starts with that ownership.
+# ECS mounts writable volumes at /tmp and Next's disk cache (the root is read-only). A
+# bind-mount volume is root-owned 0755 unless the image declares a VOLUME at the same path, in
+# which case ECS seeds it from the image: node-owned for the cache, 1777 for /tmp. Keep these
+# paths equal to the task definition's containerPath (Terraform `writable_paths`).
 RUN mkdir -p apps/website/.next/cache && chown node:node apps/website/.next/cache
+VOLUME ["/tmp", "/app/apps/website/.next/cache"]
 
 USER node
 EXPOSE 3001
