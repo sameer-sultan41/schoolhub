@@ -154,7 +154,7 @@
           "limit": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 60
+            "maximum": 50
           }
         }
       }
@@ -268,7 +268,7 @@
           "limit": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 60
+            "maximum": 50
           }
         }
       }

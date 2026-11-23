@@ -2,8 +2,16 @@ import { headers } from "next/headers";
 import type * as ReactModule from "react";
 import { makeTenant } from "@/test-utils";
 import { readJson } from "../api";
-import { TENANT_HOST_HEADER } from "../host";
-import { canonicalOrigin, getActiveTenant, getRequestHost, resolveTenant } from "../tenant";
+import { getPreviewToken } from "../preview";
+import { TENANT_HOST_HEADER, TENANT_KIND_HEADER, TENANT_PATH_HEADER } from "../host";
+import {
+  canonicalOrigin,
+  classifyTenant,
+  customDomainRedirectTarget,
+  getRequestHost,
+  resolveTenant,
+  type TenantResolution,
+} from "../tenant";
 
 // react's cache() memoizes per-request; outside of an actual render it would otherwise
 // share results across these tests in a way that has nothing to do with what each one
@@ -16,22 +24,34 @@ jest.mock("react", () => ({
 jest.mock("next/headers", () => ({ headers: jest.fn() }));
 jest.mock("../api", () => ({
   readJson: jest.fn(),
-  tenantTag: (id: string) => `tenant:${id}`,
+  hostTag: (host: string) => `tenant-host:${host}`,
 }));
+jest.mock("../preview", () => ({ getPreviewToken: jest.fn() }));
 
 const mockHeaders = headers as jest.MockedFunction<typeof headers>;
 const mockReadJson = readJson as jest.MockedFunction<typeof readJson>;
+const mockGetPreviewToken = getPreviewToken as jest.MockedFunction<typeof getPreviewToken>;
 
-function mockHost(host: string | null) {
+const HOST = "cityschool.schoolhub.pk";
+
+function mockRequestHeaders(values: Record<string, string>) {
   mockHeaders.mockResolvedValue({
-    get: (name: string) => (name === TENANT_HOST_HEADER ? host : null),
+    get: (name: string) => values[name] ?? null,
   } as Awaited<ReturnType<typeof headers>>);
 }
 
+function mockHost(host: string | null) {
+  mockRequestHeaders(host ? { [TENANT_HOST_HEADER]: host } : {});
+}
+
+beforeEach(() => {
+  mockReadJson.mockReset();
+});
+
 describe("getRequestHost", () => {
   it("reads the proxy-resolved host header", async () => {
-    mockHost("cityschool.schoolhub.pk");
-    await expect(getRequestHost()).resolves.toBe("cityschool.schoolhub.pk");
+    mockHost(HOST);
+    await expect(getRequestHost()).resolves.toBe(HOST);
   });
 
   it("is null when the proxy set no host", async () => {
@@ -40,15 +60,61 @@ describe("getRequestHost", () => {
   });
 });
 
-describe("resolveTenant", () => {
-  beforeEach(() => {
-    mockReadJson.mockReset();
+describe("classifyTenant", () => {
+  it.each([
+    ["trial", "live", "active"],
+    ["active", "live", "active"],
+    ["past_due", "live", "active"],
+    ["suspended", "live", "unavailable"],
+    ["active", "maintenance", "unavailable"],
+    ["active", "unpublished", "unavailable"],
+    ["deprovisioned", "live", "unknown"],
+    ["provisioning", "unpublished", "unknown"],
+  ] as const)("status %s with a %s site is %s", (status, websiteStatus, expected) => {
+    expect(classifyTenant(makeTenant({ status, website_status: websiteStatus }))).toBe(expected);
   });
+
+  it("renders a site that is not live under a preview", () => {
+    const tenant = makeTenant({ website_status: "unpublished" });
+    expect(classifyTenant(tenant, { draft: true })).toBe("active");
+    expect(classifyTenant(makeTenant({ website_status: "maintenance" }), { draft: true })).toBe(
+      "active",
+    );
+  });
+
+  it("fails closed on a status this build does not know", () => {
+    type Tenant = ReturnType<typeof makeTenant>;
+    const futureStatus = "archived" as Tenant["status"];
+    const futureSite = "scheduled" as Tenant["website_status"];
+    expect(classifyTenant(makeTenant({ status: futureStatus }))).toBe("unknown");
+    expect(classifyTenant(makeTenant({ website_status: futureSite }))).toBe("unknown");
+  });
+
+  it("never renders a suspended school, even under a preview", () => {
+    expect(classifyTenant(makeTenant({ status: "suspended" }), { draft: true })).toBe(
+      "unavailable",
+    );
+  });
+});
+
+describe("resolveTenant", () => {
+  beforeEach(() => mockGetPreviewToken.mockReset().mockResolvedValue(null));
 
   it("is unknown when there is no request host", async () => {
     mockHost(null);
     await expect(resolveTenant()).resolves.toEqual({ status: "unknown" });
     expect(mockReadJson).not.toHaveBeenCalled();
+  });
+
+  it("asks the API by host, tagged for host-scoped revalidation", async () => {
+    mockHost(HOST);
+    mockReadJson.mockResolvedValue(null);
+    await resolveTenant();
+    expect(mockReadJson).toHaveBeenCalledWith("/public/tenants/by-host", {
+      host: HOST,
+      revalidate: 300,
+      tags: [`tenant-host:${HOST}`],
+    });
   });
 
   it("is unknown when the host matches no tenant", async () => {
@@ -57,58 +123,125 @@ describe("resolveTenant", () => {
     await expect(resolveTenant()).resolves.toEqual({ status: "unknown" });
   });
 
-  it("is active for a live tenant", async () => {
-    mockHost("cityschool.schoolhub.pk");
+  it("is active for a live school, carrying the host", async () => {
+    mockHost(HOST);
     const tenant = makeTenant();
     mockReadJson.mockResolvedValue(tenant);
-    await expect(resolveTenant()).resolves.toEqual({ status: "active", tenant });
+    await expect(resolveTenant()).resolves.toEqual({ status: "active", tenant, host: HOST });
   });
 
-  it("is suspended for a suspended tenant", async () => {
-    mockHost("cityschool.schoolhub.pk");
+  it.each([
+    ["suspended", "live"],
+    ["active", "maintenance"],
+    ["active", "unpublished"],
+  ] as const)("is unavailable for a %s school with a %s site", async (status, websiteStatus) => {
+    mockHost(HOST);
+    const tenant = makeTenant({ status, website_status: websiteStatus });
+    mockReadJson.mockResolvedValue(tenant);
+    await expect(resolveTenant()).resolves.toEqual({ status: "unavailable", tenant, host: HOST });
+  });
+
+  it.each(["maintenance", "unpublished"] as const)(
+    "renders a %s site under a validated preview token",
+    async (websiteStatus) => {
+      mockHost(HOST);
+      mockGetPreviewToken.mockResolvedValue("tok-1");
+      const tenant = makeTenant({ website_status: websiteStatus });
+      mockReadJson.mockResolvedValue(tenant);
+      await expect(resolveTenant()).resolves.toEqual({ status: "active", tenant, host: HOST });
+    },
+  );
+
+  it("never renders a suspended school under a preview token", async () => {
+    mockHost(HOST);
+    mockGetPreviewToken.mockResolvedValue("tok-1");
     const tenant = makeTenant({ status: "suspended" });
     mockReadJson.mockResolvedValue(tenant);
-    await expect(resolveTenant()).resolves.toEqual({ status: "suspended", tenant });
+    await expect(resolveTenant()).resolves.toEqual({ status: "unavailable", tenant, host: HOST });
   });
 
-  it("is suspended for a closed tenant", async () => {
-    mockHost("cityschool.schoolhub.pk");
-    const tenant = makeTenant({ status: "closed" });
-    mockReadJson.mockResolvedValue(tenant);
-    await expect(resolveTenant()).resolves.toEqual({ status: "suspended", tenant });
-  });
+  it.each(["deprovisioned", "provisioning"] as const)(
+    "is unknown for a %s school",
+    async (status) => {
+      mockHost(HOST);
+      mockReadJson.mockResolvedValue(makeTenant({ status }));
+      await expect(resolveTenant()).resolves.toEqual({ status: "unknown" });
+    },
+  );
 });
 
-describe("getActiveTenant", () => {
-  beforeEach(() => {
-    mockReadJson.mockReset();
+describe("customDomainRedirectTarget", () => {
+  function active(customDomain: string | null, host = HOST): TenantResolution {
+    return { status: "active", tenant: makeTenant({ custom_domain: customDomain }), host };
+  }
+
+  it("redirects a subdomain request to the primary custom domain, keeping path and query", async () => {
+    mockRequestHeaders({ [TENANT_KIND_HEADER]: "subdomain", [TENANT_PATH_HEADER]: "/about?x=1" });
+    await expect(customDomainRedirectTarget(active("www.cityschool.edu.pk"))).resolves.toBe(
+      "https://www.cityschool.edu.pk/about?x=1",
+    );
   });
 
-  it("returns the tenant when active", async () => {
-    mockHost("cityschool.schoolhub.pk");
-    const tenant = makeTenant();
-    mockReadJson.mockResolvedValue(tenant);
-    await expect(getActiveTenant()).resolves.toEqual(tenant);
+  it("keeps a protocol-relative-looking path on the school's own domain", async () => {
+    mockRequestHeaders({
+      [TENANT_KIND_HEADER]: "subdomain",
+      [TENANT_PATH_HEADER]: "//evil.test/x",
+    });
+    await expect(customDomainRedirectTarget(active("www.cityschool.edu.pk"))).resolves.toBe(
+      "https://www.cityschool.edu.pk//evil.test/x",
+    );
   });
 
-  it("returns null when not active", async () => {
-    mockHost(null);
-    await expect(getActiveTenant()).resolves.toBeNull();
+  it("falls back to the root when the proxy sent no path", async () => {
+    mockRequestHeaders({ [TENANT_KIND_HEADER]: "subdomain" });
+    await expect(customDomainRedirectTarget(active("www.cityschool.edu.pk"))).resolves.toBe(
+      "https://www.cityschool.edu.pk/",
+    );
+  });
+
+  it("roots a path that lacks its leading slash", async () => {
+    mockRequestHeaders({ [TENANT_KIND_HEADER]: "subdomain", [TENANT_PATH_HEADER]: "about" });
+    await expect(customDomainRedirectTarget(active("www.cityschool.edu.pk"))).resolves.toBe(
+      "https://www.cityschool.edu.pk/about",
+    );
+  });
+
+  it("does not redirect a request already on a custom domain", async () => {
+    mockRequestHeaders({ [TENANT_KIND_HEADER]: "custom-domain", [TENANT_PATH_HEADER]: "/" });
+    await expect(
+      customDomainRedirectTarget(active("www.cityschool.edu.pk", "cityschool.edu.pk")),
+    ).resolves.toBeNull();
+  });
+
+  it("does not redirect to the host the request is already on", async () => {
+    mockRequestHeaders({ [TENANT_KIND_HEADER]: "subdomain", [TENANT_PATH_HEADER]: "/" });
+    await expect(customDomainRedirectTarget(active(HOST))).resolves.toBeNull();
+  });
+
+  it("does not redirect a school without a custom domain", async () => {
+    mockRequestHeaders({ [TENANT_KIND_HEADER]: "subdomain", [TENANT_PATH_HEADER]: "/" });
+    await expect(customDomainRedirectTarget(active(null))).resolves.toBeNull();
+  });
+
+  it("does not redirect an unknown or unavailable site", async () => {
+    await expect(customDomainRedirectTarget({ status: "unknown" })).resolves.toBeNull();
+    await expect(
+      customDomainRedirectTarget({
+        status: "unavailable",
+        tenant: makeTenant({ custom_domain: "www.cityschool.edu.pk" }),
+        host: HOST,
+      }),
+    ).resolves.toBeNull();
   });
 });
 
 describe("canonicalOrigin", () => {
   it("prefers the tenant's verified custom domain", () => {
     const tenant = makeTenant({ custom_domain: "www.cityschool.edu.pk" });
-    expect(canonicalOrigin(tenant, "cityschool.schoolhub.pk")).toBe(
-      "https://www.cityschool.edu.pk",
-    );
+    expect(canonicalOrigin(tenant, HOST)).toBe("https://www.cityschool.edu.pk");
   });
 
   it("falls back to the platform subdomain with no custom domain", () => {
-    const tenant = makeTenant({ custom_domain: null });
-    expect(canonicalOrigin(tenant, "cityschool.schoolhub.pk")).toBe(
-      "https://cityschool.schoolhub.pk",
-    );
+    expect(canonicalOrigin(makeTenant({ custom_domain: null }), HOST)).toBe(`https://${HOST}`);
   });
 });

@@ -1,6 +1,8 @@
 import { revalidateTag } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
+import { hostTag, tenantTag } from "@/lib/api";
 import { env } from "@/lib/env";
+import { normalizeHost } from "@/lib/host";
 import { SHA256_PREFIX_PATTERN } from "@/lib/regex";
 
 /**
@@ -11,12 +13,37 @@ import { SHA256_PREFIX_PATTERN } from "@/lib/regex";
  * cache tags so the next request re-renders. Edits go live in seconds without cold-rendering
  * every request.
  *
- * This is the app's only non-GET route, and it writes **nothing**: it invalidates a cache.
- * The renderer's read-only machine token is not involved.
+ * Besides the tenant's own `tenant:<id>…` tags, a signed body may name host tags: the API sends
+ * `tenant-host:<host>` for every host of the school when its settings, module flag or domains
+ * change, so the cached `by-host` answer is never stale (plan decision 8).
+ *
+ * Trust: the HMAC over the raw body is the only check, with one internal secret shared with the
+ * API (plan decision 8). A correctly signed body may name **any** tenant (its `tenant_id` is in
+ * the body) and any host, and there is no timestamp or nonce, so a captured request can be
+ * replayed. That is acceptable because the worst it does is evict cache entries, which the next
+ * request rebuilds from the API; the `tenant:` filter below only stops a body widening past the
+ * tenant it names.
+ *
+ * It writes **nothing**: it invalidates a cache. The renderer's read-only machine token is not
+ * involved.
  */
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const HOST_TAG_PREFIX = hostTag("");
+
+/** A tag the signing tenant may invalidate; anything else is ignored. */
+function isAllowedTag(tag: string, tenantId: string): boolean {
+  if (tag.startsWith(HOST_TAG_PREFIX)) {
+    // Only a well-formed host, exactly as `hostTag` writes it.
+    const host = tag.slice(HOST_TAG_PREFIX.length);
+    return normalizeHost(host) === host;
+  }
+  // `tenant:<id>` or `tenant:<id>:…`, never `tenant:<id>0…` (another tenant whose id it prefixes).
+  const own = tenantTag(tenantId);
+  return tag === own || tag.startsWith(`${own}:`);
+}
 
 function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -76,12 +103,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Always drop the tenant-wide tag; optional finer tags let a single-page publish be cheap.
-  const tags = new Set<string>([`tenant:${tenantId}`]);
+  // Always drop the tenant-wide tag; finer tenant tags and host tags come from the body.
+  const tags = new Set<string>([tenantTag(tenantId)]);
   if (Array.isArray(payload.tags)) {
     for (const tag of payload.tags) {
-      // Only ever invalidate within the tenant that signed the request.
-      if (typeof tag === "string" && tag.startsWith(`tenant:${tenantId}`)) tags.add(tag);
+      if (typeof tag === "string" && isAllowedTag(tag, tenantId)) tags.add(tag);
     }
   }
 

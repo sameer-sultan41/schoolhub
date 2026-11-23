@@ -47,6 +47,7 @@ from apps.website_cms.tests.factories import (
     enable_feature,
     make_custom_domain,
 )
+from core.rbac.machine import PublicPreviewThrottle
 from core.tenancy.context import tenant_context
 from core.tenancy.models import TenantFeatureOverride, TenantSettings, TenantStatus
 
@@ -556,6 +557,60 @@ class PreviewTests(PublicAPITestCase):
         self.make_section(self.draft, position=1, is_visible=False)
         sections = self.preview(make_preview_token(self.draft)).json()["data"]["sections"]
         self.assertEqual(len(sections), 1)
+
+
+class PreviewThrottleTests(PublicAPITestCase):
+    """Preview reads have their own per-(client, host) bucket (`public_preview`), used instead of
+    `machine_client`, so forged preview cookies can cost one school its previews only."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.draft = self.make_page(slug="admissions", status=ContentStatus.DRAFT)
+        self.make_section(self.draft, position=0, content={"heading": "Apply now"})
+        self.rates = PublicPreviewThrottle.THROTTLE_RATES
+        patcher = mock.patch.dict(self.rates, {"public_preview": "2/min"})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def preview(self, route: str = "pages", token: str | None = None, host: str | None = None):
+        # A junk token unless one is given: it still counts against the bucket.
+        header = token if token is not None else "not-a-token"
+        return self.read(route, host=host, meta={"HTTP_X_PREVIEW_TOKEN": header})
+
+    def test_preview_reads_are_throttled_per_school(self) -> None:
+        token = make_preview_token(self.draft)
+        statuses = [self.preview(token=token).status_code for _ in range(3)]
+
+        self.assertEqual(statuses, [200, 200, 429])
+
+    def test_bad_tokens_count_too_on_pages_and_site(self) -> None:
+        statuses = [self.preview(route).status_code for route in ("pages", "site", "pages")]
+
+        self.assertEqual(statuses, [404, 404, 429])
+
+    def test_another_school_has_its_own_bucket(self) -> None:
+        rival = TenantFactory(slug="rival")
+        enable_feature(rival, "module.website")
+        self.make_site(rival, is_published=True)
+        for _ in range(3):
+            self.preview()
+
+        self.assertEqual(self.preview("site", host=f"rival.{PLATFORM}").status_code, 404)
+
+    def test_preview_reads_never_spend_the_schools_machine_quota(self) -> None:
+        with mock.patch.dict(self.rates, {"machine_client": "1/min"}):
+            for _ in range(3):
+                self.preview()
+
+            # The school's first plain read is still let through.
+            self.assertEqual(self.read("site").status_code, 200)
+
+    def test_reads_without_the_header_are_not_counted(self) -> None:
+        for _ in range(3):
+            self.preview()
+
+        self.assertNotEqual(self.read("pages").status_code, 429)
+        self.assertNotEqual(self.read("site").status_code, 429)
 
 
 class SiteTests(PublicAPITestCase):

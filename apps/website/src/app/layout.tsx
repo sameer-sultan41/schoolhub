@@ -1,6 +1,8 @@
 import { Fraunces, Inter, Noto_Nastaliq_Urdu } from "next/font/google";
+import { permanentRedirect } from "next/navigation";
 import type { ReactNode } from "react";
-import { resolveTenant } from "@/lib/tenant";
+import { PreviewBanner } from "@/components/preview-banner";
+import { customDomainRedirectTarget, resolveTenant } from "@/lib/tenant";
 import { themeStyle } from "@/themes/default";
 import "./globals.css";
 
@@ -26,9 +28,15 @@ const notoNastaliqUrdu = Noto_Nastaliq_Urdu({
 /**
  * Root layout. The tenant's branding is applied here as CSS custom properties, so every
  * section below renders in the school's colours with no per-tenant code.
+ *
+ * A platform-subdomain request for a school with a primary custom domain is permanently
+ * redirected there (website-builder.md §4). It happens here, after the cached
+ * `resolveTenant()`, because the proxy stays I/O-free and cannot know the domain.
  */
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const resolution = await resolveTenant();
+  const redirectTarget = await customDomainRedirectTarget(resolution);
+  if (redirectTarget) permanentRedirect(redirectTarget);
   const tenant = resolution.status === "unknown" ? null : resolution.tenant;
   const locale = tenant?.locale.default_locale ?? "en";
   const dir = tenant?.locale.direction ?? "ltr";
@@ -40,7 +48,10 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       className={`${inter.variable} ${fraunces.variable} ${notoNastaliqUrdu.variable}`}
       style={themeStyle(tenant?.branding)}
     >
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        <PreviewBanner />
+        {children}
+      </body>
     </html>
   );
 }

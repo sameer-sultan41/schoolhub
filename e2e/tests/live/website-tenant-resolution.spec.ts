@@ -1,31 +1,41 @@
 import { env, tenantOrigin } from "@/env";
 import { expect, test } from "@/fixtures";
+import {
+  E2E_WEBSITE_ABOUT_HEADING,
+  E2E_WEBSITE_HOME_HEADING,
+  E2E_WEBSITE_OTHER_HOME_HEADING,
+} from "@/lib/seed-constants";
 
 /**
- * BLOCKED on a backend module that does not exist yet: `apps/api` has no public-content
- * API (no `/public/tenants/by-host`, no CMS-pages endpoint — see
- * `apps/api/config/api_v1.py`, which routes only `core.rbac` and
- * `apps.school_organization`). `resolveTenant()` (apps/website/src/lib/tenant.ts) 404s for
- * every host, including a real, seeded tenant.
+ * A seeded school's host renders its published site, read from the real public content API.
  *
- * This is *not* the same fallback as an unrecognizable host: a well-formed tenant
- * subdomain (`<slug>.<platform-domain>`, confirmed against the real running site, not
- * assumed) still routes past the proxy's host-parsing step, then hits the 404'd tenant
- * lookup and renders the standard Next.js not-found page — not the "No school website is
- * configured for this address." platform-landing page, which is reserved for a host the
- * proxy cannot even parse as a tenant subdomain. `tests/live/tenant-isolation.spec.ts`'s
- * header-spoofing test already covers that unparseable-host case.
+ * The path: the proxy parses `<slug>.<platform-domain>`; the root layout asks
+ * `/public/tenants/by-host?host=…` with the renderer's machine token (the live lane builds the
+ * renderer with the token the API was started with); `seed_e2e_website` made the site live and
+ * `module.website` is on, so the tenant resolves `active`; the page then reads
+ * `/public/pages?host=…`, which answers the published home page and its sections.
  *
- * This pins that real, current behavior — even for a genuinely seeded tenant — rather
- * than silently omitting coverage. Once the public-content API ships, replace this with a
- * test asserting real rendered tenant content.
+ * The site renders on the server, so nothing here can be stubbed from the browser.
  */
-test.describe("website tenant resolution (blocked on public-content API)", () => {
-  test("a real, seeded tenant host 404s to the generic not-found page — the backend it needs does not exist yet", async ({
-    publicSitePage,
-  }) => {
+test.use({ storageState: { cookies: [], origins: [] } });
+
+test.describe("website tenant resolution", () => {
+  test("a seeded school's host renders its published homepage", async ({ publicSitePage }) => {
     await publicSitePage.goto({ path: tenantOrigin(env.LIVE_TENANT_SLUG) });
 
-    await expect(publicSitePage.notFound).toBeVisible();
+    // The hero's heading is the page's only h1 (sections below it use h2).
+    await expect(publicSitePage.heading).toHaveText(E2E_WEBSITE_HOME_HEADING);
+  });
+
+  test("a published page renders on its own path", async ({ publicSitePage }) => {
+    await publicSitePage.goto({ path: `${tenantOrigin(env.LIVE_TENANT_SLUG)}/about` });
+
+    await expect(publicSitePage.sectionHeading(E2E_WEBSITE_ABOUT_HEADING)).toBeVisible();
+  });
+
+  test("each host renders its own school's homepage", async ({ publicSitePage }) => {
+    await publicSitePage.goto({ path: tenantOrigin(env.LIVE_OTHER_TENANT_SLUG) });
+
+    await expect(publicSitePage.heading).toHaveText(E2E_WEBSITE_OTHER_HOME_HEADING);
   });
 });

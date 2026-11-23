@@ -1,8 +1,16 @@
+import type { ApiSchemas } from "@schoolhub/api-client";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getPage, getSiteSettings, toPageSlug } from "@/lib/content";
-import { canonicalOrigin, getRequestHost, resolveTenant } from "@/lib/tenant";
+import { getPage, getSite, toPageSlug } from "@/lib/content";
+import { canonicalOrigin, resolveTenant } from "@/lib/tenant";
 import { getTheme, resolveSection } from "@/themes";
+import {
+  SiteChrome,
+  UNAVAILABLE_METADATA,
+  UnavailableNotice,
+  missingContentMetadata,
+  robotsFor,
+} from "./site-shell";
 
 /**
  * Shared page renderer used by both `/` and `/[...slug]`.
@@ -12,21 +20,27 @@ import { getTheme, resolveSection } from "@/themes";
  * webhook through the per-tenant cache tags set in `lib/content.ts`.
  */
 
+/** A `/`-relative canonical (the API's safe-url allows one) is made absolute on the school's origin. */
+function canonicalUrl(seo: ApiSchemas["PublicSeo"], origin: string, path: string): string {
+  const canonical = seo.canonical_url;
+  if (!canonical) return `${origin}${path}`;
+  return canonical.startsWith("/") ? `${origin}${canonical}` : canonical;
+}
+
 export async function renderPageMetadata(segments: string[] | undefined): Promise<Metadata> {
   const resolution = await resolveTenant();
-  if (resolution.status !== "active") {
-    // Unknown or suspended sites must never be indexed.
-    return { title: "Not available", robots: { index: false, follow: false } };
-  }
+  // Unknown, suspended, unpublished or maintenance sites must never be indexed.
+  if (resolution.status !== "active") return UNAVAILABLE_METADATA;
 
-  const tenant = resolution.tenant;
+  const { tenant, host } = resolution;
   const slug = toPageSlug(segments);
-  const page = await getPage(tenant.id, slug);
-  if (!page) return { title: tenant.name, robots: { index: false, follow: false } };
+  const [page, site] = await Promise.all([
+    getPage(tenant.id, host, slug),
+    getSite(tenant.id, host),
+  ]);
+  if (!page) return missingContentMetadata(tenant);
 
-  const host = (await getRequestHost()) ?? `${tenant.slug}.schoolhub`;
   const origin = canonicalOrigin(tenant, host);
-  const path = slug ? `/${slug}` : "/";
   const title = page.seo.title ?? page.title;
   const description = page.seo.description ?? undefined;
   const images = page.seo.og_image_url ? [{ url: page.seo.og_image_url }] : undefined;
@@ -34,14 +48,15 @@ export async function renderPageMetadata(segments: string[] | undefined): Promis
   return {
     title,
     ...(description ? { description } : {}),
-    alternates: { canonical: page.seo.canonical_url ?? `${origin}${path}` },
-    robots: page.seo.noindex ? { index: false, follow: false } : { index: true, follow: true },
+    alternates: { canonical: canonicalUrl(page.seo, origin, page.path) },
+    // A site-wide noindex covers every page.
+    robots: robotsFor(site?.seo, page.seo),
     openGraph: {
       type: "website",
       siteName: tenant.name,
       title,
       ...(description ? { description } : {}),
-      url: `${origin}${path}`,
+      url: `${origin}${page.path}`,
       ...(images ? { images } : {}),
     },
   };
@@ -50,47 +65,40 @@ export async function renderPageMetadata(segments: string[] | undefined): Promis
 export async function RenderPage({ segments }: { segments: string[] | undefined }) {
   const resolution = await resolveTenant();
 
-  // Unknown host → 404. A suspended tenant gets a neutral notice, never another
-  // tenant's content (multi-tenancy.md §7).
+  // Unknown host → 404. A suspended school, or a site in maintenance or not yet published,
+  // gets a neutral notice, never another tenant's content (multi-tenancy.md §7).
   if (resolution.status === "unknown") notFound();
-  if (resolution.status === "suspended") {
-    return (
-      <main className="mx-auto max-w-xl px-6 py-24 text-center">
-        <h1 className="font-heading text-2xl font-semibold">This website is unavailable</h1>
-        <p className="mt-3 text-foreground/75">
-          The site is temporarily offline. Please contact the school directly.
-        </p>
-      </main>
-    );
-  }
+  if (resolution.status === "unavailable") return <UnavailableNotice />;
 
-  const tenant = resolution.tenant;
+  const { tenant, host } = resolution;
   const slug = toPageSlug(segments);
-  const [page, settings] = await Promise.all([
-    getPage(tenant.id, slug),
-    getSiteSettings(tenant.id),
+  const [page, site] = await Promise.all([
+    getPage(tenant.id, host, slug),
+    getSite(tenant.id, host),
   ]);
 
-  if (!page || !page.is_published) notFound();
+  // The API answers only a published page (or the preview token's page); anything else is 404.
+  if (!page) notFound();
 
-  // v1 ships one theme; the tenant's theme-selection setting is read here once it exists
-  // (website-builder.md §5) — the registry lookup already supports it.
-  const theme = getTheme(null);
-  const { Navigation, Footer } = theme;
+  const theme = getTheme(site?.theme.code);
   const sections = [...page.sections].sort((a, b) => a.position - b.position);
 
   return (
-    <>
-      <Navigation tenant={tenant} settings={settings} />
-      <main>
-        {sections.map((section) => {
-          const Section = resolveSection(theme, section);
-          // Unknown section types render nothing — forward compatibility as themes evolve.
-          if (!Section) return null;
-          return <Section key={section.id} section={section} tenant={tenant} />;
-        })}
-      </main>
-      <Footer tenant={tenant} settings={settings} />
-    </>
+    <SiteChrome tenant={tenant} site={site}>
+      {sections.map((section) => {
+        const Section = resolveSection(theme, section);
+        // Unknown section types render nothing — forward compatibility as themes evolve.
+        if (!Section) return null;
+        return (
+          <Section
+            key={section.id}
+            section={section}
+            tenant={tenant}
+            host={host}
+            pageId={page.id}
+          />
+        );
+      })}
+    </SiteChrome>
   );
 }

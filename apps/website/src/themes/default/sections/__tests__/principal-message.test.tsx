@@ -1,17 +1,16 @@
 import { render, screen } from "@testing-library/react";
-import { makeSection, makeTenant } from "@/test-utils";
+import { sectionProps } from "@/test-utils";
 import { PrincipalMessage } from "../principal-message";
 
 describe("PrincipalMessage", () => {
   it("renders the message and attribution", () => {
     render(
       <PrincipalMessage
-        section={makeSection({
+        {...sectionProps({
           message: "Welcome to a new academic year.",
           principal_name: "Dr. Ayesha Khan",
           principal_title: "Principal",
         })}
-        tenant={makeTenant()}
       />,
     );
 
@@ -21,15 +20,14 @@ describe("PrincipalMessage", () => {
   });
 
   it("omits the attribution line when no principal name is given", () => {
-    render(<PrincipalMessage section={makeSection({ message: "Hello." })} tenant={makeTenant()} />);
+    render(<PrincipalMessage {...sectionProps({ message: "Hello." })} />);
     expect(screen.queryByText(/Dr\. Ayesha Khan/)).not.toBeInTheDocument();
   });
 
   it("shows the name without a title when no principal_title is given", () => {
     render(
       <PrincipalMessage
-        section={makeSection({ message: "Hello.", principal_name: "Dr. Ayesha Khan" })}
-        tenant={makeTenant()}
+        {...sectionProps({ message: "Hello.", principal_name: "Dr. Ayesha Khan" })}
       />,
     );
     const name = screen.getByText("Dr. Ayesha Khan");
@@ -40,21 +38,18 @@ describe("PrincipalMessage", () => {
   it("renders a photo when photo_url is given", () => {
     render(
       <PrincipalMessage
-        section={makeSection({
+        {...sectionProps({
           message: "Hello.",
           principal_name: "Dr. Ayesha Khan",
           photo_url: "https://cdn.example.com/principal.jpg",
         })}
-        tenant={makeTenant()}
       />,
     );
     expect(screen.getByRole("img", { name: "Dr. Ayesha Khan" })).toBeInTheDocument();
   });
 
   it("renders nothing without a message", () => {
-    const { container } = render(
-      <PrincipalMessage section={makeSection({})} tenant={makeTenant()} />,
-    );
+    const { container } = render(<PrincipalMessage {...sectionProps({})} />);
     expect(container).toBeEmptyDOMElement();
   });
 });

@@ -1,55 +1,53 @@
 import { render, screen } from "@testing-library/react";
-import { makeSection, makeTenant } from "@/test-utils";
 import { getNotices } from "@/lib/content";
+import { TEST_HOST, sectionProps } from "@/test-utils";
 import { NoticeBoard } from "../notice-board";
 
 jest.mock("@/lib/content", () => ({ getNotices: jest.fn() }));
 
 const mockGetNotices = getNotices as jest.MockedFunction<typeof getNotices>;
 
+function makeNotice(overrides: Partial<Awaited<ReturnType<typeof getNotices>>[number]> = {}) {
+  return {
+    id: "n1",
+    kind: "notice",
+    title: "Term dates for 2027",
+    body: "",
+    published_at: "2027-01-02T00:00:00Z",
+    ...overrides,
+  };
+}
+
 describe("NoticeBoard", () => {
   beforeEach(() => mockGetNotices.mockReset());
 
-  it("renders a notice with its body and attachment link", async () => {
-    mockGetNotices.mockResolvedValue([
-      {
-        id: "n1",
-        title: "Term dates for 2027",
-        published_at: "2027-01-02T00:00:00Z",
-        body: "See the attached calendar.",
-        attachment_url: "https://cdn.example.com/calendar.pdf",
-      },
-    ]);
+  it("renders a notice with its plain-text body", async () => {
+    mockGetNotices.mockResolvedValue([makeNotice({ body: "Term starts on 1 April." })]);
 
-    render(await NoticeBoard({ section: makeSection({}), tenant: makeTenant() }));
+    render(await NoticeBoard(sectionProps({ limit: 4 })));
 
     expect(screen.getByText("Term dates for 2027")).toBeInTheDocument();
-    expect(screen.getByText("See the attached calendar.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Download attachment" })).toHaveAttribute(
-      "href",
-      "https://cdn.example.com/calendar.pdf",
-    );
+    expect(screen.getByText("Term starts on 1 April.")).toBeInTheDocument();
+    expect(mockGetNotices).toHaveBeenCalledWith("t1", TEST_HOST, 4);
   });
 
-  it("renders a notice with no body or attachment", async () => {
-    mockGetNotices.mockResolvedValue([
-      { id: "n2", title: "Office closed Friday", published_at: "2027-01-05T00:00:00Z" },
-    ]);
+  it("renders a notice with no body", async () => {
+    mockGetNotices.mockResolvedValue([makeNotice({ id: "n2", title: "Office closed Friday" })]);
 
-    render(await NoticeBoard({ section: makeSection({}), tenant: makeTenant() }));
+    const { container } = render(await NoticeBoard(sectionProps({})));
 
     expect(screen.getByText("Office closed Friday")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Download attachment" })).not.toBeInTheDocument();
+    expect(container.querySelector("li p")).toBeNull();
   });
 
   it("renders nothing when there are no notices", async () => {
     mockGetNotices.mockResolvedValue([]);
-    const result = await NoticeBoard({ section: makeSection({}), tenant: makeTenant() });
+    const result = await NoticeBoard(sectionProps({}));
     expect(result).toBeNull();
   });
 
   it("renders nothing when props fail validation", async () => {
-    const result = await NoticeBoard({ section: makeSection({ limit: 0 }), tenant: makeTenant() });
+    const result = await NoticeBoard(sectionProps({ limit: 0 }));
     expect(result).toBeNull();
     expect(mockGetNotices).not.toHaveBeenCalled();
   });

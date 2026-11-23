@@ -1,29 +1,33 @@
 import { render, screen } from "@testing-library/react";
-import { makeSection, makeTenant } from "@/test-utils";
+import { makeContact, makeTenant, sectionProps } from "@/test-utils";
 import { ContactForm } from "../contact-form";
 
 jest.mock("@/components/public-enquiry-form", () => ({
-  PublicEnquiryForm: ({ kind, tenantSlug }: { kind: string; tenantSlug: string }) => (
+  PublicEnquiryForm: ({
+    kind,
+    tenantSlug,
+    sourcePageId,
+  }: {
+    kind: string;
+    tenantSlug: string;
+    sourcePageId?: string;
+  }) => (
     <div data-testid="enquiry-form">
-      {kind} / {tenantSlug}
+      {kind} / {tenantSlug} / {sourcePageId}
     </div>
   ),
 }));
 
 describe("ContactForm", () => {
   it("renders the tenant's published contact details", () => {
-    render(
-      <ContactForm
-        section={makeSection({})}
-        tenant={makeTenant({
-          contact: {
-            address: "12 School Road",
-            phone: "+92-300-1234567",
-            email: "info@cityschool.test",
-          },
-        })}
-      />,
-    );
+    const tenant = makeTenant({
+      contact: makeContact({
+        address: "12 School Road",
+        phone: "+92-300-1234567",
+        email: "info@cityschool.test",
+      }),
+    });
+    render(<ContactForm {...sectionProps({}, tenant)} />);
 
     expect(screen.getByText("12 School Road")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "+92-300-1234567" })).toHaveAttribute(
@@ -36,35 +40,36 @@ describe("ContactForm", () => {
     );
   });
 
-  it("renders the enquiry form scoped to the tenant and configured kind", () => {
+  it("renders the enquiry form scoped to the tenant, the configured kind and the page", () => {
     render(
       <ContactForm
-        section={makeSection({ form: "admission_enquiry" })}
-        tenant={makeTenant({ slug: "greenvalley" })}
+        {...sectionProps({ form: "admission_enquiry" }, makeTenant({ slug: "greenvalley" }))}
       />,
     );
 
-    expect(screen.getByTestId("enquiry-form")).toHaveTextContent("admission_enquiry / greenvalley");
+    expect(screen.getByTestId("enquiry-form")).toHaveTextContent(
+      "admission_enquiry / greenvalley / p1",
+    );
   });
 
-  it("omits contact fields the tenant has not published", () => {
-    render(<ContactForm section={makeSection({})} tenant={makeTenant({ contact: undefined })} />);
+  it("omits contact details the API withholds", () => {
+    render(<ContactForm {...sectionProps({}, makeTenant({ contact: null }))} />);
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("omits blank contact fields", () => {
+    render(<ContactForm {...sectionProps({}, makeTenant({ contact: makeContact() }))} />);
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 
   it("renders an optional intro", () => {
-    render(
-      <ContactForm
-        section={makeSection({ intro: "We would love to hear from you." })}
-        tenant={makeTenant()}
-      />,
-    );
+    render(<ContactForm {...sectionProps({ intro: "We would love to hear from you." })} />);
     expect(screen.getByText("We would love to hear from you.")).toBeInTheDocument();
   });
 
   it("renders nothing when props fail validation", () => {
     const { container } = render(
-      <ContactForm section={makeSection({ form: "not_a_real_form_kind" })} tenant={makeTenant()} />,
+      <ContactForm {...sectionProps({ form: "not_a_real_form_kind" })} />,
     );
     expect(container).toBeEmptyDOMElement();
   });

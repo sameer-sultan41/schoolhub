@@ -14,7 +14,7 @@ const schema = z.object({
  * never through the renderer's machine token (website-builder.md §6). This server component
  * only renders the shell and the tenant's contact details.
  */
-export function ContactForm({ section, tenant }: SectionProps) {
+export function ContactForm({ section, tenant, pageId }: SectionProps) {
   const parsed = schema.safeParse(section.props);
   if (!parsed.success) return null;
   const { heading, intro, form } = parsed.data;
@@ -43,7 +43,7 @@ export function ContactForm({ section, tenant }: SectionProps) {
         </address>
       </div>
 
-      <PublicEnquiryForm kind={form} tenantSlug={tenant.slug} />
+      <PublicEnquiryForm kind={form} tenantSlug={tenant.slug} sourcePageId={pageId} />
     </section>
   );
 }

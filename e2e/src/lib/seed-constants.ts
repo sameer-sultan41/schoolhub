@@ -235,3 +235,23 @@ export const E2E_FINANCE_FEE_HEAD_CODE = "E2E-LIBRARY";
 export const E2E_FINANCE_FEE_HEAD_NAME = "E2E Library Fee";
 export const E2E_FINANCE_DRAFT_STRUCTURE_NAME = "E2E Draft Fees";
 export const E2E_FINANCE_DRAFT_AMOUNT = "750.00";
+
+/**
+ * Mirror `apps/api/apps/website_cms/management/commands/seed_e2e_website.py`: the e2e tenant's
+ * live site (published home, about and contact pages, one draft page, a news post, an event and
+ * an album with one image) and the other tenant's live home page.
+ */
+export const E2E_WEBSITE_HOME_HEADING = "Welcome to E2E School";
+export const E2E_WEBSITE_ABOUT_HEADING = "About E2E School";
+export const E2E_WEBSITE_CONTACT_HEADING = "Write to E2E School";
+export const E2E_WEBSITE_DRAFT_PAGE_SLUG = "e2e-draft-notes";
+export const E2E_WEBSITE_DRAFT_PAGE_HEADING = "E2E draft notes";
+export const E2E_WEBSITE_NEWS_SLUG = "e2e-website-launch";
+export const E2E_WEBSITE_NEWS_TITLE = "E2E School launches its website";
+export const E2E_WEBSITE_NEWS_BODY = "Families can now follow school news online.";
+export const E2E_WEBSITE_EVENT_SLUG = "e2e-open-day";
+export const E2E_WEBSITE_EVENT_TITLE = "E2E Open Day";
+export const E2E_WEBSITE_ALBUM_SLUG = "e2e-campus-tour";
+export const E2E_WEBSITE_ALBUM_TITLE = "E2E Campus Tour";
+export const E2E_WEBSITE_IMAGE_ALT = "E2E campus courtyard";
+export const E2E_WEBSITE_OTHER_HOME_HEADING = "Welcome to E2E Other School";

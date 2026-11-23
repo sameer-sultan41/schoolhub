@@ -45,7 +45,11 @@ Never move a `live` assertion into a mocked project. A stub returns whatever it 
 ### Running the live lane
 
 ```bash
-./infra/scripts/seed-dev.sh --backend-only   # the backend, seeded (see below)
+WEBSITE_REVALIDATE_URL=http://host.docker.internal:3001/api/revalidate \
+  ./infra/scripts/seed-dev.sh --backend-only  # the backend, seeded (see below)
+# The renderer must present the API's machine token and accept its webhook signatures.
+E2E_WEBSITE_MACHINE_TOKEN="$(sed -n 's/^PUBLIC_CONTENT_TOKEN=//p' infra/compose/.env)" \
+E2E_REVALIDATE_SECRET="$(sed -n 's/^REVALIDATE_SECRET=//p' infra/compose/.env)" \
 E2E_REAL_API=1 \
 E2E_API_BASE_URL=http://localhost:8000/api/v1 \
 pnpm e2e:live
@@ -73,6 +77,19 @@ with the teacher allocation that makes it publishable, a second teaching staff m
 and one substitution left in `proposed` so an approval has something to act on. Set
 `E2E_LIVE_ADMIN_PASSWORD` before running the script if you want a non-default password;
 it must then match what you export for `pnpm e2e:live` too.
+
+The website specs (`website-*.spec.ts`) read the sites `seed_e2e_website` publishes for both
+tenants. Playwright builds the renderer with the stack's own `PUBLIC_CONTENT_TOKEN` and
+`REVALIDATE_SECRET` (the two `E2E_*` variables above; without them every public read is a 401
+and the sites resolve as unknown), with `NEXT_PUBLIC_API_ORIGIN` set to the API's origin (the
+contact form posts there from the browser) and with `WEBSITE_IMAGES_UNOPTIMIZED`, so the browser
+loads images from the API's local address itself. The two API origins differ on purpose:
+`NEXT_PUBLIC_API_ORIGIN` is `http://localhost:8000` (from `E2E_API_BASE_URL`), where the contact
+form posts, while image URLs use the API's own `API_PUBLIC_URL`, `http://api.localhost:8000` in
+dev settings. Chromium resolves both to the same loopback API, so nothing breaks; set
+`E2E_API_BASE_URL` to the `api.localhost` origin if you want them to match. `WEBSITE_REVALIDATE_URL` points the worker's
+webhook at the renderer on the host; compose's `celery-worker` maps `host.docker.internal` to
+the host gateway, so this also works on Linux.
 
 To run against the compose stack's own `next dev` apps instead (`seed-dev.sh` without
 `--backend-only`), pass `E2E_NO_SERVER=1` in place of `E2E_REAL_API=1`: otherwise

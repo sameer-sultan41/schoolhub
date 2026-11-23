@@ -1,5 +1,8 @@
+// Carries the machine token: a client-component import must fail the build, not leak it.
+import "server-only";
 import type { ApiSuccessEnvelope } from "@schoolhub/types";
 import { env } from "./env";
+import { PREVIEW_HEADER } from "./preview";
 import { TRAILING_SLASH_PATTERN } from "./regex";
 
 /**
@@ -13,11 +16,18 @@ import { TRAILING_SLASH_PATTERN } from "./regex";
  */
 
 export interface ReadOptions {
+  /** The school's host. The API resolves the tenant from it; the renderer never asserts one. */
+  host: string;
   /** ISR revalidation window in seconds. Defaults to the configured safety net. */
   revalidate?: number;
   /** Cache tags for on-demand invalidation from the publish webhook. */
   tags?: string[];
   query?: Record<string, string | number | undefined>;
+  /**
+   * A page preview token (decision 9): sent as `X-Preview-Token` and read with `no-store`, so a
+   * draft is never cached. Only `pages` and `site` accept one.
+   */
+  previewToken?: string | null;
 }
 
 export class ContentFetchError extends Error {
@@ -29,11 +39,12 @@ export class ContentFetchError extends Error {
   }
 }
 
-function buildUrl(path: string, query: ReadOptions["query"]): string {
+function buildUrl(path: string, host: string, query: ReadOptions["query"]): string {
   const url = new URL(
     path.startsWith("/") ? path.slice(1) : path,
     `${env.API_BASE_URL.replace(TRAILING_SLASH_PATTERN, "")}/`,
   );
+  url.searchParams.set("host", host);
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value !== undefined) url.searchParams.set(key, String(value));
   }
@@ -41,25 +52,32 @@ function buildUrl(path: string, query: ReadOptions["query"]): string {
 }
 
 /**
- * GET a public-content resource as the machine client.
+ * GET a public-content resource as the machine client. Every read carries `?host=`
+ * (website-cms §16), so a read without a school cannot be written.
  *
  * @returns the unwrapped `data`, or `null` on 404 so callers can render `notFound()`
  *          instead of a 500. Any other failure throws.
  */
-export async function readJson<TData>(
-  path: string,
-  options: ReadOptions = {},
-): Promise<TData | null> {
-  const response = await fetch(buildUrl(path, options.query), {
+export async function readJson<TData>(path: string, options: ReadOptions): Promise<TData | null> {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    Authorization: `Bearer ${env.WEBSITE_MACHINE_TOKEN}`,
+  };
+  const { previewToken } = options;
+  const caching: RequestInit = previewToken
+    ? { cache: "no-store" }
+    : {
+        next: {
+          revalidate: options.revalidate ?? env.CONTENT_REVALIDATE_SECONDS,
+          ...(options.tags ? { tags: options.tags } : {}),
+        },
+      };
+  if (previewToken) headers[PREVIEW_HEADER] = previewToken;
+
+  const response = await fetch(buildUrl(path, options.host, options.query), {
     method: "GET",
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${env.WEBSITE_MACHINE_TOKEN}`,
-    },
-    next: {
-      revalidate: options.revalidate ?? env.CONTENT_REVALIDATE_SECONDS,
-      ...(options.tags ? { tags: options.tags } : {}),
-    },
+    headers,
+    ...caching,
   });
 
   if (response.status === 404) return null;
@@ -78,6 +96,15 @@ export async function readJson<TData>(
 /** Per-tenant cache tag, so a publish event can invalidate exactly one school's pages. */
 export function tenantTag(tenantId: string): string {
   return `tenant:${tenantId}`;
+}
+
+/**
+ * Per-host cache tag. Every read made for a host carries it, so the API's domain-change
+ * revalidation (`tenant-host:<h>`) also evicts content cached under a host that has since
+ * moved to another school or stopped resolving.
+ */
+export function hostTag(host: string): string {
+  return `tenant-host:${host}`;
 }
 
 /** Per-path cache tag within a tenant. */

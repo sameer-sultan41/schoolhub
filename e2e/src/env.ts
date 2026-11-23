@@ -21,6 +21,13 @@ const schema = z.object({
   API_BASE_URL: z.url().default("http://127.0.0.1:4010/api/v1"),
   /** Apex domain the website resolves `<slug>.<domain>` against. */
   PLATFORM_DOMAIN: z.string().min(1).default("localhost"),
+  /**
+   * The renderer's machine token and revalidation secret. The mocked lane's stub accepts any
+   * value; the live lane passes the compose stack's own (`PUBLIC_CONTENT_TOKEN`,
+   * `REVALIDATE_SECRET` in `infra/compose/.env`), which the API checks against.
+   */
+  WEBSITE_MACHINE_TOKEN: z.string().min(1).default("e2e-machine-token"),
+  REVALIDATE_SECRET: z.string().min(1).default("e2e-revalidate-secret"),
 
   // ---- Live lane only. Unused by the mocked projects. ----
   LIVE_TENANT_SLUG: z.string().min(1).default("e2e-school"),
@@ -39,6 +46,8 @@ const parsed = schema.safeParse({
   WEBSITE_URL: process.env.E2E_WEBSITE_URL,
   API_BASE_URL: process.env.E2E_API_BASE_URL,
   PLATFORM_DOMAIN: process.env.E2E_PLATFORM_DOMAIN,
+  WEBSITE_MACHINE_TOKEN: process.env.E2E_WEBSITE_MACHINE_TOKEN,
+  REVALIDATE_SECRET: process.env.E2E_REVALIDATE_SECRET,
   LIVE_TENANT_SLUG: process.env.E2E_LIVE_TENANT_SLUG,
   LIVE_ADMIN_IDENTIFIER: process.env.E2E_LIVE_ADMIN_IDENTIFIER,
   LIVE_ADMIN_PASSWORD: process.env.E2E_LIVE_ADMIN_PASSWORD,

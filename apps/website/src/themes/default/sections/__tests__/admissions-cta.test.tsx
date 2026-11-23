@@ -1,10 +1,10 @@
 import { render, screen } from "@testing-library/react";
-import { makeSection, makeTenant } from "@/test-utils";
+import { sectionProps } from "@/test-utils";
 import { AdmissionsCta } from "../admissions-cta";
 
 describe("AdmissionsCta", () => {
   it("renders defaults when no props are given", () => {
-    render(<AdmissionsCta section={makeSection({})} tenant={makeTenant()} />);
+    render(<AdmissionsCta {...sectionProps({})} />);
 
     expect(screen.getByRole("heading", { name: "Admissions are open" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Apply now" })).toHaveAttribute("href", "/admissions");
@@ -13,13 +13,12 @@ describe("AdmissionsCta", () => {
   it("renders custom copy and link", () => {
     render(
       <AdmissionsCta
-        section={makeSection({
+        {...sectionProps({
           heading: "Join us for 2027",
           body: "Limited seats remain.",
           cta_label: "Start application",
           cta_href: "/apply",
         })}
-        tenant={makeTenant()}
       />,
     );
 
@@ -32,9 +31,7 @@ describe("AdmissionsCta", () => {
   });
 
   it("renders nothing when props fail validation", () => {
-    const { container } = render(
-      <AdmissionsCta section={makeSection({ heading: 123 })} tenant={makeTenant()} />,
-    );
+    const { container } = render(<AdmissionsCta {...sectionProps({ heading: 123 })} />);
     expect(container).toBeEmptyDOMElement();
   });
 });

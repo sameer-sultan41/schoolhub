@@ -73,3 +73,15 @@ export function parseHost(
 export const TENANT_HOST_HEADER = "x-schoolhub-host";
 export const TENANT_SLUG_HEADER = "x-schoolhub-tenant-slug";
 export const TENANT_KIND_HEADER = "x-schoolhub-host-kind";
+/** The request's path and query, so the root layout can redirect (308) to a custom domain keeping them. */
+export const TENANT_PATH_HEADER = "x-schoolhub-path";
+
+/**
+ * Routes that must reach their handler on any host, the apex and `localhost` included: the API's
+ * revalidation webhook targets the renderer's internal origin, and preview links are validated
+ * by their handler, not by the host (website-cms plan, decisions 8 and 9).
+ */
+export const HOST_INDEPENDENT_PATHS: ReadonlySet<string> = new Set([
+  "/api/revalidate",
+  "/api/preview",
+]);

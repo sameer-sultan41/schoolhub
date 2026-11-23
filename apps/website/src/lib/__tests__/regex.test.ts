@@ -1,5 +1,7 @@
 import {
+  CONTENT_SLUG_PATTERN,
   HOSTNAME_PATTERN,
+  PAGE_PATH_PATTERN,
   PORT_SUFFIX_PATTERN,
   SHA256_PREFIX_PATTERN,
   TRAILING_DOT_PATTERN,
@@ -64,4 +66,27 @@ describe("SHA256_PREFIX_PATTERN", () => {
   it("leaves a value without the prefix unchanged", () => {
     expect("abc123".replace(SHA256_PREFIX_PATTERN, "")).toBe("abc123");
   });
+});
+
+describe("CONTENT_SLUG_PATTERN", () => {
+  it.each(["sports-day", "a", "2027-results"])("accepts %p", (slug) => {
+    expect(CONTENT_SLUG_PATTERN.test(slug)).toBe(true);
+  });
+
+  it.each(["", "..", "a/b", "Sports", "-a", "a-", "a--b"])("refuses %p", (slug) => {
+    expect(CONTENT_SLUG_PATTERN.test(slug)).toBe(false);
+  });
+});
+
+describe("PAGE_PATH_PATTERN", () => {
+  it.each(["/", "/about", "/about/our-history"])("accepts %p", (path) => {
+    expect(PAGE_PATH_PATTERN.test(path)).toBe(true);
+  });
+
+  it.each(["", "about", "//evil.example", "/\\evil", "/\t/evil", "/about/", "/About", "/a//b"])(
+    "refuses %p",
+    (path) => {
+      expect(PAGE_PATH_PATTERN.test(path)).toBe(false);
+    },
+  );
 });

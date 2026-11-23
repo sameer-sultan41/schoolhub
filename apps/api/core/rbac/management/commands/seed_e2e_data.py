@@ -505,7 +505,8 @@ class Command(BaseCommand):
         "substitution) the grid and substitution specs need, the examinations "
         "fixtures (exam-staff and assigned-teacher identities, a complete default "
         "grading scale) and the parent-portal fixtures (attendance, an outstanding "
-        "invoice, a published result and a notice for the comms guardian's child)."
+        "invoice, a published result and a notice for the comms guardian's child), and "
+        "both tenants' live public websites."
     )
 
     @transaction.atomic
@@ -754,6 +755,7 @@ class Command(BaseCommand):
             self._ensure_portal_modules_enabled(tenant)
             self._ensure_examinations_enabled(tenant)
             self._ensure_teacher_login_staff(tenant, campus, user=teacher_user)
+            self._ensure_website_enabled(tenant)
 
         # The grading scale is the examinations module's to write (ADR-0013: `core`
         # imports no app), so it is seeded by that module's own command, by name.
@@ -782,6 +784,8 @@ class Command(BaseCommand):
             self._ensure_portal_modules_enabled(other_tenant)
             # And for examinations.
             self._ensure_examinations_enabled(other_tenant)
+            # And for the website: its public site is the cross-tenant probe's target.
+            self._ensure_website_enabled(other_tenant)
 
         # The parent portal's per-card records for the comms child (attendance, an
         # outstanding invoice, a published result, a notice). They live in the portal app's
@@ -793,12 +797,10 @@ class Command(BaseCommand):
         # structure shares the baseline class.
         call_command("seed_e2e_fees", stdout=self.stdout)
 
-        # TODO(website-cms): no public-content/CMS backend module exists yet
-        # (apps/api/config/api_v1.py routes only core.rbac and
-        # apps.school_organization) — there is nothing here to seed real tenant
-        # website content into. e2e/tests/live/website-tenant-resolution.spec.ts
-        # pins the real current (degraded) behavior instead; revisit this seed
-        # once that module ships.
+        # Both tenants' public sites (pages, news, an event, an album, a published site), for
+        # the website specs. The website module's own command writes its models, as the
+        # portal's does; the `module.website` flag above is this command's (flags are core's).
+        call_command("seed_e2e_website", stdout=self.stdout)
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -969,6 +971,14 @@ class Command(BaseCommand):
         403-before-404 reason `_ensure_timetable_enabled` is.
         """
         self._ensure_feature_enabled(tenant, "module.communication")
+
+    def _ensure_website_enabled(self, tenant: Tenant) -> None:
+        """`module.website` defaults off (apps/website_cms/features.py).
+
+        Without it every public read 404s whatever is published, so the website specs could
+        not tell a live site from a disabled module. Called for both tenants.
+        """
+        self._ensure_feature_enabled(tenant, "module.website")
 
     def _ensure_fees_enabled(self, tenant: Tenant) -> None:
         """`module.fees_finance` and `fees.online-payments` both default off.

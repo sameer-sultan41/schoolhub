@@ -9,11 +9,11 @@ const schema = z.object({
   limit: z.number().int().min(1).max(24).default(6),
 });
 
-export async function NewsList({ section, tenant }: SectionProps) {
+export async function NewsList({ section, tenant, host }: SectionProps) {
   const parsed = schema.safeParse(section.props);
   if (!parsed.success) return null;
 
-  const posts = await getNews(tenant.id, parsed.data.limit);
+  const posts = await getNews(tenant.id, host, parsed.data.limit);
   if (posts.length === 0) return null;
 
   const formatter = new Intl.DateTimeFormat(tenant.locale.default_locale, {
@@ -36,9 +36,11 @@ export async function NewsList({ section, tenant }: SectionProps) {
                 className="aspect-video w-full rounded-[var(--sh-radius)] object-cover"
               />
             ) : null}
-            <time dateTime={post.published_at} className="block text-xs text-foreground/60">
-              {formatter.format(new Date(post.published_at))}
-            </time>
+            {post.published_at ? (
+              <time dateTime={post.published_at} className="block text-xs text-foreground/60">
+                {formatter.format(new Date(post.published_at))}
+              </time>
+            ) : null}
             <h3 className="font-heading text-base font-semibold">
               <Link href={`/news/${post.slug}`} className="text-foreground hover:underline">
                 {post.title}

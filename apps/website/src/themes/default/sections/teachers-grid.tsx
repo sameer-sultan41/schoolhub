@@ -5,7 +5,8 @@ import type { SectionProps } from "@/themes/types";
 
 const schema = z.object({
   heading: z.string().default("Our teachers"),
-  limit: z.number().int().min(1).max(60).default(12),
+  // 50 mirrors the theme schema (themes/default.json) and the API's public list cap.
+  limit: z.number().int().min(1).max(50).default(12),
 });
 
 /**
@@ -13,11 +14,11 @@ const schema = z.object({
  * (`show_on_website`) — the API filters; the renderer never asks for private profiles.
  * No contact details, no personal identifiers beyond what the school published.
  */
-export async function TeachersGrid({ section, tenant }: SectionProps) {
+export async function TeachersGrid({ section, tenant, host }: SectionProps) {
   const parsed = schema.safeParse(section.props);
   if (!parsed.success) return null;
 
-  const teachers = await getTeachers(tenant.id, parsed.data.limit);
+  const teachers = await getTeachers(tenant.id, host, parsed.data.limit);
   if (teachers.length === 0) return null;
 
   return (

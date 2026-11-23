@@ -1,8 +1,11 @@
 import { defaultTheme } from "../index";
 
 describe("defaultTheme", () => {
-  it("registers every v1 section type", () => {
-    expect(Object.keys(defaultTheme.sections).sort()).toEqual(
+  it("renders every v1 section type", () => {
+    const rendered = Object.entries(defaultTheme.sections)
+      .filter(([, component]) => component !== null)
+      .map(([type]) => type);
+    expect(rendered.sort()).toEqual(
       [
         "hero",
         "about_school",
@@ -16,6 +19,8 @@ describe("defaultTheme", () => {
         "notice_board",
         "gallery",
         "contact_form",
+        "rich_text",
+        "faq",
       ].sort(),
     );
   });

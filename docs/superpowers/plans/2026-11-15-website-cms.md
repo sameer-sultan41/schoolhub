@@ -109,7 +109,7 @@ The existing `apps/website` renderer serves all of it from a real, read-only pub
 | 6 | Section schemas | **The theme file.** `website_cms/themes/default.json` (code `default`, version `1.0.0`) declares each section type's JSON Schema in a constrained subset: `type`, `properties`, `required`, `items`, `enum`, `maxLength`, `format: safe-url`, `$ref` to rich text, and an `x-widget` hint from `text`, `textarea`, `image`, `rich-text` or `url`. **Syncing.** Code-declared themes sync into `themes` on `post_migrate` (reusing `sync_feature_flags_on_migrate`'s pattern, `core/tenancy/features.py:162`), so a theme edit needs no data migration (spec §5.10). Theme v1 has the renderer's 12 types plus `rich_text` and `faq`. Validation uses `jsonschema.Draft202012Validator`. **Drift.** `section_type` is emitted as an OpenAPI enum. The renderer's registry is typed `Record<ApiSchemas["SectionTypeEnum"], …>`, so `tsc` catches any drift |
 | 7 | Custom domains | Owned by `website_cms`: it has the `website.*` keys, the website is its only consumer, and putting it in `core.tenancy` would collide with platform-admin's in-flight `core.tenancy` migrations. `custom_domains` is a `TenantOwnedModel` with RLS and `unique(tenant, domain)` among live rows. `custom_domain_routes(domain unique, tenant_id, custom_domain_id)` is a platform-scope table with no RLS, holding only active domains. Services write it in the same transaction as activation, disable or delete. This is the same denormalised read model platform-admin chose (its alternative 2). Verification is DNS TXT `_schoolhub-verify.<domain>` = token, plus a CNAME check to `WEBSITE_CNAME_TARGET`, behind a `DnsVerifier` adapter (`dnspython` real, fake for tests). TLS sits behind an `EdgeCertificateProvisioner` adapter whose v1 `NullProvisioner` leaves `tls_status=pending`. Adapter selection follows ADR-0034 |
 | 8 | Revalidation | **Scope.** Whole-tenant invalidation on any publish, unpublish or settings change. **Mechanism.** `queue_revalidation(tenant_id, extra_tags=())` runs on commit, and a Celery task POSTs `{tenant_id, tags}` signed with HMAC-SHA256, with 5 retries and backoff. **Settings.** It reads the API settings `WEBSITE_REVALIDATE_URL` and `WEBSITE_REVALIDATE_SECRET`; the latter is mapped in compose from the existing `${REVALIDATE_SECRET}`, the same variable the website service reads, so there is one secret. An empty URL makes it a no-op. **Host tags.** Changes to settings, the module flag or domains also add `tenant-host:<h>` for **every** host of the tenant (its subdomain and its active domains), so `by-host`'s 300 s cache never serves a stale `website_status`. The renderer route learns to accept these tags. The URL targets the renderer's internal origin (compose: `http://website:3000/api/revalidate`), and the proxy exempts `/api/revalidate` and `/api/preview` from the unknown-host rewrite |
-| 9 | Preview | **The token.** `POST /website-pages/{id}:preview` (`website.page.view`) returns a URL on the tenant's own host: the primary active domain, else `<slug>.<PLATFORM_DOMAIN>`. It is built by `website_cms/urls.py::tenant_site_url(tenant, path)`, modelled on `core/tenancy/urls.py`, and carries a `TimestampSigner` token (salt `website-preview`, `max_age` 600 s, payload `tenant_id:page_id`). **Validation.** The renderer's `/api/preview` validates first: it calls `GET /public/pages?host=` with header `X-Preview-Token` (never a query string, SEC-57). Only on a 200 does it enable `draftMode`, store the token in an httpOnly, Secure, `SameSite=Lax` cookie with a 600 s max-age, and redirect to the **slug the API returned**. That prevents an open redirect and stops an unvalidated `no-store` cache bypass. Draft-mode reads send the cookie's token as the header with `cache: "no-store"`. website-builder §6's "no cookies" line is amended to allow this one cookie |
+| 9 | Preview | **The token.** `POST /website-pages/{id}:preview` (`website.page.view`) returns a URL on the tenant's own host: the primary active domain, else `<slug>.<PLATFORM_DOMAIN>`. It is built by `website_cms/urls.py::tenant_site_url(tenant, path)`, modelled on `core/tenancy/urls.py`, and carries a `TimestampSigner` token (salt `website-preview`, `max_age` 600 s, payload `tenant_id:page_id`). **Validation.** The renderer's `/api/preview` validates first: it calls `GET /public/pages?host=` with header `X-Preview-Token` (never a query string, SEC-57). Only on a 200 does it store the token in an httpOnly, Secure, `SameSite=Lax` cookie with a 600 s max-age, and redirect to the **slug the API returned**. That prevents an open redirect. **The cookie is the only switch; Next's `draftMode` is not used** (amended in the PR E review): its `__prerender_bypass` cookie is one value for the whole build, so it would unlock uncached renders on every school's host and cannot be scoped to one tenant. Under the cookie only the `pages` and `site` reads send the token as `X-Preview-Token` with `cache: "no-store"`; a refused (404) or throttled (429) preview read falls back to the cached published read, and every other read stays cached. The API counts `X-Preview-Token` reads on `pages` and `site` per (machine client, host) in `PublicPreviewThrottle` (scope `public_preview`, 60/min), which replaces the per-host machine quota for such a read, so forged cookies can exhaust only that school's previews. `/api/preview/exit` (a `POST`) clears the cookie, and a banner shows while it is held. website-builder §6's "no cookies" line is amended to allow this one cookie |
 | 10 | Default site | **What it creates.** `services.ensure_default_site(tenant)` is idempotent: `get_or_create` against `unique(tenant_id)` inside a savepoint, with an `IntegrityError` re-read. It creates `website_settings` (theme `default`, unpublished) and the eight standard pages as drafts, each with placeholder sections and `home` as homepage. **Who calls it.** It is called **only from writes and the seed**: the first `PATCH /website-settings`, the first page create, and `seed_e2e_website`. **GETs never write.** `GET /website-settings` returns an unsaved default with `exists: false` when no row exists, and `GET /navigation-menus` returns empty menus. Platform-admin's `provision_tenant` can call it later (a follow-up in deferred-work) |
 | 11 | Other modules' data | Each owner exposes a read-only `public.py`: `staff_management.public.public_teachers(limit)`, `school_organization.public.public_departments()`, `public_classes()`, `primary_campus_contact()`, and `communication.public.public_notices(limit)`. New opt-in booleans `Staff.show_on_website`, `Department.show_on_website` and `Class.show_on_website` default to `false`. Turning a staff member's flag on or off sets their photo file's visibility |
 | 12 | Dashboard section forms | One schema-driven `SchemaFields` component renders the subset from decision 6, so a new theme or section type needs no dashboard code |
@@ -677,14 +677,14 @@ Project-status and deferred-work (the TLS provider and plan gating). Then review
 **Changes:**
 - Every read takes `host` and uses the final paths.
 - `resolveTenant` maps the generated `status` and `website_status`: `suspended`, `maintenance` and `unpublished` render the neutral notice; `deprovisioned` and `provisioning` render unknown.
-- The 301 to `tenant.custom_domain` for a platform-subdomain request (website-builder §4) happens **after the cached `resolveTenant()` in the layout**, through `permanentRedirect`. It does not happen in the proxy, which stays I/O-free (`host.ts:4-8`).
+- The permanent redirect (308, as `permanentRedirect` answers; amended from "301" in PR E) to `tenant.custom_domain` for a platform-subdomain request (website-builder §4) happens **after the cached `resolveTenant()` in the layout**, through `permanentRedirect`. It does not happen in the proxy, which stays I/O-free (`host.ts:4-8`).
 - The contact form posts to `/public/contact-submissions`, and the admissions form posts there too with `subject` (deferral above).
 - `PublicClass.level` becomes a number. Drop `PublicDepartment.icon` and `PublicTeacher.subjects`.
 
 - [ ] Tests (Jest):
   - `content.test.ts` asserting `host` on every read;
   - `tenant.test.ts` covering each status;
-  - a layout test for the custom-domain 301;
+  - a layout test for the custom-domain redirect (308);
   - `proxy.test.ts`: `/api/revalidate` and `/api/preview` reach their routes on the apex and on `localhost`;
   - `public-api.test.ts` for the endpoint and headers.
 - [ ] Commit.
@@ -696,18 +696,19 @@ Project-status and deferred-work (the TLS provider and plan gating). Then review
 - a shared `src/themes/default/rich-text-blocks.tsx`, which renders blocks as React elements with no `dangerouslySetInnerHTML`;
 - `apps/website/next.config.ts`:
   - **Image source.** `images.remotePatterns` is derived from `NEXT_PUBLIC_API_ORIGIN`, the **public** API origin the redirect URLs carry, not the internal `API_BASE_URL`.
-  - **Local IPs.** `images.dangerouslyAllowLocalIP` is set only when `WEBSITE_IMAGES_ALLOW_LOCAL_IP=true`, which compose and the live lane set and prod never does.
+  - **Local stacks** (amended in PR E). `WEBSITE_IMAGES_UNOPTIMIZED=true` sets `images.unoptimized`, so the browser loads image URLs itself; only compose and the E2E lanes set it, and `imagesConfig` refuses it with an https API origin. It replaced a `WEBSITE_IMAGES_ALLOW_LOCAL_IP` / `dangerouslyAllowLocalIP` flag: the optimiser never fetches from a local address.
+  - **Lifetime.** `images.minimumCacheTTL` is 300 s, the API's public file cache, instead of Next's 4 h default.
   - **Redirects.** The redirect hop to the presigned storage URL stays within the default `maximumRedirects`.
   - Context7 (Next 16) confirms each setting before it is written;
 - `src/themes/default/copy.ts`: the English constant map for new visible strings (see Deferred);
 - routes `src/app/news/[slug]/page.tsx`, `src/app/events/[slug]/page.tsx`, `src/app/gallery/[slug]/page.tsx`, with JSON-LD `NewsArticle`/`Event` (website-builder §4);
-- `src/app/api/preview/route.ts`, per decision 9:
+- `src/app/api/preview/route.ts`, per decision 9 (amended in the PR E review: no Draft Mode):
   1. Validate the token by calling the API with `X-Preview-Token`.
-  2. Only on a 200, run `draftMode().enable()` and set the httpOnly, Secure, `SameSite=Lax` 600 s token cookie.
+  2. Only on a 200, set the httpOnly, Secure, `SameSite=Lax` 600 s token cookie. Never call `draftMode().enable()`.
   3. Redirect to the API-returned slug.
 
-  In draft mode, `lib/api.ts` sends the cookie's token as the header with `cache: "no-store"`;
-- `src/app/api/revalidate/route.ts`, which also accepts `tenant-host:*` and `tenant-hosts` tags in a signed body;
+  While the cookie is held, `getPage` and `getSite` send its token as the header with `cache: "no-store"` and fall back to the cached published read on a 404 or 429; `/api/preview/exit` clears the cookie and `PreviewBanner` shows while it is held;
+- `src/app/api/revalidate/route.ts`, which also accepts `tenant-host:*` tags in a signed body (a `tenant-hosts` tag was dropped in the PR E review: the API never sends it);
 - the theme registry, which adds `rich_text` and `faq`.
 
 - [ ] Tests:
@@ -732,10 +733,23 @@ Project-status and deferred-work (the TLS provider and plan gating). Then review
 - [ ] Update the live-lane env (`e2e/playwright.config.ts` `appEnv`, the `e2e-live` workflow):
   - give the API `WEBSITE_MACHINE_TOKENS` equal to the renderer's token;
   - set `NEXT_PUBLIC_API_ORIGIN` to the API's browser-reachable origin. It is inlined at build, so it must be set at build time; without it the contact form posts to the renderer and 404s;
-  - set `WEBSITE_IMAGES_ALLOW_LOCAL_IP=true`, `WEBSITE_REVALIDATE_URL` and the shared revalidate secret.
+  - set `WEBSITE_IMAGES_UNOPTIMIZED=true` (amended in PR E, see E2), `WEBSITE_REVALIDATE_URL` and the shared revalidate secret.
 
   Trace each live assertion through the real path before writing it (L17).
 - [ ] Docs: `website-builder.md` §2.1 (section list) and §7, and project-status. Then review and open the PR.
+
+### PR E amendments (declared divergences)
+
+Recorded after the PR E change review; each was made on evidence during PR E:
+- **Images.** `WEBSITE_IMAGES_UNOPTIMIZED` replaced `WEBSITE_IMAGES_ALLOW_LOCAL_IP` (E2): the optimiser never fetches from a local address, and compose and the E2E lanes let the browser load image URLs directly.
+- **Theme limits.** `teachers_grid` and `gallery` `limit.maximum` went from 60 to 50, the API's list cap, so no saved value renders nothing.
+- **Branding colours.** `packages/ui` accepts the API's functional colours (`rgb()`, `hsl()`, `oklch()`) in branding tokens, through one declared pattern.
+- **Preview.** No Draft Mode (decision 9 as amended); `/api/preview/exit` and `PreviewBanner` were added; the API counts preview reads in their own per-host bucket.
+- **`server-only`.** Added to the renderer so `lib/api.ts` and `lib/preview.ts` cannot be imported from a client component.
+- **Seed.** `module.website` is enabled in `seed_e2e_data` (flags are core's), and `seed_e2e_website` also gives the other tenant a live home page for the cross-tenant probe.
+- **Redirect.** 308, not 301 (E1).
+- **Compose.** The worker has `extra_hosts: host.docker.internal:host-gateway` and `WEBSITE_REVALIDATE_URL` is overridable; the `website` service sets `WEBSITE_IMAGES_UNOPTIMIZED`; `seed-dev.sh` creates the bucket before the seeds.
+- **Live specs.** Beyond E3's list: a published page on its own path, the album image through the file redirect, the contact message absent from the other school's inbox, and publish-time revalidation of the cached homepage.
 
 ## PR F: `feat/website-dashboard-pages` (dashboard)
 
@@ -841,7 +855,7 @@ The module doc §20, and project-status marking website-cms full-stack complete.
 - **Findings addressed:** all 33, in this revision.
   - **1 reachability.** Decision 12a; F1 files and tests.
   - **2 machine throttle.** Decision 2a; C1 and C2.
-  - **3 images.** Decision 4 keys the throttle per (IP, file); E2 `next.config` covers `remotePatterns` from the public origin and local IPs via an env flag.
+  - **3 images.** Decision 4 keys the throttle per (IP, file); E2 `next.config` covers `remotePatterns` from the public origin, and local stacks load images unoptimised (amended in PR E from a local-IP flag).
   - **4 `safe-url`.** Decision 5a; A2 and A4 tests.
   - **5 visibility recompute.** Decision 4; A2, A3, B1, B3 and C4 tests.
   - **6 preview.** Decision 9, plus E2's validate-then-enable flow with the token in a header and cookie.
@@ -872,6 +886,7 @@ The module doc §20, and project-status marking website-cms full-stack complete.
   - **31 renderer strings.** `copy.ts`, with i18n deferred.
   - **32 fake verifier.** Dev `*.test`.
   - **33 alternatives.** Alternatives 11 and 12 added.
+- **Amended after the PR E change review (2026-11-16):** decision 9 drops Next's Draft Mode, because its `__prerender_bypass` cookie is build-wide and so can be replayed on any school's host to force uncached renders against that host's machine quota. The token cookie alone switches preview, only `pages` and `site` go uncached, and the API counts preview-header reads in their own per-(client, host) bucket (`public_preview`), replacing the content quota for those reads. The other PR E divergences are listed under "PR E amendments (declared divergences)".
 - **Unresolved:**
   - **#10.** The production value of `NUM_PROXIES` depends on the deployment's proxy count. The default `None` keeps today's behaviour, and the value is set per environment when the deploy topology is fixed.
   - **#8 and #29.** Their coordination items are handed to the platform-admin session (D2 note).

@@ -18,6 +18,7 @@ from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_sche
 from rest_framework.exceptions import NotFound
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.throttling import BaseThrottle
 from rest_framework.views import APIView
 
 from apps.website_cms.constants import PUBLIC_LIST_MAX, WebsiteStatus
@@ -36,6 +37,7 @@ from core.rbac.machine import (
     HasMachineScope,
     MachineClientThrottle,
     MachineTokenAuthentication,
+    PublicPreviewThrottle,
 )
 from core.tenancy.context import tenant_atomic
 from core.tenancy.features import is_feature_enabled
@@ -92,6 +94,14 @@ class PublicContentView(APIView):
     permission_classes = [HasMachineScope]
     throttle_classes = [MachineClientThrottle]
     required_machine_scope = WEBSITE_PUBLIC_CONTENT_SCOPE
+    #: A view that reads `X-Preview-Token` counts those reads in their own bucket.
+    accepts_preview = False
+
+    def get_throttles(self) -> list[BaseThrottle]:
+        # Replaced, not added to: a preview read must never spend the school's `machine_client`.
+        if self.accepts_preview and self.request.headers.get(PREVIEW_HEADER):
+            return [PublicPreviewThrottle()]
+        return list(super().get_throttles())
 
     @staticmethod
     def list_limit(request: Request) -> int:
@@ -173,6 +183,8 @@ class PublicSiteView(PublicContentView):
     A valid preview token for this school reads it before the site is live (decision 9).
     """
 
+    accepts_preview = True
+
     @extend_schema(
         operation_id="public_site",
         parameters=[HOST_PARAMETER, PREVIEW_PARAMETER],
@@ -193,6 +205,8 @@ class PublicPageView(PublicContentView):
     preview token in the `X-Preview-Token` header naming this tenant and this page (decision 9);
     then `slug` is optional, the site need not be live, and the response is never cached.
     """
+
+    accepts_preview = True
 
     @extend_schema(
         operation_id="public_page",

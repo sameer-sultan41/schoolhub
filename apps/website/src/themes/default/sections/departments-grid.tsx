@@ -8,12 +8,12 @@ const schema = z.object({
   intro: z.string().optional(),
 });
 
-/** Live data from the Academics module (published entries only), not duplicated into the CMS. */
-export async function DepartmentsGrid({ section, tenant }: SectionProps) {
+/** Live data from School Organisation (opted-in departments only), not duplicated into the CMS. */
+export async function DepartmentsGrid({ section, tenant, host }: SectionProps) {
   const parsed = schema.safeParse(section.props);
   if (!parsed.success) return null;
 
-  const departments = await getDepartments(tenant.id);
+  const departments = await getDepartments(tenant.id, host);
   if (departments.length === 0) return null;
 
   return (

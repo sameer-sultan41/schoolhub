@@ -1,6 +1,5 @@
 import { defaultTheme } from "./default";
-import type { SectionComponent, Theme } from "./types";
-import type { PageSection } from "@schoolhub/types";
+import type { PublicSection, SectionComponent, Theme } from "./types";
 
 /**
  * Theme registry.
@@ -15,16 +14,26 @@ export const THEMES: Record<string, Theme> = {
 
 export const DEFAULT_THEME_NAME = defaultTheme.name;
 
-/** Falls back to the default theme for an unknown/removed theme name. */
+/** Falls back to the default theme for an unknown/removed theme code. */
 export function getTheme(name: string | null | undefined): Theme {
   if (!name) return defaultTheme;
   return THEMES[name] ?? defaultTheme;
 }
 
 /** Resolve a section row to its component, or null when this theme skips the type. */
-export function resolveSection(theme: Theme, section: PageSection): SectionComponent | null {
-  const component = theme.sections[section.type as keyof Theme["sections"]];
-  return component ?? null;
+export function resolveSection(theme: Theme, section: PublicSection): SectionComponent | null {
+  // `Object.hasOwn` so a type the API adds before the renderer ships it renders nothing.
+  if (!Object.hasOwn(theme.sections, section.type)) return null;
+  return theme.sections[section.type] ?? null;
 }
 
-export type { ChromeProps, SectionComponent, SectionProps, Theme } from "./types";
+export type {
+  ChromeProps,
+  PublicSection,
+  PublicSite,
+  PublicTenant,
+  SectionComponent,
+  SectionProps,
+  SectionType,
+  Theme,
+} from "./types";
