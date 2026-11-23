@@ -15,7 +15,7 @@ ships without it.
 from django.db import connection
 from django.test import TestCase
 
-from core.tenancy.grants import APP_ROLE, append_only_tables
+from core.tenancy.grants import APP_ROLE, PLATFORM_APPEND_ONLY_TABLES, append_only_tables
 
 
 def _grants(table: str, privilege: str) -> set[str]:
@@ -66,6 +66,19 @@ class AppendOnlyCoverageTests(TestCase):
             {},
             "No AppendOnlyTenantModel subclasses found — this file is asserting nothing.",
         )
+
+    def test_every_listed_platform_table_exists_and_is_covered(self) -> None:
+        """A platform table has no tenant base class to derive it from, so it is listed.
+
+        A misspelt or dropped name would make every grant check below pass vacuously for it
+        (a missing table has no grants), so each listed name must be a real table.
+        """
+        with connection.cursor() as cursor:
+            for table in PLATFORM_APPEND_ONLY_TABLES:
+                with self.subTest(table=table):
+                    cursor.execute("SELECT to_regclass(%s)", [table])
+                    self.assertIsNotNone(cursor.fetchone()[0], f"{table} is not a table")
+                    self.assertIn(table, append_only_tables())
 
     def test_every_append_only_table_has_delete_revoked(self) -> None:
         offenders = [

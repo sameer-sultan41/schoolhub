@@ -76,6 +76,7 @@ class CeleryRoutingTests(SimpleTestCase):
             ("apps.platform_admin.tasks.expire_trials", "bulk"),
             ("apps.platform_admin.tasks.dunning_sweep", "bulk"),
             ("apps.platform_admin.tasks.lapse_overrides", "bulk"),
+            ("apps.platform_admin.tasks.snapshot_all", "bulk"),
             ("apps.platform_admin.tasks.send_trial_expiring_notice", "transactional"),
             ("apps.platform_admin.tasks.send_payment_failed_notice", "transactional"),
         ):
@@ -87,6 +88,12 @@ class CeleryRoutingTests(SimpleTestCase):
         from django.conf import settings
 
         scheduled = {entry["task"] for entry in settings.CELERY_BEAT_SCHEDULE.values()}
-        for task in ("trial_reminders", "expire_trials", "dunning_sweep", "lapse_overrides"):
+        for task in (
+            "trial_reminders",
+            "expire_trials",
+            "dunning_sweep",
+            "lapse_overrides",
+            "snapshot_all",
+        ):
             with self.subTest(task=task):
                 self.assertIn(f"apps.platform_admin.tasks.{task}", scheduled)

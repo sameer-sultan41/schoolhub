@@ -115,8 +115,8 @@ class PlanCatalogTests(PlatformAPITestCase):
         self.assertEqual(renamed.json()["data"]["name"], "Standard 2026")
 
     def test_acknowledge_over_usage_is_accepted(self) -> None:
-        # The usage check behind it, and its 409 `limit_below_usage`, arrive with usage
-        # snapshots in the next PR (ruling C3); the flag is part of the contract now.
+        # With no usage snapshot there is nothing to be below; `test_usage.py` covers the
+        # 409 `limit_below_usage` the flag acknowledges (ruling C3).
         plan = make_plan(limits={"students": 500})
 
         response = self.client.patch(
