@@ -68,7 +68,8 @@ locals {
 
   # Non-secret configuration shared by every Python service.
   api_environment = {
-    DJANGO_SETTINGS_MODULE = "config.settings.staging"
+    # Every environment runs prod.py; they differ only by the values below.
+    DJANGO_SETTINGS_MODULE = "config.settings.prod"
     DJANGO_DEBUG           = "false"
     DJANGO_ALLOWED_HOSTS   = "api.${var.platform_domain},app.${var.platform_domain}"
     PLATFORM_DOMAIN        = var.platform_domain

@@ -68,7 +68,8 @@ locals {
   uploads_bucket_regional_domain_name = "${var.uploads_bucket_name}.s3.${var.aws_region}.amazonaws.com"
 
   api_environment = {
-    DJANGO_SETTINGS_MODULE = "config.settings.production"
+    # Every environment runs prod.py; they differ only by the values below.
+    DJANGO_SETTINGS_MODULE = "config.settings.prod"
     DJANGO_DEBUG           = "false"
     DJANGO_ALLOWED_HOSTS   = "api.${var.platform_domain},app.${var.platform_domain}"
     PLATFORM_DOMAIN        = var.platform_domain

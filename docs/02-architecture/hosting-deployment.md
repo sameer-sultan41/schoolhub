@@ -48,6 +48,7 @@ lint  →  test  →  build image  →  [staging] migrate → deploy → smoke t
 
 - **PR checks:** lint (ruff / eslint), type checks (mypy / tsc), unit + API tests with a real Postgres service container (RLS and cross-tenant tests included), missing-migration check, gitleaks, dependency audit.
 - **Build:** one immutable image per service per commit, tagged with the git SHA, pushed to the registry. The same image moves staging → prod (no rebuilds between environments).
+- **One settings module:** every deployed environment runs the API with `config.settings.prod` and differs only by values (`ENVIRONMENT`, hosts, secret ARNs), so staging rehearses production's configuration. `repo-hygiene` fails if Terraform names a settings module that has no file.
 - **Migrate step** runs as a one-off job against the target database **before** the new version receives traffic (see §7).
 - **Prod gate:** a GitHub Environments manual approval; deploys are recorded (who, what SHA, when) for the audit trail.
 - Frontend CI additionally regenerates the OpenAPI client and fails on contract breaks ([`repo-structure.md`](repo-structure.md) §6.1).
