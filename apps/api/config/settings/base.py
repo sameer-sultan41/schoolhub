@@ -638,8 +638,9 @@ MFA_LOCKOUT_SECONDS = env.int("MFA_LOCKOUT_SECONDS", default=900)
 MFA_PERMANENT_LOCKOUT_ATTEMPTS = env.int("MFA_PERMANENT_LOCKOUT_ATTEMPTS", default=100)
 
 # Whether `seed_e2e_data` may run. It creates accounts with public credentials (a console
-# operator whose TOTP key is in the repo), so `prod.py` forces it off.
-E2E_SEED_ALLOWED = env.bool("E2E_SEED_ALLOWED", default=True)
+# operator whose TOTP key is in the repo), so it is off unless a settings module (`dev.py`,
+# `test.py`) or the environment turns it on; `prod.py` forces it off.
+E2E_SEED_ALLOWED = env.bool("E2E_SEED_ALLOWED", default=False)
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"

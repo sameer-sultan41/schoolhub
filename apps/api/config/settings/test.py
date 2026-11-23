@@ -8,6 +8,9 @@ from config.settings.base import *
 
 DEBUG = False
 
+# `seed_e2e_data` is exercised by the tests.
+E2E_SEED_ALLOWED = True
+
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]  # speed only, tests
 
 CELERY_TASK_ALWAYS_EAGER = True
