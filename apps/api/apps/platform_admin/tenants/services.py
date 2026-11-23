@@ -65,8 +65,7 @@ class NoLiveSubscription(CodedAPIException):
 class GraceExpired(CodedAPIException):
     status_code = 409
     default_detail = (
-        "This school's payment grace has run out. Record a payment or change its plan before "
-        "reinstating it."
+        "This school's payment grace has run out. Record a payment before reinstating it."
     )
     default_code = "grace_expired"
 
