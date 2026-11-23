@@ -193,7 +193,9 @@ test("a new school's owner sets the school up from nothing and goes live", async
     await expect(studentsPage.importDialog.getByText("3 imported")).toBeVisible({
       timeout: LIVE_JOB_TIMEOUT_MS,
     });
-    await studentsPage.importDialog.getByRole("button", { name: "Close", exact: true }).click();
+    // Once the job is over, the footer button and the corner X are both named "Close".
+    await page.keyboard.press("Escape");
+    await expect(studentsPage.importDialog).toBeHidden();
 
     await page.goBack();
     await expect(page).toHaveURL(/\/setup\?step=students$/);
