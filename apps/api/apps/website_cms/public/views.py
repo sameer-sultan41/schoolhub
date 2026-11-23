@@ -32,12 +32,12 @@ from apps.website_cms.public.serializers import (
     PublicSiteSerializer,
     PublicTenantSerializer,
 )
-from core.api.throttling import PublicPreviewThrottle
 from core.rbac.machine import (
     WEBSITE_PUBLIC_CONTENT_SCOPE,
     HasMachineScope,
     MachineClientThrottle,
     MachineTokenAuthentication,
+    PublicPreviewThrottle,
 )
 from core.tenancy.context import tenant_atomic
 from core.tenancy.features import is_feature_enabled
@@ -94,14 +94,14 @@ class PublicContentView(APIView):
     permission_classes = [HasMachineScope]
     throttle_classes = [MachineClientThrottle]
     required_machine_scope = WEBSITE_PUBLIC_CONTENT_SCOPE
-    #: A view that reads `X-Preview-Token` also counts those reads per client IP.
+    #: A view that reads `X-Preview-Token` counts those reads in their own bucket.
     accepts_preview = False
 
     def get_throttles(self) -> list[BaseThrottle]:
-        throttles = list(super().get_throttles())
+        # Replaced, not added to: a preview read must never spend the school's `machine_client`.
         if self.accepts_preview and self.request.headers.get(PREVIEW_HEADER):
-            throttles.append(PublicPreviewThrottle())
-        return throttles
+            return [PublicPreviewThrottle()]
+        return list(super().get_throttles())
 
     @staticmethod
     def list_limit(request: Request) -> int:

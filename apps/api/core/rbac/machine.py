@@ -130,3 +130,15 @@ class MachineClientThrottle(SimpleRateThrottle):
         host = normalise_host(str(request.query_params.get("host", ""))) or "-"
         digest = hashlib.sha256(host.encode()).hexdigest()[:32]
         return self.cache_format % {"scope": self.scope, "ident": f"{user.client}:{digest}"}
+
+
+class PublicPreviewThrottle(MachineClientThrottle):
+    """Machine reads carrying a page preview token, per (client, `host`) (scope `public_preview`).
+
+    A preview read is never cached, so each one reaches the API. The views use this bucket
+    *instead of* `machine_client` for such a read, so forged preview cookies replayed against a
+    school can exhaust only that school's preview bucket: its previews fall back to published
+    content, and its published reads and every other school are untouched.
+    """
+
+    scope = "public_preview"

@@ -22,11 +22,10 @@ from core.api.throttling import (
     PublicFileThrottle,
     PublicFormTenantThrottle,
     PublicFormThrottle,
-    PublicPreviewThrottle,
     TenantRateThrottle,
     UserRateThrottle,
 )
-from core.rbac.machine import MachineClientThrottle
+from core.rbac.machine import MachineClientThrottle, PublicPreviewThrottle
 from tests.prod_settings import load_prod_settings
 
 DEFAULT_RATES = {
