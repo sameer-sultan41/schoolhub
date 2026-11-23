@@ -554,6 +554,11 @@
 - **Mistake.** Platform-admin PR C Task 7 added `meta.warnings` to the renderer and typed it in `ApiMeta` as if new. Academics' teacher allocations already sent `meta.warnings` with another entry shape: the narrowed type failed the dashboard typecheck at pre-push, and the renderer would have overwritten that view's list.
 - **Check.** Before adding a key to the envelope, `meta`, or a shared type, `grep -rn "<key>" apps/api apps/dashboard/src packages/*/src`. Merge with what a view already sets, never replace it, and keep the shared type no narrower than every producer.
 
+### L77. Wait for the RED run before pushing the implementation
+
+- **Mistake.** Platform-admin PR C Task 8 pushed its implementation (`58ff793c`) while the RED commit's api run was still testing. Each workflow's `concurrency` group is `ci-${{ github.ref }}` with `cancel-in-progress: true`, so the RED `test` job was cancelled and left no failure to cite (run 45171828463).
+- **Check.** After pushing failing tests, `gh run watch <id>` on the `api` (or `frontend`) run until its `test` job has a conclusion, and record that run id, before the next push to the branch.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.
