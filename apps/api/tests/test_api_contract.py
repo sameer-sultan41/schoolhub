@@ -161,7 +161,11 @@ class ErrorCodeContractTests(APITestCase):
         from apps.platform_admin.plans.services import PlanInUse
         from apps.platform_admin.subscriptions.services import SubscriptionExists
         from apps.platform_admin.tenants.lifecycle import InvalidTransition, RetentionExpired
-        from apps.platform_admin.tenants.services import ExportRequired, NoLiveSubscription
+        from apps.platform_admin.tenants.services import (
+            ExportRequired,
+            GraceExpired,
+            NoLiveSubscription,
+        )
         from core.ai.exceptions import AIQuotaExceeded, AIUnavailable
         from core.api.exceptions import (
             Conflict,
@@ -203,6 +207,7 @@ class ErrorCodeContractTests(APITestCase):
             RetentionExpired.default_code,
             NoLiveSubscription.default_code,
             ExportRequired.default_code,
+            GraceExpired.default_code,
             # Plans and subscriptions (platform console).
             PlanInUse.default_code,
             SubscriptionExists.default_code,

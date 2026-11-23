@@ -11814,7 +11814,12 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
-        /** @description `POST` (every field but the optional ones) and `PATCH` (any subset; ``code`` fixed). */
+        /**
+         * @description `POST` (every field but the optional ones) and `PATCH` (any subset; ``code`` fixed).
+         *
+         *     ``enabled_modules`` is required on create, with no empty default: a plan with no modules
+         *     switches every `module.*` key off for its schools, so it must be asked for (``[]``).
+         */
         PatchedPlanWrite: {
             name?: string;
             /** @description Stable key; immutable. */
@@ -12506,7 +12511,12 @@ export interface components {
             readonly billing_period: components["schemas"]["BillingPeriodEnum"];
             readonly enabled_modules: string[];
         };
-        /** @description `POST` (every field but the optional ones) and `PATCH` (any subset; ``code`` fixed). */
+        /**
+         * @description `POST` (every field but the optional ones) and `PATCH` (any subset; ``code`` fixed).
+         *
+         *     ``enabled_modules`` is required on create, with no empty default: a plan with no modules
+         *     switches every `module.*` key off for its schools, so it must be asked for (``[]``).
+         */
         PlanWrite: {
             name: string;
             /** @description Stable key; immutable. */
@@ -12518,7 +12528,7 @@ export interface components {
             currency: string;
             billing_period?: components["schemas"]["BillingPeriodEnum"];
             trial_days?: number;
-            enabled_modules?: string[];
+            enabled_modules: string[];
             limits?: {
                 [key: string]: number | null;
             };
@@ -21873,7 +21883,7 @@ export interface operations {
                     "application/json": components["schemas"]["SubscriptionState"];
                 };
             };
-            /** @description invalid_transition: the subscription's status does not allow this move; no_live_subscription: the school has none. */
+            /** @description invalid_transition: the subscription's status does not allow this move; subscription_exists: the school already has a live subscription; toggle_refused: the plan would switch off a module the school still needs. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -21914,7 +21924,7 @@ export interface operations {
                     "application/json": components["schemas"]["SubscriptionState"];
                 };
             };
-            /** @description invalid_transition: the subscription's status does not allow this move; no_live_subscription: the school has none. */
+            /** @description invalid_transition: the subscription's status does not allow this move; no_live_subscription: the school has none; toggle_refused: the plan would switch off a module the school still needs. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -22092,7 +22102,7 @@ export interface operations {
                     "application/json": components["schemas"]["Tenant"];
                 };
             };
-            /** @description invalid_transition, or no_live_subscription */
+            /** @description invalid_transition, no_live_subscription, or grace_expired */
             409: {
                 headers: {
                     [name: string]: unknown;

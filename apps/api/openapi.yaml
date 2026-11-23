@@ -9759,7 +9759,8 @@ paths:
           description: ''
         '409':
           description: 'invalid_transition: the subscription''s status does not allow
-            this move; no_live_subscription: the school has none.'
+            this move; subscription_exists: the school already has a live subscription;
+            toggle_refused: the plan would switch off a module the school still needs.'
         '422':
           description: No active plan has this code.
   /api/v1/platform/tenants/{tenant_pk}/subscription:change-plan:
@@ -9802,7 +9803,8 @@ paths:
           description: ''
         '409':
           description: 'invalid_transition: the subscription''s status does not allow
-            this move; no_live_subscription: the school has none.'
+            this move; no_live_subscription: the school has none; toggle_refused:
+            the plan would switch off a module the school still needs.'
         '422':
           description: No active plan has this code, or it is the same.
   /api/v1/platform/tenants/{tenant_pk}/subscription:mark-payment-failed:
@@ -9985,7 +9987,7 @@ paths:
                 $ref: '#/components/schemas/Tenant'
           description: ''
         '409':
-          description: invalid_transition, or no_live_subscription
+          description: invalid_transition, no_live_subscription, or grace_expired
   /api/v1/platform/tenants/{tenant_pk}:restore:
     post:
       operationId: platform_tenants_:restore_create
@@ -25712,8 +25714,11 @@ components:
           readOnly: true
     PatchedPlanWrite:
       type: object
-      description: '`POST` (every field but the optional ones) and `PATCH` (any subset;
-        ``code`` fixed).'
+      description: |-
+        `POST` (every field but the optional ones) and `PATCH` (any subset; ``code`` fixed).
+
+        ``enabled_modules`` is required on create, with no empty default: a plan with no modules
+        switches every `module.*` key off for its schools, so it must be asked for (``[]``).
       properties:
         name:
           type: string
@@ -27140,8 +27145,11 @@ components:
       - price_amount
     PlanWrite:
       type: object
-      description: '`POST` (every field but the optional ones) and `PATCH` (any subset;
-        ``code`` fixed).'
+      description: |-
+        `POST` (every field but the optional ones) and `PATCH` (any subset; ``code`` fixed).
+
+        ``enabled_modules`` is required on create, with no empty default: a plan with no modules
+        switches every `module.*` key off for its schools, so it must be asked for (``[]``).
       properties:
         name:
           type: string
@@ -27188,6 +27196,7 @@ components:
       required:
       - code
       - currency
+      - enabled_modules
       - name
       - price_amount
     PortalChild:
