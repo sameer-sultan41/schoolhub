@@ -21,6 +21,8 @@ import { E2E_FRESH_OWNER_EMAIL } from "@/lib/seed-constants";
  * against the auth throttle (e2e/AGENTS.md).
  */
 test.use({ storageState: { cookies: [], origins: [] } });
+// A retry would start on the half-set-up school a failure leaves and bury the real error.
+test.describe.configure({ retries: 0 });
 
 test("a new school's owner sets the school up from nothing and goes live", async ({
   page,
