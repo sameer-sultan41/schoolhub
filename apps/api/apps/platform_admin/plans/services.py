@@ -17,7 +17,7 @@ from apps.platform_admin.models import Plan
 from apps.platform_admin.usage.limits import latest_snapshots, refuse_below_usage
 from core.api.exceptions import CodedAPIException, DomainRuleViolation
 from core.tenancy.features import invalidate_feature_cache
-from core.tenancy.models import Tenant
+from core.tenancy.models import Tenant, TenantStatus
 
 CODE_FROZEN = "A plan's code cannot change once created."
 CODE_TAKEN = "Another plan already uses this code."
@@ -81,7 +81,12 @@ def update_plan(
     """
     locked = Plan.objects.select_for_update().get(pk=plan.pk)
     if "limits" in data:
-        schools = Tenant.objects.filter(current_plan=locked.code).values_list("pk", flat=True)
+        # A deprovisioned or deleted school uses nothing it could be refused for.
+        schools = (
+            Tenant.objects.filter(current_plan=locked.code, deleted_at__isnull=True)
+            .exclude(status=TenantStatus.DEPROVISIONED)
+            .values_list("pk", flat=True)
+        )
         refuse_below_usage(
             locked.limits or {},
             data["limits"],

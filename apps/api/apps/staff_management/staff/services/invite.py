@@ -11,7 +11,7 @@ from django.db.models import Q
 from rest_framework.exceptions import PermissionDenied
 
 from apps.staff_management import notifications
-from apps.staff_management.models import EmploymentStatus, Staff
+from apps.staff_management.models import EXITED_EMPLOYMENT_STATUSES, Staff
 from core.api.exceptions import Conflict, DomainRuleViolation
 from core.rbac.cache import evict_rbac_caches
 from core.rbac.invitations.exceptions import AlreadyActive, EmailInUse
@@ -32,19 +32,13 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-EXITED_STATUSES = (
-    EmploymentStatus.RESIGNED,
-    EmploymentStatus.RETIRED,
-    EmploymentStatus.TERMINATED,
-)
-
 
 def staff_invitation_eligible(user: User) -> bool:
     """The `staff` eligibility hook: the account's staff member has not exited."""
     return (
         Staff.objects.alive()
         .filter(user_id=user.pk)
-        .exclude(employment_status__in=EXITED_STATUSES)
+        .exclude(employment_status__in=EXITED_EMPLOYMENT_STATUSES)
         .exists()
     )
 
@@ -76,7 +70,7 @@ def invite_staff(*, staff: Staff, role_ids: list[uuid.UUID], actor: Actor) -> St
     """
     actor_id = actor.pk
     staff = Staff.objects.select_for_update().get(pk=staff.pk)
-    if staff.employment_status in EXITED_STATUSES:
+    if staff.employment_status in EXITED_EMPLOYMENT_STATUSES:
         raise Conflict(f"This staff member has already exited ({staff.employment_status}).")
 
     user = None

@@ -26,7 +26,7 @@ from django.db.models import Sum
 from apps.platform_admin.models import BillingPeriod, SubscriptionStatus, TenantUsageSnapshot
 from apps.platform_admin.subscriptions.services import live_subscription
 from apps.platform_admin.usage.limits import storage_gb
-from apps.staff_management.models import EmploymentStatus, Staff
+from apps.staff_management.models import EXITED_EMPLOYMENT_STATUSES, Staff
 from apps.student_management.models import Student, StudentStatus
 from core.files.models import File
 from core.tenancy.context import TenantContextRequired, get_current_tenant_id
@@ -39,12 +39,6 @@ LEFT_STUDENT_STATUSES = (
     StudentStatus.WITHDRAWN,
     StudentStatus.GRADUATED,
     StudentStatus.TRANSFERRED,
-)
-#: Staff who have left (the spec's "exited").
-EXITED_STAFF_STATUSES = (
-    EmploymentStatus.RESIGNED,
-    EmploymentStatus.RETIRED,
-    EmploymentStatus.TERMINATED,
 )
 #: Revenue counts while the school pays, late or not; a trial brings none.
 PAYING_STATUSES = (SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE)
@@ -72,7 +66,7 @@ def count_staff(tenant_id: uuid.UUID) -> int:
     _require_bound(tenant_id)
     return (
         Staff.objects.filter(deleted_at__isnull=True)
-        .exclude(employment_status__in=EXITED_STAFF_STATUSES)
+        .exclude(employment_status__in=EXITED_EMPLOYMENT_STATUSES)
         .count()
     )
 

@@ -194,6 +194,18 @@ class SnapshotTests(TestCase):
         self.assertEqual((on_trial.plan_code, on_trial.mrr_amount), ("trial-plan", Decimal("0")))
         self.assertEqual((no_plan.plan_code, no_plan.mrr_amount), ("", Decimal("0")))
 
+    def test_a_past_due_school_pays_its_monthly_price(self) -> None:
+        tenant = make_tenant(status=S.TRIAL)
+        sub = live_on(tenant, make_plan(price_amount="5000.00", billing_period="monthly"))
+        subscriptions.mark_payment_failed(sub, actor_id=None)
+
+        with tenant_atomic(tenant.pk):
+            snap = usage.snapshot_tenant(tenant.pk)
+
+        # Late, not lost: a past-due school still counts toward revenue, at the monthly price.
+        self.assertEqual(snap.status, S.PAST_DUE)
+        self.assertEqual(snap.mrr_amount, Decimal("5000.00"))
+
     def test_snapshot_is_append_only(self) -> None:
         snap = snapshot_of(make_tenant(status=S.ACTIVE), students=4)
 
@@ -370,6 +382,18 @@ class LimitBelowUsageTests(PlatformAPITestCase):
         elsewhere = make_tenant(status=S.TRIAL)
         live_on(elsewhere, make_plan())
         snapshot_of(elsewhere, students=900)
+
+        response = self.client.patch(plan_url(plan), {"limits": {"students": 10}}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+
+    def test_deprovisioned_and_deleted_schools_do_not_count(self) -> None:
+        plan = make_plan(limits={"students": 500})
+        for gone in ({"status": S.DEPROVISIONED}, {"deleted_at": timezone.now()}):
+            tenant = make_tenant(status=S.TRIAL)
+            live_on(tenant, plan)
+            snapshot_of(tenant, students=900)
+            Tenant.objects.filter(pk=tenant.pk).update(**gone)
 
         response = self.client.patch(plan_url(plan), {"limits": {"students": 10}}, format="json")
 
