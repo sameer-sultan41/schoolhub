@@ -38,7 +38,8 @@ plan `docs/superpowers/plans/2026-11-15-platform-admin.md`.
 5. **Console routes live under `/api/v1/platform/` and are gated in this order:** a 401 for an
    anonymous caller; a **404** for any tenant principal, an impersonation token included (the
    route does not exist for a school, invariant 2's reasoning); a 403 `mfa_required` for a
-   platform token without `"otp"` in its `amr` claim; then the route's key (`PlatformViewSet`,
+   platform token without `"otp"` in its `amr` claim, or whose user's MFA is off (an
+   operator reset with `--reset-mfa`); then the route's key (`PlatformViewSet`,
    `IsPlatformPrincipal`). A missing `amr` claim fails closed.
 6. **One target school per platform request.** A route touching a school's rows is nested under
    `tenants/<tenant_pk>/`. `PlatformTenantNestedMixin` loads the tenant after authentication and
@@ -49,6 +50,12 @@ plan `docs/superpowers/plans/2026-11-15-platform-admin.md`.
 7. **Operators are created by command only.** `create_platform_admin --email --first-name
    [--role]` prompts for the password and leaves `mfa_enabled=False`, so TOTP enrolment happens
    at first sign-in.
+8. **The second factor is TOTP, built on `pyotp` in `core/rbac/mfa.py`.** Login answers an MFA
+   user with a signed, short-lived challenge (`django.core.signing`, salted, `max_age`), not a
+   session; `/auth/mfa:verify` trades it and a code for the token pair, whose `amr` claim
+   (`["pwd","otp"]`) is what the console gate reads. The per-account failure count and lockout
+   live on the `users` row, under its row lock, and only an operator lifts the lock at 100
+   consecutive failures (NIST SP 800-63B §5.2.2).
 
 ## Alternatives considered
 
@@ -70,7 +77,21 @@ plan `docs/superpowers/plans/2026-11-15-platform-admin.md`.
    Why not: §4's keys are locked vocabulary, and no key actually collides. A `scope` on each key,
    a filter in every grant path and a contract test over every row separate them by meaning, not
    by spelling.
-5. **`core/tenancy/features.py` reading `Plan` directly.** Why not: `core` imports no app
+5. **`django-otp` or `django-allauth`'s MFA instead of `pyotp`.** Why not: both are built
+   around Django sessions and their own device models and views, while every SchoolHub client,
+   mobile included (invariant 7), authenticates with JWTs. Adopting either means a session
+   step in a token flow or bypassing most of the package. `pyotp` is the RFC 6238 primitive
+   (`verify_and_get_timecode` gives replay prevention), and the rest is a few hundred lines this
+   repo owns and tests.
+6. **A server-side session (or a cache entry) for the half-signed-in state, and a session flag
+   for "passed MFA".** Why not: the API is stateless JWT; a session would be web-only and the
+   cache evicts (`allkeys-lru`). A signed challenge needs no storage beyond its attempt counter,
+   and the `amr` claim (RFC 8176) carries the second factor in the token every route already
+   reads.
+7. **The failure counter in Redis.** Why not: production Redis evicts keys, so an attacker who
+   churns the cache resets their own count; and the row lock that serialises attempts for replay
+   prevention already exists. The row makes the count durable and race-free.
+8. **`core/tenancy/features.py` reading `Plan` directly.** Why not: `core` imports no app
    ([ADR-0013](0013-cross-app-dependencies.md)). `platform_admin` registers a resolver from
    `AppConfig.ready()`, as `communication` does with `core/notifications`.
 
@@ -84,5 +105,9 @@ plan `docs/superpowers/plans/2026-11-15-platform-admin.md`.
   else binds a tenant for a platform user, and RLS returns no rows without one.
 - The `tenant=None` default rows are shared by every school, so a release that adds a key to a
   default role gives it to every school at once, as `school_owner` always has.
+- A school's own live role of a default slug wins over the shared `tenant=None` row wherever a
+  role is looked up by slug (the portal invite, `_portal_role`). The shared rows are never
+  school-editable: no school-facing endpoint writes a role, and a future role editor must
+  create the school's own copy rather than change the shared row, which every school holds.
 - The trigger checks a new or re-pointed assignment only. Flipping `is_platform` on a user or a
   role that already has assignments is not supported.

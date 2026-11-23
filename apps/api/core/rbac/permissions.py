@@ -240,7 +240,9 @@ class IsPlatformPrincipal(permissions.BasePermission):
     A signed-in tenant principal, an impersonation token included, gets a 404 rather than a
     403: the console's routes do not exist for a school's users (invariant 2's reasoning). A
     platform user's token must also carry ``"otp"`` in its ``amr`` claim, or the request is a
-    403 ``mfa_required``; a token without the claim fails closed.
+    403 ``mfa_required``; a token without the claim fails closed. So must the user's row
+    (``mfa_enabled``): ``create_platform_admin --reset-mfa`` turns it off, and the tokens issued
+    before then, whose ``amr`` still says ``otp``, stop opening the console at once.
     """
 
     def has_permission(self, request, view) -> bool:
@@ -251,7 +253,7 @@ class IsPlatformPrincipal(permissions.BasePermission):
             raise exceptions.NotFound()
         token = request.auth
         amr = token.get("amr") if token is not None and hasattr(token, "get") else None
-        if not isinstance(amr, list | tuple) or OTP_AMR not in amr:
+        if not isinstance(amr, list | tuple) or OTP_AMR not in amr or not user.mfa_enabled:
             raise MfaRequired()
         return True
 

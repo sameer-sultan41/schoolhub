@@ -16,16 +16,16 @@
 | name | varchar(200) | no | — | Legal/display name |
 | slug | varchar(63) | no | — | Unique, DNS-safe; becomes `<slug>.<platform-domain>`; immutable after provisioning |
 | status | varchar(20) | no | `'provisioning'` | Enum: `provisioning` `trial` `active` `past_due` `suspended` `deprovisioned` (multi-tenancy §7) |
-| contact_name | varchar(200) | yes | — | Primary commercial contact |
-| contact_email | varchar(254) | no | — | Owner invite target |
-| contact_phone | varchar(30) | yes | — | |
+| contact_name | varchar(200) | no | `''` (database default) | Primary commercial contact; `''` when unknown |
+| contact_email | varchar(254) | no | `''` (database default) | Owner invite target; `''` only on rows that predate the column, and `:provision` refuses one |
+| contact_phone | varchar(30) | no | `''` (database default) | |
 | trial_ends_at | timestamptz | yes | — | Set at provisioning |
 | provisioned_at | timestamptz | yes | — | Seed transaction completed |
 | suspended_at | timestamptz | yes | — | With reason in `audit_logs` |
 | deprovision_after | timestamptz | yes | — | End of 90-day retention window |
-| current_plan | varchar(50) | no | `''` | The live plan's `code`; blank without one. Denormalised read model |
-| subscription_status | varchar(20) | no | `''` | The live subscription's `status`; blank without one. Denormalised read model |
-| billing_provider_ref | varchar(120) | no | `''` | The billing provider's reference; unique when set. Denormalised read model |
+| current_plan | varchar(50) | no | `''` (database default) | The live plan's `code`; blank without one. Denormalised read model |
+| subscription_status | varchar(20) | no | `''` (database default) | The live subscription's `status`; blank without one. Denormalised read model |
+| billing_provider_ref | varchar(120) | no | `''` (database default) | The billing provider's reference; unique when set. Denormalised read model |
 
 Indexes: unique(slug); (status); unique(billing_provider_ref) where not blank.
 
@@ -161,6 +161,8 @@ All user accounts — tenant members **and** platform staff. **Exception:** `ten
 | mfa_enabled | boolean | no | `false` | TOTP (auth-and-rbac §1); true only once a first code is confirmed |
 | mfa_secret | bytea | yes | — | The TOTP secret, Fernet-encrypted with `INTEGRATIONS_ENCRYPTION_KEYS` (`core.integrations.crypto`); set at enrolment |
 | mfa_last_timecode | bigint | yes | — | TOTP time step of the last accepted code; an equal or older one is a replay |
+| mfa_failed_attempts | smallint | no | `0` (database default) | Consecutive wrong second-factor codes; counted before each check, reset only on success or by `create_platform_admin --unlock-mfa`/`--reset-mfa`. At `MFA_PERMANENT_LOCKOUT_ATTEMPTS` (100) the factor stays locked until an operator lifts it |
+| mfa_locked_until | timestamptz | yes | — | Second factor refused until then; set at every `MFA_MAX_FAILED_ATTEMPTS`-th consecutive failure, doubling each time |
 | last_login_at | timestamptz | yes | — | |
 | password_changed_at | timestamptz | yes | — | |
 

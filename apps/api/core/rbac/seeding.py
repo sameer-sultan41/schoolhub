@@ -32,9 +32,9 @@ def ensure_tenant(slug: str, name: str) -> Tenant:
 
 
 def ensure_school_owner_role(*, slug: str = SCHOOL_OWNER, name: str = "School Owner") -> Role:
-    """`school_owner` "can hold every permission" (users-and-roles.md §3) — every *tenant-scope*
+    """`school_owner` "can hold every permission" (users-and-roles.md §3): every tenant-scope one.
 
-    one: a console key (ADR-0036) is never a school's to hold. Granting
+    A console key (ADR-0036) is never a school's to hold. Granting
     the full current registry keeps this in sync as permissions are added, rather
     than hardcoding a subset that would silently go stale. Additive only, deliberately:
     revoking here would mean re-deriving "every permission" from `Permission.objects.all()`

@@ -43,6 +43,7 @@
 - **Mistake (again, attendance dashboard PR C).** Import was put on the Records toolbar, and Records was gated on `attendance.student-attendance.view`. §4 grants the import key to `it_admin` alone, and `it_admin` does not hold `.view`, so the only role meant to import could not reach the button. The premise "an importer can open Records" was never checked against `permissions.py`.
 - **Mistake (again, per-role record scope PR B).** The marks import was deferred because "the job carries no user". The payload already held `requested_by` and the task received `actor_id`, so the export-job fix applied as-is; the re-review reversed the deferral (plan, ruling 14).
 - **Mistake (again, communication dashboard PR D).** `7e7c74a0` cut a conversation back to its first page after every write, on the premise that TanStack Query replays stored cursors on refetch. The installed `infiniteQueryBehavior.js` recomputes each later cursor from the fresh pages, so the trim only threw away history the user had loaded.
+- **Recurred in platform-admin PR A (Task 2).** The TOTP brute-force gap was deferred because "`AuthEndpointThrottle` and the five-minute challenge lifetime still bound guessing". Neither does: the throttle is per IP and spoofable while `NUM_PROXIES` is unset, and a password holder mints a fresh challenge per login. The review reversed the deferral and the per-account lockout was built.
 - **Check.** For each ruling or decision, write down the premise it rests on, and verify that premise on the real path before ruling a related defect minor. When an action lives on a screen, check that every role §4 grants the action can open that screen. A premise about a library's behaviour is checked in its installed source under `node_modules`, not from memory.
 
 ### L4. Trace what the user can do after a failure
@@ -105,7 +106,8 @@
 
 - **Mistake.** A docstring still said examinations and attendance do not exist after they shipped, and a comment said a row "can be fixed later" when it could not.
   The timetable setup screens shipped delete copy ("a period in use cannot be removed") for a refusal the server never made: a soft delete never meets `on_delete=PROTECT` (#119, caught in change review).
-- **Check.** After a change, grep the nearby comments, docstrings and docs for the claim it makes false, and fix them in the same commit.
+- **Recurred in platform-admin PR A (Task 2).** `core/api/throttling.py`'s docstring said "per-account lockout is handled separately in the auth service"; no such code existed. Then the first lockout's docs (`base.py`, `mfa.py`, auth-and-rbac §1, SEC-06) cited NIST SP 800-63B §5.2.2 while the count reset at each lock, so failures were uncapped; the docs were true only after the final wave capped them at 100.
+- **Check.** After a change, grep the nearby comments, docstrings and docs for the claim it makes false, and fix them in the same commit. A doc that cites a standard or names a mechanism ("handled in X", "§5.2.2") names the code that does it; grep for that code before writing the claim.
 
 ### L13. Check the machine before heavy work
 
@@ -518,6 +520,11 @@
 
 - **Mistake.** The school profile mapped a stored locale with no picker option (`ar`, `en-GB`) to `en` and sent `locale` on every save, so a rename silently rewrote the tenant's locale (PR #183 final review).
 - **Check.** When a `…ToFormValues` helper substitutes a default for a value the form can't show, the body builder compares against that same mapping and leaves the field out when it is unchanged, as `buildSchoolProfileBody` does for `locale` and `logo_file_id`. Test it with a stored value the form can't represent.
+
+### L73. Compare a replayed response by its body, not its envelope
+
+- **Mistake.** `test_provision_replays_under_same_key` compared the whole JSON of the first and the replayed `:provision` response. The renderer stamps each response's own `meta.request_id`, so the two never match and CI failed (`6f639fb8`, platform-admin PR A).
+- **Check.** An idempotent-replay test compares `response.json()["data"]` (and any `meta` field the replay stores, such as `meta.message`), never the whole envelope; `request_id` is per request by design.
 
 ## 4. Adding a lesson
 

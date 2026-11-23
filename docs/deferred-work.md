@@ -38,12 +38,47 @@ either this file or `project-status.md`.
     `:enroll` accepts that token, so whoever holds the password first can enrol. Accounts exist
     only through `create_platform_admin`, run by an operator who enrols at once; a one-time
     enrolment link from the command would close the gap.
-  - **The wrong-code counter lives in the cache.** A cache flush resets a challenge's count;
-    `AuthEndpointThrottle` and the five-minute challenge lifetime still bound guessing. There is
-    no per-account lockout yet (auth-and-rbac §1's password-policy line applies to MFA too).
+  - **Password attempts have no per-account lockout.** The second factor does
+    (an exponential lockout counted on the `users` row, held for an operator at 100 failures),
+    but the password step has only the per-IP `AuthEndpointThrottle`, which a spoofed
+    `X-Forwarded-For` escapes while `NUM_PROXIES` is unset (entry above). auth-and-rbac §1 asks
+    for per-account lockout with exponential backoff on login. The MFA lockout lets anyone who
+    holds the password lock the operator out of the console, up to the operator-only lock at
+    100 failures (NIST SP 800-63B §5.2.2 accepts this trade-off).
   - **`packages/types` `LoginResponse` does not model the challenge.** The dashboard's login
     form expects tokens; no tenant user can have MFA on yet, and the platform console (PR D)
     handles `mfa_required`.
+  - **The MFA challenge is not bound to the password state.** A challenge minted before a
+    password change or reset stays redeemable for its `MFA_CHALLENGE_TTL_SECONDS` (300). Binding
+    it means signing a fingerprint of the password hash (as Django's reset tokens do) into the
+    challenge and checking it at `:verify`.
+  - **No alert on `auth.mfa.locked`.** A lockout is an audited security event, but nothing pages
+    anyone: an operator locked out by someone holding their password learns of it only when
+    they try to sign in. It needs a log-based monitor once the observability stack's alerting
+    lands.
+
+- **Platform scope (RBAC), what platform-admin PR A leaves out** (Task 1, `core/rbac/sync.py`,
+  ADR-0036).
+  - **The sync does not reconcile flags on existing default-role rows.** `sync_default_roles`
+    sets `is_platform` and `is_restricted_principal` only when it creates a role
+    (`get_or_create` defaults), so a flag changed in code never reaches an existing row. It
+    needs an update of the flags on each run, guarded by the user_roles trigger.
+  - **No tests for the platform-role exclusions in staff `:invite` (`_grantable_roles`) and the
+    guardian-thread fallback.** The `user_roles` trigger backs both at the database, so a
+    regression fails loudly rather than leaking, but each exclusion deserves its own test.
+  - **`school_owner` logic is duplicated, and `sync.py` imports `seeding.py`.**
+    `sync_default_roles` and `ensure_school_owner_role` both grant "every tenant-scope key", and
+    the production sync imports the dev-seed module for `role_permission_scope`. One function in
+    `core.rbac` (not in a seed module) should own both: a refactor with no behaviour change.
+  - **`sync_permissions` silently re-scopes a key whose scope changes.** It writes each key's
+    scope from the registry, so a key moved from `tenant` to `platform` keeps its existing
+    `RolePermission` rows on tenant roles until someone notices. It should refuse (or report)
+    a scope change that leaves cross-scope grants behind.
+  - **The `post_migrate` RBAC cache eviction needs `REDIS_URL` in the migrate job.** Without
+    it the cache falls back to `redis://localhost:6379/0`, so the eviction cannot reach the cache
+    the API reads: it errors, or the running tasks keep a changed default role's old grants
+    until the entries expire. Noted in `infra/runbooks/deploy.md`; the migrate task definition
+    must pass it, and nothing checks that yet.
 
 - **The tenant lifecycle, what platform-admin PR A leaves out** (Task 3,
   `apps/api/apps/platform_admin/tenants/`, platform-admin §7.4).
@@ -57,6 +92,10 @@ either this file or `project-status.md`.
     website should show a neutral notice. `apps/website` resolves tenants by host, but the API
     has no `/public/tenants/by-host` route yet (the website-cms module), so there is nowhere to
     read the status from; it lands with that route.
+  - **The create audit has no tenant.** `POST /platform/tenants` records its audit row with
+    `tenant=None`, because the view audits before the school is bound, so the school's own audit
+    trail starts at `:provision`. Recording it against the new tenant needs the view to bind the
+    created school before auditing (platform-admin §7.4 documents the current behaviour).
   - **Platform-ops copies of the lifecycle notices.** `notify()` is per tenant, so
     `platform.tenant-suspended`/`-reinstated` reach the school's owners only; §12's copy to
     platform ops waits for the platform-ops channel (PR B).

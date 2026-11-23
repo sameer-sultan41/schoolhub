@@ -13,6 +13,8 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework_simplejwt.tokens import AccessToken
 
+from apps.fees_finance.models import LedgerAccount
+from apps.fees_finance.services import SYSTEM_ACCOUNTS
 from apps.platform_admin.constants import RESERVED_SLUGS, TENANT_EXPORT_JOB_TYPE
 from apps.platform_admin.tests.base import (
     TENANTS_URL,
@@ -314,6 +316,24 @@ class ProvisionTests(PlatformAPITestCase):
         self.assertTrue(is_eligible(owner, InvitationKind.OWNER))
         UserRole.objects.filter(user=owner).delete()
         self.assertFalse(is_eligible(owner, InvitationKind.OWNER))
+
+    def test_owner_invitation_is_not_eligible_once_the_role_is_removed(self) -> None:
+        tenant = make_tenant()
+        self.provision(tenant)
+        owner = User.objects.get(tenant=tenant)
+
+        UserRole.objects.filter(user=owner).update(deleted_at=timezone.now())
+
+        self.assertFalse(is_eligible(owner, InvitationKind.OWNER))
+
+    def test_provision_seeds_the_school_system_accounts(self) -> None:
+        tenant = make_tenant()
+
+        self.provision(tenant)
+
+        with tenant_context(tenant.pk):
+            codes = set(LedgerAccount.objects.values_list("code", flat=True))
+        self.assertEqual(codes, {code for code, _name, _type in SYSTEM_ACCOUNTS})
 
 
 class LifecycleActionTests(PlatformAPITestCase):

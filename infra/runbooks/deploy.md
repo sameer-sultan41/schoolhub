@@ -30,7 +30,11 @@ migrations before the new code serves traffic, without downtime for any tenant.
 2. Watch the **migrate** job. It runs as a one-off task, as
    `schoolhub_migrator`, **connecting directly to PostgreSQL on 5432, not
    through PgBouncer** — DDL and `CREATE INDEX CONCURRENTLY` are session-scoped
-   and incompatible with transaction pooling.
+   and incompatible with transaction pooling. It also needs `REDIS_URL`: the
+   `post_migrate` RBAC sync evicts cached permission sets after it changes a
+   default role's grants. Without it the cache setting falls back to
+   `redis://localhost:6379/0`, which the migrate task does not have, so the
+   eviction cannot reach the cache the API reads (docs/deferred-work.md).
 3. Confirm the migrate job exits 0 before the rollout starts. If it fails, stop:
    nothing has been deployed and the old code is still serving.
 4. Watch the rolling deployment. ECS holds minimum healthy at 100%, so capacity

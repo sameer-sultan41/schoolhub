@@ -13,27 +13,27 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='tenant',
             name='billing_provider_ref',
-            field=models.CharField(blank=True, default='', max_length=120),
+            field=models.CharField(blank=True, db_default='', default='', max_length=120),
         ),
         migrations.AddField(
             model_name='tenant',
             name='contact_email',
-            field=models.EmailField(blank=True, default='', help_text="The owner invite's target.", max_length=254),
+            field=models.EmailField(blank=True, db_default='', default='', help_text="The owner invite's target.", max_length=254),
         ),
         migrations.AddField(
             model_name='tenant',
             name='contact_name',
-            field=models.CharField(blank=True, default='', help_text='Primary commercial contact.', max_length=200),
+            field=models.CharField(blank=True, db_default='', default='', help_text='Primary commercial contact.', max_length=200),
         ),
         migrations.AddField(
             model_name='tenant',
             name='contact_phone',
-            field=models.CharField(blank=True, default='', max_length=30),
+            field=models.CharField(blank=True, db_default='', default='', max_length=30),
         ),
         migrations.AddField(
             model_name='tenant',
             name='current_plan',
-            field=models.CharField(blank=True, default='', help_text="The live plan's code.", max_length=50),
+            field=models.CharField(blank=True, db_default='', default='', help_text="The live plan's code.", max_length=50),
         ),
         migrations.AddField(
             model_name='tenant',
@@ -48,7 +48,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='tenant',
             name='subscription_status',
-            field=models.CharField(blank=True, default='', max_length=20),
+            field=models.CharField(blank=True, db_default='', default='', max_length=20),
         ),
         migrations.AddIndex(
             model_name='tenant',

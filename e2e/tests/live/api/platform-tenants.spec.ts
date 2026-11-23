@@ -27,6 +27,7 @@ interface PlatformTenant {
  */
 test.describe("platform tenants (live API)", () => {
   test("an operator provisions, suspends and reinstates a school", async ({ liveApiClient }) => {
+    test.slow(true, "the TOTP sign-in may wait up to 30 s for a fresh code step");
     const platform = await createPlatformLiveSession();
     const run = `${String(Date.now())}-${String(env.WORKER_INDEX)}`;
 
