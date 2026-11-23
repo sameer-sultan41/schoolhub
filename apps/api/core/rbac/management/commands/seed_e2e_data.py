@@ -2,7 +2,8 @@
 
 Idempotent — safe to run on every ``seed-dev.sh`` invocation and every CI run of
 the e2e-live workflow. Never runs against anything but a local/CI dev database:
-it hardcodes dummy credentials that must never reach staging or production. Kept
+it hardcodes dummy credentials that must never reach staging or production, so it
+refuses to start unless ``E2E_SEED_ALLOWED`` is on (``prod.py`` forces it off). Kept
 alongside ``seed_dev_data`` (same app, same imports) rather than under
 ``apps.school_organization``, even though most of the data it creates lives
 there, so both seed commands stay discoverable together.
@@ -16,8 +17,9 @@ import os
 import uuid
 from datetime import time, timedelta
 
+from django.conf import settings
 from django.core.management import call_command
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
@@ -519,6 +521,11 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
+        if not settings.E2E_SEED_ALLOWED:
+            raise CommandError(
+                "seed_e2e_data creates accounts with public credentials and is off here "
+                "(E2E_SEED_ALLOWED)."
+            )
         tenant = ensure_tenant(E2E_TENANT_SLUG, "E2E School")
         other_tenant = ensure_tenant(E2E_OTHER_TENANT_SLUG, "E2E Other School")
 
@@ -828,7 +835,8 @@ class Command(BaseCommand):
 
         The console refuses a token without a second factor, so the live spec signs in as
         a real operator does: password, then a code computed from this secret. The secret
-        is re-set on every run, which also clears the last accepted time step.
+        is re-set on every run, which also clears the last accepted time step, and any
+        lockout an earlier run's wrong codes left.
         """
         operator, created = User.objects.get_or_create(
             email=E2E_PLATFORM_OPERATOR_EMAIL,
@@ -844,6 +852,8 @@ class Command(BaseCommand):
             operator.set_password(E2E_ADMIN_PASSWORD)
         operator.mfa_secret = crypto.encrypt({"secret": E2E_PLATFORM_TOTP_SECRET})
         operator.mfa_last_timecode = None
+        operator.mfa_failed_attempts = 0
+        operator.mfa_locked_until = None
         operator.mfa_enabled = True
         operator.save()
         role = Role.objects.get(tenant=None, slug="platform_super_admin", deleted_at__isnull=True)

@@ -8,6 +8,9 @@ from config.settings.base import env
 
 DEBUG = False
 
+# `seed_e2e_data` creates accounts with public credentials; never here, whatever the env says.
+E2E_SEED_ALLOWED = False
+
 # Required: no default, so the process fails at boot rather than at the first encrypt.
 INTEGRATIONS_ENCRYPTION_KEYS = env.list("INTEGRATIONS_ENCRYPTION_KEYS")
 # Required for the same reason: a callback URL pointing nowhere loses payments silently.

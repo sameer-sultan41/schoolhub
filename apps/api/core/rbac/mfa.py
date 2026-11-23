@@ -9,11 +9,14 @@ it at ``/auth/mfa:verify``, with a TOTP code or a recovery code, for the normal 
 - **Every code check runs under the user's row lock** (``_attempt``), so concurrent attempts
   are serialised until their request commits. Under it:
   - **The per-account limit** (NIST SP 800-63B §5.2.2): the attempt is counted
-    (``users.mfa_failed_attempts``) before the code is checked; ``MFA_MAX_FAILED_ATTEMPTS``
-    consecutive failures lock the second factor for ``MFA_LOCKOUT_SECONDS``
-    (``users.mfa_locked_until``), during which even a right code is refused (``MfaLockedOut``).
-    A success resets the count. The count lives in the row, not the cache, because production
-    Redis evicts keys (``allkeys-lru``) and a password holder mints a fresh challenge per login.
+    (``users.mfa_failed_attempts``) before the code is checked, and only a success resets the
+    count. Every ``MFA_MAX_FAILED_ATTEMPTS`` consecutive failures lock the second factor
+    (``users.mfa_locked_until``), for ``MFA_LOCKOUT_SECONDS`` the first time and twice as long
+    each time after. At ``MFA_PERMANENT_LOCKOUT_ATTEMPTS`` (100, §5.2.2's ceiling) it stays
+    locked until an operator runs ``create_platform_admin --unlock-mfa``. While locked even a
+    right code is refused (``MfaLockedOut``). The count lives in the row, not the cache,
+    because production Redis evicts keys (``allkeys-lru``) and a password holder mints a fresh
+    challenge per login.
   - **Replay prevention** is pyotp's documented pattern: ``verify_and_get_timecode`` with a
     one-step window, accepting only a time step later than the last accepted one.
   - **Recovery codes** are stored as SHA-256 hashes and spent by a conditional update.
@@ -28,6 +31,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import math
 import secrets
 import uuid
 from collections.abc import Callable
@@ -54,6 +58,8 @@ VALID_WINDOW = 1
 
 _CHALLENGE_SALT = "core.rbac.mfa.challenge"
 _RECOVERY_CODE_BYTES = 10  # 80 bits, 16 base32 characters
+# Bounds the doubling when settings make it run long; the permanent lock takes over anyway.
+_MAX_LOCKOUT = timedelta(days=30)
 
 
 class InvalidMfaCode(CodedAPIException):
@@ -81,11 +87,20 @@ class MfaAlreadyEnabled(CodedAPIException):
 
 
 class MfaLockedOut(CodedAPIException):
-    """Too many consecutive wrong codes: every code is refused until the lockout lifts."""
+    """Too many consecutive wrong codes: every code is refused until the lockout lifts.
+
+    ``wait`` is the seconds left (the response's ``Retry-After``); None for the lock only an
+    operator lifts.
+    """
 
     status_code = status.HTTP_429_TOO_MANY_REQUESTS
     default_detail = "Too many wrong codes. Wait a few minutes, then try again."
     default_code = "mfa_locked"
+    permanent_detail = "Too many wrong codes. Ask a platform administrator to unlock your account."
+
+    def __init__(self, wait: int | None) -> None:
+        super().__init__(None if wait is not None else self.permanent_detail)
+        self.wait = wait
 
 
 # ---------------------------------------------------------------- the secret
@@ -169,24 +184,37 @@ def _attempt(user: User, check: Callable[[User], bool]) -> bool:
     """Run one second-factor check under the row lock and the per-account limit.
 
     The lock serialises concurrent attempts, so the count read here is the latest; it is
-    incremented before ``check`` runs and compared with the threshold after a failure.
+    incremented before ``check`` runs and compared with the thresholds after a failure.
     """
     with transaction.atomic():
         locked = User.objects.select_for_update().get(pk=user.pk)
         now = timezone.now()
+        if locked.mfa_failed_attempts >= settings.MFA_PERMANENT_LOCKOUT_ATTEMPTS:
+            raise MfaLockedOut(wait=None)
         if locked.mfa_locked_until is not None and locked.mfa_locked_until > now:
-            raise MfaLockedOut()
+            raise MfaLockedOut(wait=math.ceil((locked.mfa_locked_until - now).total_seconds()))
         failures = locked.mfa_failed_attempts + 1
         User.objects.filter(pk=locked.pk).update(mfa_failed_attempts=failures)
         if check(locked):
             User.objects.filter(pk=locked.pk).update(mfa_failed_attempts=0, mfa_locked_until=None)
             return True
-        if failures >= settings.MFA_MAX_FAILED_ATTEMPTS:
+        if failures % settings.MFA_MAX_FAILED_ATTEMPTS == 0:
             User.objects.filter(pk=locked.pk).update(
-                mfa_failed_attempts=0,
-                mfa_locked_until=now + timedelta(seconds=settings.MFA_LOCKOUT_SECONDS),
+                mfa_locked_until=now + _lockout(failures // settings.MFA_MAX_FAILED_ATTEMPTS)
             )
         return False
+
+
+def _lockout(nth: int) -> timedelta:
+    """The ``nth`` lockout's length: ``MFA_LOCKOUT_SECONDS``, doubling each time, capped."""
+    return min(timedelta(seconds=settings.MFA_LOCKOUT_SECONDS) * 2 ** (nth - 1), _MAX_LOCKOUT)
+
+
+def unlock(user: User) -> None:
+    """Lift any lockout and clear the failure count; the enrolled factor stays."""
+    User.objects.filter(pk=user.pk).update(
+        mfa_failed_attempts=0, mfa_locked_until=None, updated_at=timezone.now()
+    )
 
 
 def reset(user: User) -> None:

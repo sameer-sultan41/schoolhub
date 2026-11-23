@@ -624,10 +624,18 @@ MFA_CHALLENGE_TTL_SECONDS = env.int("MFA_CHALLENGE_TTL_SECONDS", default=300)
 MFA_ISSUER_NAME = env("MFA_ISSUER_NAME", default="SchoolHub")
 # Codes one sign-in challenge accepts before the user must sign in again with the password.
 MFA_CHALLENGE_MAX_ATTEMPTS = env.int("MFA_CHALLENGE_MAX_ATTEMPTS", default=5)
-# Consecutive wrong second-factor codes, across challenges, that lock the account's second
-# factor (NIST SP 800-63B §5.2.2), and for how long. A success resets the count.
+# Every this many consecutive wrong second-factor codes, across challenges, lock the second
+# factor: for MFA_LOCKOUT_SECONDS the first time, twice as long each time after. Only a
+# success resets the count.
 MFA_MAX_FAILED_ATTEMPTS = env.int("MFA_MAX_FAILED_ATTEMPTS", default=10)
 MFA_LOCKOUT_SECONDS = env.int("MFA_LOCKOUT_SECONDS", default=900)
+# Consecutive failures from which the factor stays locked until an operator runs
+# `create_platform_admin --unlock-mfa`. NIST SP 800-63B §5.2.2 allows at most 100.
+MFA_PERMANENT_LOCKOUT_ATTEMPTS = env.int("MFA_PERMANENT_LOCKOUT_ATTEMPTS", default=100)
+
+# Whether `seed_e2e_data` may run. It creates accounts with public credentials (a console
+# operator whose TOTP key is in the repo), so `prod.py` forces it off.
+E2E_SEED_ALLOWED = env.bool("E2E_SEED_ALLOWED", default=True)
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"

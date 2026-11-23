@@ -9,6 +9,11 @@ enrolment at its first sign-in.
 both their authenticator and their recovery codes: it turns MFA off, forgets the secret and
 codes, and ends every session, so the next sign-in enrols again. A platform user can never
 turn MFA off through the API (``/auth/mfa:disable`` refuses), so this needs shell access.
+
+``create_platform_admin --email ... --unlock-mfa`` lifts a second-factor lockout, including the
+one ``MFA_PERMANENT_LOCKOUT_ATTEMPTS`` wrong codes leave, and keeps the enrolled factor and
+recovery codes. Use it once the operator confirms the failures were theirs; if not, the
+factor may be compromised and ``--reset-mfa`` is the right call.
 """
 
 from __future__ import annotations
@@ -38,7 +43,7 @@ def _platform_users(email: str) -> QuerySet[User]:
 class Command(BaseCommand):
     help = (
         "Create a platform console user holding one platform role (prompts for the password), "
-        "or reset one's MFA with --reset-mfa."
+        "or reset one's MFA with --reset-mfa, or lift an MFA lockout with --unlock-mfa."
     )
 
     def add_arguments(self, parser) -> None:
@@ -51,11 +56,21 @@ class Command(BaseCommand):
             action="store_true",
             help="Turn MFA off for an existing platform user and end their sessions.",
         )
+        parser.add_argument(
+            "--unlock-mfa",
+            action="store_true",
+            help="Lift a platform user's MFA lockout, keeping their enrolled factor.",
+        )
 
     def handle(self, *args, **options) -> None:
         email = User.objects.normalize_email(options["email"].strip())
+        if options["reset_mfa"] and options["unlock_mfa"]:
+            raise CommandError("Pass one of --reset-mfa and --unlock-mfa.")
         if options["reset_mfa"]:
             self._reset_mfa(email)
+            return
+        if options["unlock_mfa"]:
+            self._unlock_mfa(email)
             return
         if not options["first_name"]:
             raise CommandError("--first-name is required when creating a platform user.")
@@ -74,6 +89,18 @@ class Command(BaseCommand):
             self.style.SUCCESS(
                 f"Reset MFA for {user.email} and ended their sessions. "
                 "They enrol a new authenticator at their next sign-in."
+            )
+        )
+
+    def _unlock_mfa(self, email: str) -> None:
+        user = _platform_users(email).first()
+        if user is None:
+            raise CommandError(f"No platform user has the email {email}.")
+        mfa.unlock(user)
+        record_task_security_event("auth.mfa.unlocked", tenant_id=None, resource_id=user.pk)
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Lifted the MFA lockout for {user.email}. Their factor is unchanged."
             )
         )
 
