@@ -93,7 +93,7 @@ class User(AbstractBaseUser, PermissionsMixin, TimestampedModel):
     # Consecutive wrong second-factor codes, and the lockout they trigger (core/rbac/mfa.py).
     # In the row rather than the cache: production Redis evicts (allkeys-lru), and the row
     # lock replay prevention already takes serialises concurrent attempts.
-    mfa_failed_attempts = models.PositiveSmallIntegerField(default=0)
+    mfa_failed_attempts = models.PositiveSmallIntegerField(default=0, db_default=0)
     mfa_locked_until = models.DateTimeField(null=True, blank=True)
     last_login_ip = models.GenericIPAddressField(null=True, blank=True)
 
@@ -147,7 +147,10 @@ class Permission(models.Model):
     action = models.CharField(max_length=30)
     description = models.CharField(max_length=255, blank=True)
     scope = models.CharField(
-        max_length=10, choices=PermissionScope.choices, default=PermissionScope.TENANT
+        max_length=10,
+        choices=PermissionScope.choices,
+        default=PermissionScope.TENANT,
+        db_default=PermissionScope.TENANT,
     )
 
     objects = models.Manager()
@@ -186,6 +189,7 @@ class Role(TimestampedModel):
     )
     is_platform = models.BooleanField(
         default=False,
+        db_default=False,
         help_text="Platform role: holds platform-scope keys, held by platform users only.",
     )
     permissions = models.ManyToManyField(Permission, through="RolePermission", related_name="roles")
@@ -195,10 +199,12 @@ class Role(TimestampedModel):
     class Meta:
         db_table = "roles"
         constraints = [
+            # NULLS NOT DISTINCT: shared default roles (no tenant) are unique by slug too.
             models.UniqueConstraint(
                 fields=["tenant", "slug"],
                 name="roles_unique_slug_per_tenant",
                 condition=models.Q(deleted_at__isnull=True),
+                nulls_distinct=False,
             ),
             # A platform role belongs to no school.
             models.CheckConstraint(

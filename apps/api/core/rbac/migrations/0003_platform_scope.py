@@ -43,12 +43,21 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='permission',
             name='scope',
-            field=models.CharField(choices=[('tenant', 'Tenant'), ('platform', 'Platform')], default='tenant', max_length=10),
+            field=models.CharField(choices=[('tenant', 'Tenant'), ('platform', 'Platform')], db_default='tenant', default='tenant', max_length=10),
         ),
         migrations.AddField(
             model_name='role',
             name='is_platform',
-            field=models.BooleanField(default=False, help_text='Platform role: holds platform-scope keys, held by platform users only.'),
+            field=models.BooleanField(db_default=False, default=False, help_text='Platform role: holds platform-scope keys, held by platform users only.'),
+        ),
+        # Shared default roles have no tenant; NULLS NOT DISTINCT makes their slugs unique.
+        migrations.RemoveConstraint(
+            model_name='role',
+            name='roles_unique_slug_per_tenant',
+        ),
+        migrations.AddConstraint(
+            model_name='role',
+            constraint=models.UniqueConstraint(condition=models.Q(('deleted_at__isnull', True)), fields=('tenant', 'slug'), name='roles_unique_slug_per_tenant', nulls_distinct=False),
         ),
         migrations.AddConstraint(
             model_name='role',

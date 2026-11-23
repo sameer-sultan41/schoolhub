@@ -13,7 +13,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='user',
             name='mfa_failed_attempts',
-            field=models.PositiveSmallIntegerField(default=0),
+            field=models.PositiveSmallIntegerField(db_default=0, default=0),
         ),
         migrations.AddField(
             model_name='user',
