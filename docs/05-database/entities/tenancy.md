@@ -61,6 +61,11 @@ under the row lock; `/school-settings` returns `academic` but ignores it in a PA
 `AI_MONTHLY_TOKEN_BUDGET_DEFAULT` for one school (`core/ai/budget.py`). No tenant-facing endpoint
 writes it, because the quota is the platform's, not the school's (SEC-16); the school-settings API
 refuses the key.
+`onboarding` (jsonb, not null, database default `'{}'`) holds the setup wizard's stored choices:
+`profile_confirmed_at`, `skipped` (step keys) and `completed_at`; every other step's progress is
+computed from the school's rows (platform-admin §5.6). It has two writers: `PATCH /onboarding`,
+which merges `profile_confirmed_at` and `skipped` under the row lock, and `GET /onboarding`, which
+stamps `completed_at` once with a conditional `UPDATE … WHERE onboarding->>'completed_at' IS NULL`.
 
 ### plans
 **Platform scope — no `tenant_id`.** Subscription tier catalog controlling modules and limits (multi-tenancy §6).
