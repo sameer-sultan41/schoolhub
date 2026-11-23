@@ -19,6 +19,7 @@ COLUMNS = (
     ("tenants", "current_plan"),
     ("tenants", "subscription_status"),
     ("tenants", "billing_provider_ref"),
+    ("tenant_settings", "onboarding"),
 )
 
 
