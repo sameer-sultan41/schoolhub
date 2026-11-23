@@ -185,6 +185,7 @@ class ErrorCodeContractTests(APITestCase):
             MfaLockedOut,
         )
         from core.rbac.permissions import MfaRequired
+        from core.tenancy.quotas import QuotaExceeded
 
         emitted = set(_CODE_BY_STATUS.values()) | {
             DomainRuleViolation.default_code,
@@ -218,6 +219,8 @@ class ErrorCodeContractTests(APITestCase):
             ToggleRefused.default_code,
             # A limit lowered below a school's usage snapshot, unacknowledged.
             LimitBelowUsage.default_code,
+            # A create past a plan's students, staff or storage limit.
+            QuotaExceeded.default_code,
         }
         self.assertEqual(
             emitted - CLIENT_KNOWN_SERVER_CODES,
