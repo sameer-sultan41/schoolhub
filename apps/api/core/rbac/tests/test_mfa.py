@@ -32,7 +32,7 @@ from core.api.throttling import AuthEndpointThrottle
 from core.integrations import crypto
 from core.rbac import mfa
 from core.rbac.models import MfaRecoveryCode, User
-from core.rbac.permissions import IsPlatformPrincipal
+from core.rbac.permissions import IsPlatformPrincipal, MfaRequired
 from core.rbac.tests.test_platform_scope import bearer, platform_user
 from core.rbac.views import (
     REFRESH_COOKIE_NAME,
@@ -72,7 +72,7 @@ class MfaTestCase(APITestCase):
         super().setUp()
         # The auth throttle is keyed on the test client's one IP, across tests.
         cache.clear()
-        self.user = platform_user()
+        self.user = platform_user(mfa_enabled=False)
 
     def login(self, user: User | None = None):
         user = user or self.user
@@ -492,6 +492,68 @@ class SecondFactorLockoutTests(MfaTestCase):
         # Four failures in all, but never three in a row: not locked.
         self.assertTrue(mfa.verify(self.user, totp.at(now + totp.interval)))
 
+    def expire_lock(self) -> None:
+        User.objects.filter(pk=self.user.pk).update(
+            mfa_locked_until=timezone.now() - timedelta(seconds=1)
+        )
+
+    def locked_for(self) -> float:
+        self.user.refresh_from_db()
+        assert self.user.mfa_locked_until is not None
+        return (self.user.mfa_locked_until - timezone.now()).total_seconds()
+
+    def test_a_lockout_keeps_the_failure_count(self) -> None:
+        totp = enable_mfa(self.user)
+        for _ in range(3):
+            mfa.verify(self.user, wrong_code(totp))
+
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.mfa_failed_attempts, 3)
+        self.assertIsNotNone(self.user.mfa_locked_until)
+
+    def test_each_lockout_is_twice_as_long_as_the_last(self) -> None:
+        totp = enable_mfa(self.user)
+        for expected in (900, 1800, 3600):
+            self.expire_lock()
+            for _ in range(3):
+                mfa.verify(self.user, wrong_code(totp))
+            self.assertAlmostEqual(self.locked_for(), expected, delta=5)
+
+    @override_settings(MFA_PERMANENT_LOCKOUT_ATTEMPTS=9)
+    def test_the_permanent_threshold_locks_until_an_operator_unlocks(self) -> None:
+        totp = enable_mfa(self.user)
+        for _ in range(3):
+            for _ in range(3):
+                mfa.verify(self.user, wrong_code(totp))
+            self.expire_lock()
+
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.mfa_failed_attempts, 9)
+        # The timed lock has passed, and a right code is still refused.
+        with self.assertRaises(mfa.MfaLockedOut):
+            mfa.verify(self.user, totp.now())
+
+    def test_a_locked_response_carries_retry_after(self) -> None:
+        totp = enable_mfa(self.user)
+        for _ in range(3):
+            mfa.verify(self.user, wrong_code(totp))
+
+        response = self.verify(self.challenge(), code=totp.now())
+
+        self.assert_error(response, status.HTTP_429_TOO_MANY_REQUESTS, "mfa_locked")
+        self.assertIn(int(response["Retry-After"]), range(895, 901))
+
+    @override_settings(MFA_PERMANENT_LOCKOUT_ATTEMPTS=3)
+    def test_a_permanent_lock_has_no_retry_after(self) -> None:
+        totp = enable_mfa(self.user)
+        for _ in range(3):
+            mfa.verify(self.user, wrong_code(totp))
+
+        response = self.verify(self.challenge(), code=totp.now())
+
+        self.assert_error(response, status.HTTP_429_TOO_MANY_REQUESTS, "mfa_locked")
+        self.assertNotIn("Retry-After", response)
+
     def test_a_locked_account_is_refused_on_confirm_too(self) -> None:
         secret, _ = mfa.begin_enrolment(self.user)
         totp = pyotp.TOTP(secret)
@@ -532,6 +594,52 @@ class ResetMfaCommandTests(MfaTestCase):
         self.assertFalse(MfaRecoveryCode.objects.filter(user=self.user).exists())
         live = OutstandingToken.objects.filter(user=self.user, blacklistedtoken__isnull=True)
         self.assertFalse(live.exists())
+
+    def test_reset_mfa_cuts_console_access_at_once(self) -> None:
+        enable_mfa(self.user)
+        # An access token minted before the reset carries "otp" until it expires.
+        token = AccessToken.for_user(self.user)
+        token["amr"] = ["pwd", "otp"]
+        request = SimpleNamespace(user=self.user, auth=token)
+        self.assertTrue(IsPlatformPrincipal().has_permission(request, None))
+
+        call_command(
+            "create_platform_admin", email=self.user.email, reset_mfa=True, stdout=io.StringIO()
+        )
+
+        self.user.refresh_from_db()
+        request = SimpleNamespace(user=self.user, auth=token)
+        with self.assertRaises(MfaRequired):
+            IsPlatformPrincipal().has_permission(request, None)
+
+    def test_unlock_mfa_lifts_the_lock_and_keeps_the_factor(self) -> None:
+        totp = enable_mfa(self.user)
+        codes = mfa.generate_recovery_codes(self.user)
+        User.objects.filter(pk=self.user.pk).update(
+            mfa_failed_attempts=100, mfa_locked_until=timezone.now() + timedelta(hours=1)
+        )
+
+        call_command(
+            "create_platform_admin", email=self.user.email, unlock_mfa=True, stdout=io.StringIO()
+        )
+
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.mfa_failed_attempts, 0)
+        self.assertIsNone(self.user.mfa_locked_until)
+        self.assertTrue(self.user.mfa_enabled)
+        self.assertEqual(MfaRecoveryCode.objects.filter(user=self.user).count(), len(codes))
+        self.assertTrue(mfa.verify(self.user, totp.now()))
+
+    def test_unlock_mfa_refuses_an_email_that_is_not_a_platform_user(self) -> None:
+        tenant_user = UserFactory(tenant=TenantFactory())
+
+        with self.assertRaises(CommandError):
+            call_command(
+                "create_platform_admin",
+                email=tenant_user.email,
+                unlock_mfa=True,
+                stdout=io.StringIO(),
+            )
 
     def test_reset_mfa_refuses_an_email_that_is_not_a_platform_user(self) -> None:
         tenant_user = UserFactory(tenant=TenantFactory())

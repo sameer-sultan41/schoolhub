@@ -5,6 +5,7 @@ from __future__ import annotations
 import itertools
 import uuid
 from datetime import timedelta
+from unittest import mock
 
 from django.test import TestCase, override_settings
 from django.utils import timezone
@@ -118,6 +119,33 @@ class TransitionTests(TestCase):
         self.assertEqual(live.status, S.SUSPENDED)
         self.assertIsNone(live.deprovision_after)
 
+    def test_restore_stamps_suspended_at_when_the_school_was_never_suspended(self) -> None:
+        # Provisioning and active schools are deleted without a suspension first.
+        tenant = make_tenant(
+            status=S.DEPROVISIONED,
+            suspended_at=None,
+            deprovision_after=timezone.now() + timedelta(days=3),
+        )
+        before = timezone.now()
+
+        lifecycle.transition(tenant, S.SUSPENDED, actor_id=None, reason="restore")
+
+        tenant.refresh_from_db()
+        self.assertGreaterEqual(tenant.suspended_at, before)
+
+    def test_restore_keeps_the_original_suspension_time(self) -> None:
+        suspended_at = timezone.now() - timedelta(days=10)
+        tenant = make_tenant(
+            status=S.DEPROVISIONED,
+            suspended_at=suspended_at,
+            deprovision_after=timezone.now() + timedelta(days=3),
+        )
+
+        lifecycle.transition(tenant, S.SUSPENDED, actor_id=None, reason="restore")
+
+        tenant.refresh_from_db()
+        self.assertEqual(tenant.suspended_at, suspended_at)
+
     def test_system_transition_audits_through_record_system_audit(self) -> None:
         tenant = make_tenant(status=S.TRIAL)
 
@@ -162,3 +190,21 @@ class LifecycleNotificationTests(TestCase):
         lifecycle.transition(tenant, S.SUSPENDED, actor_id=None, reason="restore")
 
         self.assertEqual(self.owner_notifications(tenant, notifications.TENANT_SUSPENDED), [])
+
+    def test_an_owner_whose_role_was_removed_is_not_notified(self) -> None:
+        tenant = make_tenant(status=S.ACTIVE)
+        owner = owner_of(tenant)
+        UserRole.objects.filter(user=owner).update(deleted_at=timezone.now())
+
+        lifecycle.transition(tenant, S.SUSPENDED, actor_id=None, reason="unpaid")
+
+        self.assertEqual(self.owner_notifications(tenant, notifications.TENANT_SUSPENDED), [])
+
+    def test_a_failed_owner_lookup_does_not_undo_the_transition(self) -> None:
+        tenant = make_tenant(status=S.ACTIVE)
+
+        with mock.patch.object(notifications, "school_owners", side_effect=RuntimeError("boom")):
+            lifecycle.transition(tenant, S.SUSPENDED, actor_id=None, reason="unpaid")
+
+        tenant.refresh_from_db()
+        self.assertEqual(tenant.status, S.SUSPENDED)

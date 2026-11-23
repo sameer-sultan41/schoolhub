@@ -20,12 +20,13 @@ _sequence = itertools.count()
 
 
 def platform_user(role_slug: str | None = "platform_super_admin") -> User:
-    """An active platform user holding the synced default ``role_slug``."""
+    """An active platform user holding the synced default ``role_slug``, enrolled in MFA."""
     user = User.objects.create_user(
         f"operator{next(_sequence)}@platform.test",
         "x-platform-pass-1",
         tenant=None,
         is_platform=True,
+        mfa_enabled=True,
     )
     if role_slug:
         UserRole.objects.create(user=user, role=Role.objects.get(tenant=None, slug=role_slug))
