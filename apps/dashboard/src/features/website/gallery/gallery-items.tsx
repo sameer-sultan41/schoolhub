@@ -100,6 +100,7 @@ export function GalleryItems({ albumId, canUpdate }: { albumId: string; canUpdat
           <div className="flex flex-wrap items-start gap-2">
             <GalleryUpload
               albumId={albumId}
+              itemCount={items.length}
               onBusyChange={setIsUploading}
               disabled={isReordering || isFull}
               describedBy={isFull ? fullId : undefined}

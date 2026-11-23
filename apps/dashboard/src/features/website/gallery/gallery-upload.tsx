@@ -16,7 +16,10 @@ import {
   WEBSITE_MEDIA_MIME_TYPES,
   WEBSITE_MEDIA_PURPOSE,
 } from "@/services/modules/files/files-constant";
-import { GALLERY_MEDIA_IMAGE } from "@/services/modules/website/gallery-albums/gallery-albums-constant";
+import {
+  GALLERY_ALBUM_ITEMS_MAX,
+  GALLERY_MEDIA_IMAGE,
+} from "@/services/modules/website/gallery-albums/gallery-albums-constant";
 import { WEBSITE_QUERY_MODULE } from "@/services/shared/website-content";
 
 const ACCEPT = WEBSITE_MEDIA_MIME_TYPES.join(",");
@@ -36,11 +39,14 @@ interface Progress {
  */
 export function GalleryUpload({
   albumId,
+  itemCount,
   onBusyChange,
   disabled,
   describedBy,
 }: {
   albumId: string;
+  /** Items the album holds now: the selection is limited to the slots left under the cap. */
+  itemCount: number;
   onBusyChange: (busy: boolean) => void;
   /** Holds a new batch, e.g. while the album is being reordered or is full. */
   disabled: boolean;
@@ -119,7 +125,14 @@ export function GalleryUpload({
     const files = Array.from(event.target.files ?? []);
     // Lets the same files be picked again after a failure: an unchanged value fires no event.
     event.target.value = "";
-    if (files.length > 0) void uploadAll(files);
+    // Only the free slots are sent: the server refuses each item past the cap one by one.
+    const free = Math.max(GALLERY_ALBUM_ITEMS_MAX - itemCount, 0);
+    const skipped = files.length - Math.min(files.length, free);
+    if (skipped > 0) {
+      toast.warning(t("uploadSkipped", { skipped, free, max: GALLERY_ALBUM_ITEMS_MAX }));
+    }
+    const accepted = files.slice(0, free);
+    if (accepted.length > 0) void uploadAll(accepted);
   }
 
   return (
