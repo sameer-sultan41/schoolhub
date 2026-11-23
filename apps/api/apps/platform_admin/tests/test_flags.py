@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import timedelta
 from unittest import mock
 
+from django.db import IntegrityError
 from django.utils import timezone
 from rest_framework import status
 
@@ -97,8 +98,10 @@ class FeatureFlagConsoleTests(PlatformAPITestCase):
         flag.is_kill_switch = True
         flag.save()
 
-        features.sync_feature_flags()
+        with self.assertLogs("core.tenancy.features", level="WARNING") as logs:
+            features.sync_feature_flags()
 
+        self.assertIn(TIMETABLE, "\n".join(logs.output))
         flag.refresh_from_db()
         spec = next(s for s in features.registry.all() if s.key == TIMETABLE)
         self.assertNotEqual(flag.default_enabled, spec.default_enabled)
@@ -189,6 +192,15 @@ class FeatureOverrideTests(PlatformAPITestCase):
         with tenant_context(self.tenant.pk):
             TenantSettings.objects.filter(tenant=self.tenant).update(academic={})
         self.assertEqual(self.post(enabled=False).status_code, status.HTTP_201_CREATED)
+
+    def test_a_concurrent_override_is_409(self) -> None:
+        # Two first overrides racing for one flag: the second meets the partial unique index.
+        clash = IntegrityError("tenant_feature_overrides_unique_flag_per_tenant")
+        with mock.patch.object(TenantFeatureOverride.objects, "create", side_effect=clash):
+            response = self.post(enabled=True)
+
+        self.assert_error(response, status.HTTP_409_CONFLICT, "conflict")
+        self.assertIn("just saved", response.json()["error"]["message"])
 
     def test_kill_switch_override_refused(self) -> None:
         kill_switch()

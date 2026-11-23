@@ -16,6 +16,7 @@ from django.utils import timezone
 from apps.platform_admin import notifications, tasks
 from apps.platform_admin.models import Subscription
 from apps.platform_admin.subscriptions import services
+from apps.platform_admin.tenants import services as tenant_services
 from apps.platform_admin.tests.base import make_plan, make_tenant
 from apps.platform_admin.tests.test_lifecycle import owner_of
 from apps.platform_admin.tests.test_subscriptions import live_on, reload
@@ -102,6 +103,18 @@ class SweepTests(TestCase):
         # One payment-failed notice for the period, however often the sweep runs.
         sent = notices(in_grace, notifications.PAYMENT_FAILED)
         self.assertEqual([n.user_id for n in sent], [owner.pk])
+
+    def test_a_school_reinstated_within_grace_is_not_suspended_early(self) -> None:
+        tenant = make_tenant(status=S.TRIAL)
+        past_due(tenant, period_ended=timedelta(days=GRACE_DAYS - 1))
+        with tenant_context(tenant.pk):
+            tenant_services.suspend_tenant(reload(tenant), reason="audit", actor_id=None)
+            tenant_services.reinstate_tenant(reload(tenant), trial_ends_at=None, actor_id=None)
+        self.assertEqual(reload(tenant).status, S.PAST_DUE)
+
+        tasks.dunning_sweep()
+
+        self.assertEqual(reload(tenant).status, S.PAST_DUE)
 
     def test_expired_override_lapses(self) -> None:
         tenant = make_tenant(status=S.ACTIVE)

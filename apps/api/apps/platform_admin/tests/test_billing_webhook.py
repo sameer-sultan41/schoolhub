@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import time
 from datetime import timedelta
+from unittest import mock
 
 from django.test import TestCase, override_settings
 from django.utils import timezone
@@ -19,6 +20,7 @@ from apps.platform_admin.subscriptions import services
 from apps.platform_admin.tests.base import make_plan, make_tenant
 from apps.platform_admin.tests.test_subscriptions import live_on, reload
 from core.api.tests.rollback import rollback_as_in_production
+from core.api.throttling import BillingEventThrottle
 from core.audit.models import AuditLog
 from core.integrations.payments.fake import sign
 from core.tenancy.models import TenantStatus
@@ -103,9 +105,12 @@ class BillingWebhookTests(TestCase):
         paid_through = timezone.now() + timedelta(days=60)
         services.record_payment(self.sub(), paid_through=paid_through, actor_id=None)
 
-        replay = self.deliver(body)
+        with mock.patch("apps.platform_admin.billing.view.send_payment_failed_notice") as notice:
+            replay = self.deliver(body)
 
         self.assertEqual(replay.status_code, status.HTTP_200_OK, replay.content)
+        # Only a new receipt queues the notice: a replay changes nothing and sends nothing.
+        notice.delay.assert_not_called()
         # The replayed failure did not undo the payment recorded since.
         self.assertEqual(self.sub().status, SUB.ACTIVE)
         self.assertEqual(BillingEventReceipt.objects.count(), 1)
@@ -123,6 +128,41 @@ class BillingWebhookTests(TestCase):
         receipt = BillingEventReceipt.objects.get(event_id="evt_1")
         self.assertIsNone(receipt.tenant_id)
         self.assertEqual(receipt.outcome, "unknown_ref")
+
+    def test_an_event_from_another_provider_for_the_reference_is_a_no_op(self) -> None:
+        services.update_subscription(self.sub(), data={"billing_provider": "manual"}, actor_id=None)
+
+        with self.assertLogs("apps.platform_admin.billing", level="WARNING"):
+            response = self.deliver(event("payment_failed"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        self.assertEqual(self.sub().status, SUB.ACTIVE)
+        self.assertEqual(BillingEventReceipt.objects.get(event_id="evt_1").outcome, "unknown_ref")
+
+    def test_an_unsigned_flood_does_not_block_a_signed_event(self) -> None:
+        with mock.patch.dict(BillingEventThrottle.THROTTLE_RATES, {"billing_event": "3/min"}):
+            for n in range(5):
+                # Each from its own address, under the per-IP failure budget.
+                self.client.post(
+                    URL,
+                    data=event("payment_failed", event_id=f"forged_{n}"),
+                    content_type="application/json",
+                    HTTP_X_FAKE_SIGNATURE="t=1,v1=forged",
+                    REMOTE_ADDR=f"203.0.113.{n + 1}",
+                )
+
+            response = self.deliver(event("payment_failed"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        self.assertEqual(self.sub().status, SUB.PAST_DUE)
+
+    def test_verified_events_share_the_provider_bucket(self) -> None:
+        with mock.patch.dict(BillingEventThrottle.THROTTLE_RATES, {"billing_event": "1/min"}):
+            first = self.deliver(event("payment_failed", event_id="evt_a"))
+            second = self.deliver(event("payment_failed", event_id="evt_b"))
+
+        self.assertEqual(first.status_code, status.HTTP_200_OK, first.content)
+        self.assertEqual(second.status_code, status.HTTP_429_TOO_MANY_REQUESTS, second.content)
 
     def test_an_event_the_subscription_cannot_take_is_ignored(self) -> None:
         self.deliver(event("payment_failed", event_id="evt_a"))

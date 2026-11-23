@@ -39,7 +39,13 @@ from core.rbac.models import Role, UserRole
 from core.rbac.roles import SCHOOL_OWNER
 from core.tenancy import subscription_state
 from core.tenancy.context import tenant_context
-from core.tenancy.models import Tenant, TenantStatus
+from core.tenancy.models import (
+    FeatureFlag,
+    Tenant,
+    TenantFeatureOverride,
+    TenantSettings,
+    TenantStatus,
+)
 
 S = TenantStatus
 SUB = SubscriptionStatus
@@ -65,6 +71,14 @@ def live_on(tenant: Tenant, plan, *, actor_id=None) -> Subscription:
 
 def reload(tenant: Tenant) -> Tenant:
     return Tenant.objects.get(pk=tenant.pk)
+
+
+def period_mode(tenant: Tenant) -> None:
+    """The school takes attendance by period, so attendance's guard keeps the timetable on."""
+    with tenant_context(tenant.pk):
+        TenantSettings.objects.update_or_create(
+            tenant=tenant, defaults={"academic": {"attendance_mode": "period"}}
+        )
 
 
 def subscriptions_of(tenant: Tenant) -> list[Subscription]:
@@ -366,6 +380,71 @@ class SubscriptionRouteTests(PlatformAPITestCase):
             self.act(tenant, "mark-payment-failed").status_code, status.HTTP_403_FORBIDDEN
         )
 
+    def test_activate_naming_another_plan_points_to_change_plan(self) -> None:
+        tenant = make_tenant(status=S.TRIAL)
+        trial_plan, other = make_plan(), make_plan()
+        services.start_trial(tenant, trial_plan, actor_id=None)
+        start = whole_seconds(timezone.now())
+
+        response = self.act(
+            tenant,
+            "activate",
+            {
+                "current_period_start": start,
+                "current_period_end": start + timedelta(days=30),
+                "plan_code": other.code,
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.content)
+        details = response.json()["error"]["details"]
+        self.assertEqual({d["field"] for d in details}, {"plan_code"})
+        self.assertIn(":change-plan", details[0]["issue"])
+        row = reload(tenant)
+        self.assertEqual(
+            (row.current_plan, row.subscription_status), (trial_plan.code, SUB.TRIALING)
+        )
+
+    @override_settings(PLATFORM_DUNNING_GRACE_DAYS=14)
+    def test_reinstate_to_past_due_after_grace_is_409(self) -> None:
+        tenant = make_tenant(status=S.TRIAL)
+        sub = services.mark_payment_failed(live_on(tenant, make_plan()), actor_id=None)
+        with tenant_context(tenant.pk):
+            Subscription.objects.filter(pk=sub.pk).update(
+                current_period_end=timezone.now() - timedelta(days=15)
+            )
+        self.client.post(tenant_url(tenant, ":suspend"), {"reason": "unpaid"}, format="json")
+
+        refused = self.client.post(tenant_url(tenant, ":reinstate"), {}, format="json")
+
+        self.assert_error(refused, status.HTTP_409_CONFLICT, "grace_expired")
+        self.assertEqual(reload(tenant).status, S.SUSPENDED)
+
+        # Recording the payment first lets the school back in, on an active subscription.
+        services.record_payment(
+            services.live_subscription(tenant.pk),
+            paid_through=timezone.now() + timedelta(days=30),
+            actor_id=None,
+        )
+        reinstated = self.client.post(tenant_url(tenant, ":reinstate"), {}, format="json")
+        self.assertEqual(reinstated.status_code, status.HTTP_200_OK, reinstated.content)
+        self.assertEqual(reinstated.json()["data"]["status"], S.ACTIVE)
+
+    @override_settings(PLATFORM_DUNNING_GRACE_DAYS=14)
+    def test_reinstate_to_past_due_within_grace(self) -> None:
+        tenant = make_tenant(status=S.TRIAL)
+        sub = services.mark_payment_failed(live_on(tenant, make_plan()), actor_id=None)
+        with tenant_context(tenant.pk):
+            Subscription.objects.filter(pk=sub.pk).update(
+                current_period_end=timezone.now() - timedelta(days=13)
+            )
+        self.client.post(tenant_url(tenant, ":suspend"), {"reason": "audit"}, format="json")
+
+        response = self.client.post(tenant_url(tenant, ":reinstate"), {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        self.assertEqual(response.json()["data"]["status"], S.PAST_DUE)
+
     def test_reinstate_follows_the_live_subscription(self) -> None:
         tenant = make_tenant(status=S.TRIAL)
         live_on(tenant, make_plan())
@@ -469,3 +548,82 @@ class PlanFeatureTests(PlatformAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
         self.assertEqual(response.json()["data"]["subscription"]["plan"]["code"], "premium")
         self.assertEqual(self.rooms().status_code, status.HTTP_200_OK)
+
+
+class PlanDisableGuardTests(PlatformAPITestCase):
+    """A plan that would switch off a module the school still needs is refused, as an override
+    would be: attendance's guard keeps `module.timetable` on for a period-mode school."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.with_timetable = make_plan(enabled_modules=[TIMETABLE])
+        self.without = make_plan()
+        self.tenant = make_tenant(status=S.TRIAL)
+        period_mode(self.tenant)
+
+    def change_plan(self, plan):
+        return self.client.post(
+            subscription_url(self.tenant, ":change-plan"), {"plan_code": plan.code}, format="json"
+        )
+
+    def timetable_on_by_default(self) -> None:
+        FeatureFlag.objects.filter(key=TIMETABLE).update(default_enabled=True)
+
+    def test_change_plan_dropping_a_guarded_module_is_refused(self) -> None:
+        live_on(self.tenant, self.with_timetable)
+
+        response = self.change_plan(self.without)
+
+        self.assert_error(response, status.HTTP_409_CONFLICT, "toggle_refused")
+        self.assertEqual(response.json()["error"]["meta"]["flag"], TIMETABLE)
+        self.assertEqual(reload(self.tenant).current_plan, self.with_timetable.code)
+
+        # A daily-attendance school may make the same move.
+        with tenant_context(self.tenant.pk):
+            TenantSettings.objects.filter(tenant=self.tenant).update(academic={})
+        allowed = self.change_plan(self.without)
+        self.assertEqual(allowed.status_code, status.HTTP_200_OK, allowed.content)
+
+    def test_an_override_that_keeps_the_module_on_lets_the_plan_change(self) -> None:
+        live_on(self.tenant, self.with_timetable)
+        with tenant_context(self.tenant.pk):
+            TenantFeatureOverride.objects.create(
+                tenant=self.tenant,
+                feature_flag=FeatureFlag.objects.get(key=TIMETABLE),
+                enabled=True,
+                reason="pilot",
+            )
+
+        response = self.change_plan(self.without)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+
+    def test_activate_onto_a_plan_without_a_guarded_module_is_refused(self) -> None:
+        self.timetable_on_by_default()
+        start = whole_seconds(timezone.now())
+
+        response = self.client.post(
+            subscription_url(self.tenant, ":activate"),
+            {
+                "current_period_start": start,
+                "current_period_end": start + timedelta(days=30),
+                "plan_code": self.without.code,
+            },
+            format="json",
+        )
+
+        self.assert_error(response, status.HTTP_409_CONFLICT, "toggle_refused")
+        self.assertEqual(subscriptions_of(self.tenant), [])
+
+    def test_a_trial_on_a_plan_without_a_guarded_module_is_refused(self) -> None:
+        from apps.platform_admin.flags.services import ToggleRefused
+
+        self.timetable_on_by_default()
+
+        with self.assertRaises(ToggleRefused):
+            services.start_trial(self.tenant, self.without, actor_id=None)
+
+        self.assertEqual(subscriptions_of(self.tenant), [])
+        # A plan that keeps the module takes the school.
+        services.start_trial(self.tenant, self.with_timetable, actor_id=None)
+        self.assertEqual(reload(self.tenant).current_plan, self.with_timetable.code)

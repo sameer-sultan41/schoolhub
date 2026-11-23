@@ -61,6 +61,18 @@ class PlanCatalogTests(PlatformAPITestCase):
         row = AuditLog.objects.get(action="create", resource_id=data["id"])
         self.assertEqual((row.actor_id, row.tenant_id), (self.operator.pk, None))
 
+    def test_create_needs_enabled_modules(self) -> None:
+        body = plan_body()
+        del body["enabled_modules"]
+
+        response = self.client.post(PLANS_URL, body, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.content)
+        self.assertEqual(field_errors(response), {"enabled_modules"})
+        # An explicit empty list is a plan with no modules, and is accepted.
+        empty = self.client.post(PLANS_URL, plan_body(enabled_modules=[]), format="json")
+        self.assertEqual(empty.status_code, status.HTTP_201_CREATED, empty.content)
+
     def test_create_refuses_an_unknown_module_or_limit(self) -> None:
         for overrides, field in (
             ({"enabled_modules": ["module.no-such-module"]}, "enabled_modules"),
