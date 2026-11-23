@@ -10,6 +10,7 @@ either this file or `project-status.md`.
 
 ## Deliberately NOT done
 
+- **Terraform staging and production name settings modules that do not exist.** `infra/terraform/envs/staging/main.tf:71` sets `DJANGO_SETTINGS_MODULE` to `config.settings.staging` and `envs/production/main.tf:71` to `config.settings.production`; `apps/api/config/settings/` has only `base`, `dev`, `prod` and `test`, so those environments would fail to boot. Found in PR A's final review and left alone because it is infra, outside that PR. The follow-up points production at `config.settings.prod` and either adds a `staging` module or points staging at `prod` with its own env. `E2E_SEED_ALLOWED` now defaults to off in `base.py`, so a staging module that inherits `base` cannot seed.
 - **Online fee payments, what PR 1 leaves out** ([ADR-0034](decisions/0034-online-fee-payments.md), plan `docs/superpowers/plans/2026-11-07-fee-online-payments.md`). PR 1 runs end to end against the fake provider only.
   - **PR 2 (blocked):** the real aggregator's adapter (PayFast or Safepay, picked after the user tests both sandboxes; enable it in `PAYMENT_PROVIDERS_ENABLED` for production and set `PAYMENT_PENDING_TTL_MINUTES` from its session lifetime), the portal Pay button and result page on `PortalInvoiceDetail` (waits for the portal stack, #156 → #158 → #160), and the staff gateway-settings and reconciliation-issues screens with `:resolve`. Until then a school can be configured only through the API.
   - **Partial online payments.** A guardian pays the full available balance only (user decision, 2026-11-07).
@@ -26,6 +27,79 @@ either this file or `project-status.md`.
   limit). Set `REST_FRAMEWORK["NUM_PROXIES"]` to the number of proxies in front of the API in
   each environment (the load balancer, plus any CDN), and test that a spoofed header does not
   change the throttle key.
+
+- **TOTP MFA, what platform-admin PR A leaves out** (Task 2, `apps/api/core/rbac/mfa.py`,
+  auth-and-rbac §1). v1 builds the shared TOTP machinery and enforces it for platform users only.
+  - **MFA for tenant owners and admins, and per-tenant enforcement** (SEC-06 asks for both at
+    launch). The login challenge and `:verify` already work for any user with `mfa_enabled`, but
+    `/auth/mfa:enroll`, `:confirm` and `:disable` answer 404 to a tenant principal. Turning it on
+    means: opening enrolment to tenant roles, a `:disable` that re-checks a current code, a
+    per-tenant policy setting and its check at login, and dashboard screens.
+  - **Enrolment trusts the password.** A new operator's first sign-in is password-only, and
+    `:enroll` accepts that token, so whoever holds the password first can enrol. Accounts exist
+    only through `create_platform_admin`, run by an operator who enrols at once; a one-time
+    enrolment link from the command would close the gap.
+  - **Password attempts have no per-account lockout.** The second factor does
+    (an exponential lockout counted on the `users` row, held for an operator at 100 failures),
+    but the password step has only the per-IP `AuthEndpointThrottle`, which a spoofed
+    `X-Forwarded-For` escapes while `NUM_PROXIES` is unset (entry above). auth-and-rbac §1 asks
+    for per-account lockout with exponential backoff on login. The MFA lockout lets anyone who
+    holds the password lock the operator out of the console, up to the operator-only lock at
+    100 failures (NIST SP 800-63B §5.2.2 accepts this trade-off).
+  - **`packages/types` `LoginResponse` does not model the challenge.** The dashboard's login
+    form expects tokens; no tenant user can have MFA on yet, and the platform console (PR D)
+    handles `mfa_required`.
+  - **The MFA challenge is not bound to the password state.** A challenge minted before a
+    password change or reset stays redeemable for its `MFA_CHALLENGE_TTL_SECONDS` (300). Binding
+    it means signing a fingerprint of the password hash (as Django's reset tokens do) into the
+    challenge and checking it at `:verify`.
+  - **No alert on `auth.mfa.locked`.** A lockout is an audited security event, but nothing pages
+    anyone: an operator locked out by someone holding their password learns of it only when
+    they try to sign in. It needs a log-based monitor once the observability stack's alerting
+    lands.
+
+- **Platform scope (RBAC), what platform-admin PR A leaves out** (Task 1, `core/rbac/sync.py`,
+  ADR-0036).
+  - **The sync does not reconcile flags on existing default-role rows.** `sync_default_roles`
+    sets `is_platform` and `is_restricted_principal` only when it creates a role
+    (`get_or_create` defaults), so a flag changed in code never reaches an existing row. It
+    needs an update of the flags on each run, guarded by the user_roles trigger.
+  - **No tests for the platform-role exclusions in staff `:invite` (`_grantable_roles`) and the
+    guardian-thread fallback.** The `user_roles` trigger backs both at the database, so a
+    regression fails loudly rather than leaking, but each exclusion deserves its own test.
+  - **`school_owner` logic is duplicated, and `sync.py` imports `seeding.py`.**
+    `sync_default_roles` and `ensure_school_owner_role` both grant "every tenant-scope key", and
+    the production sync imports the dev-seed module for `role_permission_scope`. One function in
+    `core.rbac` (not in a seed module) should own both: a refactor with no behaviour change.
+  - **`sync_permissions` silently re-scopes a key whose scope changes.** It writes each key's
+    scope from the registry, so a key moved from `tenant` to `platform` keeps its existing
+    `RolePermission` rows on tenant roles until someone notices. It should refuse (or report)
+    a scope change that leaves cross-scope grants behind.
+  - **The `post_migrate` RBAC cache eviction needs `REDIS_URL` in the migrate job.** Without
+    it the cache falls back to `redis://localhost:6379/0`, so the eviction cannot reach the cache
+    the API reads: it errors, or the running tasks keep a changed default role's old grants
+    until the entries expire. Noted in `infra/runbooks/deploy.md`; the migrate task definition
+    must pass it, and nothing checks that yet.
+
+- **The tenant lifecycle, what platform-admin PR A leaves out** (Task 3,
+  `apps/api/apps/platform_admin/tenants/`, platform-admin §7.4).
+  - **The owner's read-only billing login while suspended** (multi-tenancy §7, platform-admin
+    §7.2). A suspended school refuses every login today, owner included
+    (`core.tenancy.access.operational_tenant`), so the owner cannot see the billing state that
+    explains the suspension. It needs a scoped exception at sign-in and refresh for
+    `school_owner`, limited to the tenant-facing subscription route PR B adds, and a test that
+    no other route answers that session.
+  - **The public website's suspension notice** (platform-admin §6, §18). A suspended school's
+    website should show a neutral notice. `apps/website` resolves tenants by host, but the API
+    has no `/public/tenants/by-host` route yet (the website-cms module), so there is nowhere to
+    read the status from; it lands with that route.
+  - **The create audit has no tenant.** `POST /platform/tenants` records its audit row with
+    `tenant=None`, because the view audits before the school is bound, so the school's own audit
+    trail starts at `:provision`. Recording it against the new tenant needs the view to bind the
+    created school before auditing (platform-admin §7.4 documents the current behaviour).
+  - **Platform-ops copies of the lifecycle notices.** `notify()` is per tenant, so
+    `platform.tenant-suspended`/`-reinstated` reach the school's owners only; §12's copy to
+    platform ops waits for the platform-ops channel (PR B).
 
 - **AI gateway and AI-FEE-02 follow-ups** (`feat/ai-gateway`, plan
   `docs/superpowers/plans/2026-11-07-ai-gateway.md`, [ADR-0035](decisions/0035-ai-gateway-shape.md)).
@@ -1251,7 +1325,8 @@ period_id)` — a cell in a weekly grid whose times come from the period it
 - **Communication PR C left these out** (`docs/03-modules/communication.md` §20, "Built (PR C)"):
   - **A per-broadcast live delivery board** (§7). The delivery dashboard can filter by
     `notification_id` and date, not by broadcast; the job's result carries only the counts.
-  - **MFA step-up on `:emergency`** (§4's "MFA-recommended"). There is no MFA yet. The digest
+  - **MFA step-up on `:emergency`** (§4's "MFA-recommended"). TOTP exists for platform users
+    only; tenant MFA is deferred (the TOTP MFA entry near the top of this file). The digest
     proves the audience, not that a person read the confirmation (ADR-0029).
   - **Quiet hours.** No quiet-hours setting exists, so there is nothing for the emergency
     category to bypass yet.
@@ -1612,23 +1687,6 @@ first_name, id) > (<previous chunk's last row>) ORDER BY last_name, first_name, 
   shared `BulkImportDialog`). The fix is the same
   guard students' own version now has: add `populatedStaffId !== staffDetailQuery.data.id`
   to the `if`, and add `populatedStaffId` to the effect's dependency array.
-
-- **No production mechanism provisions a tenant's default roles.** `principal`'s new
-  `students.document.view` grant (`apps/api/apps/student_management/permissions.py`,
-  students Phase 2) reaches a `principal` role only when one is created via
-  `seed_all_roles`/`seed_e2e_data` (dev/e2e tooling) — both derive the role's permission
-  set from the registry's `default_roles` on every run. Reading `core/rbac/seeding.py`
-  and `apps/staff_management/staff/services/invite.py` in full confirms there is no
-  production code anywhere that creates a platform-default (`tenant=None`) `Role` row for
-  any role except `school_owner` (`ensure_school_owner_role`) — not `principal`, not
-  `teacher`, not `school_admin`. The staff invite flow is written to let an admin assign a
-  `tenant=None` default role, but nothing ever creates one for a real tenant. A migration
-  "backfilling existing tenants' `principal` role" was considered during this phase's plan
-  review and rejected for exactly this reason — it would only ever touch dev/e2e seed
-  fixtures, giving false confidence that production tenants are covered when none are.
-  This is a pre-existing, platform-wide gap in `core.rbac`/`core.tenancy` — building a
-  real tenant-provisioning system for default roles is its own spec and plan, not a
-  one-permission backfill inside a dashboard-tabs PR.
 
 - **`core/files`' generic `GET /files` and `POST /files/{id}:download` remain open to
   any `platform.file.view` holder, including for student documents.** `platform.file.view`

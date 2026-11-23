@@ -573,6 +573,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * @description Password sign-in: the first step of the login state machine (auth-and-rbac §1).
+         *
+         *     A user with ``mfa_enabled`` gets a challenge (``mfa_required``, ``mfa_token``) and no token
+         *     or cookie; ``MfaVerifyView`` completes the sign-in. Everyone else gets the token pair with
+         *     ``amr=["pwd"]``.
+         */
         post: operations["auth_login_create"];
         delete?: never;
         options?: never;
@@ -607,6 +614,103 @@ export interface paths {
         get: operations["auth_me_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa:confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``POST /auth/mfa:confirm``: a first code turns MFA on.
+         *
+         *     Returns ten single-use recovery codes, shown this once, and a fresh token pair whose
+         *     ``amr`` carries ``"otp"``, so the console opens without signing in again.
+         */
+        post: operations["auth_mfa:confirm_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa:disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``POST /auth/mfa:disable``: refused for every platform user (SEC-06).
+         *
+         *     The console requires a second factor, so a platform account never turns it off; an operator
+         *     who lost their authenticator and recovery codes is reset out of band with
+         *     ``create_platform_admin --reset-mfa``. Tenant principals get 404 until tenant MFA ships
+         *     (docs/deferred-work.md), which is when this route gains a path that succeeds.
+         */
+        post: operations["auth_mfa:disable_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa:enroll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``POST /auth/mfa:enroll``: a new TOTP secret, stored encrypted and not yet enabled.
+         *
+         *     Platform users only in v1 (a tenant principal gets 404). Refused 409
+         *     ``mfa_already_enabled`` once MFA is on, so a password-only token can never replace an
+         *     enrolled factor (ruling A2); an operator who lost theirs is reset with
+         *     ``create_platform_admin --reset-mfa``.
+         */
+        post: operations["auth_mfa:enroll_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa:verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description ``POST /auth/mfa:verify``: the ``second_factor`` step, completing a challenged login.
+         *
+         *     Trades login's ``mfa_token`` and either a TOTP ``code`` or a ``recovery_code`` for the token
+         *     pair with ``amr=["pwd","otp"]``. A wrong code is a 400 ``invalid_mfa_code``. Every attempt
+         *     counts against the challenge (``MFA_CHALLENGE_MAX_ATTEMPTS``; past it, or once used, a 400
+         *     ``mfa_challenge_invalid`` and the client signs in again) and against the account
+         *     (``MFA_MAX_FAILED_ATTEMPTS`` consecutive failures lock it: 429 ``mfa_locked``, for twice as
+         *     long each time; ``MFA_PERMANENT_LOCKOUT_ATTEMPTS`` failures lock it until an operator runs
+         *     ``create_platform_admin --unlock-mfa``).
+         */
+        post: operations["auth_mfa:verify_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4042,6 +4146,148 @@ export interface paths {
         head?: never;
         /** @description `periods` — the bell schedule (§5.1). */
         patch: operations["periods_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/platform/tenants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET/POST /platform/tenants`. */
+        get: operations["platform_tenants_list"];
+        put?: never;
+        /**
+         * Create a school, in provisioning
+         * @description `GET/POST /platform/tenants`.
+         */
+        post: operations["platform_tenants_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_pk}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET/PATCH /platform/tenants/{tenant_pk}` and its lifecycle colon-actions. */
+        get: operations["platform_tenants_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit a school's name and contact; its slug only while provisioning
+         * @description `GET/PATCH /platform/tenants/{tenant_pk}` and its lifecycle colon-actions.
+         */
+        patch: operations["platform_tenants_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_pk}:delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start deprovisioning (reason, and an export or a waiver, required)
+         * @description `GET/PATCH /platform/tenants/{tenant_pk}` and its lifecycle colon-actions.
+         */
+        post: operations["platform_tenants_:delete_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_pk}:provision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Provision: seed settings, invite the owner and start the trial
+         * @description `GET/PATCH /platform/tenants/{tenant_pk}` and its lifecycle colon-actions.
+         */
+        post: operations["platform_tenants_:provision_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_pk}:reinstate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reinstate a suspended school to the status its subscription implies
+         * @description `GET/PATCH /platform/tenants/{tenant_pk}` and its lifecycle colon-actions.
+         */
+        post: operations["platform_tenants_:reinstate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_pk}:restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore a deprovisioned school inside its retention window (as suspended)
+         * @description `GET/PATCH /platform/tenants/{tenant_pk}` and its lifecycle colon-actions.
+         */
+        post: operations["platform_tenants_:restore_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_pk}:suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suspend a school (reason required)
+         * @description `GET/PATCH /platform/tenants/{tenant_pk}` and its lifecycle colon-actions.
+         */
+        post: operations["platform_tenants_:suspend_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/public/payment-callbacks/{tenant_slug}/{callback_token}": {
@@ -7646,6 +7892,15 @@ export interface components {
          * @enum {string}
          */
         DefaultersReportRowKindEnum: "defaulters";
+        /** @description `:suspend` and `:restore`: a reason is required (§11), and audited. */
+        Delete: {
+            reason: string;
+            /**
+             * @description Delete a school that went live without a succeeded export of its data.
+             * @default false
+             */
+            waive_export: boolean;
+        };
         /** @description Read-only. `DeliveryLog` rows are written only by `core.notifications`. */
         DeliveryLog: {
             /** Format: uuid */
@@ -9241,6 +9496,7 @@ export interface components {
             /** @description Tenant slug. Required only when the identifier exists at more than one school. */
             school?: string;
         };
+        LoginResponse: components["schemas"]["SignedInResponse"] | components["schemas"]["MfaChallengeResponse"];
         /** @description `POST /ledger-entries:post-journal` — §8's hand-written journal entry. */
         ManualJournal: {
             /** Format: date */
@@ -9483,6 +9739,32 @@ export interface components {
          * @enum {string}
          */
         MessageThreadStatusEnum: "open" | "closed";
+        /** @description Login's answer for a user with MFA on: no token yet, a challenge to verify; schema only. */
+        MfaChallengeResponse: {
+            mfa_required: boolean;
+            /** @description Signed and short-lived; send it to /auth/mfa:verify with a code. */
+            mfa_token: string;
+        };
+        MfaConfirm: {
+            code: string;
+        };
+        /** @description Schema only: MFA is on; the recovery codes are shown this once. */
+        MfaConfirmResponse: {
+            access_token: string;
+            expires_in: number;
+            user: components["schemas"]["User"];
+            recovery_codes: string[];
+        };
+        /** @description Schema only: the new secret, shown once, and the URI an authenticator app scans. */
+        MfaEnrollResponse: {
+            secret: string;
+            otpauth_uri: string;
+        };
+        MfaVerify: {
+            mfa_token: string;
+            code?: string;
+            recovery_code?: string;
+        };
         /** @description One register the caller marks on a date. The period fields are null in daily mode. */
         MyRegister: {
             /** Format: uuid */
@@ -10306,6 +10588,17 @@ export interface components {
         };
         PaginatedTeacherSubstitutionList: {
             data?: components["schemas"]["TeacherSubstitution"][];
+            meta?: {
+                pagination?: {
+                    page?: number;
+                    page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
+                };
+            };
+        };
+        PaginatedTenantList: {
+            data?: components["schemas"]["Tenant"][];
             meta?: {
                 pagination?: {
                     page?: number;
@@ -11629,6 +11922,15 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        /** @description `PATCH`: any subset. The service refuses a slug change after `:provision`. */
+        PatchedTenantUpdate: {
+            name?: string;
+            slug?: string;
+            contact_name?: string;
+            /** Format: email */
+            contact_email?: string;
+            contact_phone?: string;
+        };
         PatchedTerm: {
             /** Format: uuid */
             readonly id?: string;
@@ -12005,6 +12307,10 @@ export interface components {
         PromotionTransitionResult: {
             updated: number;
         };
+        Provision: {
+            /** @description Refused (422) until plans exist; provision without one. */
+            plan_code?: string | null;
+        };
         /**
          * @description * `degree` - Degree
          *     * `diploma` - Diploma
@@ -12131,6 +12437,10 @@ export interface components {
          * @enum {string}
          */
         QuestionTypeEnum: "mcq" | "true_false" | "short_answer" | "long_answer" | "fill_blank" | "numerical";
+        /** @description `:suspend` and `:restore`: a reason is required (§11), and audited. */
+        Reason: {
+            reason: string;
+        };
         Receipt: {
             /** Format: uuid */
             readonly id: string;
@@ -12213,6 +12523,15 @@ export interface components {
             readonly record: components["schemas"]["StudentAttendance"] | null;
             /** @description The student has a daily `on_leave` row for this date. */
             readonly on_leave: boolean;
+        };
+        Reinstate: {
+            /**
+             * Format: date-time
+             * @description Required to reinstate on a trial: when there is no live subscription, or it is trialing. Must be in the future.
+             */
+            trial_ends_at?: string | null;
+            /** @default  */
+            reason: string;
         };
         /**
          * @description * `father` - Father
@@ -12600,6 +12919,12 @@ export interface components {
          * @enum {string}
          */
         SettlementImportStatusEnum: "processing" | "completed" | "failed";
+        /** @description A completed sign-in (login without MFA, or ``/auth/mfa:verify``); schema only. */
+        SignedInResponse: {
+            access_token: string;
+            expires_in: number;
+            user: components["schemas"]["User"];
+        };
         /**
          * @description The substitution overlay on one cell of `GET /timetables/my`.
          *
@@ -13394,6 +13719,70 @@ export interface components {
          * @enum {string}
          */
         TeacherSubstitutionStatusEnum: "proposed" | "confirmed" | "declined" | "completed" | "cancelled";
+        /** @description A school as the console shows it: identity, contact and lifecycle columns. */
+        Tenant: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly name: string;
+            /** @description Wildcard subdomain label. */
+            readonly slug: string;
+            readonly status: components["schemas"]["TenantStatusEnum"];
+            /** @description Primary commercial contact. */
+            readonly contact_name: string;
+            /**
+             * Format: email
+             * @description The owner invite's target.
+             */
+            readonly contact_email: string;
+            readonly contact_phone: string;
+            readonly timezone: string;
+            readonly locale: string;
+            readonly currency: string;
+            /** Format: date-time */
+            readonly trial_ends_at: string | null;
+            /**
+             * Format: date-time
+             * @description When `:provision`'s seed transaction committed.
+             */
+            readonly provisioned_at: string | null;
+            /** Format: date-time */
+            readonly suspended_at: string | null;
+            /**
+             * Format: date-time
+             * @description End of the retention window a deprovision starts.
+             */
+            readonly deprovision_after: string | null;
+            /** @description The live plan's code. */
+            readonly current_plan: string;
+            readonly subscription_status: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /** @description The slug's rules (format, reserved, unique) are the service's, `services.slug_errors`. */
+        TenantCreate: {
+            name: string;
+            /** @description The subdomain label. Fixed once the school is provisioned. */
+            slug: string;
+            contact_name: string;
+            /**
+             * Format: email
+             * @description Where `:provision` invites the school's owner.
+             */
+            contact_email: string;
+            contact_phone?: string;
+        };
+        /**
+         * @description * `provisioning` - Provisioning
+         *     * `trial` - Trial
+         *     * `active` - Active
+         *     * `past_due` - Past due
+         *     * `suspended` - Suspended
+         *     * `deprovisioned` - Deprovisioned
+         * @enum {string}
+         */
+        TenantStatusEnum: "provisioning" | "trial" | "active" | "past_due" | "suspended" | "deprovisioned";
         /** @description The caller's school, as a client shows it: its name and subdomain label. */
         TenantSummary: {
             readonly name: string;
@@ -14565,7 +14954,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["User"];
+                    "application/json": components["schemas"]["LoginResponse"];
                 };
             };
         };
@@ -14603,6 +14992,93 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["User"];
+                };
+            };
+        };
+    };
+    "auth_mfa:confirm_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaConfirm"];
+                "application/x-www-form-urlencoded": components["schemas"]["MfaConfirm"];
+                "multipart/form-data": components["schemas"]["MfaConfirm"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaConfirmResponse"];
+                };
+            };
+        };
+    };
+    "auth_mfa:disable_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "auth_mfa:enroll_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaEnrollResponse"];
+                };
+            };
+        };
+    };
+    "auth_mfa:verify_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaVerify"];
+                "application/x-www-form-urlencoded": components["schemas"]["MfaVerify"];
+                "multipart/form-data": components["schemas"]["MfaVerify"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignedInResponse"];
                 };
             };
         };
@@ -20341,6 +20817,295 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Period"];
                 };
+            };
+        };
+    };
+    platform_tenants_list: {
+        parameters: {
+            query?: {
+                current_plan?: string;
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+                /**
+                 * @description * `provisioning` - Provisioning
+                 *     * `trial` - Trial
+                 *     * `active` - Active
+                 *     * `past_due` - Past due
+                 *     * `suspended` - Suspended
+                 *     * `deprovisioned` - Deprovisioned
+                 */
+                status?: "active" | "deprovisioned" | "past_due" | "provisioning" | "suspended" | "trial";
+                subscription_status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedTenantList"];
+                };
+            };
+        };
+    };
+    platform_tenants_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantCreate"];
+                "application/x-www-form-urlencoded": components["schemas"]["TenantCreate"];
+                "multipart/form-data": components["schemas"]["TenantCreate"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tenant"];
+                };
+            };
+        };
+    };
+    platform_tenants_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tenant"];
+                };
+            };
+        };
+    };
+    platform_tenants_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedTenantUpdate"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedTenantUpdate"];
+                "multipart/form-data": components["schemas"]["PatchedTenantUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tenant"];
+                };
+            };
+        };
+    };
+    "platform_tenants_:delete_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Delete"];
+                "application/x-www-form-urlencoded": components["schemas"]["Delete"];
+                "multipart/form-data": components["schemas"]["Delete"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tenant"];
+                };
+            };
+            /** @description invalid_transition, or export_required */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "platform_tenants_:provision_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["Provision"];
+                "application/x-www-form-urlencoded": components["schemas"]["Provision"];
+                "multipart/form-data": components["schemas"]["Provision"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tenant"];
+                };
+            };
+            /** @description invalid_transition: the tenant's status does not allow this action. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A plan_code before plans exist, or no contact */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "platform_tenants_:reinstate_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["Reinstate"];
+                "application/x-www-form-urlencoded": components["schemas"]["Reinstate"];
+                "multipart/form-data": components["schemas"]["Reinstate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tenant"];
+                };
+            };
+            /** @description invalid_transition, or no_live_subscription */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "platform_tenants_:restore_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Reason"];
+                "application/x-www-form-urlencoded": components["schemas"]["Reason"];
+                "multipart/form-data": components["schemas"]["Reason"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tenant"];
+                };
+            };
+            /** @description invalid_transition, or retention_expired */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "platform_tenants_:suspend_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Reason"];
+                "application/x-www-form-urlencoded": components["schemas"]["Reason"];
+                "multipart/form-data": components["schemas"]["Reason"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tenant"];
+                };
+            };
+            /** @description invalid_transition: the tenant's status does not allow this action. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

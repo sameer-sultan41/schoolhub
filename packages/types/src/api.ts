@@ -152,6 +152,24 @@ export const API_ERROR_CODES = [
   // `tenant` or `user`) and AI being unavailable (503).
   "ai_quota_exceeded",
   "ai_unavailable",
+  // A platform console token issued without a second factor (403; apps/api/core/rbac/permissions.py
+  // `MfaRequired`, ADR-0036).
+  "mfa_required",
+  // TOTP sign-in and enrolment (apps/api/core/rbac/mfa.py): a wrong or reused code (400), a
+  // sign-in challenge that expired or was used up, so sign in again (400), and an enrolment
+  // attempt while MFA is already on (409), and a second factor locked after too many wrong codes
+  // in a row (429).
+  "invalid_mfa_code",
+  "mfa_challenge_invalid",
+  "mfa_already_enabled",
+  "mfa_locked",
+  // The platform console's tenant lifecycle (apps/api/apps/platform_admin/tenants): a move the
+  // state machine does not allow, a restore after the retention window, a reinstatement with no
+  // live subscription to return to, and a delete with neither an export nor a waiver (all 409).
+  "invalid_transition",
+  "retention_expired",
+  "no_live_subscription",
+  "export_required",
   // Synthesised by this client when the request never produced an envelope.
   "network_error",
   "server_error",

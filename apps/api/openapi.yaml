@@ -1108,6 +1108,12 @@ paths:
   /api/v1/auth/login:
     post:
       operationId: auth_login_create
+      description: |-
+        Password sign-in: the first step of the login state machine (auth-and-rbac §1).
+
+        A user with ``mfa_enabled`` gets a challenge (``mfa_required``, ``mfa_token``) and no token
+        or cookie; ``MfaVerifyView`` completes the sign-in. Everyone else gets the token pair with
+        ``amr=["pwd"]``.
       tags:
       - auth
       requestBody:
@@ -1130,7 +1136,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/User'
+                $ref: '#/components/schemas/LoginResponse'
           description: ''
   /api/v1/auth/logout:
     post:
@@ -1157,6 +1163,112 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/User'
+          description: ''
+  /api/v1/auth/mfa:confirm:
+    post:
+      operationId: auth_mfa:confirm_create
+      description: |-
+        ``POST /auth/mfa:confirm``: a first code turns MFA on.
+
+        Returns ten single-use recovery codes, shown this once, and a fresh token pair whose
+        ``amr`` carries ``"otp"``, so the console opens without signing in again.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MfaConfirm'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MfaConfirm'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MfaConfirm'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaConfirmResponse'
+          description: ''
+  /api/v1/auth/mfa:disable:
+    post:
+      operationId: auth_mfa:disable_create
+      description: |-
+        ``POST /auth/mfa:disable``: refused for every platform user (SEC-06).
+
+        The console requires a second factor, so a platform account never turns it off; an operator
+        who lost their authenticator and recovery codes is reset out of band with
+        ``create_platform_admin --reset-mfa``. Tenant principals get 404 until tenant MFA ships
+        (docs/deferred-work.md), which is when this route gains a path that succeeds.
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      responses:
+        '403':
+          description: No response body
+  /api/v1/auth/mfa:enroll:
+    post:
+      operationId: auth_mfa:enroll_create
+      description: |-
+        ``POST /auth/mfa:enroll``: a new TOTP secret, stored encrypted and not yet enabled.
+
+        Platform users only in v1 (a tenant principal gets 404). Refused 409
+        ``mfa_already_enabled`` once MFA is on, so a password-only token can never replace an
+        enrolled factor (ruling A2); an operator who lost theirs is reset with
+        ``create_platform_admin --reset-mfa``.
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaEnrollResponse'
+          description: ''
+  /api/v1/auth/mfa:verify:
+    post:
+      operationId: auth_mfa:verify_create
+      description: |-
+        ``POST /auth/mfa:verify``: the ``second_factor`` step, completing a challenged login.
+
+        Trades login's ``mfa_token`` and either a TOTP ``code`` or a ``recovery_code`` for the token
+        pair with ``amr=["pwd","otp"]``. A wrong code is a 400 ``invalid_mfa_code``. Every attempt
+        counts against the challenge (``MFA_CHALLENGE_MAX_ATTEMPTS``; past it, or once used, a 400
+        ``mfa_challenge_invalid`` and the client signs in again) and against the account
+        (``MFA_MAX_FAILED_ATTEMPTS`` consecutive failures lock it: 429 ``mfa_locked``, for twice as
+        long each time; ``MFA_PERMANENT_LOCKOUT_ATTEMPTS`` failures lock it until an operator runs
+        ``create_platform_admin --unlock-mfa``).
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MfaVerify'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MfaVerify'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MfaVerify'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignedInResponse'
           description: ''
   /api/v1/auth/password-reset:
     post:
@@ -9012,6 +9124,341 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/platform/tenants:
+    get:
+      operationId: platform_tenants_list
+      description: '`GET/POST /platform/tenants`.'
+      parameters:
+      - in: query
+        name: current_plan
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - active
+          - deprovisioned
+          - past_due
+          - provisioning
+          - suspended
+          - trial
+        description: |-
+          * `provisioning` - Provisioning
+          * `trial` - Trial
+          * `active` - Active
+          * `past_due` - Past due
+          * `suspended` - Suspended
+          * `deprovisioned` - Deprovisioned
+      - in: query
+        name: subscription_status
+        schema:
+          type: string
+      tags:
+      - platform
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTenantList'
+          description: ''
+    post:
+      operationId: platform_tenants_create
+      description: '`GET/POST /platform/tenants`.'
+      summary: Create a school, in provisioning
+      tags:
+      - platform
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TenantCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TenantCreate'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+          description: ''
+  /api/v1/platform/tenants/{tenant_pk}:
+    get:
+      operationId: platform_tenants_retrieve
+      description: '`GET/PATCH /platform/tenants/{tenant_pk}` and its lifecycle colon-actions.'
+      parameters:
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+          description: ''
+    patch:
+      operationId: platform_tenants_partial_update
+      description: '`GET/PATCH /platform/tenants/{tenant_pk}` and its lifecycle colon-actions.'
+      summary: Edit a school's name and contact; its slug only while provisioning
+      parameters:
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTenantUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTenantUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTenantUpdate'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+          description: ''
+  /api/v1/platform/tenants/{tenant_pk}:delete:
+    post:
+      operationId: platform_tenants_:delete_create
+      description: '`GET/PATCH /platform/tenants/{tenant_pk}` and its lifecycle colon-actions.'
+      summary: Start deprovisioning (reason, and an export or a waiver, required)
+      parameters:
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Delete'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Delete'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Delete'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+          description: ''
+        '409':
+          description: invalid_transition, or export_required
+  /api/v1/platform/tenants/{tenant_pk}:provision:
+    post:
+      operationId: platform_tenants_:provision_create
+      description: '`GET/PATCH /platform/tenants/{tenant_pk}` and its lifecycle colon-actions.'
+      summary: 'Provision: seed settings, invite the owner and start the trial'
+      parameters:
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Provision'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Provision'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Provision'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+          description: ''
+        '409':
+          description: 'invalid_transition: the tenant''s status does not allow this
+            action.'
+        '422':
+          description: A plan_code before plans exist, or no contact
+  /api/v1/platform/tenants/{tenant_pk}:reinstate:
+    post:
+      operationId: platform_tenants_:reinstate_create
+      description: '`GET/PATCH /platform/tenants/{tenant_pk}` and its lifecycle colon-actions.'
+      summary: Reinstate a suspended school to the status its subscription implies
+      parameters:
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reinstate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Reinstate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Reinstate'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+          description: ''
+        '409':
+          description: invalid_transition, or no_live_subscription
+  /api/v1/platform/tenants/{tenant_pk}:restore:
+    post:
+      operationId: platform_tenants_:restore_create
+      description: '`GET/PATCH /platform/tenants/{tenant_pk}` and its lifecycle colon-actions.'
+      summary: Restore a deprovisioned school inside its retention window (as suspended)
+      parameters:
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reason'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Reason'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Reason'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+          description: ''
+        '409':
+          description: invalid_transition, or retention_expired
+  /api/v1/platform/tenants/{tenant_pk}:suspend:
+    post:
+      operationId: platform_tenants_:suspend_create
+      description: '`GET/PATCH /platform/tenants/{tenant_pk}` and its lifecycle colon-actions.'
+      summary: Suspend a school (reason required)
+      parameters:
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reason'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Reason'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Reason'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+          description: ''
+        '409':
+          description: 'invalid_transition: the tenant''s status does not allow this
+            action.'
   /api/v1/public/payment-callbacks/{tenant_slug}/{callback_token}:
     post:
       operationId: public_payment_callbacks_create
@@ -17107,6 +17554,20 @@ components:
       - defaulters
       type: string
       description: '* `defaulters` - defaulters'
+    Delete:
+      type: object
+      description: '`:suspend` and `:restore`: a reason is required (§11), and audited.'
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+        waive_export:
+          type: boolean
+          default: false
+          description: Delete a school that went live without a succeeded export of
+            its data.
+      required:
+      - reason
     DeliveryLog:
       type: object
       description: Read-only. `DeliveryLog` rows are written only by `core.notifications`.
@@ -20459,6 +20920,10 @@ components:
       required:
       - identifier
       - password
+    LoginResponse:
+      oneOf:
+      - $ref: '#/components/schemas/SignedInResponse'
+      - $ref: '#/components/schemas/MfaChallengeResponse'
     ManualJournal:
       type: object
       description: '`POST /ledger-entries:post-journal` — §8''s hand-written journal
@@ -20975,6 +21440,72 @@ components:
       description: |-
         * `open` - Open
         * `closed` - Closed
+    MfaChallengeResponse:
+      type: object
+      description: 'Login''s answer for a user with MFA on: no token yet, a challenge
+        to verify; schema only.'
+      properties:
+        mfa_required:
+          type: boolean
+        mfa_token:
+          type: string
+          description: Signed and short-lived; send it to /auth/mfa:verify with a
+            code.
+      required:
+      - mfa_required
+      - mfa_token
+    MfaConfirm:
+      type: object
+      properties:
+        code:
+          type: string
+          pattern: ^\d{6}$
+      required:
+      - code
+    MfaConfirmResponse:
+      type: object
+      description: 'Schema only: MFA is on; the recovery codes are shown this once.'
+      properties:
+        access_token:
+          type: string
+        expires_in:
+          type: integer
+        user:
+          $ref: '#/components/schemas/User'
+        recovery_codes:
+          type: array
+          items:
+            type: string
+      required:
+      - access_token
+      - expires_in
+      - recovery_codes
+      - user
+    MfaEnrollResponse:
+      type: object
+      description: 'Schema only: the new secret, shown once, and the URI an authenticator
+        app scans.'
+      properties:
+        secret:
+          type: string
+        otpauth_uri:
+          type: string
+      required:
+      - otpauth_uri
+      - secret
+    MfaVerify:
+      type: object
+      properties:
+        mfa_token:
+          type: string
+        code:
+          type: string
+          pattern: ^\d{6}$
+        recovery_code:
+          type: string
+          maxLength: 64
+      required:
+      - mfa_token
     MyRegister:
       type: object
       description: One register the caller marks on a date. The period fields are
@@ -22709,6 +23240,27 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TeacherSubstitution'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                page:
+                  type: integer
+                page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
+                  type: integer
+    PaginatedTenantList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tenant'
         meta:
           type: object
           properties:
@@ -25311,6 +25863,26 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedTenantUpdate:
+      type: object
+      description: '`PATCH`: any subset. The service refuses a slug change after `:provision`.'
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        slug:
+          type: string
+          maxLength: 63
+        contact_name:
+          type: string
+          maxLength: 200
+        contact_email:
+          type: string
+          format: email
+          maxLength: 254
+        contact_phone:
+          type: string
+          maxLength: 30
     PatchedTerm:
       type: object
       properties:
@@ -26110,6 +26682,13 @@ components:
           type: integer
       required:
       - updated
+    Provision:
+      type: object
+      properties:
+        plan_code:
+          type: string
+          nullable: true
+          description: Refused (422) until plans exist; provision without one.
     QualificationTypeEnum:
       enum:
       - degree
@@ -26355,6 +26934,15 @@ components:
         * `long_answer` - Long answer
         * `fill_blank` - Fill in the blank
         * `numerical` - Numerical
+    Reason:
+      type: object
+      description: '`:suspend` and `:restore`: a reason is required (§11), and audited.'
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - reason
     Receipt:
       type: object
       properties:
@@ -26566,6 +27154,19 @@ components:
       - roll_number
       - student_id
       - student_name
+    Reinstate:
+      type: object
+      properties:
+        trial_ends_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 'Required to reinstate on a trial: when there is no live subscription,
+            or it is trialing. Must be in the future.'
+        reason:
+          type: string
+          default: ''
+          maxLength: 500
     RelationshipEnum:
       enum:
       - father
@@ -27418,6 +28019,21 @@ components:
         * `processing` - Processing
         * `completed` - Completed
         * `failed` - Failed
+    SignedInResponse:
+      type: object
+      description: A completed sign-in (login without MFA, or ``/auth/mfa:verify``);
+        schema only.
+      properties:
+        access_token:
+          type: string
+        expires_in:
+          type: integer
+        user:
+          $ref: '#/components/schemas/User'
+      required:
+      - access_token
+      - expires_in
+      - user
     SlotSubstitution:
       type: object
       description: |-
@@ -29167,6 +29783,148 @@ components:
         * `declined` - Declined
         * `completed` - Completed
         * `cancelled` - Cancelled
+    Tenant:
+      type: object
+      description: 'A school as the console shows it: identity, contact and lifecycle
+        columns.'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          description: Wildcard subdomain label.
+          pattern: ^[-a-zA-Z0-9_]+$
+        status:
+          allOf:
+          - $ref: '#/components/schemas/TenantStatusEnum'
+          readOnly: true
+        contact_name:
+          type: string
+          readOnly: true
+          description: Primary commercial contact.
+        contact_email:
+          type: string
+          format: email
+          readOnly: true
+          description: The owner invite's target.
+        contact_phone:
+          type: string
+          readOnly: true
+        timezone:
+          type: string
+          readOnly: true
+        locale:
+          type: string
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+        trial_ends_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        provisioned_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: When `:provision`'s seed transaction committed.
+        suspended_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        deprovision_after:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: End of the retention window a deprovision starts.
+        current_plan:
+          type: string
+          readOnly: true
+          description: The live plan's code.
+        subscription_status:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - contact_email
+      - contact_name
+      - contact_phone
+      - created_at
+      - currency
+      - current_plan
+      - deprovision_after
+      - id
+      - locale
+      - name
+      - provisioned_at
+      - slug
+      - status
+      - subscription_status
+      - suspended_at
+      - timezone
+      - trial_ends_at
+      - updated_at
+    TenantCreate:
+      type: object
+      description: The slug's rules (format, reserved, unique) are the service's,
+        `services.slug_errors`.
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        slug:
+          type: string
+          description: The subdomain label. Fixed once the school is provisioned.
+          maxLength: 63
+        contact_name:
+          type: string
+          maxLength: 200
+        contact_email:
+          type: string
+          format: email
+          description: Where `:provision` invites the school's owner.
+          maxLength: 254
+        contact_phone:
+          type: string
+          maxLength: 30
+      required:
+      - contact_email
+      - contact_name
+      - name
+      - slug
+    TenantStatusEnum:
+      enum:
+      - provisioning
+      - trial
+      - active
+      - past_due
+      - suspended
+      - deprovisioned
+      type: string
+      description: |-
+        * `provisioning` - Provisioning
+        * `trial` - Trial
+        * `active` - Active
+        * `past_due` - Past due
+        * `suspended` - Suspended
+        * `deprovisioned` - Deprovisioned
     TenantSummary:
       type: object
       description: 'The caller''s school, as a client shows it: its name and subdomain

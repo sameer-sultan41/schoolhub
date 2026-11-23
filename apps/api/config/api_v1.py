@@ -22,4 +22,6 @@ urlpatterns = [
     path("", include("apps.fees_finance.urls")),
     path("", include("apps.communication.urls")),
     path("", include("apps.parent_portal.urls")),
+    # The platform console: platform users only (ADR-0036).
+    path("platform/", include("apps.platform_admin.urls")),
 ]

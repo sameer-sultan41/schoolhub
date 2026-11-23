@@ -60,19 +60,26 @@ Stored per tenant (JSONB `settings` + typed tables where structure matters):
 ```mermaid
 stateDiagram-v2
     [*] --> Provisioning : signup / sales onboarding
-    Provisioning --> Trial : onboarding wizard complete
+    Provisioning --> Trial : provisioned, owner invited
+    Provisioning --> Deprovisioned : created by mistake
     Trial --> Active : subscription started
+    Trial --> Suspended : trial expired / manual
     Active --> PastDue : payment failed
     PastDue --> Active : payment recovered
-    PastDue --> Suspended : grace period expired
+    PastDue --> Suspended : grace period expired / manual
     Active --> Suspended : manual (ToS)
-    Suspended --> Active : reinstated
-    Suspended --> Deprovisioned : retention window expired
+    Suspended --> Active : reinstated (live subscription)
+    Suspended --> PastDue : reinstated (subscription past due)
+    Suspended --> Trial : reinstated on a new trial
+    Suspended --> Deprovisioned : deleted + export
     Active --> Deprovisioned : cancellation + export
-    Deprovisioned --> [*]
+    Deprovisioned --> Suspended : restored within retention
+    Deprovisioned --> [*] : retention window expired, purge
 ```
 
-- **Provisioning:** creating a tenant row + seed data (default roles, permission sets, notification templates, one website theme instance, sample academic structure) is a single idempotent transaction — no per-tenant infrastructure.
+The trial starts when the school is provisioned and its owner invited (platform-admin §7.1), not when the onboarding wizard completes: the wizard runs during the trial. These edges are the only ones `apps/platform_admin/tenants/lifecycle.py` allows; platform-admin §7.4 lists each with its trigger.
+
+- **Provisioning:** `:provision` seeds the school in one idempotent transaction — its `tenant_settings` row, its system ledger accounts, and the owner's account holding the shared `school_owner` role, invited — with no per-tenant infrastructure. Default roles and notification templates are shared platform rows (`tenant=None`, synced on every migrate), not copied per school; a website theme and a sample academic structure are not seeded (the onboarding wizard builds the structure).
 - **Onboarding wizard:** guided setup (school profile → campuses → academic session → classes/sections → fee structures → staff invites → student import). Documented as part of `platform-admin.md`.
 - **Suspension:** logins blocked (except owner read-only billing view), public website replaced with a neutral notice, data untouched.
 - **Export:** tenant admins can request a full export (CSV per entity + uploaded files archive) as a background job; also used before deletion.

@@ -7,7 +7,16 @@ own or being discoverable twice.
 """
 
 from core.rbac.cache import evict_rbac_caches
-from core.rbac.models import Permission, RecordScope, Role, RolePermission, User, UserRole
+from core.rbac.models import (
+    Permission,
+    PermissionScope,
+    RecordScope,
+    Role,
+    RolePermission,
+    User,
+    UserRole,
+)
+from core.rbac.roles import SCHOOL_OWNER
 from core.tenancy.models import Tenant, TenantStatus
 
 
@@ -22,9 +31,10 @@ def ensure_tenant(slug: str, name: str) -> Tenant:
     return tenant
 
 
-def ensure_school_owner_role(*, slug: str = "school_owner", name: str = "School Owner") -> Role:
-    """`school_owner` "can hold every permission" (users-and-roles.md §3) — granting
+def ensure_school_owner_role(*, slug: str = SCHOOL_OWNER, name: str = "School Owner") -> Role:
+    """`school_owner` "can hold every permission" (users-and-roles.md §3): every tenant-scope one.
 
+    A console key (ADR-0036) is never a school's to hold. Granting
     the full current registry keeps this in sync as permissions are added, rather
     than hardcoding a subset that would silently go stale. Additive only, deliberately:
     revoking here would mean re-deriving "every permission" from `Permission.objects.all()`
@@ -43,13 +53,18 @@ def ensure_school_owner_role(*, slug: str = "school_owner", name: str = "School 
     RolePermission.objects.bulk_create(
         [
             RolePermission(role=role, permission=permission)
-            for permission in Permission.objects.all()
+            for permission in Permission.objects.filter(scope=PermissionScope.TENANT)
         ],
         batch_size=500,
         ignore_conflicts=True,
     )
     _evict_holders(role)
     return role
+
+
+def role_permission_scope(role: Role) -> str:
+    """The one permission scope ``role`` may hold (ADR-0036)."""
+    return PermissionScope.PLATFORM if role.is_platform else PermissionScope.TENANT
 
 
 def _evict_holders(role: Role) -> None:
@@ -114,6 +129,9 @@ def sync_role_permissions(role: Role, permission_keys: list[str]) -> None:
     scoped to one tenant: a narrower re-seed (trimming a fixture role down for a
     stricter CUJ) can only ever affect that tenant's own role. Also used for a portal
     role created by the first invite (ADR-0033).
+
+    Refuses (``ValueError``, before any write) a key of the other scope: a platform role
+    holds platform-scope keys only, every other role tenant-scope keys only (ADR-0036).
     """
     permissions = list(Permission.objects.filter(key__in=permission_keys))
     found_keys = {permission.key for permission in permissions}
@@ -122,6 +140,13 @@ def sync_role_permissions(role: Role, permission_keys: list[str]) -> None:
         raise ValueError(
             f"sync_role_permissions({role.slug!r}): no Permission row for "
             f"{sorted(missing_keys)} — check for a renamed/removed permission key."
+        )
+    role_scope = role_permission_scope(role)
+    crossing = sorted(p.key for p in permissions if p.scope != role_scope)
+    if crossing:
+        raise ValueError(
+            f"sync_role_permissions({role.slug!r}): {crossing} are not {role_scope}-scope keys, "
+            f"and a {role_scope} role may hold only those."
         )
 
     RolePermission.objects.bulk_create(

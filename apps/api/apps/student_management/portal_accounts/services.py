@@ -259,8 +259,9 @@ def _portal_role(*, tenant_id: uuid.UUID, slug: str) -> Role:
     """The school's live ``guardian``/``student`` role, created from the registry if missing.
 
     A school's own live role of that slug wins over a live platform default; a
-    soft-deleted role is never reused. No migration seeds these roles, so the first
-    invite creates the tenant's one, restricted, holding exactly the keys the registry
+    soft-deleted role is never reused. The platform defaults exist wherever migrations
+    ran (`core.rbac.sync.sync_default_roles`, ADR-0036); if one is missing, the first
+    invite creates the tenant's own, restricted, holding exactly the keys the registry
     gives the slug (ADR-0033). The lookup is local rather than
     ``ensure_role_with_permissions``, whose ``get_or_create`` ignores ``deleted_at``.
     """

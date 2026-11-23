@@ -7,8 +7,15 @@ exercise it honestly.
 
 from __future__ import annotations
 
+import ast
+from datetime import timedelta
+from pathlib import Path
+
+from django.conf import settings
 from django.core.management import call_command
-from django.test import TestCase
+from django.core.management.base import CommandError
+from django.test import TestCase, override_settings
+from django.utils import timezone
 
 from apps.attendance.models import AttendanceStatus, StudentAttendance
 from apps.communication.models import Notice, NoticeStatus
@@ -52,6 +59,7 @@ from apps.staff_management.models import EmploymentStatus, Staff, StaffType
 from apps.student_management.models import Guardian, Student, StudentGuardian
 from core.notifications.models import Notification
 from core.notifications.permissions import NOTIFICATION_VIEW
+from core.rbac import mfa
 from core.rbac.management.commands.seed_e2e_data import (
     E2E_ACCOUNTANT_APPROVER_EMAIL,
     E2E_ACCOUNTANT_EMAIL,
@@ -70,6 +78,8 @@ from core.rbac.management.commands.seed_e2e_data import (
     E2E_GUARDIAN_PHONE,
     E2E_OTHER_ADMIN_EMAIL,
     E2E_OTHER_TENANT_SLUG,
+    E2E_PLATFORM_OPERATOR_EMAIL,
+    E2E_PLATFORM_TOTP_SECRET,
     E2E_PRINCIPAL_PERMISSIONS,
     E2E_SCHOOL_ADMIN_PERMISSIONS,
     E2E_TEACHER_EMAIL,
@@ -81,6 +91,19 @@ from core.rbac.models import RecordScope, Role, RolePermission, User, UserRole
 from core.rbac.registry import registry
 from core.tenancy.context import tenant_context
 from core.tenancy.models import Tenant, TenantFeatureOverride, TenantSettings, TenantStatus
+
+
+def _settings_assignment(module: str, name: str) -> ast.expr:
+    """The value expression assigned to `name` in a settings module, read from its source."""
+    source = (Path(settings.BASE_DIR) / "config/settings" / module).read_text()
+    for node in ast.parse(source).body:
+        if (
+            isinstance(node, ast.Assign)
+            and isinstance(node.targets[0], ast.Name)
+            and node.targets[0].id == name
+        ):
+            return node.value
+    raise AssertionError(f"{module} does not assign {name}")
 
 
 class SeedE2EDataTests(TestCase):
@@ -100,6 +123,65 @@ class SeedE2EDataTests(TestCase):
             user = User.objects.get(tenant=row, email=email)
             self.assertTrue(user.check_password(E2E_ADMIN_PASSWORD))
             self.assertTrue(UserRole.objects.filter(user=user, role=role).exists())
+
+    def test_seeds_a_platform_operator_with_a_fixed_totp_secret(self) -> None:
+        """The live lane signs the operator in with password + TOTP (platform-admin.md §4)."""
+        call_command("seed_e2e_data")
+        call_command("seed_e2e_data")
+
+        operator = User.objects.get(email=E2E_PLATFORM_OPERATOR_EMAIL, tenant=None)
+        self.assertTrue(operator.is_platform)
+        self.assertTrue(operator.is_active)
+        self.assertTrue(operator.mfa_enabled)
+        self.assertTrue(operator.check_password(E2E_ADMIN_PASSWORD))
+        self.assertEqual(mfa.secret_for(operator), E2E_PLATFORM_TOTP_SECRET)
+        role = Role.objects.get(tenant=None, slug="platform_super_admin")
+        self.assertEqual(
+            list(UserRole.objects.filter(user=operator).values_list("role_id", flat=True)),
+            [role.pk],
+        )
+
+    def test_reseeding_lifts_the_operator_lockout(self) -> None:
+        """A live run that burned wrong codes must not lock the next run out."""
+        call_command("seed_e2e_data")
+        User.objects.filter(email=E2E_PLATFORM_OPERATOR_EMAIL).update(
+            mfa_failed_attempts=7, mfa_locked_until=timezone.now() + timedelta(hours=1)
+        )
+
+        call_command("seed_e2e_data")
+
+        operator = User.objects.get(email=E2E_PLATFORM_OPERATOR_EMAIL, tenant=None)
+        self.assertEqual(operator.mfa_failed_attempts, 0)
+        self.assertIsNone(operator.mfa_locked_until)
+
+    @override_settings(E2E_SEED_ALLOWED=False)
+    def test_refuses_to_run_where_e2e_seeding_is_not_allowed(self) -> None:
+        with self.assertRaises(CommandError):
+            call_command("seed_e2e_data")
+
+        self.assertFalse(User.objects.filter(email=E2E_PLATFORM_OPERATOR_EMAIL).exists())
+        self.assertFalse(Tenant.objects.filter(slug=E2E_TENANT_SLUG).exists())
+
+    def test_production_settings_disallow_e2e_seeding(self) -> None:
+        """`prod.py` needs env vars to import, so its assignment is read from the source."""
+        value = _settings_assignment("prod.py", "E2E_SEED_ALLOWED")
+        assert isinstance(value, ast.Constant)
+        self.assertIs(value.value, False)
+
+    def test_base_settings_fail_closed_on_e2e_seeding(self) -> None:
+        """A settings module that says nothing (staging, production-like) must not seed."""
+        value = _settings_assignment("base.py", "E2E_SEED_ALLOWED")
+        assert isinstance(value, ast.Call)
+        default = next(kw.value for kw in value.keywords if kw.arg == "default")
+        assert isinstance(default, ast.Constant)
+        self.assertIs(default.value, False)
+
+    def test_dev_and_test_settings_allow_e2e_seeding(self) -> None:
+        """The live lane runs under `dev.py` (compose's default module)."""
+        value = _settings_assignment("dev.py", "E2E_SEED_ALLOWED")
+        assert isinstance(value, ast.Constant)
+        self.assertIs(value.value, True)
+        self.assertIs(settings.E2E_SEED_ALLOWED, True)
 
     def test_the_school_admin_can_poll_the_jobs_it_starts(self) -> None:
         """It starts promotion execute; a 403 on `GET /jobs/{id}` reads as a failed job."""

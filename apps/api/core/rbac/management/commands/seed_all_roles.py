@@ -54,6 +54,7 @@ from apps.timetable.models import Period, Room, RoomType, SlotStatus, TimetableS
 from core.rbac.management.commands.seed_dev_data import DEMO_TENANT_SLUG
 from core.rbac.models import RecordScope
 from core.rbac.registry import registry
+from core.rbac.roles import PLATFORM_ROLES
 from core.rbac.seeding import ensure_role_with_permissions, ensure_seed_user, ensure_tenant
 from core.tenancy.context import tenant_context
 from core.tenancy.models import FeatureFlag, Tenant, TenantFeatureOverride, TenantSettings
@@ -204,7 +205,11 @@ class Command(BaseCommand):
         the next run with the right permissions and no edit to this file.
         """
         specs = registry.all()
-        role_slugs = sorted({role for spec in specs for role in spec.default_roles})
+        # A platform role is no school's to hold (ADR-0036); `create_platform_admin` makes
+        # a console login.
+        role_slugs = sorted(
+            {role for spec in specs for role in spec.default_roles} - set(PLATFORM_ROLES)
+        )
 
         credentials: list[tuple[str, str]] = []
         for slug in role_slugs:
