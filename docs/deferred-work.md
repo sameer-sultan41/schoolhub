@@ -23,7 +23,7 @@ either this file or `project-status.md`.
     - **Plan-gating of custom domains.** Waits on platform-admin's plan resolver; every school may bind up to five domains until it ships.
     - **Apex custom domains.** Verification requires a CNAME from the domain to `WEBSITE_CNAME_TARGET`, and DNS forbids a CNAME at a zone apex, so a school binds `www.myschool.tld`, not `myschool.tld`. Accepting an apex needs an A/ALIAS check against the edge's addresses, which depends on the real edge provider above.
     - **Disabling a custom domain without deleting it.** `custom_domains.status` has `disabled`, but no route sets it in v1 (the module doc's §16 has no disable action); remove the domain instead, and re-add it to restore it.
-    - **Terraform names settings modules that do not exist** (infra-owned). `infra/terraform/envs/production/main.tf` sets `DJANGO_SETTINGS_MODULE = "config.settings.production"` and staging sets `config.settings.staging`, but `apps/api/config/settings/` has only `base`, `dev`, `prod` and `test`, so either environment would fail at boot. Fixing it belongs in an infra PR (`infra/AGENTS.md` governs Terraform), not this one. That PR must also pass `WEBSITE_CNAME_TARGET`, which `prod.py` now requires, and the other website settings (`WEBSITE_MACHINE_TOKENS`, `WEBSITE_REVALIDATE_URL`, `WEBSITE_REVALIDATE_SECRET`, `NUM_PROXIES`), none of which Terraform sets yet.
+    - **Terraform names settings modules that do not exist** (infra-owned). `infra/terraform/envs/production/main.tf` sets `DJANGO_SETTINGS_MODULE = "config.settings.production"` and staging sets `config.settings.staging`, but `apps/api/config/settings/` has only `base`, `dev`, `prod` and `test`, so either environment would fail at boot. Fixing it belongs in an infra PR (`infra/AGENTS.md` governs Terraform), not this one. **Handled:** `WEBSITE_CNAME_TARGET`, which `prod.py` requires at boot, is a required `website_cname_target` variable in both environments (validated as an FQDN), and `NUM_PROXIES` is wired from `num_proxies`. Still a **boot blocker**: the settings-module name above. Still **feature blockers** (the API boots, the public site is dark or stale): `WEBSITE_MACHINE_TOKENS`, `WEBSITE_REVALIDATE_URL` and `WEBSITE_REVALIDATE_SECRET` (see "Terraform wiring for the public website" below).
   - **Coordination note for the platform-admin session** (handoff from `website-cms` PR D; nothing here blocks either module):
     - **`custom_domains` and `custom_domain_routes` live in `website_cms`**, not platform-admin. Ownership moved because the claim lifecycle (DNS verification, the route table the renderer resolves, revalidation and the domain notifications) is website behaviour, and `core/` and platform-admin must not import `website_cms`. Platform-admin's docs carry the same note (`platform-admin.md` §6, §15, §18; `tenancy.md`).
     - **`provision_tenant` may call `website_cms.settings.services.ensure_default_site(tenant)`** so a new school has a default site at once; until then it is created on the first CMS write.
@@ -104,12 +104,13 @@ either this file or `project-status.md`.
   payment-callback failures) and the stored audit and contact IPs are spoofable.
   ([ADR-0039](decisions/0039-public-content-api.md) Consequences.)
 
-- **Terraform wiring for the public website is missing.** The API container needs
-  `WEBSITE_MACHINE_TOKENS`, `WEBSITE_REVALIDATE_URL` (the renderer's internal origin) and
-  `WEBSITE_REVALIDATE_SECRET` (both secrets as `api_secrets` ARNs) and `WEBSITE_CNAME_TARGET`;
-  the renderer task needs `WEBSITE_MACHINE_TOKEN` and the same revalidate secret. Until wired,
-  staging and production sites are dark (the renderer's reads get 401 and fail closed) and
-  revalidation is a no-op.
+- **Terraform wiring for the public website is incomplete** (feature blockers: the API boots
+  without these). The API container needs `WEBSITE_MACHINE_TOKENS`, `WEBSITE_REVALIDATE_URL`
+  (the renderer's internal origin) and `WEBSITE_REVALIDATE_SECRET` (both secrets as
+  `api_secrets` ARNs); the renderer task needs `WEBSITE_MACHINE_TOKEN` and the same revalidate
+  secret. Until wired, staging and production sites are dark (the renderer's reads get 401 and
+  fail closed) and revalidation is a no-op. `WEBSITE_CNAME_TARGET`, the one website setting
+  the API needs to boot, is wired (`website_cname_target`).
 
 - **AI gateway and AI-FEE-02 follow-ups** (`feat/ai-gateway`, plan
   `docs/superpowers/plans/2026-11-07-ai-gateway.md`, [ADR-0035](decisions/0035-ai-gateway-shape.md)).
