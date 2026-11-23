@@ -53,19 +53,8 @@ export function isOffsetPagination(pagination: Pagination): pagination is Offset
   return "total_pages" in pagination;
 }
 
-/**
- * Advice on a 2xx response, in `meta.warnings` (api-architecture.md §2): the write succeeded,
- * but the caller should know something, e.g. `quota_warning` when a school nears a plan limit.
- */
-export interface ApiWarning {
-  code: string;
-  message: string;
-  details: Record<string, unknown>;
-}
-
 export interface ApiMeta {
   pagination?: Pagination;
-  warnings?: ApiWarning[];
   [key: string]: unknown;
 }
 

@@ -61,7 +61,8 @@ class EnvelopeJSONRenderer(JSONRenderer):
                 meta["request_id"] = request_id
             warnings = response_warnings()
             if warnings and response is not None and 200 <= response.status_code < 300:
-                meta["warnings"] = warnings
+                # A view may already have put its own there (teacher allocations' load warnings).
+                meta["warnings"] = [*meta.get("warnings", []), *warnings]
             if response is not None and not meta:
                 payload.pop("meta")
 
