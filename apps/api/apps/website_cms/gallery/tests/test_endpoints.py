@@ -9,7 +9,7 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from apps.website_cms.constants import EMBED_HOSTS, EMBED_URL_MAX_LENGTH
+from apps.website_cms.constants import EMBED_HOSTS, EMBED_URL_MAX_LENGTH, GALLERY_ALBUM_ITEMS_MAX
 from apps.website_cms.models import ContentStatus, GalleryAlbum, GalleryItem
 from apps.website_cms.tests.base import WebsiteAPITestCase
 from core.files.models import FileVisibility
@@ -209,6 +209,15 @@ class ItemTests(WebsiteAPITestCase):
         reorder = self.client.patch(f"{items_url(self.album)}:reorder", {"ids": []}, format="json")
         self.assertEqual(reorder.status_code, 403)
         self.assertEqual(self.client.get(items_url(self.album)).status_code, 200)
+
+    def test_an_album_holds_at_most_the_item_cap(self) -> None:
+        for position in range(GALLERY_ALBUM_ITEMS_MAX - 1):
+            self.make_item(self.album, position=position)
+        self.assertEqual(self._video().status_code, 201)
+        response = self._video()
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["error"]["meta"]["reason"], "too_many_items")
+        self.assertEqual(len(self._positions()), GALLERY_ALBUM_ITEMS_MAX)
 
     def test_image_item_requires_file(self) -> None:
         response = self._add(media_type="image")

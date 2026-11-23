@@ -4651,7 +4651,8 @@
           "altTextHint": "Say what the photo shows, for visitors who can't see it.",
           "saved": "Item saved.",
           "added": "Video added."
-        }
+        },
+        "full": "This album holds the most photos and videos it can ({max}). Remove some to add more."
       }
     },
     "inventory": {
@@ -4840,7 +4841,8 @@
       "content": {
         "slug_taken": "Another item already uses this address.",
         "invalid_slug": "Use lowercase letters, digits and single hyphens.",
-        "publish_required": "This is live: only a publisher can change it. Ask a publisher, or have it unpublished first."
+        "publish_required": "This is live: only a publisher can change it. Ask a publisher, or have it unpublished first.",
+        "too_many_items": "This album holds the most photos and videos it can. Remove some to add more."
       },
       "seo": {
         "invalid_url": "Use an https:// link, or a path on this site starting with /.",

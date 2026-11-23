@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
   closestCenter,
   DndContext,
@@ -25,6 +25,7 @@ import { CONTENT_REASON_SCOPE } from "@/features/website/shared/content-fields";
 import { DeleteContentDialog } from "@/features/website/shared/delete-content-dialog";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { Services, type GalleryItemRecord } from "@/services";
+import { GALLERY_ALBUM_ITEMS_MAX } from "@/services/modules/website/gallery-albums/gallery-albums-constant";
 import { GalleryItemDialog } from "./gallery-item-dialog";
 import { GalleryItemTile } from "./gallery-item-tile";
 import { GalleryUpload } from "./gallery-upload";
@@ -49,6 +50,9 @@ export function GalleryItems({ albumId, canUpdate }: { albumId: string; canUpdat
     useGalleryItems(albumId);
   const [target, setTarget] = useState<Target | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const fullId = useId();
+  // The server refuses an item past the cap (`too_many_items`): hold both ways to add one.
+  const isFull = items.length >= GALLERY_ALBUM_ITEMS_MAX;
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: DRAG_ACTIVATION_DISTANCE } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -97,12 +101,14 @@ export function GalleryItems({ albumId, canUpdate }: { albumId: string; canUpdat
             <GalleryUpload
               albumId={albumId}
               onBusyChange={setIsUploading}
-              disabled={isReordering}
+              disabled={isReordering || isFull}
+              describedBy={isFull ? fullId : undefined}
             />
             <Button
               type="button"
               variant="outline"
-              disabled={isReordering}
+              disabled={isReordering || isFull}
+              aria-describedby={isFull ? fullId : undefined}
               onClick={() => {
                 setTarget({ action: "addVideo" });
               }}
@@ -113,6 +119,11 @@ export function GalleryItems({ albumId, canUpdate }: { albumId: string; canUpdat
           </div>
         ) : null}
       </div>
+      {canUpdate && isFull ? (
+        <p id={fullId} className="text-sm text-muted-foreground">
+          {t("full", { max: GALLERY_ALBUM_ITEMS_MAX })}
+        </p>
+      ) : null}
 
       {reorderError ? (
         <Alert variant="destructive">

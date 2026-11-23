@@ -143,8 +143,11 @@ PUBLIC_LIST_MAX = 50
 #: Seconds a browser or CDN may reuse the public file redirect; the presign outlives it.
 PUBLIC_FILE_CACHE_SECONDS = 300
 
-#: Most items a public album detail returns; `item_count` still reports the total.
-PUBLIC_ALBUM_ITEMS_MAX = 200
+#: Most items an album may hold: the dashboard manages them as one page (`MAX_PAGE_SIZE`).
+GALLERY_ALBUM_ITEMS_MAX = 100
+
+#: Most items a public album detail returns: every item an album may hold.
+PUBLIC_ALBUM_ITEMS_MAX = GALLERY_ALBUM_ITEMS_MAX
 
 
 def empty_rich_text() -> dict[str, list[dict[str, object]]]:

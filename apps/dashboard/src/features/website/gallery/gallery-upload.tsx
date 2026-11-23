@@ -38,11 +38,14 @@ export function GalleryUpload({
   albumId,
   onBusyChange,
   disabled,
+  describedBy,
 }: {
   albumId: string;
   onBusyChange: (busy: boolean) => void;
-  /** Holds a new batch, e.g. while the album is being reordered. */
+  /** Holds a new batch, e.g. while the album is being reordered or is full. */
   disabled: boolean;
+  /** The id of the text saying why the button is held. */
+  describedBy?: string;
 }) {
   const t = useTranslations("website.gallery.items");
   const tErrors = useTranslations("errors");
@@ -126,6 +129,7 @@ export function GalleryUpload({
           type="button"
           variant="outline"
           disabled={disabled || progress !== null}
+          aria-describedby={describedBy}
           onClick={() => {
             inputRef.current?.click();
           }}

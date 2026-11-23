@@ -296,6 +296,28 @@ describe("gallery items", () => {
     expect(toast.success).toHaveBeenCalledWith("2 photos added.");
   });
 
+  it("holds Upload photos and Add video, with the reason, once the album is full", async () => {
+    // `GALLERY_ALBUM_ITEMS_MAX` items: the server refuses one more (`too_many_items`).
+    fetchItems.mockResolvedValue(
+      Array.from({ length: 100 }, (_, index) =>
+        galleryItem({
+          id: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+          caption: `Photo ${String(index + 1)}`,
+          position: index,
+        }),
+      ),
+    );
+    await renderAlbum();
+
+    const reason =
+      "This album holds the most photos and videos it can (100). Remove some to add more.";
+    for (const name of ["Upload photos", "Add video"]) {
+      const button = screen.getByRole("button", { name });
+      expect(button).toBeDisabled();
+      expect(button).toHaveAccessibleDescription(reason);
+    }
+  });
+
   it("removes an item through its own confirm", async () => {
     deleteItem.mockResolvedValue(undefined);
     const user = await renderAlbum();
