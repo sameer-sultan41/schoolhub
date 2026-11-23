@@ -33,6 +33,7 @@ axllent
 barcoded
 baselined
 bcher
+Buildx
 bücher
 Bibi
 Bilal
@@ -254,6 +255,7 @@ tablename
 tableowner
 Talha
 telematics
+tflint
 tfvars
 timestamptz
 toggleable
