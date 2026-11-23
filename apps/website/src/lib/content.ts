@@ -1,7 +1,7 @@
 import type { ApiSchemas } from "@schoolhub/api-client";
 import { cache } from "react";
 import { ContentFetchError, type ReadOptions, hostTag, pageTag, readJson, tenantTag } from "./api";
-import { getPreviewToken } from "./preview";
+import { getPreviewToken, markPreviewServed } from "./preview";
 import { CONTENT_SLUG_PATTERN } from "./regex";
 
 /**
@@ -46,45 +46,60 @@ export function toPageSlug(segments: string[] | undefined): string {
   return (segments ?? []).filter(Boolean).join("/");
 }
 
+/** What a `pages` or `site` read returned, and whether it was served as a preview. */
+interface PreviewRead<TData> {
+  data: TData | null;
+  previewed: boolean;
+}
+
 /**
  * A `pages` or `site` read, as a preview when the preview cookie holds a token.
  *
  * The preview read is uncached and sends `X-Preview-Token`. When the API refuses it (an expired,
  * forged or other page's token: 404) or throttles it (429), the cached published read answers
- * instead, so a bad cookie never costs more than one uncached request.
+ * instead, so a bad cookie never costs more than one uncached request. `previewed` says which
+ * read answered, so the banner labels only content that really is a preview.
  */
-async function readWithPreview<TData>(path: string, options: ReadOptions): Promise<TData | null> {
+async function readWithPreview<TData>(
+  path: string,
+  options: ReadOptions,
+): Promise<PreviewRead<TData>> {
   const previewToken = await getPreviewToken();
   if (previewToken) {
     try {
       const draft = await readJson<TData>(path, { ...options, previewToken });
-      if (draft) return draft;
+      if (draft) return { data: draft, previewed: true };
     } catch (error) {
       if (!(error instanceof ContentFetchError && error.status === 429)) throw error;
     }
   }
-  return readJson<TData>(path, options);
+  return { data: await readJson<TData>(path, options), previewed: false };
 }
 
 /**
  * The homepage is asked for with no slug: `slug=home` is a 404 by contract. Under a preview
- * cookie the token's draft page is read; any other page falls back to its published version.
+ * cookie the token's draft page is read; any other page falls back to its published version,
+ * and only a page the API served as a preview marks the render for the banner.
  */
-export const getPage = cache(
-  async (tenantId: string, host: string, slug: string): Promise<PublicPage | null> =>
-    readWithPreview<PublicPage>("/public/pages", {
-      host,
-      query: { slug: slug || undefined },
-      tags: [tenantTag(tenantId), hostTag(host), pageTag(tenantId, slug)],
-    }),
-);
+export const getPage = cache(async (tenantId: string, host: string, slug: string) => {
+  const { data, previewed } = await readWithPreview<PublicPage>("/public/pages", {
+    host,
+    query: { slug: slug || undefined },
+    tags: [tenantTag(tenantId), hostTag(host), pageTag(tenantId, slug)],
+  });
+  if (previewed) markPreviewServed();
+  return data;
+});
 
 /** Under a preview cookie the token lets a site that is not live yet be read. */
-export const getSite = cache(async (tenantId: string, host: string): Promise<PublicSite | null> =>
-  readWithPreview<PublicSite>("/public/site", {
-    host,
-    tags: [tenantTag(tenantId), hostTag(host), `tenant:${tenantId}:site`],
-  }),
+export const getSite = cache(
+  async (tenantId: string, host: string): Promise<PublicSite | null> =>
+    (
+      await readWithPreview<PublicSite>("/public/site", {
+        host,
+        tags: [tenantTag(tenantId), hostTag(host), `tenant:${tenantId}:site`],
+      })
+    ).data,
 );
 
 /**

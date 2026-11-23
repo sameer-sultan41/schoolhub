@@ -1,6 +1,7 @@
 import type { ApiSchemas } from "@schoolhub/api-client";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { PreviewBanner } from "@/components/preview-banner";
 import { getPage, getSite, toPageSlug } from "@/lib/content";
 import { canonicalOrigin, resolveTenant } from "@/lib/tenant";
 import { getTheme, resolveSection } from "@/themes";
@@ -84,21 +85,25 @@ export async function RenderPage({ segments }: { segments: string[] | undefined 
   const sections = [...page.sections].sort((a, b) => a.position - b.position);
 
   return (
-    <SiteChrome tenant={tenant} site={site}>
-      {sections.map((section) => {
-        const Section = resolveSection(theme, section);
-        // Unknown section types render nothing — forward compatibility as themes evolve.
-        if (!Section) return null;
-        return (
-          <Section
-            key={section.id}
-            section={section}
-            tenant={tenant}
-            host={host}
-            pageId={page.id}
-          />
-        );
-      })}
-    </SiteChrome>
+    <>
+      {/* After the reads above, so it knows whether the page was served as a preview. */}
+      <PreviewBanner />
+      <SiteChrome tenant={tenant} site={site}>
+        {sections.map((section) => {
+          const Section = resolveSection(theme, section);
+          // Unknown section types render nothing — forward compatibility as themes evolve.
+          if (!Section) return null;
+          return (
+            <Section
+              key={section.id}
+              section={section}
+              tenant={tenant}
+              host={host}
+              pageId={page.id}
+            />
+          );
+        })}
+      </SiteChrome>
+    </>
   );
 }

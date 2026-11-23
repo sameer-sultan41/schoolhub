@@ -1,20 +1,20 @@
 import { render, screen } from "@testing-library/react";
-import { getPreviewToken } from "@/lib/preview";
+import { isPreviewServed } from "@/lib/preview";
 import { PreviewBanner } from "../preview-banner";
 
-jest.mock("@/lib/preview", () => ({ getPreviewToken: jest.fn() }));
+jest.mock("@/lib/preview", () => ({ isPreviewServed: jest.fn() }));
 
-const mockGetPreviewToken = getPreviewToken as jest.MockedFunction<typeof getPreviewToken>;
+const mockIsPreviewServed = isPreviewServed as jest.MockedFunction<typeof isPreviewServed>;
 
 describe("PreviewBanner", () => {
-  it("renders nothing without a preview cookie", async () => {
-    mockGetPreviewToken.mockResolvedValue(null);
-    await expect(PreviewBanner()).resolves.toBeNull();
+  it("renders nothing when the page was not served as a preview (junk cookie or fallback)", () => {
+    mockIsPreviewServed.mockReturnValue(false);
+    expect(PreviewBanner()).toBeNull();
   });
 
-  it("labels the preview while the cookie is held, and posts to the exit route", async () => {
-    mockGetPreviewToken.mockResolvedValue("tok-1");
-    const { container } = render(await PreviewBanner());
+  it("labels the preview when the page was served as one, and posts to the exit route", () => {
+    mockIsPreviewServed.mockReturnValue(true);
+    const { container } = render(PreviewBanner());
 
     expect(screen.getByRole("status")).toHaveTextContent("Preview");
     expect(screen.getByText("You are viewing unpublished content.")).toBeInTheDocument();

@@ -1,6 +1,11 @@
 import type * as ReactModule from "react";
 import { cookies } from "next/headers";
-import { PREVIEW_COOKIE, PREVIEW_TOKEN_MAX_LENGTH, getPreviewToken } from "../preview";
+import {
+  PREVIEW_COOKIE,
+  PREVIEW_TOKEN_MAX_LENGTH,
+  getPreviewToken,
+  previewMaxAgeSeconds,
+} from "../preview";
 
 jest.mock("react", () => ({
   ...jest.requireActual<typeof ReactModule>("react"),
@@ -32,5 +37,25 @@ describe("getPreviewToken", () => {
     await expect(getPreviewToken()).resolves.toBeNull();
     withCookie("a".repeat(PREVIEW_TOKEN_MAX_LENGTH + 1));
     await expect(getPreviewToken()).resolves.toBeNull();
+  });
+});
+
+describe("previewMaxAgeSeconds", () => {
+  const NOW = Date.parse("2026-11-23T10:00:00Z");
+
+  it("is the token's remaining life in whole seconds", () => {
+    expect(previewMaxAgeSeconds("2026-11-23T10:05:00Z", NOW)).toBe(300);
+    expect(previewMaxAgeSeconds("2026-11-23T10:00:30.900Z", NOW)).toBe(30);
+  });
+
+  it.each([
+    ["already expired", "2026-11-23T09:59:00Z"],
+    ["expiring this instant", "2026-11-23T10:00:00Z"],
+    ["under a second left", "2026-11-23T10:00:00.500Z"],
+    ["not a date", "soon"],
+    ["empty", ""],
+    ["missing", null],
+  ])("is null (no cookie) when the token is %s", (_label, header) => {
+    expect(previewMaxAgeSeconds(header, NOW)).toBeNull();
   });
 });

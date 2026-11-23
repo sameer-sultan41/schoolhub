@@ -17,7 +17,7 @@ import {
   PUBLIC_LIST_MAX,
   toPageSlug,
 } from "../content";
-import { getPreviewToken } from "../preview";
+import { getPreviewToken, markPreviewServed } from "../preview";
 
 jest.mock("react", () => ({
   ...jest.requireActual<typeof ReactModule>("react"),
@@ -38,15 +38,17 @@ jest.mock("../api", () => ({
   pageTag: (id: string, path: string) => `tenant:${id}:page:${path || "/"}`,
 }));
 
-jest.mock("../preview", () => ({ getPreviewToken: jest.fn() }));
+jest.mock("../preview", () => ({ getPreviewToken: jest.fn(), markPreviewServed: jest.fn() }));
 
 const mockReadJson = readJson as jest.MockedFunction<typeof readJson>;
 const mockGetPreviewToken = getPreviewToken as jest.MockedFunction<typeof getPreviewToken>;
+const mockMarkPreviewServed = markPreviewServed as jest.MockedFunction<typeof markPreviewServed>;
 const HOST = "cityschool.schoolhub.pk";
 
 beforeEach(() => {
   mockReadJson.mockReset();
   mockGetPreviewToken.mockReset().mockResolvedValue(null);
+  mockMarkPreviewServed.mockReset();
 });
 
 describe("toPageSlug", () => {
@@ -140,6 +142,46 @@ describe("preview", () => {
       path,
       expect.objectContaining({ previewToken: "tok-1" }),
     );
+  });
+
+  it("marks the render as a preview only when the page read itself was served as one", async () => {
+    mockGetPreviewToken.mockResolvedValue("tok-1");
+    mockReadJson.mockResolvedValue(draft);
+
+    await getPage("t1", HOST, "about");
+    expect(mockMarkPreviewServed).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not mark a preview for the site read: a token for another page still opens it", async () => {
+    mockGetPreviewToken.mockResolvedValue("tok-1");
+    mockReadJson.mockResolvedValue(draft);
+
+    await getSite("t1", HOST);
+    expect(mockMarkPreviewServed).not.toHaveBeenCalled();
+  });
+
+  it("does not mark a preview without a cookie", async () => {
+    mockReadJson.mockResolvedValue(published);
+    await getPage("t1", HOST, "about");
+    expect(mockMarkPreviewServed).not.toHaveBeenCalled();
+  });
+
+  it("does not mark a preview when the read falls back to published (404)", async () => {
+    mockGetPreviewToken.mockResolvedValue("junk");
+    mockReadJson.mockResolvedValueOnce(null).mockResolvedValueOnce(published);
+
+    await expect(getPage("t1", HOST, "about")).resolves.toBe(published);
+    expect(mockMarkPreviewServed).not.toHaveBeenCalled();
+  });
+
+  it("does not mark a preview when the read falls back to published (429)", async () => {
+    mockGetPreviewToken.mockResolvedValue("tok-1");
+    mockReadJson
+      .mockRejectedValueOnce(new ContentFetchError("throttled", 429))
+      .mockResolvedValueOnce(published);
+
+    await expect(getPage("t1", HOST, "about")).resolves.toBe(published);
+    expect(mockMarkPreviewServed).not.toHaveBeenCalled();
   });
 
   it("stays the cached, tagged published read without a preview cookie", async () => {

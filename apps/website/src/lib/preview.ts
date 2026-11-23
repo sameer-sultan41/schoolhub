@@ -11,14 +11,15 @@ import { cache } from "react";
  * `__prerender_bypass` cookie is one value for the whole build and so would work on every
  * school's host. While the cookie is held, `pages` and `site` reads send the token as
  * `X-Preview-Token`, uncached; every other read stays the cached public one. The API decides what
- * a token may read, so a forged or expired cookie only falls back to the published read.
+ * a token may read, so a forged or expired cookie only falls back to the published read, and the banner shows
+ * only for a render whose page the API served as a preview.
  */
 
 export const PREVIEW_COOKIE = "schoolhub_preview";
 /** The header the API reads a preview token from; never a query parameter (SEC-57). */
 export const PREVIEW_HEADER = "X-Preview-Token";
-/** The token's own lifetime (`TimestampSigner` `max_age`), so the cookie never outlives it. */
-export const PREVIEW_MAX_AGE_SECONDS = 600;
+/** Response header: when the API stops accepting the token (ISO-8601, UTC). */
+export const PREVIEW_EXPIRES_HEADER = "X-Preview-Expires-At";
 /** Comfortably above a signed `tenant_id:page_id` token; anything longer is not one. */
 export const PREVIEW_TOKEN_MAX_LENGTH = 512;
 
@@ -29,6 +30,32 @@ export const PREVIEW_COOKIE_OPTIONS = {
   sameSite: "lax",
   path: "/",
 } as const;
+
+/**
+ * The cookie's `maxAge`: the token's remaining life in whole seconds, so the cookie never
+ * outlives it. `null` when the header is missing, unparseable or already past (set no cookie).
+ */
+export function previewMaxAgeSeconds(
+  expiresAt: string | null,
+  now: number = Date.now(),
+): number | null {
+  if (!expiresAt) return null;
+  const expiresAtMs = Date.parse(expiresAt);
+  if (Number.isNaN(expiresAtMs)) return null;
+  const seconds = Math.floor((expiresAtMs - now) / 1000);
+  return seconds > 0 ? seconds : null;
+}
+
+/** Per-request flag: did this render's page come from a preview read (not the published fallback)? */
+const previewServed = cache(() => ({ current: false }));
+
+export function markPreviewServed(): void {
+  previewServed().current = true;
+}
+
+export function isPreviewServed(): boolean {
+  return previewServed().current;
+}
 
 /** The preview cookie's token, or null when there is none or it cannot be a token. */
 export const getPreviewToken = cache(async (): Promise<string | null> => {
