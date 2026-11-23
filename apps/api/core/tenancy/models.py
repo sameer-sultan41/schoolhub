@@ -58,14 +58,22 @@ class Tenant(TimestampedModel):
     locale = models.CharField(max_length=10, default="en")
     currency = models.CharField(max_length=3, default="USD")
     contact_name = models.CharField(
-        max_length=200, blank=True, default="", help_text="Primary commercial contact."
+        max_length=200,
+        blank=True,
+        default="",
+        db_default="",
+        help_text="Primary commercial contact.",
     )
     # Blank only on rows that predate the column; the console requires it, since
     # `:provision` invites the owner at this address.
     contact_email = models.EmailField(
-        max_length=254, blank=True, default="", help_text="The owner invite's target."
+        max_length=254,
+        blank=True,
+        default="",
+        db_default="",
+        help_text="The owner invite's target.",
     )
-    contact_phone = models.CharField(max_length=30, blank=True, default="")
+    contact_phone = models.CharField(max_length=30, blank=True, default="", db_default="")
     trial_ends_at = models.DateTimeField(null=True, blank=True)
     provisioned_at = models.DateTimeField(
         null=True, blank=True, help_text="When `:provision`'s seed transaction committed."
@@ -80,10 +88,10 @@ class Tenant(TimestampedModel):
     # subscription row, which stays the source of truth. Plain columns, not a foreign key:
     # `core` never references `apps.platform_admin` (ADR-0013).
     current_plan = models.CharField(
-        max_length=50, blank=True, default="", help_text="The live plan's code."
+        max_length=50, blank=True, default="", db_default="", help_text="The live plan's code."
     )
-    subscription_status = models.CharField(max_length=20, blank=True, default="")
-    billing_provider_ref = models.CharField(max_length=120, blank=True, default="")
+    subscription_status = models.CharField(max_length=20, blank=True, default="", db_default="")
+    billing_provider_ref = models.CharField(max_length=120, blank=True, default="", db_default="")
 
     # Platform-scope table: the unfiltered manager is the only manager.
     objects = models.Manager()

@@ -112,10 +112,16 @@ urlpatterns = [
 ]
 
 
-def platform_user(role_slug: str | None = "platform_super_admin") -> User:
-    """An active platform user holding the synced default `role_slug`."""
+def platform_user(
+    role_slug: str | None = "platform_super_admin", *, mfa_enabled: bool = True
+) -> User:
+    """An active platform user holding the synced default `role_slug`, enrolled in MFA."""
     user = User.objects.create_user(
-        f"operator{next(_emails)}@platform.test", "x-platform-pass-1", tenant=None, is_platform=True
+        f"operator{next(_emails)}@platform.test",
+        "x-platform-pass-1",
+        tenant=None,
+        is_platform=True,
+        mfa_enabled=mfa_enabled,
     )
     if role_slug:
         UserRole.objects.create(user=user, role=Role.objects.get(tenant=None, slug=role_slug))
@@ -173,6 +179,17 @@ class PlatformGateTests(APITestCase):
 
         self.client.credentials(HTTP_AUTHORIZATION=bearer(operator, amr=MFA))
         self.assertEqual(self.client.get("/api/v1/platform/probe").status_code, status.HTTP_200_OK)
+
+    def test_an_otp_token_is_refused_once_mfa_is_off(self) -> None:
+        # `create_platform_admin --reset-mfa` turns MFA off; tokens minted before it still
+        # carry "otp" until they expire, and must stop opening the console at once.
+        operator = platform_user(mfa_enabled=False)
+        self.client.credentials(HTTP_AUTHORIZATION=bearer(operator, amr=MFA))
+
+        response = self.client.get("/api/v1/platform/probe")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.json()["error"]["code"], "mfa_required")
 
     def test_platform_user_without_the_key_is_403(self) -> None:
         operator = platform_user(role_slug=None)
@@ -236,6 +253,12 @@ class PlatformGateTests(APITestCase):
 
 
 class PlatformRoleTests(APITestCase):
+    def test_a_default_role_slug_is_unique_among_shared_roles(self) -> None:
+        # Shared roles have no tenant; NULLS NOT DISTINCT makes the slug unique among them.
+        Role.objects.create(tenant=None, slug="duplicate-default", name="One")
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Role.objects.create(tenant=None, slug="duplicate-default", name="Two")
+
     def test_platform_role_refuses_tenant_user(self) -> None:
         tenant_user = UserFactory()
         platform_role = Role.objects.get(tenant=None, slug="platform_super_admin")

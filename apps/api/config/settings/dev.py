@@ -7,6 +7,9 @@ from config.settings.base import PLATFORM_DOMAIN, THROTTLE_RATES, env
 
 DEBUG = True
 
+# The local and live-lane stacks seed their e2e fixtures with `seed_e2e_data`.
+E2E_SEED_ALLOWED = True
+
 # A fixed, public, dev-only Fernet key so the api and celery-worker (separate processes)
 # agree without configuration, used when the variable is unset or empty. It protects nothing;
 # never use it outside local development.

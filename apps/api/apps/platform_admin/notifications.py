@@ -74,6 +74,7 @@ def school_owners(tenant: Tenant) -> list[User]:
             tenant_id=tenant.pk,
             is_active=True,
             deleted_at__isnull=True,
+            user_roles__deleted_at__isnull=True,
             user_roles__role__slug=SCHOOL_OWNER,
             user_roles__role__deleted_at__isnull=True,
         ).distinct()
@@ -88,11 +89,11 @@ def notify_owners(tenant: Tenant, event_key: str) -> None:
     """
     from core.notifications.services import Recipient, notify
 
-    owners = school_owners(tenant)
-    if not owners:
-        return
     try:
         with transaction.atomic(), tenant_context(tenant.pk):
+            owners = school_owners(tenant)
+            if not owners:
+                return
             notify(
                 event_key,
                 tenant_id=tenant.pk,

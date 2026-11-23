@@ -190,6 +190,10 @@ its own migration; never use a merge migration.
   - an `active` subscription → `active`, a `past_due` one → `past_due`;
   - a `trialing` one → `trial` only when the body carries a future `trial_ends_at`;
   - with no live subscription it is refused 409 `no_live_subscription`.
+
+  *Amended (PR A final review, ruling C2):* with no live subscription, a future `trial_ends_at`
+  reinstates to `trial`; a past `trial_ends_at` is a 400 on `trial_ends_at`, and so is a missing
+  one under a `trialing` subscription; only no subscription and no `trial_ends_at` is the 409.
 - **Reasons and export:** `:suspend`, `:delete` and `:restore` require a non-empty `reason`. `:delete` from
   `active` or `suspended` also requires a succeeded `tenant_export` job for that tenant, or `waive_export:
   true`.
@@ -249,6 +253,12 @@ its own migration; never use a merge migration.
   The owner invite is ADR-0033's invitation email with a new `InvitationKind.OWNER`. `notify()` does not
   dedupe, so each sender checks
   `Notification.objects.filter(event_key=..., source_type=..., source_id=...).exists()` first.
+
+  *Amended (PR A final review, Task 3 ruling):* the lifecycle notices (`platform.tenant-suspended`,
+  `platform.tenant-reinstated`) are **not** deduped. A tenant-keyed check would silence a school's second
+  suspension forever, and a duplicate cannot happen: the notice is sent only after the edge is accepted
+  under the tenant row's lock, so a retry is refused first. The sweeps' notices (PR B, Task 5) still
+  dedupe, on a key more specific than the tenant: tenant plus subscription period or trigger.
 - **`meta.warnings`:** a list of `{code, message, details}` on a 2xx response. It is documented in
   `docs/02-architecture/api-architecture.md` §2 in Task 6, if it is not already there.
 
@@ -357,7 +367,9 @@ its own migration; never use a merge migration.
   - `apps/api/core/rbac/serializers.py` / `views.py`: `LoginView` returns the challenge when the user has
     `mfa_enabled`, and the tokens' `amr` claim is set
   - `apps/api/core/rbac/urls.py`
-  - `core/integrations` rotator registration for `mfa_secret`
+  - `core/integrations` rotator registration for `mfa_secret`. *Amended (PR A final review):* `users`
+    has no RLS, so this is a **global** rotator seam (`mfa.rotate_mfa_secrets`, run once per
+    `rotate_integration_credentials` call), not a per-tenant one
 - Create: `apps/api/core/rbac/mfa.py`
 - Test: `apps/api/core/rbac/tests/test_mfa.py`
 - Docs: auth-and-rbac §1 (the `second_factor` step, as built)
@@ -400,11 +412,15 @@ its own migration; never use a merge migration.
 **Files:**
 - Create:
   - `apps/api/apps/platform_admin/tenants/{views,serializers,services,lifecycle,filters}.py`
+    (*amended:* the viewset module is `viewset.py`, the ADR-0010 name)
   - `apps/api/apps/platform_admin/notifications.py` (`platform.tenant-suspended`, `platform.tenant-reinstated`)
 - Modify:
   - `apps/api/core/tenancy/models.py`: `contact_name`, `contact_email`, `contact_phone`, `provisioned_at` and
     `deprovision_after` (entity spec), plus `current_plan` (FK, null), `subscription_status` (null) and
-    `billing_provider_ref` (null, unique when set) for Alternative 2
+    `billing_provider_ref` (null, unique when set) for Alternative 2. *Amended (ruling C1):*
+    `current_plan` is a `CharField` holding the plan's code, with no foreign key (`core` never
+    references `apps.platform_admin`, ADR-0013); all three are NOT NULL with a `''` default (and a
+    database default, so the previous release can still insert during a deploy)
   - `apps/api/core/rbac/models.py`: `InvitationKind.OWNER`, its migration, and an eligibility hook
   - `seed_e2e_data`: a platform operator with a fixed TOTP secret
 - Test:
@@ -426,18 +442,22 @@ its own migration; never use a merge migration.
 - `services.provision_tenant(tenant, *, plan_code: str | None, actor_id) -> Tenant`, inside the bound
   tenant's transaction:
   - creates `TenantSettings`;
+  - *amended (PR A final review):* seeds the school's system ledger accounts with
+    `apps.fees_finance.services.ensure_system_accounts(tenant_id=...)`, so its first fee head has an
+    income account;
   - creates the owner with `create_invited_user` plus the `school_owner` default role, then
     `create_invitation(kind=OWNER)`, whose link is built by `account_link(tenant, "/accept-invite", ...)`;
   - sets `trial_ends_at` (plan `trial_days`, or `PLATFORM_DEFAULT_TRIAL_DAYS`) and `provisioned_at`;
   - transitions to `trial`.
 
   Default staff roles already exist globally from `sync_default_roles`. PR B adds the trialing subscription
-  here.
+  here. *Amended (ruling A7):* in PR A a non-null `plan_code` is refused with a 422 until PR B wires it.
 - Routes:
   - `GET/POST /platform/tenants`
   - `GET/PATCH /platform/tenants/{tenant_pk}`
   - `POST /platform/tenants/{tenant_pk}:provision`, `:suspend`, `:reinstate`, `:delete`, `:restore`, each
-    under `run_idempotent`
+    under `run_idempotent`. *Amended:* `:restore` is gated on `platform.tenant.delete` (it undoes a
+    delete; §4 has no restore key)
 
 - [ ] **Step 1: Write the failing tests**
   - a parametrized `test_every_transition_pair` (allowed pairs pass, all others raise);

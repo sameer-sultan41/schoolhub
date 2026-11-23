@@ -51,7 +51,8 @@ class TenantViewSet(mixins.ListModelMixin, PlatformViewSet):
     search_fields = ["name", "slug", "contact_email"]
     # Bounded by the number of schools on the platform, and read by position.
     pagination_class = PageNumberPagination
-    ordering = ["name"]
+    # `id` breaks ties between schools of one name, so page boundaries are stable.
+    ordering = ["name", "id"]
     # `slug` is unique-indexed and `status` indexed; the rest scan a table of schools.
     ordering_fields = ["name", "slug", "status", "trial_ends_at", "created_at"]
     required_permission = "platform.tenant.view"

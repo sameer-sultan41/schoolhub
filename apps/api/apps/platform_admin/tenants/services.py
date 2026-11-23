@@ -17,6 +17,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework import serializers
 
+from apps.fees_finance.services import ensure_system_accounts
 from apps.platform_admin.constants import RESERVED_SLUGS, SLUG_PATTERN, TENANT_EXPORT_JOB_TYPE
 from apps.platform_admin.tenants import lifecycle
 from core.api.exceptions import CodedAPIException, DomainRuleViolation
@@ -29,7 +30,6 @@ from core.rbac.invitations.services import (
 )
 from core.rbac.models import InvitationKind, Role, User, UserRole
 from core.rbac.roles import SCHOOL_OWNER
-from core.rbac.seeding import ensure_school_owner_role
 from core.tenancy import subscription_state
 from core.tenancy.context import tenant_context
 from core.tenancy.models import Tenant, TenantSettings, TenantStatus
@@ -139,7 +139,9 @@ def provision_tenant(
 ) -> Tenant:
     """Seed a ``provisioning`` school and start its trial, in one transaction.
 
-    - creates its `TenantSettings` row;
+    - creates its `TenantSettings` row and its system ledger accounts
+      (`fees_finance.services.ensure_system_accounts`), so its first fee head has an
+      income account to map to;
     - creates the owner's account from the contact details (inactive, no password), gives
       it the shared `school_owner` default role, and invites it (`InvitationKind.OWNER`,
       emailed once this commits, linking to the school's own dashboard host);
@@ -166,6 +168,7 @@ def provision_tenant(
 
     with tenant_context(locked.pk):
         TenantSettings.objects.get_or_create(tenant=locked)
+        ensure_system_accounts(tenant_id=locked.pk)
         owner = _create_owner(locked)
         create_invitation(user=owner, kind=InvitationKind.OWNER, actor_id=actor_id)
 
@@ -190,11 +193,8 @@ def _create_owner(tenant: Tenant) -> User:
         last_name=last_name.strip(),
         phone=tenant.contact_phone,
     )
-    role = (
-        Role.objects.filter(tenant=None, slug=SCHOOL_OWNER, deleted_at__isnull=True).first()
-        # Synced on every migrate; built here only on a database that never ran one.
-        or ensure_school_owner_role()
-    )
+    # Synced on every migrate (`sync_default_roles`); missing means a broken database.
+    role = Role.objects.get(tenant=None, slug=SCHOOL_OWNER, deleted_at__isnull=True)
     UserRole.objects.create(user=owner, role=role, tenant_id=tenant.pk)
     evict_rbac_caches([owner.pk])
     return owner
@@ -205,7 +205,10 @@ def owner_invitation_eligible(user: User) -> bool:
     return (
         user.deleted_at is None
         and UserRole.objects.filter(
-            user_id=user.pk, role__slug=SCHOOL_OWNER, role__deleted_at__isnull=True
+            user_id=user.pk,
+            deleted_at__isnull=True,
+            role__slug=SCHOOL_OWNER,
+            role__deleted_at__isnull=True,
         ).exists()
     )
 

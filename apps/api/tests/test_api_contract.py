@@ -44,6 +44,7 @@ CLIENT_KNOWN_SERVER_CODES = {
     "invalid_mfa_code",
     "mfa_challenge_invalid",
     "mfa_already_enabled",
+    "mfa_locked",
     "invalid_transition",
     "retention_expired",
     "no_live_subscription",
@@ -163,7 +164,12 @@ class ErrorCodeContractTests(APITestCase):
             TenantNotFound,
             TenantSuspended,
         )
-        from core.rbac.mfa import InvalidMfaCode, MfaAlreadyEnabled, MfaChallengeInvalid
+        from core.rbac.mfa import (
+            InvalidMfaCode,
+            MfaAlreadyEnabled,
+            MfaChallengeInvalid,
+            MfaLockedOut,
+        )
         from core.rbac.permissions import MfaRequired
 
         emitted = set(_CODE_BY_STATUS.values()) | {
@@ -184,6 +190,7 @@ class ErrorCodeContractTests(APITestCase):
             InvalidMfaCode.default_code,
             MfaChallengeInvalid.default_code,
             MfaAlreadyEnabled.default_code,
+            MfaLockedOut.default_code,
             # The tenant lifecycle (platform console).
             InvalidTransition.default_code,
             RetentionExpired.default_code,
