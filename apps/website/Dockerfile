@@ -41,6 +41,16 @@ ENV PATH=$PNPM_HOME:$PATH
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN corepack enable pnpm
+# The one build input: the image optimiser's hostname pattern(s), the SAME value for every
+# environment (e.g. `**.schoolhub.example`), so one image is promoted unchanged.
+ARG WEBSITE_IMAGE_HOSTNAME=""
+ENV WEBSITE_IMAGE_HOSTNAME=${WEBSITE_IMAGE_HOSTNAME}
+# Build-only placeholders, not secrets: src/lib/env.ts validates these at import. They are
+# server-only names, so Next never inlines them, and the runner stage does not inherit them;
+# ECS supplies the real values at runtime.
+ENV API_BASE_URL=https://api.build.invalid/api/v1
+ENV WEBSITE_MACHINE_TOKEN=build-placeholder
+ENV PLATFORM_DOMAIN=build.invalid
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/website/node_modules ./apps/website/node_modules
 COPY --from=deps /app/packages ./packages
@@ -50,7 +60,8 @@ RUN pnpm --filter @schoolhub/website build
 FROM ${NODE_IMAGE} AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-ENV PORT=3000
+# The port package.json, compose and the Terraform target group use.
+ENV PORT=3001
 ENV HOSTNAME="0.0.0.0"
 ENV NEXT_TELEMETRY_DISABLED=1
 
@@ -61,6 +72,6 @@ COPY --from=builder --chown=node:node /app/apps/website/.next/static ./apps/webs
 COPY --from=builder --chown=node:node /app/apps/website/public ./apps/website/public
 
 USER node
-EXPOSE 3000
+EXPOSE 3001
 # Tracing from the workspace root preserves the apps/<name> path inside standalone.
 CMD ["node", "apps/website/server.js"]

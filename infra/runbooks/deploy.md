@@ -15,6 +15,10 @@ migrations before the new code serves traffic, without downtime for any tenant.
       migration check, gitleaks, dependency audit.
 - [ ] One immutable image per service exists, tagged with the git SHA. Nothing is
       rebuilt between environments — production runs the exact bytes staging ran.
+      The website image takes one build argument, `WEBSITE_IMAGE_HOSTNAME` (the
+      image optimiser's hostname pattern, e.g. `**.<prod domain>`), with the same
+      value for every environment; everything else it reads at runtime from ECS.
+      CI's `website-image` job proves the Dockerfile builds; it does not push.
 - [ ] Migrations are **expand-phase only**: additive columns, tables and indexes.
       No drops, no type narrowing, no renames. A `DROP` in the diff means this
       release is not deployable — split it. Indexes use `CONCURRENTLY`; any
