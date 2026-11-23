@@ -17,6 +17,8 @@
 #   redis-auth-token   ElastiCache supports two valid tokens during a rotation,
 #                      so this one is genuinely zero-downtime if done in order.
 #   provider keys      Depends on the provider supporting overlapping keys.
+#   website/*          The renderer's token list is edited by hand (--rotate
+#                      refuses it); see infra/runbooks/rotate-website-secrets.md.
 #
 # This script writes the NEW value as AWSPENDING and does NOT promote it. A
 # human promotes it after confirming the application picked it up. That two-step
@@ -81,6 +83,9 @@ classify() {
     */redis/auth-token)   echo "SAFE|ElastiCache accepts old and new during rotation. Rotate, deploy, then promote." ;;
     */payments/*)         echo "COORDINATED|Provider must support overlapping keys. Confirm before rotating, or in-flight payments fail." ;;
     */sentry/*)           echo "SAFE|Worst case is a gap in error reporting." ;;
+    */website/machine-tokens) echo "MANUAL|The API's list of live renderer tokens. A random value would drop every live token; edit the list by hand (infra/runbooks/rotate-website-secrets.md)." ;;
+    */website/machine-token) echo "COORDINATED|The new token must already be in the API's machine-tokens list, or every renderer read gets 401 (infra/runbooks/rotate-website-secrets.md)." ;;
+    */website/revalidate-secret) echo "COORDINATED|Shared by the API and the renderer: redeploy both together. Webhooks fail closed meanwhile; the 300 s cache TTL bounds the staleness." ;;
     *)                    echo "UNKNOWN|Classification not recorded. Work out the blast radius before rotating." ;;
   esac
 }
@@ -121,6 +126,12 @@ if [ "${ACTION}" = "plan" ]; then
     --output json
 
   printf '\nSteps:\n'
+  case "${SECRET_NAME}" in
+    */website/*)
+      printf '  Follow infra/runbooks/rotate-website-secrets.md; the order is what keeps the site up.\n\n'
+      exit 0
+      ;;
+  esac
   printf '  1. ./rotate-secrets.sh --secret %s --rotate    # writes AWSPENDING\n' "${SECRET_NAME}"
   case "${SECRET_NAME}" in
     */db/*)
@@ -143,6 +154,9 @@ fi
 # rotate — generate and stage, never promote
 # -----------------------------------------------------------------------------
 if [ "${ACTION}" = "rotate" ]; then
+  if [ "${risk}" = "MANUAL" ]; then
+    fail "refusing to --rotate ${SECRET_NAME}: a random value would drop every live token; edit the list by hand (infra/runbooks/rotate-website-secrets.md)"
+  fi
   if [ "${risk}" = "DISRUPTIVE" ] || [ "${risk}" = "UNKNOWN" ]; then
     printf '\n  *** %s: %s ***\n\n' "${risk}" "${note}"
     printf '  Type the secret name to confirm: '

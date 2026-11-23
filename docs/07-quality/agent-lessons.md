@@ -24,6 +24,7 @@
 9. A hook rejection was fixed at its cause, after reading its error, on the files it named (L10).
 10. Every brief to a subagent carries this repository's overrides (L11).
 11. A viewset you edited is the one `config/api_v1.py` routes to (L40), and every fixture of a type the regenerated contract changed was updated in the same commit (L41).
+12. Every value Terraform passes to an app is read by that app, under that name, at that port or path (L74).
 
 ## 3. Lessons
 
@@ -525,6 +526,11 @@
 
 - **Mistake.** Three times in website CMS PR B a value reached something that could not take it: a gallery embed URL over the `varchar(500)` column and one that made `urlsplit` raise (B1, a 500), page rules held only in a serializer so a second caller skipped them (B2), and a contact subject of 200 characters that overflowed `Notification.title` once the notice prefix was added, so the notify task died and nobody was told (change review).
 - **Check.** For every field a caller supplies, name where it ends up (a `max_length` column, `urlsplit`/`UUID`/`json` parsing, an email subject or other header, a title with a prefix) and enforce that limit in the service as a field-keyed `DomainRuleViolation`, so no caller can bypass it. Where text is derived (prefix, truncation), compute the budget from one constant and test the maximum-length input end to end.
+
+### L74. Every value Terraform passes to an app is checked against the file that reads it
+
+- **Mistake.** The website launch infrastructure named settings modules (`config.settings.production`, `.staging`) that never existed, gave the renderer `NEXT_PUBLIC_API_BASE_URL`, which it never reads, routed port 3001 to an image listening on 3000, and probed `/api/health` routes neither frontend had. The API's `/healthz` could never pass behind the ALB under `prod.py` (the probe's IP Host got `DisallowedHost` or the SSL redirect), and a `NEXT_PUBLIC_` value read by server code would have been frozen into the promoted image at build.
+- **Check.** For every environment variable, port, settings module and health path Terraform passes to an app, open the file that reads or serves it. A health path must pass under the production middleware with an IP `Host` and no `X-Forwarded-Proto`. No per-environment value may be a `NEXT_PUBLIC_*`, which `next build` inlines into server bundles too.
 
 ## 4. Adding a lesson
 

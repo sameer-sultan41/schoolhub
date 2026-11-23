@@ -23,7 +23,7 @@ either this file or `project-status.md`.
     - **Plan-gating of custom domains.** Waits on platform-admin's plan resolver; every school may bind up to five domains until it ships.
     - **Apex custom domains.** Verification requires a CNAME from the domain to `WEBSITE_CNAME_TARGET`, and DNS forbids a CNAME at a zone apex, so a school binds `www.myschool.tld`, not `myschool.tld`. Accepting an apex needs an A/ALIAS check against the edge's addresses, which depends on the real edge provider above.
     - **Disabling a custom domain without deleting it.** `custom_domains.status` has `disabled`, but no route sets it in v1 (the module doc's §16 has no disable action); remove the domain instead, and re-add it to restore it.
-    - **Terraform names settings modules that do not exist** (infra-owned). `infra/terraform/envs/production/main.tf` sets `DJANGO_SETTINGS_MODULE = "config.settings.production"` and staging sets `config.settings.staging`, but `apps/api/config/settings/` has only `base`, `dev`, `prod` and `test`, so either environment would fail at boot. Fixing it belongs in an infra PR (`infra/AGENTS.md` governs Terraform), not this one. **Handled:** `WEBSITE_CNAME_TARGET`, which `prod.py` requires at boot, is a required `website_cname_target` variable in both environments (validated as an FQDN), and `NUM_PROXIES` is wired from `num_proxies`. Still a **boot blocker**: the settings-module name above. Still **feature blockers** (the API boots, the public site is dark or stale): `WEBSITE_MACHINE_TOKENS`, `WEBSITE_REVALIDATE_URL` and `WEBSITE_REVALIDATE_SECRET` (see "Terraform wiring for the public website" below).
+    - ~~**Terraform names settings modules that do not exist**~~ **Closed by the website launch-infra PR** (plan `docs/superpowers/plans/2026-11-23-website-launch-infra.md`): both environments run `config.settings.prod`, and a `repo-hygiene` check fails when Terraform names a settings module with no file. The website feature blockers are closed by the same PR (below).
   - **Coordination note for the platform-admin session** (handoff from `website-cms` PR D; nothing here blocks either module):
     - **`custom_domains` and `custom_domain_routes` live in `website_cms`**, not platform-admin. Ownership moved because the claim lifecycle (DNS verification, the route table the renderer resolves, revalidation and the domain notifications) is website behaviour, and `core/` and platform-admin must not import `website_cms`. Platform-admin's docs carry the same note (`platform-admin.md` §6, §15, §18; `tenancy.md`).
     - **`provision_tenant` may call `website_cms.settings.services.ensure_default_site(tenant)`** so a new school has a default site at once; until then it is created on the first CMS write.
@@ -93,7 +93,7 @@ either this file or `project-status.md`.
   - **The preview token is in the editor's link.** `POST …:preview` returns `/api/preview?token=…` (`pages/viewset.py`), so for its 600 s life the token can appear in the renderer's access log and the browser's history; the renderer → API hop is header-only. A POST-based hand-off (or a one-time code exchanged for the token) would keep it out of URLs.
   - **The preview banner can show for a junk or expired cookie.** The banner keys on the cookie being present, not on the API accepting it. Fix by having the API return the token's expiry and setting the cookie's `maxAge` from it.
   - **External-host logos load unoptimised.** `branding.logo_url` may be any https host, so the navigation logo bypasses `next/image`'s optimiser instead of widening its allow-list. Serving logos through the API's file route would let them be optimised.
-  - **Image config is fixed at build time.** `images.remotePatterns` (from `NEXT_PUBLIC_API_ORIGIN`) and `WEBSITE_IMAGES_UNOPTIMIZED` are read when `next build` loads `next.config.ts`. `apps/website/Dockerfile` sets no build args, so an image built without `NEXT_PUBLIC_API_ORIGIN` allows no remote image and posts the contact form to its own origin. The deploy pipeline must pass it at build; the Terraform wiring note below should carry it.
+  - ~~**Image config is fixed at build time.**~~ **Closed by the website launch-infra PR.** The one build input is `WEBSITE_IMAGE_HOSTNAME` (e.g. `**.<prod domain>`), the same value for every environment; the contact form's origin is the runtime `API_PUBLIC_ORIGIN`, passed as a prop. The Dockerfile takes it as its one build argument and CI builds the runner image.
   - **The custom-domain redirect is a 308**, not a 301 (`permanentRedirect` in the root layout; a layout cannot return a 301). Both are permanent; a literal 301 needs a route-level response.
   - **`header_config` and `footer_config` are not rendered.** They have no schema yet (PR A); the renderer reads menus and social links only.
   - **Duplicate menu items warn in React.** Navigation keys are `href` plus label; two identical items in one menu are not unique.
@@ -102,28 +102,47 @@ either this file or `project-status.md`.
 - **`NUM_PROXIES` is now required, and operators must set the real hop count.** Production
   refuses to boot without `NUM_PROXIES` (`0` means no proxy), and the production and staging
   Terraform take a required `num_proxies` input with no default. DRF's throttles and
-  `core.api.client_ip.client_ip` (the stored `contact_submissions.ip` and the audit log, which used to take the spoofable left-most entry) both honour it. What remains is operational: the example
-  `num_proxies = 2` assumes CloudFront then the ALB, and each environment must confirm its real
-  chain. A wrong value is not detected by the boot check (too small records a proxy's address,
-  too large trusts a client-supplied `X-Forwarded-For` entry). It blocks launching the public
-  site until set. An unset value in dev and test keeps keying on the raw header.
+  `core.api.client_ip.client_ip` (the stored `contact_submissions.ip` and the audit log) both
+  honour it. The ALB now accepts CloudFront only, so `num_proxies = 2` matches the Terraform as
+  written. What remains is operational: each environment must confirm its real chain is
+  CloudFront then the ALB before launch. A wrong value is not detected by the boot check (too
+  small records a proxy's address, too large trusts a client-supplied `X-Forwarded-For` entry).
+  An unset value in dev and test keeps keying on the raw header.
 
-- **LAUNCH BLOCKER: restrict the ALB to CloudFront before trusting `num_proxies = 2`.** The
-  value is safe only once the ALB accepts traffic from CloudFront alone: the origin-facing
-  managed prefix list on the ALB security group, or a CloudFront custom origin header checked by
-  an ALB listener rule. Until then anyone connecting to the ALB directly controls
-  `X-Forwarded-For`, so the per-IP limits (public form, login, password reset, invitations,
-  payment-callback failures) and the stored audit and contact IPs are spoofable.
-  ([ADR-0039](decisions/0039-public-content-api.md) Consequences.)
+- ~~**LAUNCH BLOCKER: restrict the ALB to CloudFront before trusting `num_proxies = 2`.**~~
+  **Closed by the website launch-infra PR.** The ALB security group admits HTTPS from the
+  `com.amazonaws.global.cloudfront.origin-facing` managed prefix list only, and the port-80
+  listener is gone. Operators check the `L-0EA8095F` quota (≥ 55) before the first apply
+  (`infra/terraform/README.md`). ([ADR-0039](decisions/0039-public-content-api.md) Consequences.)
 
-- **Terraform wiring for the public website is incomplete** (feature blockers: the API boots
-  without these). The API container needs `WEBSITE_MACHINE_TOKENS`, `WEBSITE_REVALIDATE_URL`
-  (the renderer's internal origin) and `WEBSITE_REVALIDATE_SECRET` (both secrets as
-  `api_secrets` ARNs); the renderer task needs `WEBSITE_MACHINE_TOKEN` and the same revalidate
-  secret, and its image build needs `NEXT_PUBLIC_API_ORIGIN` as a build argument (it is
-  inlined). Until wired, staging and production sites are dark (the renderer's reads get 401
-  and fail closed) and revalidation is a no-op. `WEBSITE_CNAME_TARGET`, the one website setting
-  the API needs to boot, is wired (`website_cname_target`).
+- ~~**Terraform wiring for the public website is incomplete**~~ **Closed by the website
+  launch-infra PR.** Three required ARNs per environment (`website_machine_tokens_arn`,
+  `website_machine_token_arn`, `website_revalidate_secret_arn`) reach the API and the renderer;
+  `WEBSITE_REVALIDATE_URL` is `https://<platform_domain>/api/revalidate` through CloudFront; the
+  renderer reads `API_BASE_URL`, `API_PUBLIC_ORIGIN` and `PLATFORM_DOMAIN` at runtime. Nothing
+  is applied yet: the real secret ARNs, domains and `website_cname_target` are operator inputs.
+
+- **Website launch-infra follow-ups** (plan `docs/superpowers/plans/2026-11-23-website-launch-infra.md`):
+  - **Multi-task revalidation.** `revalidateTag()` invalidates one renderer task only (Next 16
+    self-hosting docs), so the other tasks serve content up to `CONTENT_REVALIDATE_SECONDS`
+    (300 s) stale after a publish. The fix is the singular `cacheHandler` (with
+    `cacheMaxMemorySize: 0`) backed by shared storage, implementing `refreshTags`/`updateTags`,
+    which means giving the renderer Redis access. It is a renderer design change.
+  - **The dashboard image is per-environment.** `NEXT_PUBLIC_API_BASE_URL` and
+    `NEXT_PUBLIC_PLATFORM_DOMAIN` are inlined at its build (the client `login-form.tsx` and
+    `forgot-password-form.tsx` read them, as do `next.config.ts`'s rewrites), so it cannot yet be
+    promoted unchanged the way the renderer now is. It needs the same runtime treatment.
+  - **Terraform sets neither `CORS_ALLOWED_ORIGINS` nor `CSRF_TRUSTED_ORIGINS`.** `prod.py`
+    defaults both to `[]`. Tenant-origin CORS for the public form goes through
+    `website_cms.cors`, but the dashboard's cross-origin calls to `api.<domain>` and any
+    CSRF-checked POST need them.
+  - **The ALB reuses the CloudFront certificate**, issued in us-east-1. That works only while
+    `aws_region = "us-east-1"`; any other region needs a regional ACM certificate for the ALB.
+  - **A CloudFront custom origin header** as defence in depth beside the prefix list: it would
+    stop another CloudFront distribution reaching the ALB around this one's WAF, at the cost of a
+    shared secret in state and a condition on every listener rule.
+  - **`SizeRestrictions_BODY` (8 KB) on webhook bodies.** The production WAF's common rule set
+    blocks bodies over 8 KB; a bulk publish with a long tag list could exceed it.
 
 - **AI gateway and AI-FEE-02 follow-ups** (`feat/ai-gateway`, plan
   `docs/superpowers/plans/2026-11-07-ai-gateway.md`, [ADR-0035](decisions/0035-ai-gateway-shape.md)).
