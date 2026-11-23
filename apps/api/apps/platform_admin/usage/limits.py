@@ -62,22 +62,21 @@ def breaches(before: Limits, after: Limits, snapshots: Iterable[TenantUsageSnaps
     A limit that stays or rises is never a breach, so an edit that leaves an already-exceeded
     limit alone needs no acknowledgement. ``None`` is unlimited.
     """
-    lowered = [
-        metric
-        for metric in COUNTED_METRICS
-        if after.get(metric) is not None
-        and (before.get(metric) is None or after[metric] < before[metric])
-    ]
+    lowered: dict[str, int] = {}
+    for metric in COUNTED_METRICS:
+        new, old = after.get(metric), before.get(metric)
+        if new is not None and (old is None or new < old):
+            lowered[metric] = new
     found = []
     for snapshot in snapshots:
         used = snapshot_usage(snapshot)
-        for metric in lowered:
-            if used[metric] > after[metric]:
+        for metric, limit in lowered.items():
+            if used[metric] > limit:
                 found.append(
                     {
                         "tenant_id": str(snapshot.tenant_id),
                         "metric": metric,
-                        "limit": after[metric],
+                        "limit": limit,
                         "usage": _json_number(used[metric]),
                     }
                 )

@@ -4442,6 +4442,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/tenants/{tenant_pk}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A school's latest usage snapshot and its effective limits
+         * @description `GET .../tenants/{tenant_pk}/usage` and `POST .../tenants/{tenant_pk}:refresh-usage`.
+         */
+        get: operations["platform_tenants_usage_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/tenants/{tenant_pk}:delete": {
         parameters: {
             query?: never;
@@ -4476,6 +4496,26 @@ export interface paths {
          * @description `GET/PATCH /platform/tenants/{tenant_pk}` and its lifecycle colon-actions.
          */
         post: operations["platform_tenants_:provision_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_pk}:refresh-usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take a usage snapshot of the school now
+         * @description `GET .../tenants/{tenant_pk}/usage` and `POST .../tenants/{tenant_pk}:refresh-usage`.
+         */
+        post: operations["platform_tenants_:refresh_usage_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -11837,7 +11877,7 @@ export interface components {
             };
             /** @description Inactive plans take no new subscriber. */
             is_active?: boolean;
-            /** @description Lower a limit below a school's current usage anyway (checked from PR C). */
+            /** @description Lower a limit below a school's latest usage snapshot anyway; without it that is a 409 limit_below_usage. */
             acknowledge_over_usage?: boolean;
         };
         /**
@@ -12255,6 +12295,11 @@ export interface components {
             limits_override?: {
                 [key: string]: number | null;
             } | null;
+            /**
+             * @description Lower a limit below the school's latest usage snapshot anyway; without it that is a 409 limit_below_usage.
+             * @default false
+             */
+            acknowledge_over_usage: boolean;
         };
         PatchedTeacherAllocation: {
             /** Format: uuid */
@@ -12534,7 +12579,7 @@ export interface components {
             };
             /** @description Inactive plans take no new subscriber. */
             is_active?: boolean;
-            /** @description Lower a limit below a school's current usage anyway (checked from PR C). */
+            /** @description Lower a limit below a school's latest usage snapshot anyway; without it that is a 409 limit_below_usage. */
             acknowledge_over_usage?: boolean;
         };
         PortalChild: {
@@ -14318,6 +14363,35 @@ export interface components {
             readonly name: string;
             /** @description Wildcard subdomain label. */
             readonly slug: string;
+        };
+        /** @description The school's latest snapshot (null before its first) and its effective limits. */
+        TenantUsage: {
+            readonly snapshot: components["schemas"]["TenantUsageSnapshot"] | null;
+            /** @description Every quota metric's effective limit; null is unlimited. `storage_gb` is GiB. */
+            readonly limits: {
+                [key: string]: number | null;
+            };
+        };
+        TenantUsageSnapshot: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: date-time */
+            readonly taken_at: string;
+            readonly status: components["schemas"]["TenantStatusEnum"];
+            /** @description The live plan's code; blank for none. */
+            readonly plan_code: string;
+            /**
+             * Format: decimal
+             * @description The plan's price per month while paying (active or past due); 0 otherwise.
+             */
+            readonly mrr_amount: string;
+            readonly currency: string;
+            readonly students: number;
+            readonly staff: number;
+            readonly storage_bytes: number;
+            /** @description Impersonation grants in the last 30 days (PR E). */
+            readonly impersonations_30d: number | null;
+            readonly modules_enabled: string[];
         };
         Term: {
             /** Format: uuid */
@@ -21601,6 +21675,13 @@ export interface operations {
                     "application/json": components["schemas"]["Plan"];
                 };
             };
+            /** @description limit_below_usage: a limit would drop below a school's latest usage; `meta.over_usage` lists each school and metric. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     platform_tenants_list: {
@@ -21849,7 +21930,7 @@ export interface operations {
                     "application/json": components["schemas"]["SubscriptionState"];
                 };
             };
-            /** @description invalid_transition: the subscription's status does not allow this move; no_live_subscription: the school has none. */
+            /** @description invalid_transition: the subscription's status does not allow this move; no_live_subscription: the school has none; limit_below_usage: a limit would drop below the school's latest usage (`meta.over_usage`). */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -22002,6 +22083,27 @@ export interface operations {
             };
         };
     };
+    platform_tenants_usage_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantUsage"];
+                };
+            };
+        };
+    };
     "platform_tenants_:delete_create": {
         parameters: {
             query?: never;
@@ -22074,6 +22176,27 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    "platform_tenants_:refresh_usage_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantUsage"];
+                };
             };
         };
     };

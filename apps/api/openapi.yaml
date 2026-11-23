@@ -9384,6 +9384,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Plan'
           description: ''
+        '409':
+          description: 'limit_below_usage: a limit would drop below a school''s latest
+            usage; `meta.over_usage` lists each school and metric.'
     delete:
       operationId: platform_plans_destroy
       description: '`GET/POST /platform/plans` and `GET/PATCH/DELETE /platform/plans/{id}`.'
@@ -9718,7 +9721,8 @@ paths:
           description: ''
         '409':
           description: 'invalid_transition: the subscription''s status does not allow
-            this move; no_live_subscription: the school has none.'
+            this move; no_live_subscription: the school has none; limit_below_usage:
+            a limit would drop below the school''s latest usage (`meta.over_usage`).'
   /api/v1/platform/tenants/{tenant_pk}/subscription:activate:
     post:
       operationId: platform_tenants_subscription:activate_create
@@ -9876,6 +9880,29 @@ paths:
         '409':
           description: 'invalid_transition: the subscription''s status does not allow
             this move; no_live_subscription: the school has none.'
+  /api/v1/platform/tenants/{tenant_pk}/usage:
+    get:
+      operationId: platform_tenants_usage_retrieve
+      description: '`GET .../tenants/{tenant_pk}/usage` and `POST .../tenants/{tenant_pk}:refresh-usage`.'
+      summary: A school's latest usage snapshot and its effective limits
+      parameters:
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantUsage'
+          description: ''
   /api/v1/platform/tenants/{tenant_pk}:delete:
     post:
       operationId: platform_tenants_:delete_create
@@ -9952,6 +9979,29 @@ paths:
             action.'
         '422':
           description: An unknown or inactive plan_code, or no contact
+  /api/v1/platform/tenants/{tenant_pk}:refresh-usage:
+    post:
+      operationId: platform_tenants_:refresh_usage_create
+      description: '`GET .../tenants/{tenant_pk}/usage` and `POST .../tenants/{tenant_pk}:refresh-usage`.'
+      summary: Take a usage snapshot of the school now
+      parameters:
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantUsage'
+          description: ''
   /api/v1/platform/tenants/{tenant_pk}:reinstate:
     post:
       operationId: platform_tenants_:reinstate_create
@@ -25760,8 +25810,8 @@ components:
         acknowledge_over_usage:
           type: boolean
           writeOnly: true
-          description: Lower a limit below a school's current usage anyway (checked
-            from PR C).
+          description: Lower a limit below a school's latest usage snapshot anyway;
+            without it that is a 409 limit_below_usage.
     PatchedPromotionDecision:
       type: object
       description: |-
@@ -26608,6 +26658,11 @@ components:
             minimum: 0
             nullable: true
           nullable: true
+        acknowledge_over_usage:
+          type: boolean
+          default: false
+          description: Lower a limit below the school's latest usage snapshot anyway;
+            without it that is a 409 limit_below_usage.
     PatchedTeacherAllocation:
       type: object
       properties:
@@ -27191,8 +27246,8 @@ components:
         acknowledge_over_usage:
           type: boolean
           writeOnly: true
-          description: Lower a limit below a school's current usage anyway (checked
-            from PR C).
+          description: Lower a limit below a school's latest usage snapshot anyway;
+            without it that is a 409 limit_below_usage.
       required:
       - code
       - currency
@@ -31126,6 +31181,87 @@ components:
       required:
       - name
       - slug
+    TenantUsage:
+      type: object
+      description: The school's latest snapshot (null before its first) and its effective
+        limits.
+      properties:
+        snapshot:
+          allOf:
+          - $ref: '#/components/schemas/TenantUsageSnapshot'
+          readOnly: true
+          nullable: true
+        limits:
+          type: object
+          additionalProperties:
+            type: integer
+            nullable: true
+          readOnly: true
+          description: Every quota metric's effective limit; null is unlimited. `storage_gb`
+            is GiB.
+      required:
+      - limits
+      - snapshot
+    TenantUsageSnapshot:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        taken_at:
+          type: string
+          format: date-time
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/TenantStatusEnum'
+          readOnly: true
+        plan_code:
+          type: string
+          readOnly: true
+          description: The live plan's code; blank for none.
+        mrr_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          description: The plan's price per month while paying (active or past due);
+            0 otherwise.
+        currency:
+          type: string
+          readOnly: true
+        students:
+          type: integer
+          readOnly: true
+        staff:
+          type: integer
+          readOnly: true
+        storage_bytes:
+          type: integer
+          readOnly: true
+        impersonations_30d:
+          type: integer
+          readOnly: true
+          nullable: true
+          description: Impersonation grants in the last 30 days (PR E).
+        modules_enabled:
+          type: array
+          items:
+            type: string
+          readOnly: true
+      required:
+      - currency
+      - id
+      - impersonations_30d
+      - modules_enabled
+      - mrr_amount
+      - plan_code
+      - staff
+      - status
+      - storage_bytes
+      - students
+      - taken_at
     Term:
       type: object
       properties:

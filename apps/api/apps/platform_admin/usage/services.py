@@ -48,7 +48,7 @@ EXITED_STAFF_STATUSES = (
 )
 #: Revenue counts while the school pays, late or not; a trial brings none.
 PAYING_STATUSES = (SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE)
-_MONTHS = {BillingPeriod.MONTHLY: 1, BillingPeriod.ANNUAL: 12}
+_MONTHS: dict[str, int] = {BillingPeriod.MONTHLY: 1, BillingPeriod.ANNUAL: 12}
 _CENT = Decimal("0.01")
 
 
