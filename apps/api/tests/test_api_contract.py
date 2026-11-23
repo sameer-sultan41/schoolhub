@@ -53,6 +53,7 @@ CLIENT_KNOWN_SERVER_CODES = {
     "plan_in_use",
     "subscription_exists",
     "toggle_refused",
+    "limit_below_usage",
 }
 
 
@@ -166,6 +167,7 @@ class ErrorCodeContractTests(APITestCase):
             GraceExpired,
             NoLiveSubscription,
         )
+        from apps.platform_admin.usage.limits import LimitBelowUsage
         from core.ai.exceptions import AIQuotaExceeded, AIUnavailable
         from core.api.exceptions import (
             Conflict,
@@ -213,6 +215,8 @@ class ErrorCodeContractTests(APITestCase):
             SubscriptionExists.default_code,
             # The feature-flag console: a refused disable or kill-switch override.
             ToggleRefused.default_code,
+            # A limit lowered below a school's usage snapshot, unacknowledged.
+            LimitBelowUsage.default_code,
         }
         self.assertEqual(
             emitted - CLIENT_KNOWN_SERVER_CODES,

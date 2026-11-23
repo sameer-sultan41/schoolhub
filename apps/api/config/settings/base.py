@@ -511,6 +511,7 @@ CELERY_TASK_ROUTES = {
     "apps.platform_admin.tasks.expire_trials": {"queue": "bulk"},
     "apps.platform_admin.tasks.dunning_sweep": {"queue": "bulk"},
     "apps.platform_admin.tasks.lapse_overrides": {"queue": "bulk"},
+    "apps.platform_admin.tasks.snapshot_all": {"queue": "bulk"},
     "apps.platform_admin.tasks.send_trial_expiring_notice": {"queue": "transactional"},
     "apps.platform_admin.tasks.send_payment_failed_notice": {"queue": "transactional"},
 }
@@ -615,6 +616,12 @@ CELERY_BEAT_SCHEDULE = {
     "platform-lapse-overrides": {
         "task": "apps.platform_admin.tasks.lapse_overrides",
         "schedule": crontab(minute="23"),
+    },
+    # After expiry and dunning, so tonight's snapshot records tonight's suspensions; the
+    # platform reports and the quota check read it.
+    "platform-usage-snapshot": {
+        "task": "apps.platform_admin.tasks.snapshot_all",
+        "schedule": crontab(hour="2", minute="50"),
     },
 }
 

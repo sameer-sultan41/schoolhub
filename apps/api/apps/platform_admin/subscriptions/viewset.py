@@ -39,6 +39,11 @@ _CONFLICT = OpenApiResponse(
     description="invalid_transition: the subscription's status does not allow this move; "
     "no_live_subscription: the school has none."
 )
+_UPDATE_CONFLICT = OpenApiResponse(
+    description="invalid_transition: the subscription's status does not allow this move; "
+    "no_live_subscription: the school has none; limit_below_usage: a limit would drop below "
+    "the school's latest usage (`meta.over_usage`)."
+)
 _PLAN_CONFLICT = OpenApiResponse(
     description="invalid_transition: the subscription's status does not allow this move; "
     "no_live_subscription: the school has none; toggle_refused: the plan would switch off a "
@@ -74,16 +79,21 @@ class TenantSubscriptionViewSet(PlatformTenantNestedMixin, PlatformViewSet):
     @extend_schema(
         summary="Set the billing provider, its reference or negotiated limits",
         request=SubscriptionUpdateSerializer,
-        responses={200: SubscriptionStateSerializer, 409: _CONFLICT},
+        responses={200: SubscriptionStateSerializer, 409: _UPDATE_CONFLICT},
     )
     def partial_update(self, request: Request, tenant_pk=None) -> Response:
         payload = SubscriptionUpdateSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
+        fields = dict(payload.validated_data)
+        acknowledged = fields.pop("acknowledge_over_usage")
         return self._act(
             request,
             "update",
             lambda sub: services.update_subscription(
-                self._live(sub), data=payload.validated_data, actor_id=request.user.pk
+                self._live(sub),
+                data=fields,
+                actor_id=request.user.pk,
+                acknowledge_over_usage=acknowledged,
             ),
             message="Subscription updated.",
         )

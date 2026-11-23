@@ -42,6 +42,7 @@ from apps.platform_admin.plans.services import subscribable_plan
 # A module reference, not its names: `tenants.services` imports this module for `:provision`.
 from apps.platform_admin.tenants import lifecycle
 from apps.platform_admin.tenants import services as tenant_services
+from apps.platform_admin.usage.limits import latest_snapshots, refuse_below_usage
 from core.api.exceptions import CodedAPIException, DomainRuleViolation
 from core.audit.services import record_system_audit
 from core.tenancy.context import tenant_atomic, tenant_context
@@ -96,10 +97,15 @@ def effective_limits(tenant_id: uuid.UUID) -> dict[str, int | None]:
 
 
 def _limits_of(sub: Subscription | None) -> dict[str, int | None]:
-    limits: dict[str, int | None] = dict.fromkeys(QUOTA_METRICS)
     if sub is None:
-        return limits
-    for source in (sub.plan.limits or {}, sub.limits_override or {}):
+        return dict.fromkeys(QUOTA_METRICS)
+    return _merged_limits(sub.plan.limits, sub.limits_override)
+
+
+def _merged_limits(plan_limits: dict | None, override: dict | None) -> dict[str, int | None]:
+    """Every metric's limit: the plan's, then the negotiated override's on top."""
+    limits: dict[str, int | None] = dict.fromkeys(QUOTA_METRICS)
+    for source in (plan_limits or {}, override or {}):
         limits.update({metric: value for metric, value in source.items() if metric in limits})
     return limits
 
@@ -285,11 +291,26 @@ def change_plan(sub: Subscription, plan_code: str, *, actor_id: uuid.UUID | None
 
 
 def update_subscription(
-    sub: Subscription, *, data: dict, actor_id: uuid.UUID | None
+    sub: Subscription,
+    *,
+    data: dict,
+    actor_id: uuid.UUID | None,
+    acknowledge_over_usage: bool = False,
 ) -> Subscription:
-    """Change the billing provider, its reference or the negotiated limits."""
+    """Change the billing provider, its reference or the negotiated limits.
+
+    Lowering an effective limit below the school's latest usage snapshot is a 409
+    `limit_below_usage` unless acknowledged.
+    """
     with _writing(sub.tenant_id) as school:
         row = _locked(sub, None, allowed=tuple(_LIVE))
+        if "limits_override" in data:
+            refuse_below_usage(
+                _limits_of(row),
+                _merged_limits(row.plan.limits, data["limits_override"]),
+                latest_snapshots([row.tenant_id]),
+                acknowledged=acknowledge_over_usage,
+            )
         fields = [field for field in EDITABLE_FIELDS if field in data]
         for field in fields:
             setattr(row, field, data[field])

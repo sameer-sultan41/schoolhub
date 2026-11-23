@@ -88,7 +88,8 @@ class PlanWriteSerializer(serializers.ModelSerializer):
     acknowledge_over_usage = serializers.BooleanField(
         required=False,
         write_only=True,
-        help_text="Lower a limit below a school's current usage anyway (checked from PR C).",
+        help_text="Lower a limit below a school's latest usage snapshot anyway; without it "
+        "that is a 409 limit_below_usage.",
     )
 
     class Meta:
@@ -117,9 +118,3 @@ class PlanWriteSerializer(serializers.ModelSerializer):
         if not _CURRENCY.match(value):
             raise serializers.ValidationError("Use a three-letter ISO 4217 code, e.g. PKR.")
         return value
-
-    def validate(self, attrs: dict) -> dict:
-        # Accepted and not yet acted on: the check against a school's usage, and its 409
-        # `limit_below_usage`, need the usage snapshots that arrive in PR C (ruling C3).
-        attrs.pop("acknowledge_over_usage", None)
-        return attrs

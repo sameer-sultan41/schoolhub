@@ -80,6 +80,12 @@ class SubscriptionUpdateSerializer(serializers.Serializer):
     billing_provider = serializers.CharField(max_length=30, required=False, allow_blank=True)
     billing_provider_ref = serializers.CharField(max_length=120, required=False, allow_blank=True)
     limits_override = LimitsField(required=False, allow_null=True)
+    acknowledge_over_usage = serializers.BooleanField(
+        required=False,
+        default=False,
+        help_text="Lower a limit below the school's latest usage snapshot anyway; without it "
+        "that is a 409 limit_below_usage.",
+    )
 
 
 class SubscriptionActivateSerializer(serializers.Serializer):

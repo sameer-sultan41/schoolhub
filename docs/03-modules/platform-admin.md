@@ -56,7 +56,7 @@ Every operator signs in with password **and** TOTP ([auth-and-rbac §1](../02-ar
 2. **Plans & subscriptions** — plan catalog (modules enabled, usage limits, price, trial length); per-tenant subscription with period tracking; plan upgrades/downgrades with proration rules *(recommendation)*. *Built:* the catalog, one live subscription per school, trial → active → past due → recovered, plan changes and plan-based module enablement (§7.5, §20); proration and plan versioning are deferred.
 3. **Billing of schools** — invoicing tenants for their subscription via a billing provider; dunning on failed payment → `past_due` → grace → suspension. (This bills *schools*; student fee billing is the tenant-side fees-finance module.) *Built:* manual billing from the console (`:activate`, `:record-payment`, `:mark-payment-failed`), the provider webhook (a fake adapter only) and the trial and dunning sweeps (§7.6).
 4. **Feature flags** — platform flag registry with per-plan defaults and per-tenant overrides, kill-switch capable; every tenant module checks its flag server-side (multi-tenancy §5). *Built:* the console's flag list and default/kill-switch edits, per-school overrides with expiry, and disable guards (§7.6).
-5. **Usage tracking & quotas** — metered counters per tenant (active students, staff, storage GB, SMS credits, AI tokens, API rate) vs. plan limits; soft-warn then hard-enforce.
+5. **Usage tracking & quotas** — metered counters per tenant (active students, staff, storage GB, SMS credits, AI tokens, API rate) vs. plan limits; soft-warn then hard-enforce. *Built:* the students, staff and storage counters and the usage snapshots taken from them, nightly and on demand, and the 409 `limit_below_usage` on a limit lowered below them (§7.7); enforcement at create time follows in the same PR.
 6. **Onboarding wizard** — guided tenant setup: school profile → campuses → academic session → classes/sections → fee structures → staff invites → student import; resumable, with progress tracking.
 7. **Data migration / legacy import** — Excel/CSV import pipelines (students, guardians, staff, fee balances, marks history) with mapping templates, dry-run validation, error reports, and rollback of a failed batch.
 8. **Platform-level reporting** — aggregates only: tenant counts by state, MRR/ARR, usage/adoption per module, churn, support-load; never row-level school data.
@@ -129,7 +129,7 @@ Support agent requests elevation (tenant, target user, reason) → grant issued 
 
 ### 7.5 Plans and subscriptions, as built
 
-- **Catalog.** A plan's `code` is unique and fixed once created (`tenants.current_plan` holds it). `enabled_modules` lists registered `module.*` feature keys; `limits` maps `QUOTA_METRICS` (`students`, `staff`, `storage_gb`, `sms_credits`, `ai_tokens`) to a non-negative integer or null (unlimited); a metric left out is unlimited. `DELETE` soft-deletes (and deactivates) the plan, refused with 409 `plan_in_use` while any school's `current_plan` is it. An inactive plan keeps its subscribers but takes no new one. `PATCH` accepts `acknowledge_over_usage` already; the 409 `limit_below_usage` check against usage snapshots arrives with the usage PR.
+- **Catalog.** A plan's `code` is unique and fixed once created (`tenants.current_plan` holds it). `enabled_modules` lists registered `module.*` feature keys; `limits` maps `QUOTA_METRICS` (`students`, `staff`, `storage_gb`, `sms_credits`, `ai_tokens`) to a non-negative integer or null (unlimited); a metric left out is unlimited. `DELETE` soft-deletes (and deactivates) the plan, refused with 409 `plan_in_use` while any school's `current_plan` is it. An inactive plan keeps its subscribers but takes no new one. Lowering a limit below the latest usage snapshot of a school on the plan is a 409 `limit_below_usage` unless the body carries `acknowledge_over_usage: true` (§7.7).
 - **One live subscription per school.** `trialing`, `active` and `past_due` are live; a partial unique index on `subscriptions(tenant_id)` allows one, and the services refuse a second with 409 `subscription_exists`.
 - **Every write is one transaction** (`apps/platform_admin/subscriptions/services.py`), with the school bound and its `tenants` row locked: it updates the subscription, mirrors it onto `tenants.current_plan`, `subscription_status` and `billing_provider_ref`, moves the school's lifecycle where the subscription implies it, and invalidates the feature cache now and again on commit. A duplicate billing reference is a 400.
 
@@ -166,6 +166,14 @@ Support agent requests elevation (tenant, target user, reason) → grant issued 
 - **Trial end of record** is `tenants.trial_ends_at`, which `:reinstate` moves; the trialing subscription's period is not read.
 - **Dunning runs from the unpaid period's end**, the date the payment was due, so a failure marked mid-period still gives the school the period it paid for plus the grace.
 - **A reinstated past-due school keeps the grace it had.** `:reinstate` to `past_due` is refused with 409 `grace_expired` once the grace has run out (§7.2), so the sweep never re-suspends a school an operator just let back in; within the grace, the sweep suspends it on the original date.
+
+### 7.7 Usage snapshots, as built
+
+- **Counters** (`apps/platform_admin/usage/services.py`, the one implementation; quota checks reuse `USAGE_COUNTERS`). `students`: students not soft-deleted whose status is not `withdrawn`, `graduated` or `transferred`. `staff`: staff not soft-deleted whose employment status is not `resigned`, `retired` or `terminated` (the spec's "exited"). `storage_gb`: the sum of the school's non-deleted `files.size_bytes`, pending uploads included, in GiB. Each counter reads the school's own tables, so it runs only with that school bound and raises `TenantContextRequired` for any other.
+- **Snapshots** (`tenant_usage_snapshots`, platform scope, append-only). Each row holds the school's lifecycle status, live plan code, monthly recurring revenue (the plan's price per month, an annual price over twelve, while the subscription is `active` or `past_due`; 0 on a trial or with no plan) and currency, the three counts, the `module.*` keys on for the school, and `impersonations_30d` (null until impersonation ships). Nothing else: no names, no row of school data. The app role cannot update or delete a row (`core.tenancy.grants.PLATFORM_APPEND_ONLY_TABLES`).
+- **Taken** nightly by `snapshot_all` (beat 02:50 UTC, `bulk` queue, after expiry and dunning so the night's suspensions are recorded), which visits every school that is not hard-deleted, suspended and deprovisioned ones included, through `for_each_tenant`: one school bound per transaction, and one school failing does not stop the rest. `POST /platform/tenants/{id}:refresh-usage` takes one for that school now.
+- **Read** with no school bound: the console's `GET .../usage`, the platform reports and the over-usage check read snapshots, never the schools' tables, so they are as fresh as the last snapshot.
+- **`limit_below_usage`** (409). A `PATCH /platform/plans/{id}` that lowers `students`, `staff` or `storage_gb` below the latest snapshot of any school whose `current_plan` is the plan, or a subscription `PATCH` whose `limits_override` lowers the school's effective limit below its own latest snapshot, is refused unless the body carries `acknowledge_over_usage: true`. `error.meta.over_usage` lists each `{tenant_id, metric, limit, usage}`. A limit that stays or rises is never refused. `sms_credits` and `ai_tokens` are not checked (no counter yet). The plan check does not read schools' overrides, so it may ask for an acknowledgement an override makes unnecessary, never the reverse.
 
 ## 8. User Journeys
 
@@ -220,6 +228,8 @@ Platform aggregate reports (metrics only, never row-level tenant data — multi-
 - **Usage & adoption** — module adoption per plan, storage/SMS/AI-token consumption distribution, quota-pressure list.
 - **Support & health** — impersonation counts, error-rate and job-failure rates per tenant (operational metrics), onboarding funnel drop-off.
 
+*Built source:* every report reads `tenants` and the usage snapshots of §7.7 (the per-school MRR, counts and enabled modules), never a school's own tables.
+
 Exports CSV/Excel; scheduled variants via the same job infrastructure as [`reporting-analytics.md`](reporting-analytics.md) but on the platform read path.
 
 ## 14. AI Capabilities
@@ -234,7 +244,7 @@ Cross-referenced to [`ai-features.md`](../04-ai/ai-features.md). Platform AI fea
 
 Full column specs in [`../05-database/entities/tenancy.md`](../05-database/entities/tenancy.md).
 
-- **Platform-scope (no `tenant_id`):** `tenants`, `plans`, `feature_flags`, `billing_event_receipts` (the webhook's idempotency record).
+- **Platform-scope (no `tenant_id`):** `tenants`, `plans`, `feature_flags`, `billing_event_receipts` (the webhook's idempotency record), `tenant_usage_snapshots` (aggregate usage per school, append-only; it has a `tenant_id` foreign key but no RLS).
 - **Tenant-scoped:** `tenant_settings` (1:1 with tenant), `subscriptions`, `tenant_feature_overrides`, `custom_domains` (bound via website-cms UI, owned here for lifecycle/TLS).
 - **Shared platform primitives referenced, not owned by this module:** `users`, `roles`, `permissions`, `role_permissions`, `user_roles`, `audit_logs`, `files`, `webhooks`, `webhook_deliveries`, `background_jobs` (defined in the same entity file; owned by the auth/platform core).
 
@@ -258,7 +268,10 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
   - `GET /platform/feature-flags` (`platform.feature-flag.view`): page-numbered; `?search=` (key, description), `?ordering=` (key, updated_at). `GET /platform/feature-flags/{id}` (`.view`); `PATCH` (`.update`): `{default_enabled?, is_kill_switch?}`.
   - `GET /platform/tenants/{id}/feature-overrides` (`.view`): the school's live overrides, unpaged. `POST` (`.update`): `{flag, enabled, reason, expires_at?}` → 201, replacing the live one; 409 `toggle_refused`. `DELETE .../feature-overrides/{override_id}` (`.update`): 204, or 409 `toggle_refused`. Another school's override is a 404.
   - `POST /platform/billing-events/{provider}` (no login; the signature authenticates it, throttled per provider and per IP on failures): 200 `{received, outcome}` (`applied`, `ignored`, `unknown_ref`, `no_subscription`); 401 `invalid_signature`; 404 for a provider that is unknown, not in `PLATFORM_BILLING_PROVIDERS_ENABLED` or receives no webhooks (`manual`); 503 `billing_unavailable` while `PLATFORM_BILLING_WEBHOOK_SECRET` is empty.
-- `GET /api/v1/platform/tenants/{id}/usage` · `GET /api/v1/platform/reports/{key}` (aggregate read path)
+- `GET /api/v1/platform/tenants/{id}/usage` · `GET /api/v1/platform/reports/{key}` (aggregate read path). *Built* (usage):
+  - `GET /platform/tenants/{id}/usage` (`platform.tenant.view`): `{snapshot | null, limits}`, the school's latest snapshot (§7.7) and every metric's effective limit (null is unlimited; `storage_gb` in GiB).
+  - `POST /platform/tenants/{id}:refresh-usage` (`platform.tenant.view`, no body): takes a snapshot now and answers the same shape. Gated on the view key because it changes no school data.
+  - `PATCH /platform/plans/{id}` and `PATCH /platform/tenants/{id}/subscription` take `acknowledge_over_usage`; without it a lowered limit below usage is a 409 `limit_below_usage` (§7.7).
 - `POST /api/v1/platform/tenants/{id}/imports` (`202` + job, dry-run flag) · `GET /api/v1/platform/imports/{id}`
 - Tenant-facing: `GET /api/v1/subscription` (own billing state, `school.subscription.view`; *built*, the same shape as the console's GET, ungated by any module flag) · `GET/PATCH /api/v1/onboarding` (wizard progress). These mount through `apps/platform_admin/tenant_urls.py`, a separate include in `config/api_v1.py` from the console's `platform/` routes.
 - Operator sign-in (built, `core/rbac`, under `/api/v1/auth/`, §4): `POST /auth/login` → `{mfa_required, mfa_token}` · `POST /auth/mfa:verify` · `POST /auth/mfa:enroll` · `POST /auth/mfa:confirm` · `POST /auth/mfa:disable` (always 403 for an operator).
@@ -317,4 +330,11 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - **Tasks** (`apps/platform_admin/tasks.py`): the four sweeps and the two notice tasks, routed by exact name in `CELERY_TASK_ROUTES` and scheduled in `CELERY_BEAT_SCHEDULE`.
 - **Tests:** `test_flags.py`, `test_billing_webhook.py`, `test_sweeps.py`, and `tests/test_celery_routing.py` (queues and beat entries).
 
-**Not yet built:** usage, quotas, `limit_below_usage`, reports and `:export` (PR C); the console screens (PR D); impersonation (PR E); the onboarding wizard (PR H). Deferred items are in [`deferred-work.md`](../deferred-work.md).
+**Built (PR C, Task 6 — usage snapshots):**
+
+- **Model** `TenantUsageSnapshot` (app-root `models.py`, migration `platform_admin/0003`): platform scope, append-only (`save()` of an existing row, `delete()` and the bulk forms raise; the migration revokes UPDATE and DELETE through `core.tenancy.grants.append_only_operations`, and `PLATFORM_APPEND_ONLY_TABLES` adds the table to `tests/test_append_only_coverage.py`).
+- **Usage** (`apps/platform_admin/usage/`): `services.py` (`count_students`, `count_staff`, `count_storage_bytes`, `count_storage_gb`, `USAGE_COUNTERS`, `snapshot_tenant`, `snapshot_step`, `latest_snapshot`, `monthly_amount`), `limits.py` (`LimitBelowUsage`, `refuse_below_usage`, `latest_snapshots`; asked by `plans.services.update_plan` and `subscriptions.services.update_subscription`), `viewset.py`, `serializers.py`, `urls.py`.
+- **Task** `snapshot_all` in `tasks.py`, routed to `bulk` and scheduled at 02:50 UTC.
+- **Tests:** `apps/platform_admin/tests/test_usage.py` (the counter definitions, binding, the field allow-list, append-only, the nightly visit, the routes and their 404s, `limit_below_usage`).
+
+**Not yet built:** quotas, reports and `:export` (PR C); the console screens (PR D); impersonation (PR E); the onboarding wizard (PR H). Deferred items are in [`deferred-work.md`](../deferred-work.md).

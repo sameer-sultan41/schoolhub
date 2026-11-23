@@ -175,6 +175,22 @@ either this file or `project-status.md`.
     trial end of record (the trial-expiry sweep is to read it), so the subscription's
     `current_period_end` is informational until the two are reconciled.
 
+- **Usage snapshots, what platform-admin PR C's Task 6 leaves out** (`apps/api/apps/platform_admin/usage/`,
+  platform-admin §7.7).
+  - **Snapshot retention.** `tenant_usage_snapshots` grows by one row per school per night,
+    plus each `:refresh-usage`, and nothing prunes it. The table is append-only (DELETE is
+    revoked from the app role), so pruning needs a migrator-role job, like the hard purge;
+    a rollup (keep dailies for a quarter, then one per month) is the likely shape.
+  - **`:change-plan` does not ask the over-usage check.** Moving a school to a plan whose
+    limits sit below its usage is allowed without `acknowledge_over_usage`; only lowering a
+    plan's own limits and a school's `limits_override` are checked (ruling C3).
+  - **The plan check ignores overrides.** Lowering a plan's limit reads every school on the
+    plan, not each school's `limits_override`, so a school whose override shields it can still
+    make the edit ask for the acknowledgement.
+  - **`sms_credits` and `ai_tokens` have no counter,** so neither is snapshotted nor checked.
+  - **Stale snapshots.** The over-usage check and the reports are as fresh as the last
+    snapshot (nightly, or `:refresh-usage`); a school that grew today is not yet seen.
+
 - **AI gateway and AI-FEE-02 follow-ups** (`feat/ai-gateway`, plan
   `docs/superpowers/plans/2026-11-07-ai-gateway.md`, [ADR-0035](decisions/0035-ai-gateway-shape.md)).
   The gateway and the on-demand finance report summary shipped backend only. Left out on purpose:

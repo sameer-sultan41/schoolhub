@@ -5,9 +5,10 @@ then handles one school at a time in that school's own transaction (`tenant_atom
 its `tenants` row locked and its state checked again: an operator may have moved the school
 since the candidates were read. One school failing is logged and the sweep goes on.
 
-Sweeps run on the `bulk` queue; the two notices on `transactional` (ruling C5,
-`CELERY_TASK_ROUTES`). Every system write passes ``actor_id=None`` and is audited through
-`record_system_audit` (ruling A3).
+The nightly usage snapshot (`snapshot_all`) visits every school through `for_each_tenant`,
+one bound transaction each. Sweeps and the snapshot run on the `bulk` queue; the two notices
+on `transactional` (ruling C5, `CELERY_TASK_ROUTES`). Every system write passes
+``actor_id=None`` and is audited through `record_system_audit` (ruling A3).
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ from apps.platform_admin.flags.services import lapse_expired_overrides
 from apps.platform_admin.models import Subscription, SubscriptionStatus
 from apps.platform_admin.subscriptions.services import grace_ends
 from apps.platform_admin.tenants import lifecycle
+from apps.platform_admin.usage.services import snapshot_step
 from core.tenancy.context import tenant_atomic
 from core.tenancy.maintenance import for_each_tenant
 from core.tenancy.models import Tenant, TenantStatus
@@ -199,3 +201,17 @@ def lapse_overrides() -> dict[str, int]:
     Every school is a candidate: which ones hold an expired override is itself under RLS.
     """
     return for_each_tenant(lapse_expired_overrides, job="lapse-overrides")
+
+
+# -------------------------------------------------------------------------------- usage
+
+
+@shared_task
+def snapshot_all() -> dict[str, int]:
+    """Nightly: append one usage snapshot per school, suspended and deprovisioned included.
+
+    `for_each_tenant` binds each school in its own transaction, so every count is that
+    school's alone and one school failing does not stop the rest. The platform reports and
+    the console read the snapshots, never the schools' tables (multi-tenancy §8).
+    """
+    return for_each_tenant(snapshot_step, job="usage-snapshot")
