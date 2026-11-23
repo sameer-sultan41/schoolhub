@@ -38,6 +38,11 @@ describe("parseHost", () => {
     expect(parseHost("dashboard.schoolhub.pk", PLATFORM)).toBeNull();
   });
 
+  it("never treats the custom-domain CNAME target `sites` as a school", () => {
+    // A school with the slug `sites` would otherwise answer on every custom domain's target.
+    expect(parseHost("sites.schoolhub.pk", PLATFORM)).toBeNull();
+  });
+
   it("does not treat a nested label as a tenant slug", () => {
     expect(parseHost("a.b.schoolhub.pk", PLATFORM)).toBeNull();
   });

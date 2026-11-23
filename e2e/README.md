@@ -81,10 +81,10 @@ it must then match what you export for `pnpm e2e:live` too.
 The website specs (`website-*.spec.ts`) read the sites `seed_e2e_website` publishes for both
 tenants. Playwright builds the renderer with the stack's own `PUBLIC_CONTENT_TOKEN` and
 `REVALIDATE_SECRET` (the two `E2E_*` variables above; without them every public read is a 401
-and the sites resolve as unknown), with `NEXT_PUBLIC_API_ORIGIN` set to the API's origin (the
-contact form posts there from the browser) and with `WEBSITE_IMAGES_UNOPTIMIZED`, so the browser
+and the sites resolve as unknown), with `API_PUBLIC_ORIGIN` set to the API's origin (read at
+runtime and handed to the contact form, which posts there from the browser) and with `WEBSITE_IMAGES_UNOPTIMIZED`, so the browser
 loads images from the API's local address itself. The two API origins differ on purpose:
-`NEXT_PUBLIC_API_ORIGIN` is `http://localhost:8000` (from `E2E_API_BASE_URL`), where the contact
+`API_PUBLIC_ORIGIN` is `http://localhost:8000` (from `E2E_API_BASE_URL`), where the contact
 form posts, while image URLs use the API's own `API_PUBLIC_URL`, `http://api.localhost:8000` in
 dev settings. Chromium resolves both to the same loopback API, so nothing breaks; set
 `E2E_API_BASE_URL` to the `api.localhost` origin if you want them to match. `WEBSITE_REVALIDATE_URL` points the worker's

@@ -25,9 +25,9 @@ type NewsPostWrite = ApiSchemas["NewsPostWrite"];
  *
  * Every read here is the renderer's server-side fetch with its machine token, resolving the
  * school from the request's host; the API binds that school for RLS. Only the contact form and
- * the album image are fetched by the browser itself, from `NEXT_PUBLIC_API_ORIGIN` and the API's
- * public file redirect, which is why the live lane builds the renderer with that origin and with
- * images unoptimised.
+ * the album image are fetched by the browser itself, from `API_PUBLIC_ORIGIN` and the API's
+ * public file redirect, which is why the live lane runs the renderer with that origin and builds
+ * it with images unoptimised.
  */
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -83,7 +83,7 @@ test.describe("website content", () => {
     await publicSitePage.sendMessage.click();
 
     // Shown only for a 2xx from the API's contact endpoint (a 404 from the renderer's own
-    // origin, the failure when NEXT_PUBLIC_API_ORIGIN is missing, shows the error instead).
+    // origin, the failure when API_PUBLIC_ORIGIN is missing, shows the error instead).
     await expect(publicSitePage.contactSent).toBeVisible();
 
     const { data: inbox } = await liveApiClient.get<ContactSubmission[]>("/contact-submissions", {

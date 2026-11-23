@@ -1,5 +1,4 @@
 import type { ApiSchemas } from "@schoolhub/api-client";
-import { publicEnv } from "./env.client";
 
 /**
  * Browser-side calls to the public API — the one write path the renderer has.
@@ -27,11 +26,15 @@ export type PublicContactSubmission = ApiSchemas["PublicContactSubmission"];
 /**
  * Posts a public form. Resolves to whether the API accepted it; rejects on network failure.
  *
+ * `apiOrigin` is the server's runtime `API_PUBLIC_ORIGIN`, handed down as a prop: empty means
+ * same-origin. Never a `NEXT_PUBLIC` value, which would be fixed when the image is built.
+ *
  * `idempotencyKey` is random and belongs to one fill of the form, so a retry after a lost
  * response replays the first answer instead of storing the message twice. A guessable key would
  * let a later visitor replay another's reply.
  */
 export async function submitPublicForm(
+  apiOrigin: string,
   kind: PublicFormKind,
   tenantSlug: string,
   submission: PublicContactSubmission,
@@ -42,7 +45,7 @@ export async function submitPublicForm(
       ? { ...submission, subject: ADMISSION_ENQUIRY_SUBJECT }
       : submission;
 
-  const response = await fetch(`${publicEnv.NEXT_PUBLIC_API_ORIGIN}${CONTACT_SUBMISSIONS_PATH}`, {
+  const response = await fetch(`${apiOrigin}${CONTACT_SUBMISSIONS_PATH}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

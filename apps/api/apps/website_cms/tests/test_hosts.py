@@ -42,6 +42,11 @@ class ResolveHostTests(TestCase):
         TenantFactory(slug="www")
         self.assertIsNone(resolve_host("www.schools.test"))
 
+    def test_cname_target_label_never_resolves(self) -> None:
+        # `sites.<platform>` is the custom-domain CNAME target, never a school's site.
+        TenantFactory(slug="sites")
+        self.assertIsNone(resolve_host("sites.schools.test"))
+
     def test_platform_apex_is_no_tenant(self) -> None:
         self.assertIsNone(resolve_host(PLATFORM))
 

@@ -13,6 +13,10 @@ export const TRAILING_DOT_PATTERN = /\.$/;
  * reaches an API URL. */
 export const HOSTNAME_PATTERN = /^[a-z0-9.-]+$/;
 
+/** One `images.remotePatterns` hostname: plain labels, optionally led by Next's `*.` or `**.`
+ * wildcard. No scheme, port or path. */
+export const IMAGE_HOSTNAME_PATTERN = /^(?:\*\*?\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+$/;
+
 /** Strips the "sha256=" scheme prefix HMAC signature headers are conventionally sent with. */
 export const SHA256_PREFIX_PATTERN = /^sha256=/;
 

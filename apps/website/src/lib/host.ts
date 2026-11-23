@@ -37,6 +37,8 @@ export const RESERVED_LABELS = new Set([
   "cdn",
   "mail",
   "status",
+  // The custom-domain CNAME target (`WEBSITE_CNAME_TARGET`), already served by the wildcard record.
+  "sites",
 ]);
 
 /**
@@ -78,10 +80,12 @@ export const TENANT_PATH_HEADER = "x-schoolhub-path";
 
 /**
  * Routes that must reach their handler on any host, the apex and `localhost` included: the API's
- * revalidation webhook targets the renderer's internal origin, and preview links are validated
- * by their handler, not by the host (website-cms plan, decisions 8 and 9).
+ * revalidation webhook posts to the platform apex through the public edge, preview links are
+ * validated by their handler, not by the host (website-cms plan, decisions 8 and 9), and the
+ * load balancer's health check must never be rewritten to the landing page.
  */
 export const HOST_INDEPENDENT_PATHS: ReadonlySet<string> = new Set([
   "/api/revalidate",
   "/api/preview",
+  "/api/health",
 ]);

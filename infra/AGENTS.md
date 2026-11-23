@@ -73,7 +73,7 @@ with no obvious failure.
 developer) control the backend's host-exposed ports; `x-api-env`'s `CORS_ALLOWED_ORIGINS` /
 `CSRF_TRUSTED_ORIGINS` in `docker-compose.yml` must be overridden in that same `.env` to match
 whatever port the dashboard's dev server actually runs on (its own `NEXT_PUBLIC_APP_URL` in
-`apps/dashboard/.env`, plus `NEXT_PUBLIC_API_BASE_URL`/`API_BASE_URL`/`NEXT_PUBLIC_API_ORIGIN` in
+`apps/dashboard/.env`, plus `NEXT_PUBLIC_API_BASE_URL`/`API_BASE_URL`/`API_PUBLIC_ORIGIN` in
 both `apps/dashboard/.env` and `apps/website/.env`, need to agree with whatever port the API
 actually runs on). Containers' own internal ports (`http://api:8000`, `http://minio:9000` on the
 docker network) stay as-is — only host-exposed ports and host-facing URLs need to move.

@@ -23,7 +23,7 @@ DEBUG = env.bool("DJANGO_DEBUG", default=False)
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
 # Apex domain for tenant wildcard subdomains: `<slug>.<PLATFORM_DOMAIN>`. Mirrors
-# apps/website's NEXT_PUBLIC_PLATFORM_DOMAIN — same concept, backend side.
+# apps/website's PLATFORM_DOMAIN — same concept, backend side.
 PLATFORM_DOMAIN = env("PLATFORM_DOMAIN", default="localhost")
 # Links the API hands out to the dashboard (invitation and password-reset emails, a
 # payment's return URL) point at the dashboard on

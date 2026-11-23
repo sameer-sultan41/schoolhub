@@ -4,16 +4,18 @@ import { ContactForm } from "../contact-form";
 
 jest.mock("@/components/public-enquiry-form", () => ({
   PublicEnquiryForm: ({
+    apiOrigin,
     kind,
     tenantSlug,
     sourcePageId,
   }: {
+    apiOrigin: string;
     kind: string;
     tenantSlug: string;
     sourcePageId?: string;
   }) => (
     <div data-testid="enquiry-form">
-      {kind} / {tenantSlug} / {sourcePageId}
+      {apiOrigin} / {kind} / {tenantSlug} / {sourcePageId}
     </div>
   ),
 }));
@@ -40,7 +42,7 @@ describe("ContactForm", () => {
     );
   });
 
-  it("renders the enquiry form scoped to the tenant, the configured kind and the page", () => {
+  it("renders the enquiry form with the runtime API origin, the tenant, the kind and the page", () => {
     render(
       <ContactForm
         {...sectionProps({ form: "admission_enquiry" }, makeTenant({ slug: "greenvalley" }))}
@@ -48,7 +50,7 @@ describe("ContactForm", () => {
     );
 
     expect(screen.getByTestId("enquiry-form")).toHaveTextContent(
-      "admission_enquiry / greenvalley / p1",
+      "https://api.schoolhub.test / admission_enquiry / greenvalley / p1",
     );
   });
 

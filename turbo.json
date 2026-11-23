@@ -11,12 +11,14 @@
         "NEXT_PUBLIC_APP_URL",
         "NEXT_PUBLIC_SENTRY_DSN",
         "NEXT_PUBLIC_PLATFORM_DOMAIN",
-        "NEXT_PUBLIC_API_ORIGIN",
+        "PLATFORM_DOMAIN",
+        "API_PUBLIC_ORIGIN",
         "API_BASE_URL",
         "WEBSITE_MACHINE_TOKEN",
         "REVALIDATE_WEBHOOK_SECRET",
         "CONTENT_REVALIDATE_SECONDS",
-        "WEBSITE_IMAGES_UNOPTIMIZED"
+        "WEBSITE_IMAGES_UNOPTIMIZED",
+        "WEBSITE_IMAGE_HOSTNAME"
       ],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },

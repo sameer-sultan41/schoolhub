@@ -39,7 +39,7 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   // Only the public API's file route, which 302s to presigned storage (src/lib/image-config.ts).
   images: imagesConfig({
-    apiOrigin: buildEnv.NEXT_PUBLIC_API_ORIGIN,
+    hostnames: buildEnv.WEBSITE_IMAGE_HOSTNAME,
     unoptimized: buildEnv.WEBSITE_IMAGES_UNOPTIMIZED,
   }),
   headers() {

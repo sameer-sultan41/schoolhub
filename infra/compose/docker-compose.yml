@@ -328,10 +328,10 @@ services:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://api.localhost:8000/api/v1}
       # Server-side calls stay on the compose network.
       API_BASE_URL: http://api:8000/api/v1
-      NEXT_PUBLIC_PLATFORM_DOMAIN: ${PLATFORM_DOMAIN:-localhost}
-      # The public API origin (the API's API_PUBLIC_URL): contact forms post to it, and it is the
-      # only origin next/image optimises in production.
-      NEXT_PUBLIC_API_ORIGIN: ${NEXT_PUBLIC_API_ORIGIN:-http://api.localhost:8000}
+      # Server-only, read at runtime: one image serves every environment.
+      PLATFORM_DOMAIN: ${PLATFORM_DOMAIN:-localhost}
+      # The public API origin (the API's API_PUBLIC_URL), which the browser posts contact forms to.
+      API_PUBLIC_ORIGIN: ${API_PUBLIC_ORIGIN:-http://api.localhost:8000}
       # The browser loads images from api.localhost itself: inside this container that name is the
       # container, and the optimiser refuses local addresses anyway. Never set in production.
       WEBSITE_IMAGES_UNOPTIMIZED: "true"

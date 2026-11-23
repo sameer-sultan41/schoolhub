@@ -1,15 +1,28 @@
 import { z } from "zod";
-import { publicEnv } from "./env.client";
 
 /**
  * Build-time configuration, read by `next.config.ts` (the image optimiser's allow-list is fixed
  * when the config loads, so a standalone build fixes it at `next build`).
  *
- * `WEBSITE_IMAGES_UNOPTIMIZED` turns the optimiser off, so the browser loads each image from its
- * public URL. Only compose and the E2E lanes set it: their API is on a local address the optimiser
- * cannot (and must not) fetch from. Production leaves it off and optimises the API's file route.
+ * - `WEBSITE_IMAGE_HOSTNAME`: the hostname pattern(s) the API's file route is served from,
+ *   comma-separated, e.g. `**.schoolhub.example`. It must be the **same value for every
+ *   environment**, because one image is promoted from staging to production unchanged
+ *   (`infra/AGENTS.md` rule 5); `**.<prod domain>` covers `api.<prod domain>` and
+ *   `api.staging.<prod domain>`. Empty allows no remote image.
+ * - `WEBSITE_IMAGES_UNOPTIMIZED` turns the optimiser off, so the browser loads each image from its
+ *   public URL. Only compose and the E2E lanes set it: their API is on a local address the
+ *   optimiser cannot (and must not) fetch from. Production leaves it off.
  */
 const buildEnvSchema = z.object({
+  WEBSITE_IMAGE_HOSTNAME: z
+    .string()
+    .default("")
+    .transform((value) =>
+      value
+        .split(",")
+        .map((hostname) => hostname.trim())
+        .filter(Boolean),
+    ),
   WEBSITE_IMAGES_UNOPTIMIZED: z
     .enum(["true", "false"])
     .default("false")
@@ -17,6 +30,7 @@ const buildEnvSchema = z.object({
 });
 
 const parsed = buildEnvSchema.safeParse({
+  WEBSITE_IMAGE_HOSTNAME: process.env.WEBSITE_IMAGE_HOSTNAME,
   WEBSITE_IMAGES_UNOPTIMIZED: process.env.WEBSITE_IMAGES_UNOPTIMIZED,
 });
 
@@ -24,8 +38,4 @@ if (!parsed.success) {
   throw new Error(`Invalid website build configuration:\n${z.prettifyError(parsed.error)}`);
 }
 
-export const buildEnv = {
-  /** Declared once in `env.client.ts`: the public API origin the browser and image URLs use. */
-  NEXT_PUBLIC_API_ORIGIN: publicEnv.NEXT_PUBLIC_API_ORIGIN,
-  ...parsed.data,
-};
+export const buildEnv = parsed.data;

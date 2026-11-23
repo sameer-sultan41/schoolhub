@@ -26,7 +26,7 @@ Each kind of value has exactly one owner:
 | ----- | ----- |
 | Dashboard user-facing text | `apps/dashboard/messages/{en,ur}.json` via next-intl. The website's chrome is exempt, because `website-builder.md` sets no i18n requirement for it |
 | `packages/ui` text | Required props supplied by the caller ([0009](0009-ported-ui-primitives.md)) |
-| Environment | One typed module per runtime: `apps/dashboard/src/lib/env.ts` (public `NEXT_PUBLIC_*` only); `apps/website/src/lib/env.ts` (server-only, holds secrets) plus a public-only `env.client.ts` for client components; `apps/api/config/settings/*` for Django; `e2e/src/env.ts` |
+| Environment | One typed module per runtime: `apps/dashboard/src/lib/env.ts` (public `NEXT_PUBLIC_*` only); `apps/website/src/lib/env.ts` (server-only, holds secrets, read at runtime; a client component gets a value as a prop); `apps/api/config/settings/*` for Django; `e2e/src/env.ts` |
 | API paths | `apps/dashboard/src/services/endpoints.ts` ([0011](0011-dashboard-services-layer.md)); on the website, a registry beside its fetch helper |
 | Query keys | The `queryKeys` factory in `apps/dashboard/src/lib/query-client.ts` |
 | Magic numbers (timeouts, page sizes, batch sizes, TTLs) | A named constant (`apps/dashboard/src/lib/constants.ts`, `core/api/pagination.py`, a module-level `UPPER_SNAKE` name) |

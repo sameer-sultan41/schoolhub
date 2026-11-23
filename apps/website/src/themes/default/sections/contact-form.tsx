@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { PublicEnquiryForm } from "@/components/public-enquiry-form";
+import { env } from "@/lib/env";
 import type { SectionProps } from "@/themes/types";
 
 const schema = z.object({
@@ -12,7 +13,8 @@ const schema = z.object({
 /**
  * The form POSTs from the **browser** directly to the rate-limited public API endpoint —
  * never through the renderer's machine token (website-builder.md §6). This server component
- * only renders the shell and the tenant's contact details.
+ * only renders the shell and the tenant's contact details, and hands the form the API's public
+ * origin, read here at runtime so one image serves every environment.
  */
 export function ContactForm({ section, tenant, pageId }: SectionProps) {
   const parsed = schema.safeParse(section.props);
@@ -43,7 +45,12 @@ export function ContactForm({ section, tenant, pageId }: SectionProps) {
         </address>
       </div>
 
-      <PublicEnquiryForm kind={form} tenantSlug={tenant.slug} sourcePageId={pageId} />
+      <PublicEnquiryForm
+        apiOrigin={env.API_PUBLIC_ORIGIN}
+        kind={form}
+        tenantSlug={tenant.slug}
+        sourcePageId={pageId}
+      />
     </section>
   );
 }
