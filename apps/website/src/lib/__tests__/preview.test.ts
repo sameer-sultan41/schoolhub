@@ -41,21 +41,19 @@ describe("getPreviewToken", () => {
 });
 
 describe("previewMaxAgeSeconds", () => {
-  const NOW = Date.parse("2026-11-23T10:00:00Z");
-
-  it("is the token's remaining life in whole seconds", () => {
-    expect(previewMaxAgeSeconds("2026-11-23T10:05:00Z", NOW)).toBe(300);
-    expect(previewMaxAgeSeconds("2026-11-23T10:00:30.900Z", NOW)).toBe(30);
+  it("is the seconds the API reports, as they are", () => {
+    expect(previewMaxAgeSeconds("300")).toBe(300);
+    expect(previewMaxAgeSeconds("1")).toBe(1);
   });
 
   it.each([
-    ["already expired", "2026-11-23T09:59:00Z"],
-    ["expiring this instant", "2026-11-23T10:00:00Z"],
-    ["under a second left", "2026-11-23T10:00:00.500Z"],
-    ["not a date", "soon"],
+    ["none left", "0"],
+    ["negative", "-5"],
+    ["fractional", "1.5"],
+    ["not a number", "soon"],
     ["empty", ""],
     ["missing", null],
-  ])("is null (no cookie) when the token is %s", (_label, header) => {
-    expect(previewMaxAgeSeconds(header, NOW)).toBeNull();
+  ])("is null (no cookie) when the header is %s", (_label, header) => {
+    expect(previewMaxAgeSeconds(header)).toBeNull();
   });
 });

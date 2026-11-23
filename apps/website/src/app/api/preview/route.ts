@@ -17,7 +17,7 @@ import { PAGE_PATH_PATTERN } from "@/lib/regex";
  *
  * The token is validated first, by reading the token's page from the API with the token in
  * `X-Preview-Token`. Only a 200 stores the token (httpOnly, Secure, `SameSite=Lax`, `maxAge` the
- * token's remaining life from the API's `X-Preview-Expires-At`, so no cookie for an expired one); Next's Draft Mode is never enabled (see `lib/preview.ts`). The redirect goes to the page path the API
+ * token's remaining life from the API's `X-Preview-Expires-In`, so no cookie for an expired one); Next's Draft Mode is never enabled (see `lib/preview.ts`). The redirect goes to the page path the API
  * returned, never to anything in the request, so this cannot be an open redirect, and an invalid
  * token can never switch on the uncached draft path.
  */

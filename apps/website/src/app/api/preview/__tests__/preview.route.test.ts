@@ -14,14 +14,10 @@ jest.mock("@/lib/api", () => ({ readJsonWithHeaders: jest.fn() }));
 
 const mockReadJson = readJsonWithHeaders as jest.MockedFunction<typeof readJsonWithHeaders>;
 
-const NOW = Date.parse("2026-11-23T10:00:00Z");
-
-/** A 200 from the API: the page plus the token's expiry header, `remainingSeconds` from NOW. */
-function apiPage(page: ReturnType<typeof makePage>, remainingSeconds: number | null = 300) {
+/** A 200 from the API: the page plus the token's remaining seconds in its expiry header. */
+function apiPage(page: ReturnType<typeof makePage>, expiresIn: number | string | null = 300) {
   const headers = new Headers();
-  if (remainingSeconds !== null) {
-    headers.set("X-Preview-Expires-At", new Date(NOW + remainingSeconds * 1000).toISOString());
-  }
+  if (expiresIn !== null) headers.set("X-Preview-Expires-In", String(expiresIn));
   return { data: page, headers };
 }
 
@@ -32,12 +28,7 @@ function makeRequest(query: string, host = HOST) {
 }
 
 beforeEach(() => {
-  jest.useFakeTimers().setSystemTime(NOW);
   mockReadJson.mockReset();
-});
-
-afterEach(() => {
-  jest.useRealTimers();
 });
 
 describe("GET /api/preview", () => {
@@ -97,8 +88,8 @@ describe("GET /api/preview", () => {
     expect(response.headers.get("set-cookie")).toMatch(/Max-Age=90(;|$)/i);
   });
 
-  it("sets no cookie for a token that has already expired", async () => {
-    mockReadJson.mockResolvedValue(apiPage(makePage(), -5));
+  it("sets no cookie for a token with no seconds left", async () => {
+    mockReadJson.mockResolvedValue(apiPage(makePage(), 0));
     const response = await GET(makeRequest("?token=tok-1"));
 
     expect(response.status).toBe(404);

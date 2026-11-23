@@ -18,8 +18,9 @@ import { cache } from "react";
 export const PREVIEW_COOKIE = "schoolhub_preview";
 /** The header the API reads a preview token from; never a query parameter (SEC-57). */
 export const PREVIEW_HEADER = "X-Preview-Token";
-/** Response header: when the API stops accepting the token (ISO-8601, UTC). */
-export const PREVIEW_EXPIRES_HEADER = "X-Preview-Expires-At";
+/** Response header: whole seconds the API will still accept the token. */
+export const PREVIEW_EXPIRES_HEADER = "X-Preview-Expires-In";
+const WHOLE_NUMBER_PATTERN = /^\d+$/;
 /** Comfortably above a signed `tenant_id:page_id` token; anything longer is not one. */
 export const PREVIEW_TOKEN_MAX_LENGTH = 512;
 
@@ -32,17 +33,13 @@ export const PREVIEW_COOKIE_OPTIONS = {
 } as const;
 
 /**
- * The cookie's `maxAge`: the token's remaining life in whole seconds, so the cookie never
- * outlives it. `null` when the header is missing, unparseable or already past (set no cookie).
+ * The cookie's `maxAge`: the whole seconds the API says the token has left, so the cookie never
+ * outlives it and no clock is compared. `null` when the header is missing, not a whole number
+ * or 0 (set no cookie).
  */
-export function previewMaxAgeSeconds(
-  expiresAt: string | null,
-  now: number = Date.now(),
-): number | null {
-  if (!expiresAt) return null;
-  const expiresAtMs = Date.parse(expiresAt);
-  if (Number.isNaN(expiresAtMs)) return null;
-  const seconds = Math.floor((expiresAtMs - now) / 1000);
+export function previewMaxAgeSeconds(expiresIn: string | null): number | null {
+  if (!expiresIn || !WHOLE_NUMBER_PATTERN.test(expiresIn)) return null;
+  const seconds = Number(expiresIn);
   return seconds > 0 ? seconds : null;
 }
 
