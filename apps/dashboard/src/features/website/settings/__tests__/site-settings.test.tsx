@@ -71,7 +71,9 @@ const CLASSIC: ThemeRecord = {
   config_schema: {
     type: "object",
     properties: {
-      motto: { type: "string", maxLength: 60, "x-widget": "text" },
+      // Required with a minimum length, as every required text in a shipped theme is: JSON
+      // Schema's `required` alone accepts "", and the form mirrors the server (`schema-zod.ts`).
+      motto: { type: "string", minLength: 1, maxLength: 60, "x-widget": "text" },
       accent: { type: "string", enum: ["blue", "green"] },
     },
     required: ["motto"],
