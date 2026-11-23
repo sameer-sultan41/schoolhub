@@ -1,3 +1,5 @@
+// Holds the machine token and webhook secret: a client-component import must fail the build.
+import "server-only";
 import { z } from "zod";
 
 import { RESERVED_LABELS } from "./host";

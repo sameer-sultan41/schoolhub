@@ -324,8 +324,6 @@ services:
       - api
     environment:
       NODE_ENV: development
-      # Browser-visible: must be a host the browser can resolve, not "api".
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://api.localhost:8000/api/v1}
       # Server-side calls stay on the compose network.
       API_BASE_URL: http://api:8000/api/v1
       # Server-only, read at runtime: one image serves every environment.

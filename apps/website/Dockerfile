@@ -42,7 +42,8 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN corepack enable pnpm
 # The one build input: the image optimiser's hostname pattern(s), the SAME value for every
-# environment (e.g. `**.schoolhub.example`), so one image is promoted unchanged.
+# environment (e.g. `api.schoolhub.example,api.staging.schoolhub.example`), so one image is
+# promoted unchanged.
 ARG WEBSITE_IMAGE_HOSTNAME=""
 ENV WEBSITE_IMAGE_HOSTNAME=${WEBSITE_IMAGE_HOSTNAME}
 # Build-only placeholders, not secrets: src/lib/env.ts validates these at import. They are

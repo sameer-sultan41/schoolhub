@@ -151,7 +151,7 @@ jobs:
           NEXT_PUBLIC_APP_URL: https://dashboard.example.invalid
           NEXT_PUBLIC_PLATFORM_DOMAIN: example.invalid
           PLATFORM_DOMAIN: example.invalid
-          WEBSITE_IMAGE_HOSTNAME: "**.example.invalid"
+          WEBSITE_IMAGE_HOSTNAME: "api.example.invalid,api.staging.example.invalid"
           API_BASE_URL: https://api.example.invalid/api/v1
           WEBSITE_MACHINE_TOKEN: ci-placeholder-token
           REVALIDATE_WEBHOOK_SECRET: ci-placeholder-secret
@@ -172,7 +172,7 @@ jobs:
         run: >-
           docker buildx build
           --target runner
-          --build-arg "WEBSITE_IMAGE_HOSTNAME=**.example.invalid"
+          --build-arg "WEBSITE_IMAGE_HOSTNAME=api.example.invalid,api.staging.example.invalid"
           --output type=cacheonly
           -f apps/website/Dockerfile
           .
