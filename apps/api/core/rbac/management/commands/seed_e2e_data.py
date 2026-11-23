@@ -69,10 +69,11 @@ from core.tenancy.models import FeatureFlag, Tenant, TenantFeatureOverride, Tena
 
 E2E_TENANT_SLUG = "e2e-school"
 E2E_OTHER_TENANT_SLUG = "e2e-other-school"
-# A third school holding nothing but its owner (and the system ledger accounts provisioning
-# gives it): `e2e/tests/live/onboarding-journey.spec.ts` sets it up from nothing and takes it
-# live. Going live is permanent, so that journey needs a fresh database. The owner's email is
-# used nowhere else, so signing in by email lands in this school.
+# A third school holding nothing but its owner and the system ledger accounts (seeded here, as
+# `provision_tenant` does for a console-provisioned school):
+# `e2e/tests/live/onboarding-journey.spec.ts` sets it up from nothing and takes it live. Going
+# live is permanent, so that journey needs a fresh database. The owner's email is used nowhere
+# else, so signing in by email lands in this school.
 E2E_FRESH_TENANT_SLUG = "fresh-school"
 E2E_FRESH_TENANT_NAME = "E2E Fresh School"
 E2E_FRESH_OWNER_EMAIL = "e2e-fresh-owner@schoolhub.test"
@@ -844,9 +845,9 @@ class Command(BaseCommand):
     def _ensure_fresh_school(self, owner_role: Role) -> Tenant:
         """The onboarding journey's school: an owner, the modules on, no structure at all.
 
-        Only the system ledger accounts are seeded, as `seed_finance_accounts` does for any
-        school starting on fees (fees-finance §6, "seeded at provisioning"): a fee head needs
-        an income account, and no screen creates the system ones.
+        It is created directly, not through `provision_tenant`, so it seeds the system ledger
+        accounts itself, as provisioning does (fees-finance §6): a fee head needs an income
+        account, and no screen creates the system ones.
         """
         fresh = ensure_tenant(E2E_FRESH_TENANT_SLUG, E2E_FRESH_TENANT_NAME)
         ensure_seed_user(
