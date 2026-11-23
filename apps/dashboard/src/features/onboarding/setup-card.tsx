@@ -26,7 +26,7 @@ import { useOnboarding } from "./use-onboarding";
  */
 export function SetupCard() {
   const t = useTranslations("onboarding");
-  const { user, query } = useOnboarding();
+  const { user, query } = useOnboarding({ untilCompleted: true });
   const record = query.data;
   if (!record || isSetupFinished(record)) return null;
 

@@ -62,6 +62,7 @@ export function SetupWizard() {
   );
 
   const mutation = useMutation({
+    mutationKey: queryKeys.onboarding(),
     mutationFn: (body: OnboardingUpdate) => Services.onboarding.updateOnboarding(body),
     onSuccess: (record, body) => {
       queryClient.setQueryData(queryKeys.onboarding(), record);
