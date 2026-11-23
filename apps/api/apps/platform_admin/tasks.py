@@ -89,7 +89,7 @@ def trial_reminders() -> dict:
     ).values_list("pk", "trial_ends_at")
     queued = 0
     for tenant_id, trial_ends_at in due:
-        threshold = _threshold(trial_ends_at, now)
+        threshold = _threshold(trial_ends_at, now) if trial_ends_at is not None else None
         if threshold is not None:
             send_trial_expiring_notice.delay(tenant_id=str(tenant_id), threshold_days=threshold)
             queued += 1

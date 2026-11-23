@@ -18,6 +18,7 @@ from apps.platform_admin.models import BillingEventReceipt, SubscriptionStatus
 from apps.platform_admin.subscriptions import services
 from apps.platform_admin.tests.base import make_plan, make_tenant
 from apps.platform_admin.tests.test_subscriptions import live_on, reload
+from core.api.tests.rollback import rollback_as_in_production
 from core.audit.models import AuditLog
 from core.integrations.payments.fake import sign
 from core.tenancy.models import TenantStatus
@@ -45,6 +46,9 @@ class BillingWebhookTests(TestCase):
         from django.core.cache import cache
 
         cache.clear()
+        # The webhook is `non_atomic_requests`: an error response must not poison the test's
+        # own transaction (lesson L67).
+        rollback_as_in_production(self)
         self.tenant = make_tenant(status=S.TRIAL)
         sub = live_on(self.tenant, make_plan())
         services.update_subscription(

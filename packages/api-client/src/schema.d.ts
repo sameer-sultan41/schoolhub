@@ -4148,6 +4148,61 @@ export interface paths {
         patch: operations["periods_partial_update"];
         trace?: never;
     };
+    "/api/v1/platform/billing-events/{provider}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A billing provider's event: a school's payment succeeded or failed */
+        post: operations["platform_billing_events_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/feature-flags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET /platform/feature-flags`, `GET/PATCH /platform/feature-flags/{id}`. */
+        get: operations["platform_feature_flags_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/feature-flags/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET /platform/feature-flags`, `GET/PATCH /platform/feature-flags/{id}`. */
+        get: operations["platform_feature_flags_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set a flag's platform default or kill switch, for every school at once
+         * @description `GET /platform/feature-flags`, `GET/PATCH /platform/feature-flags/{id}`.
+         */
+        patch: operations["platform_feature_flags_partial_update"];
+        trace?: never;
+    };
     "/api/v1/platform/plans": {
         parameters: {
             query?: never;
@@ -4234,6 +4289,47 @@ export interface paths {
          * @description `GET/PATCH /platform/tenants/{tenant_pk}` and its lifecycle colon-actions.
          */
         patch: operations["platform_tenants_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_pk}/feature-overrides": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET/POST .../tenants/{tenant_pk}/feature-overrides`, `DELETE .../{id}`. */
+        get: operations["platform_tenants_feature_overrides_list"];
+        put?: never;
+        /**
+         * Override a flag for this school, replacing any override it has
+         * @description `GET/POST .../tenants/{tenant_pk}/feature-overrides`, `DELETE .../{id}`.
+         */
+        post: operations["platform_tenants_feature_overrides_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_pk}/feature-overrides/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove this school's override; the plan or the default decides again
+         * @description `GET/POST .../tenants/{tenant_pk}/feature-overrides`, `DELETE .../{id}`.
+         */
+        delete: operations["platform_tenants_feature_overrides_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/platform/tenants/{tenant_pk}/subscription": {
@@ -7666,6 +7762,18 @@ export interface components {
          * @enum {string}
          */
         BackgroundJobStatusEnum: "queued" | "running" | "succeeded" | "failed";
+        BillingEventReceived: {
+            received: boolean;
+            outcome: components["schemas"]["BillingOutcomeEnum"];
+        };
+        /**
+         * @description * `applied` - Applied
+         *     * `ignored` - Ignored
+         *     * `unknown_ref` - Unknown reference
+         *     * `no_subscription` - No live subscription
+         * @enum {string}
+         */
+        BillingOutcomeEnum: "applied" | "ignored" | "unknown_ref" | "no_subscription";
         /**
          * @description * `monthly` - Monthly
          *     * `annual` - Annual
@@ -8649,6 +8757,19 @@ export interface components {
          * @enum {string}
          */
         ExpenseStatusEnum: "draft" | "submitted" | "approved" | "paid" | "rejected" | "reversed";
+        FeatureFlag: {
+            /** Format: uuid */
+            readonly id: string;
+            /** @description e.g. 'module.students'. */
+            readonly key: string;
+            readonly description: string;
+            /** @description Resolved value when no tenant override applies. */
+            readonly default_enabled: boolean;
+            /** @description When true, a tenant override can never turn this ON — only the platform default can enable it. Overrides may still force it off. */
+            readonly is_kill_switch: boolean;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
         /**
          * @description * `active` - Active
          *     * `expired` - Expired
@@ -10320,6 +10441,17 @@ export interface components {
                 };
             };
         };
+        PaginatedFeatureFlagList: {
+            data?: components["schemas"]["FeatureFlag"][];
+            meta?: {
+                pagination?: {
+                    page?: number;
+                    page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
+                };
+            };
+        };
         PaginatedFeeHeadList: {
             data?: components["schemas"]["FeeHead"][];
             meta?: {
@@ -11320,6 +11452,11 @@ export interface components {
             readonly created_at?: string;
             /** Format: date-time */
             readonly updated_at?: string;
+        };
+        /** @description `PATCH`: the platform default and the kill switch only; the key and text are code. */
+        PatchedFeatureFlagUpdate: {
+            default_enabled?: boolean;
+            is_kill_switch?: boolean;
         };
         PatchedFeeHead: {
             /** Format: uuid */
@@ -14127,6 +14264,34 @@ export interface components {
              */
             contact_email: string;
             contact_phone?: string;
+        };
+        TenantFeatureOverride: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly flag: string;
+            readonly enabled: boolean;
+            readonly reason: string;
+            /**
+             * Format: date-time
+             * @description Null means the override never expires.
+             */
+            readonly expires_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: uuid */
+            readonly created_by: string | null;
+        };
+        TenantFeatureOverrideCreate: {
+            /** @description e.g. 'module.students'. */
+            flag: string;
+            enabled: boolean;
+            /** @description Why the school gets it: pilot, support, commercial. */
+            reason: string;
+            /**
+             * Format: date-time
+             * @description Null or absent: the override never lapses.
+             */
+            expires_at?: string | null;
         };
         /**
          * @description * `provisioning` - Provisioning
@@ -21175,6 +21340,124 @@ export interface operations {
             };
         };
     };
+    platform_billing_events_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingEventReceived"];
+                };
+            };
+            /** @description invalid_signature */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or disabled provider. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description billing_unavailable: no webhook secret. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    platform_feature_flags_list: {
+        parameters: {
+            query?: {
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedFeatureFlagList"];
+                };
+            };
+        };
+    };
+    platform_feature_flags_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureFlag"];
+                };
+            };
+        };
+    };
+    platform_feature_flags_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedFeatureFlagUpdate"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedFeatureFlagUpdate"];
+                "multipart/form-data": components["schemas"]["PatchedFeatureFlagUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureFlag"];
+                };
+            };
+        };
+    };
     platform_plans_list: {
         parameters: {
             query?: {
@@ -21419,6 +21702,94 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Tenant"];
                 };
+            };
+        };
+    };
+    platform_tenants_feature_overrides_list: {
+        parameters: {
+            query?: {
+                /** @description Which field to use when ordering the results. */
+                ordering?: string;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path: {
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantFeatureOverride"][];
+                };
+            };
+        };
+    };
+    platform_tenants_feature_overrides_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantFeatureOverrideCreate"];
+                "application/x-www-form-urlencoded": components["schemas"]["TenantFeatureOverrideCreate"];
+                "multipart/form-data": components["schemas"]["TenantFeatureOverrideCreate"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantFeatureOverride"];
+                };
+            };
+            /** @description toggle_refused: the school still needs this flag, or the override would switch a kill switch on. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    platform_tenants_feature_overrides_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description toggle_refused: the school still needs this flag, or the override would switch a kill switch on. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

@@ -501,6 +501,12 @@
   calls `rollback_as_in_production(self)` from `core/api/tests/rollback.py` in `setUp` (it skips
   `TestCase`'s own blocks, as `atomic(durable=True)` does), or uses `TransactionTestCase`. Read a
   `TransactionManagementError`'s chained cause as possibly stale: `rollback_exc` is never reset.
+- **Recurred (platform-admin PR B, Task 5).** The billing webhook
+  (`POST /platform/billing-events/{provider}`) is `non_atomic_requests`, and its 503 test read the
+  subscription after the error response; CI failed with `TransactionManagementError`. Its tests
+  now call `rollback_as_in_production(self)` in `setUp`. The same run showed a second trap: a
+  plain `APIException` with a 401 status renders as `unauthenticated`, because the envelope keeps
+  a custom code only for a `CodedAPIException` (or `DomainRuleViolation`) subclass.
 
 ### L68. A `non_atomic_requests` route binds its tenant per transaction
 

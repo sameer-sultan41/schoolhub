@@ -23,7 +23,7 @@ from __future__ import annotations
 from django.conf import settings
 from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
 from rest_framework import serializers, status
-from rest_framework.exceptions import APIException, NotFound, Throttled
+from rest_framework.exceptions import NotFound, Throttled
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -34,18 +34,19 @@ from apps.platform_admin.billing.base import InvalidBillingSignature
 from apps.platform_admin.billing.registry import webhook_adapter
 from apps.platform_admin.models import BillingOutcome
 from apps.platform_admin.tasks import send_payment_failed_notice
+from core.api.exceptions import CodedAPIException
 from core.api.throttling import BillingEventFailureThrottle, BillingEventThrottle
 from core.api.viewsets import ActionResponse
 from core.audit.services import record_security_event
 
 
-class InvalidBillingEventSignature(APIException):
+class InvalidBillingEventSignature(CodedAPIException):
     status_code = status.HTTP_401_UNAUTHORIZED
     default_detail = "The event signature is invalid or stale."
     default_code = "invalid_signature"
 
 
-class BillingUnavailable(APIException):
+class BillingUnavailable(CodedAPIException):
     status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     default_detail = "Billing webhooks are not configured."
     default_code = "billing_unavailable"

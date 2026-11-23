@@ -73,6 +73,7 @@ class TenantFeatureOverrideViewSet(
     # One row per flag at most: a short, bounded list.
     pagination_class = None
     ordering = ["feature_flag__key"]
+    ordering_fields = ["created_at", "expires_at"]
     required_permission = _VIEW
     required_permission_map = {"create": _UPDATE, "destroy": _UPDATE}
     http_method_names = ["get", "post", "delete", "head", "options"]
