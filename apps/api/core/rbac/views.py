@@ -116,7 +116,8 @@ def _error_response(request, code: str, message: str, http_status: int) -> Respo
 
 def _refusal(request, exc: APIException) -> Response:
     response = _error_response(request, str(exc.default_code), str(exc.detail), exc.status_code)
-    # As DRF's own handler does for a throttled request (RFC 9110 §10.2.3).
+    # As DRF's handler does for a throttle: a timed MFA lock says when to retry (RFC 9110
+    # §10.2.3); the operator-only lock has no wait.
     wait = getattr(exc, "wait", None)
     if wait:
         response["Retry-After"] = str(wait)
@@ -205,8 +206,7 @@ class MfaVerifyView(APIView):
     pair with ``amr=["pwd","otp"]``. A wrong code is a 400 ``invalid_mfa_code``. Every attempt
     counts against the challenge (``MFA_CHALLENGE_MAX_ATTEMPTS``; past it, or once used, a 400
     ``mfa_challenge_invalid`` and the client signs in again) and against the account
-    (``MFA_MAX_FAILED_ATTEMPTS`` consecutive failures lock it: 429 ``mfa_locked`` with
-    ``Retry-After``, which is absent once only an operator can lift the lock).
+    (``MFA_MAX_FAILED_ATTEMPTS`` consecutive failures lock it: 429 ``mfa_locked``).
     """
 
     permission_classes = [AllowAny]
