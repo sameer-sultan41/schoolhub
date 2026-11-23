@@ -31,6 +31,11 @@ describe("RESERVED_SUBDOMAINS", () => {
 describe("API_PUBLIC_ORIGIN", () => {
   const ORIGINAL = process.env.API_PUBLIC_ORIGIN;
 
+  // The top-level import above already parsed env.ts; each case needs a fresh parse.
+  beforeEach(() => {
+    jest.resetModules();
+  });
+
   afterEach(() => {
     if (ORIGINAL === undefined) delete process.env.API_PUBLIC_ORIGIN;
     else process.env.API_PUBLIC_ORIGIN = ORIGINAL;
