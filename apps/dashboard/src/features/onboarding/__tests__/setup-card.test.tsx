@@ -1,6 +1,7 @@
 import type { PermissionKey } from "@schoolhub/types";
 import { screen, waitFor } from "@testing-library/react";
 
+import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
 import { onboardingRecord } from "@/test-fixtures/onboarding";
 import { USER_LOADED, UserLoaded } from "@/test-fixtures/user-loaded";
@@ -139,5 +140,27 @@ describe("setup card", () => {
 
     expect(await screen.findByText("2 of 9 steps done")).toBeInTheDocument();
     expect(mockFetchOnboarding).toHaveBeenCalledTimes(2);
+  });
+
+  it("stops reading the checklist once setup is completed, since the card can never return", async () => {
+    mockFetchOnboarding.mockResolvedValue(
+      onboardingRecord({ done: ["profile"], completedAt: "2026-11-16T10:00:00Z" }),
+    );
+    const { rerender, queryClient } = renderWithClient(<SetupCard />);
+    await waitFor(() => {
+      expect(queryClient.getQueryState(queryKeys.onboarding())?.status).toBe("success");
+    });
+
+    rerender(<></>);
+    rerender(
+      <>
+        <SetupCard />
+        <UserLoaded />
+      </>,
+    );
+
+    // The user is cached, so a remount would have asked for the checklist by now.
+    await screen.findByText(USER_LOADED);
+    expect(mockFetchOnboarding).toHaveBeenCalledTimes(1);
   });
 });

@@ -189,6 +189,20 @@ describe("setup wizard", () => {
     expect(await screen.findByRole("button", { name: "Profile confirmed" })).toBeDisabled();
   });
 
+  it("takes the checklist from its own PATCH's response, without reading it again", async () => {
+    serveChecklist(onboardingRecord(), onboardingRecord({ done: ["profile"] }));
+    setUrl("/setup?step=profile");
+    const { queryClient } = renderWithClient(<SetupWizard />);
+    const invalidate = jest.spyOn(queryClient, "invalidateQueries");
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "Confirm profile" }));
+
+    expect(await screen.findByRole("button", { name: "Profile confirmed" })).toBeDisabled();
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: queryKeys.onboarding() });
+    expect(onboarding.fetchOnboarding).toHaveBeenCalledTimes(1);
+  });
+
   it("tells a viewer without a step's key that someone else does it", async () => {
     mockFetchCurrentUser.mockResolvedValue(
       buildUser(["school.settings.view", "school.campus.view", "school.campus.create"]),
