@@ -16,6 +16,9 @@ export const LOCKED_SESSION_STATUSES: readonly AcademicSessionSummary["status"][
   "archived",
 ];
 
+/** A session not yet active: the one status `:activate` accepts. */
+export const PLANNED_SESSION_STATUS: AcademicSessionStatus = "planned";
+
 // --- Shared by the School module's structure lists -----------------------------------------
 
 /** The query-key module every school-organization read lives under, the reference lists other

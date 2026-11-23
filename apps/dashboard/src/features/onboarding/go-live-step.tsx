@@ -14,12 +14,11 @@ import { queryKeys } from "@/lib/query-client";
 import { Services, type AcademicSessionRecord } from "@/services";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import {
+  PLANNED_SESSION_STATUS,
   SCHOOL_ORGANIZATION_QUERY_MODULE,
   SESSION_PAGE_RESOURCE,
   SESSION_PAGE_SIZE,
 } from "@/services/modules/school-organization/school-organization-constant";
-
-const PLANNED = "planned";
 
 export interface GoLiveStepProps {
   /** A session is already active. */
@@ -43,11 +42,11 @@ export function GoLiveStep({ done, onGoToSessions }: GoLiveStepProps) {
 
   const query = useQuery({
     queryKey: queryKeys.list(SCHOOL_ORGANIZATION_QUERY_MODULE, SESSION_PAGE_RESOURCE, {
-      status: PLANNED,
+      status: PLANNED_SESSION_STATUS,
     }),
     queryFn: () =>
       Services.schoolOrganization.fetchSessionPage({
-        status: PLANNED,
+        status: PLANNED_SESSION_STATUS,
         pageSize: SESSION_PAGE_SIZE,
       }),
     enabled: !done,
