@@ -93,6 +93,19 @@ from core.tenancy.context import tenant_context
 from core.tenancy.models import Tenant, TenantFeatureOverride, TenantSettings, TenantStatus
 
 
+def _settings_assignment(module: str, name: str) -> ast.expr:
+    """The value expression assigned to `name` in a settings module, read from its source."""
+    source = (Path(settings.BASE_DIR) / "config/settings" / module).read_text()
+    for node in ast.parse(source).body:
+        if (
+            isinstance(node, ast.Assign)
+            and isinstance(node.targets[0], ast.Name)
+            and node.targets[0].id == name
+        ):
+            return node.value
+    raise AssertionError(f"{module} does not assign {name}")
+
+
 class SeedE2EDataTests(TestCase):
     def test_seeds_both_tenants_and_an_admin_on_each(self) -> None:
         call_command("seed_e2e_data")
@@ -151,15 +164,24 @@ class SeedE2EDataTests(TestCase):
 
     def test_production_settings_disallow_e2e_seeding(self) -> None:
         """`prod.py` needs env vars to import, so its assignment is read from the source."""
-        source = (Path(settings.BASE_DIR) / "config/settings/prod.py").read_text()
-        assignments = {
-            node.targets[0].id: node.value
-            for node in ast.parse(source).body
-            if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name)
-        }
-        value = assignments["E2E_SEED_ALLOWED"]
+        value = _settings_assignment("prod.py", "E2E_SEED_ALLOWED")
         assert isinstance(value, ast.Constant)
         self.assertIs(value.value, False)
+
+    def test_base_settings_fail_closed_on_e2e_seeding(self) -> None:
+        """A settings module that says nothing (staging, production-like) must not seed."""
+        value = _settings_assignment("base.py", "E2E_SEED_ALLOWED")
+        assert isinstance(value, ast.Call)
+        default = next(kw.value for kw in value.keywords if kw.arg == "default")
+        assert isinstance(default, ast.Constant)
+        self.assertIs(default.value, False)
+
+    def test_dev_and_test_settings_allow_e2e_seeding(self) -> None:
+        """The live lane runs under `dev.py` (compose's default module)."""
+        value = _settings_assignment("dev.py", "E2E_SEED_ALLOWED")
+        assert isinstance(value, ast.Constant)
+        self.assertIs(value.value, True)
+        self.assertIs(settings.E2E_SEED_ALLOWED, True)
 
     def test_the_school_admin_can_poll_the_jobs_it_starts(self) -> None:
         """It starts promotion execute; a 403 on `GET /jobs/{id}` reads as a failed job."""
