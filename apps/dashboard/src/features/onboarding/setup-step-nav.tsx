@@ -58,7 +58,7 @@ export function SetupStepNav({ steps, activeKey, onSelect }: SetupStepNavProps) 
                   <span className="text-xs text-muted-foreground">
                     {step.count === undefined
                       ? status
-                      : `${status} · ${t("status.count", { count: step.count })}`}
+                      : t("status.withCount", { status, count: step.count })}
                   </span>
                 </span>
               </Button>

@@ -5252,7 +5252,7 @@
       "done": "مکمل",
       "skipped": "چھوڑ دیا گیا",
       "todo": "باقی",
-      "count": "{count, plural, one {# ریکارڈ} other {# ریکارڈ}}"
+      "withCount": "{status} · {count, plural, one {# ریکارڈ} other {# ریکارڈ}}"
     },
     "steps": {
       "profile": {

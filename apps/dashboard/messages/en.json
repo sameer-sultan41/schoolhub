@@ -5252,7 +5252,7 @@
       "done": "Done",
       "skipped": "Skipped",
       "todo": "To do",
-      "count": "{count, plural, one {# record} other {# records}}"
+      "withCount": "{status} · {count, plural, one {# record} other {# records}}"
     },
     "steps": {
       "profile": {
