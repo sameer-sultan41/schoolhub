@@ -24,7 +24,9 @@ def make_preview_token(page: WebsitePage) -> str:
 def read_preview_token_with_expiry(token: str) -> tuple[UUID, UUID, datetime]:
     """`(tenant_id, page_id, expires_at)`; raises `BadSignature`, or `SignatureExpired` once past.
 
-    `expires_at` is the signed timestamp plus `PREVIEW_TOKEN_MAX_AGE`, in UTC.
+    `expires_at` is the signed timestamp plus `PREVIEW_TOKEN_MAX_AGE`, in UTC. The timestamp is
+    read with `b62_decode`, an undocumented Django helper (what `TimestampSigner` itself uses);
+    `test_expiry_is_the_signed_time_plus_the_max_age` guards it across Django upgrades.
     """
     payload = TimestampSigner(salt=PREVIEW_SALT).unsign(token, max_age=PREVIEW_TOKEN_MAX_AGE)
     # `unsign` has verified the signature, so the token is `<payload>:<timestamp>:<signature>`.

@@ -34,6 +34,7 @@ from apps.website_cms.models import (
     WebsitePage,
 )
 from apps.website_cms.preview import PREVIEW_TOKEN_MAX_AGE, make_preview_token
+from apps.website_cms.public.views import PreviewGrant
 from apps.website_cms.tests.factories import (
     GalleryAlbumFactory,
     NavigationMenuFactory,
@@ -489,25 +490,29 @@ class PreviewTests(PublicAPITestCase):
         self.assertEqual(response["Cache-Control"], "no-store")
         self.assertIn("X-Preview-Token", response["Vary"])
 
-    def test_preview_response_carries_the_tokens_expiry(self) -> None:
+    def test_preview_response_carries_the_seconds_the_token_has_left(self) -> None:
         signed_at = int(time.time()) - 100
         with mock.patch("django.core.signing.time.time", return_value=signed_at):
             token = make_preview_token(self.draft)
-        expected = (
-            (datetime.fromtimestamp(signed_at, tz=UTC) + timedelta(seconds=PREVIEW_TOKEN_MAX_AGE))
-            .isoformat()
-            .replace("+00:00", "Z")
-        )
         for resource, params in (("pages", {"slug": "admissions"}), ("site", {})):
             with self.subTest(resource=resource):
                 response = self.read(resource, meta={"HTTP_X_PREVIEW_TOKEN": token}, **params)
                 self.assertEqual(response.status_code, 200)
-                self.assertEqual(response["X-Preview-Expires-At"], expected)
+                # 600 s of life, 100 s used; a little slack for the request's own time.
+                left = int(response["X-Preview-Expires-In"])
+                self.assertGreaterEqual(left, PREVIEW_TOKEN_MAX_AGE - 100 - 3)
+                self.assertLessEqual(left, PREVIEW_TOKEN_MAX_AGE - 100)
+
+    def test_seconds_left_never_go_below_zero(self) -> None:
+        past = PreviewGrant(
+            page_id=self.draft.id, expires_at=datetime.now(UTC) - timedelta(seconds=30)
+        )
+        self.assertEqual(past.expires_in, 0)
 
     def test_published_read_without_a_token_has_no_expiry_header(self) -> None:
         self.make_page(slug="about", status=PUBLISHED)
         response = self.read("pages", slug="about")
-        self.assertNotIn("X-Preview-Expires-At", response)
+        self.assertNotIn("X-Preview-Expires-In", response)
 
     def test_published_page_varies_on_the_preview_header_but_is_cacheable(self) -> None:
         self.make_page(slug="about", status=PUBLISHED)

@@ -8,6 +8,7 @@ never asserted by the caller; each read resolves it from `?host=` and binds it f
 from __future__ import annotations
 
 import contextlib
+import time
 from collections.abc import Iterator
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
@@ -47,8 +48,9 @@ from core.tenancy.models import Tenant, TenantStatus
 
 #: The header a draft page's preview token travels in; never a query parameter (SEC-57).
 PREVIEW_HEADER = "X-Preview-Token"
-#: Response header: when the presented preview token stops working (ISO-8601, UTC).
-PREVIEW_EXPIRES_HEADER = "X-Preview-Expires-At"
+#: Response header: whole seconds the presented preview token still works, at response time.
+#: Relative, so the renderer needs no clock comparison with the API.
+PREVIEW_EXPIRES_HEADER = "X-Preview-Expires-In"
 
 HOST_PARAMETER = OpenApiParameter(
     "host", str, required=True, description="The site's host, as the visitor's browser sent it."
@@ -60,6 +62,14 @@ PREVIEW_PARAMETER = OpenApiParameter(
     required=False,
     description="A page preview token for this host's school: reads before the site is live.",
 )
+PREVIEW_EXPIRES_PARAMETER = OpenApiParameter(
+    PREVIEW_EXPIRES_HEADER,
+    int,
+    location=OpenApiParameter.HEADER,
+    response=[200],
+    description="Sent only when a valid preview token was presented: whole seconds it still "
+    "works (0 or more). The renderer sets its preview cookie's life to this.",
+)
 
 
 @dataclass(frozen=True)
@@ -68,6 +78,11 @@ class PreviewGrant:
 
     page_id: UUID
     expires_at: datetime
+
+    @property
+    def expires_in(self) -> int:
+        """Whole seconds left, now, never below 0."""
+        return max(0, int(self.expires_at.timestamp() - time.time()))
 
 
 PAGE_SIZE_PARAMETER = OpenApiParameter(
@@ -156,11 +171,11 @@ class PublicContentView(APIView):
 
     @staticmethod
     def mark_preview(response: Response, *, grant: PreviewGrant | None) -> Response:
-        """Mark a response a preview token can change: if it did, no-store plus the token expiry."""
+        """Mark a response a preview token can change: if it did, no-store plus the seconds left."""
         patch_vary_headers(response, [PREVIEW_HEADER])
         if grant is not None:
             patch_cache_control(response, no_store=True)
-            response[PREVIEW_EXPIRES_HEADER] = grant.expires_at.isoformat().replace("+00:00", "Z")
+            response[PREVIEW_EXPIRES_HEADER] = str(grant.expires_in)
         return response
 
 
@@ -202,7 +217,7 @@ class PublicSiteView(PublicContentView):
 
     @extend_schema(
         operation_id="public_site",
-        parameters=[HOST_PARAMETER, PREVIEW_PARAMETER],
+        parameters=[HOST_PARAMETER, PREVIEW_PARAMETER, PREVIEW_EXPIRES_PARAMETER],
         responses={200: PublicSiteSerializer, 404: NOT_FOUND},
     )
     def get(self, request: Request) -> Response:
@@ -235,6 +250,7 @@ class PublicPageView(PublicContentView):
                 "token's page.",
             ),
             PREVIEW_PARAMETER,
+            PREVIEW_EXPIRES_PARAMETER,
         ],
         responses={200: PublicPageSerializer, 404: NOT_FOUND},
     )
