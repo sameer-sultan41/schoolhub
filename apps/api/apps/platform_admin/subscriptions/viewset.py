@@ -47,7 +47,8 @@ _UPDATE_CONFLICT = OpenApiResponse(
 _PLAN_CONFLICT = OpenApiResponse(
     description="invalid_transition: the subscription's status does not allow this move; "
     "no_live_subscription: the school has none; toggle_refused: the plan would switch off a "
-    "module the school still needs."
+    "module the school still needs; limit_below_usage: a limit would drop below the school's "
+    "latest usage (`meta.over_usage`)."
 )
 _ACTIVATE_CONFLICT = OpenApiResponse(
     description="invalid_transition: the subscription's status does not allow this move; "
@@ -172,10 +173,16 @@ class TenantSubscriptionViewSet(PlatformTenantNestedMixin, PlatformViewSet):
         payload = SubscriptionChangePlanSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
         code = payload.validated_data["plan_code"]
+        acknowledged = payload.validated_data["acknowledge_over_usage"]
         return self._idempotent(
             request,
             "change_plan",
-            lambda sub: services.change_plan(self._live(sub), code, actor_id=request.user.pk),
+            lambda sub: services.change_plan(
+                self._live(sub),
+                code,
+                actor_id=request.user.pk,
+                acknowledge_over_usage=acknowledged,
+            ),
             message="Plan changed.",
         )
 

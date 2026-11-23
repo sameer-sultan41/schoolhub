@@ -182,15 +182,18 @@ either this file or `project-status.md`.
     plus each `:refresh-usage`, and nothing prunes it. The table is append-only (DELETE is
     revoked from the app role), so pruning needs a migrator-role job, like the hard purge;
     a rollup (keep dailies for a quarter, then one per month) is the likely shape.
-  - **`:change-plan` does not ask the over-usage check.** Moving a school to a plan whose
-    limits sit below its usage is allowed without `acknowledge_over_usage`; only lowering a
-    plan's own limits and a school's `limits_override` are checked (ruling C3).
   - **The plan check ignores overrides.** Lowering a plan's limit reads every school on the
     plan, not each school's `limits_override`, so a school whose override shields it can still
     make the edit ask for the acknowledgement.
   - **`sms_credits` and `ai_tokens` have no counter,** so neither is snapshotted nor checked.
   - **Stale snapshots.** The over-usage check and the reports are as fresh as the last
     snapshot (nightly, or `:refresh-usage`); a school that grew today is not yet seen.
+  - **`modules_enabled` costs a query per module per school** on a cold feature cache: each
+    snapshot asks `is_feature_enabled` for every registered `module.*` key. Fine nightly; a
+    bulk resolver is the fix if the school count makes the run slow.
+  - **Pending uploads ratchet storage.** The counter sums every non-deleted file, `pending`
+    included, so an upload that is never confirmed keeps counting toward `storage_gb` (and
+    its quota) until something removes the row; nothing sweeps abandoned pending files yet.
 
 - **Quotas, what platform-admin PR C's Task 7 leaves out** (`apps/api/core/tenancy/quotas.py`,
   platform-admin §7.8).

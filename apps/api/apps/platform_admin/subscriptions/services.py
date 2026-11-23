@@ -271,11 +271,19 @@ def mark_payment_failed(sub: Subscription, *, actor_id: uuid.UUID | None) -> Sub
     return row
 
 
-def change_plan(sub: Subscription, plan_code: str, *, actor_id: uuid.UUID | None) -> Subscription:
+def change_plan(
+    sub: Subscription,
+    plan_code: str,
+    *,
+    actor_id: uuid.UUID | None,
+    acknowledge_over_usage: bool = False,
+) -> Subscription:
     """Move the live subscription to the active plan ``plan_code``, at once.
 
     The period and status stay as they are: proration and plan versioning are deferred
-    (deferred-work.md). Module access follows on the next request.
+    (deferred-work.md). Module access follows on the next request. A plan whose limits, with
+    the school's override on top, drop below its latest usage snapshot is a 409
+    `limit_below_usage` unless acknowledged.
     """
     with _writing(sub.tenant_id) as school:
         row = _locked(sub, None, allowed=tuple(_LIVE))
@@ -283,6 +291,12 @@ def change_plan(sub: Subscription, plan_code: str, *, actor_id: uuid.UUID | None
         if plan.pk == row.plan_id:
             raise DomainRuleViolation({"plan_code": SAME_PLAN})
         _refuse_guarded_drop(school, plan)
+        refuse_below_usage(
+            _limits_of(row),
+            _merged_limits(plan.limits, row.limits_override),
+            latest_snapshots([row.tenant_id]),
+            acknowledged=acknowledge_over_usage,
+        )
         row.plan = plan
         _save(row, actor_id, "plan")
         _mirror(school, row)

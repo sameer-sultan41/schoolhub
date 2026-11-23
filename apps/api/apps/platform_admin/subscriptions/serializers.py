@@ -109,3 +109,9 @@ class SubscriptionPaymentSerializer(serializers.Serializer):
 
 class SubscriptionChangePlanSerializer(serializers.Serializer):
     plan_code = serializers.CharField(max_length=50)
+    acknowledge_over_usage = serializers.BooleanField(
+        required=False,
+        default=False,
+        help_text="Move to a plan whose limits sit below the school's latest usage snapshot "
+        "anyway; without it that is a 409 limit_below_usage.",
+    )
