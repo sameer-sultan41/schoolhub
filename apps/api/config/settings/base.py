@@ -300,6 +300,9 @@ SPECTACULAR_SETTINGS = {
     "ENUM_ADD_EXPLICIT_BLANK_NULL_CHOICE": False,
     "ENUM_NAME_OVERRIDES": {
         "PromotionDecisionEnum": "apps.academics.models.PromotionDecision",
+        # A job's `status`, in `GET /jobs/{id}` and the console's job poll alike: pinned to
+        # the name the first component gave it, so a second one does not rename it.
+        "BackgroundJobStatusEnum": "core.jobs.models.JobStatus",
         # One name for the batch summary's `status` and the decision rows' `status`.
         "PromotionStatusEnum": "apps.academics.models.PromotionStatus",
         # A plain list of tuples, per drf-spectacular's own FAQ: the two document

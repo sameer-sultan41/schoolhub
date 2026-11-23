@@ -7,6 +7,7 @@ from rest_framework import serializers
 
 from core.files.models import File
 from core.files.services import get_download_url, servable_file
+from core.jobs.models import BackgroundJob
 from core.jobs.serializers import BackgroundJobSerializer
 
 
@@ -16,8 +17,9 @@ class PlatformJobSerializer(BackgroundJobSerializer):
         "poll again for a fresh one."
     )
 
-    class Meta(BackgroundJobSerializer.Meta):
-        fields = (*BackgroundJobSerializer.Meta.fields, "download_url")
+    class Meta:
+        model = BackgroundJob
+        fields: tuple[str, ...] = (*BackgroundJobSerializer.Meta.fields, "download_url")
         read_only_fields = fields
 
     @extend_schema_field(serializers.CharField(allow_null=True))

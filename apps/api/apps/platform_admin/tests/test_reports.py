@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 from datetime import timedelta
 from decimal import Decimal
 
@@ -29,6 +30,11 @@ from core.tenancy.rls import tenant_owned_tables
 S = TenantStatus
 GIB = 1024**3
 REPORTS_URL = "/api/v1/platform/reports"
+
+
+def tables_read(sql: str) -> set[str]:
+    """The relations a query names; a column that shares a table's name (`staff`) is not one."""
+    return set(re.findall(r'\b(?:FROM|JOIN|UPDATE|INTO)\s+"([^"]+)"', sql))
 
 
 def report_url(key: str, fmt: str | None = None) -> str:
@@ -146,13 +152,16 @@ class ReportTests(PlatformAPITestCase):
         snapshot_of(tenant, plan_code=plan.code, currency="PKR", mrr_amount=10, students=3)
         # The builders alone: no school table, and no school's users (the request below also
         # reads the operator's own user and roles to authenticate, so it is checked apart).
+        read_by_any: set[str] = set()
         for key, report in REPORTS.items():
             with self.subTest(builder=key), CaptureQueriesContext(connection) as queries:
                 report.build()
-            self.assertTrue(queries.captured_queries, key)
             for query in queries.captured_queries:
-                for table in (*tenant_owned_tables(), "users", "user_roles"):
-                    self.assertNotIn(f'"{table}"', query["sql"], (key, table))
+                read = tables_read(query["sql"])
+                read_by_any |= read
+                self.assertFalse(read & {*tenant_owned_tables(), "users", "user_roles"}, key)
+        # The matcher sees the reports' real sources, so the checks above are not vacuous.
+        self.assertLessEqual({"tenants", "tenant_usage_snapshots", "plans"}, read_by_any)
 
         forbidden = set(tenant_owned_tables())
         for key in ("tenant-overview", "revenue", "usage"):
@@ -161,8 +170,7 @@ class ReportTests(PlatformAPITestCase):
                     response = self.client.get(report_url(key, fmt))
                     self.assertEqual(response.status_code, status.HTTP_200_OK)
                 for query in queries.captured_queries:
-                    for table in forbidden:
-                        self.assertNotIn(f'"{table}"', query["sql"], (key, table))
+                    self.assertFalse(tables_read(query["sql"]) & forbidden, (key, query["sql"]))
                     # Nothing binds a school: the reports never enter one's RLS boundary.
                     self.assertNotIn("set_config", query["sql"], key)
 
