@@ -166,3 +166,19 @@ class ForEachTenantTests(TestCase):
             "this connection, so every cross-tenant test in the suite is only "
             "testing the Python manager",
         )
+
+
+class ForEachTenantSubsetTests(TestCase):
+    def test_visits_only_the_given_tenants(self) -> None:
+        wanted = TenantFactory()
+        TenantFactory()
+        seen: list[uuid.UUID] = []
+
+        def step(tenant_id: uuid.UUID) -> int:
+            seen.append(tenant_id)
+            return 0
+
+        summary = for_each_tenant(step, job="subset", atomic=False, tenant_ids=[wanted.pk])
+
+        self.assertEqual(seen, [wanted.pk])
+        self.assertEqual(summary["tenants"], 1)

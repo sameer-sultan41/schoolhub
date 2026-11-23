@@ -40,10 +40,10 @@ class WebsiteAPITestCase(APITestCase):
 
         self.allow(*(spec.key for spec in registry.for_module("website")))
 
-    def bearer_client(self) -> APIClient:
-        """A client with the user's access token and no session (lesson L63)."""
+    def bearer_client(self, user=None) -> APIClient:
+        """A client with `user`'s (default: `self.user`) access token and no session (L63)."""
         client = APIClient()
-        client.credentials(HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(self.user)}")
+        client.credentials(HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(user or self.user)}")
         return client
 
     def assert_ties_page_apart(self, url: str, model, rows, params=None, **tie) -> None:

@@ -17,6 +17,9 @@ PAYMENT_PROVIDERS_ENABLED = ["fake"]
 # The live E2E lane signs a callback for a checkout it started; the fake provider has
 # to "know" that payment for the callback's re-fetch to confirm it.
 PAYMENT_FAKE_SETTLES_ON_INITIATE = True
+# Custom domains verify without real DNS in dev: any `*.test` domain passes, so the live E2E
+# lane can activate one from outside the API process (L64).
+WEBSITE_DNS_VERIFIER = env("WEBSITE_DNS_VERIFIER", default="") or "fake"
 ALLOWED_HOSTS = ["*"]
 
 INSTALLED_APPS += ["drf_spectacular_sidecar"]

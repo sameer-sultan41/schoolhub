@@ -6,7 +6,7 @@ Everything here is a hardening decision; see docs/06-security/security.md.
 from django.core.exceptions import ImproperlyConfigured
 
 from config.settings.base import *
-from config.settings.base import env
+from config.settings.base import WEBSITE_DNS_VERIFIER, env
 
 DEBUG = False
 
@@ -14,6 +14,13 @@ DEBUG = False
 INTEGRATIONS_ENCRYPTION_KEYS = env.list("INTEGRATIONS_ENCRYPTION_KEYS")
 # Required for the same reason: a callback URL pointing nowhere loses payments silently.
 API_PUBLIC_URL = env("API_PUBLIC_URL")
+# The fake verifier activates any `*.test` domain without DNS; never in production.
+if WEBSITE_DNS_VERIFIER == "fake":
+    raise ImproperlyConfigured("WEBSITE_DNS_VERIFIER=fake is for development and tests only.")
+# Required: with no CNAME target every custom domain fails verification, and lapses.
+WEBSITE_CNAME_TARGET = env("WEBSITE_CNAME_TARGET")
+if not WEBSITE_CNAME_TARGET:
+    raise ImproperlyConfigured("WEBSITE_CNAME_TARGET must name the custom-domain CNAME target.")
 
 # Required (0 means the API is reached directly): per-IP throttles and stored IPs trust
 # X-Forwarded-For only as far as this says, so a wrong default would be spoofable or blind.

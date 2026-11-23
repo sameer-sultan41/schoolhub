@@ -366,3 +366,15 @@ pseudonymizer
 Safepay
 unflagged
 unexpired
+dnspython
+idna
+nxdomain
+rdata
+rdtype
+rdtypes
+recheck
+rechecks
+reverify
+strae
+straße
+myschoolhub

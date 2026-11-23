@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 
 from core.tenancy.context import tenant_atomic
 
@@ -39,7 +39,11 @@ def active_tenant_ids() -> Iterator[uuid.UUID]:
 
 
 def for_each_tenant(
-    step: Callable[[uuid.UUID], int], *, job: str, atomic: bool = True
+    step: Callable[[uuid.UUID], int],
+    *,
+    job: str,
+    atomic: bool = True,
+    tenant_ids: Iterable[uuid.UUID] | None = None,
 ) -> dict[str, int]:
     """Run ``step`` once per tenant inside that tenant's own transaction.
 
@@ -51,10 +55,13 @@ def for_each_tenant(
     step that must call out over the network (a payment provider) between its
     units of work: it opens ``tenant_atomic(tenant_id)`` itself around each one,
     so no lock or transaction is held across the call.
+
+    ``tenant_ids`` narrows the sweep to the tenants a caller already knows have work (read
+    from a platform-scope table); the default is every tenant `active_tenant_ids` yields.
     """
     visited = affected = failed = 0
 
-    for tenant_id in active_tenant_ids():
+    for tenant_id in active_tenant_ids() if tenant_ids is None else tenant_ids:
         visited += 1
         try:
             if atomic:
