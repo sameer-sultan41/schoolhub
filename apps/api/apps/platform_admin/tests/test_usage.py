@@ -406,3 +406,28 @@ class LimitBelowUsageTests(PlatformAPITestCase):
         )
         self.assertEqual(acknowledged.status_code, status.HTTP_200_OK, acknowledged.content)
         self.assertEqual(acknowledged.json()["data"]["limits"]["students"], 10)
+
+    def test_change_plan_below_usage_is_409(self) -> None:
+        tenant = make_tenant(status=S.TRIAL)
+        live_on(tenant, make_plan(limits={"students": 500}))
+        smaller = make_plan(limits={"students": 10})
+        snapshot_of(tenant, students=50)
+
+        refused = self.client.post(
+            subscription_url(tenant, ":change-plan"), {"plan_code": smaller.code}, format="json"
+        )
+
+        self.assert_error(refused, status.HTTP_409_CONFLICT, "limit_below_usage")
+        self.assertEqual(
+            refused.json()["error"]["meta"]["over_usage"],
+            [{"tenant_id": str(tenant.pk), "metric": "students", "limit": 10, "usage": 50}],
+        )
+        self.assertNotEqual(Tenant.objects.get(pk=tenant.pk).current_plan, smaller.code)
+
+        acknowledged = self.client.post(
+            subscription_url(tenant, ":change-plan"),
+            {"plan_code": smaller.code, "acknowledge_over_usage": True},
+            format="json",
+        )
+        self.assertEqual(acknowledged.status_code, status.HTTP_200_OK, acknowledged.content)
+        self.assertEqual(Tenant.objects.get(pk=tenant.pk).current_plan, smaller.code)
