@@ -76,6 +76,8 @@ locals {
     API_PUBLIC_URL         = "https://api.${var.platform_domain}"
     NUM_PROXIES            = tostring(var.num_proxies)
     WEBSITE_CNAME_TARGET   = var.website_cname_target
+    # The renderer's webhook, through CloudFront: tasks cannot reach each other directly.
+    WEBSITE_REVALIDATE_URL = "https://${var.platform_domain}/api/revalidate"
     S3_BUCKET_NAME         = module.storage.uploads_bucket_name
     S3_REGION_NAME         = var.aws_region
     LOG_LEVEL              = "INFO"
@@ -88,6 +90,8 @@ locals {
       DATABASE_URL                 = var.app_database_url_arn
       INTEGRATIONS_ENCRYPTION_KEYS = var.integrations_encryption_keys_arn
       REDIS_AUTH_TOKEN             = module.cache.auth_token_secret_arn
+      WEBSITE_MACHINE_TOKENS       = var.website_machine_tokens_arn
+      WEBSITE_REVALIDATE_SECRET    = var.website_revalidate_secret_arn
       SENTRY_DSN                   = var.sentry_dsn_arn
     },
     var.payment_gateway_secret_arn != "" ? { PAYMENT_GATEWAY_SECRET = var.payment_gateway_secret_arn } : {},
@@ -98,6 +102,12 @@ locals {
   frontend_secrets = {
     SENTRY_DSN = var.sentry_dsn_arn
   }
+
+  # The renderer adds its own token and the webhook secret; neither reaches the dashboard.
+  website_secrets = merge(local.frontend_secrets, {
+    WEBSITE_MACHINE_TOKEN     = var.website_machine_token_arn
+    REVALIDATE_WEBHOOK_SECRET = var.website_revalidate_secret_arn
+  })
 }
 
 # -----------------------------------------------------------------------------
@@ -449,7 +459,7 @@ module "website" {
   image          = var.website_image
   cpu            = 1024
   memory         = 2048
-  container_port = 3001
+  container_port = 3001 # the Dockerfile's PORT
 
   expose_via_alb = true
   listener_arn   = aws_lb_listener.https.arn
@@ -467,14 +477,19 @@ module "website" {
 
   health_check_path = "/api/health"
 
+  # Read at runtime (server-only names), so the same image runs in every environment.
   environment_variables = {
-    NODE_ENV                    = "production"
-    NEXT_PUBLIC_API_BASE_URL    = "https://api.${var.platform_domain}/api/v1"
-    NEXT_PUBLIC_PLATFORM_DOMAIN = var.platform_domain
-    NEXT_TELEMETRY_DISABLED     = "1"
+    NODE_ENV                = "production"
+    API_BASE_URL            = "https://api.${var.platform_domain}/api/v1"
+    API_PUBLIC_ORIGIN       = "https://api.${var.platform_domain}"
+    PLATFORM_DOMAIN         = var.platform_domain
+    NEXT_TELEMETRY_DISABLED = "1"
   }
 
-  secret_arns = local.frontend_secrets
+  secret_arns = local.website_secrets
+
+  # Next's disk cache; without it Next warns on the read-only root and serves uncached.
+  writable_paths = ["/app/apps/website/.next/cache"]
 
   desired_count = 3
   min_capacity  = 3
@@ -512,6 +527,9 @@ module "cdn" {
   waf_rate_limit_per_5min = 20000
 
   log_bucket_domain_name = var.cloudfront_log_bucket_domain_name
+
+  # The platform's own egress (renderer reads, revalidation webhooks) skips the rate rule.
+  waf_rate_limit_exempt_cidrs = [for ip in module.network.nat_gateway_public_ips : "${ip}/32"]
 
   tags = local.common_tags
 }

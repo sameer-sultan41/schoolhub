@@ -114,6 +114,17 @@ variable "health_check_path" {
   default     = "/healthz"
 }
 
+variable "writable_paths" {
+  description = "Absolute container paths that get their own writable, non-persistent volume, like /tmp. For an app cache that must not fail on the read-only root (the renderer's .next/cache)."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for path in var.writable_paths : startswith(path, "/") && path != "/tmp"])
+    error_message = "writable_paths must be absolute paths other than /tmp, which is always mounted."
+  }
+}
+
 variable "environment_variables" {
   description = "Non-secret environment variables. Anything sensitive goes in secret_arns instead — plain env vars are visible in the task definition to anyone with ecs:DescribeTaskDefinition."
   type        = map(string)

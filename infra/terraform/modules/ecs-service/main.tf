@@ -217,13 +217,22 @@ resource "aws_ecs_task_definition" "this" {
       # write its own filesystem cannot persist a dropped payload.
       readonlyRootFilesystem = true
 
-      mountPoints = [
-        {
-          sourceVolume  = "tmp"
-          containerPath = "/tmp"
-          readOnly      = false
-        }
-      ]
+      mountPoints = concat(
+        [
+          {
+            sourceVolume  = "tmp"
+            containerPath = "/tmp"
+            readOnly      = false
+          }
+        ],
+        [
+          for index, path in var.writable_paths : {
+            sourceVolume  = "writable-${index}"
+            containerPath = path
+            readOnly      = false
+          }
+        ],
+      )
 
       linuxParameters = {
         initProcessEnabled = true
@@ -244,6 +253,13 @@ resource "aws_ecs_task_definition" "this" {
 
   volume {
     name = "tmp"
+  }
+
+  dynamic "volume" {
+    for_each = var.writable_paths
+    content {
+      name = "writable-${volume.key}"
+    }
   }
 
   tags = local.tags

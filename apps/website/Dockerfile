@@ -70,6 +70,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=builder --chown=node:node /app/apps/website/.next/standalone ./
 COPY --from=builder --chown=node:node /app/apps/website/.next/static ./apps/website/.next/static
 COPY --from=builder --chown=node:node /app/apps/website/public ./apps/website/public
+# Next's disk cache. ECS mounts a writable volume here (the root is read-only); the directory
+# exists, owned by node, so the volume starts with that ownership.
+RUN mkdir -p apps/website/.next/cache && chown node:node apps/website/.next/cache
 
 USER node
 EXPOSE 3001

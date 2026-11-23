@@ -70,6 +70,13 @@ integrations_encryption_keys_arn = "arn:aws:secretsmanager:us-east-1:12345678901
 # be able to run DDL, and session-scoped connections break RLS under pooling.
 app_database_url_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:schoolhub-staging/db/app-url-AbCdEf"
 
+# The website renderer's secrets. The renderer's token must be in the API's list; see
+# infra/runbooks/rotate-website-secrets.md. The revalidate secret is one value under two names
+# (the API's WEBSITE_REVALIDATE_SECRET, the renderer's REVALIDATE_WEBHOOK_SECRET).
+website_machine_tokens_arn    = "arn:aws:secretsmanager:us-east-1:123456789012:secret:schoolhub-staging/website/machine-tokens-AbCdEf"
+website_machine_token_arn     = "arn:aws:secretsmanager:us-east-1:123456789012:secret:schoolhub-staging/website/machine-token-AbCdEf"
+website_revalidate_secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:schoolhub-staging/website/revalidate-secret-AbCdEf"
+
 # Sentry DSN for the staging project. Leave "" to run without error tracking.
 # Source: Sentry -> Settings -> Projects -> schoolhub-staging -> Client Keys.
 sentry_dsn_arn = ""

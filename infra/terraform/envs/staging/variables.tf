@@ -81,6 +81,21 @@ variable "integrations_encryption_keys_arn" {
   type        = string
 }
 
+variable "website_machine_tokens_arn" {
+  description = "Secrets Manager ARN holding WEBSITE_MACHINE_TOKENS for the API: every live website renderer token, comma-separated, newest first. See infra/runbooks/rotate-website-secrets.md."
+  type        = string
+}
+
+variable "website_machine_token_arn" {
+  description = "Secrets Manager ARN holding the renderer's current WEBSITE_MACHINE_TOKEN, which must be one of the tokens in website_machine_tokens_arn. See infra/runbooks/rotate-website-secrets.md."
+  type        = string
+}
+
+variable "website_revalidate_secret_arn" {
+  description = "Secrets Manager ARN holding the shared HMAC secret for the revalidation webhook: the API's WEBSITE_REVALIDATE_SECRET and the renderer's REVALIDATE_WEBHOOK_SECRET. See infra/runbooks/rotate-website-secrets.md."
+  type        = string
+}
+
 variable "app_database_url_arn" {
   description = "Secrets Manager ARN holding the application DATABASE_URL — the schoolhub_app role, through PgBouncer. Never the master URL."
   type        = string

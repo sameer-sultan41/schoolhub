@@ -73,6 +73,17 @@ variable "waf_rate_limit_per_5min" {
   default     = 10000
 }
 
+variable "waf_rate_limit_exempt_cidrs" {
+  description = "IPv4 CIDRs the WAF rate rule skips: the platform's own egress (NAT EIPs as /32s), which carries every renderer read and revalidation webhook. The managed rule groups still apply to them. Empty exempts nothing."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for cidr in var.waf_rate_limit_exempt_cidrs : can(cidrnetmask(cidr))])
+    error_message = "waf_rate_limit_exempt_cidrs must be IPv4 CIDRs, e.g. 203.0.113.10/32."
+  }
+}
+
 variable "log_bucket_domain_name" {
   description = "S3 bucket domain for CloudFront access logs. Empty disables access logging."
   type        = string

@@ -390,6 +390,22 @@ resource "aws_route53_record" "wildcard_ipv6" {
 # -----------------------------------------------------------------------------
 # WAF
 # -----------------------------------------------------------------------------
+# The platform's own egress. Renderer reads and revalidation webhooks reach the API and
+# the renderer through CloudFront from the NAT addresses, so without this the rate rule
+# would count every school's traffic against one IP.
+resource "aws_wafv2_ip_set" "rate_limit_exempt" {
+  count    = var.enable_waf && length(var.waf_rate_limit_exempt_cidrs) > 0 ? 1 : 0
+  provider = aws.us_east_1
+
+  name               = "${var.name_prefix}-rate-limit-exempt"
+  description        = "Platform egress (NAT) addresses the rate rule skips."
+  scope              = "CLOUDFRONT"
+  ip_address_version = "IPV4"
+  addresses          = var.waf_rate_limit_exempt_cidrs
+
+  tags = local.tags
+}
+
 resource "aws_wafv2_web_acl" "this" {
   count    = var.enable_waf ? 1 : 0
   provider = aws.us_east_1
@@ -413,6 +429,20 @@ resource "aws_wafv2_web_acl" "this" {
       rate_based_statement {
         limit              = var.waf_rate_limit_per_5min
         aggregate_key_type = "IP"
+
+        # Rate-limit everything except the platform's egress; the managed rules still apply.
+        dynamic "scope_down_statement" {
+          for_each = aws_wafv2_ip_set.rate_limit_exempt
+          content {
+            not_statement {
+              statement {
+                ip_set_reference_statement {
+                  arn = scope_down_statement.value.arn
+                }
+              }
+            }
+          }
+        }
       }
     }
 
