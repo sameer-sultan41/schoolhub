@@ -526,6 +526,11 @@
 - **Mistake.** `test_provision_replays_under_same_key` compared the whole JSON of the first and the replayed `:provision` response. The renderer stamps each response's own `meta.request_id`, so the two never match and CI failed (`6f639fb8`, platform-admin PR A).
 - **Check.** An idempotent-replay test compares `response.json()["data"]` (and any `meta` field the replay stores, such as `meta.message`), never the whole envelope; `request_id` is per request by design.
 
+### L74. A finished import dialog has two buttons named "Close"
+
+- **Mistake.** The live onboarding journey closed `BulkImportDialog` with `getByRole("button", { name: "Close" })` after the job finished. The footer button and the corner X are both named "Close" then, so Playwright's strict mode failed the run that only the live lane exercises (e2e-live run 45129296839, fixed in `23ad56cd`, PR H #194).
+- **Check.** To close a dialog that may show both a footer "Close" and the corner X, press Escape and assert the dialog is hidden. Do not name a "Close" button inside it.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.
