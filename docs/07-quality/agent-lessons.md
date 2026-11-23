@@ -550,7 +550,7 @@
 
 ### L78. `get_throttles` that replaces a bucket returns a new list
 
-- **Mistake.** The preview reads were meant to spend their own `public_preview` bucket instead of the per-host machine quota, but appending to `super().get_throttles()` still spent the machine quota too: DRF calls `allow_request` on every throttle in the list (website CMS PR C, `1635454b`).
+- **Mistake.** The preview reads were meant to spend their own `public_preview` bucket instead of the per-host machine quota, but appending to `super().get_throttles()` still spent the machine quota too: DRF calls `allow_request` on every throttle in the list (website CMS PR E review, fixed in `22539083`).
 - **Check.** To replace a bucket, return a list without it (`[PreviewThrottle()]`); to add one, append. Test that a request in the replacing branch leaves the other bucket's cache count unchanged.
 
 ### L79. A multi-tenant renderer never uses Next Draft Mode for preview
