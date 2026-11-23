@@ -51,6 +51,7 @@ CLIENT_KNOWN_SERVER_CODES = {
     "export_required",
     "plan_in_use",
     "subscription_exists",
+    "toggle_refused",
 }
 
 
@@ -155,6 +156,7 @@ class OffsetEnvelopeTests(APITestCase):
 class ErrorCodeContractTests(APITestCase):
     def test_the_client_knows_every_code_the_server_can_emit(self):
         from apps.examinations.processing import MarksOutstanding
+        from apps.platform_admin.flags.services import ToggleRefused
         from apps.platform_admin.plans.services import PlanInUse
         from apps.platform_admin.subscriptions.services import SubscriptionExists
         from apps.platform_admin.tenants.lifecycle import InvalidTransition, RetentionExpired
@@ -203,6 +205,8 @@ class ErrorCodeContractTests(APITestCase):
             # Plans and subscriptions (platform console).
             PlanInUse.default_code,
             SubscriptionExists.default_code,
+            # The feature-flag console: a refused disable or kill-switch override.
+            ToggleRefused.default_code,
         }
         self.assertEqual(
             emitted - CLIENT_KNOWN_SERVER_CODES,
