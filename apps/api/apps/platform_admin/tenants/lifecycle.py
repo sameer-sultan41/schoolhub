@@ -83,7 +83,9 @@ def transition(tenant: Tenant, to: str, *, actor_id: uuid.UUID | None, reason: s
     locked.status = to
     fields = ["status", "updated_at"]
     if to == S.SUSPENDED:
-        if source != S.DEPROVISIONED:
+        # A restored school keeps its suspension time; one deleted without a suspension
+        # (from provisioning or active) gets one now.
+        if source != S.DEPROVISIONED or locked.suspended_at is None:
             locked.suspended_at = now
         # Restoring ends the retention countdown; the school is suspended again.
         locked.deprovision_after = None
