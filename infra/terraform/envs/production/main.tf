@@ -228,12 +228,11 @@ resource "aws_ecs_cluster" "this" {
   tags = local.common_tags
 }
 
-# The load balancer is deliberately internet-facing: it serves every school's
-# public website and the admin dashboard, so reachability from the internet is the
-# requirement, not an oversight. What protects it is layered in front of and behind
-# it — WAF on the CloudFront distribution, TLS termination, authentication on every
-# API route, and an application tier that only accepts traffic from this security
-# group.
+# The load balancer is internet-facing because CloudFront must reach it, but its
+# security group admits only CloudFront's origin-facing addresses (modules/network).
+# So every request comes through CloudFront, and NUM_PROXIES = 2 holds. Behind
+# it: TLS, authentication on every API route, and an application tier that accepts
+# traffic from this security group only.
 #trivy:ignore:AVD-AWS-0053
 resource "aws_lb" "this" {
   name               = substr("${local.name_prefix}-alb", 0, 32)
@@ -253,6 +252,8 @@ resource "aws_lb" "this" {
   tags = local.common_tags
 }
 
+# CloudFront redirects viewers to HTTPS and reaches the origin over HTTPS only, so there
+# is no port-80 listener.
 resource "aws_lb_listener" "https" {
   load_balancer_arn = aws_lb.this.arn
   port              = 443
@@ -267,24 +268,6 @@ resource "aws_lb_listener" "https" {
       content_type = "text/plain"
       message_body = "Unknown host"
       status_code  = "404"
-    }
-  }
-
-  tags = local.common_tags
-}
-
-resource "aws_lb_listener" "http_redirect" {
-  load_balancer_arn = aws_lb.this.arn
-  port              = 80
-  protocol          = "HTTP"
-
-  default_action {
-    type = "redirect"
-
-    redirect {
-      protocol    = "HTTPS"
-      port        = "443"
-      status_code = "HTTP_301"
     }
   }
 
