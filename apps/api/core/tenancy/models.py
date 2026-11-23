@@ -157,6 +157,7 @@ class TenantSettings(TimestampedModel):
     )
     onboarding = models.JSONField(
         default=dict,
+        db_default={},
         blank=True,
         help_text="The setup wizard's stored choices: `profile_confirmed_at`, `skipped` (step "
         "keys) and `completed_at`. Every other step's progress is computed from the school's "

@@ -13,6 +13,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='tenantsettings',
             name='onboarding',
-            field=models.JSONField(blank=True, default=dict, help_text="The setup wizard's stored choices: `profile_confirmed_at`, `skipped` (step keys) and `completed_at`. Every other step's progress is computed from the school's own rows (platform-admin §5.6), never stored."),
+            field=models.JSONField(blank=True, db_default={}, default=dict, help_text="The setup wizard's stored choices: `profile_confirmed_at`, `skipped` (step keys) and `completed_at`. Every other step's progress is computed from the school's own rows (platform-admin §5.6), never stored."),
         ),
     ]
