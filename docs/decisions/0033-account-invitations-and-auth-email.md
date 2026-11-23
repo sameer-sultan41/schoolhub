@@ -16,7 +16,8 @@ from a future mobile app (Invariant 7). Decided in plan
 ## Decision
 
 1. **Invitations are rows.** `invitations` (tenant-owned, RLS) holds one row per invitation:
-   `kind` (`staff`, `guardian`, `student`), `token_hash`, `expires_at` (72 hours from the
+   `kind` (`staff`, `guardian`, `student`, and `owner`: a school's first owner, invited by the
+   platform console's `:provision`, ADR-0036), `token_hash`, `expires_at` (72 hours from the
    send), `sent_at`, `accepted_at`, `revoked_at`, `send_failed_at`. Its `status` is pending,
    accepted, revoked, expired or send_failed. A resend revokes the user's earlier pending
    invitations first, so only the newest link works.
@@ -118,8 +119,10 @@ English-only until `User` gains a locale, and they are not visible in the notifi
 or delivery log, by design: the audit trail records `auth.invitation.sent`,
 `auth.invitation.send_failed`, `auth.invitation.accepted` and `auth.password.reset` instead.
 
-No migration seeds a tenant's `guardian` or `student` role, so the first portal invite at a
-school creates it (restricted, holding the registry's keys for the slug, synced by
-`core.rbac.seeding.sync_role_permissions`) unless the school or the platform already has a live
-one. A soft-deleted role is never reused, which is why the lookup is local rather than
+The shared `guardian` and `student` default roles (`tenant=None`, restricted) are created by
+`core.rbac.sync.sync_default_roles` on every migrate (ADR-0036). A portal invite takes the
+school's own live role of that slug first, then the shared one. Only where neither exists (a
+database the sync never ran on) does the first portal invite create the school's own
+(restricted, holding the registry's keys for the slug, synced by
+`core.rbac.seeding.sync_role_permissions`). A soft-deleted role is never reused, which is why the lookup is local rather than
 `ensure_role_with_permissions`, whose `get_or_create` ignores `deleted_at`.

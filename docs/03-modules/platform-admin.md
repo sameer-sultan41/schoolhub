@@ -47,7 +47,7 @@ Permissions follow the RBAC model in [`auth-and-rbac.md`](../02-architecture/aut
 
 Every key above is **platform-scope** ([ADR-0036](../decisions/0036-platform-scope-and-cross-tenant-access.md)): only the two platform roles hold them, and no school's role ever can. The scope, not the module name, decides it: the tenant-side `platform.file.*`, `platform.job.view` and `platform.notification.view` keys stay tenant-scope. `registry.register(..., scope="platform")` refuses a tenant default role, every grant path filters on `Permission.scope`, and only a platform user may hold a platform role (a trigger on `user_roles`). Both roles are synced as shared `tenant=None` rows on every migrate (`core.rbac.sync.sync_default_roles`), and an operator account is created with `manage.py create_platform_admin --email --first-name [--role]`.
 
-Every operator signs in with password **and** TOTP ([auth-and-rbac §1](../02-architecture/auth-and-rbac.md), SEC-06). A new account starts with MFA off: its first password sign-in gets an `amr=["pwd"]` token, which the console refuses (403 `mfa_required`) but which can call `POST /auth/mfa:enroll` and `:confirm`; confirming returns ten recovery codes and an `amr=["pwd","otp"]` pair. From then on login answers with a challenge that `POST /auth/mfa:verify` completes. An operator cannot turn MFA off (`/auth/mfa:disable` is 403); one who lost their authenticator and recovery codes is reset with `manage.py create_platform_admin --email … --reset-mfa`, which also ends their sessions.
+Every operator signs in with password **and** TOTP ([auth-and-rbac §1](../02-architecture/auth-and-rbac.md), SEC-06). A new account starts with MFA off: its first password sign-in gets an `amr=["pwd"]` token, which the console refuses (403 `mfa_required`) but which can call `POST /auth/mfa:enroll` and `:confirm`; confirming returns ten recovery codes and an `amr=["pwd","otp"]` pair. From then on login answers with a challenge that `POST /auth/mfa:verify` completes. An operator cannot turn MFA off (`/auth/mfa:disable` is 403); one who lost their authenticator and recovery codes is reset with `manage.py create_platform_admin --email … --reset-mfa`, which also ends their sessions: the console refuses their existing tokens at once. One locked out by 100 consecutive wrong codes is unlocked with `--unlock-mfa`, which keeps the factor.
 
 ## 5. Main Features
 
@@ -76,7 +76,7 @@ Every operator signs in with password **and** TOTP ([auth-and-rbac §1](../02-ar
 
 ```mermaid
 flowchart TD
-    A[Signup / sales order] --> B[platform.tenant.provision:<br/>tenant row + seed data in one idempotent tx<br/>roles, permissions, templates, theme, sample structure]
+    A[Sales order: POST /platform/tenants] --> B[platform.tenant.provision:<br/>one idempotent tx: tenant settings, system ledger accounts,<br/>owner account with the shared school_owner role]
     B --> C[Owner invite sent → Trial starts]
     C --> D[Onboarding wizard<br/>profile → campuses → session → classes →<br/>fees → staff invites → student import]
     D --> E{Subscription started?}
@@ -91,8 +91,10 @@ flowchart TD
     A[Active] -- payment failed webhook --> B[PastDue: dunning emails, retry schedule]
     B -- payment recovered --> A
     B -- grace period expired --> C[Suspended: logins blocked except owner<br/>read-only billing; website shows neutral notice]
-    C -- reinstated --> A
-    C -- retention window expired --> D[Deprovisioned: export offered → 90-day retention → hard purge]
+    C -- ":reinstate: active subscription" --> A
+    C -- ":reinstate: past_due subscription" --> B
+    C -- ":reinstate with a future trial_ends_at" --> T[Trial]
+    C -- ":delete by an operator (export or waiver)" --> D[Deprovisioned: 90-day retention → hard purge]
 ```
 
 ### 7.3 Impersonation
@@ -115,12 +117,12 @@ Support agent requests elevation (tenant, target user, reason) → grant issued 
 | `active`, `suspended` | `deprovisioned` | `:delete` |
 | `deprovisioned` | `suspended` | `:restore`, only while `now < deprovision_after` (else 409 `retention_expired`) |
 
-- **`:provision`** runs in one transaction with the school bound: it creates `tenant_settings`, creates the owner's inactive account from `contact_name` (split on the first space) and `contact_email`, gives it the shared `school_owner` default role, invites it (ADR-0033, kind `owner`, linking to `<slug>.app.<domain>`), sets `trial_ends_at` (`PLATFORM_DEFAULT_TRIAL_DAYS`) and `provisioned_at`, and moves the school to `trial`. The owner invite therefore starts the trial (§7.1), not the onboarding wizard. A second `:provision` is a 409; the same `Idempotency-Key` replays the first answer. Until plans exist (PR B), a `plan_code` is refused with a 422.
-- **`:reinstate`** asks the `subscription_state` hook (`core/tenancy/subscription_state.py`, registered by PR B) for the live subscription: `active` → `active`, `past_due` → `past_due`. A `trialing` one, or none, reinstates to `trial` only with a future `trial_ends_at` in the body; with neither a subscription nor a date it is a 409 `no_live_subscription`.
+- **`:provision`** runs in one transaction with the school bound: it creates `tenant_settings` and the school's system ledger accounts (`fees_finance.services.ensure_system_accounts`, so its first fee head has an income account), creates the owner's inactive account from `contact_name` (split on the first space) and `contact_email`, gives it the shared `school_owner` default role, invites it (ADR-0033, kind `owner`, linking to `<slug>.app.<domain>`), sets `trial_ends_at` (`PLATFORM_DEFAULT_TRIAL_DAYS`) and `provisioned_at`, and moves the school to `trial`. The owner invite therefore starts the trial (§7.1), not the onboarding wizard. A second `:provision` is a 409; the same `Idempotency-Key` replays the first answer. Until plans exist (PR B), a `plan_code` is refused with a 422.
+- **`:reinstate`** asks the `subscription_state` hook (`core/tenancy/subscription_state.py`, registered by PR B) for the live subscription: `active` → `active`, `past_due` → `past_due`. A `trialing` one, or none, reinstates to `trial` only with a future `trial_ends_at` in the body: a past one is a 400 on `trial_ends_at`, and so is a missing one under a `trialing` subscription; with neither a subscription nor a date it is a 409 `no_live_subscription`.
 - **`:delete`** of a school that went live (`active`, `suspended`) needs a succeeded `tenant_export` job or `waive_export: true`, else a 409 `export_required`. It sets `deprovision_after = now + PLATFORM_RETENTION_DAYS`.
 - **Reasons:** `:suspend`, `:delete` and `:restore` require a non-blank `reason`, stored in the audit row.
-- **Timestamps:** entering `suspended` stamps `suspended_at`; leaving it for an operational status clears it.
-- **Audit:** a person's action is audited by the view (`record_audit`, with the operator as actor and the school as tenant, before and after). A system caller (sweep, webhook) passes `actor_id=None` and the transition audits itself through `record_system_audit`.
+- **Timestamps:** entering `suspended` stamps `suspended_at`; leaving it for an operational status clears it. `:restore` keeps the original suspension time, and stamps one when the school was deleted without being suspended first.
+- **Audit:** a person's action is audited by the view (`record_audit`, with the operator as actor and the school as tenant, before and after). The exception is `POST /platform/tenants`: its audit row has no tenant (`tenant=None`), because the school is created by that same request (deferred-work.md). A system caller (sweep, webhook) passes `actor_id=None` and the transition audits itself through `record_system_audit`.
 
 ## 8. User Journeys
 
