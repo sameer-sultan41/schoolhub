@@ -7,7 +7,9 @@ since the candidates were read. One school failing is logged and the sweep goes 
 
 The nightly usage snapshot (`snapshot_all`) visits every school through `for_each_tenant`,
 one bound transaction each. Sweeps and the snapshot run on the `bulk` queue; the notices
-on `transactional` (ruling C5, `CELERY_TASK_ROUTES`). Every system write passes
+on `transactional` (ruling C5, `CELERY_TASK_ROUTES`). The `:export` task lives with its
+resource in `export/tasks.py` under this module's name, and is imported here so the worker's
+autodiscovery registers it. Every system write passes
 ``actor_id=None`` and is audited through `record_system_audit` (ruling A3).
 """
 
@@ -25,6 +27,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from apps.platform_admin import notifications
+from apps.platform_admin.export.tasks import export_tenant
 from apps.platform_admin.flags.services import lapse_expired_overrides
 from apps.platform_admin.models import Subscription, SubscriptionStatus
 from apps.platform_admin.subscriptions.services import grace_ends, live_subscription
@@ -35,6 +38,18 @@ from core.tenancy.maintenance import for_each_tenant
 from core.tenancy.models import Tenant, TenantStatus
 
 logger = logging.getLogger(__name__)
+
+__all__ = [
+    "dunning_sweep",
+    "expire_trials",
+    "export_tenant",
+    "lapse_overrides",
+    "send_payment_failed_notice",
+    "send_quota_threshold_notice",
+    "send_trial_expiring_notice",
+    "snapshot_all",
+    "trial_reminders",
+]
 
 S = TenantStatus
 TRIAL_EXPIRED = "The trial ended without a plan."

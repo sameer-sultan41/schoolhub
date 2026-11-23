@@ -514,6 +514,8 @@ CELERY_TASK_ROUTES = {
     "apps.platform_admin.tasks.dunning_sweep": {"queue": "bulk"},
     "apps.platform_admin.tasks.lapse_overrides": {"queue": "bulk"},
     "apps.platform_admin.tasks.snapshot_all": {"queue": "bulk"},
+    # A whole school zipped to storage: the heaviest platform job, and nobody watches it.
+    "apps.platform_admin.tasks.export_tenant": {"queue": "bulk"},
     "apps.platform_admin.tasks.send_trial_expiring_notice": {"queue": "transactional"},
     "apps.platform_admin.tasks.send_payment_failed_notice": {"queue": "transactional"},
     "apps.platform_admin.tasks.send_quota_threshold_notice": {"queue": "transactional"},

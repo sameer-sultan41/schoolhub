@@ -52,14 +52,14 @@ Every operator signs in with password **and** TOTP ([auth-and-rbac §1](../02-ar
 
 ## 5. Main Features
 
-1. **Tenant lifecycle management** — create, provision (idempotent seed transaction), trial, activate, suspend, reinstate, export, and delete tenants per the state machine in multi-tenancy §7. *Built:* create, edit, `:provision`, `:suspend`, `:reinstate`, `:delete` and `:restore` (§7.4, §20); export arrives with the usage PR.
+1. **Tenant lifecycle management** — create, provision (idempotent seed transaction), trial, activate, suspend, reinstate, export, and delete tenants per the state machine in multi-tenancy §7. *Built:* create, edit, `:provision`, `:suspend`, `:reinstate`, `:export`, `:delete` and `:restore` (§7.4, §7.9, §20).
 2. **Plans & subscriptions** — plan catalog (modules enabled, usage limits, price, trial length); per-tenant subscription with period tracking; plan upgrades/downgrades with proration rules *(recommendation)*. *Built:* the catalog, one live subscription per school, trial → active → past due → recovered, plan changes and plan-based module enablement (§7.5, §20); proration and plan versioning are deferred.
 3. **Billing of schools** — invoicing tenants for their subscription via a billing provider; dunning on failed payment → `past_due` → grace → suspension. (This bills *schools*; student fee billing is the tenant-side fees-finance module.) *Built:* manual billing from the console (`:activate`, `:record-payment`, `:mark-payment-failed`), the provider webhook (a fake adapter only) and the trial and dunning sweeps (§7.6).
 4. **Feature flags** — platform flag registry with per-plan defaults and per-tenant overrides, kill-switch capable; every tenant module checks its flag server-side (multi-tenancy §5). *Built:* the console's flag list and default/kill-switch edits, per-school overrides with expiry, and disable guards (§7.6).
 5. **Usage tracking & quotas** — metered counters per tenant (active students, staff, storage GB, SMS credits, AI tokens, API rate) vs. plan limits; soft-warn then hard-enforce. *Built:* the students, staff and storage counters and the usage snapshots taken from them, nightly and on demand, and the 409 `limit_below_usage` on a limit lowered below them (§7.7); enforcement at create time, with a warning from `PLATFORM_QUOTA_WARN_RATIO` and the owners' threshold notice (§7.8). SMS-credit, AI-token and API-rate quotas are deferred.
 6. **Onboarding wizard** — guided tenant setup: school profile → campuses → academic session → classes/sections → fee structures → staff invites → student import; resumable, with progress tracking.
 7. **Data migration / legacy import** — Excel/CSV import pipelines (students, guardians, staff, fee balances, marks history) with mapping templates, dry-run validation, error reports, and rollback of a failed batch.
-8. **Platform-level reporting** — aggregates only: tenant counts by state, MRR/ARR, usage/adoption per module, churn, support-load; never row-level school data.
+8. **Platform-level reporting** — aggregates only: tenant counts by state, MRR/ARR, usage/adoption per module, churn, support-load; never row-level school data. *Built:* tenant overview, revenue and usage (§7.9, §13); support-load is deferred.
 9. **Impersonation with audit** — elevation grant (≤ 1 h, reason required, banner shown); every action tagged `impersonated_by` in `audit_logs` (RBAC §1).
 
 ## 6. Sub-features
@@ -185,6 +185,20 @@ Support agent requests elevation (tenant, target user, reason) → grant issued 
 - **Notice.** A write that moves usage into the warn band, or onto the limit, queues `platform.quota-threshold` on commit (`send_quota_threshold_notice`, `transactional` queue) to the school's owners, once per metric, band and subscription period. A refused or rolled-back write sends nothing.
 - **Not enforced:** `sms_credits` and `ai_tokens` (no counter yet), and API rate (deferred-work.md).
 
+### 7.9 Reports and `:export`, as built
+
+- **Reports** (`apps/platform_admin/reports/registry.py`). Each report reads the platform-scope `tenants` columns and each school's latest usage snapshot (§7.7), with no school bound and none of a school's own tables, and is a set of named tables:
+  - `tenant-overview`: `by_status` (every lifecycle status, zero included; soft-deleted schools left out), `signups` (schools per month of `created_at`) and `churn` (deprovisioned schools per month they were deprovisioned, `deprovision_after - PLATFORM_RETENTION_DAYS`; a restore takes a school back out).
+  - `revenue`: `mrr`, one row per plan and currency with `paying_tenants`, `past_due`, `mrr` and `arr` (12 × MRR). Amounts are never summed across currencies. Only schools whose latest snapshot is `active` or `past_due` count.
+  - `usage`: `distribution` (per counted metric: schools, min, median, p90, max; `storage_gb` in GiB), `quota_pressure` (each school and metric at or above `PLATFORM_QUOTA_WARN_RATIO` of its plan's limit, highest first; per-school overrides are not read) and `adoption` (schools with each `module.*` key on, per plan, beside the plan's school count). Trial, active, past-due and suspended schools count.
+- **`:export`** (`apps/platform_admin/export/`). `POST /platform/tenants/{id}:export` binds the school, and creates a `BackgroundJob` the school owns (`job_type = "tenant_export"`, the type `:delete` looks for) or answers the one already queued or running. The task (`apps.platform_admin.tasks.export_tenant`, `bulk` queue) builds a zip on a temporary file:
+  - `data/<table>.csv` for every tenant-owned table (`tenant_owned_tables()`), plus `tenant_settings`, `users` and `user_roles`, the school's rows only, each table streamed from a server-side cursor in its own bound transaction;
+  - every column except those in `EXPORT_DENIED_FIELDS` (the audit trail's redactions plus `password`, `token_hash`, `mfa_secret`, `code_hash`, `credentials_ciphertext`, `callback_token`) and any binary column; cells are neutralised against spreadsheet formulas;
+  - `files/<file id>-<name>`, the bytes of each of the school's ready files, earlier export archives aside.
+
+  The archive is streamed to storage under `tenants/{id}/` and registered as the school's file with purpose `platform.tenant-export` (module-gated, so the school's own `/files` routes never list or sign it). The job's `result` is `{result_file_id, tables, rows, files}`. A failure marks the job `failed` with the error.
+- **Polling.** `GET /platform/tenants/{id}/jobs/{job_id}` answers the job (the `GET /jobs/{id}` shape) plus `download_url`, a 5-minute signed link to the archive once the job succeeded. It sees the school's platform jobs only, never the jobs the school's staff started.
+
 ## 8. User Journeys
 
 - **`platform_super_admin`:** morning console review → two trials expiring this week (nudge emails) → one past-due tenant recovered via dunning → provisions a new school from a sales order → creates a per-tenant flag override to pilot the new transport module.
@@ -239,9 +253,9 @@ Platform aggregate reports (metrics only, never row-level tenant data — multi-
 - **Usage & adoption** — module adoption per plan, storage/SMS/AI-token consumption distribution, quota-pressure list.
 - **Support & health** — impersonation counts, error-rate and job-failure rates per tenant (operational metrics), onboarding funnel drop-off.
 
-*Source, built ahead of the reports:* the usage snapshots of §7.7 (the per-school MRR, counts and enabled modules) are what the reports will read, with `tenants`, never a school's own tables. The reports themselves are not built yet (§20).
+*Built:* `GET /platform/reports/{key}` for `tenant-overview`, `revenue` and `usage` (§7.9, §16). They read the usage snapshots of §7.7 and `tenants`, never a school's own tables, so they are as fresh as each school's latest snapshot. Time-to-active, dunning recovery, SMS/AI-token consumption and the support & health report are deferred (deferred-work.md).
 
-Exports CSV/Excel; scheduled variants via the same job infrastructure as [`reporting-analytics.md`](reporting-analytics.md) but on the platform read path.
+Exports CSV/Excel (`?format=csv|xlsx`, built); scheduled variants via the same job infrastructure as [`reporting-analytics.md`](reporting-analytics.md) but on the platform read path.
 
 ## 14. AI Capabilities
 
@@ -263,10 +277,11 @@ Full column specs in [`../05-database/entities/tenancy.md`](../05-database/entit
 
 Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md). Platform-console resources are namespaced under `/api/v1/platform/...` and built on `core.api.platform.PlatformViewSet` ([ADR-0036](../decisions/0036-platform-scope-and-cross-tenant-access.md)): an anonymous caller gets 401, any tenant principal **404**, a platform token without `"otp"` in its `amr` claim 403 `mfa_required`, and a platform user without the route's key 403. A route that touches one school's rows is nested under `tenants/{tenant_pk}/` and binds that school for the whole request (`PlatformTenantNestedMixin`). Tenant-facing touchpoints (billing view, onboarding) are normal tenant endpoints.
 
-- `GET/POST /api/v1/platform/tenants` · `GET/PATCH /api/v1/platform/tenants/{id}` · `POST .../tenants/{id}:provision` / `:suspend` / `:reinstate` / `:export` / `:delete` / `:restore` (all with `Idempotency-Key`). *Built* (except `:export`):
+- `GET/POST /api/v1/platform/tenants` · `GET/PATCH /api/v1/platform/tenants/{id}` · `POST .../tenants/{id}:provision` / `:suspend` / `:reinstate` / `:export` / `:delete` / `:restore` (all with `Idempotency-Key`). *Built:*
   - `GET /platform/tenants` (`platform.tenant.view`): page-numbered; `?status=`, `?current_plan=`, `?subscription_status=`, `?search=` (name, slug, contact email), `?ordering=` (name, slug, status, trial_ends_at, created_at).
   - `POST /platform/tenants` (`platform.tenant.provision`): `{name, slug, contact_name, contact_email, contact_phone?}` → 201, status `provisioning`. The slug is one DNS label (`^[a-z0-9]` then `(?:[a-z0-9-]{1,61}[a-z0-9])?$`), not in `RESERVED_SLUGS` (pinned to the website's `RESERVED_LABELS`) and unused, else 400 on `slug`. Idempotent by the unique slug.
   - `GET /platform/tenants/{id}` (`.view`); `PATCH` (`.update`): name and contact fields; `slug` only while `provisioning` (else 400 on `slug`).
+  - `:export` (`platform.tenant.export`, no body): 202 `{job_id, status}`; an export already queued or running is answered instead of a new one (§7.9). `GET /platform/tenants/{id}/jobs/{job_id}` (`platform.tenant.export`): the job plus `download_url`; a job of another school, or one the school's staff started, is a 404.
   - `:provision` (`.provision`, body `{plan_code?: null}`), `:suspend` (`.suspend`, `{reason}`), `:reinstate` (`.reinstate`, `{trial_ends_at?, reason?}`), `:delete` (`.delete`, `{reason, waive_export?}`), `:restore` (`.delete`, `{reason}`): each answers the tenant, and refuses with the 409 codes of §7.4.
 - `POST /api/v1/platform/tenants/{id}:impersonate` — returns a time-boxed elevated token; `DELETE /api/v1/platform/impersonation-grants/{id}` releases it
 - `GET/POST/PATCH/DELETE /api/v1/platform/plans` · `GET/PATCH /api/v1/platform/tenants/{id}/subscription` (nested and bound to the school, since `subscriptions` is under RLS and a school has one live subscription; it replaces the spec's `/platform/subscriptions/{id}`) · billing webhooks at `POST /api/v1/platform/billing-events/{provider}` (HMAC-verified). *Built:*
@@ -279,9 +294,10 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
   - `GET /platform/feature-flags` (`platform.feature-flag.view`): page-numbered; `?search=` (key, description), `?ordering=` (key, updated_at). `GET /platform/feature-flags/{id}` (`.view`); `PATCH` (`.update`): `{default_enabled?, is_kill_switch?}`.
   - `GET /platform/tenants/{id}/feature-overrides` (`.view`): the school's live overrides, unpaged. `POST` (`.update`): `{flag, enabled, reason, expires_at?}` → 201, replacing the live one; 409 `toggle_refused`. `DELETE .../feature-overrides/{override_id}` (`.update`): 204, or 409 `toggle_refused`. Another school's override is a 404.
   - `POST /platform/billing-events/{provider}` (no login; the signature authenticates it, throttled per provider and per IP on failures): 200 `{received, outcome}` (`applied`, `ignored`, `unknown_ref`, `no_subscription`); 401 `invalid_signature`; 404 for a provider that is unknown, not in `PLATFORM_BILLING_PROVIDERS_ENABLED` or receives no webhooks (`manual`); 503 `billing_unavailable` while `PLATFORM_BILLING_WEBHOOK_SECRET` is empty.
-- `GET /api/v1/platform/tenants/{id}/usage` · `GET /api/v1/platform/reports/{key}` (aggregate read path). *Built* (usage):
+- `GET /api/v1/platform/tenants/{id}/usage` · `GET /api/v1/platform/reports/{key}` (aggregate read path). *Built:*
   - `GET /platform/tenants/{id}/usage` (`platform.tenant.view`): `{snapshot | null, limits}`, the school's latest snapshot (§7.7) and every metric's effective limit (null is unlimited; `storage_gb` in GiB).
   - `POST /platform/tenants/{id}:refresh-usage` (`platform.tenant.view`, no body): takes a snapshot now and answers the same shape. Gated on the view key because it changes no school data.
+  - `GET /platform/reports/{key}` (`platform.report.view`, both platform roles): `key` is `tenant-overview`, `revenue` or `usage`, else 404. `?format=json` (the default) answers `{key, title, generated_at, sections: {name: [row]}}`; `csv` or `xlsx` answers the sections as one table with a leading `section` column, as an attachment; any other format is a 400.
   - `PATCH /platform/plans/{id}` and `PATCH /platform/tenants/{id}/subscription` take `acknowledge_over_usage`; without it a lowered limit below usage is a 409 `limit_below_usage` (§7.7).
 - `POST /api/v1/platform/tenants/{id}/imports` (`202` + job, dry-run flag) · `GET /api/v1/platform/imports/{id}`
 - Tenant-facing: `GET /api/v1/subscription` (own billing state, `school.subscription.view`; *built*, the same shape as the console's GET, ungated by any module flag) · `GET/PATCH /api/v1/onboarding` (wizard progress). These mount through `apps/platform_admin/tenant_urls.py`, a separate include in `config/api_v1.py` from the console's `platform/` routes.
@@ -355,4 +371,11 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - **This app:** `hooks.py` registers the limits, the counters and `usage/quotas.py`'s `threshold_reached`; `tasks.send_quota_threshold_notice` (`transactional`); the `platform.quota-threshold` trigger.
 - **Tests:** `apps/platform_admin/tests/test_quotas.py` (refusal, the race at limit − 1, imports refused at upload, the warning, unlimited limits, the notice once) and `tests/test_celery_routing.py`.
 
-**Not yet built:** reports and `:export` (PR C); the console screens (PR D); impersonation (PR E); the onboarding wizard (PR H). Deferred items are in [`deferred-work.md`](../deferred-work.md).
+**Built (PR C, Task 8 — reports and `:export`):**
+
+- **Reports** (`apps/platform_admin/reports/`): `registry.py` (`REPORTS`, `Report(key, title, build)`, the three builders), `viewset.py` (`PlatformReportViewSet`, the JSON sections or a flattened CSV/XLSX through `core.exports.tabular.render`), `urls.py`.
+- **Export** (`apps/platform_admin/export/`): `services.py` (`EXPORT_DENIED_FIELDS`, `start_export`, `export_columns`, `write_archive`, `run_export`), `tasks.py` (`export_tenant`, named `apps.platform_admin.tasks.export_tenant` and imported by the root `tasks.py`, `bulk`), `viewset.py` (`TenantExportViewSet`: `:export` and the job poll), `serializers.py` (`PlatformJobSerializer`), `urls.py`; `uploads.py` registers `platform.tenant-export`.
+- **Core:** `core.files.storage` gained `Presigner.open` and a streamed `put` (boto3's managed multipart upload for a file object), and `create_ready_file` takes a seekable file object as well as bytes.
+- **Tests:** `apps/platform_admin/tests/test_reports.py` (currencies kept apart, the latest snapshot only, the overview counts, distribution, pressure and adoption, no tenant-owned table read and no school bound, CSV/XLSX, gates) and `test_export.py` (the job the school owns, only its rows and files, no secrets, the poll and its link, an export in flight, other schools' jobs 404, the export key, replay, `:delete` unblocked, a failure recorded), and `tests/test_celery_routing.py`.
+
+**Not yet built:** the console screens (PR D); impersonation (PR E); the onboarding wizard (PR H). Deferred items are in [`deferred-work.md`](../deferred-work.md).
