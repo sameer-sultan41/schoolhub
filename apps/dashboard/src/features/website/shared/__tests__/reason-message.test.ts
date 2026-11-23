@@ -1,5 +1,7 @@
 import { ApiError } from "@schoolhub/api-client";
 
+import enMessages from "../../../../../messages/en.json";
+
 import { reasonText, refusalReason, withReasonText } from "../reason-message";
 
 jest.mock("@/services", () =>
@@ -76,5 +78,30 @@ describe("reason messages", () => {
     expect(refusalReason(refusal())).toBeNull();
     expect(refusalReason(refusal({ reason: 3 }))).toBeNull();
     expect(refusalReason(new Error("boom"))).toBeNull();
+  });
+
+  it("translates the file and SEO-target refusals from the shipped messages", () => {
+    // `validation.py::_FILE_NOT_AVAILABLE` and `seo/services.py`'s unsupported target.
+    const reasons: unknown = enMessages.website.reasons;
+    const lookup = (key: string): unknown =>
+      key
+        .split(".")
+        .reduce<unknown>(
+          (node, part) =>
+            typeof node === "object" && node !== null
+              ? (node as Record<string, unknown>)[part]
+              : undefined,
+          reasons,
+        );
+    const tShipped = Object.assign((key: string) => String(lookup(key)), {
+      has: (key: string) => typeof lookup(key) === "string",
+    });
+
+    expect(reasonText("file_not_available: this file is not available.", tShipped, "content")).toBe(
+      enMessages.website.reasons.file_not_available,
+    );
+    expect(
+      reasonText("unsupported_target: this target type is not supported.", tShipped, "seo"),
+    ).toBe(enMessages.website.reasons.unsupported_target);
   });
 });

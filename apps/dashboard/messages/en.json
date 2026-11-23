@@ -4868,7 +4868,9 @@
         "tls_not_issued": "The domain's HTTPS certificate isn't issued yet, so it can't be the primary domain.",
         "not_verifiable": "This domain can't be checked.",
         "domain_taken": "Another school already uses this domain."
-      }
+      },
+      "file_not_available": "This file isn't available: it may still be processing, or belong elsewhere. Upload it again.",
+      "unsupported_target": "This kind of item can't have its own SEO settings."
     },
     "imageField": {
       "uploading": "Uploading…",
