@@ -9407,6 +9407,46 @@ paths:
           description: No response body
         '409':
           description: 'plan_in_use: a school is on this plan.'
+  /api/v1/platform/reports/{key}:
+    get:
+      operationId: platform_reports_retrieve
+      description: |-
+        A platform console viewset. Declare ``required_permission`` and ``required_permission_map``.
+
+        Gates, in order:
+        - ``IsAuthenticated``: anonymous callers get a 401.
+        - ``IsPlatformPrincipal``: a tenant principal gets a 404, and a platform token without
+          ``"otp"`` in its ``amr`` gets a 403 ``mfa_required``.
+        - ``HasPermissionKey``: a platform user without the route's key gets a 403.
+
+        No tenant is bound, so a route here reads platform tables only (``tenants``, ``plans``).
+        One that reads or writes a school's own rows is nested under its tenant through
+        `PlatformTenantNestedMixin`, which binds that one school.
+      summary: 'A platform report: tenant-overview, revenue or usage'
+      parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+          enum:
+          - csv
+          - json
+          - xlsx
+      - in: path
+        name: key
+        schema:
+          type: string
+        required: true
+      tags:
+      - platform
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: 'JSON: {key, title, generated_at, sections: {name: [row]}};
+            CSV or XLSX: the sections as one table, as an attachment.'
+        '404':
+          description: An unknown report key.
   /api/v1/platform/tenants:
     get:
       operationId: platform_tenants_list
@@ -9659,6 +9699,48 @@ paths:
         '409':
           description: 'toggle_refused: the school still needs this flag, or the override
             would switch a kill switch on.'
+  /api/v1/platform/tenants/{tenant_pk}/jobs/{job_id}:
+    get:
+      operationId: platform_tenants_jobs_retrieve
+      description: |-
+        Binds the target school of a ``.../tenants/<tenant_pk>/...`` route for the whole request.
+
+        **One target tenant per platform request.** ``initial()`` loads the tenant named by the
+        ``tenant_pk`` URL kwarg (404 if there is none), binds it the way
+        `core.api.viewsets.TenantScopedViewSetMixin` binds the caller's own, and sets
+        ``request.tenant``, so `record_audit` attributes each row to it. Under
+        ``ATOMIC_REQUESTS`` the binding's ``SET LOCAL`` lasts the whole request: reads and writes
+        alike see that school's rows and no other's.
+
+        The tenant is loaded only after authentication and the permission checks have passed, so
+        an unknown id answers 401, 404 or 403 exactly as a known one does, and is no oracle.
+
+        List it before `PlatformViewSet`: ``class X(PlatformTenantNestedMixin, PlatformViewSet)``.
+      summary: Poll one of the school's platform jobs
+      parameters:
+      - in: path
+        name: job_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformJob'
+          description: ''
   /api/v1/platform/tenants/{tenant_pk}/subscription:
     get:
       operationId: platform_tenants_subscription_retrieve
@@ -9941,6 +10023,39 @@ paths:
           description: ''
         '409':
           description: invalid_transition, or export_required
+  /api/v1/platform/tenants/{tenant_pk}:export:
+    post:
+      operationId: platform_tenants_:export_create
+      description: |-
+        Binds the target school of a ``.../tenants/<tenant_pk>/...`` route for the whole request.
+
+        **One target tenant per platform request.** ``initial()`` loads the tenant named by the
+        ``tenant_pk`` URL kwarg (404 if there is none), binds it the way
+        `core.api.viewsets.TenantScopedViewSetMixin` binds the caller's own, and sets
+        ``request.tenant``, so `record_audit` attributes each row to it. Under
+        ``ATOMIC_REQUESTS`` the binding's ``SET LOCAL`` lasts the whole request: reads and writes
+        alike see that school's rows and no other's.
+
+        The tenant is loaded only after authentication and the permission checks have passed, so
+        an unknown id answers 401, 404 or 403 exactly as a known one does, and is no oracle.
+
+        List it before `PlatformViewSet`: ``class X(PlatformTenantNestedMixin, PlatformViewSet)``.
+      summary: Export the school's data and files (a job; poll .../jobs/{job_id})
+      parameters:
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          description: '{''data'': {''job_id'': str, ''status'': ''queued''}}. An
+            export already queued or running is returned instead of starting another.'
   /api/v1/platform/tenants/{tenant_pk}:provision:
     post:
       operationId: platform_tenants_:provision_create
@@ -27255,6 +27370,68 @@ components:
       - enabled_modules
       - name
       - price_amount
+    PlatformJob:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        job_type:
+          type: string
+          readOnly: true
+          description: e.g. 'import.students', 'export.students', 'id-cards.generate'.
+        status:
+          allOf:
+          - $ref: '#/components/schemas/BackgroundJobStatusEnum'
+          readOnly: true
+        progress:
+          type: integer
+          readOnly: true
+        result:
+          readOnly: true
+          nullable: true
+          description: Result summary, e.g. result_file_id.
+        error:
+          type: string
+          readOnly: true
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        download_url:
+          type: string
+          nullable: true
+          readOnly: true
+          description: A short-lived signed link to the result file once the job succeeded;
+            poll again for a fresh one.
+      required:
+      - created_at
+      - download_url
+      - error
+      - finished_at
+      - id
+      - job_type
+      - progress
+      - result
+      - started_at
+      - status
+      - updated_at
     PortalChild:
       type: object
       properties:

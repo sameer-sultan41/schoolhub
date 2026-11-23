@@ -4249,6 +4249,36 @@ export interface paths {
         patch: operations["platform_plans_partial_update"];
         trace?: never;
     };
+    "/api/v1/platform/reports/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A platform report: tenant-overview, revenue or usage
+         * @description A platform console viewset. Declare ``required_permission`` and ``required_permission_map``.
+         *
+         *     Gates, in order:
+         *     - ``IsAuthenticated``: anonymous callers get a 401.
+         *     - ``IsPlatformPrincipal``: a tenant principal gets a 404, and a platform token without
+         *       ``"otp"`` in its ``amr`` gets a 403 ``mfa_required``.
+         *     - ``HasPermissionKey``: a platform user without the route's key gets a 403.
+         *
+         *     No tenant is bound, so a route here reads platform tables only (``tenants``, ``plans``).
+         *     One that reads or writes a school's own rows is nested under its tenant through
+         *     `PlatformTenantNestedMixin`, which binds that one school.
+         */
+        get: operations["platform_reports_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/tenants": {
         parameters: {
             query?: never;
@@ -4327,6 +4357,38 @@ export interface paths {
          * @description `GET/POST .../tenants/{tenant_pk}/feature-overrides`, `DELETE .../{id}`.
          */
         delete: operations["platform_tenants_feature_overrides_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_pk}/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Poll one of the school's platform jobs
+         * @description Binds the target school of a ``.../tenants/<tenant_pk>/...`` route for the whole request.
+         *
+         *     **One target tenant per platform request.** ``initial()`` loads the tenant named by the
+         *     ``tenant_pk`` URL kwarg (404 if there is none), binds it the way
+         *     `core.api.viewsets.TenantScopedViewSetMixin` binds the caller's own, and sets
+         *     ``request.tenant``, so `record_audit` attributes each row to it. Under
+         *     ``ATOMIC_REQUESTS`` the binding's ``SET LOCAL`` lasts the whole request: reads and writes
+         *     alike see that school's rows and no other's.
+         *
+         *     The tenant is loaded only after authentication and the permission checks have passed, so
+         *     an unknown id answers 401, 404 or 403 exactly as a known one does, and is no oracle.
+         *
+         *     List it before `PlatformViewSet`: ``class X(PlatformTenantNestedMixin, PlatformViewSet)``.
+         */
+        get: operations["platform_tenants_jobs_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -4476,6 +4538,38 @@ export interface paths {
          * @description `GET/PATCH /platform/tenants/{tenant_pk}` and its lifecycle colon-actions.
          */
         post: operations["platform_tenants_:delete_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_pk}:export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export the school's data and files (a job; poll .../jobs/{job_id})
+         * @description Binds the target school of a ``.../tenants/<tenant_pk>/...`` route for the whole request.
+         *
+         *     **One target tenant per platform request.** ``initial()`` loads the tenant named by the
+         *     ``tenant_pk`` URL kwarg (404 if there is none), binds it the way
+         *     `core.api.viewsets.TenantScopedViewSetMixin` binds the caller's own, and sets
+         *     ``request.tenant``, so `record_audit` attributes each row to it. Under
+         *     ``ATOMIC_REQUESTS`` the binding's ``SET LOCAL`` lasts the whole request: reads and writes
+         *     alike see that school's rows and no other's.
+         *
+         *     The tenant is loaded only after authentication and the permission checks have passed, so
+         *     an unknown id answers 401, 404 or 403 exactly as a known one does, and is no oracle.
+         *
+         *     List it before `PlatformViewSet`: ``class X(PlatformTenantNestedMixin, PlatformViewSet)``.
+         */
+        post: operations["platform_tenants_:export_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -12581,6 +12675,27 @@ export interface components {
             is_active?: boolean;
             /** @description Lower a limit below a school's latest usage snapshot anyway; without it that is a 409 limit_below_usage. */
             acknowledge_over_usage?: boolean;
+        };
+        PlatformJob: {
+            /** Format: uuid */
+            readonly id: string;
+            /** @description e.g. 'import.students', 'export.students', 'id-cards.generate'. */
+            readonly job_type: string;
+            readonly status: components["schemas"]["BackgroundJobStatusEnum"];
+            readonly progress: number;
+            /** @description Result summary, e.g. result_file_id. */
+            readonly result: unknown;
+            readonly error: string | null;
+            /** Format: date-time */
+            readonly started_at: string | null;
+            /** Format: date-time */
+            readonly finished_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+            /** @description A short-lived signed link to the result file once the job succeeded; poll again for a fresh one. */
+            readonly download_url: string | null;
         };
         PortalChild: {
             student: components["schemas"]["PortalStudent"];
@@ -21689,6 +21804,35 @@ export interface operations {
             };
         };
     };
+    platform_reports_retrieve: {
+        parameters: {
+            query?: {
+                format?: "csv" | "json" | "xlsx";
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description JSON: {key, title, generated_at, sections: {name: [row]}}; CSV or XLSX: the sections as one table, as an attachment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description An unknown report key. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     platform_tenants_list: {
         parameters: {
             query?: {
@@ -21886,6 +22030,28 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    platform_tenants_jobs_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformJob"];
+                };
             };
         };
     };
@@ -22136,6 +22302,26 @@ export interface operations {
             };
             /** @description invalid_transition, or export_required */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "platform_tenants_:export_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description {'data': {'job_id': str, 'status': 'queued'}}. An export already queued or running is returned instead of starting another. */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
