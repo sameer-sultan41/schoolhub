@@ -79,6 +79,7 @@ class CeleryRoutingTests(SimpleTestCase):
             ("apps.platform_admin.tasks.snapshot_all", "bulk"),
             ("apps.platform_admin.tasks.send_trial_expiring_notice", "transactional"),
             ("apps.platform_admin.tasks.send_payment_failed_notice", "transactional"),
+            ("apps.platform_admin.tasks.send_quota_threshold_notice", "transactional"),
         ):
             with self.subTest(task=task):
                 self.assertIn(task, app.tasks)
