@@ -35,6 +35,17 @@ const SCHOOL_ADMIN: PermissionKey[] = [
   "school.subject.create",
 ];
 
+/** `it_admin`'s setup-relevant keys: the settings keys (`CONFIG_MANAGERS`), `STRUCTURE_IO`
+ * (`school_organization/permissions.py`) and `STUDENT_IO` (`student_management/permissions.py`). */
+const IT_ADMIN: PermissionKey[] = [
+  "school.settings.view",
+  "school.settings.update",
+  "school.structure.import",
+  "school.structure.export",
+  "students.student.import",
+  "students.student.export",
+];
+
 function renderCard() {
   renderWithProviders(
     <>
@@ -101,13 +112,26 @@ describe("setup card", () => {
     expect(screen.queryByText("Finish setting up")).not.toBeInTheDocument();
   });
 
-  it("is hidden for an it_admin with no remaining step of theirs", async () => {
-    // `it_admin` holds the settings keys but no structure key: with the profile confirmed,
-    // every step left needs someone else.
-    mockFetchCurrentUser.mockResolvedValue(
-      buildUser(["school.settings.view", "school.settings.update"]),
-    );
+  it("shows an it_admin the student import, the one remaining step of theirs", async () => {
+    mockFetchCurrentUser.mockResolvedValue(buildUser(IT_ADMIN));
     mockFetchOnboarding.mockResolvedValue(onboardingRecord({ done: ["profile"] }));
+
+    renderCard();
+
+    expect(await screen.findByText("Finish setting up")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Continue setup" })).toHaveAttribute(
+      "href",
+      "/setup?step=students",
+    );
+  });
+
+  it("is hidden for an it_admin once the student import is settled", async () => {
+    // Every step left (campuses, sessions, classes, subjects, fees, staff, go live) needs a key
+    // `it_admin` does not hold.
+    mockFetchCurrentUser.mockResolvedValue(buildUser(IT_ADMIN));
+    mockFetchOnboarding.mockResolvedValue(
+      onboardingRecord({ done: ["profile"], skipped: ["students"] }),
+    );
 
     renderCard();
 
