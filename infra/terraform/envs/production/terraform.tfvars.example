@@ -17,8 +17,8 @@ platform_domain = "schoolhub.example"
 
 # Proxies in front of the API that append to X-Forwarded-For (CloudFront + ALB = 2,
 # ALB only = 1, direct = 0). Wrong values make per-IP throttles and stored IPs
-# spoofable or wrong; the API refuses to boot without it. 2 is safe only once the ALB
-# accepts traffic from CloudFront alone (launch blocker, docs/deferred-work.md).
+# spoofable or wrong; the API refuses to boot without it. 2 is correct here because the
+# ALB's security group accepts CloudFront's origin-facing addresses only.
 num_proxies = 2
 
 # The hostname schools' custom domains CNAME to (the edge serving tenant sites). Changing
@@ -73,6 +73,13 @@ integrations_encryption_keys_arn = "arn:aws:secretsmanager:us-east-1:12345678901
 #   psql "$URL" -c "SELECT current_user, rolbypassrls FROM pg_roles WHERE rolname = current_user"
 # It must print schoolhub_app and f.
 app_database_url_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:schoolhub-production/db/app-url-AbCdEf"
+
+# The website renderer's secrets. The renderer's token must be in the API's list; see
+# infra/runbooks/rotate-website-secrets.md. The revalidate secret is one value under two names
+# (the API's WEBSITE_REVALIDATE_SECRET, the renderer's REVALIDATE_WEBHOOK_SECRET).
+website_machine_tokens_arn    = "arn:aws:secretsmanager:us-east-1:123456789012:secret:schoolhub-production/website/machine-tokens-AbCdEf"
+website_machine_token_arn     = "arn:aws:secretsmanager:us-east-1:123456789012:secret:schoolhub-production/website/machine-token-AbCdEf"
+website_revalidate_secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:schoolhub-production/website/revalidate-secret-AbCdEf"
 
 # Sentry DSN for the production project. Required — errors here page someone.
 sentry_dsn_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:schoolhub-production/sentry/dsn-AbCdEf"

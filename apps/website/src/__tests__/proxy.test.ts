@@ -10,7 +10,7 @@ import { proxy } from "../proxy";
 // The proxy reads the platform domain from the validated server env module (ADR-0014), which
 // is parsed once at import — so the test pins it by mocking the module, not process.env.
 // A getter, read when the proxy runs: the factory is hoisted above this `const`.
-const mockEnv = { NEXT_PUBLIC_PLATFORM_DOMAIN: "schoolhub.pk" };
+const mockEnv = { PLATFORM_DOMAIN: "schoolhub.pk" };
 jest.mock("../lib/env", () => ({
   get env() {
     return mockEnv;
@@ -113,22 +113,23 @@ describe("proxy", () => {
     expect(response.headers.get("x-middleware-request-x-schoolhub-path")).toBeNull();
   });
 
-  // The API's revalidation webhook targets the renderer's internal origin, and a preview link
-  // may land anywhere: neither may be rewritten to the landing page (plan decisions 8 and 9).
+  // The API's revalidation webhook posts to the platform apex, a preview link may land anywhere,
+  // and the health check must answer: none may be rewritten to the landing page.
   describe.each([
     ["the platform apex", "schoolhub.pk", "schoolhub.pk", "https"],
     ["localhost as the dev and e2e apex", "localhost:3001", "localhost", "http"],
   ])("host-independent routes on %s", (_label, host, platformDomain, protocol) => {
     beforeEach(() => {
-      mockEnv.NEXT_PUBLIC_PLATFORM_DOMAIN = platformDomain;
+      mockEnv.PLATFORM_DOMAIN = platformDomain;
     });
     afterEach(() => {
-      mockEnv.NEXT_PUBLIC_PLATFORM_DOMAIN = "schoolhub.pk";
+      mockEnv.PLATFORM_DOMAIN = "schoolhub.pk";
     });
 
     it.each([
       ["POST", "/api/revalidate"],
       ["GET", "/api/preview?token=abc"],
+      ["GET", "/api/health"],
     ])("%s %s reaches its route handler", (method, path) => {
       const response = proxy(
         makeRequest(
@@ -148,5 +149,13 @@ describe("proxy", () => {
       const response = proxy(makeRequest(host, "/api/other", {}, { protocol }));
       expect(response.headers.get("x-middleware-rewrite")).toContain("/platform-landing");
     });
+  });
+
+  // The ALB probes each task by its IP. That classifies as a custom domain, so the request
+  // continues to the route handler instead of being rewritten to the landing page.
+  it("lets an ALB health check by task IP reach the health route", () => {
+    const response = proxy(makeRequest("10.0.1.5:3001", "/api/health", {}, { protocol: "http" }));
+    expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+    expect(response.headers.get("x-middleware-next")).toBe("1");
   });
 });

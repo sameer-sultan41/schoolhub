@@ -41,6 +41,17 @@ ENV PATH=$PNPM_HOME:$PATH
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN corepack enable pnpm
+# The one build input: the image optimiser's hostname pattern(s), the SAME value for every
+# environment (e.g. `api.schoolhub.example,api.staging.schoolhub.example`), so one image is
+# promoted unchanged.
+ARG WEBSITE_IMAGE_HOSTNAME=""
+ENV WEBSITE_IMAGE_HOSTNAME=${WEBSITE_IMAGE_HOSTNAME}
+# Build-only placeholders, not secrets: src/lib/env.ts validates these at import. They are
+# server-only names, so Next never inlines them, and the runner stage does not inherit them;
+# ECS supplies the real values at runtime.
+ENV API_BASE_URL=https://api.build.invalid/api/v1
+ENV WEBSITE_MACHINE_TOKEN=build-placeholder
+ENV PLATFORM_DOMAIN=build.invalid
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/website/node_modules ./apps/website/node_modules
 COPY --from=deps /app/packages ./packages
@@ -50,17 +61,24 @@ RUN pnpm --filter @schoolhub/website build
 FROM ${NODE_IMAGE} AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-ENV PORT=3000
+# The port package.json, compose and the Terraform target group use.
+ENV PORT=3001
 ENV HOSTNAME="0.0.0.0"
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# standalone already contains the server and its traced dependencies; static and
-# public are served alongside it.
+# standalone already contains the server and its traced dependencies; static is served
+# alongside it. The site has no public/ folder (tenant assets come from the API): add a COPY
+# of apps/website/public here if one is ever created.
 COPY --from=builder --chown=node:node /app/apps/website/.next/standalone ./
 COPY --from=builder --chown=node:node /app/apps/website/.next/static ./apps/website/.next/static
-COPY --from=builder --chown=node:node /app/apps/website/public ./apps/website/public
+# ECS mounts writable volumes at /tmp and Next's disk cache (the root is read-only). A
+# bind-mount volume is root-owned 0755 unless the image declares a VOLUME at the same path, in
+# which case ECS seeds it from the image: node-owned for the cache, 1777 for /tmp. Keep these
+# paths equal to the task definition's containerPath (Terraform `writable_paths`).
+RUN mkdir -p apps/website/.next/cache && chown node:node apps/website/.next/cache
+VOLUME ["/tmp", "/app/apps/website/.next/cache"]
 
 USER node
-EXPOSE 3000
+EXPOSE 3001
 # Tracing from the workspace root preserves the apps/<name> path inside standalone.
 CMD ["node", "apps/website/server.js"]

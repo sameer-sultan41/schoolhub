@@ -214,16 +214,27 @@ resource "aws_ecs_task_definition" "this" {
       secrets     = local.container_secrets
 
       # Containers run read-only with a writable /tmp. A process that cannot
-      # write its own filesystem cannot persist a dropped payload.
+      # write its own filesystem cannot persist a dropped payload. Each mount is
+      # root-owned 0755 unless the image declares a VOLUME at the same path, so a
+      # non-root image must declare one for /tmp and for every writable_paths entry.
       readonlyRootFilesystem = true
 
-      mountPoints = [
-        {
-          sourceVolume  = "tmp"
-          containerPath = "/tmp"
-          readOnly      = false
-        }
-      ]
+      mountPoints = concat(
+        [
+          {
+            sourceVolume  = "tmp"
+            containerPath = "/tmp"
+            readOnly      = false
+          }
+        ],
+        [
+          for index, path in var.writable_paths : {
+            sourceVolume  = "writable-${index}"
+            containerPath = path
+            readOnly      = false
+          }
+        ],
+      )
 
       linuxParameters = {
         initProcessEnabled = true
@@ -244,6 +255,13 @@ resource "aws_ecs_task_definition" "this" {
 
   volume {
     name = "tmp"
+  }
+
+  dynamic "volume" {
+    for_each = var.writable_paths
+    content {
+      name = "writable-${volume.key}"
+    }
   }
 
   tags = local.tags

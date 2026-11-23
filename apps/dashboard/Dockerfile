@@ -59,6 +59,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=builder --chown=node:node /app/apps/dashboard/.next/standalone ./
 COPY --from=builder --chown=node:node /app/apps/dashboard/.next/static ./apps/dashboard/.next/static
 COPY --from=builder --chown=node:node /app/apps/dashboard/public ./apps/dashboard/public
+# ECS mounts a writable volume at /tmp (the root is read-only). Without a VOLUME at the same
+# path it is root-owned 0755 and node cannot write it; with one, ECS seeds it as 1777.
+VOLUME ["/tmp"]
 
 USER node
 EXPOSE 3000

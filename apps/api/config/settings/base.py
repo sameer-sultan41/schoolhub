@@ -23,7 +23,7 @@ DEBUG = env.bool("DJANGO_DEBUG", default=False)
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
 # Apex domain for tenant wildcard subdomains: `<slug>.<PLATFORM_DOMAIN>`. Mirrors
-# apps/website's NEXT_PUBLIC_PLATFORM_DOMAIN — same concept, backend side.
+# apps/website's PLATFORM_DOMAIN — same concept, backend side.
 PLATFORM_DOMAIN = env("PLATFORM_DOMAIN", default="localhost")
 # Links the API hands out to the dashboard (invitation and password-reset emails, a
 # payment's return URL) point at the dashboard on
@@ -37,7 +37,8 @@ DASHBOARD_URL_PORT = ""
 API_PUBLIC_URL = env("API_PUBLIC_URL", default="")
 
 # The renderer's cache-invalidation webhook (website_cms.revalidation). Empty URL = disabled,
-# so a stack with no renderer never errors. The secret is the renderer's REVALIDATE_SECRET.
+# so a stack with no renderer never errors. The secret is the renderer's
+# REVALIDATE_WEBHOOK_SECRET; the URL reaches the renderer through the public edge.
 WEBSITE_REVALIDATE_URL = env("WEBSITE_REVALIDATE_URL", default="")
 WEBSITE_REVALIDATE_SECRET = env("WEBSITE_REVALIDATE_SECRET", default="")
 # Platform services calling the API with a static bearer token (core.rbac.machine). Each
@@ -154,6 +155,8 @@ MODULE_APPS = [
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + CORE_APPS + MODULE_APPS
 
 MIDDLEWARE = [
+    # Answers the ALB's /healthz probe before the host and SSL checks below.
+    "core.api.middleware.HealthCheckMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",

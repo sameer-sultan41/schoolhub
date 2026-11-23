@@ -37,9 +37,10 @@ RESERVED_PAGE_SLUGS = frozenset(
 )
 
 #: Platform subdomain labels that never name a tenant's site. Mirrors the renderer's
-#: `RESERVED_LABELS` (apps/website/src/lib/host.ts); keep the two in step.
+#: `RESERVED_LABELS` (apps/website/src/lib/host.ts); keep the two in step. `sites` is the
+#: custom-domain CNAME target (`WEBSITE_CNAME_TARGET`), which the wildcard record already serves.
 RESERVED_SUBDOMAIN_LABELS = frozenset(
-    {"www", "api", "app", "admin", "dashboard", "static", "cdn", "mail", "status"}
+    {"www", "api", "app", "admin", "dashboard", "static", "cdn", "mail", "status", "sites"}
 )
 
 #: Custom domain columns (docs/05-database/entities/tenancy.md `custom_domains`).

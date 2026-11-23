@@ -256,3 +256,15 @@ jobs:
       - name: Compare every baseline with the PR's base
         # HEAD^1 is the base tip of the PR's synthetic merge commit.
         run: python3 .github/scripts/check_baselines_shrink.py HEAD^1
+
+  # Terraform once named settings modules that never existed, so no environment could boot.
+  # No path filter here, so renaming a settings file runs this as well as editing Terraform.
+  settings-modules:
+    name: Terraform names existing settings modules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run the checker's unit tests
+        run: python3 -m unittest discover -s .github/scripts/tests -p test_check_settings_modules.py -v
+      - name: Every config.settings.<name> in envs/*/main.tf has a file
+        run: python3 .github/scripts/check_settings_modules.py .

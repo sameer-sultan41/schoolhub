@@ -31,6 +31,9 @@ create anything.
    a destroyed and recreated zone means new nameservers and a domain-wide outage.
 4. **Fill in `terraform.tfvars`** from the environment's `terraform.tfvars.example`.
    It is git-ignored. Real secret values never appear in it — only ARNs and names.
+   **Check the quota `L-0EA8095F` (inbound rules per security group) is at least 55**
+   in the environment's region: the ALB admits CloudFront's origin-facing prefix list,
+   which counts as 55 rules (the default quota is 60).
 5. `terraform init` then **`terraform plan` and read every line of it.** The first
    plan for an environment is 150+ resources; that is the plan to review most
    carefully, not least.

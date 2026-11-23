@@ -30,7 +30,7 @@ const eslintConfig = warningsAsErrors(
       rules: { "no-restricted-imports": "off" },
     },
     restrictedSyntax(["src/**/*.{ts,tsx}"], [PROCESS_ENV, ...PHYSICAL_DIRECTION], {
-      ignores: [...TEST_FILES, "src/lib/env.ts", "src/lib/env.client.ts", "src/lib/env.build.ts"],
+      ignores: [...TEST_FILES, "src/lib/env.ts", "src/lib/env.build.ts"],
     }),
     maxLines(["src/**/*.{ts,tsx}"], { ignores: TEST_FILES }),
     globalIgnores([".next/**", "out/**", "build/**", "coverage/**", "next-env.d.ts"]),

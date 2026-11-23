@@ -25,7 +25,7 @@ import {
  * root layout after the cached `resolveTenant()`, never here.
  */
 export function proxy(request: NextRequest): NextResponse {
-  const resolved = parseHost(request.headers.get("host"), env.NEXT_PUBLIC_PLATFORM_DOMAIN);
+  const resolved = parseHost(request.headers.get("host"), env.PLATFORM_DOMAIN);
 
   const headers = new Headers(request.headers);
   headers.delete(TENANT_HOST_HEADER);
@@ -34,8 +34,9 @@ export function proxy(request: NextRequest): NextResponse {
   headers.delete(TENANT_PATH_HEADER);
 
   if (!resolved) {
-    // The revalidation webhook and preview entry are host-independent: the API calls the
-    // renderer's internal origin (an apex or `localhost`), which resolves to no school.
+    // The revalidation webhook, preview entry and health check are host-independent: the API
+    // posts to the platform apex through the public edge (`localhost` in dev and e2e), which
+    // resolves to no school. An ALB probe by task IP classifies as a custom domain and passes.
     if (HOST_INDEPENDENT_PATHS.has(request.nextUrl.pathname)) {
       return NextResponse.next({ request: { headers } });
     }

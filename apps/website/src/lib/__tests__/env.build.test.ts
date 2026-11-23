@@ -1,9 +1,12 @@
-const ORIGINAL = process.env.WEBSITE_IMAGES_UNOPTIMIZED;
+const ORIGINAL_UNOPTIMIZED = process.env.WEBSITE_IMAGES_UNOPTIMIZED;
+const ORIGINAL_HOSTNAME = process.env.WEBSITE_IMAGE_HOSTNAME;
 
 afterEach(() => {
   // Assigning `undefined` to process.env stores the string "undefined" — delete instead.
-  if (ORIGINAL === undefined) delete process.env.WEBSITE_IMAGES_UNOPTIMIZED;
-  else process.env.WEBSITE_IMAGES_UNOPTIMIZED = ORIGINAL;
+  if (ORIGINAL_UNOPTIMIZED === undefined) delete process.env.WEBSITE_IMAGES_UNOPTIMIZED;
+  else process.env.WEBSITE_IMAGES_UNOPTIMIZED = ORIGINAL_UNOPTIMIZED;
+  if (ORIGINAL_HOSTNAME === undefined) delete process.env.WEBSITE_IMAGE_HOSTNAME;
+  else process.env.WEBSITE_IMAGE_HOSTNAME = ORIGINAL_HOSTNAME;
   jest.resetModules();
 });
 
@@ -25,9 +28,15 @@ describe("buildEnv", () => {
     await expect(import("../env.build")).rejects.toThrow(/Invalid website build configuration/);
   });
 
-  it("reads the API origin from the one public declaration", async () => {
+  it("allows no image hostname by default", async () => {
+    delete process.env.WEBSITE_IMAGE_HOSTNAME;
     const { buildEnv } = await import("../env.build");
-    const { publicEnv } = await import("../env.client");
-    expect(buildEnv.NEXT_PUBLIC_API_ORIGIN).toBe(publicEnv.NEXT_PUBLIC_API_ORIGIN);
+    expect(buildEnv.WEBSITE_IMAGE_HOSTNAME).toEqual([]);
+  });
+
+  it("splits a comma list of image hostnames and drops blanks", async () => {
+    process.env.WEBSITE_IMAGE_HOSTNAME = " **.schoolhub.example, api.other.example ,";
+    const { buildEnv } = await import("../env.build");
+    expect(buildEnv.WEBSITE_IMAGE_HOSTNAME).toEqual(["**.schoolhub.example", "api.other.example"]);
   });
 });

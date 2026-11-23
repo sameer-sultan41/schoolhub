@@ -40,7 +40,7 @@ export const PROCESS_ENV = {
   selector:
     "MemberExpression[object.name='process']:matches([property.name='env'], [property.value='env'])",
   message:
-    "Read configuration through the app's typed env module (src/lib/env.ts, env.client.ts), not process.env (ADR-0014).",
+    "Read configuration through the app's typed env module (src/lib/env.ts), not process.env (ADR-0014).",
 };
 
 export const INLINE_QUERY_KEY = {

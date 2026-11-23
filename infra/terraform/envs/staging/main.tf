@@ -68,13 +68,16 @@ locals {
 
   # Non-secret configuration shared by every Python service.
   api_environment = {
-    DJANGO_SETTINGS_MODULE = "config.settings.staging"
+    # Every environment runs prod.py; they differ only by the values below.
+    DJANGO_SETTINGS_MODULE = "config.settings.prod"
     DJANGO_DEBUG           = "false"
     DJANGO_ALLOWED_HOSTS   = "api.${var.platform_domain},app.${var.platform_domain}"
     PLATFORM_DOMAIN        = var.platform_domain
     API_PUBLIC_URL         = "https://api.${var.platform_domain}"
     NUM_PROXIES            = tostring(var.num_proxies)
     WEBSITE_CNAME_TARGET   = var.website_cname_target
+    # The renderer's webhook, through CloudFront: tasks cannot reach each other directly.
+    WEBSITE_REVALIDATE_URL = "https://${var.platform_domain}/api/revalidate"
     S3_BUCKET_NAME         = module.storage.uploads_bucket_name
     S3_REGION_NAME         = var.aws_region
     LOG_LEVEL              = "INFO"
@@ -88,6 +91,17 @@ locals {
       DATABASE_URL                 = var.app_database_url_arn
       INTEGRATIONS_ENCRYPTION_KEYS = var.integrations_encryption_keys_arn
       REDIS_AUTH_TOKEN             = module.cache.auth_token_secret_arn
+      WEBSITE_MACHINE_TOKENS       = var.website_machine_tokens_arn
+      WEBSITE_REVALIDATE_SECRET    = var.website_revalidate_secret_arn
+    },
+    var.sentry_dsn_arn != "" ? { SENTRY_DSN = var.sentry_dsn_arn } : {},
+  )
+
+  # The renderer's token and the webhook secret; neither reaches the dashboard.
+  website_secrets = merge(
+    {
+      WEBSITE_MACHINE_TOKEN     = var.website_machine_token_arn
+      REVALIDATE_WEBHOOK_SECRET = var.website_revalidate_secret_arn
     },
     var.sentry_dsn_arn != "" ? { SENTRY_DSN = var.sentry_dsn_arn } : {},
   )
@@ -194,12 +208,11 @@ resource "aws_ecs_cluster" "this" {
   tags = local.common_tags
 }
 
-# The load balancer is deliberately internet-facing: it serves every school's
-# public website and the admin dashboard, so reachability from the internet is the
-# requirement, not an oversight. What protects it is layered in front of and behind
-# it — WAF on the CloudFront distribution, TLS termination, authentication on every
-# API route, and an application tier that only accepts traffic from this security
-# group.
+# The load balancer is internet-facing because CloudFront must reach it, but its
+# security group admits only CloudFront's origin-facing addresses (modules/network).
+# So every request comes through CloudFront, and NUM_PROXIES = 2 holds. Behind
+# it: TLS, authentication on every API route, and an application tier that accepts
+# traffic from this security group only.
 #trivy:ignore:AVD-AWS-0053
 resource "aws_lb" "this" {
   name               = substr("${local.name_prefix}-alb", 0, 32)
@@ -215,6 +228,8 @@ resource "aws_lb" "this" {
   tags = local.common_tags
 }
 
+# CloudFront redirects viewers to HTTPS and reaches the origin over HTTPS only, so there
+# is no port-80 listener.
 resource "aws_lb_listener" "https" {
   load_balancer_arn = aws_lb.this.arn
   port              = 443
@@ -232,24 +247,6 @@ resource "aws_lb_listener" "https" {
       content_type = "text/plain"
       message_body = "Unknown host"
       status_code  = "404"
-    }
-  }
-
-  tags = local.common_tags
-}
-
-resource "aws_lb_listener" "http_redirect" {
-  load_balancer_arn = aws_lb.this.arn
-  port              = 80
-  protocol          = "HTTP"
-
-  default_action {
-    type = "redirect"
-
-    redirect {
-      protocol    = "HTTPS"
-      port        = "443"
-      status_code = "HTTP_301"
     }
   }
 
@@ -403,7 +400,7 @@ module "website" {
   image          = var.website_image
   cpu            = 512
   memory         = 1024
-  container_port = 3001
+  container_port = 3001 # the Dockerfile's PORT
 
   expose_via_alb = true
   listener_arn   = aws_lb_listener.https.arn
@@ -415,12 +412,19 @@ module "website" {
   host_headers           = ["*.${var.platform_domain}", var.platform_domain]
   health_check_path      = "/api/health"
 
+  # Read at runtime (server-only names), so the same image runs in every environment.
   environment_variables = {
-    NODE_ENV                    = "production"
-    NEXT_PUBLIC_API_BASE_URL    = "https://api.${var.platform_domain}/api/v1"
-    NEXT_PUBLIC_PLATFORM_DOMAIN = var.platform_domain
-    NEXT_TELEMETRY_DISABLED     = "1"
+    NODE_ENV                = "production"
+    API_BASE_URL            = "https://api.${var.platform_domain}/api/v1"
+    API_PUBLIC_ORIGIN       = "https://api.${var.platform_domain}"
+    PLATFORM_DOMAIN         = var.platform_domain
+    NEXT_TELEMETRY_DISABLED = "1"
   }
+
+  secret_arns = local.website_secrets
+
+  # Next's disk cache; without it Next warns on the read-only root and serves uncached.
+  writable_paths = ["/app/apps/website/.next/cache"]
 
   desired_count = 1
   min_capacity  = 1
@@ -454,6 +458,9 @@ module "cdn" {
   # WAF off in staging: the managed rule groups cost real money and staging is
   # not exposed to hostile traffic. Enabled in production.
   enable_waf = false
+
+  # The platform's own egress (renderer reads, revalidation webhooks) skips the rate rule.
+  waf_rate_limit_exempt_cidrs = [for ip in module.network.nat_gateway_public_ips : "${ip}/32"]
 
   tags = local.common_tags
 }

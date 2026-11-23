@@ -121,7 +121,7 @@ Support agent requests elevation (tenant, target user, reason) → grant issued 
 
 ## 11. Validations
 
-- Tenant slug: globally unique, DNS-safe (it becomes the subdomain), immutable after provisioning *(recommendation: rename via support process only)*.
+- Tenant slug: globally unique, DNS-safe (it becomes the subdomain), not a reserved subdomain label (`www`, `api`, `app`, `admin`, `dashboard`, `static`, `cdn`, `mail`, `status`, `sites`; `website_cms.constants.RESERVED_SUBDOMAIN_LABELS`), immutable after provisioning *(recommendation: rename via support process only)*.
 - Lifecycle transitions restricted to the state machine (multi-tenancy §7); suspension and deletion require a reason; deletion requires a completed or explicitly-waived export.
 - Plan limits must not be lowered below a tenant's current usage without an explicit override acknowledgment.
 - Flag overrides must reference registered flags; kill-switch flags cannot be overridden tenant-side.

@@ -139,6 +139,15 @@ class RevalidateTaskTests(TestCase):
             with self.subTest(error=error.__name__):
                 self.assertTrue(issubclass(error, retried))
 
+    def test_webhook_identifies_itself_with_a_user_agent(self) -> None:
+        # The production WAF blocks requests with no User-Agent (NoUserAgent_HEADER).
+        with mock.patch.object(tasks.http.client, "HTTPConnection") as connection_class:
+            connection_class.return_value.getresponse.return_value.status = 200
+            tasks._post(URL, b"{}", {"Content-Type": "application/json"})
+        headers = connection_class.return_value.request.call_args.kwargs["headers"]
+        self.assertEqual(headers["User-Agent"], "schoolhub-api/website-revalidate")
+        self.assertEqual(headers["Content-Type"], "application/json")
+
     def test_non_http_url_is_refused(self) -> None:
         with self.assertRaises(ValueError):
             tasks._post("file:///etc/passwd", b"{}", {})

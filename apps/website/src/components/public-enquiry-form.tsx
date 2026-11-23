@@ -32,10 +32,13 @@ function textField(form: FormData, name: string): string {
 }
 
 export function PublicEnquiryForm({
+  apiOrigin,
   kind,
   tenantSlug,
   sourcePageId,
 }: {
+  /** The API's public origin, read on the server at runtime; empty means same-origin. */
+  apiOrigin: string;
   kind: PublicFormKind;
   tenantSlug: string;
   /** The published page the form sits on, so staff see where the message came from. */
@@ -63,6 +66,7 @@ export function PublicEnquiryForm({
     idempotencyKey.current ??= crypto.randomUUID();
     try {
       const accepted = await submitPublicForm(
+        apiOrigin,
         kind,
         tenantSlug,
         {

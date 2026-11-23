@@ -215,29 +215,28 @@ data "aws_region" "current" {}
 # -----------------------------------------------------------------------------
 # Security groups — referenced by ID, never by CIDR.
 # -----------------------------------------------------------------------------
+# CloudFront's origin-facing addresses (IPv4; the ALB is not dual-stack). The reference
+# counts as 55 rules against the per-group quota L-0EA8095F (default 60).
+data "aws_ec2_managed_prefix_list" "cloudfront_origin_facing" {
+  name = "com.amazonaws.global.cloudfront.origin-facing"
+}
+
 resource "aws_security_group" "alb" {
   name        = "${var.name_prefix}-alb"
-  description = "Public load balancer. Only 443 from the internet; 80 exists solely to redirect."
+  description = "Public load balancer. HTTPS from CloudFront origin-facing addresses only."
   vpc_id      = aws_vpc.this.id
 
   tags = merge(local.tags, { Name = "${var.name_prefix}-alb" })
 }
 
+# CloudFront only, so nobody bypasses its WAF and X-Forwarded-For has exactly the two
+# hops NUM_PROXIES = 2 trusts. No port 80: CloudFront reaches the origin over HTTPS only.
 resource "aws_vpc_security_group_ingress_rule" "alb_https" {
   security_group_id = aws_security_group.alb.id
-  description       = "HTTPS from the internet"
-  cidr_ipv4         = "0.0.0.0/0"
+  description       = "HTTPS from CloudFront origin-facing addresses"
+  prefix_list_id    = data.aws_ec2_managed_prefix_list.cloudfront_origin_facing.id
   from_port         = 443
   to_port           = 443
-  ip_protocol       = "tcp"
-}
-
-resource "aws_vpc_security_group_ingress_rule" "alb_http_redirect" {
-  security_group_id = aws_security_group.alb.id
-  description       = "HTTP from the internet, answered with a 301 to HTTPS"
-  cidr_ipv4         = "0.0.0.0/0"
-  from_port         = 80
-  to_port           = 80
   ip_protocol       = "tcp"
 }
 

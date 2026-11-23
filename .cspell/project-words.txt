@@ -33,6 +33,7 @@ axllent
 barcoded
 baselined
 bcher
+Buildx
 bücher
 Bibi
 Bilal
@@ -43,6 +44,7 @@ bookmarkable
 Brien
 bursty
 BYPASSRLS
+cacheonly
 chainguard
 Chandni
 chartable
@@ -254,6 +256,7 @@ tablename
 tableowner
 Talha
 telematics
+tflint
 tfvars
 timestamptz
 toggleable
