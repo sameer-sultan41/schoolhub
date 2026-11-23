@@ -12,8 +12,9 @@ import io
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from decimal import Decimal
+from unittest import mock
 
-from django.db import connection, connections
+from django.db import IntegrityError, connection, connections
 from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 from rest_framework import status
@@ -36,6 +37,7 @@ from apps.staff_management.staff.services.import_staff import import_staff_row
 from apps.staff_management.tests.factories import StaffFactory
 from apps.student_management.models import Student
 from apps.student_management.services import create_student, import_student_row
+from apps.student_management.tasks import import_students_task
 from apps.student_management.tests.factories import StudentFactory, enable_feature
 from core.files.services import create_upload
 from core.files.tests.factories import FileFactory
@@ -124,11 +126,19 @@ class QuotaTestCase(APITestCase):
             self, lambda: self.client.post(path, {"file": upload}, format="multipart")
         )
 
-    def assert_quota_exceeded(self, response, *, metric: str, limit: int, usage) -> None:
+    def assert_quota_exceeded(
+        self, response, *, metric: str, limit: int, usage, adding: int = 1
+    ) -> None:
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT, response.content)
         error = response.json()["error"]
         self.assertEqual(error["code"], "quota_exceeded")
-        self.assertEqual(error["meta"], {"metric": metric, "limit": limit, "usage": usage})
+        self.assertEqual(
+            error["meta"], {"metric": metric, "limit": limit, "usage": usage, "adding": adding}
+        )
+
+    def threshold_notices(self) -> int:
+        with tenant_context(self.tenant.pk):
+            return Notification.objects.filter(event_key=notifications.QUOTA_THRESHOLD).count()
 
 
 class QuotaRefusalTests(QuotaTestCase):
@@ -165,7 +175,9 @@ class QuotaRefusalTests(QuotaTestCase):
                     actor_id=self.user.pk,
                     tenant_id=self.tenant.pk,
                 )
-        self.assertEqual(refused.exception.meta, {"metric": "staff", "limit": 1, "usage": 1})
+        self.assertEqual(
+            refused.exception.meta, {"metric": "staff", "limit": 1, "usage": 1, "adding": 1}
+        )
 
     def test_upload_past_the_storage_limit_is_refused(self) -> None:
         on_plan(self.tenant, storage_gb=1)
@@ -182,10 +194,10 @@ class QuotaRefusalTests(QuotaTestCase):
                     actor_id=self.user.pk,
                 )
 
-            # Filling the quota to just under 1 GiB is allowed; passing it is not.
-            upload(1024)
+            # Filling the quota exactly to 1 GiB is allowed; one byte more is not.
+            upload(2048)
             with self.assertRaises(quotas.QuotaExceeded) as refused:
-                upload(1025)
+                upload(1)
         self.assertEqual(refused.exception.meta["metric"], "storage_gb")
         self.assertEqual(refused.exception.meta["limit"], 1)
 
@@ -197,7 +209,7 @@ class QuotaRefusalTests(QuotaTestCase):
             "/api/v1/student-imports", "students.student.import", student_rows(3)
         )
 
-        self.assert_quota_exceeded(response, metric="students", limit=5, usage=3)
+        self.assert_quota_exceeded(response, metric="students", limit=5, usage=3, adding=3)
         with tenant_context(self.tenant.pk):
             self.assertFalse(BackgroundJob.objects.exists())
         self.assertEqual(self.student_count(), 3)
@@ -213,12 +225,27 @@ class QuotaRefusalTests(QuotaTestCase):
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.content)
         self.assertEqual(self.student_count(), 5)
 
+    def test_an_accepted_upload_sends_no_notice_and_no_warning(self) -> None:
+        # The upload only refuses: its rows may never exist, so only the job's creates count.
+        owner_of(self.tenant)
+        on_plan(self.tenant, students=10)
+        self.students(6)
+
+        with mock.patch.object(import_students_task, "apply_async"):
+            response = self.upload(
+                "/api/v1/student-imports", "students.student.import", student_rows(4)
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.content)
+        self.assertNotIn("warnings", response.json().get("meta", {}))
+        self.assertEqual(self.threshold_notices(), 0)
+
     def test_staff_import_over_remaining_refused_at_upload(self) -> None:
         on_plan(self.tenant, staff=1)
 
         response = self.upload("/api/v1/staff-imports", "staff.staff.import", staff_rows(2))
 
-        self.assert_quota_exceeded(response, metric="staff", limit=1, usage=0)
+        self.assert_quota_exceeded(response, metric="staff", limit=1, usage=0, adding=2)
         with tenant_context(self.tenant.pk):
             self.assertFalse(BackgroundJob.objects.exists())
 
@@ -278,9 +305,18 @@ class QuotaWarningTests(QuotaTestCase):
         self.assertEqual(warning["details"], {"metric": "students", "limit": 10, "usage": 9})
         self.assertTrue(warning["message"])
 
-    def test_below_the_warn_band_adds_no_warning(self) -> None:
+    def test_the_warn_band_starts_at_eighty_percent(self) -> None:
         on_plan(self.tenant, students=10)
         self.students(7)
+
+        response = self.post_student()
+
+        [warning] = response.json()["meta"]["warnings"]
+        self.assertEqual(warning["details"]["usage"], 8)
+
+    def test_below_the_warn_band_adds_no_warning(self) -> None:
+        on_plan(self.tenant, students=10)
+        self.students(6)
 
         response = self.post_student()
 
@@ -311,7 +347,7 @@ class QuotaWarningTests(QuotaTestCase):
     def test_threshold_notice_sent_once(self) -> None:
         owner = owner_of(self.tenant)
         on_plan(self.tenant, students=10)
-        self.students(8)
+        self.students(7)
 
         self.assertEqual(self.post_student("First").status_code, status.HTTP_201_CREATED)
         # Back below the band and across it again: the same band, the same period.
@@ -323,32 +359,36 @@ class QuotaWarningTests(QuotaTestCase):
             sent = list(Notification.objects.filter(event_key=notifications.QUOTA_THRESHOLD))
         self.assertEqual([n.user_id for n in sent], [owner.pk])
 
-        # Reaching the limit is the next band, and a notice of its own.
+        # Within the band is no new crossing; reaching the limit is the next band.
         self.assertEqual(self.post_student("Third").status_code, status.HTTP_201_CREATED)
-        with tenant_context(self.tenant.pk):
-            self.assertEqual(
-                Notification.objects.filter(event_key=notifications.QUOTA_THRESHOLD).count(), 2
-            )
+        self.assertEqual(self.threshold_notices(), 1)
+        self.assertEqual(self.post_student("Fourth").status_code, status.HTTP_201_CREATED)
+        self.assertEqual(self.threshold_notices(), 2)
 
-    def test_a_refused_create_sends_no_notice(self) -> None:
+    def test_a_rolled_back_create_sends_no_notice(self) -> None:
+        # The check passes and crosses into the band; the insert after it fails and rolls back.
         owner_of(self.tenant)
-        on_plan(self.tenant, students=1)
-        self.students(1)
+        on_plan(self.tenant, students=10)
+        self.students(7)
 
-        self.assertEqual(self.post_student().status_code, status.HTTP_409_CONFLICT)
+        with mock.patch.object(
+            Student.objects, "create", side_effect=IntegrityError("forced after the check")
+        ):
+            response = self.post_student()
 
-        with tenant_context(self.tenant.pk):
-            self.assertFalse(
-                Notification.objects.filter(event_key=notifications.QUOTA_THRESHOLD).exists()
-            )
+        self.assertNotEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(self.threshold_notices(), 0)
 
 
 class QuotaSeamTests(TestCase):
     def test_the_platform_console_registers_the_limits_and_the_counters(self) -> None:
         self.assertIs(quotas._hooks["resolver"], subscriptions.effective_limits)
-        for metric, counter in usage.USAGE_COUNTERS.items():
-            with self.subTest(metric=metric):
-                self.assertIs(quotas._counters[metric], counter)
+        self.assertEqual(quotas._counters["students"], (usage.count_students, 1))
+        self.assertEqual(quotas._counters["staff"], (usage.count_staff, 1))
+        # Storage counts and compares in bytes; GiB is only the limit's unit.
+        self.assertEqual(
+            quotas._counters["storage_gb"], (usage.count_storage_bytes, quotas.BYTES_PER_GB)
+        )
         self.assertIn("listener", quotas._hooks)
 
     def test_the_quota_lock_has_its_own_namespace(self) -> None:
@@ -386,7 +426,12 @@ class ConcurrentQuotaTests(TransactionTestCase):
         deadline = time.monotonic() + LOCK_WAIT_SECONDS
         while time.monotonic() < deadline:
             with connection.cursor() as cursor:
-                cursor.execute("SELECT count(*) FROM pg_locks WHERE NOT granted")
+                # Only the quota lock: two-int advisory locks keep the namespace in `classid`.
+                cursor.execute(
+                    "SELECT count(*) FROM pg_locks WHERE NOT granted "
+                    "AND locktype = 'advisory' AND classid = %s",
+                    [int(AdvisoryLockNamespace.QUOTA)],
+                )
                 (waiting,) = cursor.fetchone()
             if waiting:
                 return
