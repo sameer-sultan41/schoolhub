@@ -66,11 +66,11 @@ ENV PORT=3001
 ENV HOSTNAME="0.0.0.0"
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# standalone already contains the server and its traced dependencies; static and
-# public are served alongside it.
+# standalone already contains the server and its traced dependencies; static is served
+# alongside it. The site has no public/ folder (tenant assets come from the API): add a COPY
+# of apps/website/public here if one is ever created.
 COPY --from=builder --chown=node:node /app/apps/website/.next/standalone ./
 COPY --from=builder --chown=node:node /app/apps/website/.next/static ./apps/website/.next/static
-COPY --from=builder --chown=node:node /app/apps/website/public ./apps/website/public
 # ECS mounts writable volumes at /tmp and Next's disk cache (the root is read-only). A
 # bind-mount volume is root-owned 0755 unless the image declares a VOLUME at the same path, in
 # which case ECS seeds it from the image: node-owned for the cache, 1777 for /tmp. Keep these
