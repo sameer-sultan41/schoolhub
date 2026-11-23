@@ -42,10 +42,6 @@ export async function updateSchoolEvent(
   return data;
 }
 
-export async function deleteSchoolEvent(id: string): Promise<void> {
-  await apiClient.delete(paths.detail(id));
-}
-
 export async function publishSchoolEvent(id: string): Promise<SchoolEventDetail> {
   const { data } = await apiClient.post<SchoolEventDetail>(paths.publish(id));
   return data;
