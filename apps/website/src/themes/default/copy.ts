@@ -17,6 +17,14 @@ export const COPY = {
     body: "You are viewing unpublished content.",
     exit: "Exit preview",
   },
+  navigation: {
+    primary: "Primary",
+  },
+  footer: {
+    socialLinks: "Social media",
+    primaryLinks: "Footer",
+    secondaryLinks: "Footer secondary",
+  },
   faq: {
     heading: "Frequently asked questions",
   },

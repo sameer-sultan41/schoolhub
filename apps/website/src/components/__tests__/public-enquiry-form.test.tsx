@@ -107,4 +107,46 @@ describe("PublicEnquiryForm", () => {
       ).toBeInTheDocument();
     });
   });
+
+  function sentKeys(): string[] {
+    return mockFetch.mock.calls.map(
+      ([, init]) =>
+        (init as RequestInit & { headers: Record<string, string> }).headers[
+          "Idempotency-Key"
+        ] as string,
+    );
+  }
+
+  it("retries an unanswered submission under the same idempotency key", async () => {
+    // No answer: the first request may have been stored, so the retry must replay it.
+    mockFetch.mockRejectedValueOnce(new Error("network down")).mockResolvedValueOnce({ ok: true });
+    render(<PublicEnquiryForm kind="contact" tenantSlug="cityschool" />);
+
+    fillAndSubmit();
+    await screen.findByText("We could not send your message. Please try again in a moment.");
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+    const [first, second] = sentKeys();
+    expect(first).toMatch(/^[0-9a-f-]{36}$/);
+    expect(second).toBe(first);
+  });
+
+  it("starts a new key once the API has answered", async () => {
+    // An edited retry under the answered key would be refused as a reused key.
+    mockFetch.mockResolvedValueOnce({ ok: false }).mockResolvedValueOnce({ ok: true });
+    render(<PublicEnquiryForm kind="contact" tenantSlug="cityschool" />);
+
+    fillAndSubmit();
+    await screen.findByText("We could not send your message. Please try again in a moment.");
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+    const [first, second] = sentKeys();
+    expect(second).not.toBe(first);
+  });
 });

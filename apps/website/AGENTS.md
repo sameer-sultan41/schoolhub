@@ -61,7 +61,7 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
 | Image optimiser allow-list                  | `next.config.ts` → `src/lib/image-config.ts` (the public API file route only) and `src/lib/env.build.ts` (`WEBSITE_IMAGES_UNOPTIMIZED`, compose and E2E only)                                                              |
 | Visible strings                             | `src/themes/default/copy.ts` (English; one map for a later i18n pass)                                                                                                                                                        |
 | Theme registry + token contract             | `src/themes/index.ts`, `src/themes/default/`                                                                                                                                                                                 |
-| Publish invalidation webhook (HMAC)         | `src/app/api/revalidate/route.ts` — the signer's `tenant:<id>…` tags, plus `tenant-host:<host>` and `tenant-hosts`                                                                                                           |
+| Publish invalidation webhook (HMAC)         | `src/app/api/revalidate/route.ts` — the signer's `tenant:<id>…` tags, plus `tenant-host:<host>`                                                                                                           |
 | Unknown host landing                        | `src/app/platform-landing/page.tsx` (the proxy rewrites here)                                                                                                                                                                |
 | Configuration                               | `src/lib/env.ts` (server: secrets, platform domain — never import from a client component) · `src/lib/env.client.ts` (public `NEXT_PUBLIC_*` only, all optional)                                                             |
 | Public form submission (the one write path) | `src/lib/public-api.ts` — browser → public API, endpoint registry; never through `api.ts`                                                                                                                                    |
@@ -73,10 +73,13 @@ Read the monorepo root [`../../AGENTS.md`](../../AGENTS.md) first — it holds t
   regression**, not a feature. Browser → public API is the only write path.
 - The proxy **deletes** inbound `x-schoolhub-*` headers before setting its own; without
   that, a client could hand us a header and read another school's site.
-- Cache tags are `tenant:<id>…` or a host tag (`tenant-host:<host>`, `tenant-hosts`); the
-  revalidate webhook accepts `tenant:` tags only inside the tenant that signed the request.
-- Draft Mode is entered only through `/api/preview` after the API accepted the token, and it
-  redirects only to the path the API returned, never to a request parameter.
+- Cache tags are `tenant:<id>…` or a host tag (`tenant-host:<host>`); the revalidate webhook
+  accepts `tenant:` tags only inside the tenant that signed the request.
+- Preview is the httpOnly `schoolhub_preview` token cookie alone, set only by `/api/preview`
+  after the API accepted the token; it redirects only to the path the API returned. Never use
+  Next's Draft Mode: its `__prerender_bypass` cookie is build-wide, so it would work on every
+  school's host. Only `pages` and `site` send the token, uncached, and fall back to the cached
+  published read when the API refuses it.
 - An unknown or suspended host renders the platform notice or a 404 — **never** another
   tenant's content, and never with `index: true`.
 

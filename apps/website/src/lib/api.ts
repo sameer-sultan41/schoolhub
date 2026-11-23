@@ -107,9 +107,6 @@ export function hostTag(host: string): string {
   return `tenant-host:${host}`;
 }
 
-/** Tags every cached host → school lookup, so one invalidation drops them all. */
-export const ALL_HOSTS_TAG = "tenant-hosts";
-
 /** Per-path cache tag within a tenant. */
 export function pageTag(tenantId: string, path: string): string {
   return `tenant:${tenantId}:page:${path || "/"}`;

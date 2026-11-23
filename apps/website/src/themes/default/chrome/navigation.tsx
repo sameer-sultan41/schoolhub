@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { COPY } from "@/themes/default/copy";
 import type { ChromeProps } from "@/themes/types";
 
 /** Header navigation from the CMS `header` menu; the API drops unpublished targets. */
@@ -27,7 +28,7 @@ export function Navigation({ tenant, site }: ChromeProps) {
         </Link>
 
         {items.length > 0 ? (
-          <nav aria-label="Primary">
+          <nav aria-label={COPY.navigation.primary}>
             <ul className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
               {items.map((item) => (
                 <li key={`${item.href}-${item.label}`}>

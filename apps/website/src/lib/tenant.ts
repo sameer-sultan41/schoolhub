@@ -1,7 +1,7 @@
 import type { ApiSchemas } from "@schoolhub/api-client";
 import { headers } from "next/headers";
 import { cache } from "react";
-import { ALL_HOSTS_TAG, hostTag, readJson } from "./api";
+import { hostTag, readJson } from "./api";
 import { TENANT_HOST_HEADER, TENANT_KIND_HEADER, TENANT_PATH_HEADER } from "./host";
 import { getPreviewToken } from "./preview";
 
@@ -90,11 +90,11 @@ export const resolveTenant = cache(async (): Promise<TenantResolution> => {
     host,
     // Host→tenant mappings change rarely; settings and domain changes invalidate these tags.
     revalidate: 300,
-    tags: [ALL_HOSTS_TAG, hostTag(host)],
+    tags: [hostTag(host)],
   });
 
   if (!tenant) return { status: "unknown" };
-  // A validated preview (Draft Mode plus its token cookie) renders a site that is not live yet.
+  // A preview cookie renders a site that is not live yet; the API still checks the token.
   const status = classifyTenant(tenant, { draft: (await getPreviewToken()) !== null });
   if (status === "unknown") return { status };
   return { status, tenant, host };
@@ -123,7 +123,7 @@ export async function customDomainRedirectTarget(
 
 /**
  * Canonical origin for SEO: an active custom domain wins, otherwise the platform subdomain
- * (website-builder.md §4 — the subdomain 301-redirects to the custom domain when set).
+ * (website-builder.md §4 — the subdomain permanently redirects (308) to the custom domain when set).
  */
 export function canonicalOrigin(tenant: PublicTenant, fallbackHost: string): string {
   const host = tenant.custom_domain ?? fallbackHost;

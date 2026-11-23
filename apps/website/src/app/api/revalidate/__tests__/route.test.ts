@@ -106,15 +106,8 @@ describe("POST /api/revalidate", () => {
     ]);
   });
 
-  it("revalidates every cached host lookup on tenant-hosts", async () => {
-    const body = JSON.stringify({ tenant_id: "t1", tags: ["tenant-hosts"] });
-    const response = await POST(makeRequest(body, await sign(body)));
-
-    expect(response.status).toBe(200);
-    expect(mockRevalidateTag).toHaveBeenCalledWith("tenant-hosts", { expire: 0 });
-  });
-
-  it.each(["tenant-host:", "tenant-host:Bad Host", "tenant-host:a/b", "tenant-hosts-all", 7])(
+  // The API sends only per-host tags; a platform-wide host tag is not one it may name.
+  it.each(["tenant-host:", "tenant-host:Bad Host", "tenant-host:a/b", "tenant-hosts", 7])(
     "ignores a malformed host tag (%p)",
     async (tag) => {
       const body = JSON.stringify({ tenant_id: "t1", tags: [tag] });

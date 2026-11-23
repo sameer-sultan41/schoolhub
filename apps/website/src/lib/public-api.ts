@@ -24,11 +24,18 @@ export type PublicFormKind = "contact" | "admission_enquiry";
 
 export type PublicContactSubmission = ApiSchemas["PublicContactSubmission"];
 
-/** Posts a public form. Resolves to whether the API accepted it; rejects on network failure. */
+/**
+ * Posts a public form. Resolves to whether the API accepted it; rejects on network failure.
+ *
+ * `idempotencyKey` is random and belongs to one fill of the form, so a retry after a lost
+ * response replays the first answer instead of storing the message twice. A guessable key would
+ * let a later visitor replay another's reply.
+ */
 export async function submitPublicForm(
   kind: PublicFormKind,
   tenantSlug: string,
   submission: PublicContactSubmission,
+  idempotencyKey: string,
 ): Promise<boolean> {
   const body: PublicContactSubmission =
     kind === "admission_enquiry"
@@ -41,8 +48,7 @@ export async function submitPublicForm(
       "Content-Type": "application/json",
       // Re-validated server-side against the request's Origin; never trusted as-is.
       "X-Tenant-Slug": tenantSlug,
-      // Random per submission: a guessable key would let a later visitor replay another's reply.
-      "Idempotency-Key": crypto.randomUUID(),
+      "Idempotency-Key": idempotencyKey,
     },
     body: JSON.stringify(body),
   });

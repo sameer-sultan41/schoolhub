@@ -1,6 +1,6 @@
 import { revalidateTag } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
-import { ALL_HOSTS_TAG, hostTag, tenantTag } from "@/lib/api";
+import { hostTag, tenantTag } from "@/lib/api";
 import { env } from "@/lib/env";
 import { normalizeHost } from "@/lib/host";
 import { SHA256_PREFIX_PATTERN } from "@/lib/regex";
@@ -15,8 +15,7 @@ import { SHA256_PREFIX_PATTERN } from "@/lib/regex";
  *
  * Besides the tenant's own `tenant:<id>…` tags, a signed body may name host tags: the API sends
  * `tenant-host:<host>` for every host of the school when its settings, module flag or domains
- * change, so the cached `by-host` answer is never stale (plan decision 8), and `tenant-hosts`
- * drops every cached host lookup.
+ * change, so the cached `by-host` answer is never stale (plan decision 8).
  *
  * Trust: the HMAC over the raw body is the only check, with one internal secret shared with the
  * API (plan decision 8). A correctly signed body may name **any** tenant (its `tenant_id` is in
@@ -36,7 +35,6 @@ const HOST_TAG_PREFIX = hostTag("");
 
 /** A tag the signing tenant may invalidate; anything else is ignored. */
 function isAllowedTag(tag: string, tenantId: string): boolean {
-  if (tag === ALL_HOSTS_TAG) return true;
   if (tag.startsWith(HOST_TAG_PREFIX)) {
     // Only a well-formed host, exactly as `hostTag` writes it.
     const host = tag.slice(HOST_TAG_PREFIX.length);

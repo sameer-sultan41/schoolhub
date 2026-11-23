@@ -32,6 +32,12 @@ describe("imagesConfig", () => {
     ).not.toHaveProperty("unoptimized");
   });
 
+  it("refuses to turn the optimiser off for an https (deployed) API origin", () => {
+    expect(() =>
+      imagesConfig({ apiOrigin: "https://api.schoolhub.pk", unoptimized: true }),
+    ).toThrow(/local stacks only/);
+  });
+
   it("never lets the optimiser fetch from a local address", () => {
     for (const unoptimized of [true, false]) {
       expect(

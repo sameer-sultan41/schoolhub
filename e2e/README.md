@@ -83,7 +83,11 @@ tenants. Playwright builds the renderer with the stack's own `PUBLIC_CONTENT_TOK
 `REVALIDATE_SECRET` (the two `E2E_*` variables above; without them every public read is a 401
 and the sites resolve as unknown), with `NEXT_PUBLIC_API_ORIGIN` set to the API's origin (the
 contact form posts there from the browser) and with `WEBSITE_IMAGES_UNOPTIMIZED`, so the browser
-loads images from the API's local address itself. `WEBSITE_REVALIDATE_URL` points the worker's
+loads images from the API's local address itself. The two API origins differ on purpose:
+`NEXT_PUBLIC_API_ORIGIN` is `http://localhost:8000` (from `E2E_API_BASE_URL`), where the contact
+form posts, while image URLs use the API's own `API_PUBLIC_URL`, `http://api.localhost:8000` in
+dev settings. Chromium resolves both to the same loopback API, so nothing breaks; set
+`E2E_API_BASE_URL` to the `api.localhost` origin if you want them to match. `WEBSITE_REVALIDATE_URL` points the worker's
 webhook at the renderer on the host; compose's `celery-worker` maps `host.docker.internal` to
 the host gateway, so this also works on Linux.
 

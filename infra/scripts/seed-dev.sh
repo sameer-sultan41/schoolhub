@@ -170,7 +170,7 @@ fi
 # -----------------------------------------------------------------------------
 if [ "${CHECK_ONLY}" -eq 0 ]; then
   log "starting pgbouncer, redis, minio, mailpit"
-  dc up -d pgbouncer redis minio mailpit minio-init
+  dc up -d pgbouncer redis minio mailpit
 fi
 
 # -----------------------------------------------------------------------------
@@ -206,6 +206,11 @@ fi
 # -----------------------------------------------------------------------------
 # 6. Migrations and sample data
 # -----------------------------------------------------------------------------
+# The bucket must exist before the seeds write files (seed_e2e_website stores an image).
+# `run`, not `up -d`: it waits for MinIO to be healthy and for the bucket to be created.
+log "creating the storage bucket"
+dc run --rm minio-init || fail "minio-init failed. Check: docker compose logs minio"
+
 log "running migrations as ${MIGRATION_DB_USER} (direct connection, not via the pooler)"
 if ! dc run --rm --no-deps \
      -e DATABASE_URL="${MIGRATION_DATABASE_URL:-postgres://${MIGRATION_DB_USER}:${MIGRATION_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}}" \

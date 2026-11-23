@@ -43,6 +43,9 @@ export function PublicEnquiryForm({
 }) {
   const [status, setStatus] = useState<Status>("idle");
   const confirmationRef = useRef<HTMLDivElement>(null);
+  // One key per fill: kept while a request got no answer (a retry may replay it), dropped once
+  // the API answered, since an edited retry under the same key would be refused as a reuse.
+  const idempotencyKey = useRef<string | null>(null);
 
   useEffect(() => {
     // The success branch below unmounts the whole <form>, submit button included — without
@@ -57,14 +60,21 @@ export function PublicEnquiryForm({
     setStatus("submitting");
     const form = new FormData(event.currentTarget);
 
+    idempotencyKey.current ??= crypto.randomUUID();
     try {
-      const accepted = await submitPublicForm(kind, tenantSlug, {
-        name: textField(form, "name"),
-        email: textField(form, "email"),
-        message: textField(form, "message"),
-        [HONEYPOT_FIELD]: textField(form, HONEYPOT_FIELD),
-        ...(sourcePageId ? { source_page_id: sourcePageId } : {}),
-      });
+      const accepted = await submitPublicForm(
+        kind,
+        tenantSlug,
+        {
+          name: textField(form, "name"),
+          email: textField(form, "email"),
+          message: textField(form, "message"),
+          [HONEYPOT_FIELD]: textField(form, HONEYPOT_FIELD),
+          ...(sourcePageId ? { source_page_id: sourcePageId } : {}),
+        },
+        idempotencyKey.current,
+      );
+      idempotencyKey.current = null;
       setStatus(accepted ? "sent" : "error");
     } catch {
       setStatus("error");

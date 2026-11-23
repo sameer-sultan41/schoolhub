@@ -1,5 +1,6 @@
 import type { ApiSchemas } from "@schoolhub/api-client";
 import Link from "next/link";
+import { COPY } from "@/themes/default/copy";
 import type { ChromeProps } from "@/themes/types";
 
 type NavItem = ApiSchemas["PublicNavItem"];
@@ -36,7 +37,10 @@ export function Footer({ tenant, site }: ChromeProps) {
             </address>
           ) : null}
           {socialLinks.length > 0 ? (
-            <ul aria-label="Social media" className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+            <ul
+              aria-label={COPY.footer.socialLinks}
+              className="flex flex-wrap gap-x-4 gap-y-1 text-sm"
+            >
               {socialLinks.map((link) => (
                 <li key={link.url}>
                   <a
@@ -56,8 +60,14 @@ export function Footer({ tenant, site }: ChromeProps) {
           </p>
         </div>
 
-        <FooterLinks label="Footer" items={site?.navigation.footer_primary ?? []} />
-        <FooterLinks label="Footer secondary" items={site?.navigation.footer_secondary ?? []} />
+        <FooterLinks
+          label={COPY.footer.primaryLinks}
+          items={site?.navigation.footer_primary ?? []}
+        />
+        <FooterLinks
+          label={COPY.footer.secondaryLinks}
+          items={site?.navigation.footer_secondary ?? []}
+        />
       </div>
     </footer>
   );

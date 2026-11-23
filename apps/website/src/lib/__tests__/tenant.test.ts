@@ -23,7 +23,6 @@ jest.mock("react", () => ({
 
 jest.mock("next/headers", () => ({ headers: jest.fn() }));
 jest.mock("../api", () => ({
-  ALL_HOSTS_TAG: "tenant-hosts",
   readJson: jest.fn(),
   hostTag: (host: string) => `tenant-host:${host}`,
 }));
@@ -75,7 +74,7 @@ describe("classifyTenant", () => {
     expect(classifyTenant(makeTenant({ status, website_status: websiteStatus }))).toBe(expected);
   });
 
-  it("renders a site that is not live in draft mode", () => {
+  it("renders a site that is not live under a preview", () => {
     const tenant = makeTenant({ website_status: "unpublished" });
     expect(classifyTenant(tenant, { draft: true })).toBe("active");
     expect(classifyTenant(makeTenant({ website_status: "maintenance" }), { draft: true })).toBe(
@@ -91,7 +90,7 @@ describe("classifyTenant", () => {
     expect(classifyTenant(makeTenant({ website_status: futureSite }))).toBe("unknown");
   });
 
-  it("never renders a suspended school, even in draft mode", () => {
+  it("never renders a suspended school, even under a preview", () => {
     expect(classifyTenant(makeTenant({ status: "suspended" }), { draft: true })).toBe(
       "unavailable",
     );
@@ -114,7 +113,7 @@ describe("resolveTenant", () => {
     expect(mockReadJson).toHaveBeenCalledWith("/public/tenants/by-host", {
       host: HOST,
       revalidate: 300,
-      tags: ["tenant-hosts", `tenant-host:${HOST}`],
+      tags: [`tenant-host:${HOST}`],
     });
   });
 

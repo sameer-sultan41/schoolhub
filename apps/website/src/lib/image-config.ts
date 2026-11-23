@@ -35,6 +35,10 @@ export function imagesConfig({
   apiOrigin: string;
   unoptimized: boolean;
 }): ImagesConfig {
+  // An https API origin is a deployed one: the optimiser must stay on there.
+  if (unoptimized && apiOrigin.startsWith("https:")) {
+    throw new Error("WEBSITE_IMAGES_UNOPTIMIZED is for local stacks only, not an https API origin");
+  }
   return {
     remotePatterns: apiOrigin ? [publicFilesPattern(apiOrigin)] : [],
     minimumCacheTTL: IMAGE_CACHE_SECONDS,

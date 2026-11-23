@@ -17,6 +17,9 @@ function lastCall(): { url: string; init: RequestInit; headers: Record<string, s
   return { url, init, headers: init.headers as Record<string, string> };
 }
 
+// A fixed per-fill key, as the form would hold it.
+const FORM_FILL_ID = "00000000-0000-4000-8000-000000000001";
+
 const SUBMISSION = {
   name: "Ayesha Khan",
   email: "ayesha@example.com",
@@ -28,7 +31,9 @@ describe("submitPublicForm", () => {
   it("posts JSON to the public contact-submissions endpoint", async () => {
     mockFetch.mockResolvedValue({ ok: true });
 
-    await expect(submitPublicForm("contact", "cityschool", SUBMISSION)).resolves.toBe(true);
+    await expect(submitPublicForm("contact", "cityschool", SUBMISSION, FORM_FILL_ID)).resolves.toBe(
+      true,
+    );
 
     const { url, init, headers } = lastCall();
     expect(CONTACT_SUBMISSIONS_PATH).toBe("/api/v1/public/contact-submissions");
@@ -38,24 +43,25 @@ describe("submitPublicForm", () => {
     expect(JSON.parse(init.body as string)).toEqual(SUBMISSION);
   });
 
-  it("names the school and sends a fresh random idempotency key each time", async () => {
+  it("names the school and sends the caller's idempotency key", async () => {
     mockFetch.mockResolvedValue({ ok: true });
 
-    await submitPublicForm("contact", "cityschool", SUBMISSION);
-    await submitPublicForm("contact", "cityschool", SUBMISSION);
+    await submitPublicForm("contact", "cityschool", SUBMISSION, FORM_FILL_ID);
 
-    const keys = mockFetch.mock.calls.map(
-      ([, init]) => (init as RequestInit & { headers: Record<string, string> }).headers,
-    );
-    expect(keys[0]?.["X-Tenant-Slug"]).toBe("cityschool");
-    expect(keys[0]?.["Idempotency-Key"]).toMatch(/^[0-9a-f-]{36}$/);
-    expect(keys[0]?.["Idempotency-Key"]).not.toBe(keys[1]?.["Idempotency-Key"]);
+    const { headers } = lastCall();
+    expect(headers["X-Tenant-Slug"]).toBe("cityschool");
+    expect(headers["Idempotency-Key"]).toBe(FORM_FILL_ID);
   });
 
   it("sends the honeypot field so the API can drop bot submissions", async () => {
     mockFetch.mockResolvedValue({ ok: true });
 
-    await submitPublicForm("contact", "cityschool", { ...SUBMISSION, [HONEYPOT_FIELD]: "spam" });
+    await submitPublicForm(
+      "contact",
+      "cityschool",
+      { ...SUBMISSION, [HONEYPOT_FIELD]: "spam" },
+      FORM_FILL_ID,
+    );
 
     expect(JSON.parse(lastCall().init.body as string)).toMatchObject({ company_website: "spam" });
   });
@@ -63,7 +69,12 @@ describe("submitPublicForm", () => {
   it("posts an admission enquiry as a contact submission with the fixed subject", async () => {
     mockFetch.mockResolvedValue({ ok: true });
 
-    await submitPublicForm("admission_enquiry", "cityschool", { ...SUBMISSION, subject: "x" });
+    await submitPublicForm(
+      "admission_enquiry",
+      "cityschool",
+      { ...SUBMISSION, subject: "x" },
+      FORM_FILL_ID,
+    );
 
     const { url, init } = lastCall();
     expect(url.endsWith(CONTACT_SUBMISSIONS_PATH)).toBe(true);
@@ -72,6 +83,8 @@ describe("submitPublicForm", () => {
 
   it("resolves false when the API refuses the submission", async () => {
     mockFetch.mockResolvedValue({ ok: false });
-    await expect(submitPublicForm("contact", "cityschool", SUBMISSION)).resolves.toBe(false);
+    await expect(submitPublicForm("contact", "cityschool", SUBMISSION, FORM_FILL_ID)).resolves.toBe(
+      false,
+    );
   });
 });

@@ -21,7 +21,7 @@ import {
  * Security: inbound `x-schoolhub-*` headers are **deleted** before ours are set. Without
  * that, a client could hand us a header and read another school's site.
  *
- * The proxy stays I/O-free: the custom-domain 301 needs the tenant lookup, so it happens in the
+ * The proxy stays I/O-free: the custom-domain redirect (308) needs the tenant lookup, so it happens in the
  * root layout after the cached `resolveTenant()`, never here.
  */
 export function proxy(request: NextRequest): NextResponse {

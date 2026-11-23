@@ -73,7 +73,7 @@ export function parseHost(
 export const TENANT_HOST_HEADER = "x-schoolhub-host";
 export const TENANT_SLUG_HEADER = "x-schoolhub-tenant-slug";
 export const TENANT_KIND_HEADER = "x-schoolhub-host-kind";
-/** The request's path and query, so the root layout can 301 to a custom domain keeping them. */
+/** The request's path and query, so the root layout can redirect (308) to a custom domain keeping them. */
 export const TENANT_PATH_HEADER = "x-schoolhub-path";
 
 /**
