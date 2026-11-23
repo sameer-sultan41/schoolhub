@@ -112,7 +112,17 @@ either this file or `project-status.md`.
     receive events. The launch market is Pakistan, where Stripe does not onboard merchants,
     and §19 leaves the provider open; a real adapter needs that commercial decision. A
     payment event for a `trialing` subscription is recorded `ignored`: converting a trial
-    from a webhook waits for a provider whose events say which period was bought.
+    from a webhook waits for a provider whose events say which period was bought, and until
+    then a school that pays during its trial is still suspended by `expire_trials` unless an
+    operator activates it. The real adapter must also carry the invoice period or the time
+    the event occurred: a `payment_failed` carries neither today, so a delayed failure for an
+    earlier period, delivered after a later payment, still moves an `active` school to
+    `past_due`. It must ignore a failure for a period already paid
+    (`apps/platform_admin/billing/services.py`).
+  - **A school suspended by dunning that then pays by webhook stays suspended, and nobody is
+    told.** `record_payment` recovers the subscription but leaves a suspended school
+    suspended (`:reinstate` follows the subscription); the platform-ops channel below would
+    carry the "paid while suspended" alert.
   - **The platform-ops notification channel.** `notify()` is per tenant, so
     `platform.payment-failed` and `platform.trial-expiring` reach the school's owners only;
     §12's copy to `platform_super_admin` and the lifecycle notices' copy to platform ops wait
@@ -122,6 +132,34 @@ either this file or `project-status.md`.
     it for every school is a sweep the console has no shape for yet. Switching
     `module.timetable`'s default off still leaves period-mode schools refused at the register
     (attendance's `assert_register_period`), as before.
+  - **No guard on the other platform-wide disables.** Two more writes switch a `module.*`
+    key off for many schools at once and ask no guard, for the same reason:
+    `plans/services.update_plan` dropping a key from a plan's `enabled_modules` (every school
+    on the plan), and `PATCH /platform/feature-flags/{id}` with `is_kill_switch: true` on a
+    flag that defaults off (every school, overrides and plans included). The per-school plan
+    writes (`:change-plan`, `:activate`, a trial at `:provision`) do ask the guards.
+  - **Smaller items from PR B's reviews.**
+    - Two subscription tests assert `assertRaises(Exception)` where a named exception would
+      pin the failure (`test_a_payment_must_reach_past_the_paid_period`,
+      `test_a_move_the_subscription_cannot_make_is_invalid_transition`).
+    - `:provision`'s trial subscription is audited only through the tenant's provision row,
+      with no subscription row of its own for the person who provisioned.
+    - `subscriptions.services.live_subscription` binds the school for the rest of the
+      surrounding transaction (its `tenant_atomic`'s `SET LOCAL`); a caller that serves
+      several schools in one transaction (usage, PR C) must not rely on the earlier binding.
+    - `subscribable_plan` takes the plan row `FOR UPDATE`, so subscription writes onto one
+      plan run one at a time; `FOR SHARE` would let them run together while still blocking a
+      retire. Console-paced, so not changed.
+    - The billing webhook has no concurrency test for a duplicate delivery; the receipt's
+      unique index serialises it (a `TransactionTestCase` with two threads would pin it).
+    - `update_flag` reads the audit `before` without a row lock: two concurrent `PATCH`es
+      are last-writer-wins with a possibly stale `before`.
+    - The `trial_reminders` beat comment calls 06:00 UTC "the school day"; it is 11:00 in
+      Pakistan.
+    - `?search=` on a console list with no `search_fields` is silently ignored (drop
+      `SearchFilter` there, or add the field).
+    - `BillingEventReceipt.tenant` is `PROTECT`, which a future hard purge of a school must
+      delete first.
   - **Proration.** `:change-plan` moves the live subscription to the new plan at once and
     leaves its period and price untouched; nothing credits or charges the difference (§5,
     §19 recommendation).

@@ -21,7 +21,7 @@ def get_settings_row(request) -> TenantSettings:
     return row
 
 
-def lock_settings_row(*, tenant_id: uuid.UUID, actor_id: uuid.UUID) -> TenantSettings:
+def lock_settings_row(*, tenant_id: uuid.UUID, actor_id: uuid.UUID | None) -> TenantSettings:
     """The row, fetched or created under `SELECT ... FOR UPDATE`, for a read-modify-write.
 
     Every writer that merges into the row's JSON takes this lock, so two overlapping writes

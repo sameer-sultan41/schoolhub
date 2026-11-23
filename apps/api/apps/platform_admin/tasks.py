@@ -25,6 +25,7 @@ from django.utils import timezone
 from apps.platform_admin import notifications
 from apps.platform_admin.flags.services import lapse_expired_overrides
 from apps.platform_admin.models import Subscription, SubscriptionStatus
+from apps.platform_admin.subscriptions.services import grace_ends
 from apps.platform_admin.tenants import lifecycle
 from core.tenancy.context import tenant_atomic
 from core.tenancy.maintenance import for_each_tenant
@@ -142,11 +143,6 @@ def expire_trials() -> dict:
 # ------------------------------------------------------------------------------ dunning
 
 
-def _grace_ends(sub: Subscription) -> datetime:
-    """Dunning runs from the end of the unpaid period, the date the payment was due."""
-    return sub.current_period_end + timedelta(days=settings.PLATFORM_DUNNING_GRACE_DAYS)
-
-
 def _past_due_subscription() -> Subscription | None:
     return Subscription.objects.filter(
         status=SubscriptionStatus.PAST_DUE, deleted_at__isnull=True
@@ -160,7 +156,7 @@ def _dun(tenant_id: uuid.UUID) -> bool:
         sub = _past_due_subscription() if tenant.status == S.PAST_DUE else None
         if sub is None:
             return False
-        if timezone.now() >= _grace_ends(sub):
+        if timezone.now() >= grace_ends(sub):
             lifecycle.transition(tenant, S.SUSPENDED, actor_id=None, reason=GRACE_ENDED)
             return True
     send_payment_failed_notice.delay(tenant_id=str(tenant_id))
@@ -189,7 +185,7 @@ def send_payment_failed_notice(*, tenant_id: str) -> int:
             tenant,
             notifications.PAYMENT_FAILED,
             occasion=sub.current_period_end.isoformat(),
-            context={"grace.ends_on": _grace_ends(sub).date().isoformat()},
+            context={"grace.ends_on": grace_ends(sub).date().isoformat()},
         )
 
 

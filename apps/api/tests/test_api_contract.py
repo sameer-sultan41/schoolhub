@@ -49,6 +49,7 @@ CLIENT_KNOWN_SERVER_CODES = {
     "retention_expired",
     "no_live_subscription",
     "export_required",
+    "grace_expired",
     "plan_in_use",
     "subscription_exists",
     "toggle_refused",

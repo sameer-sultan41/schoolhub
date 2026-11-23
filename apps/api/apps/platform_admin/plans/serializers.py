@@ -76,9 +76,13 @@ class PlanSerializer(serializers.ModelSerializer):
 
 
 class PlanWriteSerializer(serializers.ModelSerializer):
-    """`POST` (every field but the optional ones) and `PATCH` (any subset; ``code`` fixed)."""
+    """`POST` (every field but the optional ones) and `PATCH` (any subset; ``code`` fixed).
 
-    enabled_modules = EnabledModulesField(required=False)
+    ``enabled_modules`` is required on create, with no empty default: a plan with no modules
+    switches every `module.*` key off for its schools, so it must be asked for (``[]``).
+    """
+
+    enabled_modules = EnabledModulesField()
     limits = LimitsField(required=False)
     price_amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
     acknowledge_over_usage = serializers.BooleanField(

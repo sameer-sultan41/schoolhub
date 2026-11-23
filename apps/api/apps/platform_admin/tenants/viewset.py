@@ -164,7 +164,9 @@ class TenantDetailViewSet(PlatformTenantNestedMixin, PlatformViewSet):
         request=ReinstateSerializer,
         responses={
             200: TenantSerializer,
-            409: OpenApiResponse(description="invalid_transition, or no_live_subscription"),
+            409: OpenApiResponse(
+                description="invalid_transition, no_live_subscription, or grace_expired"
+            ),
         },
     )
     def reinstate(self, request: Request, tenant_pk=None) -> Response:

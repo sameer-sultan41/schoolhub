@@ -120,6 +120,26 @@ def disable_refusal(key: str, tenant_id: uuid.UUID) -> str | None:
     return None
 
 
+def plan_change_refusal(tenant_id: uuid.UUID, modules: frozenset[str]) -> tuple[str, str] | None:
+    """The first guarded ``module.*`` key a move to a plan of ``modules`` would switch off for
+    the school, with the guard's reason; None when the move switches off nothing guarded.
+
+    A key is switched off when it resolves on now and off once ``modules`` is the plan: a
+    live override still decides, so one that keeps the module on makes the move harmless.
+    """
+    for key in sorted(_disable_guards):
+        if not key.startswith(_PLAN_KEY_PREFIX) or key in modules:
+            continue
+        if not _resolve_feature(key, tenant_id=tenant_id):
+            continue
+        if _resolve_feature(key, tenant_id=tenant_id, plan_modules=modules):
+            continue
+        reason = disable_refusal(key, tenant_id)
+        if reason:
+            return key, reason
+    return None
+
+
 @dataclass(frozen=True)
 class FeatureSpec:
     key: str
@@ -224,7 +244,9 @@ def sync_feature_flags() -> dict[str, int]:
         bump_feature_cache_generation()
 
     if drifted:
-        logger.info(
+        # WARNING: the code's new default does not apply here. A deliberate default change
+        # needs a console edit or a data migration (platform-admin §7.6).
+        logger.warning(
             "feature flags whose console setting differs from the code's default: %s",
             ", ".join(sorted(drifted)),
         )
@@ -285,7 +307,14 @@ def resolve_without_override(key: str, *, tenant_id: uuid.UUID) -> bool:
     return _resolve_feature(key, tenant_id=tenant_id, ignore_override=True)
 
 
-def _resolve_feature(key: str, *, tenant_id: uuid.UUID, ignore_override: bool = False) -> bool:
+def _resolve_feature(
+    key: str,
+    *,
+    tenant_id: uuid.UUID,
+    ignore_override: bool = False,
+    plan_modules: frozenset[str] | None = None,
+) -> bool:
+    """Resolve uncached. ``plan_modules`` stands in for the live plan's modules (a plan move)."""
     from core.tenancy.models import FeatureFlag, TenantFeatureOverride
 
     flag = FeatureFlag.objects.filter(key=key).first()
@@ -313,7 +342,11 @@ def _resolve_feature(key: str, *, tenant_id: uuid.UUID, ignore_override: bool = 
             return flag.default_enabled
         return override.enabled
 
-    planned = _plan_enables(key, tenant_id=tenant_id)
+    planned = (
+        _plan_enables(key, tenant_id=tenant_id)
+        if plan_modules is None
+        else (key in plan_modules if key.startswith(_PLAN_KEY_PREFIX) else None)
+    )
     if planned is not None:
         # The same rule as an override: a plan can switch a kill switch off, never on.
         if flag.is_kill_switch and planned:

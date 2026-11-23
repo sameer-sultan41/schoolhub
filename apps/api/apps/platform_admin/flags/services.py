@@ -15,10 +15,10 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from core.api.exceptions import CodedAPIException
+from core.api.exceptions import CodedAPIException, Conflict
 from core.audit.services import record_system_audit
 from core.tenancy.context import tenant_context
 from core.tenancy.features import (
@@ -29,6 +29,7 @@ from core.tenancy.features import (
 from core.tenancy.models import FeatureFlag, Tenant, TenantFeatureOverride
 
 KILL_SWITCH_ON = "A kill switch can only be turned on by its platform default, not per school."
+OVERRIDE_RACED = "Another override for this flag was just saved. Reload and try again."
 
 # The fields `PATCH /platform/feature-flags/{id}` may change; the key and description are code.
 EDITABLE_FIELDS = ("default_enabled", "is_kill_switch")
@@ -59,12 +60,17 @@ def set_override(
     expires_at: datetime | None,
     actor_id: uuid.UUID,
 ) -> TenantFeatureOverride:
-    """Give the school an override of ``flag``, replacing any live one it has."""
+    """Give the school an override of ``flag``, replacing any live one it has.
+
+    The guard is asked inside the write's transaction, so a lock it takes (attendance's
+    settings row) holds until the override commits. Two first overrides racing for one flag
+    meet the partial unique index: the second is a 409 ``conflict``.
+    """
     if enabled and flag.is_kill_switch:
         raise ToggleRefused(KILL_SWITCH_ON, meta={"flag": flag.key})
-    if not enabled:
-        _refuse_if_guarded(flag.key, tenant.pk)
     with transaction.atomic(), tenant_context(tenant.pk):
+        if not enabled:
+            _refuse_if_guarded(flag.key, tenant.pk)
         current = (
             TenantFeatureOverride.objects.select_for_update()
             .filter(feature_flag=flag, deleted_at__isnull=True)
@@ -72,15 +78,19 @@ def set_override(
         )
         if current is not None:
             _retire(current, actor_id)
-        override = TenantFeatureOverride.objects.create(
-            tenant=tenant,
-            feature_flag=flag,
-            enabled=enabled,
-            reason=reason,
-            expires_at=expires_at,
-            created_by=actor_id,
-            updated_by=actor_id,
-        )
+        try:
+            with transaction.atomic():
+                override = TenantFeatureOverride.objects.create(
+                    tenant=tenant,
+                    feature_flag=flag,
+                    enabled=enabled,
+                    reason=reason,
+                    expires_at=expires_at,
+                    created_by=actor_id,
+                    updated_by=actor_id,
+                )
+        except IntegrityError as exc:
+            raise Conflict(OVERRIDE_RACED) from exc
     invalidate_feature_cache()
     return override
 
@@ -92,9 +102,10 @@ def remove_override(override: TenantFeatureOverride, *, actor_id: uuid.UUID) -> 
     so the guards are asked then too.
     """
     key = override.feature_flag.key
-    if override.enabled and not resolve_without_override(key, tenant_id=override.tenant_id):
-        _refuse_if_guarded(key, override.tenant_id)
-    _retire(override, actor_id)
+    with transaction.atomic():
+        if override.enabled and not resolve_without_override(key, tenant_id=override.tenant_id):
+            _refuse_if_guarded(key, override.tenant_id)
+        _retire(override, actor_id)
     invalidate_feature_cache()
 
 

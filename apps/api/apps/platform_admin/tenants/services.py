@@ -62,6 +62,15 @@ class NoLiveSubscription(CodedAPIException):
     default_code = "no_live_subscription"
 
 
+class GraceExpired(CodedAPIException):
+    status_code = 409
+    default_detail = (
+        "This school's payment grace has run out. Record a payment or change its plan before "
+        "reinstating it."
+    )
+    default_code = "grace_expired"
+
+
 class ExportRequired(CodedAPIException):
     status_code = 409
     default_detail = "Export this school's data before deleting it, or waive the export explicitly."
@@ -232,7 +241,9 @@ def reinstate_tenant(
 ) -> Tenant:
     """Return a suspended school to the status its live subscription implies.
 
-    - an ``active`` subscription: ``active``; a ``past_due`` one: ``past_due``;
+    - an ``active`` subscription: ``active``; a ``past_due`` one: ``past_due``, but only
+      within its grace (409 ``grace_expired`` after it, or the next dunning sweep would
+      suspend the school again at once): the operator records a payment first;
     - a ``trialing`` one, or none: ``trial``, and only with a future ``trial_ends_at``,
       which becomes the school's trial end;
     - no live subscription and no ``trial_ends_at``: 409 ``no_live_subscription``.
@@ -248,6 +259,9 @@ def reinstate_tenant(
     if state == subscription_state.ACTIVE:
         target = S.ACTIVE
     elif state == subscription_state.PAST_DUE:
+        sub = subscription_services.live_subscription(tenant.pk)
+        if sub is not None and timezone.now() >= subscription_services.grace_ends(sub):
+            raise GraceExpired()
         target = S.PAST_DUE
     else:
         _check_trial_end(trial_ends_at, trialing=state == subscription_state.TRIALING)

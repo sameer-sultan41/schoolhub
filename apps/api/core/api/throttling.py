@@ -124,10 +124,12 @@ class PaymentCallbackFailureThrottle(SimpleRateThrottle):
 
 
 class BillingEventThrottle(SimpleRateThrottle):
-    """The platform's billing webhook, per provider (`/platform/billing-events/{provider}`).
+    """Verified billing-webhook events, per provider (`/platform/billing-events/{provider}`).
 
     One provider sends every school's events from a handful of addresses, so the bucket is
-    the provider, as `PaymentCallbackThrottle`'s is the school's account.
+    the provider. Its key is public, unlike `PaymentCallbackThrottle`'s token, so the view
+    counts an event only after its signature is verified (`allow_request` by hand, not a
+    ``throttle_classes`` entry): unsigned posts cannot use up the provider's budget.
     """
 
     scope = "billing_event"

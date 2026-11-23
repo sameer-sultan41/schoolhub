@@ -111,3 +111,24 @@ plan `docs/superpowers/plans/2026-11-15-platform-admin.md`.
   create the school's own copy rather than change the shared row, which every school holds.
 - The trigger checks a new or re-pointed assignment only. Flipping `is_platform` on a user or a
   role that already has assignments is not supported.
+
+## Amendment (2026-11-23): the console owns a flag's default once the flag exists
+
+Feature flags are declared in code (`features.py`), and the `post_migrate` sync
+(`core.tenancy.features.sync_feature_flags`) used to write the code's `default_enabled` and
+`is_kill_switch` onto every row on every deploy. With the console's
+`PATCH /platform/feature-flags/{id}` that would silently undo an operator's change, including a
+kill switch thrown during an incident, at the next deploy.
+
+**Rule.** The sync creates a missing flag with the code's values. After that, the console owns
+`default_enabled` and `is_kill_switch`: the sync updates only the description, and logs a WARNING
+naming each flag whose row differs from the code. A deliberate change to a code default does not
+reach an existing row by itself: make it in the console, or ship a data migration.
+
+**Why not the alternatives.** Code wins on every deploy: the revert above. A per-row "edited by
+the console" marker: two sources of truth for one value, and the code default still has to reach
+an untouched row through a deploy nobody reviews as a production change. The database as the
+runtime source of truth is the standard model for console-managed flags.
+
+**Enforced by** `apps/platform_admin/tests/test_flags.py::test_a_deploy_keeps_the_console_s_default`
+(the kept values and the WARNING).

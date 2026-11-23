@@ -123,9 +123,9 @@ class Subscription(TenantOwnedModel):
 
 class BillingOutcome(models.TextChoices):
     APPLIED = "applied", "Applied"
-    # Verified, but the subscription could not take it (out of order, or a state it has left).
+    # Verified, but the subscription's current status could not take it.
     IGNORED = "ignored", "Ignored"
-    # Verified, but no school carries the event's provider reference.
+    # Verified, but no school billed through this provider carries the event's reference.
     UNKNOWN_REF = "unknown_ref", "Unknown reference"
     NO_SUBSCRIPTION = "no_subscription", "No live subscription"
 

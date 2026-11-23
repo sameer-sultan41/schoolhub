@@ -146,7 +146,7 @@ class SubscriptionServiceTests(PlatformAPITestCase):
         row = reload(tenant)
         self.assertEqual((row.subscription_status, row.status), (SUB.PAST_DUE, S.PAST_DUE))
 
-        moved = services.change_plan(failed, premium, actor_id=self.operator.pk)
+        moved = services.change_plan(failed, premium.code, actor_id=self.operator.pk)
         row = reload(tenant)
         self.assertEqual((row.current_plan, row.subscription_status), ("premium", SUB.PAST_DUE))
 

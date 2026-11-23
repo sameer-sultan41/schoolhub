@@ -18,7 +18,6 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from apps.platform_admin.models import Subscription
-from apps.platform_admin.plans.services import subscribable_plan
 from apps.platform_admin.subscriptions import services
 from apps.platform_admin.subscriptions.serializers import (
     SubscriptionActivateSerializer,
@@ -39,6 +38,16 @@ USE_CHANGE_PLAN = "The school already has a subscription; change its plan with :
 _CONFLICT = OpenApiResponse(
     description="invalid_transition: the subscription's status does not allow this move; "
     "no_live_subscription: the school has none."
+)
+_PLAN_CONFLICT = OpenApiResponse(
+    description="invalid_transition: the subscription's status does not allow this move; "
+    "no_live_subscription: the school has none; toggle_refused: the plan would switch off a "
+    "module the school still needs."
+)
+_ACTIVATE_CONFLICT = OpenApiResponse(
+    description="invalid_transition: the subscription's status does not allow this move; "
+    "subscription_exists: the school already has a live subscription; toggle_refused: the "
+    "plan would switch off a module the school still needs."
 )
 _UPDATE = "platform.subscription.update"
 
@@ -84,7 +93,7 @@ class TenantSubscriptionViewSet(PlatformTenantNestedMixin, PlatformViewSet):
         request=SubscriptionActivateSerializer,
         responses={
             200: SubscriptionStateSerializer,
-            409: _CONFLICT,
+            409: _ACTIVATE_CONFLICT,
             422: OpenApiResponse(description="No active plan has this code."),
         },
     )
@@ -102,9 +111,7 @@ class TenantSubscriptionViewSet(PlatformTenantNestedMixin, PlatformViewSet):
             if sub is None:
                 if not code:
                     raise serializers.ValidationError({"plan_code": [PLAN_REQUIRED]})
-                return services.subscribe(
-                    request.tenant, subscribable_plan(code), **period, actor_id=request.user.pk
-                )
+                return services.subscribe(request.tenant, code, **period, actor_id=request.user.pk)
             if code and code != sub.plan.code:
                 raise serializers.ValidationError({"plan_code": [USE_CHANGE_PLAN]})
             return services.activate(sub, **period, actor_id=request.user.pk)
@@ -147,7 +154,7 @@ class TenantSubscriptionViewSet(PlatformTenantNestedMixin, PlatformViewSet):
         request=SubscriptionChangePlanSerializer,
         responses={
             200: SubscriptionStateSerializer,
-            409: _CONFLICT,
+            409: _PLAN_CONFLICT,
             422: OpenApiResponse(description="No active plan has this code, or it is the same."),
         },
     )
@@ -158,9 +165,7 @@ class TenantSubscriptionViewSet(PlatformTenantNestedMixin, PlatformViewSet):
         return self._idempotent(
             request,
             "change_plan",
-            lambda sub: services.change_plan(
-                self._live(sub), subscribable_plan(code), actor_id=request.user.pk
-            ),
+            lambda sub: services.change_plan(self._live(sub), code, actor_id=request.user.pk),
             message="Plan changed.",
         )
 

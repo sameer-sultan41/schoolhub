@@ -171,9 +171,11 @@ export const API_ERROR_CODES = [
   "no_live_subscription",
   "export_required",
   // Plans and subscriptions (apps/api/apps/platform_admin): retiring a plan a school is still on,
-  // and starting a second live subscription for a school (both 409).
+  // starting a second live subscription for a school, and reinstating a past-due school whose
+  // payment grace has run out (all 409).
   "plan_in_use",
   "subscription_exists",
+  "grace_expired",
   // The feature-flag console (apps/api/apps/platform_admin/flags): a disable the school still
   // needs (a registered guard objects), or an override switching a kill switch on (409).
   "toggle_refused",

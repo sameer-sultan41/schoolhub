@@ -439,10 +439,13 @@ rather than worked around, because the workaround would be a key nobody declared
   tab. Still open, in `docs/deferred-work.md`: mapping a half-day leave to periods
   (a half-day leave writes a daily row and blocks every period that day), and two
   simultaneous period submissions for one student, which can each send an alert. The
-  platform console now refuses a per-school `module.timetable` override that would switch
-  it off while the school is in period mode (409 `toggle_refused`): attendance registers
-  `services.timetable_disable_refusal` as the flag's disable guard from
-  `AttendanceConfig.ready()`.
+  platform console now refuses to switch `module.timetable` off for one school while it is
+  in period mode (409 `toggle_refused`), whether through an override or by putting the
+  school on a plan without it (`:change-plan`, `:activate`, a trial at `:provision`):
+  attendance registers `services.timetable_disable_refusal` as the flag's disable guard
+  from `AttendanceConfig.ready()`. The guard and a switch to period mode both hold the
+  settings row's lock. A platform-wide disable (a plan edit, the flag's default or kill
+  switch) still asks no guard; `docs/deferred-work.md` records it.
 - **The staff register's department filter, a report viewer's mode read, and a `holiday`
   staff correction.** The API takes `department_id`, but the dashboard has no departments
   reference list yet; the Reports tab learns the tenant's mode only from a report's response;

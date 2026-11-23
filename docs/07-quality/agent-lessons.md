@@ -538,6 +538,16 @@
 - **Mistake.** `test_provision_replays_under_same_key` compared the whole JSON of the first and the replayed `:provision` response. The renderer stamps each response's own `meta.request_id`, so the two never match and CI failed (`6f639fb8`, platform-admin PR A).
 - **Check.** An idempotent-replay test compares `response.json()["data"]` (and any `meta` field the replay stores, such as `meta.message`), never the whole envelope; `request_id` is per request by design.
 
+### L74. A guard on one write covers every write that makes the same change
+
+- **Mistake.** Platform-admin PR B Task 5 registered attendance's `module.timetable` disable guard on the flag-override writes only, and closed the deferred-work item. A plan change, a paid sign-up and a trial onto a plan without the module switched it off for the same school, unguarded (`e6061eb8`).
+- **Check.** Before closing a rule, list every write that reaches the same end state (here: anything that changes how a flag resolves for a school: overrides, plans, defaults) and either guard each or name the unguarded ones in `docs/deferred-work.md`.
+
+### L75. A throttle keyed on a public value counts only verified requests
+
+- **Mistake.** The billing webhook's provider-wide throttle was a `throttle_classes` entry keyed on the public `{provider}` path segment, so unsigned posts from many addresses could use it up and get the real provider's events refused (platform-admin PR B Task 5). The precedent it copied is safe only because its key holds a secret token.
+- **Check.** On an unauthenticated endpoint, a bucket whose key an attacker can name is consumed after verification (`allow_request` by hand), and failures count in a separate per-IP bucket checked first.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.

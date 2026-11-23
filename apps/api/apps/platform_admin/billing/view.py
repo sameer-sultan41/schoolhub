@@ -15,7 +15,9 @@ event, and `handle_event` runs its own transaction.
 | Verified, including replays and unknown references | 200 `{"received": true, "outcome": ...}` |
 
 Failed signatures count against a per-IP budget, so guessing is slowed without slowing a
-genuine provider.
+genuine provider. Only verified events count against the provider-wide budget, after the
+signature check: unsigned posts, however many addresses send them, cannot use it up and
+starve the provider's real deliveries.
 """
 
 from __future__ import annotations
@@ -55,7 +57,8 @@ class BillingUnavailable(CodedAPIException):
 class BillingEventView(APIView):
     authentication_classes: list = []
     permission_classes = [AllowAny]
-    throttle_classes = [BillingEventThrottle]
+    # Throttled by hand: failures per IP before verifying, verified events per provider after.
+    throttle_classes: list = []
 
     @extend_schema(
         summary="A billing provider's event: a school's payment succeeded or failed",
@@ -93,8 +96,18 @@ class BillingEventView(APIView):
             record_security_event(request, "billing_event.invalid_signature", provider=provider)
             raise InvalidBillingEventSignature() from exc
 
-        outcome, tenant = services.handle_event(provider, event)
-        if outcome == BillingOutcome.APPLIED and event.kind == "payment_failed" and tenant:
-            # After `handle_event`'s commit: the notice reads the school's new state.
-            send_payment_failed_notice.delay(tenant_id=str(tenant.pk))
-        return ActionResponse.ok({"received": True, "outcome": outcome})
+        verified = BillingEventThrottle()
+        if not verified.allow_request(request, self):
+            raise Throttled(wait=verified.wait())
+
+        handled = services.handle_event(provider, event)
+        if (
+            handled.is_new
+            and handled.outcome == BillingOutcome.APPLIED
+            and event.kind == "payment_failed"
+            and handled.tenant is not None
+        ):
+            # After `handle_event`'s commit: the notice reads the school's new state. A replay
+            # queues nothing: the first delivery already did.
+            send_payment_failed_notice.delay(tenant_id=str(handled.tenant.pk))
+        return ActionResponse.ok({"received": True, "outcome": handled.outcome})

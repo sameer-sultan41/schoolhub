@@ -15,6 +15,11 @@ audits itself through `record_system_audit` (ruling A3).
 
 A school has at most one live subscription (``trialing``, ``active`` or ``past_due``): the
 services refuse a second (409 ``subscription_exists``) and a partial unique index backs them.
+
+Locks are taken school first, then plan (`subscribable_plan`), as `:provision` takes them; a
+caller passes a plan's code, never a plan it locked itself. A write that puts the school on a
+plan asks the disable guards first (`core.tenancy.features.plan_change_refusal`): a plan
+that would switch off a module the school still needs is a 409 ``toggle_refused``.
 """
 
 from __future__ import annotations
@@ -24,11 +29,13 @@ import uuid
 from collections.abc import Iterator
 from datetime import datetime, timedelta
 
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework import serializers
 
 from apps.platform_admin.constants import QUOTA_METRICS
+from apps.platform_admin.flags.services import ToggleRefused
 from apps.platform_admin.models import Plan, Subscription, SubscriptionStatus
 from apps.platform_admin.plans.services import subscribable_plan
 
@@ -38,7 +45,7 @@ from apps.platform_admin.tenants import services as tenant_services
 from core.api.exceptions import CodedAPIException, DomainRuleViolation
 from core.audit.services import record_system_audit
 from core.tenancy.context import tenant_atomic, tenant_context
-from core.tenancy.features import invalidate_feature_cache
+from core.tenancy.features import invalidate_feature_cache, plan_change_refusal
 from core.tenancy.models import Tenant, TenantStatus
 from core.tenancy.subscription_state import LIVE_STATES
 
@@ -142,11 +149,13 @@ def start_trial(tenant: Tenant, plan: Plan, *, actor_id: uuid.UUID | None) -> Su
 
     The school's ``trial_ends_at`` becomes the trial's end. `:provision` calls this when it
     is given a plan, before it moves the school to ``trial``; the lifecycle is not moved here.
+    ``plan`` is re-read under its lock here, after the school's.
     """
     with _writing(tenant.pk) as school:
         plan = subscribable_plan(plan.code)
         if _live_row(lock=False) is not None:
             raise SubscriptionExists()
+        _refuse_guarded_drop(school, plan)
         now = timezone.now()
         sub = Subscription.objects.create(
             tenant=school,
@@ -165,13 +174,13 @@ def start_trial(tenant: Tenant, plan: Plan, *, actor_id: uuid.UUID | None) -> Su
 
 def subscribe(
     tenant: Tenant,
-    plan: Plan,
+    plan_code: str,
     *,
     period_start: datetime,
     period_end: datetime,
     actor_id: uuid.UUID | None,
 ) -> Subscription:
-    """An ``active`` subscription to ``plan`` for a school that has none (a paid sign-up).
+    """An ``active`` subscription to plan ``plan_code`` for a school that has none (a paid sign-up).
 
     A school on a trial without a plan, or one that predates plans, pays and goes straight to
     ``active``. A trial school becomes ``active``; a suspended one stays suspended until it is
@@ -181,9 +190,10 @@ def subscribe(
     with _writing(tenant.pk) as school:
         if school.status not in (*lifecycle.OPERATIONAL, S.SUSPENDED):
             raise lifecycle.InvalidTransition(meta={"from": school.status, "to": S.ACTIVE})
-        plan = subscribable_plan(plan.code)
+        plan = subscribable_plan(plan_code)
         if _live_row(lock=False) is not None:
             raise SubscriptionExists()
+        _refuse_guarded_drop(school, plan)
         sub = Subscription.objects.create(
             tenant=school,
             plan=plan,
@@ -255,17 +265,18 @@ def mark_payment_failed(sub: Subscription, *, actor_id: uuid.UUID | None) -> Sub
     return row
 
 
-def change_plan(sub: Subscription, plan: Plan, *, actor_id: uuid.UUID | None) -> Subscription:
-    """Move the live subscription to another active plan, at once.
+def change_plan(sub: Subscription, plan_code: str, *, actor_id: uuid.UUID | None) -> Subscription:
+    """Move the live subscription to the active plan ``plan_code``, at once.
 
     The period and status stay as they are: proration and plan versioning are deferred
     (deferred-work.md). Module access follows on the next request.
     """
     with _writing(sub.tenant_id) as school:
         row = _locked(sub, None, allowed=tuple(_LIVE))
-        plan = subscribable_plan(plan.code)
+        plan = subscribable_plan(plan_code)
         if plan.pk == row.plan_id:
             raise DomainRuleViolation({"plan_code": SAME_PLAN})
+        _refuse_guarded_drop(school, plan)
         row.plan = plan
         _save(row, actor_id, "plan")
         _mirror(school, row)
@@ -376,6 +387,19 @@ def snapshot(sub: Subscription) -> dict:
         "billing_provider_ref": sub.billing_provider_ref,
         "limits_override": sub.limits_override,
     }
+
+
+def grace_ends(sub: Subscription) -> datetime:
+    """When a past-due school's grace runs out: dunning runs from the unpaid period's end."""
+    return sub.current_period_end + timedelta(days=settings.PLATFORM_DUNNING_GRACE_DAYS)
+
+
+def _refuse_guarded_drop(school: Tenant, plan: Plan) -> None:
+    """409 ``toggle_refused`` when ``plan`` would switch off a module the school still needs."""
+    refusal = plan_change_refusal(school.pk, frozenset(plan.enabled_modules or ()))
+    if refusal is not None:
+        key, reason = refusal
+        raise ToggleRefused(reason, meta={"flag": key})
 
 
 def _check_period(start: datetime, end: datetime) -> None:
