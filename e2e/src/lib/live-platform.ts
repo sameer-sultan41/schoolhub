@@ -29,12 +29,15 @@ interface SignedIn {
   access_token: string;
 }
 
-async function postJson<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(`${env.API_BASE_URL}${path}`, {
+function post(path: string, body: unknown): Promise<Response> {
+  return fetch(`${env.API_BASE_URL}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+}
+
+async function dataOf<T>(path: string, response: Response): Promise<T> {
   if (!response.ok) {
     throw new Error(`live platform ${path} failed: ${response.status} ${await response.text()}`);
   }
@@ -42,24 +45,47 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
   return data;
 }
 
+async function isInvalidCode(response: Response): Promise<boolean> {
+  if (response.status !== 400) return false;
+  const body = (await response.clone().json()) as { error?: { code?: string } };
+  return body.error?.code === "invalid_mfa_code";
+}
+
+/** Milliseconds until the next 30-second TOTP step starts, plus a small margin. */
+function untilNextStep(): number {
+  const stepMs = TOTP_STEP_SECONDS * 1000;
+  return stepMs - (Date.now() % stepMs) + 250;
+}
+
 /**
  * The seeded platform operator, signed in the way the console requires: password, then a
  * TOTP code (`POST /auth/login` answers a challenge, `POST /auth/mfa:verify` completes it).
  * The token carries `amr: ["pwd", "otp"]`, which `/platform/*` routes require.
  *
- * Costs two auth-throttled requests and no refresh: a spec makes one of these and keeps it
- * for its whole run, well inside the access token's lifetime. A code is accepted once per
- * 30-second step (`mfa_last_timecode`), so a retry inside the same step would be refused.
+ * A code is accepted once per 30-second step (`mfa_last_timecode`), so a spec signing in
+ * within the same step as another is refused `invalid_mfa_code`; it then waits for the next
+ * step and retries once on the same challenge. Costs two or three auth-throttled requests and
+ * no refresh: a spec keeps the session for its whole run, well inside the token's lifetime.
  */
 export async function createPlatformLiveSession(): Promise<ApiClient> {
-  const challenge = await postJson<MfaChallenge>("/auth/login", {
-    identifier: E2E_PLATFORM_OPERATOR_EMAIL,
-    password: env.LIVE_ADMIN_PASSWORD,
-  });
-  const { access_token: accessToken } = await postJson<SignedIn>("/auth/mfa:verify", {
-    mfa_token: challenge.mfa_token,
-    code: totpCode(E2E_PLATFORM_TOTP_KEY),
-  });
+  const challenge = await dataOf<MfaChallenge>(
+    "/auth/login",
+    await post("/auth/login", {
+      identifier: E2E_PLATFORM_OPERATOR_EMAIL,
+      password: env.LIVE_ADMIN_PASSWORD,
+    }),
+  );
+  const verify = () =>
+    post("/auth/mfa:verify", {
+      mfa_token: challenge.mfa_token,
+      code: totpCode(E2E_PLATFORM_TOTP_KEY),
+    });
+  let response = await verify();
+  if (await isInvalidCode(response)) {
+    await new Promise((resolve) => setTimeout(resolve, untilNextStep()));
+    response = await verify();
+  }
+  const { access_token: accessToken } = await dataOf<SignedIn>("/auth/mfa:verify", response);
   return new ApiClient({
     baseUrl: env.API_BASE_URL,
     fetchImpl: fetch,
