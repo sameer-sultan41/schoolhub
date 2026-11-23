@@ -1,4 +1,4 @@
-"""Request correlation.
+"""Request correlation, and the load balancer's liveness probe.
 
 Every request carries an id that appears in the response header, in every log line,
 and in the error envelope, so a user-reported failure can be traced end to end.
@@ -6,6 +6,10 @@ and in the error envelope, so a user-reported failure can be traced end to end.
 
 import uuid
 from contextvars import ContextVar
+
+from django.http import JsonResponse
+
+HEALTH_PATH = "/healthz"
 
 REQUEST_ID_HEADER = "HTTP_X_REQUEST_ID"
 RESPONSE_HEADER = "X-Request-ID"
@@ -40,3 +44,20 @@ class RequestIDMiddleware:
             return response
         finally:
             _current_request_id.reset(token)
+
+
+class HealthCheckMiddleware:
+    """Answers `GET /healthz` before any host check, SSL redirect or CORS handling.
+
+    The ALB probes a task by its IP with no `X-Forwarded-Proto`, so under prod.py the full
+    stack would answer 400 (`DisallowedHost`) or 301 and the target would never turn healthy.
+    First in `MIDDLEWARE`; every other path, `/readyz` included, takes the full stack.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.path == HEALTH_PATH and request.method in ("GET", "HEAD"):
+            return JsonResponse({"status": "ok"})
+        return self.get_response(request)

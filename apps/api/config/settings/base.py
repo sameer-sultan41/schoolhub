@@ -37,7 +37,8 @@ DASHBOARD_URL_PORT = ""
 API_PUBLIC_URL = env("API_PUBLIC_URL", default="")
 
 # The renderer's cache-invalidation webhook (website_cms.revalidation). Empty URL = disabled,
-# so a stack with no renderer never errors. The secret is the renderer's REVALIDATE_SECRET.
+# so a stack with no renderer never errors. The secret is the renderer's
+# REVALIDATE_WEBHOOK_SECRET; the URL reaches the renderer through the public edge.
 WEBSITE_REVALIDATE_URL = env("WEBSITE_REVALIDATE_URL", default="")
 WEBSITE_REVALIDATE_SECRET = env("WEBSITE_REVALIDATE_SECRET", default="")
 # Platform services calling the API with a static bearer token (core.rbac.machine). Each
@@ -154,6 +155,8 @@ MODULE_APPS = [
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + CORE_APPS + MODULE_APPS
 
 MIDDLEWARE = [
+    # Answers the ALB's /healthz probe before the host and SSL checks below.
+    "core.api.middleware.HealthCheckMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",

@@ -22,6 +22,8 @@ REVALIDATE_TIMEOUT_SECONDS = 5
 REVALIDATE_MAX_RETRIES = 5
 REVALIDATE_BACKOFF_MAX_SECONDS = 300
 SIGNATURE_HEADER = "x-schoolhub-signature"
+# `http.client` sends no User-Agent, and the WAF's managed NoUserAgent_HEADER rule blocks that.
+REVALIDATE_USER_AGENT = "schoolhub-api/website-revalidate"
 
 
 class RevalidationFailed(OSError):
@@ -41,7 +43,9 @@ def _post(url: str, body: bytes, headers: dict[str, str]) -> int:
         target = parts.path or "/"
         if parts.query:
             target = f"{target}?{parts.query}"
-        connection.request("POST", target, body=body, headers=headers)
+        connection.request(
+            "POST", target, body=body, headers={"User-Agent": REVALIDATE_USER_AGENT, **headers}
+        )
         response = connection.getresponse()
         response.read()
         return response.status
