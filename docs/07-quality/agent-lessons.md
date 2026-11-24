@@ -559,6 +559,16 @@
 - **Mistake.** Platform-admin PR C Task 8 pushed its implementation (`58ff793c`) while the RED commit's api run was still testing. Each workflow's `concurrency` group is `ci-${{ github.ref }}` with `cancel-in-progress: true`, so the RED `test` job was cancelled and left no failure to cite (run 45171828463).
 - **Check.** After pushing failing tests, `gh run watch <id>` on the `api` (or `frontend`) run until its `test` job has a conclusion, and record that run id, before the next push to the branch.
 
+### L78. A RED across packages proves only the packages Turbo reached
+
+- **Mistake.** Platform-admin PR D's RED commit (`0d4c23be`) failed tests in two packages. Turbo stops the task graph at the first failing task, so frontend run 45329263477 reported only `@schoolhub/api-client`'s failure; the dashboard suite started and never reported, and its five RED tests had no evidence until a second push made api-client green (run 45330441484).
+- **Check.** In the RED run's `Test (coverage)` log, find a `Tests:` summary for every package the commit touches. If one is missing, the RED is unproven there: push the earlier package's fix alone, wait for the run, and cite the run that shows each package's failures.
+
+### L79. A pipeline hides a hook's rejection, and `git commit` takes every staged path
+
+- **Mistake.** Platform-admin PR D ran `git commit --amend ... | tail`; cspell rejected the amend, but the pipeline's status was `tail`'s, so the push went ahead with the unfixed commit. Later a plain `git commit` swept two renames `git mv` had staged into an unrelated commit, without their importers (caught by `git show --stat` before the push).
+- **Check.** Commit with `git commit -- <paths>` and test the exit status on its own (no pipe, or `${pipestatus[1]}` in zsh). Before every push, `git show --stat` each new commit and confirm it holds only the files it names.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.
