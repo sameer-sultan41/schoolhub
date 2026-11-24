@@ -6,10 +6,22 @@ import { useRouter } from "next/navigation";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { homePathFor } from "@/lib/home-path";
 
+export type Audience = "portal" | "staff" | "platform";
+
 export interface AudienceGateProps {
-  /** Who the wrapped shell is for: `portal` (students and guardians) or `staff`. */
-  audience: "portal" | "staff";
+  /** Who the wrapped shell is for: `portal` (students and guardians), `staff`, or `platform`
+   * (the console's operators). */
+  audience: Audience;
   children: ReactNode;
+}
+
+/** The one shell a signed-in user belongs in; `homePathFor` is its landing page. */
+export function audienceOf(user: {
+  is_platform?: boolean;
+  is_restricted_principal?: boolean;
+}): Audience {
+  if (user.is_platform === true) return "platform";
+  return user.is_restricted_principal === true ? "portal" : "staff";
 }
 
 /**
@@ -26,8 +38,7 @@ export function AudienceGate({ audience, children }: AudienceGateProps) {
   const router = useRouter();
   const { data: user, isError } = useCurrentUser();
 
-  const isPortalUser = user?.is_restricted_principal === true;
-  const isWrongShell = user !== undefined && isPortalUser !== (audience === "portal");
+  const isWrongShell = user !== undefined && audienceOf(user) !== audience;
 
   useEffect(() => {
     if (user && isWrongShell) router.replace(homePathFor(user));

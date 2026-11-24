@@ -77,6 +77,11 @@ export function hasPendingMfaChallenge(): boolean {
   return mfaChallengeStore.get() !== null;
 }
 
+/** Notifies `listener` whenever the pending challenge is set or spent (`useSyncExternalStore`). */
+export function subscribeMfaChallenge(listener: () => void): () => void {
+  return mfaChallengeStore.subscribe(listener);
+}
+
 /**
  * Completes a challenged sign-in with a TOTP or recovery code. Every refusal is a 400 or 429 and
  * never a 401, so no refresh is tried and no sign-out happens: a wrong code keeps the challenge

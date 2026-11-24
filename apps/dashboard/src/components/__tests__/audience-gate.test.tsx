@@ -21,6 +21,11 @@ const mockFetchCurrentUser = Services.auth.fetchCurrentUser as jest.MockedFuncti
 
 const restricted = { ...buildUser([]), is_restricted_principal: true };
 const staff = { ...buildUser([]), is_restricted_principal: false };
+const operator = {
+  ...buildUser(["platform.tenant.view"]),
+  tenant_summary: null,
+  is_platform: true,
+};
 
 describe("AudienceGate", () => {
   beforeEach(() => {
@@ -107,6 +112,49 @@ describe("AudienceGate", () => {
     );
 
     expect(await screen.findByText("staff shell")).toBeInTheDocument();
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it("platform operator is redirected out of the staff shell to the console", async () => {
+    mockFetchCurrentUser.mockResolvedValue(operator);
+
+    renderWithProviders(
+      <AudienceGate audience="staff">
+        <p>staff shell</p>
+      </AudienceGate>,
+    );
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/platform");
+    });
+    expect(screen.queryByText("staff shell")).not.toBeInTheDocument();
+  });
+
+  it("a school's staff user is redirected out of the console", async () => {
+    mockFetchCurrentUser.mockResolvedValue(staff);
+
+    renderWithProviders(
+      <AudienceGate audience="platform">
+        <p>console</p>
+      </AudienceGate>,
+    );
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/dashboard");
+    });
+    expect(screen.queryByText("console")).not.toBeInTheDocument();
+  });
+
+  it("a platform operator stays in the console", async () => {
+    mockFetchCurrentUser.mockResolvedValue(operator);
+
+    renderWithProviders(
+      <AudienceGate audience="platform">
+        <p>console</p>
+      </AudienceGate>,
+    );
+
+    expect(await screen.findByText("console")).toBeInTheDocument();
     expect(mockReplace).not.toHaveBeenCalled();
   });
 });

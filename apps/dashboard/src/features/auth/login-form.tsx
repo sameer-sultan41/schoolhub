@@ -19,7 +19,8 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
-import { Paths } from "@/config/paths";
+import { isMfaChallenge } from "@schoolhub/types";
+import { mfaVerifyPath, Paths } from "@/config/paths";
 import { env } from "@/lib/env";
 import { homePathFor } from "@/lib/home-path";
 import { parseTenantSlug } from "@/lib/host";
@@ -44,11 +45,15 @@ export function LoginForm() {
   const mutation = useMutation({
     mutationFn: Services.auth.login,
     onSuccess: (data) => {
-      if ("mfa_required" in data) return;
       // A new identity starts from an empty cache: nothing a previous user read (their
       // `/auth/me`, a staff list, another family's portal) may be shown or routed on.
       queryClient.clear();
       const next = searchParams.get("next");
+      if (isMfaChallenge(data)) {
+        // No session yet: the second factor finishes the sign-in, then honours `next`.
+        router.replace(mfaVerifyPath(next));
+        return;
+      }
       // The auth layout's own logo links to /dashboard (unconditionally, next= or not),
       // so Next's Router Cache may already hold that route resolving to the pre-login
       // redirect back to /login — prefetched the instant this page mounted, while still

@@ -247,6 +247,7 @@ export type {
   SectionOption,
   StructurePageQuery,
 } from "./modules/school-organization";
+export type { LoginResult, MfaConfirmResponse, MfaEnrollResponse, MfaFactor } from "./modules/auth";
 export type {
   ActionOptions,
   ActivateSubscriptionInput,

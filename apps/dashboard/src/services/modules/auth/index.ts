@@ -11,6 +11,7 @@ import {
   previewInvitation,
   requestPasswordReset,
   restoreSession,
+  subscribeMfaChallenge,
   verifyMfa,
 } from "./auth-service";
 
@@ -25,6 +26,7 @@ export const AuthService = {
   requestPasswordReset,
   confirmPasswordReset,
   hasPendingMfaChallenge,
+  subscribeMfaChallenge,
   verifyMfa,
   enrollMfa,
   confirmMfa,
