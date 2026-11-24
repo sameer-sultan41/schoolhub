@@ -44,6 +44,7 @@ export function LoginForm() {
   const mutation = useMutation({
     mutationFn: Services.auth.login,
     onSuccess: (data) => {
+      if ("mfa_required" in data) return;
       // A new identity starts from an empty cache: nothing a previous user read (their
       // `/auth/me`, a staff list, another family's portal) may be shown or routed on.
       queryClient.clear();

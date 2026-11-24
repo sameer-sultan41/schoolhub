@@ -46,6 +46,44 @@ describe("ApiClient", () => {
     expect(result.requestId).toBe("req-1");
   });
 
+  it("carries a refusal's Retry-After seconds on the error", async () => {
+    // `core/rbac/views.py`'s `_refusal`: a timed MFA lock is a 429 `mfa_locked` with the wait
+    // in the header, not the body.
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(
+          { error: { code: "mfa_locked", message: "Too many wrong codes.", request_id: "r" } },
+          { status: 429, headers: { "Retry-After": "900" } },
+        ),
+      );
+    const client = new ApiClient({ baseUrl: "https://api.test/api/v1", fetchImpl });
+
+    const error = await client.post("/auth/mfa:verify", {}).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).code).toBe("mfa_locked");
+    expect((error as ApiError).retryAfter).toBe(900);
+  });
+
+  it("leaves retryAfter null without a header, or with one that is not a number of seconds", async () => {
+    // The operator-only MFA lock sends no Retry-After: nothing but an operator lifts it.
+    const body = { error: { code: "mfa_locked", message: "Locked.", request_id: "r" } };
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(body, { status: 429 }))
+      .mockResolvedValueOnce(
+        jsonResponse(body, { status: 429, headers: { "Retry-After": "soon" } }),
+      );
+    const client = new ApiClient({ baseUrl: "https://api.test/api/v1", fetchImpl });
+
+    const first = await client.post("/x", {}).catch((caught: unknown) => caught);
+    const second = await client.post("/x", {}).catch((caught: unknown) => caught);
+
+    expect((first as ApiError).retryAfter).toBeNull();
+    expect((second as ApiError).retryAfter).toBeNull();
+  });
+
   it("sends the access token as a bearer header", async () => {
     const fetchImpl = jest.fn().mockResolvedValue(jsonResponse({ data: [] }));
     const client = new ApiClient({

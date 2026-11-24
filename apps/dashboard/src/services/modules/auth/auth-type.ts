@@ -3,7 +3,13 @@ import type { ApiSchemas } from "@schoolhub/api-client";
 // Re-exported, not redefined: these are cross-cutting, no-generated-source types
 // (ADR-0017) whose real home is `@schoolhub/types` — consumed well beyond auth, by
 // `lib/permissions.ts` and tests across students/staff.
-export type { AuthenticatedUser, LoginCredentials, LoginResponse } from "@schoolhub/types";
+export type {
+  AuthenticatedUser,
+  LoginCredentials,
+  LoginResponse,
+  LoginResult,
+  MfaChallengeResponse,
+} from "@schoolhub/types";
 
 /** The emailed-link endpoints' generated wire shapes (ADR-0017, ADR-0033). */
 export type InvitationLink = ApiSchemas["InvitationLink"];
@@ -13,3 +19,9 @@ export type PasswordResetRequest = ApiSchemas["PasswordResetRequest"];
 export type PasswordResetConfirm = ApiSchemas["PasswordResetConfirm"];
 /** `POST /auth/change-password`'s body (generated, ADR-0017). */
 export type ChangePasswordInput = ApiSchemas["ChangePassword"];
+
+/** The second factor's generated wire shapes (`core/rbac/views.py`). */
+export type MfaEnrollResponse = ApiSchemas["MfaEnrollResponse"];
+export type MfaConfirmResponse = ApiSchemas["MfaConfirmResponse"];
+/** One factor for `/auth/mfa:verify`: a TOTP code, or a recovery code; never both. */
+export type MfaFactor = { code: string } | { recovery_code: string };

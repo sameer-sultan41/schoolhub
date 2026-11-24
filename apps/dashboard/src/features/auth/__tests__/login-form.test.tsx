@@ -151,6 +151,51 @@ describe("LoginForm", () => {
     ).toBeUndefined();
   });
 
+  it("routes an mfa_required challenge to the second-factor page, not a home", async () => {
+    // The server's real challenge body (core/rbac/views.py LoginView): no token, no user.
+    mockLogin.mockResolvedValue({ mfa_required: true, mfa_token: "signed-challenge" });
+
+    renderLoginForm();
+    await fillAndSubmit("ops@schoolhub.test", "secret123");
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/mfa/verify");
+    });
+    expect(mockReplace).toHaveBeenCalledTimes(1);
+  });
+
+  it("carries a same-origin next param through the second-factor page", async () => {
+    mockGet.mockReturnValue("/platform/plans");
+    mockLogin.mockResolvedValue({ mfa_required: true, mfa_token: "signed-challenge" });
+
+    renderLoginForm();
+    await fillAndSubmit("ops@schoolhub.test", "secret123");
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledTimes(1);
+    });
+    const target = new URL(String(mockReplace.mock.calls[0]?.[0]), "https://app.schoolhub.test");
+    expect(target.pathname).toBe("/mfa/verify");
+    expect(target.searchParams.get("next")).toBe("/platform/plans");
+  });
+
+  it("lands a platform operator signed in without a challenge on the console", async () => {
+    // A platform account not yet enrolled gets a password-only pair; the console then
+    // sends it to enrolment.
+    const response = makeLoginResponse();
+    mockLogin.mockResolvedValue({
+      ...response,
+      user: { ...response.user, tenant_summary: null, is_platform: true, mfa_enabled: false },
+    });
+
+    renderLoginForm();
+    await fillAndSubmit("ops@schoolhub.test", "secret123");
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/platform");
+    });
+  });
+
   it("redirects to a same-origin next param when present", async () => {
     mockGet.mockReturnValue("/students");
     mockLogin.mockResolvedValue(makeLoginResponse());

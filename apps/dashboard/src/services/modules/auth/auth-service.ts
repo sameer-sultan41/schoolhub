@@ -1,9 +1,11 @@
 import { ApiError } from "@schoolhub/api-client";
+import { isMfaChallenge } from "@schoolhub/types";
 import {
   accessTokenStore,
   apiClient,
   authProxyClient,
   clearSessionCookie,
+  mfaChallengeStore,
   setSessionCookie,
 } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
@@ -15,6 +17,10 @@ import type {
   InvitationPreview,
   LoginCredentials,
   LoginResponse,
+  LoginResult,
+  MfaConfirmResponse,
+  MfaEnrollResponse,
+  MfaFactor,
   PasswordResetConfirm,
   PasswordResetRequest,
 } from "./auth-type";
@@ -33,18 +39,85 @@ export type {
   InvitationPreview,
   LoginCredentials,
   LoginResponse,
+  LoginResult,
+  MfaConfirmResponse,
+  MfaEnrollResponse,
+  MfaFactor,
   PasswordResetConfirm,
   PasswordResetRequest,
 } from "./auth-type";
 
-export async function login(credentials: LoginCredentials): Promise<LoginResponse> {
-  const { data } = await authProxyClient.post<LoginResponse>(endpoints.auth.login, credentials, {
+/** A completed sign-in's token and the proxy's session marker. */
+function startSession(data: { access_token: string; expires_in: number }): void {
+  accessTokenStore.set(data.access_token, data.expires_in);
+  setSessionCookie();
+}
+
+/**
+ * Password sign-in. An account with TOTP on gets a challenge instead of a session: no token, no
+ * cookie, only the `mfa_token` kept for `verifyMfa`.
+ */
+export async function login(credentials: LoginCredentials): Promise<LoginResult> {
+  const { data } = await authProxyClient.post<LoginResult>(endpoints.auth.login, credentials, {
     // Lets the API set the HttpOnly refresh cookie on this same-origin response.
     credentials: "include",
     skipAuthRefresh: true,
   });
-  accessTokenStore.set(data.access_token, data.expires_in);
-  setSessionCookie();
+  if (isMfaChallenge(data)) {
+    mfaChallengeStore.set(data.mfa_token);
+    return data;
+  }
+  mfaChallengeStore.set(null);
+  startSession(data);
+  return data;
+}
+
+/** Whether a password sign-in is waiting for its second factor in this tab. */
+export function hasPendingMfaChallenge(): boolean {
+  return mfaChallengeStore.get() !== null;
+}
+
+/**
+ * Completes a challenged sign-in with a TOTP or recovery code. Every refusal is a 400 or 429 and
+ * never a 401, so no refresh is tried and no sign-out happens: a wrong code keeps the challenge
+ * for another try; a dead one (`mfa_challenge_invalid`) is dropped, and the user signs in again.
+ */
+export async function verifyMfa(factor: MfaFactor): Promise<LoginResponse> {
+  const mfaToken = mfaChallengeStore.get();
+  try {
+    const { data } = await authProxyClient.post<LoginResponse>(
+      endpoints.auth.mfaVerify,
+      { mfa_token: mfaToken ?? "", ...factor },
+      { credentials: "include", skipAuthRefresh: true },
+    );
+    mfaChallengeStore.set(null);
+    startSession(data);
+    return data;
+  } catch (error) {
+    if (error instanceof ApiError && error.code === "mfa_challenge_invalid") {
+      mfaChallengeStore.set(null);
+    }
+    throw error;
+  }
+}
+
+/** A new, not-yet-enabled TOTP secret for the signed-in platform user (a password-only session). */
+export async function enrollMfa(): Promise<MfaEnrollResponse> {
+  const { data } = await apiClient.post<MfaEnrollResponse>(endpoints.auth.mfaEnroll);
+  return data;
+}
+
+/**
+ * Turns TOTP on with a first code. The answer is a fresh session carrying the second factor and
+ * the ten recovery codes, shown once; through the auth proxy, since it sets the refresh cookie.
+ */
+export async function confirmMfa(code: string): Promise<MfaConfirmResponse> {
+  const { data } = await authProxyClient.post<MfaConfirmResponse>(
+    endpoints.auth.mfaConfirm,
+    { code },
+    { credentials: "include" },
+  );
+  startSession(data);
   return data;
 }
 

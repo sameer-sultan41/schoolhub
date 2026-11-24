@@ -16,6 +16,9 @@ export class ApiError extends Error {
   readonly meta: Record<string, unknown>;
   /** HTTP status, or 0 when the request never reached the server. */
   readonly status: number;
+  /** Seconds to wait before trying again, from the response's `Retry-After`; `null` without
+   * one (a 429 `mfa_locked` sends it for a timed lock, and none for an operator-only lock). */
+  readonly retryAfter: number | null;
   readonly url: string;
 
   constructor(init: {
@@ -26,6 +29,7 @@ export class ApiError extends Error {
     details?: ApiErrorDetail[];
     requestId?: string | null;
     meta?: Record<string, unknown>;
+    retryAfter?: number | null;
     cause?: unknown;
   }) {
     super(init.message, init.cause === undefined ? undefined : { cause: init.cause });
@@ -36,6 +40,7 @@ export class ApiError extends Error {
     this.details = init.details ?? [];
     this.requestId = init.requestId ?? null;
     this.meta = init.meta ?? {};
+    this.retryAfter = init.retryAfter ?? null;
   }
 
   /** 401 — no valid credentials. Triggers the refresh-then-retry path once. */

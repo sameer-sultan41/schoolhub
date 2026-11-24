@@ -67,6 +67,11 @@ export interface AuthenticatedUser {
   is_restricted_principal?: boolean;
   /** Set when a platform support user is impersonating this account. */
   impersonated_by?: string | null;
+  /** A platform-scope operator, with no school (the generated `User` schema's field; optional
+   * here for the same reason as `is_restricted_principal`). Routes them to the console. */
+  is_platform?: boolean;
+  /** TOTP is on for this account. A platform operator without it is sent to enrol. */
+  mfa_enabled?: boolean;
 }
 
 export interface LoginCredentials {
@@ -77,13 +82,27 @@ export interface LoginCredentials {
   school?: string;
 }
 
+/** A completed sign-in (the generated `SignedInResponse`): `/auth/login` for an account without
+ * a second factor, `/auth/mfa:verify` and `/auth/mfa:confirm` otherwise. */
 export interface LoginResponse {
   access_token: string;
   /** Seconds until `access_token` expires (15 min by default). */
   expires_in: number;
   user: AuthenticatedUser;
-  /** Present when the login state machine requires a second factor. */
-  second_factor_required?: boolean;
+}
+
+/** `/auth/login`'s answer for an account with TOTP on (the generated `MfaChallengeResponse`):
+ * no token and no cookie, only a short-lived signed challenge for `/auth/mfa:verify`. */
+export interface MfaChallengeResponse {
+  mfa_required: true;
+  mfa_token: string;
+}
+
+/** What `/auth/login` returns (the generated `LoginResponse` oneOf). */
+export type LoginResult = LoginResponse | MfaChallengeResponse;
+
+export function isMfaChallenge(result: LoginResult): result is MfaChallengeResponse {
+  return "mfa_required" in result && result.mfa_required;
 }
 
 export interface RefreshResponse {
