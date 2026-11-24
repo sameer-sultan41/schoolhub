@@ -8,7 +8,7 @@ import { Card, Skeleton, Tabs, TabsContent } from "@schoolhub/ui";
 
 import { Toolbar, ToolbarActions, ToolbarHeading } from "@/app/(app)/shell/toolbar";
 import { LoadErrorCard } from "@/components/load-error-card";
-import { ResponsiveTabsList } from "@/components/responsive-tabs-list";
+import { ResponsiveTabsList, type ResponsiveTabItem } from "@/components/responsive-tabs-list";
 import { Paths } from "@/config/paths";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useUrlParams } from "@/hooks/use-url-params";
@@ -29,6 +29,11 @@ import { TenantSubscriptionTab } from "./subscription/tenant-subscription-tab";
 import { TenantUsageTab } from "./tenant-usage-tab";
 
 type TenantTab = "overview" | "subscription" | "overrides" | "usage";
+const TENANT_TABS: readonly string[] = ["overview", "subscription", "overrides", "usage"];
+
+function isTenantTab(value: string | null): value is TenantTab {
+  return value !== null && TENANT_TABS.includes(value);
+}
 
 export interface TenantDetailProps {
   tenantId: string;
@@ -57,22 +62,25 @@ export function TenantDetail({ tenantId, extraActions }: TenantDetailProps) {
     queryFn: () => Services.platform.fetchTenant(tenantId),
   });
 
-  const items = useMemo(
-    () =>
-      [
-        { value: "overview", label: t("tenants.tabs.overview") },
-        ...(hasPermission(user, PLATFORM_KEYS.subscriptionView)
-          ? [{ value: "subscription", label: t("tenants.tabs.subscription") }]
-          : []),
-        ...(hasPermission(user, PLATFORM_KEYS.flagView)
-          ? [{ value: "overrides", label: t("tenants.tabs.overrides") }]
-          : []),
-        { value: "usage", label: t("tenants.tabs.usage") },
-      ] as const,
+  const items = useMemo<ResponsiveTabItem[]>(
+    () => [
+      { value: "overview", label: t("tenants.tabs.overview") },
+      ...(hasPermission(user, PLATFORM_KEYS.subscriptionView)
+        ? [{ value: "subscription", label: t("tenants.tabs.subscription") }]
+        : []),
+      ...(hasPermission(user, PLATFORM_KEYS.flagView)
+        ? [{ value: "overrides", label: t("tenants.tabs.overrides") }]
+        : []),
+      { value: "usage", label: t("tenants.tabs.usage") },
+    ],
     [t, user],
   );
+  // A tab the viewer can't open (or no tab) falls back to the overview.
   const requested = searchParams.get("tab");
-  const tab: TenantTab = items.find((item) => item.value === requested)?.value ?? "overview";
+  const tab: TenantTab =
+    isTenantTab(requested) && items.some((item) => item.value === requested)
+      ? requested
+      : "overview";
 
   if (query.isError) {
     const notFound = query.error instanceof ApiError && query.error.isNotFound;
@@ -129,7 +137,7 @@ export function TenantDetail({ tenantId, extraActions }: TenantDetailProps) {
         }}
       >
         <ResponsiveTabsList
-          items={[...items]}
+          items={items}
           value={tab}
           onValueChange={(value) => {
             setParams({ tab: value === "overview" ? null : value });
