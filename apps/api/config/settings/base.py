@@ -662,7 +662,7 @@ PLATFORM_DUNNING_GRACE_DAYS = env.int("PLATFORM_DUNNING_GRACE_DAYS", default=14)
 # Days a deprovisioned school's data is kept, restorable, before purge.
 PLATFORM_RETENTION_DAYS = env.int("PLATFORM_RETENTION_DAYS", default=90)
 # Usage share of a plan limit from which responses carry a quota warning.
-PLATFORM_QUOTA_WARN_RATIO = env.float("PLATFORM_QUOTA_WARN_RATIO", default=0.9)
+PLATFORM_QUOTA_WARN_RATIO = env.float("PLATFORM_QUOTA_WARN_RATIO", default=0.8)
 # Longest impersonation grant an operator may request.
 PLATFORM_IMPERSONATION_MAX_MINUTES = env.int("PLATFORM_IMPERSONATION_MAX_MINUTES", default=60)
 # Lifetime of the single-use code that hands an impersonation session to the dashboard.

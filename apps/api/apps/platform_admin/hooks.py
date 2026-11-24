@@ -5,7 +5,7 @@
 - the subscription state `:reinstate` follows (`core.tenancy.subscription_state`);
 - the plan step of feature resolution (`core.tenancy.features.register_plan_resolver`);
 - quotas (`core.tenancy.quotas`): the limits, the usage counters (the one implementation, in
-  `usage.services`) and the threshold notice.
+  `usage.services`; storage in bytes) and the threshold notice.
 
 A later PR adds the impersonation-grant checker to this same function.
 """
@@ -24,11 +24,12 @@ def register() -> None:
     )
     from apps.platform_admin.tenants.services import owner_invitation_eligible
     from apps.platform_admin.usage.quotas import threshold_reached
-    from apps.platform_admin.usage.services import USAGE_COUNTERS
+    from apps.platform_admin.usage.services import count_staff, count_storage_bytes, count_students
     from core.rbac.invitations.eligibility import register_invitation_eligibility
     from core.rbac.models import InvitationKind
     from core.tenancy.features import register_plan_resolver
     from core.tenancy.quotas import (
+        BYTES_PER_GB,
         register_quota_resolver,
         register_threshold_listener,
         register_usage_counter,
@@ -42,5 +43,8 @@ def register() -> None:
     # school already bound.
     register_quota_resolver(effective_limits)
     register_threshold_listener(threshold_reached)
-    for metric, counter in USAGE_COUNTERS.items():
-        register_usage_counter(metric, counter)
+    # The one implementation of each counter (`usage.services`); storage counts in bytes, so
+    # the check compares whole numbers against the GiB limit.
+    register_usage_counter("students", count_students)
+    register_usage_counter("staff", count_staff)
+    register_usage_counter("storage_gb", count_storage_bytes, unit=BYTES_PER_GB)

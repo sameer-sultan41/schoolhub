@@ -200,8 +200,11 @@ either this file or `project-status.md`.
   - **SMS-credit, AI-token and API-rate quotas.** Only `students`, `staff` and `storage_gb` are
     enforced; the others have no counter (the AI gateway keeps its own per-school budget).
   - **Platform-ops copies of `platform.quota-threshold`.** Owners only; `it_admin` and the
-    platform-ops channel of §12 wait for that channel. §12's 80 % is
-    `PLATFORM_QUOTA_WARN_RATIO` (0.9) as built.
+    platform-ops channel of §12 wait for that channel.
+  - **Two `meta.warnings` entry shapes.** `quota_warning` is `{code, message, details}`;
+    academics' older `teacher_over_norm` puts its fields beside `code`. `ApiMeta.warnings`
+    stays untyped until `teacher_over_norm` moves to the shared shape (or the type becomes a
+    union on `code`); clients read each entry by `code` meanwhile.
   - **A notice for a school already over its limit.** The notice fires on a crossing made by a
     create; a school pushed over by a lowered, acknowledged limit is told nothing until it next
     crosses a band in a new period.

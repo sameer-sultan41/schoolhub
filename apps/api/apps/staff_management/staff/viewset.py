@@ -18,7 +18,7 @@ from __future__ import annotations
 import base64
 
 from django.db.models import F
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import viewsets
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
@@ -45,11 +45,14 @@ from core.audit.services import record_audit
 from core.idempotency.services import replay_or_execute
 from core.imports.tabular import count_rows
 from core.jobs.services import create_job, enqueue_job
-from core.tenancy.quotas import check_quota
+from core.tenancy.quotas import QUOTA_EXCEEDED_RESPONSE, assert_room
 
 _MAX_IMPORT_FILE_BYTES = 5 * 1024 * 1024
 
 
+@extend_schema_view(
+    create=extend_schema(responses={201: StaffSerializer, 409: QUOTA_EXCEEDED_RESPONSE})
+)
 class StaffViewSet(_StaffModuleViewSetMixin, viewsets.ModelViewSet):
     """Staff master records (module doc §5.1)."""
 
@@ -243,7 +246,8 @@ class StaffImportViewSet(_StaffModuleViewSetMixin, viewsets.GenericViewSet):
         summary="Bulk-import staff from a CSV or .xlsx file",
         request=StaffImportRequestSerializer,
         responses={
-            202: OpenApiResponse(description="{'data': {'job_id': str, 'status': 'queued'}}")
+            202: OpenApiResponse(description="{'data': {'job_id': str, 'status': 'queued'}}"),
+            409: QUOTA_EXCEEDED_RESPONSE,
         },
     )
     def create(self, request, *args, **kwargs) -> Response:
@@ -259,8 +263,9 @@ class StaffImportViewSet(_StaffModuleViewSetMixin, viewsets.GenericViewSet):
 
         rows = count_rows(filename=upload.name, data=content)
         if rows:
-            # Refused before a job exists; each row's create checks again in the job.
-            check_quota(request.tenant.pk, "staff", adding=rows)
+            # Refuse-only, before a job exists: no warning or notice for rows that may never
+            # be created. Each row's create checks again in the job, and advises there.
+            assert_room(request.tenant.pk, "staff", adding=rows)
 
         job = create_job(
             tenant_id=request.tenant.pk,
