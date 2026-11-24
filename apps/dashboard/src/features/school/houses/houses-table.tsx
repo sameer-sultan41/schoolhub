@@ -8,7 +8,7 @@ import { Flag } from "lucide-react";
 import { SearchInput } from "@/components/search-input";
 import { HOUSE_KEYS } from "@/features/school/school-permissions";
 import { RemoveRecordDialog } from "@/features/school/shared/remove-record-dialog";
-import { StructureGridCard } from "@/features/school/shared/structure-grid-card";
+import { PagedGridCard } from "@/components/paged-grid-card";
 import { StructureStatusFilter } from "@/features/school/shared/structure-status";
 import { useStructureList } from "@/features/school/shared/use-structure-list";
 import { useCurrentUser } from "@/hooks/use-current-user";
@@ -64,7 +64,7 @@ export function HousesTable() {
 
   return (
     <>
-      <StructureGridCard
+      <PagedGridCard
         table={list.table}
         query={list.query}
         totalCount={list.totalCount}

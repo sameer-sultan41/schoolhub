@@ -18,8 +18,12 @@ export interface FormTextFieldProps<TFieldValues extends FieldValues> {
   label: string;
   maxLength?: number;
   description?: string;
-  type?: "text" | "email" | "tel" | "date";
+  type?: "text" | "email" | "tel" | "date" | "datetime-local";
   placeholder?: string;
+  disabled?: boolean;
+  /** The on-screen keyboard, e.g. `numeric` for a whole number kept as text (blank allowed). */
+  inputMode?: "text" | "numeric" | "decimal" | "email" | "tel";
+  autoComplete?: string;
 }
 
 /** A labelled text input with its own `FormMessage`, so a server error mapped onto it shows
@@ -32,6 +36,9 @@ export function FormTextField<TFieldValues extends FieldValues>({
   description,
   type = "text",
   placeholder,
+  disabled,
+  inputMode,
+  autoComplete,
 }: FormTextFieldProps<TFieldValues>) {
   return (
     <FormField
@@ -41,7 +48,17 @@ export function FormTextField<TFieldValues extends FieldValues>({
         <FormItem>
           <FormLabel>{label}</FormLabel>
           <FormControl>
-            <Input type={type} maxLength={maxLength} placeholder={placeholder} {...field} />
+            {/* `field` first: its own `disabled` (undefined unless the form sets one) must not
+                override the prop. */}
+            <Input
+              {...field}
+              type={type}
+              maxLength={maxLength}
+              placeholder={placeholder}
+              disabled={disabled ?? field.disabled}
+              inputMode={inputMode}
+              autoComplete={autoComplete}
+            />
           </FormControl>
           {description ? <FormDescription>{description}</FormDescription> : null}
           <FormMessage />

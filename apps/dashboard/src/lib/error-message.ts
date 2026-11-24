@@ -50,6 +50,7 @@ export function rekeyFieldErrors(
     details,
     requestId: error.requestId,
     meta: error.meta,
+    retryAfter: error.retryAfter,
   });
 }
 
@@ -88,6 +89,7 @@ export function foldUnknownFieldErrors(
       .map((detail) => (isFolded(detail.field) ? { ...detail, field: NON_FIELD, issue } : detail)),
     requestId: error.requestId,
     meta: error.meta,
+    retryAfter: error.retryAfter,
   });
 }
 

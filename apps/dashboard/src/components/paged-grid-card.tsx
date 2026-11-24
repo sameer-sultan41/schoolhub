@@ -25,7 +25,7 @@ import { DASHBOARD_DATA_GRID_LABELS } from "@/app/(app)/shell/data-grid-labels";
 import { LoadErrorCard } from "@/components/load-error-card";
 import { resolveErrorMessage } from "@/lib/error-message";
 
-export interface StructureGridCardProps<TRow extends object> {
+export interface PagedGridCardProps<TRow extends object> {
   table: Table<TRow>;
   query: Pick<UseQueryResult, "isPending" | "isFetching" | "isError" | "error" | "refetch">;
   totalCount: number;
@@ -39,9 +39,9 @@ export interface StructureGridCardProps<TRow extends object> {
   emptyState: ReactElement;
 }
 
-/** A paged structure list's card: the filters, the grid and its pager, or a load-failure card
- * with Try again. */
-export function StructureGridCard<TRow extends object>({
+/** A server-paged list's card (the School structure lists, the platform console's lists): the
+ * filters, the grid and its pager, or a load-failure card with Try again. */
+export function PagedGridCard<TRow extends object>({
   table,
   query,
   totalCount,
@@ -50,7 +50,7 @@ export function StructureGridCard<TRow extends object>({
   loadErrorMessage,
   filters,
   emptyState,
-}: StructureGridCardProps<TRow>) {
+}: PagedGridCardProps<TRow>) {
   const tErrors = useTranslations("errors");
 
   if (query.isError && !isStalePage) {

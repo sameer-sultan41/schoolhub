@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { useTranslations } from "next-intl";
 
 import { DEPARTMENT_KEYS } from "@/features/school/school-permissions";
-import { StructureToolbar } from "@/features/school/shared/structure-toolbar";
+import { SectionToolbar } from "@/components/section-toolbar";
 import { DepartmentFormDialog } from "./department-form-dialog";
 import { DepartmentsTable } from "./departments-table";
 
@@ -14,7 +14,7 @@ export function DepartmentsSection() {
   const t = useTranslations("school");
   return (
     <div className="space-y-5">
-      <StructureToolbar
+      <SectionToolbar
         title={t("departments.title")}
         description={t("departments.summary")}
         addLabel={t("departments.actions.create")}

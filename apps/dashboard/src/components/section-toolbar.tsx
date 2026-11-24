@@ -10,7 +10,7 @@ import { Toolbar, ToolbarActions, ToolbarHeading } from "@/app/(app)/shell/toolb
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { hasPermission } from "@/lib/permissions";
 
-export interface StructureToolbarProps {
+export interface SectionToolbarProps {
   title: string;
   description: string;
   addLabel: string;
@@ -20,15 +20,16 @@ export interface StructureToolbarProps {
   renderAddDialog: (onOpenChange: (open: boolean) => void) => ReactNode;
 }
 
-/** A structure section's title and its Add button. Fails closed: disabled, with a `title`
- * saying why, until the viewer's permissions are known. */
-export function StructureToolbar({
+/** A section's title and its Add button (the School structure sections, the platform console's
+ * lists). Fails closed: disabled, with a `title` saying why, until the viewer's permissions are
+ * known. */
+export function SectionToolbar({
   title,
   description,
   addLabel,
   createKey,
   renderAddDialog,
-}: StructureToolbarProps) {
+}: SectionToolbarProps) {
   const [addOpen, setAddOpen] = useState(false);
   const tCommon = useTranslations("common");
 
