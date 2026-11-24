@@ -63,7 +63,119 @@ describe("AuthService", () => {
       );
       expect(accessTokenStore.get()).toBe("at-1");
       expect(document.cookie).toContain("sh_session=1");
-      expect(result.access_token).toBe("at-1");
+      expect(result).toEqual(expect.objectContaining({ access_token: "at-1" }));
+    });
+
+    it("keeps an mfa_required challenge instead of starting a session", async () => {
+      const { hasPendingMfaChallenge, login } = await import("../auth-service");
+      const { accessTokenStore } = await import("@/lib/auth");
+      // `core/rbac/views.py` LoginView's challenge body: no token, no user, no cookie.
+      mockPost.mockResolvedValueOnce({ data: { mfa_required: true, mfa_token: "challenge-1" } });
+
+      const result = await login({ identifier: "ops", password: "secret" });
+
+      expect(result).toEqual({ mfa_required: true, mfa_token: "challenge-1" });
+      expect(accessTokenStore.get()).toBeNull();
+      expect(document.cookie).not.toContain("sh_session=1");
+      expect(hasPendingMfaChallenge()).toBe(true);
+    });
+  });
+
+  describe("second factor", () => {
+    const SIGNED_IN = {
+      access_token: "at-otp",
+      expires_in: 900,
+      user: {
+        id: "op1",
+        email: "ops@schoolhub.test",
+        phone: null,
+        full_name: "Platform Operator",
+        avatar_url: null,
+        locale: "en",
+        tenant_id: "",
+        tenant_summary: null,
+        roles: [],
+        permissions: ["platform.tenant.view"],
+        is_platform: true,
+        mfa_enabled: true,
+      },
+    };
+
+    async function challenged() {
+      const service = await import("../auth-service");
+      mockPost.mockResolvedValueOnce({ data: { mfa_required: true, mfa_token: "challenge-1" } });
+      await service.login({ identifier: "ops", password: "secret" });
+      return service;
+    }
+
+    it("trades the challenge and a code for a session through the auth proxy", async () => {
+      const { hasPendingMfaChallenge, verifyMfa } = await challenged();
+      const { accessTokenStore } = await import("@/lib/auth");
+      mockPost.mockResolvedValueOnce({ data: SIGNED_IN });
+
+      const result = await verifyMfa({ code: "123456" });
+
+      expect(mockPost).toHaveBeenLastCalledWith(
+        "/mfa:verify",
+        { mfa_token: "challenge-1", code: "123456" },
+        expect.objectContaining({ credentials: "include", skipAuthRefresh: true }),
+      );
+      expect(result.user.is_platform).toBe(true);
+      expect(accessTokenStore.get()).toBe("at-otp");
+      expect(document.cookie).toContain("sh_session=1");
+      // Spent: the server takes a challenge once.
+      expect(hasPendingMfaChallenge()).toBe(false);
+    });
+
+    it("keeps the challenge after a wrong code, and drops a dead one", async () => {
+      const { hasPendingMfaChallenge, verifyMfa } = await challenged();
+      const { ApiError } = await importApiClient();
+      const { accessTokenStore } = await import("@/lib/auth");
+      mockPost.mockRejectedValueOnce(
+        new ApiError({ code: "invalid_mfa_code", message: "Wrong.", status: 400, url: "/x" }),
+      );
+
+      await expect(verifyMfa({ code: "000000" })).rejects.toBeInstanceOf(ApiError);
+      expect(hasPendingMfaChallenge()).toBe(true);
+      expect(accessTokenStore.get()).toBeNull();
+
+      mockPost.mockRejectedValueOnce(
+        new ApiError({
+          code: "mfa_challenge_invalid",
+          message: "Expired.",
+          status: 400,
+          url: "/x",
+        }),
+      );
+      await expect(verifyMfa({ recovery_code: "AAAA-BBBB-CCCC-DDDD" })).rejects.toBeInstanceOf(
+        ApiError,
+      );
+      expect(hasPendingMfaChallenge()).toBe(false);
+    });
+
+    it("enrols directly against the API and confirms through the auth proxy", async () => {
+      const { confirmMfa, enrollMfa } = await import("../auth-service");
+      const { accessTokenStore } = await import("@/lib/auth");
+      mockPost
+        .mockResolvedValueOnce({
+          data: { secret: "test-secret", otpauth_uri: "otpauth://totp/SchoolHub:ops" },
+        })
+        .mockResolvedValueOnce({ data: { ...SIGNED_IN, recovery_codes: ["AAAA-BBBB-CCCC-DDDD"] } });
+
+      const enrolment = await enrollMfa();
+      const confirmed = await confirmMfa("123456");
+
+      expect(enrolment.otpauth_uri).toBe("otpauth://totp/SchoolHub:ops");
+      expect(mockPost).toHaveBeenNthCalledWith(1, "/auth/mfa:enroll");
+      expect(mockPost).toHaveBeenNthCalledWith(
+        2,
+        "/mfa:confirm",
+        { code: "123456" },
+        expect.objectContaining({ credentials: "include" }),
+      );
+      expect(confirmed.recovery_codes).toEqual(["AAAA-BBBB-CCCC-DDDD"]);
+      expect(accessTokenStore.get()).toBe("at-otp");
+      expect(document.cookie).toContain("sh_session=1");
     });
   });
 
