@@ -1,6 +1,6 @@
 import type { ApiMeta, ApiSuccessEnvelope } from "@schoolhub/types";
 import { ApiError, codeForStatus, parseErrorEnvelope } from "./errors";
-import { TRAILING_SLASH_PATTERN } from "./regex";
+import { DELAY_SECONDS_PATTERN, TRAILING_SLASH_PATTERN } from "./regex";
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -301,6 +301,7 @@ export class ApiClient {
       // ApiError, so fall through with payload left null.
     }
 
+    const retryAfter = retryAfterSeconds(response.headers.get("Retry-After"));
     const envelope = parseErrorEnvelope(payload);
     if (envelope) {
       return new ApiError({
@@ -311,6 +312,7 @@ export class ApiClient {
         details: envelope.details ?? [],
         requestId: envelope.request_id || requestId,
         meta: envelope.meta,
+        retryAfter,
       });
     }
 
@@ -320,6 +322,7 @@ export class ApiClient {
       status: response.status,
       url,
       requestId,
+      retryAfter,
     });
   }
 
@@ -341,4 +344,13 @@ export class ApiClient {
 
 export function createApiClient(config: ApiClientConfig): ApiClient {
   return new ApiClient(config);
+}
+
+/**
+ * A `Retry-After` header's delay in whole seconds. The API sends delay-seconds (DRF's throttle,
+ * `core/rbac/views.py`'s MFA lock); the HTTP-date form and anything unparseable read as `null`.
+ */
+function retryAfterSeconds(header: string | null): number | null {
+  const value = header?.trim() ?? "";
+  return DELAY_SECONDS_PATTERN.test(value) ? Number(value) : null;
 }
