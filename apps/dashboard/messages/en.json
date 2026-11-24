@@ -157,6 +157,49 @@
       "submit": "Save password",
       "submitting": "Saving",
       "success": "Your password has been changed. Sign in with the new one."
+    },
+    "mfa": {
+      "verify": {
+        "metaTitle": "Verify sign-in",
+        "title": "Two-step sign-in",
+        "subtitle": "Enter the six-digit code from your authenticator app.",
+        "recoverySubtitle": "Enter one of the recovery codes you saved when you set up two-step sign-in.",
+        "expiredSubtitle": "This sign-in has expired or was already used. Sign in again to get a new one.",
+        "signInAgain": "Sign in again",
+        "code": "Authentication code",
+        "codeHint": "It changes every 30 seconds.",
+        "codeInvalid": "Enter the six digits your app shows.",
+        "recoveryCode": "Recovery code",
+        "recoveryHint": "Each recovery code works once.",
+        "submit": "Verify",
+        "submitting": "Verifying",
+        "useRecovery": "Use a recovery code instead",
+        "useCode": "Use your authenticator app instead",
+        "lockedFor": "Too many wrong codes. Try again in {minutes, plural, one {# minute} other {# minutes}}.",
+        "lockedByOperator": "Too many wrong codes. Ask a platform administrator to unlock your account."
+      },
+      "enroll": {
+        "metaTitle": "Set up two-step sign-in",
+        "title": "Set up two-step sign-in",
+        "subtitle": "The platform console needs a second step at every sign-in: a code from an authenticator app on your phone.",
+        "start": "Set up authenticator",
+        "starting": "Setting up",
+        "signInAgain": "Sign in again",
+        "scanTitle": "Scan this code",
+        "scanSubtitle": "Scan the QR code with your authenticator app, then enter the code it shows.",
+        "qrTitle": "QR code for your authenticator app",
+        "manualEntry": "Can't scan it? Enter this key in the app instead:",
+        "codeHint": "The six-digit code your app shows now.",
+        "confirm": "Turn on two-step sign-in",
+        "confirming": "Turning on",
+        "codesTitle": "Save your recovery codes",
+        "codesSubtitle": "If you lose your phone, each of these codes signs you in once. They are shown only now.",
+        "copy": "Copy codes",
+        "copied": "Recovery codes copied.",
+        "copyFailed": "The codes couldn't be copied. Write them down instead.",
+        "savedConfirm": "I have saved these codes somewhere safe.",
+        "continue": "Continue to the console"
+      }
     }
   },
   "dashboard": {
@@ -4784,7 +4827,22 @@
     "requestId": "Reference: {requestId}",
     "pageErrorTitle": "Something went wrong",
     "pageErrorBody": "This page hit an unexpected error. Try again, or contact support if it keeps happening.",
-    "invalid_link": "This link is no longer valid."
+    "invalid_link": "This link is no longer valid.",
+    "mfa_required": "Sign in with your second factor to use the console.",
+    "invalid_mfa_code": "That code isn't right. Check your authenticator app and try again.",
+    "mfa_challenge_invalid": "This sign-in has expired. Sign in again.",
+    "mfa_already_enabled": "Two-step sign-in is already on for this account.",
+    "mfa_locked": "Too many wrong codes. Ask a platform administrator to unlock your account.",
+    "invalid_transition": "This school can't move to that status from where it is now.",
+    "retention_expired": "This school's retention window has closed, so it can't be restored.",
+    "no_live_subscription": "This school has no live subscription. Give a trial end date to reinstate it on a trial.",
+    "export_required": "Export this school's data before deleting it, or waive the export.",
+    "plan_in_use": "A school is still on this plan, so it can't be retired.",
+    "subscription_exists": "This school already has a live subscription. Change its plan instead.",
+    "grace_expired": "This school's payment grace has run out. Record a payment before reinstating it.",
+    "toggle_refused": "That feature can't be changed for this school right now.",
+    "limit_below_usage": "A limit would drop below a school's current usage.",
+    "quota_exceeded": "Your school has reached its plan's limit. Ask your administrator about upgrading."
   },
   "portal": {
     "shell": {
@@ -5068,6 +5126,379 @@
           "reasonTooLong": "The reason can be at most {max} characters.",
           "attachmentRequired": "This leave type needs a supporting document."
         }
+      }
+    }
+  },
+  "platform": {
+    "nav": {
+      "label": "Platform console sections",
+      "tenants": "Tenants",
+      "plans": "Plans",
+      "featureFlags": "Feature flags",
+      "reports": "Reports"
+    },
+    "status": {
+      "provisioning": "Provisioning",
+      "trial": "Trial",
+      "active": "Active",
+      "past_due": "Past due",
+      "suspended": "Suspended",
+      "deprovisioned": "Deprovisioned"
+    },
+    "subscriptionStatus": {
+      "trialing": "Trialing",
+      "active": "Active",
+      "past_due": "Past due",
+      "canceled": "Canceled"
+    },
+    "errors": {
+      "toggleRefused": "{flag} can't be changed for this school: {reason}",
+      "limitBelowUsage": "{count, plural, one {# school is} other {# schools are}} already over a limit this lowers."
+    },
+    "validation": {
+      "emailInvalid": "Enter a valid email address.",
+      "slugInvalid": "Use lowercase letters, digits and hyphens, starting and ending with a letter or digit.",
+      "codeInvalid": "Use lowercase letters, digits, hyphens and underscores.",
+      "amountInvalid": "Enter an amount, with at most two decimals.",
+      "currencyInvalid": "Use a three-letter currency code, such as PKR.",
+      "wholeNumber": "Enter a whole number."
+    },
+    "filters": {
+      "search": "Search",
+      "clearSearch": "Clear search",
+      "allStatuses": "All statuses",
+      "all": "All"
+    },
+    "list": {
+      "noMatches": "Nothing matches",
+      "noMatchesDescription": "Try another search or filter."
+    },
+    "tenants": {
+      "title": "Schools",
+      "summary": "Every school on the platform, and where each is in its lifecycle.",
+      "create": "New school",
+      "statusLabel": "School status",
+      "fields": {
+        "name": "Name",
+        "slug": "Subdomain",
+        "status": "Status",
+        "plan": "Plan",
+        "contact": "Contact",
+        "created": "Created"
+      },
+      "list": {
+        "caption": "Schools on the platform",
+        "loadError": "The schools couldn't be loaded.",
+        "searchPlaceholder": "Search by name or subdomain",
+        "emptyTitle": "No schools yet",
+        "emptyDescription": "Create a school, then provision it to invite its owner."
+      },
+      "form": {
+        "createTitle": "New school",
+        "editTitle": "Edit {name}",
+        "createDescription": "The school starts in provisioning. Provision it to invite its owner and start the trial.",
+        "createSubmit": "Create school",
+        "name": "School name",
+        "slug": "Subdomain",
+        "slugHint": "The school's address: <subdomain>.app.<platform>. Fixed once the school is provisioned.",
+        "slugLocked": "Fixed: the school is provisioned.",
+        "contactName": "Contact name",
+        "contactEmail": "Contact email",
+        "contactEmailHint": "Provisioning invites the school's owner here.",
+        "contactPhone": "Contact phone",
+        "created": "{name} created.",
+        "saved": "{name} saved."
+      },
+      "tabs": {
+        "overview": "Overview",
+        "subscription": "Subscription",
+        "overrides": "Feature overrides",
+        "usage": "Usage",
+        "more": "More"
+      },
+      "detail": {
+        "notFound": "This school doesn't exist, or was removed.",
+        "backToList": "Back to schools",
+        "loadError": "The school couldn't be loaded."
+      },
+      "overview": {
+        "contactName": "Contact",
+        "contactEmail": "Email",
+        "contactPhone": "Phone",
+        "plan": "Plan",
+        "noPlan": "No plan",
+        "regional": "Time zone, language, currency",
+        "created": "Created",
+        "provisioned": "Provisioned",
+        "trialEnds": "Trial ends",
+        "suspended": "Suspended",
+        "deprovisionAfter": "Data kept until"
+      }
+    },
+    "lifecycle": {
+      "reason": "Reason",
+      "reasonHint": "Kept in the audit log.",
+      "edit": {
+        "action": "Edit details"
+      },
+      "provision": {
+        "action": "Provision",
+        "title": "Provision {name}",
+        "description": "Seeds the school's settings, invites its owner at {email} and starts the trial.",
+        "submit": "Provision school",
+        "submitting": "Provisioning",
+        "done": "{name} is provisioned and on trial.",
+        "plan": "Trial plan",
+        "planHint": "The school trials on this plan, for its trial length.",
+        "noPlan": "No plan"
+      },
+      "suspend": {
+        "action": "Suspend",
+        "title": "Suspend {name}",
+        "description": "The school's users can't sign in until it is reinstated. Its data is kept.",
+        "submit": "Suspend school",
+        "submitting": "Suspending",
+        "done": "{name} is suspended."
+      },
+      "reinstate": {
+        "action": "Reinstate",
+        "title": "Reinstate {name}",
+        "description": "The school returns to the status its subscription implies. To put it back on a trial, give the trial's end.",
+        "submit": "Reinstate school",
+        "submitting": "Reinstating",
+        "done": "{name} is reinstated.",
+        "trialEndsAt": "Trial ends",
+        "trialEndsAtHint": "Only to reinstate on a trial. Must be in the future."
+      },
+      "delete": {
+        "action": "Delete",
+        "title": "Delete {name}",
+        "description": "The school stops working at once. Its data is kept for the retention window, inside which it can be restored.",
+        "submit": "Delete school",
+        "submitting": "Deleting",
+        "done": "{name} is deleted. It can be restored until its retention window closes.",
+        "waive": "Delete without an export",
+        "waiveHint": "Only when the school has agreed its data need not be exported. Recorded in the audit log.",
+        "export": {
+          "summary": "Export the school's data and files first, so they can be handed over.",
+          "start": "Export first",
+          "checkAgain": "Check the export again",
+          "running": "Exporting, {progress}%",
+          "progress": "Exporting: {progress}% done.",
+          "succeeded": "The export is ready. The school can now be deleted without a waiver.",
+          "timedOut": "The export is still running. Check it again in a moment.",
+          "failed": "The export failed.",
+          "download": "Download the export"
+        }
+      },
+      "restore": {
+        "action": "Restore",
+        "title": "Restore {name}",
+        "description": "The school comes back suspended, with its data. Reinstate it afterwards to reopen it.",
+        "submit": "Restore school",
+        "submitting": "Restoring",
+        "done": "{name} is restored, suspended."
+      }
+    },
+    "usage": {
+      "loadError": "The school's usage couldn't be loaded.",
+      "takenAt": "Snapshot taken {when}.",
+      "noSnapshot": "No usage snapshot yet. Snapshots are taken nightly, or now with Refresh.",
+      "refresh": "Refresh",
+      "refreshing": "Refreshing",
+      "unlimited": "unlimited",
+      "usedOf": "{used} of {limit}",
+      "metrics": {
+        "students": "Students",
+        "staff": "Staff",
+        "storage_gb": "Storage (GiB)",
+        "sms_credits": "SMS credits",
+        "ai_tokens": "AI tokens"
+      }
+    },
+    "overUsage": {
+      "title": "Lower limits below current usage?",
+      "description": "These schools already use more than the new limits. They keep what they have, but can't add more until they are under the limit.",
+      "confirm": "Save anyway",
+      "breach": "{metric}: {usage} in use, new limit {limit}"
+    },
+    "subscription": {
+      "loadError": "The subscription couldn't be loaded.",
+      "status": "Status",
+      "plan": "Plan",
+      "period": "Current period",
+      "provider": "Billing",
+      "planLine": "{name} ({code}), {amount} {currency}",
+      "periodLine": "{start} to {end}",
+      "noSubscription": "No live subscription.",
+      "noSubscriptionTrial": "No live subscription. The trial ends {date}.",
+      "choosePlan": "Choose a plan",
+      "periodStart": "Period starts",
+      "periodEnd": "Period ends",
+      "activate": {
+        "action": "Activate",
+        "title": "Activate {name}'s subscription",
+        "descriptionNew": "The school starts paying for the plan you choose, from the period you set.",
+        "descriptionTrial": "The trial converts to a paid subscription on its plan, from the period you set.",
+        "submit": "Activate subscription",
+        "submitting": "Activating",
+        "done": "{name}'s subscription is active."
+      },
+      "recordPayment": {
+        "action": "Record payment",
+        "title": "Record a payment for {name}",
+        "description": "The paid period runs on to the date you set, and a past-due school recovers.",
+        "submit": "Record payment",
+        "submitting": "Recording",
+        "done": "Payment recorded for {name}.",
+        "paidThrough": "Paid through",
+        "paidThroughHint": "The end of the period this payment covers."
+      },
+      "markFailed": {
+        "action": "Mark payment failed",
+        "title": "Mark {name}'s payment failed?",
+        "description": "The subscription and the school become past due, and the payment grace starts.",
+        "confirm": "Mark failed",
+        "done": "{name} is past due."
+      },
+      "changePlan": {
+        "action": "Change plan",
+        "title": "Change {name}'s plan",
+        "description": "Module access and limits follow the new plan at once.",
+        "submit": "Change plan",
+        "submitting": "Changing",
+        "done": "{name} is on the new plan."
+      }
+    },
+    "overrides": {
+      "summary": "An override decides a flag for this school before its plan or the flag's default does.",
+      "create": "Add override",
+      "empty": "No overrides: the plan and the flags' defaults decide.",
+      "caption": "{name}'s feature overrides",
+      "flag": "Flag",
+      "state": "State",
+      "reason": "Reason",
+      "expiresAt": "Expires",
+      "actions": "Actions",
+      "on": "On",
+      "off": "Off",
+      "never": "Never",
+      "removeRow": "Remove the {flag} override",
+      "loadError": "The overrides couldn't be loaded.",
+      "createTitle": "Add an override for {name}",
+      "createDescription": "It replaces any override this school has for the same flag.",
+      "chooseFlag": "Choose a flag",
+      "enabled": "Turn the feature on",
+      "enabledHint": "Off forces it off for this school, whatever its plan says.",
+      "reasonHint": "Why this school gets it: a pilot, support, a commercial deal.",
+      "expiresAtHint": "Leave blank for an override that never lapses.",
+      "saved": "{flag} override saved.",
+      "removed": "{flag} override removed.",
+      "removeTitle": "Remove the {flag} override?",
+      "removeDescription": "The school's plan, or the flag's default, decides again.",
+      "remove": "Remove override"
+    },
+    "plans": {
+      "title": "Plans",
+      "summary": "What a school can buy: its modules, its limits and its price.",
+      "create": "New plan",
+      "active": "Active",
+      "retired": "Retired",
+      "priceFor": "{amount} {currency} / {period}",
+      "editRow": "Edit {name}",
+      "retireRow": "Retire {name}",
+      "period": {
+        "monthly": "month",
+        "annual": "year"
+      },
+      "fields": {
+        "name": "Name",
+        "code": "Code",
+        "price": "Price",
+        "modules": "Modules",
+        "status": "Status"
+      },
+      "list": {
+        "caption": "Plans in the catalog",
+        "loadError": "The plans couldn't be loaded.",
+        "searchPlaceholder": "Search by name or code",
+        "emptyTitle": "No plans yet",
+        "emptyDescription": "Add a plan to sell schools their modules and limits."
+      },
+      "form": {
+        "createTitle": "New plan",
+        "editTitle": "Edit {name}",
+        "editDescription": "Every school on this plan follows the change at once.",
+        "created": "{name} added.",
+        "saved": "{name} saved.",
+        "name": "Plan name",
+        "code": "Code",
+        "codeHint": "A stable key. Fixed once the plan exists.",
+        "codeLocked": "Fixed: a plan's code never changes.",
+        "description": "Description",
+        "price": "Price per period",
+        "currency": "Currency",
+        "currencyHint": "A three-letter code, such as PKR.",
+        "billingPeriod": "Billing period",
+        "trialDays": "Trial length (days)",
+        "isActive": "Takes new subscribers",
+        "isActiveHint": "Off retires the plan for new schools; schools already on it stay.",
+        "limitsLegend": "Limits",
+        "limitsHint": "Blank is unlimited. Students, staff and storage are enforced; the others are recorded.",
+        "modules": "Modules",
+        "modulesHint": "The modules a school on this plan can use.",
+        "noModules": "No module flags to choose from.",
+        "limits": {
+          "students": "Students limit",
+          "staff": "Staff limit",
+          "storage_gb": "Storage limit (GiB)",
+          "sms_credits": "SMS credits limit",
+          "ai_tokens": "AI tokens limit"
+        }
+      },
+      "retire": {
+        "title": "Retire {name}?",
+        "description": "It stops taking new subscribers. A plan a school is still on can't be retired.",
+        "confirm": "Retire plan",
+        "done": "{name} retired."
+      }
+    },
+    "flags": {
+      "title": "Feature flags",
+      "summary": "Each flag's platform default and kill switch. A school's own overrides are on its page.",
+      "caption": "Feature flags",
+      "loadError": "The flags couldn't be loaded.",
+      "searchPlaceholder": "Search by key",
+      "emptyTitle": "No flags",
+      "emptyDescription": "Flags are registered by the modules that use them.",
+      "key": "Key",
+      "description": "Description",
+      "defaultEnabled": "On by default",
+      "killSwitch": "Kill switch",
+      "killSwitchOn": "Kill switch",
+      "updated": "Updated",
+      "on": "On",
+      "off": "Off",
+      "editRow": "Edit {key}",
+      "editTitle": "Edit {key}",
+      "editDescription": "This changes the flag for every school at once, except where a school's own override decides.",
+      "defaultEnabledHint": "What a school gets when neither an override nor its plan decides.",
+      "killSwitchHint": "A kill switch can only be turned on by its default: no school's override can turn it on.",
+      "saved": "{key} saved."
+    },
+    "reports": {
+      "title": "Reports",
+      "summary": "Platform-wide figures, from the nightly usage snapshots.",
+      "downloadCsv": "Download CSV",
+      "downloading": "Downloading",
+      "choose": "Report",
+      "loadError": "The report couldn't be loaded.",
+      "generated": "Generated {when}.",
+      "noRows": "Nothing to show yet.",
+      "keys": {
+        "tenantOverview": "Tenant overview",
+        "revenue": "Revenue",
+        "usage": "Usage and adoption"
       }
     }
   }

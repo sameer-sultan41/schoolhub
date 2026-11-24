@@ -11,6 +11,7 @@ import {
   Package,
   School,
   ScrollText,
+  ServerCog,
   Settings,
   Shield,
   ShieldUser,
@@ -28,6 +29,7 @@ import { ATTENDANCE_SECTIONS } from "@/features/attendance/attendance-sections";
 import { COMMUNICATION_SECTIONS } from "@/features/communication/communication-sections";
 import { EXAMS_SECTIONS } from "@/features/exams/exams-sections";
 import { FEES_SECTIONS } from "@/features/fees/fees-sections";
+import { PLATFORM_SECTIONS } from "@/features/platform/platform-sections";
 import { SCHOOL_SECTIONS } from "@/features/school/school-sections";
 import { TIMETABLE_SECTIONS } from "@/features/timetable/timetable-sections";
 
@@ -57,6 +59,13 @@ export const MENU_SIDEBAR: MenuConfig = [
       { title: "Light Sidebar", path: Paths.DASHBOARD },
       { title: "Dark Sidebar", path: "/dev/metronic-demo1/dark-sidebar" },
     ],
+  },
+  {
+    title: "Platform",
+    icon: ServerCog,
+    // Each child needs a console view key, which no school role holds; with none visible the
+    // whole entry drops out, so a school account never sees it (`filterMenuByAccess`).
+    children: sectionMenuItems(PLATFORM_SECTIONS),
   },
   { heading: "School" },
   {

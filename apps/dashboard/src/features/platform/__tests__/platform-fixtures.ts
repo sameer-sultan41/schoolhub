@@ -79,3 +79,31 @@ export function apiError(
     meta: extra.meta,
   });
 }
+
+/** A one-page `Page<T>`, as `fetchPage` returns a page-numbered list. */
+export function onePage<T>(items: T[]) {
+  return {
+    items,
+    pagination: { page: 1, page_size: 25, total_count: items.length, total_pages: 1 },
+  };
+}
+
+/** Every console key: an operator who may do anything the console offers. */
+export const ALL_PLATFORM_KEYS: PermissionKey[] = [
+  "platform.tenant.view",
+  "platform.tenant.provision",
+  "platform.tenant.update",
+  "platform.tenant.suspend",
+  "platform.tenant.reinstate",
+  "platform.tenant.export",
+  "platform.tenant.delete",
+  "platform.plan.view",
+  "platform.plan.create",
+  "platform.plan.update",
+  "platform.plan.delete",
+  "platform.subscription.view",
+  "platform.subscription.update",
+  "platform.feature-flag.view",
+  "platform.feature-flag.update",
+  "platform.report.view",
+];
