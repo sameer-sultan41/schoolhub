@@ -18795,6 +18795,13 @@ export interface operations {
                     "application/json": components["schemas"]["File"];
                 };
             };
+            /** @description quota_exceeded: the school's plan limit would be passed (`meta` {metric, limit, usage, adding}). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description A portal user asked for a staff-only purpose */
             422: {
                 headers: {
@@ -24048,6 +24055,13 @@ export interface operations {
                     "application/json": components["schemas"]["Staff"];
                 };
             };
+            /** @description quota_exceeded: the school's plan limit would be passed (`meta` {metric, limit, usage, adding}). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     staff_attendance_list: {
@@ -24305,6 +24319,13 @@ export interface operations {
         responses: {
             /** @description {'data': {'job_id': str, 'status': 'queued'}} */
             202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description quota_exceeded: the school's plan limit would be passed (`meta` {metric, limit, usage, adding}). */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -25033,6 +25054,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description quota_exceeded: the school's plan limit would be passed (`meta` {metric, limit, usage, adding}). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     student_promotions_list: {
@@ -25490,6 +25518,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Student"];
                 };
+            };
+            /** @description quota_exceeded: the school's plan limit would be passed (`meta` {metric, limit, usage, adding}). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
