@@ -86,6 +86,9 @@ either this file or `project-status.md`.
   - `CONTACT_BODY_MAX_BYTES` (32 KB) could clip a 5000-character message written in a script of four-byte characters; raise it if a school reports one.
   - The contact tenant throttle keys on the raw `X-Tenant-Slug` before the school is resolved; bogus slugs only fill their own buckets, but a shape-valid flood costs a cache key each.
 
+- **Website & CMS, external review follow-ups** (2026-11-25; non-blocking):
+  - **Content lifecycle services repeat themselves.** `news_posts`, `school_events` and `gallery` services each hand-write create/update/publish/unpublish/archive with the same lock, publish-gate, file-visibility and revalidation steps. Extract one lifecycle helper in `website_cms/content.py` when one of them next changes.
+  - **Custom-domain DNS checks run one after another.** `DnspythonVerifier.check` resolves TXT then CNAME, each with its own 3 s timeout, so a dead domain costs up to 6 s in the beat re-verify sweep (at most 5 domains per school). Resolve both concurrently if the sweep grows slow.
 - **Website & CMS, PR E follow-ups** (the renderer on the public contract; plan `docs/superpowers/plans/2026-11-15-website-cms.md`):
   - **Video embeds.** An album's video item is a link to YouTube or Vimeo, not an `<iframe>`: an embed needs a CSP `frame-src` decision and a sandboxed iframe (the API checks only the host).
   - **Preview shows only the token's draft.** With a preview token the API answers that page alone (ADR-0039), so another page shows its published version (the renderer falls back), and another draft is not found. The preview cookie is `Secure`, so a preview over plain `http` on a hostname other than `localhost` does not keep its token.

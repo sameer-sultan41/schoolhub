@@ -1,3 +1,5 @@
+import { Button } from "@schoolhub/ui";
+
 import { isPreviewServed } from "@/lib/preview";
 import { COPY } from "@/themes/default/copy";
 
@@ -17,9 +19,9 @@ export function PreviewBanner() {
       <strong className="font-semibold">{COPY.preview.label}</strong>
       <span>{COPY.preview.body}</span>
       <form method="post" action="/api/preview/exit">
-        <button type="submit" className="underline underline-offset-2">
+        <Button type="submit" variant="inverse" mode="link" underline="solid">
           {COPY.preview.exit}
-        </button>
+        </Button>
       </form>
     </aside>
   );
