@@ -30,6 +30,12 @@ export interface ReadOptions {
   previewToken?: string | null;
 }
 
+/** A successful read: the unwrapped `data` and the response's headers. */
+export interface ReadResult<TData> {
+  data: TData;
+  headers: Headers;
+}
+
 export class ContentFetchError extends Error {
   readonly status: number;
   constructor(message: string, status: number) {
@@ -55,10 +61,13 @@ function buildUrl(path: string, host: string, query: ReadOptions["query"]): stri
  * GET a public-content resource as the machine client. Every read carries `?host=`
  * (website-cms §16), so a read without a school cannot be written.
  *
- * @returns the unwrapped `data`, or `null` on 404 so callers can render `notFound()`
- *          instead of a 500. Any other failure throws.
+ * @returns the unwrapped `data` with the response headers, or `null` on 404 so callers can
+ *          render `notFound()` instead of a 500. Any other failure throws.
  */
-export async function readJson<TData>(path: string, options: ReadOptions): Promise<TData | null> {
+export async function readJsonWithHeaders<TData>(
+  path: string,
+  options: ReadOptions,
+): Promise<ReadResult<TData> | null> {
   const headers: Record<string, string> = {
     Accept: "application/json",
     Authorization: `Bearer ${env.WEBSITE_MACHINE_TOKEN}`,
@@ -90,7 +99,12 @@ export async function readJson<TData>(path: string, options: ReadOptions): Promi
   }
 
   const payload = (await response.json()) as ApiSuccessEnvelope<TData>;
-  return payload.data;
+  return { data: payload.data, headers: response.headers };
+}
+
+/** `readJsonWithHeaders` without the response headers, for callers that need only the data. */
+export async function readJson<TData>(path: string, options: ReadOptions): Promise<TData | null> {
+  return (await readJsonWithHeaders<TData>(path, options))?.data ?? null;
 }
 
 /** Per-tenant cache tag, so a publish event can invalidate exactly one school's pages. */

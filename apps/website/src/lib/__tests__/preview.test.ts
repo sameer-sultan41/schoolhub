@@ -1,6 +1,11 @@
 import type * as ReactModule from "react";
 import { cookies } from "next/headers";
-import { PREVIEW_COOKIE, PREVIEW_TOKEN_MAX_LENGTH, getPreviewToken } from "../preview";
+import {
+  PREVIEW_COOKIE,
+  PREVIEW_TOKEN_MAX_LENGTH,
+  getPreviewToken,
+  previewMaxAgeSeconds,
+} from "../preview";
 
 jest.mock("react", () => ({
   ...jest.requireActual<typeof ReactModule>("react"),
@@ -32,5 +37,23 @@ describe("getPreviewToken", () => {
     await expect(getPreviewToken()).resolves.toBeNull();
     withCookie("a".repeat(PREVIEW_TOKEN_MAX_LENGTH + 1));
     await expect(getPreviewToken()).resolves.toBeNull();
+  });
+});
+
+describe("previewMaxAgeSeconds", () => {
+  it("is the seconds the API reports, as they are", () => {
+    expect(previewMaxAgeSeconds("300")).toBe(300);
+    expect(previewMaxAgeSeconds("1")).toBe(1);
+  });
+
+  it.each([
+    ["none left", "0"],
+    ["negative", "-5"],
+    ["fractional", "1.5"],
+    ["not a number", "soon"],
+    ["empty", ""],
+    ["missing", null],
+  ])("is null (no cookie) when the header is %s", (_label, header) => {
+    expect(previewMaxAgeSeconds(header)).toBeNull();
   });
 });

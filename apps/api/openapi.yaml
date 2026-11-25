@@ -10343,6 +10343,13 @@ paths:
       - machineToken: []
       responses:
         '200':
+          headers:
+            X-Preview-Expires-In:
+              schema:
+                type: integer
+              description: 'Sent only when a valid preview token was presented: whole
+                seconds it still works (0 or more). The renderer sets its preview
+                cookie''s life to this.'
           content:
             application/json:
               schema:
@@ -10490,6 +10497,13 @@ paths:
       - machineToken: []
       responses:
         '200':
+          headers:
+            X-Preview-Expires-In:
+              schema:
+                type: integer
+              description: 'Sent only when a valid preview token was presented: whole
+                seconds it still works (0 or more). The renderer sets its preview
+                cookie''s life to this.'
           content:
             application/json:
               schema:

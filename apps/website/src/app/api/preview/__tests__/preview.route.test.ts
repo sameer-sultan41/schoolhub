@@ -5,14 +5,21 @@
  * which jsdom (this project's default testEnvironment) does not provide.
  */
 import { NextRequest } from "next/server";
-import { readJson } from "@/lib/api";
+import { readJsonWithHeaders } from "@/lib/api";
 import { makePage } from "@/test-utils";
 import { GET } from "../route";
 
 jest.mock("next/headers", () => ({ cookies: jest.fn() }));
-jest.mock("@/lib/api", () => ({ readJson: jest.fn() }));
+jest.mock("@/lib/api", () => ({ readJsonWithHeaders: jest.fn() }));
 
-const mockReadJson = readJson as jest.MockedFunction<typeof readJson>;
+const mockReadJson = readJsonWithHeaders as jest.MockedFunction<typeof readJsonWithHeaders>;
+
+/** A 200 from the API: the page plus the token's remaining seconds in its expiry header. */
+function apiPage(page: ReturnType<typeof makePage>, expiresIn: number | string | null = 300) {
+  const headers = new Headers();
+  if (expiresIn !== null) headers.set("X-Preview-Expires-In", String(expiresIn));
+  return { data: page, headers };
+}
 
 const HOST = "cityschool.schoolhub.pk";
 
@@ -58,7 +65,9 @@ describe("GET /api/preview", () => {
   });
 
   it("stores the token and redirects to the API's page path", async () => {
-    mockReadJson.mockResolvedValue(makePage({ slug: "about", path: "/about", status: "draft" }));
+    mockReadJson.mockResolvedValue(
+      apiPage(makePage({ slug: "about", path: "/about", status: "draft" })),
+    );
     const response = await GET(makeRequest("?token=tok-1"));
 
     expect(response.status).toBe(307);
@@ -68,12 +77,36 @@ describe("GET /api/preview", () => {
     expect(cookie).toMatch(/HttpOnly/i);
     expect(cookie).toMatch(/Secure/i);
     expect(cookie).toMatch(/SameSite=lax/i);
-    expect(cookie).toMatch(/Max-Age=600/i);
+    expect(cookie).toMatch(/Max-Age=300/i);
     expect(cookie).toMatch(/Path=\//i);
   });
 
+  it("sets the cookie's maxAge to the token's remaining life, not a flat 600 s", async () => {
+    mockReadJson.mockResolvedValue(apiPage(makePage(), 90));
+    const response = await GET(makeRequest("?token=tok-1"));
+
+    expect(response.headers.get("set-cookie")).toMatch(/Max-Age=90(;|$)/i);
+  });
+
+  it("sets no cookie for a token with no seconds left", async () => {
+    mockReadJson.mockResolvedValue(apiPage(makePage(), 0));
+    const response = await GET(makeRequest("?token=tok-1"));
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("sets no cookie when the API sent no expiry (fails closed)", async () => {
+    mockReadJson.mockResolvedValue(apiPage(makePage(), null));
+    const response = await GET(makeRequest("?token=tok-1"));
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
   it("ignores a slug in the request: the redirect is the API's path (no open redirect)", async () => {
-    mockReadJson.mockResolvedValue(makePage({ slug: "about", path: "/about" }));
+    mockReadJson.mockResolvedValue(apiPage(makePage({ slug: "about", path: "/about" })));
     const response = await GET(makeRequest("?token=tok-1&slug=//evil.example/phish"));
 
     expect(response.headers.get("location")).toBe("/about");
@@ -84,13 +117,15 @@ describe("GET /api/preview", () => {
   });
 
   it("redirects the homepage to /", async () => {
-    mockReadJson.mockResolvedValue(makePage());
+    mockReadJson.mockResolvedValue(apiPage(makePage()));
     const response = await GET(makeRequest("?token=tok-1"));
     expect(response.headers.get("location")).toBe("/");
   });
 
   it("redirects a nested page to its full path", async () => {
-    mockReadJson.mockResolvedValue(makePage({ slug: "about/history", path: "/about/history" }));
+    mockReadJson.mockResolvedValue(
+      apiPage(makePage({ slug: "about/history", path: "/about/history" })),
+    );
     const response = await GET(makeRequest("?token=tok-1"));
     expect(response.headers.get("location")).toBe("/about/history");
   });
@@ -106,7 +141,7 @@ describe("GET /api/preview", () => {
     "/about/",
     "",
   ])("refuses a page path outside the page-slug grammar (%p)", async (path) => {
-    mockReadJson.mockResolvedValue(makePage({ path }));
+    mockReadJson.mockResolvedValue(apiPage(makePage({ path })));
     const response = await GET(makeRequest("?token=tok-1"));
 
     expect(response.status).toBe(404);
@@ -116,7 +151,7 @@ describe("GET /api/preview", () => {
   it("never sets Next's build-wide Draft Mode cookie, only the school's token cookie", async () => {
     // `__prerender_bypass` is one value per build: set here, it would open uncached renders on
     // every school's host. The token cookie is the only preview switch.
-    mockReadJson.mockResolvedValue(makePage({ slug: "about", path: "/about" }));
+    mockReadJson.mockResolvedValue(apiPage(makePage({ slug: "about", path: "/about" })));
     const response = await GET(makeRequest("?token=tok-1"));
 
     const cookie = response.headers.get("set-cookie") ?? "";

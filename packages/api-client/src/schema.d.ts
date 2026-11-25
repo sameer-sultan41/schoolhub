@@ -23431,6 +23431,8 @@ export interface operations {
         responses: {
             200: {
                 headers: {
+                    /** @description Sent only when a valid preview token was presented: whole seconds it still works (0 or more). The renderer sets its preview cookie's life to this. */
+                    "X-Preview-Expires-In"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -23549,6 +23551,8 @@ export interface operations {
         responses: {
             200: {
                 headers: {
+                    /** @description Sent only when a valid preview token was presented: whole seconds it still works (0 or more). The renderer sets its preview cookie's life to this. */
+                    "X-Preview-Expires-In"?: number;
                     [name: string]: unknown;
                 };
                 content: {

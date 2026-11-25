@@ -15,6 +15,10 @@ jest.mock("next/navigation", () => ({
     throw new Error("NEXT_NOT_FOUND");
   }),
 }));
+// The banner has its own test (components/__tests__/preview-banner.test.tsx).
+jest.mock("@/components/preview-banner", () => ({
+  PreviewBanner: () => <div data-testid="preview-banner" />,
+}));
 jest.mock("@/lib/content", () => ({
   getPage: jest.fn(),
   getSite: jest.fn(),
@@ -247,6 +251,22 @@ describe("RenderPage", () => {
     expect(mockGetPage).toHaveBeenCalledWith("t1", HOST, "about");
     expect(mockGetSite).toHaveBeenCalledWith("t1", HOST);
     expect(mockGetTheme).toHaveBeenCalledWith("default");
+  });
+
+  it("renders the preview banner on a page, and not on the unavailable notice", async () => {
+    mockResolveTenant.mockResolvedValue(active());
+    mockGetPage.mockResolvedValue(makePage());
+    const { unmount } = render(await RenderPage({ segments: [] }));
+    expect(screen.getByTestId("preview-banner")).toBeInTheDocument();
+    unmount();
+
+    mockResolveTenant.mockResolvedValue({
+      status: "unavailable",
+      tenant: makeTenant({ website_status: "unpublished" }),
+      host: HOST,
+    });
+    render(await RenderPage({ segments: [] }));
+    expect(screen.queryByTestId("preview-banner")).not.toBeInTheDocument();
   });
 
   it("renders sections in position order with the host and page, skipping unrendered types", async () => {

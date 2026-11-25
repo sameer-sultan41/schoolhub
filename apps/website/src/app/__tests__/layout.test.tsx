@@ -8,10 +8,6 @@ jest.mock("@/lib/tenant", () => ({
   resolveTenant: jest.fn(),
   customDomainRedirectTarget: jest.fn(),
 }));
-// An async server component; its own test covers it (components/__tests__/preview-banner.test.tsx).
-jest.mock("@/components/preview-banner", () => ({
-  PreviewBanner: () => <div data-testid="preview-banner" />,
-}));
 // The real permanentRedirect() never returns (type "never"); the mock throws the same way.
 jest.mock("next/navigation", () => ({
   permanentRedirect: jest.fn(() => {
@@ -46,7 +42,6 @@ describe("RootLayout", () => {
     expect(document.documentElement).toHaveAttribute("lang", "en");
     expect(document.documentElement).toHaveAttribute("dir", "ltr");
     expect(screen.getByText("content")).toBeInTheDocument();
-    expect(screen.getByTestId("preview-banner")).toBeInTheDocument();
     expect(mockPermanentRedirect).not.toHaveBeenCalled();
   });
 

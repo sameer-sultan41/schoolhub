@@ -1,12 +1,15 @@
-import { getPreviewToken } from "@/lib/preview";
+import { Button } from "@schoolhub/ui";
+
+import { isPreviewServed } from "@/lib/preview";
 import { COPY } from "@/themes/default/copy";
 
 /**
- * Tells an editor they are looking at unpublished content, with the way out, while the preview
- * cookie is held. Once it expires the reads are public again and the banner goes with it.
+ * Tells an editor they are looking at unpublished content, with the way out. It shows only when
+ * this render's page was served as a preview, never for a junk or expired cookie or after the
+ * read fell back to published content. Render it after the page read has settled.
  */
-export async function PreviewBanner() {
-  if ((await getPreviewToken()) === null) return null;
+export function PreviewBanner() {
+  if (!isPreviewServed()) return null;
 
   return (
     <aside
@@ -16,9 +19,9 @@ export async function PreviewBanner() {
       <strong className="font-semibold">{COPY.preview.label}</strong>
       <span>{COPY.preview.body}</span>
       <form method="post" action="/api/preview/exit">
-        <button type="submit" className="underline underline-offset-2">
+        <Button type="submit" variant="inverse" mode="link" underline="solid">
           {COPY.preview.exit}
-        </button>
+        </Button>
       </form>
     </aside>
   );
