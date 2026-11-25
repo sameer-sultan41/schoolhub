@@ -163,6 +163,29 @@ describe("gallery items", () => {
     });
   });
 
+  it("holds Upload and Add video until the list has been read again", async () => {
+    const reordered = [first, third, second];
+    reorderItems.mockResolvedValue(reordered);
+    const user = await renderAlbum();
+    let settle: (items: GalleryItemRecord[]) => void = () => undefined;
+    fetchItems.mockReturnValue(
+      new Promise<GalleryItemRecord[]>((resolve) => {
+        settle = resolve;
+      }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Move item 2 later" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Upload photos" })).toBeDisabled();
+    });
+    expect(screen.getByRole("button", { name: "Add video" })).toBeDisabled();
+    settle(reordered);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Upload photos" })).toBeEnabled();
+    });
+  });
+
   it("puts the order back and says why when the server refuses it", async () => {
     reorderItems.mockRejectedValue(
       violation("ids", "invalid_item_ids", "list every item of this album exactly once."),
