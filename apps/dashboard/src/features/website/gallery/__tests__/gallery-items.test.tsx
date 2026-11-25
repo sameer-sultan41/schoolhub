@@ -10,6 +10,7 @@ import {
   violation,
 } from "@/features/website/shared/__tests__/content-fixtures";
 import { FileUploadError, Services, type GalleryItemRecord } from "@/services";
+import { GALLERY_ALBUM_ITEMS_MAX } from "@/services/modules/website/gallery-albums/gallery-albums-constant";
 import { mocked } from "@/test-fixtures/list-screen";
 import { USER_LOADED, UserLoaded } from "@/test-fixtures/user-loaded";
 import { buildUser, renderWithClient, renderWithProviders, setUrl } from "@/test-utils";
@@ -88,6 +89,16 @@ async function renderAlbum() {
   return userEvent.setup();
 }
 
+function albumItems(count: number) {
+  return Array.from({ length: count }, (_, index) =>
+    galleryItem({
+      id: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+      caption: `Photo ${String(index + 1)}`,
+      position: index,
+    }),
+  );
+}
+
 /** The captions in the order the grid shows them. */
 function shownOrder() {
   return within(screen.getByRole("list", { name: "Album items" }))
@@ -149,6 +160,29 @@ describe("gallery items", () => {
     settle([first, third, second]);
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Edit item 1" })).toBeEnabled();
+    });
+  });
+
+  it("holds Upload and Add video until the list has been read again", async () => {
+    const reordered = [first, third, second];
+    reorderItems.mockResolvedValue(reordered);
+    const user = await renderAlbum();
+    let settle: (items: GalleryItemRecord[]) => void = () => undefined;
+    fetchItems.mockReturnValue(
+      new Promise<GalleryItemRecord[]>((resolve) => {
+        settle = resolve;
+      }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Move item 2 later" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Upload photos" })).toBeDisabled();
+    });
+    expect(screen.getByRole("button", { name: "Add video" })).toBeDisabled();
+    settle(reordered);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Upload photos" })).toBeEnabled();
     });
   });
 
@@ -298,24 +332,39 @@ describe("gallery items", () => {
 
   it("holds Upload photos and Add video, with the reason, once the album is full", async () => {
     // `GALLERY_ALBUM_ITEMS_MAX` items: the server refuses one more (`too_many_items`).
-    fetchItems.mockResolvedValue(
-      Array.from({ length: 100 }, (_, index) =>
-        galleryItem({
-          id: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
-          caption: `Photo ${String(index + 1)}`,
-          position: index,
-        }),
-      ),
-    );
+    fetchItems.mockResolvedValue(albumItems(GALLERY_ALBUM_ITEMS_MAX));
     await renderAlbum();
 
-    const reason =
-      "This album holds the most photos and videos it can (100). Remove some to add more.";
+    const reason = `This album holds the most photos and videos it can (${String(GALLERY_ALBUM_ITEMS_MAX)}). Remove some to add more.`;
     for (const name of ["Upload photos", "Add video"]) {
       const button = screen.getByRole("button", { name });
       expect(button).toBeDisabled();
       expect(button).toHaveAccessibleDescription(reason);
     }
+  });
+
+  it("uploads only the free slots near the cap and says how many files were skipped", async () => {
+    fetchItems.mockResolvedValue(albumItems(GALLERY_ALBUM_ITEMS_MAX - 2));
+    uploadFile.mockResolvedValue("file-x");
+    createItem.mockResolvedValue(first);
+    const user = await renderAlbum();
+
+    const input = screen.getByLabelText("Upload photos", { selector: "input" });
+    await user.upload(
+      input,
+      ["a", "b", "c", "d", "e"].map(
+        (name) => new File([name], `${name}.png`, { type: "image/png" }),
+      ),
+    );
+
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith("2 photos added.");
+    });
+    expect(uploadFile).toHaveBeenCalledTimes(2);
+    expect(createItem).toHaveBeenCalledTimes(2);
+    expect(toast.warning).toHaveBeenCalledWith(
+      `3 photos were not added: an album holds at most ${String(GALLERY_ALBUM_ITEMS_MAX)} items, and this one had room for 2 more.`,
+    );
   });
 
   it("removes an item through its own confirm", async () => {

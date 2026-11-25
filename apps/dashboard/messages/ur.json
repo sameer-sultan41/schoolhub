@@ -4620,6 +4620,7 @@
         "uploadFailed": "{name}: {reason}",
         "uploadDone": "{count, plural, one {# تصویر شامل ہو گئی۔} other {# تصاویر شامل ہو گئیں۔}}",
         "uploadFailedAfterLeave": "البم چھوڑنے کے بعد {count, plural, one {# تصویر شامل نہیں ہو سکی} other {# تصاویر شامل نہیں ہو سکیں}}: {names}۔",
+        "uploadSkipped": "{skipped, plural, one {# تصویر شامل نہیں کی گئی} other {# تصاویر شامل نہیں کی گئیں}}: ایک البم میں زیادہ سے زیادہ {max} آئٹم آ سکتے ہیں، اور اس میں مزید {free} کی گنجائش تھی۔",
         "addVideo": "ویڈیو شامل کریں",
         "image": "تصویر",
         "video": "ویڈیو",

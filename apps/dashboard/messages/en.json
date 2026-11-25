@@ -4620,6 +4620,7 @@
         "uploadFailed": "{name}: {reason}",
         "uploadDone": "{count, plural, one {# photo added.} other {# photos added.}}",
         "uploadFailedAfterLeave": "{count, plural, one {# photo couldn't be added} other {# photos couldn't be added}} after you left the album: {names}.",
+        "uploadSkipped": "{skipped, plural, one {# photo was} other {# photos were}} not added: an album holds at most {max} items, and this one had room for {free} more.",
         "addVideo": "Add video",
         "image": "Photo",
         "video": "Video",
