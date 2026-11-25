@@ -53,6 +53,8 @@ export function GalleryItems({ albumId, canUpdate }: { albumId: string; canUpdat
   const fullId = useId();
   // The server refuses an item past the cap (`too_many_items`): hold both ways to add one.
   const isFull = items.length >= GALLERY_ALBUM_ITEMS_MAX;
+  // The free-slot count comes from the last read: hold adding until a refetch settles it.
+  const addHeld = isReordering || isFull || query.isFetching;
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: DRAG_ACTIVATION_DISTANCE } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -102,13 +104,13 @@ export function GalleryItems({ albumId, canUpdate }: { albumId: string; canUpdat
               albumId={albumId}
               itemCount={items.length}
               onBusyChange={setIsUploading}
-              disabled={isReordering || isFull}
+              disabled={addHeld}
               describedBy={isFull ? fullId : undefined}
             />
             <Button
               type="button"
               variant="outline"
-              disabled={isReordering || isFull}
+              disabled={addHeld}
               aria-describedby={isFull ? fullId : undefined}
               onClick={() => {
                 setTarget({ action: "addVideo" });
