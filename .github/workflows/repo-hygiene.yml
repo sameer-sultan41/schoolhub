@@ -284,6 +284,10 @@ jobs:
         run: python3 -m unittest discover -s .github/scripts/tests -p 'test_check_migrations.py' -v
       - name: CI gate tests
         run: python3 -m unittest discover -s .github/scripts/tests -p 'test_ci_gate.py' -v
+      - name: Deployments API tests
+        run: python3 -m unittest discover -s .github/scripts/tests -p 'test_deployments.py' -v
+      - name: Task definition check tests
+        run: python3 -m unittest discover -s .github/scripts/tests -p 'test_check_task_definition.py' -v
       # Early warning only: a contract migration is legal to merge (it deploys with the
       # override), but the author should see it at review time, not at deploy time.
       # HEAD^1 is the base tip of the PR's synthetic merge commit, HEAD^2 the PR head.

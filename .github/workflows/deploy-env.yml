@@ -1,0 +1,567 @@
+# =============================================================================
+# One environment's build (staging only) and deploy or rollback.
+#
+# Called only by deploy.yml. This is the ONLY workflow file the deploy roles trust:
+# their OIDC `sub` names `job_workflow_ref:.../deploy-env.yml@refs/heads/main` (D2),
+# so every step that assumes a deploy role lives here. Inputs arrive already
+# validated by deploy.yml's `resolve` and `preview`; the rollout job re-checks what
+# an Environment approval could have let go stale.
+#
+# Run logs are public (D22): no step prints a secret, a full migrate log or AWS
+# output beyond IDs and statuses.
+# =============================================================================
+
+name: deploy-env
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true
+      sha:
+        type: string
+        required: true
+      mode:
+        description: deploy | rollback
+        type: string
+        required: true
+      previous_sha:
+        description: preview's view of the deployed SHA; re-read before anything changes.
+        type: string
+        default: ""
+      allow_contract_migration:
+        type: boolean
+        default: false
+      allow_unstaged_sha:
+        type: boolean
+        default: false
+      acknowledge_migration_review:
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  # Images are built once per SHA, natively on arm64, and only for staging (D8). A
+  # production run never builds: it promotes a tag staging already pushed.
+  build:
+    name: build (${{ matrix.app }})
+    if: inputs.environment == 'staging' && inputs.mode == 'deploy'
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      id-token: write
+    # The job needs the staging deploy role, but it is not a deployment.
+    environment:
+      name: staging
+      deployment: false
+    concurrency:
+      group: build-${{ inputs.sha }}-${{ matrix.app }}
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: api
+            context: apps/api
+            file: apps/api/Dockerfile
+            target: prod
+            build-args: ""
+          - app: dashboard
+            context: .
+            file: apps/dashboard/Dockerfile
+            target: runner
+            # Build-only placeholders live in the Dockerfile (D17, author ruling 1).
+            build-args: ""
+          - app: website
+            context: .
+            file: apps/website/Dockerfile
+            target: runner
+            build-args: WEBSITE_IMAGE_HOSTNAME=${{ vars.WEBSITE_IMAGE_HOSTNAME }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.sha }}
+
+      - name: AWS credentials (staging deploy role)
+        uses: aws-actions/configure-aws-credentials@45666896f5d8e0f10ae255413f3a4cdd03bdc8f5 # v6.3.1
+        with:
+          role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: gha-build-${{ github.run_id }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          role-duration-seconds: 3600
+
+      - name: ECR login
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@7290e214a610b32bc0eef81748948b6d466a8783 # v2.2.0
+
+      # Tags are immutable, so a re-run of the same SHA must skip, not fail on push.
+      - name: Skip if schoolhub/${{ matrix.app }}:<sha> exists
+        id: exists
+        env:
+          APP: ${{ matrix.app }}
+          SHA: ${{ inputs.sha }}
+        run: |
+          if out=$(aws ecr describe-images --repository-name "schoolhub/$APP" --image-ids "imageTag=$SHA" 2>&1); then
+            echo "::notice::schoolhub/$APP:${SHA:0:7} already exists; not rebuilt"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          elif grep -q ImageNotFoundException <<<"$out"; then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "$out"
+            exit 1
+          fi
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        if: steps.exists.outputs.exists != 'true'
+
+      - name: Build and push
+        if: steps.exists.outputs.exists != 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          target: ${{ matrix.target }}
+          build-args: ${{ matrix.build-args }}
+          push: true
+          tags: ${{ vars.ECR_REGISTRY }}/schoolhub/${{ matrix.app }}:${{ inputs.sha }}
+          # The task definitions run ARM64 (cpu_architecture).
+          platforms: linux/arm64
+          # A single-platform image, not an index, so ECR's tag and the task
+          # definition's image resolve to the same manifest.
+          provenance: false
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,scope=${{ matrix.app }},mode=max
+
+  rollout:
+    name: ${{ inputs.mode }} ${{ inputs.environment }}
+    needs: build
+    if: ${{ !cancelled() && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    # deployment: false: deployments.py writes the one record per run (D10). Required
+    # reviewers still apply, so the production gate (D14) is unchanged.
+    environment:
+      name: ${{ inputs.environment }}
+      deployment: false
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+      deployments: write
+    # Worst case: checks 3 + migrate 15 + five services 50 + invalidation 5 + smoke 4
+    # + records 1 = 78 min. The 7200 s credentials outlive it.
+    timeout-minutes: 95
+    env:
+      CLUSTER: ${{ vars.ECS_CLUSTER }}
+      TARGET_ENV: ${{ inputs.environment }}
+      SHA: ${{ inputs.sha }}
+      MODE: ${{ inputs.mode }}
+      ALLOW_CONTRACT: ${{ inputs.allow_contract_migration }}
+      ALLOW_UNSTAGED: ${{ inputs.allow_unstaged_sha }}
+      ACK_REVIEW: ${{ inputs.acknowledge_migration_review }}
+      REGISTRY: ${{ vars.ECR_REGISTRY }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # 0. Build only: before the env root is applied, ECS_CLUSTER is empty. An
+      # Environment variable cannot be read by a job-level `if`, hence this step.
+      - name: Enabled?
+        id: enabled
+        run: |
+          if [ -z "$CLUSTER" ]; then
+            msg="build only: ECS_CLUSTER is not set for $TARGET_ENV"
+            echo "::notice::$msg"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The workflow's own commit (main), not inputs.sha: a rollback target may predate
+      # these scripts. Full history for the ancestry check and the migration guard,
+      # which reads the target's migrations with `git show`.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.enabled.outputs.enabled == 'true'
+        with:
+          fetch-depth: 0
+
+      # 2. Another deploy may have finished after preview; every check below uses this.
+      - name: Re-read the current deployment
+        id: current
+        if: steps.enabled.outputs.enabled == 'true'
+        env:
+          PREVIEW_PREVIOUS: ${{ inputs.previous_sha }}
+        run: |
+          prev=$(python3 .github/scripts/deployments.py current --env "$TARGET_ENV")
+          if [ "$prev" != "$PREVIEW_PREVIOUS" ]; then
+            echo "::notice::the deployed SHA changed since preview (${PREVIEW_PREVIOUS:0:7} -> ${prev:0:7}); re-checking against ${prev:0:7}"
+          fi
+          echo "previous_sha=$prev" >> "$GITHUB_OUTPUT"
+
+      # 3. The same checks preview ran, so an approval cannot outlive a stale preview.
+      - name: Re-check
+        id: recheck
+        if: steps.enabled.outputs.enabled == 'true'
+        env:
+          PREV: ${{ steps.current.outputs.previous_sha }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$MODE" = "deploy" ]; then
+            if [ "$TARGET_ENV" = "production" ]; then
+              rc=0; python3 .github/scripts/deployments.py ever-succeeded --env staging --sha "$SHA" || rc=$?
+              if [ "$rc" -eq 1 ] && [ "$ALLOW_UNSTAGED" = "true" ]; then
+                echo "::warning::${SHA:0:7} never deployed successfully to staging; promoted under allow_unstaged_sha by $GITHUB_ACTOR"
+              elif [ "$rc" -ne 0 ]; then
+                echo "::error::${SHA:0:7} never deployed successfully to staging (allow_unstaged_sha overrides)"
+                exit 1
+              fi
+            fi
+            if [ -n "$PREV" ] && ! git merge-base --is-ancestor "$PREV" "$SHA"; then
+              if [ "$EVENT" = "push" ]; then
+                echo "::notice::${SHA:0:7} is older than the running ${PREV:0:7}; skipped as superseded"
+                echo "superseded: ${SHA:0:7} is older than the running ${PREV:0:7}" >> "$GITHUB_STEP_SUMMARY"
+                echo "go=false" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              echo "::error::${SHA:0:7} is not a descendant of the running ${PREV:0:7}; to go back, use mode=rollback"
+              exit 1
+            fi
+          else
+            rc=0; python3 .github/scripts/deployments.py ever-succeeded --env "$TARGET_ENV" --sha "$SHA" || rc=$?
+            if [ "$rc" -ne 0 ]; then
+              echo "::error::${SHA:0:7} was never live in $TARGET_ENV"
+              exit 1
+            fi
+            if [ -n "$PREV" ]; then
+              rc=0; python3 .github/scripts/deployments.py overrides-between --env "$TARGET_ENV" --from "$SHA" --to "$PREV" || rc=$?
+              if [ "$rc" -eq 1 ] && [ "$ALLOW_CONTRACT" = "true" ]; then
+                echo "::warning::rolling back across a contract migration, confirmed by allow_contract_migration ($GITHUB_ACTOR)"
+              elif [ "$rc" -ne 0 ]; then
+                echo "::error::a deployment between ${SHA:0:7} and ${PREV:0:7} carried a contract migration; the old code may not run on that schema (allow_contract_migration confirms it)"
+                exit 1
+              fi
+            fi
+          fi
+          echo "go=true" >> "$GITHUB_OUTPUT"
+
+      # 4. Deploy mode only. Any non-zero exit fails before a record exists.
+      - name: Migration guard
+        id: guard
+        if: steps.recheck.outputs.go == 'true'
+        env:
+          PREV: ${{ steps.current.outputs.previous_sha }}
+        run: |
+          if [ "$MODE" != "deploy" ]; then
+            echo "contract_override=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          args=(--base "${PREV:-none}" --target "$SHA" --json "$RUNNER_TEMP/migrations.json" --summary "$GITHUB_STEP_SUMMARY")
+          if [ "$ALLOW_CONTRACT" = "true" ]; then args+=(--allow-contract); fi
+          if [ "$ACK_REVIEW" = "true" ]; then args+=(--acknowledge-review); fi
+          python3 .github/scripts/check_migrations.py "${args[@]}"
+          read -r contract review < <(python3 -c '
+          import json, sys
+          rows = json.load(open(sys.argv[1]))["findings"]
+          over = lambda sev: any(f["severity"] == sev and f["overridden"] for f in rows)
+          print(str(over("contract")).lower(), str(over("review")).lower())
+          ' "$RUNNER_TEMP/migrations.json")
+          if [ "$contract" = "true" ]; then
+            echo "::warning::contract migration deployed under allow_contract_migration by $GITHUB_ACTOR"
+          fi
+          if [ "$review" = "true" ]; then
+            echo "::warning::review migration deployed under acknowledge_migration_review by $GITHUB_ACTOR"
+          fi
+          echo "contract_override=$contract" >> "$GITHUB_OUTPUT"
+
+      # 5. The one deployment record for this run (D10).
+      - name: Create the deployment
+        id: deployment
+        if: steps.recheck.outputs.go == 'true'
+        env:
+          PREV: ${{ steps.current.outputs.previous_sha }}
+          CONTRACT_OVERRIDE: ${{ steps.guard.outputs.contract_override }}
+        run: |
+          id=$(python3 .github/scripts/deployments.py create --env "$TARGET_ENV" --sha "$SHA" --mode "$MODE" \
+            --previous "$PREV" --allow-contract "$ALLOW_CONTRACT" --allow-unstaged "$ALLOW_UNSTAGED" \
+            --ack-review "$ACK_REVIEW" --contract-override "${CONTRACT_OVERRIDE:-false}")
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          {
+            echo "### $MODE $TARGET_ENV ${SHA:0:7}"
+            echo ""
+            echo "- deployment record: $id"
+            echo "- previous SHA: ${PREV:-none}"
+            echo "- allow_contract_migration: $ALLOW_CONTRACT"
+            echo "- allow_unstaged_sha: $ALLOW_UNSTAGED"
+            echo "- acknowledge_migration_review: $ACK_REVIEW"
+            echo "- contract_override: ${CONTRACT_OVERRIDE:-false}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # 6. Requested duration equals the role's max_session_duration (H1).
+      - name: AWS credentials (${{ inputs.environment }} deploy role)
+        if: steps.recheck.outputs.go == 'true'
+        uses: aws-actions/configure-aws-credentials@45666896f5d8e0f10ae255413f3a4cdd03bdc8f5 # v6.3.1
+        with:
+          role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: gha-deploy-${{ inputs.environment }}-${{ github.run_id }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          role-duration-seconds: 7200
+
+      # 7. No ECR login: describe-images is an API call (ecr:DescribeImages only, N1),
+      # and ECS pulls with each task's execution role. A missing tag fails here.
+      - name: Verify all three images exist
+        id: images
+        if: steps.recheck.outputs.go == 'true'
+        run: |
+          for app in api dashboard website; do
+            pushed=$(aws ecr describe-images --repository-name "schoolhub/$app" --image-ids "imageTag=$SHA" \
+              --query 'imageDetails[0].imagePushedAt' --output text)
+            age=$(( ( $(date +%s) - $(date -d "$pushed" +%s) ) / 86400 ))
+            echo "schoolhub/$app:${SHA:0:7} pushed $age days ago"
+            if [ "$age" -gt 300 ]; then
+              echo "::warning::image ${SHA:0:7} was pushed $age days ago; ECR expires SHA tags at 365 days (D5)"
+            fi
+          done
+
+      # 8. Migrate (deploy mode only): a one-off task on the new image, exit 0 required.
+      - name: Render migrate
+        id: migrate-render
+        if: steps.recheck.outputs.go == 'true' && inputs.mode == 'deploy'
+        uses: aws-actions/amazon-ecs-render-task-definition@8d79160660ad39c402a16e5fc7cd2a32e8f7d6b7 # v1.9.1
+        with:
+          task-definition-family: ${{ vars.MIGRATE_TASK_FAMILY }}
+          container-name: migrate
+          image: ${{ vars.ECR_REGISTRY }}/schoolhub/api:${{ inputs.sha }}
+
+      - name: Check the migrate render
+        id: migrate-check
+        if: steps.recheck.outputs.go == 'true' && inputs.mode == 'deploy'
+        env:
+          RENDERED: ${{ steps.migrate-render.outputs.task-definition }}
+          ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+        run: |
+          python3 .github/scripts/check_task_definition.py --file "$RENDERED" --cluster "$CLUSTER" \
+            --service migrate --env "$TARGET_ENV" --account "$ACCOUNT_ID" --registry "$REGISTRY"
+
+      - name: Migrate
+        id: migrate
+        if: steps.recheck.outputs.go == 'true' && inputs.mode == 'deploy'
+        uses: aws-actions/amazon-ecs-deploy-task-definition@a00d4d57ac0de1a99b39fe469f3d898d38717c2b # v2.6.4
+        with:
+          task-definition: ${{ steps.migrate-render.outputs.task-definition }}
+          cluster: ${{ vars.ECS_CLUSTER }}
+          run-task: true
+          run-task-launch-type: FARGATE
+          run-task-subnets: ${{ vars.PRIVATE_SUBNETS }}
+          run-task-security-groups: ${{ vars.MIGRATE_SECURITY_GROUP }}
+          run-task-assign-public-IP: DISABLED
+          run-task-started-by: gha-${{ github.run_id }}
+          wait-for-task-stopped: true
+          wait-for-minutes: 15
+
+      # Public log (D22): exit code, stoppedReason and error lines only; never the full
+      # log, and nothing but the exit code in the summary.
+      - name: Migrate result
+        if: always() && (steps.migrate.outcome == 'success' || steps.migrate.outcome == 'failure')
+        env:
+          RENDERED: ${{ steps.migrate-render.outputs.task-definition }}
+          TASK_ARNS: ${{ steps.migrate.outputs.run-task-arn }}
+        run: |
+          task=$(python3 -c 'import json, sys; arns = json.loads(sys.argv[1] or "[]"); print(arns[0] if arns else "")' "$TASK_ARNS")
+          if [ -z "$task" ]; then
+            echo "migrate: no task started"
+            echo "migrate: no task started" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          read -r code reason < <(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$task" \
+            --query 'tasks[0].[containers[0].exitCode, stoppedReason]' --output text)
+          echo "migrate: exit $code ($reason)"
+          echo "migrate: exit $code" >> "$GITHUB_STEP_SUMMARY"
+          read -r group prefix < <(python3 -c '
+          import json, sys
+          td = json.load(open(sys.argv[1]))
+          c = next(c for c in td["containerDefinitions"] if c["name"] == "migrate")
+          o = c["logConfiguration"]["options"]
+          print(o["awslogs-group"], o["awslogs-stream-prefix"])
+          ' "$RENDERED")
+          stream="$prefix/migrate/${task##*/}"
+          aws logs get-log-events --log-group-name "$group" --log-stream-name "$stream" --start-from-head \
+            --query 'events[].message' --output json \
+            | python3 -c '
+          import json, re, sys
+          pattern = re.compile(r"^(ERROR|CRITICAL)|Traceback|django\.db\.utils\.|psycopg\.errors\.")
+          lines = [m for m in json.load(sys.stdin) if pattern.search(m)]
+          for line in lines[:50]:
+              print(line.rstrip())
+          ' || echo "migrate: could not read the log stream; the full log is in CloudWatch"
+
+      # 9. Roll out in D9 order; a failed service stops the ones after it. Beat goes
+      # last and always at one task, in rollback mode too (Review Focus 4).
+      - name: Roll out api
+        id: api
+        if: steps.recheck.outputs.go == 'true'
+        uses: ./.github/actions/ecs-rollout
+        with:
+          cluster: ${{ vars.ECS_CLUSTER }}
+          service: api
+          image: ${{ vars.ECR_REGISTRY }}/schoolhub/api:${{ inputs.sha }}
+          environment: ${{ inputs.environment }}
+          account-id: ${{ vars.AWS_ACCOUNT_ID }}
+          registry: ${{ vars.ECR_REGISTRY }}
+
+      - name: Roll out celery-worker
+        id: worker
+        if: steps.recheck.outputs.go == 'true'
+        uses: ./.github/actions/ecs-rollout
+        with:
+          cluster: ${{ vars.ECS_CLUSTER }}
+          service: celery-worker
+          image: ${{ vars.ECR_REGISTRY }}/schoolhub/api:${{ inputs.sha }}
+          environment: ${{ inputs.environment }}
+          account-id: ${{ vars.AWS_ACCOUNT_ID }}
+          registry: ${{ vars.ECR_REGISTRY }}
+
+      - name: Roll out dashboard
+        id: dashboard
+        if: steps.recheck.outputs.go == 'true'
+        uses: ./.github/actions/ecs-rollout
+        with:
+          cluster: ${{ vars.ECS_CLUSTER }}
+          service: dashboard
+          image: ${{ vars.ECR_REGISTRY }}/schoolhub/dashboard:${{ inputs.sha }}
+          environment: ${{ inputs.environment }}
+          account-id: ${{ vars.AWS_ACCOUNT_ID }}
+          registry: ${{ vars.ECR_REGISTRY }}
+
+      - name: Roll out website
+        id: website
+        if: steps.recheck.outputs.go == 'true'
+        uses: ./.github/actions/ecs-rollout
+        with:
+          cluster: ${{ vars.ECS_CLUSTER }}
+          service: website
+          image: ${{ vars.ECR_REGISTRY }}/schoolhub/website:${{ inputs.sha }}
+          environment: ${{ inputs.environment }}
+          account-id: ${{ vars.AWS_ACCOUNT_ID }}
+          registry: ${{ vars.ECR_REGISTRY }}
+
+      - name: Roll out celery-beat
+        id: beat
+        if: steps.recheck.outputs.go == 'true'
+        uses: ./.github/actions/ecs-rollout
+        with:
+          cluster: ${{ vars.ECS_CLUSTER }}
+          service: celery-beat
+          image: ${{ vars.ECR_REGISTRY }}/schoolhub/api:${{ inputs.sha }}
+          desired-count: "1"
+          environment: ${{ inputs.environment }}
+          account-id: ${{ vars.AWS_ACCOUNT_ID }}
+          registry: ${{ vars.ECR_REGISTRY }}
+
+      # The skill reads this line (Task 7).
+      - name: celery-beat runningCount
+        if: always() && (steps.beat.outcome == 'success' || steps.beat.outcome == 'failure')
+        run: |
+          n=$(aws ecs describe-services --cluster "$CLUSTER" --services "$CLUSTER-celery-beat" \
+            --query 'services[0].runningCount' --output text)
+          echo "celery-beat runningCount=$n"
+          echo "celery-beat runningCount=$n" >> "$GITHUB_STEP_SUMMARY"
+
+      # 10. Required for rollback (D13); in deploy mode too, because cached HTML names
+      # the previous build's hashed /_next/static chunks. The wait is bounded and
+      # non-fatal: the CLI waiter alone fails after 10 min.
+      - name: CloudFront invalidation
+        id: invalidation
+        if: steps.recheck.outputs.go == 'true'
+        env:
+          DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
+        run: |
+          inv=$(aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths '/*' \
+            --query 'Invalidation.Id' --output text)
+          echo "invalidation $inv created"
+          if ! timeout 300 aws cloudfront wait invalidation-completed --distribution-id "$DISTRIBUTION_ID" --id "$inv"; then
+            msg="invalidation $inv still in progress after 5 min; it completes on its own (usually under 10 min). Smoke checks may see cached pages until then."
+            echo "::notice::$msg"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # 11. D12. Tenant checks are skipped while no smoke tenant is seeded.
+      - name: Smoke tests
+        id: smoke
+        if: steps.recheck.outputs.go == 'true'
+        env:
+          PLATFORM_DOMAIN: ${{ vars.PLATFORM_DOMAIN }}
+          SMOKE_TENANT_SLUG: ${{ vars.SMOKE_TENANT_SLUG }}
+        run: |
+          get() { curl -fsS --retry 6 --retry-delay 10 --retry-all-errors --max-time 10 -o "$2" "$1"; }
+          get "https://api.${PLATFORM_DOMAIN}/healthz" /dev/null
+          get "https://app.${PLATFORM_DOMAIN}/api/health" /dev/null
+          if [ -z "$SMOKE_TENANT_SLUG" ]; then
+            msg="tenant smoke checks skipped: SMOKE_TENANT_SLUG is not set (seed the smoke tenant, Task 2 step 11)"
+            echo "::notice::$msg"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+          else
+            get "https://${SMOKE_TENANT_SLUG}.${PLATFORM_DOMAIN}/api/health" /dev/null
+            get "https://${SMOKE_TENANT_SLUG}.${PLATFORM_DOMAIN}/" "$RUNNER_TEMP/home.html"
+            grep -qi '<html' "$RUNNER_TEMP/home.html" || { echo "::error::the tenant home page did not render HTML"; exit 1; }
+          fi
+          echo "smoke checks passed"
+
+      # 12-14. Only when a record exists, so a failure in steps 0-4 creates none.
+      - name: Mark success
+        if: success() && steps.deployment.outputs.id != ''
+        env:
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.id }}
+          PLATFORM_DOMAIN: ${{ vars.PLATFORM_DOMAIN }}
+        run: |
+          python3 .github/scripts/deployments.py status --id "$DEPLOYMENT_ID" --state success \
+            --environment-url "https://app.${PLATFORM_DOMAIN}"
+
+      - name: On failure
+        if: failure() && steps.deployment.outputs.id != ''
+        env:
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.id }}
+          PREV: ${{ steps.current.outputs.previous_sha }}
+          OUTCOMES: >-
+            images=${{ steps.images.outcome }}
+            migrate=${{ steps.migrate-render.outcome }}
+            migrate=${{ steps.migrate-check.outcome }}
+            migrate=${{ steps.migrate.outcome }}
+            api=${{ steps.api.outcome }}
+            celery-worker=${{ steps.worker.outcome }}
+            dashboard=${{ steps.dashboard.outcome }}
+            website=${{ steps.website.outcome }}
+            celery-beat=${{ steps.beat.outcome }}
+            invalidation=${{ steps.invalidation.outcome }}
+            smoke=${{ steps.smoke.outcome }}
+        run: |
+          failed="an early step"
+          for pair in $OUTCOMES; do
+            if [ "${pair#*=}" = "failure" ]; then failed="${pair%%=*}"; break; fi
+          done
+          python3 .github/scripts/deployments.py status --id "$DEPLOYMENT_ID" --state failure \
+            --description "$MODE ${SHA:0:7} failed at $failed"
+          {
+            echo "### $MODE ${SHA:0:7} to $TARGET_ENV failed at: $failed"
+            if [ "$failed" = "migrate" ] || [ "$failed" = "images" ]; then
+              echo "Nothing was rolled out; the previous code is still serving."
+            fi
+            if [ -n "$PREV" ]; then
+              echo "Roll back with:"
+              echo ""
+              echo "    gh workflow run deploy.yml --ref main -f environment=$TARGET_ENV -f mode=rollback -f sha=$PREV"
+            else
+              echo "No earlier successful deployment in $TARGET_ENV; nothing to roll back to."
+            fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: On cancel
+        if: cancelled() && steps.deployment.outputs.id != ''
+        env:
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.id }}
+        run: |
+          python3 .github/scripts/deployments.py status --id "$DEPLOYMENT_ID" --state error \
+            --description "$MODE ${SHA:0:7} cancelled"

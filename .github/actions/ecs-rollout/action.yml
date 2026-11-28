@@ -1,0 +1,123 @@
+# One ECS service's rollout: render -> check -> deploy -> verify (deploy-env.yml calls it
+# once per service, in D9 order). Fetching the task definition by family keeps Terraform
+# the owner of its shape; only the image changes here. AWS credentials come from the
+# calling job.
+name: ECS rollout
+description: Render, check, deploy and verify one ECS service at a new image.
+inputs:
+  cluster:
+    description: ECS cluster name (schoolhub-<env>), also the service and family prefix.
+    required: true
+  service:
+    description: "Short service name: api, celery-worker, dashboard, website, celery-beat."
+    required: true
+  image:
+    description: Full image URI with the SHA tag.
+    required: true
+  desired-count:
+    description: Desired task count; empty keeps the service's current count.
+    required: false
+    default: ""
+  wait-minutes:
+    description: Minutes to wait for service stability (a healthy Fargate roll is about 4-6).
+    required: false
+    default: "10"
+  environment:
+    description: staging or production, for the task-role prefix check.
+    required: true
+  account-id:
+    description: AWS account ID the task roles must belong to.
+    required: true
+  registry:
+    description: ECR registry every container image must come from.
+    required: true
+outputs:
+  task-definition-arn:
+    description: ARN of the task definition revision this rollout registered.
+    value: ${{ steps.deploy.outputs.task-definition-arn }}
+runs:
+  using: composite
+  steps:
+    - name: Render ${{ inputs.service }}
+      id: render
+      uses: aws-actions/amazon-ecs-render-task-definition@8d79160660ad39c402a16e5fc7cd2a32e8f7d6b7 # v1.9.1
+      with:
+        task-definition-family: ${{ inputs.cluster }}-${{ inputs.service }}
+        container-name: ${{ inputs.service }}
+        image: ${{ inputs.image }}
+
+    - name: Check the render belongs to ${{ inputs.environment }}
+      shell: bash
+      env:
+        RENDERED: ${{ steps.render.outputs.task-definition }}
+        CLUSTER: ${{ inputs.cluster }}
+        SERVICE: ${{ inputs.service }}
+        TARGET_ENV: ${{ inputs.environment }}
+        ACCOUNT_ID: ${{ inputs.account-id }}
+        REGISTRY: ${{ inputs.registry }}
+      run: |
+        python3 .github/scripts/check_task_definition.py --file "$RENDERED" --cluster "$CLUSTER" \
+          --service "$SERVICE" --env "$TARGET_ENV" --account "$ACCOUNT_ID" --registry "$REGISTRY"
+
+    - name: Deploy ${{ inputs.service }}
+      id: deploy
+      uses: aws-actions/amazon-ecs-deploy-task-definition@a00d4d57ac0de1a99b39fe469f3d898d38717c2b # v2.6.4
+      with:
+        task-definition: ${{ steps.render.outputs.task-definition }}
+        service: ${{ inputs.cluster }}-${{ inputs.service }}
+        cluster: ${{ inputs.cluster }}
+        wait-for-service-stability: true
+        wait-for-minutes: ${{ inputs.wait-minutes }}
+        wait-max-delay-seconds: 15
+        desired-count: ${{ inputs.desired-count }}
+
+    # The circuit breaker's rollback leaves the service stable on the OLD revision, which
+    # wait-for-service-stability reports as success. This step turns that into a failure.
+    - name: Verify the new revision is the one running
+      shell: bash
+      env:
+        CLUSTER: ${{ inputs.cluster }}
+        SERVICE: ${{ inputs.service }}
+        EXPECTED: ${{ steps.deploy.outputs.task-definition-arn }}
+      run: |
+        aws ecs describe-services --cluster "$CLUSTER" --services "$CLUSTER-$SERVICE" \
+          --query 'services[0]' --output json > "$RUNNER_TEMP/service-$SERVICE.json"
+        python3 - "$RUNNER_TEMP/service-$SERVICE.json" <<'PY'
+        import json, os, sys
+        svc = json.load(open(sys.argv[1]))
+        deployments = svc.get("deployments") or []
+        expected = os.environ["EXPECTED"]
+        service = os.environ["SERVICE"]
+        errors = []
+        if len(deployments) != 1:
+            errors.append(f"{len(deployments)} deployments, expected exactly 1")
+        elif deployments[0].get("taskDefinition") != expected:
+            errors.append(f"running {deployments[0].get('taskDefinition')}, expected {expected} (rolled back?)")
+        elif deployments[0].get("rolloutState") != "COMPLETED":
+            errors.append(f"rolloutState {deployments[0].get('rolloutState')}, expected COMPLETED")
+        if service == "celery-beat":
+            print(f"celery-beat runningCount={svc.get('runningCount')}")
+            if svc.get("runningCount") != 1:
+                errors.append(f"celery-beat runningCount={svc.get('runningCount')}, expected 1")
+        for e in errors:
+            print(f"::error::{service}: {e}")
+        sys.exit(1 if errors else 0)
+        PY
+
+    # AWS status strings only, never application logs, so safe in the public log (D22).
+    - name: Stopped reasons for ${{ inputs.service }}
+      if: failure()
+      shell: bash
+      env:
+        CLUSTER: ${{ inputs.cluster }}
+        SERVICE: ${{ inputs.service }}
+      run: |
+        mapfile -t arns < <(aws ecs list-tasks --cluster "$CLUSTER" --service-name "$CLUSTER-$SERVICE" \
+          --desired-status STOPPED --query 'taskArns[]' --output text | tr '\t' '\n' | grep . || true)
+        if [ "${#arns[@]}" -eq 0 ]; then
+          echo "no stopped tasks for $CLUSTER-$SERVICE"
+          exit 0
+        fi
+        aws ecs describe-tasks --cluster "$CLUSTER" --tasks "${arns[@]:0:100}" \
+          --query 'reverse(sort_by(tasks, &to_string(stoppedAt)))[:5].{taskDefinition: taskDefinitionArn, stoppedReason: stoppedReason, containers: containers[].{name: name, reason: reason, exitCode: exitCode}}' \
+          --output json || true

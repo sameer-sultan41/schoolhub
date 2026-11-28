@@ -41,6 +41,13 @@ ENV PATH=$PNPM_HOME:$PATH
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN corepack enable pnpm
+# Build-only placeholders, not secrets: src/lib/env.ts validates these at import, so the
+# image builds once and is promoted unchanged. Next inlines NEXT_PUBLIC_* at build time,
+# so browser-side API calls do not work with this image until the dashboard reads them at
+# runtime (launch-blocker:dashboard-runtime-env, docs/deferred-work.md).
+ENV NEXT_PUBLIC_API_BASE_URL=https://api.build.invalid/api/v1
+ENV NEXT_PUBLIC_APP_URL=https://app.build.invalid
+ENV NEXT_PUBLIC_PLATFORM_DOMAIN=build.invalid
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/dashboard/node_modules ./apps/dashboard/node_modules
 COPY --from=deps /app/packages ./packages

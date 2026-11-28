@@ -1,0 +1,290 @@
+# =============================================================================
+# Deploy: staging on every green push to main, production and rollback by dispatch.
+#
+# resolve -> ci-gate -> preview -> deploy-env.yml (staging | production)
+#
+# This file holds no AWS credentials. Everything that assumes a deploy role is in
+# deploy-env.yml, the only workflow file the deploy roles trust (D2). `preview` runs
+# before the production Environment's approval, so its failures stop the run before
+# anyone is asked to approve, and its job summary is what the approver reads (D14).
+#
+# Disabled until AWS exists: every job after `resolve` needs the repository variable
+# ECR_REGISTRY, except that `dry_run` runs ci-gate and preview without it (no AWS).
+# The schoolhub-deploy skill starts and watches these runs; see infra/runbooks/deploy.md.
+# =============================================================================
+
+name: deploy
+run-name: deploy ${{ inputs.environment || 'staging' }} ${{ inputs.sha || github.sha }} (${{ inputs.mode || 'deploy' }})
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [staging, production]
+        required: true
+      sha:
+        description: Full 40-character SHA on main.
+        type: string
+        required: true
+      mode:
+        type: choice
+        options: [deploy, rollback]
+        default: deploy
+      allow_contract_migration:
+        description: Deploy a contract (non-expand) migration, or roll back across one.
+        type: boolean
+        default: false
+      allow_unstaged_sha:
+        description: Production only. Promote a SHA with no successful staging deployment.
+        type: boolean
+        default: false
+      acknowledge_migration_review:
+        description: A human has read the review-class migration findings (D11).
+        type: boolean
+        default: false
+      dry_run:
+        description: Run the gate, the Deployments API read and the migration guard only.
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+      environment: ${{ steps.resolve.outputs.environment }}
+      mode: ${{ steps.resolve.outputs.mode }}
+      allow_contract: ${{ steps.resolve.outputs.allow_contract }}
+      allow_unstaged: ${{ steps.resolve.outputs.allow_unstaged }}
+      ack_review: ${{ steps.resolve.outputs.ack_review }}
+      dry_run: ${{ steps.resolve.outputs.dry_run }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Resolve and validate the inputs
+        id: resolve
+        env:
+          EVENT: ${{ github.event_name }}
+          PUSH_SHA: ${{ github.sha }}
+          IN_SHA: ${{ inputs.sha }}
+          IN_ENV: ${{ inputs.environment }}
+          IN_MODE: ${{ inputs.mode }}
+          IN_ALLOW_CONTRACT: ${{ inputs.allow_contract_migration }}
+          IN_ALLOW_UNSTAGED: ${{ inputs.allow_unstaged_sha }}
+          IN_ACK_REVIEW: ${{ inputs.acknowledge_migration_review }}
+          IN_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ "$EVENT" = "push" ]; then
+            sha=$PUSH_SHA env=staging mode=deploy
+            allow_contract=false allow_unstaged=false ack_review=false dry_run=false
+          else
+            sha=$IN_SHA env=$IN_ENV mode=$IN_MODE
+            allow_contract=$IN_ALLOW_CONTRACT allow_unstaged=$IN_ALLOW_UNSTAGED
+            ack_review=$IN_ACK_REVIEW dry_run=$IN_DRY_RUN
+          fi
+          if ! [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::sha must be a full 40-character lower-case SHA"
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$sha" origin/main; then
+            echo "::error::${sha:0:7} is not on main; only merged commits deploy"
+            exit 1
+          fi
+          if [ "$allow_unstaged" = "true" ] && [ "$env" = "staging" ]; then
+            echo "::error::allow_unstaged_sha applies to production only"
+            exit 1
+          fi
+          {
+            echo "sha=$sha"
+            echo "environment=$env"
+            echo "mode=$mode"
+            echo "allow_contract=$allow_contract"
+            echo "allow_unstaged=$allow_unstaged"
+            echo "ack_review=$ack_review"
+            echo "dry_run=$dry_run"
+          } >> "$GITHUB_OUTPUT"
+
+  # Rollback skips the gate: the SHA was green when it was first deployed, and
+  # preview checks that it was.
+  ci-gate:
+    needs: resolve
+    if: needs.resolve.outputs.mode == 'deploy' && (vars.ECR_REGISTRY != '' || needs.resolve.outputs.dry_run == 'true')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      verdict: ${{ steps.gate.outputs.verdict }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: CI is green for this SHA
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ needs.resolve.outputs.sha }}
+          WAIT: ${{ github.event_name == 'push' && '45' || '0' }}
+        run: |
+          rc=0
+          python3 .github/scripts/ci_gate.py --sha "$SHA" --wait-minutes "$WAIT" || rc=$?
+          # 3 = superseded: later jobs skip instead of failing the run.
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 3 ]; then exit "$rc"; fi
+
+  preview:
+    needs: [resolve, ci-gate]
+    if: >-
+      ${{ !cancelled() && needs.resolve.result == 'success'
+      && (needs.ci-gate.result == 'skipped' || needs.ci-gate.outputs.verdict == 'green')
+      && (vars.ECR_REGISTRY != '' || needs.resolve.outputs.dry_run == 'true') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: read
+    outputs:
+      previous_sha: ${{ steps.preview.outputs.previous_sha }}
+      superseded: ${{ steps.preview.outputs.superseded }}
+    steps:
+      # Full history: the ancestry check and the migration guard need it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Preview
+        id: preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          SHA: ${{ needs.resolve.outputs.sha }}
+          TARGET_ENV: ${{ needs.resolve.outputs.environment }}
+          MODE: ${{ needs.resolve.outputs.mode }}
+          ALLOW_CONTRACT: ${{ needs.resolve.outputs.allow_contract }}
+          ALLOW_UNSTAGED: ${{ needs.resolve.outputs.allow_unstaged }}
+          ACK_REVIEW: ${{ needs.resolve.outputs.ack_review }}
+          DRY_RUN: ${{ needs.resolve.outputs.dry_run }}
+        run: |
+          # (1) What is deployed now.
+          prev=$(python3 .github/scripts/deployments.py current --env "$TARGET_ENV")
+          echo "previous_sha=$prev" >> "$GITHUB_OUTPUT"
+
+          # (1b) A deploy never goes backwards (N6).
+          if [ "$MODE" = "deploy" ] && [ -n "$prev" ] && ! git merge-base --is-ancestor "$prev" "$SHA"; then
+            if [ "$EVENT" = "push" ]; then
+              echo "::notice::${SHA:0:7} is older than the running ${prev:0:7}; skipped"
+              echo "superseded=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::error::${SHA:0:7} is not a descendant of the running ${prev:0:7}; to go back, use mode=rollback"
+            exit 1
+          fi
+
+          # (2) Production promotes only what staging ran.
+          if [ "$MODE" = "deploy" ] && [ "$TARGET_ENV" = "production" ]; then
+            rc=0; python3 .github/scripts/deployments.py ever-succeeded --env staging --sha "$SHA" || rc=$?
+            if [ "$rc" -eq 1 ] && [ "$ALLOW_UNSTAGED" = "true" ]; then
+              echo "::warning::${SHA:0:7} never deployed successfully to staging; continuing under allow_unstaged_sha"
+            elif [ "$rc" -ne 0 ]; then
+              echo "::error::this SHA never deployed successfully to staging (allow_unstaged_sha overrides)"
+              exit 1
+            fi
+          fi
+
+          # (3) Rollback targets a SHA that was live, and not across a contract migration.
+          if [ "$MODE" = "rollback" ]; then
+            rc=0; python3 .github/scripts/deployments.py ever-succeeded --env "$TARGET_ENV" --sha "$SHA" || rc=$?
+            if [ "$rc" -ne 0 ]; then
+              echo "::error::this SHA was never live in $TARGET_ENV"
+              exit 1
+            fi
+            if [ -n "$prev" ]; then
+              rc=0; python3 .github/scripts/deployments.py overrides-between --env "$TARGET_ENV" --from "$SHA" --to "$prev" || rc=$?
+              if [ "$rc" -eq 1 ] && [ "$ALLOW_CONTRACT" = "true" ]; then
+                echo "::warning::rolling back across a contract migration, confirmed by allow_contract_migration"
+              elif [ "$rc" -ne 0 ]; then
+                echo "::error::a deployment between ${SHA:0:7} and ${prev:0:7} carried a contract migration; the old code may not run on that schema (allow_contract_migration confirms it)"
+                exit 1
+              fi
+            fi
+          fi
+
+          # (4) Migration guard; the inputs' overrides pass straight through.
+          if [ "$MODE" = "deploy" ]; then
+            args=(--base "${prev:-none}" --target "$SHA" --summary "$GITHUB_STEP_SUMMARY")
+            if [ "$ALLOW_CONTRACT" = "true" ]; then args+=(--allow-contract); fi
+            if [ "$ACK_REVIEW" = "true" ]; then args+=(--acknowledge-review); fi
+            python3 .github/scripts/check_migrations.py "${args[@]}"
+          fi
+
+          # (5) ECR expires SHA tags at 365 days (D5).
+          if [ -n "$prev" ]; then
+            age=$(( ( $(date +%s) - $(git show -s --format=%ct "$prev") ) / 86400 ))
+            if [ "$age" -gt 300 ]; then
+              echo "::warning::the running ${prev:0:7} is $age days old; its image expires at 365 days (D5); ship a newer build"
+            fi
+          fi
+
+          # (6) The plan the approver reads.
+          {
+            echo "### Deploy plan"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| environment | $TARGET_ENV |"
+            echo "| mode | $MODE |"
+            echo "| current → target | \`${prev:-none}\` → \`$SHA\` |"
+            echo "| allow_contract_migration | $ALLOW_CONTRACT |"
+            echo "| allow_unstaged_sha | $ALLOW_UNSTAGED |"
+            echo "| acknowledge_migration_review | $ACK_REVIEW |"
+            echo "| dry_run | $DRY_RUN |"
+            echo "| order | migrate (deploy only) → api → celery-worker → dashboard → website → celery-beat (1 task) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "superseded=false" >> "$GITHUB_OUTPUT"
+
+  staging:
+    needs: [resolve, preview]
+    if: >-
+      ${{ !cancelled() && needs.preview.result == 'success' && needs.preview.outputs.superseded != 'true'
+      && needs.resolve.outputs.environment == 'staging' && needs.resolve.outputs.dry_run != 'true'
+      && vars.ECR_REGISTRY != '' }}
+    # A called workflow can only keep or reduce these (H2).
+    permissions:
+      contents: read
+      id-token: write
+      deployments: write
+    uses: ./.github/workflows/deploy-env.yml
+    with:
+      environment: staging
+      sha: ${{ needs.resolve.outputs.sha }}
+      mode: ${{ needs.resolve.outputs.mode }}
+      previous_sha: ${{ needs.preview.outputs.previous_sha }}
+      allow_contract_migration: ${{ needs.resolve.outputs.allow_contract == 'true' }}
+      allow_unstaged_sha: ${{ needs.resolve.outputs.allow_unstaged == 'true' }}
+      acknowledge_migration_review: ${{ needs.resolve.outputs.ack_review == 'true' }}
+
+  production:
+    needs: [resolve, preview]
+    if: >-
+      ${{ !cancelled() && needs.preview.result == 'success' && needs.preview.outputs.superseded != 'true'
+      && needs.resolve.outputs.environment == 'production' && needs.resolve.outputs.dry_run != 'true'
+      && vars.ECR_REGISTRY != '' }}
+    permissions:
+      contents: read
+      id-token: write
+      deployments: write
+    uses: ./.github/workflows/deploy-env.yml
+    with:
+      environment: production
+      sha: ${{ needs.resolve.outputs.sha }}
+      mode: ${{ needs.resolve.outputs.mode }}
+      previous_sha: ${{ needs.preview.outputs.previous_sha }}
+      allow_contract_migration: ${{ needs.resolve.outputs.allow_contract == 'true' }}
+      allow_unstaged_sha: ${{ needs.resolve.outputs.allow_unstaged == 'true' }}
+      acknowledge_migration_review: ${{ needs.resolve.outputs.ack_review == 'true' }}
