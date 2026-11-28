@@ -18,7 +18,7 @@ variables {
   state_admin_principal_arns = ["arn:aws:iam::111111111111:role/Admin"]
 }
 
-run "deploy_production_trusts_only_deploy_env_on_main" {
+run "deploy_production_trusts_only_deploy_env_called_by_deploy_on_main" {
   command = plan
 
   assert {
@@ -27,8 +27,8 @@ run "deploy_production_trusts_only_deploy_env_on_main" {
   }
 
   assert {
-    condition     = jsondecode(aws_iam_role.deploy["production"].assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:acme/schoolhub:environment:production:job_workflow_ref:acme/schoolhub/.github/workflows/deploy-env.yml@refs/heads/main"
-    error_message = "The production deploy role must trust only deploy-env.yml on main in the production Environment."
+    condition     = jsondecode(aws_iam_role.deploy["production"].assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:acme/schoolhub:environment:production:job_workflow_ref:acme/schoolhub/.github/workflows/deploy-env.yml@refs/heads/main:workflow_ref:acme/schoolhub/.github/workflows/deploy.yml@refs/heads/main"
+    error_message = "The production deploy role must trust only deploy-env.yml called by deploy.yml, both on main, in the production Environment."
   }
 
   assert {
@@ -37,7 +37,7 @@ run "deploy_production_trusts_only_deploy_env_on_main" {
   }
 }
 
-run "deploy_staging_trusts_only_deploy_env_on_main" {
+run "deploy_staging_trusts_only_deploy_env_called_by_deploy_on_main" {
   command = plan
 
   assert {
@@ -46,8 +46,8 @@ run "deploy_staging_trusts_only_deploy_env_on_main" {
   }
 
   assert {
-    condition     = jsondecode(aws_iam_role.deploy["staging"].assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:acme/schoolhub:environment:staging:job_workflow_ref:acme/schoolhub/.github/workflows/deploy-env.yml@refs/heads/main"
-    error_message = "The staging deploy role must trust only deploy-env.yml on main in the staging Environment."
+    condition     = jsondecode(aws_iam_role.deploy["staging"].assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:acme/schoolhub:environment:staging:job_workflow_ref:acme/schoolhub/.github/workflows/deploy-env.yml@refs/heads/main:workflow_ref:acme/schoolhub/.github/workflows/deploy.yml@refs/heads/main"
+    error_message = "The staging deploy role must trust only deploy-env.yml called by deploy.yml, both on main, in the staging Environment."
   }
 
   assert {
@@ -65,7 +65,7 @@ run "plan_production_rejects_pull_request" {
   }
 
   assert {
-    condition     = jsondecode(aws_iam_role.plan["production"].assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:acme/schoolhub:ref:refs/heads/main:job_workflow_ref:acme/schoolhub/.github/workflows/infra-terraform.yml@refs/heads/main"
+    condition     = jsondecode(aws_iam_role.plan["production"].assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:acme/schoolhub:ref:refs/heads/main:job_workflow_ref:acme/schoolhub/.github/workflows/infra-terraform.yml@refs/heads/main:workflow_ref:acme/schoolhub/.github/workflows/infra-terraform.yml@refs/heads/main"
     error_message = "The production plan role must trust only infra-terraform.yml on main."
   }
 
@@ -82,7 +82,7 @@ run "plan_staging_wildcard_only_in_pr_number" {
     condition = one([
       for s in jsondecode(aws_iam_role.plan["staging"].assume_role_policy).Statement :
       s.Condition.StringLike["token.actions.githubusercontent.com:sub"] if can(s.Condition.StringLike)
-    ]) == "repo:acme/schoolhub:pull_request:job_workflow_ref:acme/schoolhub/.github/workflows/infra-terraform.yml@refs/pull/*/merge"
+    ]) == "repo:acme/schoolhub:pull_request:job_workflow_ref:acme/schoolhub/.github/workflows/infra-terraform.yml@refs/pull/*/merge:workflow_ref:acme/schoolhub/.github/workflows/infra-terraform.yml@refs/pull/*/merge"
     error_message = "The staging plan role's PR trust must name infra-terraform.yml on refs/pull/*/merge."
   }
 
@@ -90,8 +90,8 @@ run "plan_staging_wildcard_only_in_pr_number" {
     condition = length(regexall("\\*", one([
       for s in jsondecode(aws_iam_role.plan["staging"].assume_role_policy).Statement :
       s.Condition.StringLike["token.actions.githubusercontent.com:sub"] if can(s.Condition.StringLike)
-    ]))) == 1
-    error_message = "The PR number must be the only wildcard in the staging plan trust."
+    ]))) == 2
+    error_message = "The PR number (once per workflow claim) must be the only wildcard in the staging plan trust."
   }
 }
 
@@ -186,7 +186,11 @@ run "staging_plan_denies_foreign_data_plane" {
 
   assert {
     condition = length(setsubtract(
-      ["logs:GetLogEvents", "logs:FilterLogEvents", "logs:StartQuery", "rds:DownloadDBLogFilePortion", "ssm:GetParameter", "ecr:GetDownloadUrlForLayer"],
+      [
+        "logs:GetLogEvents", "logs:FilterLogEvents", "logs:StartQuery", "logs:StartLiveTail", "logs:GetLogRecord",
+        "logs:GetQueryResults", "rds:Download*", "ssm:GetParameter", "ssm:GetParameterHistory",
+        "ecr:GetDownloadUrlForLayer", "sqs:ReceiveMessage", "dynamodb:Scan", "ec2:GetPasswordData", "lambda:GetFunction",
+      ],
       flatten([for s in jsondecode(aws_iam_role_policy.plan["staging"].policy).Statement : s.Action if s.Effect == "Deny"])
     )) == 0
     error_message = "The staging plan role must deny foreign data-plane reads."

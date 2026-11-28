@@ -44,7 +44,7 @@ terraform plan -out=bootstrap.tfplan                 # 4. read it: about 30 reso
 terraform apply bootstrap.tfplan                     # 5.
 terraform output -json oidc_subject_template > /tmp/oidc-sub.json                               # 6.
 gh api -X PUT repos/{owner}/{repo}/actions/oidc/customization/sub --input /tmp/oidc-sub.json     # 7. customise the sub
-gh api repos/{owner}/{repo}/actions/oidc/customization/sub     # 8. expect use_default=false and repo, context, job_workflow_ref
+gh api repos/{owner}/{repo}/actions/oidc/customization/sub     # 8. expect use_default=false and repo, context, job_workflow_ref, workflow_ref
 terraform output -json github_variables              # 9. paste into /schoolhub-deploy bootstrap
 ```
 

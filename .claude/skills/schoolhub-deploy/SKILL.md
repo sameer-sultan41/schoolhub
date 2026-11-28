@@ -85,7 +85,7 @@ git merge-base --is-ancestor <sha> origin/main                # accept only a fu
 `deploy production`), which carries the Environment gate and the `deploy-<env>` concurrency
 group. Rollout steps, in order: `Enabled?`, `Re-read the current deployment`, `Re-check`,
 `Migration guard`, `Create the deployment`, AWS credentials, `Verify all three images exist`,
-`Render migrate`, `Check the migrate render`, `Migrate`, `Migrate result`, `Roll out api`,
+`Migrate` (the `ecs-migrate` action: render, check, run, then `Migrate result`), `Roll out api`,
 `Roll out celery-worker`, `Roll out dashboard`, `Roll out website`, `Roll out celery-beat`,
 `celery-beat runningCount`, `CloudFront invalidation`, `Smoke tests`, `Mark success` /
 `On failure` / `On cancel`.
@@ -129,9 +129,9 @@ mutating AWS API. The two AWS reads below are printed for the human, who pastes 
 | Region enabled | human: `aws account get-region-opt-status --region-name <region>` | `ENABLED` or `ENABLED_BY_DEFAULT`. `me-central-1` is opt-in; if `DISABLED`, the human runs `aws account enable-region --region-name <region>` and waits before the bootstrap apply |
 | Env tfvars object, per env | human: `aws s3api list-objects-v2 --bucket <TF_STATE_BUCKET> --prefix schoolhub/<env>/terraform.tfvars --query "length(Contents[?Key=='schoolhub/<env>/terraform.tfvars'])"` | `1` present, `0` pending (until the env-apply step); any error fails. Not `head-object` (403 on a missing key) |
 | Repository variables | `gh variable list --json name,value` | `AWS_REGION`, `AWS_ACCOUNT_ID`, `ECR_REGISTRY`, `WEBSITE_IMAGE_HOSTNAME`, `PLAN_ROLE_ARN_STAGING`, `PLAN_ROLE_ARN_PRODUCTION`, `TF_STATE_BUCKET`, `TF_STATE_KMS_KEY_ARN` |
-| OIDC `sub` customisation | `gh api repos/$REPO/actions/oidc/customization/sub` | `use_default: false`, `include_claim_keys: ["repo","context","job_workflow_ref"]` |
+| OIDC `sub` customisation | `gh api repos/$REPO/actions/oidc/customization/sub` | `use_default: false`, `include_claim_keys: ["repo","context","job_workflow_ref","workflow_ref"]` (without `workflow_ref`, every deploy assume fails: the trusts pin the caller `deploy.yml@refs/heads/main`) |
 | Environments | `gh api repos/$REPO/environments --jq '.environments[] \| {id, name, protection_rules}'` | `staging` and `production`; production has `required_reviewers` naming the user and `prevent_self_review: false` |
-| Branch policy, per env | `gh api repos/$REPO/environments/<env>/deployment-branch-policies --jq '.branch_policies[].name'` | `main` |
+| Branch policy, per env | `gh api repos/$REPO/environments/<env>/deployment-branch-policies --jq '.branch_policies[].name'` | `main`, for `staging` as well as `production`: a branch run cannot enter either Environment |
 | Environment variables, per env | `gh variable list --env <env> --json name,value` | `DEPLOY_ROLE_ARN`, `ECS_CLUSTER`, `SMOKE_TENANT_SLUG`, `PLATFORM_DOMAIN`, `CLOUDFRONT_DISTRIBUTION_ID`, `MIGRATE_TASK_FAMILY`, `PRIVATE_SUBNETS`, `MIGRATE_SECURITY_GROUP` |
 | Bootstrap outputs recorded | from the two lists above | `ECR_REGISTRY`, `AWS_ACCOUNT_ID`, both `PLAN_ROLE_ARN_*`, both `DEPLOY_ROLE_ARN` set; no ARN contains `123456789012` |
 | Plan backend works | `gh run list --workflow infra-terraform.yml --branch main -L 1 --json databaseId,conclusion,url` | `success`; on failure `gh run view <id> --log-failed` (a failed `init` means a backend variable or `PLAN_ROLE_ARN_*` is not ready) |

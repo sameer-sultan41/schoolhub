@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-28
-- **Enforced by:** the trust policies in `infra/terraform/bootstrap/roles.tf` and `bootstrap/tests/bootstrap.tftest.hcl` (each deploy role trusts only `deploy-env.yml@refs/heads/main` in its own Environment; the production role's ECR actions are `ecr:DescribeImages` only; every role's session is 7200 s); `modules/gha-deploy-policy` and its test (services listed exactly, `iam:PassRole` to the env's own roles); `deploy-env.yml`'s `environment:` and `concurrency: deploy-<env>`; `.github/scripts/check_task_definition.py` (a render naming another environment's role, account or registry fails); `.github/scripts/check_migrations.py`, `ci_gate.py`, `deployments.py` and their tests in `.github/scripts/tests/` (the `deploy-scripts` job); `infra-terraform.yml`'s counts-only plan output; the `production` Environment's required reviewer and `main`-only branch policy (GitHub settings, review only); `.claude/settings.json`'s `ask` rules on `pending_deployments` (a second control); the guardrail hook (blocks `terraform apply` and mutating `aws` from agents)
+- **Enforced by:** the trust policies in `infra/terraform/bootstrap/roles.tf` and `bootstrap/tests/bootstrap.tftest.hcl` (each deploy role trusts only `deploy-env.yml@refs/heads/main` called by `deploy.yml@refs/heads/main`, in its own Environment; the production role's ECR actions are `ecr:DescribeImages` only; every role's session is 7200 s); `modules/gha-deploy-policy` and its test (services listed exactly, `iam:PassRole` to the env's own roles); `deploy-env.yml`'s `environment:` and `concurrency: deploy-<env>`; `.github/scripts/check_task_definition.py` (a render naming another environment's role, account or registry fails); `.github/scripts/check_migrations.py`, `ci_gate.py`, `deployments.py` and their tests in `.github/scripts/tests/` (the `deploy-scripts` job); `infra-terraform.yml`'s counts-only plan output; the `production` Environment's required reviewer, and the `main`-only branch policy on both `staging` and `production` (GitHub settings, checked by the skill's bootstrap mode); `.claude/settings.json`'s `ask` rules on `pending_deployments` (a second control); the guardrail hook (blocks `terraform apply` and mutating `aws` from agents)
 
 ## Context
 
@@ -20,8 +20,11 @@ be designed from scratch for a **public** repository, with one human operator, a
    `deploy-env.yml`, the only file that assumes a deploy role.
 2. **AWS access is GitHub OIDC, no stored keys.** Per environment, a plan role (read-only) and
    a deploy role (least privilege). The repository's OIDC `sub` is customised with
-   `["repo", "context", "job_workflow_ref"]`, and each deploy role trusts only
-   `environment:<env>:job_workflow_ref:<repo>/.github/workflows/deploy-env.yml@refs/heads/main`.
+   `["repo", "context", "job_workflow_ref", "workflow_ref"]`, and each deploy role trusts only
+   `environment:<env>:job_workflow_ref:<repo>/.github/workflows/deploy-env.yml@refs/heads/main:workflow_ref:<repo>/.github/workflows/deploy.yml@refs/heads/main`.
+   `job_workflow_ref` names the called file, so without `workflow_ref` a workflow on any
+   branch could call `deploy-env.yml@main` and take a deploy role; `workflow_ref` pins the
+   caller to `deploy.yml` on `main`. Both Environments also allow `main` only.
    Sessions last at most 7200 s. The production plan role trusts `main` only (its state holds
    the database master password); the staging plan role also trusts same-repository PRs.
 3. **One image per SHA, promoted unchanged.** The three ECR repositories live in the bootstrap
@@ -31,6 +34,8 @@ be designed from scratch for a **public** repository, with one human operator, a
    warns from 300 days.
 4. **GitHub Deployments record what is deployed.** One record per run, `task: deploy`, the SHA
    in `payload.target_sha` with every override; all readers go through `deployments.py`.
+   A record counts only when the Actions bot created it and its `payload.run_id` is a
+   `deploy.yml` run on `main` that was running when the record was made.
 5. **Infrastructure is applied by a human** from the CI plan. CI shows only a plan's
    add/change/destroy counts and the destructive flag; no full plan in logs, comments, the step
    summary or artifacts. There is no apply role in v1.

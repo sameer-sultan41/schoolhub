@@ -1,9 +1,14 @@
 # =============================================================================
 # CI roles, assumed through GitHub OIDC (D2, D3).
 #
-# The repository's OIDC sub is customised to include job_workflow_ref, so each
-# trust pins the workflow file and ref, not just the Environment:
-#   <prefix>:<context>:job_workflow_ref:<owner>/<repo>/.github/workflows/<file>@<ref>
+# The repository's OIDC sub is customised to include job_workflow_ref (the file
+# that runs the job) and workflow_ref (the workflow the run started from), so each
+# trust pins both files and their ref, not just the Environment:
+#   <prefix>:<context>:job_workflow_ref:<repo>/.github/workflows/<file>@<ref>:workflow_ref:<repo>/.github/workflows/<caller>@<ref>
+# For a reusable workflow, job_workflow_ref names the CALLED file. Without
+# workflow_ref, any branch's workflow could call deploy-env.yml@main and get a deploy
+# role; workflow_ref pins the caller to deploy.yml on main. For a workflow that is
+# not called, both claims name the same file.
 #
 # Policies are jsonencode()d locals, not aws_iam_policy_document, so
 # tests/bootstrap.tftest.hcl can assert them under a mocked provider.
@@ -14,11 +19,12 @@ locals {
   oidc_aud = "token.actions.githubusercontent.com:aud"
   oidc_sub = "token.actions.githubusercontent.com:sub"
 
-  workflow_ref_prefix = "job_workflow_ref:${var.github_repository}/.github/workflows"
-  deploy_workflow_ref = "${local.workflow_ref_prefix}/deploy-env.yml@refs/heads/main"
-  plan_main_ref       = "${local.workflow_ref_prefix}/infra-terraform.yml@refs/heads/main"
-  # The PR number is the only wildcard.
-  plan_pr_ref = "${local.workflow_ref_prefix}/infra-terraform.yml@refs/pull/*/merge"
+  workflows = "${var.github_repository}/.github/workflows"
+  # job_workflow_ref (called file) then workflow_ref (caller), in include_claim_keys order.
+  deploy_workflow_ref = "job_workflow_ref:${local.workflows}/deploy-env.yml@refs/heads/main:workflow_ref:${local.workflows}/deploy.yml@refs/heads/main"
+  plan_main_ref       = "job_workflow_ref:${local.workflows}/infra-terraform.yml@refs/heads/main:workflow_ref:${local.workflows}/infra-terraform.yml@refs/heads/main"
+  # The PR number is the only wildcard (once per claim).
+  plan_pr_ref = "job_workflow_ref:${local.workflows}/infra-terraform.yml@refs/pull/*/merge:workflow_ref:${local.workflows}/infra-terraform.yml@refs/pull/*/merge"
 
   # Every role allows 2 h; the deploy workflow requests at most 7200 s.
   max_session_seconds = 7200
@@ -199,11 +205,18 @@ locals {
           Resource = ["arn:aws:secretsmanager:${local.region}:${local.account_id}:secret:${local.env_prefix[local.other_env[env]]}/*"]
         },
         # Data-plane reads ReadOnlyAccess grants and a plan never needs, outside
-        # the role's own prefix. Application logs can carry tenant data.
+        # the role's own prefix. Application logs can carry tenant data. Checked
+        # against ReadOnlyAccess (logs:Get*, logs:StartLiveTail, rds:Download*,
+        # ssm:Get*, sqs:Receive*, dynamodb, ec2:Get*, lambda:Get*, athena) on
+        # 2026-11-28. GetLogRecord and GetQueryResults have no log-group resource,
+        # so NotResource never exempts them: they are denied everywhere.
         {
           Sid    = "DenyDataPlaneLogs"
           Effect = "Deny"
-          Action = ["logs:GetLogEvents", "logs:FilterLogEvents", "logs:StartQuery"]
+          Action = [
+            "logs:GetLogEvents", "logs:FilterLogEvents", "logs:StartQuery", "logs:StartLiveTail",
+            "logs:GetLogRecord", "logs:GetQueryResults",
+          ]
           NotResource = [
             "arn:aws:logs:${local.region}:${local.account_id}:log-group:/ecs/${local.env_prefix[env]}-*",
             "arn:aws:logs:${local.region}:${local.account_id}:log-group:/ecs/${local.env_prefix[env]}-*:*",
@@ -212,13 +225,13 @@ locals {
         {
           Sid         = "DenyDataPlaneRdsLogs"
           Effect      = "Deny"
-          Action      = ["rds:DownloadDBLogFilePortion"]
+          Action      = ["rds:Download*"]
           NotResource = ["arn:aws:rds:${local.region}:${local.account_id}:db:${local.env_prefix[env]}-*"]
         },
         {
           Sid         = "DenyDataPlaneSsm"
           Effect      = "Deny"
-          Action      = ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"]
+          Action      = ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath", "ssm:GetParameterHistory"]
           NotResource = ["arn:aws:ssm:${local.region}:${local.account_id}:parameter/${local.env_prefix[env]}/*"]
         },
         {
@@ -227,6 +240,27 @@ locals {
           Effect   = "Deny"
           Action   = ["ecr:GetDownloadUrlForLayer"]
           Resource = ["arn:aws:ecr:*:*:repository/*"]
+        },
+        {
+          # Services this stack does not use, whose ReadOnlyAccess reads return
+          # data rather than configuration. Denied everywhere, so a future table,
+          # queue or function is not readable by a PR plan by default.
+          Sid    = "DenyDataPlaneUnusedServices"
+          Effect = "Deny"
+          Action = [
+            "sqs:ReceiveMessage",
+            "dynamodb:GetItem", "dynamodb:BatchGetItem", "dynamodb:Query", "dynamodb:Scan",
+            "ec2:GetConsoleOutput", "ec2:GetConsoleScreenshot", "ec2:GetPasswordData",
+            "lambda:GetFunction",
+            "athena:GetQueryResults",
+          ]
+          Resource = [
+            "arn:aws:sqs:*:*:*",
+            "arn:aws:dynamodb:*:*:table/*",
+            "arn:aws:ec2:*:*:instance/*",
+            "arn:aws:lambda:*:*:function:*",
+            "arn:aws:athena:*:*:workgroup/*",
+          ]
         },
       ]
     }

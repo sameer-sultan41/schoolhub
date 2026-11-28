@@ -45,7 +45,7 @@ output "oidc_subject_template" {
   description = "Body for `gh api -X PUT repos/{owner}/{repo}/actions/oidc/customization/sub` (README first run)."
   value = {
     use_default        = false
-    include_claim_keys = ["repo", "context", "job_workflow_ref"]
+    include_claim_keys = ["repo", "context", "job_workflow_ref", "workflow_ref"]
   }
 }
 
