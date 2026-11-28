@@ -113,17 +113,44 @@ def ours(deployments: list[dict]) -> list[dict]:
     )
 
 
+def run_title(env: str, sha: str, mode: str) -> str:
+    """deploy.yml's run-name: `deploy <environment> <sha> (<mode>)`."""
+    return f"deploy {env} {sha} ({mode})"
+
+
+def run_key(deployment: dict) -> tuple[str, str]:
+    payload = _payload(deployment)
+    return (str(payload.get("run_id", "")), str(payload.get("run_attempt", "")))
+
+
+def unique_runs(deployments: list[dict]) -> list[dict]:
+    """Drop every record whose (run_id, run_attempt) appears more than once: one attempt
+    of a deploy run creates one record, so a second one claiming it is forged, and which
+    of the two is real cannot be told apart."""
+    counts: dict[tuple[str, str], int] = {}
+    for d in deployments:
+        counts[run_key(d)] = counts.get(run_key(d), 0) + 1
+    return [d for d in deployments if counts[run_key(d)] == 1]
+
+
 def run_matches(deployment: dict, run: dict | None) -> bool:
-    """True when payload.run_id names a deploy.yml run on main that was live when the
-    record was created. Any workflow with `deployments: write` can create a record as the
-    bot, so the creator alone proves nothing."""
+    """True when payload.run_id names a deploy.yml run on main, for this environment, SHA
+    and mode (its run-name), with this attempt, that was live when the record was created.
+    Any workflow with `deployments: write` can create a record as the bot, so the creator
+    alone proves nothing."""
     if not run:
         return False
+    payload = _payload(deployment)
     created = deployment.get("created_at") or ""
+    attempt = str(payload.get("run_attempt", ""))
     return (
         (run.get("path") or "").split("@")[0] == DEPLOY_WORKFLOW_PATH
         and run.get("head_branch") == "main"
         and run.get("event") in DEPLOY_RUN_EVENTS
+        and run.get("display_title")
+        == run_title(str(deployment.get("environment")), str(target_sha(deployment)), str(payload.get("mode")))
+        and attempt.isdigit()
+        and 1 <= int(attempt) <= int(run.get("run_attempt") or 1)
         and (run.get("created_at") or "") <= created <= (run.get("updated_at") or "")
     )
 
@@ -202,7 +229,9 @@ class Deployments:
 
     def load(self, env: str) -> tuple[list[dict], dict[int, list[dict]]]:
         deployments = [
-            d for d in ours(self.list(env)) if run_matches(d, self.run(str(_payload(d).get("run_id", ""))))
+            d
+            for d in unique_runs(ours(self.list(env)))
+            if run_matches(d, self.run(str(_payload(d).get("run_id", ""))))
         ]
         return deployments, {d["id"]: self.statuses(d["id"]) for d in deployments}
 
@@ -335,6 +364,7 @@ def main(argv: list[str], api: Api = gh_api) -> int:
                 "acknowledge_migration_review": args.ack_review,
                 "contract_override": args.contract_override,
                 "run_id": os.environ.get("GITHUB_RUN_ID", ""),
+                "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT", ""),
                 "actor": os.environ.get("GITHUB_ACTOR", ""),
             }
             deployment_id = gh.create(args.env, args.sha, args.mode, payload)

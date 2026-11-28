@@ -19,17 +19,20 @@ A, B, C = "a" * 40, "b" * 40, "c" * 40
 def dep(i: int, sha: str, task: str = "deploy", record_sha: str | None = None,
         creator: str = dp.BOT_LOGIN, **payload: object) -> dict:
     return {
-        "id": i, "task": task, "sha": record_sha or sha, "created_at": f"2026-11-{10 + i:02d}T00:00:00Z",
-        "payload": {"target_sha": sha, "run_id": str(900 + i), **payload}, "creator": {"login": creator},
+        "id": i, "task": task, "sha": record_sha or sha, "environment": "staging",
+        "created_at": f"2026-11-{10 + i:02d}T00:00:00Z", "creator": {"login": creator},
+        "payload": {"target_sha": sha, "mode": "deploy", "run_id": str(900 + i), "run_attempt": "1", **payload},
     }
 
 
-def deploy_run(i: int, path: str = ".github/workflows/deploy.yml", branch: str = "main",
-               event: str = "push") -> dict:
-    """The deploy.yml run that created dep(i): live across the record's created_at."""
+def deploy_run(i: int, sha: str = A, path: str = ".github/workflows/deploy.yml", branch: str = "main",
+               event: str = "push", title: str | None = None, attempts: int = 1) -> dict:
+    """The deploy.yml run that created dep(i, sha): live across the record's created_at."""
     day = 10 + i
     return {
-        "id": 900 + i, "path": path, "head_branch": branch, "event": event,
+        "id": 900 + i, "path": path, "head_branch": branch, "event": event, "run_attempt": attempts,
+        # deploy.yml's run-name: deploy <environment> <sha> (<mode>)
+        "display_title": title or f"deploy staging {sha} (deploy)",
         "created_at": f"2026-11-{day:02d}T00:00:00Z", "updated_at": f"2026-11-{day:02d}T01:00:00Z",
     }
 
@@ -68,6 +71,34 @@ class PureCoreTests(unittest.TestCase):
 
     def test_record_created_outside_the_run_does_not_match(self) -> None:
         self.assertFalse(dp.run_matches(dep(1, A), deploy_run(2)))
+
+    def test_record_created_after_the_run_ended_does_not_match(self) -> None:
+        run = deploy_run(1) | {"created_at": "2026-11-10T00:00:00Z", "updated_at": "2026-11-10T01:00:00Z"}
+        self.assertFalse(dp.run_matches(dep(1, A), run))
+
+    def test_run_from_another_event_does_not_match(self) -> None:
+        self.assertFalse(dp.run_matches(dep(1, A), deploy_run(1, event="pull_request")))
+
+    def test_run_for_another_sha_does_not_match(self) -> None:
+        self.assertFalse(dp.run_matches(dep(1, A), deploy_run(1, sha=B)))
+
+    def test_run_for_another_mode_does_not_match(self) -> None:
+        self.assertFalse(dp.run_matches(dep(1, A), deploy_run(1, title=f"deploy staging {A} (rollback)")))
+
+    def test_run_for_another_environment_does_not_match(self) -> None:
+        self.assertFalse(dp.run_matches(dep(1, A), deploy_run(1, title=f"deploy production {A} (deploy)")))
+
+    def test_attempt_beyond_the_runs_attempts_does_not_match(self) -> None:
+        self.assertFalse(dp.run_matches(dep(1, A, run_attempt="2"), deploy_run(1)))
+        self.assertTrue(dp.run_matches(dep(1, A, run_attempt="2"), deploy_run(1, attempts=2)))
+
+    def test_records_sharing_a_run_attempt_are_all_dropped(self) -> None:
+        real, forged = dep(1, A), dep(2, A, run_id="901")
+        self.assertEqual(dp.unique_runs([real, forged]), [])
+
+    def test_records_of_different_attempts_of_one_run_are_kept(self) -> None:
+        first, rerun = dep(1, A), dep(2, A, run_id="901", run_attempt="2")
+        self.assertEqual(dp.unique_runs([first, rerun]), [first, rerun])
 
     def test_deploy_run_on_main_matches(self) -> None:
         self.assertTrue(dp.run_matches(dep(1, A), deploy_run(1, event="workflow_dispatch")))
@@ -172,15 +203,16 @@ class CreateTests(unittest.TestCase):
         api = FakeApi([
             listing,
             dp.ApiResult(0, json.dumps(deploy_run(1)), ""),
-            dp.ApiResult(0, json.dumps(deploy_run(2, branch="feature")), ""),
+            dp.ApiResult(0, json.dumps(deploy_run(2, sha=B, branch="feature")), ""),
             dp.ApiResult(0, json.dumps(st("success")[0]), ""),
         ])
         code, out = run_main(["deployments.py", "--repo", "o/r", "current", "--env", "staging"], api)
         self.assertEqual((code, out.strip()), (0, A))
 
     def test_each_run_is_fetched_once(self) -> None:
-        listing = dp.ApiResult(0, json.dumps(dep(1, A)) + "\n" + json.dumps(dep(2, B, run_id="901")), "")
-        run = dp.ApiResult(0, json.dumps(deploy_run(1) | {"updated_at": "2026-11-13T00:00:00Z"}), "")
+        second = dep(2, B, run_id="901", run_attempt="2")
+        listing = dp.ApiResult(0, json.dumps(dep(1, A)) + "\n" + json.dumps(second), "")
+        run = dp.ApiResult(0, json.dumps(deploy_run(1, attempts=2) | {"updated_at": "2026-11-13T00:00:00Z"}), "")
         ok = dp.ApiResult(0, json.dumps(st("success")[0]), "")
         api = FakeApi([listing, run, ok, ok])
         run_main(["deployments.py", "--repo", "o/r", "current", "--env", "staging"], api)

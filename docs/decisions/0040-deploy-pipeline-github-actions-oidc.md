@@ -34,8 +34,10 @@ be designed from scratch for a **public** repository, with one human operator, a
    warns from 300 days.
 4. **GitHub Deployments record what is deployed.** One record per run, `task: deploy`, the SHA
    in `payload.target_sha` with every override; all readers go through `deployments.py`.
-   A record counts only when the Actions bot created it and its `payload.run_id` is a
-   `deploy.yml` run on `main` that was running when the record was made.
+   A record counts only when the Actions bot created it, its `payload.run_id` is a
+   `deploy.yml` run on `main` whose run-name names the record's environment, SHA and mode,
+   that run was live when the record was made, and no other record claims the same
+   `run_id` and `run_attempt`.
 5. **Infrastructure is applied by a human** from the CI plan. CI shows only a plan's
    add/change/destroy counts and the destructive flag; no full plan in logs, comments, the step
    summary or artifacts. There is no apply role in v1.
