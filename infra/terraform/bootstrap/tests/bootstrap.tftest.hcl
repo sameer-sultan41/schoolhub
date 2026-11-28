@@ -111,7 +111,7 @@ run "production_deploy_ecr_actions_exact" {
     condition = sort(distinct(flatten([
       for s in jsondecode(aws_iam_role_policy.deploy_ecr["production"].policy).Statement :
       [for a in s.Action : a if startswith(a, "ecr:")]
-    ]))) == ["ecr:DescribeImages"]
+    ]))) == tolist(["ecr:DescribeImages"])
     error_message = "The production deploy role's only ECR action must be ecr:DescribeImages: no push, pull or retag."
   }
 }
