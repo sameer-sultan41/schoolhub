@@ -24,7 +24,8 @@ export function TenantExportPanel({ tenantId }: { tenantId: string }) {
   const t = useTranslations("platform.lifecycle.delete.export");
   const tErrors = useTranslations("errors");
   const tCommon = useTranslations("common");
-  // One key per panel: a retry after a lost answer replays the first start.
+  // One key per attempt: a retry after a lost answer replays its start. A failed job ends the
+  // attempt, since the server would replay that key's 202 with the failed job.
   const keyRef = useRef<string>(crypto.randomUUID());
   const [jobId, setJobId] = useState<string | null>(null);
 
@@ -59,8 +60,12 @@ export function TenantExportPanel({ tenantId }: { tenantId: string }) {
           isLoading={isBusy}
           loadingLabel={t("running", { progress: job?.progress ?? 0 })}
           onClick={() => {
-            if (watch.isTimedOut || watch.isError) watch.resume();
-            else start.mutate();
+            if (watch.isTimedOut || watch.isError) {
+              watch.resume();
+              return;
+            }
+            if (job?.status === "failed") keyRef.current = crypto.randomUUID();
+            start.mutate();
           }}
           disabled={job?.status === "succeeded"}
         >

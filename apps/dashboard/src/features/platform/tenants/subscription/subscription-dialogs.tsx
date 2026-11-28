@@ -57,7 +57,8 @@ interface ActivateValues {
 /**
  * `:activate`: a trial converts to paying (its plan stays), or a school with no live
  * subscription starts paying for the plan picked. `subscription_exists` (409) means it already
- * has one; change its plan instead.
+ * has one; change its plan instead. A plan below the school's usage is a 409
+ * `limit_below_usage`, answered like change-plan's: list the breaches, resend acknowledged.
  */
 export function ActivateSubscriptionDialog({
   tenant,
@@ -70,67 +71,96 @@ export function ActivateSubscriptionDialog({
   const done = useSubscriptionDone(tenant, onOpenChange);
   const needsPlan = state.subscription === null;
 
+  const describeError = usePlatformErrorDescriber();
+  const [overUsage, setOverUsage] = useState<{
+    breaches: OverUsage[];
+    values: ActivateValues;
+  } | null>(null);
+
   const form = useForm<ActivateValues>({
     defaultValues: { plan_code: "", current_period_start: "", current_period_end: "" },
   });
   const key = useIdempotencyKey(form);
+  // The acknowledged resend is a different body, so it has its own key, stable for this open.
+  const [acknowledgedKey] = useState(() => crypto.randomUUID());
+  const activate = (values: ActivateValues, acknowledged: boolean) =>
+    Services.platform.activateSubscription(
+      tenant.id,
+      {
+        ...(needsPlan ? { plan_code: values.plan_code || null } : {}),
+        current_period_start: localInputToIso(values.current_period_start) ?? "",
+        current_period_end: localInputToIso(values.current_period_end) ?? "",
+        acknowledge_over_usage: acknowledged,
+      },
+      { idempotencyKey: acknowledged ? acknowledgedKey : key.current() },
+    );
 
   const { handleSubmit, formError, isPending } = useFormDialogSubmit({
     form,
     knownFields: ["plan_code", "current_period_start", "current_period_end"],
     fallbackMessage: tCommon("submitFailed"),
-    mutationFn: (values: ActivateValues) =>
-      Services.platform.activateSubscription(
-        tenant.id,
-        {
-          ...(needsPlan ? { plan_code: values.plan_code || null } : {}),
-          current_period_start: localInputToIso(values.current_period_start) ?? "",
-          current_period_end: localInputToIso(values.current_period_end) ?? "",
-          acknowledge_over_usage: false,
-        },
-        { idempotencyKey: key.current() },
-      ),
+    describeError,
+    mutationFn: (values: ActivateValues) => activate(values, false),
     onSuccess: () => {
       key.clear();
       done("activate.done");
     },
+    // A paid sign-up onto a plan below the school's usage: ask, as change-plan does.
+    onError: (error, values) => {
+      const breaches = overUsageOf(error);
+      setOverUsage(breaches ? { breaches, values } : null);
+    },
   });
 
   return (
-    <FormDialogLayout
-      open
-      onOpenChange={onOpenChange}
-      title={t("activate.title", { name: tenant.name })}
-      description={t(needsPlan ? "activate.descriptionNew" : "activate.descriptionTrial")}
-      form={form}
-      onSubmit={handleSubmit}
-      formError={formError}
-      isPending={isPending}
-      submittingLabel={t("activate.submitting")}
-      submitLabel={t("activate.submit")}
-    >
-      {needsPlan && (
-        <FormSelectField
+    <>
+      <FormDialogLayout
+        open
+        onOpenChange={onOpenChange}
+        title={t("activate.title", { name: tenant.name })}
+        description={t(needsPlan ? "activate.descriptionNew" : "activate.descriptionTrial")}
+        form={form}
+        onSubmit={handleSubmit}
+        formError={formError}
+        isPending={isPending}
+        submittingLabel={t("activate.submitting")}
+        submitLabel={t("activate.submit")}
+      >
+        {needsPlan && (
+          <FormSelectField
+            form={form}
+            name="plan_code"
+            label={t("plan")}
+            placeholder={t("choosePlan")}
+            options={planOptions(plans.data)}
+          />
+        )}
+        <FormTextField
           form={form}
-          name="plan_code"
-          label={t("plan")}
-          placeholder={t("choosePlan")}
-          options={planOptions(plans.data)}
+          name="current_period_start"
+          type="datetime-local"
+          label={t("periodStart")}
+        />
+        <FormTextField
+          form={form}
+          name="current_period_end"
+          type="datetime-local"
+          label={t("periodEnd")}
+        />
+      </FormDialogLayout>
+      {overUsage && (
+        <AcknowledgeOverUsageDialog
+          breaches={overUsage.breaches}
+          onCancel={() => {
+            setOverUsage(null);
+          }}
+          resend={() => activate(overUsage.values, true)}
+          onSaved={() => {
+            done("activate.done");
+          }}
         />
       )}
-      <FormTextField
-        form={form}
-        name="current_period_start"
-        type="datetime-local"
-        label={t("periodStart")}
-      />
-      <FormTextField
-        form={form}
-        name="current_period_end"
-        type="datetime-local"
-        label={t("periodEnd")}
-      />
-    </FormDialogLayout>
+    </>
   );
 }
 
