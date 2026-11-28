@@ -7,6 +7,7 @@ attributed to the grant's school. A start and an end tell the school's owners in
 from __future__ import annotations
 
 from apps.platform_admin import notifications
+from apps.platform_admin.impersonation.services import SUPPORT_NAME, operator_name
 from apps.platform_admin.models import ImpersonationEnd, ImpersonationGrant
 from core.audit.services import record_security_event, record_task_security_event
 
@@ -64,8 +65,6 @@ def ended(grant: ImpersonationGrant, *, request=None) -> None:
         _notify(grant, "ended")
 
 
-# Named to the school without any of the operator's contact details.
-SUPPORT_NAME = "SchoolHub support"
 _WHEN = "%Y-%m-%d %H:%M UTC"
 
 
@@ -74,10 +73,7 @@ def _notify(grant: ImpersonationGrant, event: str) -> None:
         timing = f"It ends by {grant.expires_at.strftime(_WHEN)} at the latest."
     else:
         timing = f"It ended at {(grant.released_at or grant.expires_at).strftime(_WHEN)}."
-    # Not `get_full_name()`: it falls back to the email, which the school must not see.
-    operator = " ".join(
-        part for part in (grant.granted_to.first_name, grant.granted_to.last_name) if part
-    ).strip()
+    operator = operator_name(grant.granted_to)
     notifications.notify_owners(
         grant.tenant,
         notifications.IMPERSONATION,

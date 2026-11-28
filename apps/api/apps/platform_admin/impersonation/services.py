@@ -36,6 +36,15 @@ HANDOFF_PATH = "/impersonate"
 REVOKING_ROLE = PLATFORM_SUPER_ADMIN
 
 
+# Named to the school without any of the operator's contact details.
+SUPPORT_NAME = "SchoolHub support"
+
+
+def operator_name(user: User) -> str:
+    """First and last name, empty when unset (`get_full_name()` would fall back to the email)."""
+    return " ".join(part for part in (user.first_name, user.last_name) if part).strip()
+
+
 @dataclass(frozen=True)
 class Exchanged:
     """What one exchange did: a token, or a refusal naming the grant the code matched, if any.
@@ -162,7 +171,7 @@ def live_grant(
     return LiveGrant(
         grant_id=grant.pk,
         operator_id=grant.granted_to_id,
-        operator_name=grant.granted_to.get_full_name(),
+        operator_name=operator_name(grant.granted_to) or SUPPORT_NAME,
         expires_at=grant.expires_at,
     )
 
