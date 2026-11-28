@@ -61,10 +61,6 @@ either this file or `project-status.md`.
     /platform/tenants/{id}/subscription` (`limits_override`, `billing_provider`,
     `billing_provider_ref`, with its `acknowledge_over_usage` 409) is in the API; the Subscription
     tab shows the values but cannot edit them. The acknowledgement dialog is ready to reuse.
-  - **Report headings are the server's keys, humanised.** A section or column name
-    (`mrr_by_plan`, `plan_code`) reads "Mrr by plan", never translated, because the report
-    registry declares no labels the client could key on. Labels in `reports/registry.py`, or a
-    client map per report, would fix it.
   - **`quota_exceeded` on a school's own screens names no metric.** It shows the generic
     `errors.quota_exceeded`; `meta` carries `{metric, limit, usage}`, which `resolveErrorMessage`
     does not interpolate. A school screen that creates students or staff could say which limit.
@@ -75,10 +71,10 @@ either this file or `project-status.md`.
   - **A signed-in operator at `/login` or `/` takes one extra hop.** The proxy can't tell who is
     signed in (an opaque cookie), so it sends them to `/dashboard`, and `AudienceGate` then
     sends them to `/platform`.
-  - **An export's download link is fetched once.** The link from the job poll is short-lived;
-    after it expires the dialog must be reopened, which starts a new export rather than
-    re-polling the succeeded job for a fresh link.
   - **Recovery codes can be copied, not downloaded or printed.**
+  - **`toggle_refused` in Urdu names the flag but not the reason.** The server's reason is an
+    English sentence from the guard, so Urdu leaves it out rather than mix languages; a reason
+    code on the refusal would let both locales translate it.
 
 - **Platform scope (RBAC), what platform-admin PR A leaves out** (Task 1, `core/rbac/sync.py`,
   ADR-0036).
