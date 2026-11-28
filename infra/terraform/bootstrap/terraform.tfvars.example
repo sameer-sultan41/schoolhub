@@ -1,0 +1,26 @@
+# =============================================================================
+# Copy to terraform.tfvars (git-ignored) and fill in. No secrets belong here.
+# =============================================================================
+
+# me-central-1 or ap-south-1 (D20). me-central-1 is an opt-in region: enable it first.
+aws_region = "me-central-1"
+
+# Exact OIDC sub prefix. Repositories created after 15 July 2026 use the immutable
+# form repo:<owner>@<owner-id>/<repo>@<repo-id>.
+# Source: gh api repos/{owner}/{repo}/actions/oidc/customization/sub
+github_oidc_subject_prefix = "repo:example-owner/schoolhub"
+
+# <owner>/<repo> by name; job_workflow_ref always uses names.
+github_repository = "example-owner/schoolhub"
+
+# Human admin principals allowed to change the state bucket's versioning,
+# lifecycle and policy, and to delete object versions.
+# Source: aws sts get-caller-identity (use the role ARN, not the session ARN).
+state_admin_principal_arns = ["arn:aws:iam::123456789012:role/Admin"]
+
+# Set false if the account already has the token.actions.githubusercontent.com provider.
+create_oidc_provider = true
+
+# ECR expiry, in days since push. Defaults: 365 for SHA tags, 7 untagged.
+# ecr_sha_tag_max_age_days  = 365
+# ecr_untagged_max_age_days = 7

@@ -22,9 +22,11 @@ on:
     # then.
     branches: [main, "feat/**", "fix/**", "chore/**", "refactor/**"]
 
+# On main, one group per SHA: ci_gate.py (deploy.yml) reads every main run, so none may
+# be cancelled or left pending behind another. PR branches still cancel stale runs.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
@@ -268,3 +270,48 @@ jobs:
         run: python3 -m unittest discover -s .github/scripts/tests -p test_check_settings_modules.py -v
       - name: Every config.settings.<name> in envs/*/main.tf has a file
         run: python3 .github/scripts/check_settings_modules.py .
+
+  # The deploy pipeline's own checkers (deploy.yml, deploy-env.yml). No `if:`, so they
+  # also run on push to main, where ci_gate.py reads this workflow's result.
+  deploy-scripts:
+    name: Deploy checkers' unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Migration guard tests
+        run: python3 -m unittest discover -s .github/scripts/tests -p 'test_check_migrations.py' -v
+      - name: CI gate tests
+        run: python3 -m unittest discover -s .github/scripts/tests -p 'test_ci_gate.py' -v
+      - name: Deployments API tests
+        run: python3 -m unittest discover -s .github/scripts/tests -p 'test_deployments.py' -v
+      - name: Task definition check tests
+        run: python3 -m unittest discover -s .github/scripts/tests -p 'test_check_task_definition.py' -v
+      # Early warning only: a contract migration is legal to merge (it deploys with the
+      # override), but the author should see it at review time, not at deploy time.
+      # HEAD^1 is the base tip of the PR's synthetic merge commit, HEAD^2 the PR head.
+      - name: Migration guard on this PR (warning only)
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        run: python3 .github/scripts/check_migrations.py --base HEAD^1 --target HEAD^2
+
+  # Lints only the workflows the deploy plan writes; the older workflows were never
+  # linted, and fixing their findings is tracked in docs/deferred-work.md.
+  actionlint:
+    name: actionlint (deploy workflows)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Download actionlint v1.7.12
+        # The download script is read at the release's commit, not a branch.
+        run: |
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/914e7df21a07ef503a81201c76d2b11c789d3fca/scripts/download-actionlint.bash) 1.7.12
+      - name: actionlint
+        run: |
+          files=()
+          for f in .github/workflows/deploy.yml .github/workflows/deploy-env.yml .github/workflows/infra-terraform.yml; do
+            if [ -f "$f" ]; then files+=("$f"); fi
+          done
+          echo "linting: ${files[*]}"
+          ./actionlint -color "${files[@]}"

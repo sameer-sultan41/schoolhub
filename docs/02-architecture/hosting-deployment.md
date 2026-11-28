@@ -32,25 +32,37 @@ Scored 1–5 (5 best) for this workload: containerized Django + Celery + two Nex
 | Purpose | Local feature work | Pre-release verification, UAT, migration rehearsal | Live tenants |
 | Runs | docker-compose (Postgres, Redis, MinIO, Mailpit) | Scaled-down copy of prod topology | Full topology, autoscaled workers |
 | Data | Seed/fixture tenants | Anonymized synthetic tenants — **never** production PII | Real tenant data |
-| Deploy trigger | — | Auto on merge to `main` | Manual approval gate |
+| Deploy trigger | — | Auto on green push to `main` (`deploy.yml`) | Dispatch with a SHA + Environment approval |
 | Domains | `*.localhost` | `*.staging.<platform-domain>` | `*.<platform-domain>` + custom domains |
 | Providers | Mocks/sandboxes (Mailpit, SMS sandbox) | Sandbox credentials | Live credentials |
 | Error tracking | Off/local | Sentry (staging env tag) | Sentry + alerting |
 
 ## 3. CI/CD Pipeline (GitHub Actions)
 
-Per repo, on every PR and on `main`:
+Deploys run only in GitHub Actions, never from a laptop ([ADR-0040](../decisions/0040-deploy-pipeline-github-actions-oidc.md)).
+The operator's entry point is the `schoolhub-deploy` skill (`/schoolhub-deploy`), which
+starts and watches runs with `gh` ([`infra/runbooks/deploy.md`](../../infra/runbooks/deploy.md)).
 
 ```
-lint  →  test  →  build image  →  [staging] migrate → deploy → smoke test
-                                   └── manual approval gate ──▶ [prod] migrate → deploy → smoke test
+PR:    lint → test → build check (CI workflows, path-filtered)
+
+main:  push ─▶ deploy.yml: resolve → ci-gate (CI green for this SHA) → preview (migration guard)
+             └─▶ deploy-env.yml [staging]: build images (arm64, tag = SHA, push to ECR)
+                                          → migrate → api → celery-worker → dashboard → website → celery-beat
+                                          → CloudFront invalidation → smoke → GitHub Deployment success
+
+dispatch (sha): deploy.yml [production]: resolve → ci-gate → preview (staging ran it? migrations?)
+             └─▶ deploy-env.yml: ── production Environment approval ──▶ verify images exist (no build)
+                                          → migrate → rollout (same order) → invalidation → smoke → Deployment
 ```
 
 - **PR checks:** lint (ruff / eslint), type checks (mypy / tsc), unit + API tests with a real Postgres service container (RLS and cross-tenant tests included), missing-migration check, gitleaks, dependency audit.
-- **Build:** one immutable image per service per commit, tagged with the git SHA, pushed to the registry. The same image moves staging → prod (no rebuilds between environments).
+- **Build:** one immutable image per service per commit, built once by the staging run, tagged with the full git SHA, pushed to ECR. The ECR repositories live in the Terraform **bootstrap** root, shared by both environments, so the same image moves staging → prod (no rebuilds between environments). Tags are immutable and expire 365 days after push.
 - **One settings module:** every deployed environment runs the API with `config.settings.prod` and differs only by values (`ENVIRONMENT`, hosts, secret ARNs), so staging rehearses production's configuration. `repo-hygiene` fails if Terraform names a settings module that has no file.
-- **Migrate step** runs as a one-off job against the target database **before** the new version receives traffic (see §7).
-- **Prod gate:** a GitHub Environments manual approval; deploys are recorded (who, what SHA, when) for the audit trail.
+- **Migrate step** runs as a one-off ECS task against the target database **before** the new version receives traffic (see §6). `check_migrations.py` blocks non-expand migrations unless explicitly overridden.
+- **AWS access:** GitHub OIDC, one deploy role per environment, trusted only for `deploy-env.yml` on `main` in that environment's GitHub Environment. No stored keys.
+- **Prod gate:** the `production` GitHub Environment's required reviewer. **Record:** every run creates a GitHub Deployment (SHA, actor, overrides, status), which is the source of "what is deployed where".
+- **Infrastructure:** `infra-terraform.yml` plans on PRs and `main` (CI shows only add/change/destroy counts; the repository is public); a human applies.
 - Frontend CI additionally regenerates the OpenAPI client and fails on contract breaks ([`repo-structure.md`](repo-structure.md) §6.1).
 
 ## 4. Domains, DNS & TLS
@@ -63,6 +75,7 @@ lint  →  test  →  build image  →  [staging] migrate → deploy → smoke t
 
 - Production/staging secrets live in the **platform secret manager** (PaaS/environment secrets, or AWS Secrets Manager on tier (a)), injected as environment variables at deploy; never in images, never in git (gitleaks-enforced).
 - Where secrets must live in the repo (e.g. IaC values), use **SOPS with age/KMS encryption** (recommendation) so encrypted files are diffable and access-controlled.
+- **CI reaches AWS by OIDC only:** short-lived role sessions per environment, no AWS keys stored in GitHub ([ADR-0040](../decisions/0040-deploy-pipeline-github-actions-oidc.md)). App secrets stay in Secrets Manager and are never GitHub secrets.
 - Rotation: quarterly for provider keys, immediately on personnel change or suspected exposure; DB credentials rotated via the managed provider. Access to prod secrets is limited to the deploy pipeline plus named operators, and audited.
 
 ## 6. Database Migration Process in Deploys
@@ -81,7 +94,7 @@ lint  →  test  →  build image  →  [staging] migrate → deploy → smoke t
 
 ## 8. Rollback Strategy
 
-- **Application:** redeploy the previous immutable image tag — a one-command, minutes-scale operation because images are versioned and config is external.
+- **Application:** redeploy the previous immutable image tag — `/schoolhub-deploy rollback`, which runs `gh workflow run deploy.yml --ref main -f environment=<env> -f sha=<previous sha> -f mode=rollback` (no build, no migration). A minutes-scale operation because images are versioned and config is external. A rollback across a deployment that shipped a contract migration needs explicit confirmation.
 - **Database:** expand–contract means the previous app version always runs against the migrated schema, so rollback normally requires **no** schema reversal. Reverse migrations exist for expand steps where meaningful; data-destructive rollback is instead handled via PITR to a scratch instance and targeted repair.
 - **Websites:** ISR caches are purged on rollback; CDN serves the previous renderer build immediately.
 - **Kill switches:** per-module feature flags ([`multi-tenancy.md`](multi-tenancy.md) §5) allow disabling a faulty feature without any deploy — the first rollback tool, not the last.

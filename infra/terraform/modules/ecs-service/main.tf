@@ -58,6 +58,38 @@ locals {
       valueFrom = v
     }
   ]
+
+  # A valueFrom with a JSON key (<arn>:password::) is not an IAM resource; the
+  # first 7 colon-separated fields are the secret's ARN.
+  secret_resource_arns = distinct([
+    for v in values(var.secret_arns) : join(":", slice(split(":", v), 0, min(7, length(split(":", v)))))
+  ])
+
+  execution_secrets_policy = {
+    Version = "2012-10-17"
+    Statement = concat(
+      [
+        {
+          # Exactly the secrets this service is given, by ARN. Not
+          # secretsmanager:* and not a prefix wildcard.
+          Sid      = "ReadInjectedSecrets"
+          Effect   = "Allow"
+          Action   = ["secretsmanager:GetSecretValue", "ssm:GetParameters"]
+          Resource = local.secret_resource_arns
+        },
+      ],
+      length(var.secret_kms_key_arns) > 0 ? [
+        {
+          # Secrets encrypted with a customer-managed key (RDS master, Redis token).
+          Sid       = "DecryptInjectedSecrets"
+          Effect    = "Allow"
+          Action    = ["kms:Decrypt"]
+          Resource  = var.secret_kms_key_arns
+          Condition = { StringEquals = { "kms:ViaService" = "secretsmanager.${data.aws_region.current.region}.amazonaws.com" } }
+        },
+      ] : [],
+    )
+  }
 }
 
 # A singleton service running two copies is a correctness bug, not a capacity
@@ -111,30 +143,12 @@ resource "aws_iam_role_policy_attachment" "execution_managed" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-data "aws_iam_policy_document" "execution_secrets" {
-  count = length(var.secret_arns) > 0 ? 1 : 0
-
-  statement {
-    sid    = "ReadInjectedSecrets"
-    effect = "Allow"
-
-    actions = [
-      "secretsmanager:GetSecretValue",
-      "ssm:GetParameters",
-    ]
-
-    # Exactly the secrets this service is given, by ARN. Not secretsmanager:*
-    # and not a prefix wildcard.
-    resources = values(var.secret_arns)
-  }
-}
-
 resource "aws_iam_role_policy" "execution_secrets" {
   count = length(var.secret_arns) > 0 ? 1 : 0
 
   name   = "${local.name}-secrets"
   role   = aws_iam_role.execution.id
-  policy = data.aws_iam_policy_document.execution_secrets[0].json
+  policy = jsonencode(local.execution_secrets_policy)
 }
 
 # -----------------------------------------------------------------------------
@@ -273,7 +287,7 @@ data "aws_region" "current" {}
 # Load balancer target
 # -----------------------------------------------------------------------------
 resource "aws_lb_target_group" "this" {
-  count = var.expose_via_alb ? 1 : 0
+  count = var.create_service && var.expose_via_alb ? 1 : 0
 
   name        = substr("${local.name}-tg", 0, 32)
   port        = var.container_port
@@ -304,7 +318,7 @@ resource "aws_lb_target_group" "this" {
 }
 
 resource "aws_lb_listener_rule" "this" {
-  count = var.expose_via_alb && length(var.host_headers) > 0 ? 1 : 0
+  count = var.create_service && var.expose_via_alb && length(var.host_headers) > 0 ? 1 : 0
 
   listener_arn = var.listener_arn
   priority     = var.listener_rule_priority
@@ -327,6 +341,9 @@ resource "aws_lb_listener_rule" "this" {
 # Service
 # -----------------------------------------------------------------------------
 resource "aws_ecs_service" "this" {
+  # false for one-off tasks (migrate, db-bootstrap): task definition, roles and logs only.
+  count = var.create_service ? 1 : 0
+
   name            = local.name
   cluster         = var.cluster_arn
   task_definition = aws_ecs_task_definition.this.arn
@@ -353,17 +370,19 @@ resource "aws_ecs_service" "this" {
   }
 
   # Rolling deployment with room for a full extra set of tasks, and never below
-  # 100% healthy: a deploy must not reduce capacity.
-  deployment_maximum_percent         = 200
-  deployment_minimum_healthy_percent = 100
+  # 100% healthy: a deploy must not reduce capacity. The singleton is the
+  # exception: 100/0 makes ECS stop the old beat before starting the new one,
+  # a 1-2 minute gap with no scheduler instead of two schedulers.
+  deployment_maximum_percent         = local.is_singleton ? 100 : 200
+  deployment_minimum_healthy_percent = local.is_singleton ? 0 : 100
 
   deployment_circuit_breaker {
     enable   = var.deployment_circuit_breaker
     rollback = var.deployment_circuit_breaker
   }
 
-  # A singleton scheduler cannot run two copies even briefly, so beat is
-  # stop-then-start instead of rolling.
+  # A singleton scheduler cannot run two copies even briefly; the percentages
+  # above make beat stop-then-start.
   dynamic "deployment_controller" {
     for_each = local.is_singleton ? [1] : []
 
@@ -393,10 +412,10 @@ resource "aws_ecs_service" "this" {
 # Autoscaling
 # -----------------------------------------------------------------------------
 resource "aws_appautoscaling_target" "this" {
-  count = local.autoscaling_enabled ? 1 : 0
+  count = var.create_service && local.autoscaling_enabled ? 1 : 0
 
   service_namespace  = "ecs"
-  resource_id        = "service/${element(split("/", var.cluster_arn), 1)}/${aws_ecs_service.this.name}"
+  resource_id        = "service/${element(split("/", var.cluster_arn), 1)}/${aws_ecs_service.this[0].name}"
   scalable_dimension = "ecs:service:DesiredCount"
   min_capacity       = var.min_capacity
   max_capacity       = var.max_capacity
@@ -405,7 +424,7 @@ resource "aws_appautoscaling_target" "this" {
 }
 
 resource "aws_appautoscaling_policy" "cpu" {
-  count = local.autoscaling_enabled ? 1 : 0
+  count = var.create_service && local.autoscaling_enabled ? 1 : 0
 
   name               = "${local.name}-cpu"
   policy_type        = "TargetTrackingScaling"

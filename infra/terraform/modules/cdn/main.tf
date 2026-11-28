@@ -93,8 +93,16 @@ resource "aws_route53_record" "cert_validation" {
 resource "aws_acm_certificate_validation" "this" {
   provider = aws.us_east_1
 
-  certificate_arn         = aws_acm_certificate.this.arn
-  validation_record_fqdns = [for r in aws_route53_record.cert_validation : r.fqdn]
+  certificate_arn = aws_acm_certificate.this.arn
+
+  # Every validation record name on the certificate, whoever created it (us for
+  # the platform zone, the tenant for a custom domain). The provider errors on
+  # any name left out, so listing only our own records fails with a custom domain.
+  validation_record_fqdns = distinct([
+    for dvo in aws_acm_certificate.this.domain_validation_options : trimsuffix(dvo.resource_record_name, ".")
+  ])
+
+  depends_on = [aws_route53_record.cert_validation]
 }
 
 # -----------------------------------------------------------------------------

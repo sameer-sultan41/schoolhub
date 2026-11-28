@@ -9,7 +9,8 @@
       "Bash(gh pr merge:*)",
       "Bash(gh * pr merge*)",
       "Bash(gh api *merge*)"
-    ]
+    ],
+    "ask": ["Bash(gh api *pending_deployments*)", "Bash(curl *pending_deployments*)"]
   },
   "skillOverrides": {
     "g-flow": "off",

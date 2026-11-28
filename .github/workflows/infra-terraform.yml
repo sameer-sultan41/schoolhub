@@ -1,14 +1,16 @@
 # =============================================================================
 # Terraform validation and plan.
 #
-# THIS WORKFLOW NEVER APPLIES. Plan only, and the plan job assumes a read-only
-# AWS role. Production apply is manual and gated behind a GitHub Environment
-# approval (hosting-deployment.md §3).
+# THIS WORKFLOW NEVER APPLIES. There is no apply role in v1 (D3): a human applies,
+# with the full plan in front of them.
 #
-# The plan step is currently disabled because no state backend exists yet — see
-# infra/terraform/README.md. Everything above it (fmt, init -backend=false, validate,
-# tflint, tfsec) runs on every PR from day one, so the code cannot rot while it
-# waits for Phase 6.
+# fmt, validate, test, tflint and trivy run on every PR. The plan job runs per
+# environment once its plan-role repository variable (PLAN_ROLE_ARN_STAGING,
+# PLAN_ROLE_ARN_PRODUCTION) and its tfvars object in the state bucket exist (D23);
+# until then each row ends green with every step after its gate skipped. Staging is
+# planned on same-repository PRs and on main; production only on main (push or
+# dispatch), because its state holds the database master password. Run logs are
+# public (D22): the plan reports only resource counts and a destructive-change flag.
 # =============================================================================
 
 name: terraform-plan
@@ -17,27 +19,28 @@ on:
   pull_request:
     paths:
       - "infra/terraform/**"
+      - "infra/postgres/init/**"
       - ".github/workflows/infra-terraform.yml"
   push:
     branches: [main]
     paths:
       - "infra/terraform/**"
+      - "infra/postgres/init/**"
   workflow_dispatch:
 
+# Only the plan job gets id-token and pull-requests (H4).
 permissions:
   contents: read
-  pull-requests: write
-  # Required for OIDC role assumption once the plan step is enabled.
-  id-token: write
 
+# On main, one group per SHA: ci_gate.py (deploy.yml) reads every main run, so none may
+# be cancelled or left pending behind another. PR branches still cancel stale runs.
 concurrency:
-  group: terraform-${{ github.ref }}
-  cancel-in-progress: true
+  group: terraform-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   TF_VERSION: "1.13.3"
   TF_IN_AUTOMATION: "true"
-  # No colour codes in the PR comment.
   TF_CLI_ARGS: "-no-color"
 
 jobs:
@@ -45,9 +48,9 @@ jobs:
     name: fmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
@@ -62,11 +65,13 @@ jobs:
       fail-fast: false
       matrix:
         dir:
+          - infra/terraform/bootstrap
           - infra/terraform/modules/network
           - infra/terraform/modules/database
           - infra/terraform/modules/cache
           - infra/terraform/modules/storage
           - infra/terraform/modules/ecs-service
+          - infra/terraform/modules/gha-deploy-policy
           # infra/terraform/modules/cdn is intentionally absent: it declares
           # configuration_aliases for the us-east-1 provider that CloudFront
           # certificates require, and an aliased provider can only be supplied by a
@@ -76,9 +81,9 @@ jobs:
           - infra/terraform/envs/staging
           - infra/terraform/envs/production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
@@ -93,13 +98,54 @@ jobs:
         working-directory: ${{ matrix.dir }}
         run: terraform validate
 
+  # terraform test with mocked providers: no AWS credentials, nothing applied.
+  # A separate job so modules/cdn (which cannot validate standalone) is tested too.
+  test:
+    name: test (${{ matrix.dir }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir:
+          - infra/terraform/bootstrap
+          - infra/terraform/modules/ecs-service
+          - infra/terraform/modules/gha-deploy-policy
+          - infra/terraform/modules/cdn
+          - infra/terraform/envs/staging
+          - infra/terraform/envs/production
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform init
+        working-directory: ${{ matrix.dir }}
+        run: terraform init -backend=false -input=false
+
+      - name: terraform test
+        working-directory: ${{ matrix.dir }}
+        run: terraform test
+
+      # The ALB certificate reuses module.cdn's and the tenants' validation
+      # records; an env root that creates its own would duplicate them.
+      - name: env roots declare no Route 53 records
+        if: startsWith(matrix.dir, 'infra/terraform/envs/')
+        run: |
+          if grep -l 'resource "aws_route53_record"' infra/terraform/envs/*/*.tf; then
+            echo "::error::An env root declares aws_route53_record; validation records belong to modules/cdn or the tenant."
+            exit 1
+          fi
+
   lint:
     name: tflint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: terraform-linters/setup-tflint@v4
+      - uses: terraform-linters/setup-tflint@90f302c255ef959cbfb4bd10581afecdb7ece3e6 # v4.1.1
         with:
           tflint_version: latest
 
@@ -115,105 +161,210 @@ jobs:
     name: trivy config
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       # Static analysis of the HCL: public buckets, unencrypted volumes,
       # world-open security groups. Findings fail the PR rather than warn,
       # because an infrastructure warning nobody reads is an infrastructure
       # warning nobody reads.
       - name: Scan Terraform
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: config
           scan-ref: infra/terraform/
           severity: HIGH,CRITICAL
           exit-code: "1"
 
+  # Plans only, with a read-only role per environment; never applies (D3).
   plan:
     name: plan (${{ matrix.env }})
     runs-on: ubuntu-latest
     needs: [fmt, validate, lint, security]
-
-    # DISABLED. No state backend and no AWS account are wired up yet. Flip this
-    # to `github.event_name == 'pull_request'` in the same PR that creates the
-    # state buckets and the OIDC roles — not before, or every PR fails on an
-    # unassumable role and people learn to ignore a red check.
-    if: false
-
+    # A job-level `if` cannot read matrix.*, so only the row-independent rule is here:
+    # fork PRs get no OIDC token and are skipped (H4). Per-row rules are the first step.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
     strategy:
       fail-fast: false
       matrix:
         include:
           - env: staging
             dir: infra/terraform/envs/staging
-            role: arn:aws:iam::123456789012:role/schoolhub-terraform-plan-staging
+            var_suffix: STAGING
           - env: production
             dir: infra/terraform/envs/production
-            role: arn:aws:iam::123456789012:role/schoolhub-terraform-plan-production
-
+            var_suffix: PRODUCTION
+    env:
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TARGET_ENV: ${{ matrix.env }}
     steps:
-      - uses: actions/checkout@v4
+      # An unset variable gives a green, empty row, so this merges before bootstrap is
+      # applied. The event must fit the role's trust (Task 1), or the assume would fail.
+      - name: Enabled?
+        id: enabled
+        env:
+          ROLE_ARN: ${{ vars[format('PLAN_ROLE_ARN_{0}', matrix.var_suffix)] }}
+          VAR_NAME: PLAN_ROLE_ARN_${{ matrix.var_suffix }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+        run: |
+          enabled=false
+          if [ -z "$ROLE_ARN" ]; then
+            echo "::notice::$TARGET_ENV plan disabled: repository variable $VAR_NAME is not set"
+          elif [ "$TARGET_ENV" = "staging" ]; then
+            if [ "$EVENT" = "pull_request" ] || [ "$REF" = "refs/heads/main" ]; then
+              enabled=true
+            else
+              echo "::notice::staging is planned on pull requests and on main only"
+            fi
+          elif { [ "$EVENT" = "push" ] || [ "$EVENT" = "workflow_dispatch" ]; } && [ "$REF" = "refs/heads/main" ]; then
+            enabled=true
+          else
+            echo "::notice::$TARGET_ENV is planned on push and workflow_dispatch from main only"
+          fi
+          echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
 
-      # Read-only role. Plan needs Describe/Get/List and nothing else; if a plan
-      # ever needs a write permission, the plan is doing something it should not.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        if: steps.enabled.outputs.enabled == 'true'
+
+      # Read-only role: if a plan ever needs a write beyond its own lock file, the plan
+      # is doing something it should not. v6, not this file's v4: v4 has no
+      # allowed-account-ids input.
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        if: steps.enabled.outputs.enabled == 'true'
+        uses: aws-actions/configure-aws-credentials@45666896f5d8e0f10ae255413f3a4cdd03bdc8f5 # v6.3.1
         with:
-          role-to-assume: ${{ matrix.role }}
-          aws-region: us-east-1
-          role-session-name: gha-terraform-plan-${{ github.run_id }}
+          role-to-assume: ${{ vars[format('PLAN_ROLE_ARN_{0}', matrix.var_suffix)] }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: gha-terraform-plan-${{ matrix.env }}-${{ github.run_id }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
 
-      - uses: hashicorp/setup-terraform@v3
+      # Counts the exact key (the role has s3:ListBucket on its own prefix). Not
+      # head-object: without bucket-wide ListBucket, a missing key answers 403, not 404.
+      - name: tfvars object exists?
+        id: tfvars
+        if: steps.enabled.outputs.enabled == 'true'
+        run: |
+          key="schoolhub/$TARGET_ENV/terraform.tfvars"
+          count=$(aws s3api list-objects-v2 --bucket "$TF_STATE_BUCKET" --prefix "$key" \
+            --query "length(Contents[?Key=='$key'] || \`[]\`)" --output text)
+          if [ "$count" = "1" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::$TARGET_ENV plan disabled: s3://$TF_STATE_BUCKET/$key does not exist yet (create it with /schoolhub-deploy bootstrap)"
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        if: steps.tfvars.outputs.present == 'true'
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
 
       - name: terraform init
+        if: steps.tfvars.outputs.present == 'true'
         working-directory: ${{ matrix.dir }}
-        run: terraform init -input=false
+        env:
+          STATE_REGION: ${{ vars.AWS_REGION }}
+          STATE_KMS_KEY_ARN: ${{ vars.TF_STATE_KMS_KEY_ARN }}
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=$TF_STATE_BUCKET" \
+            -backend-config="region=$STATE_REGION" \
+            -backend-config="key=schoolhub/$TARGET_ENV/terraform.tfstate" \
+            -backend-config="kms_key_id=$STATE_KMS_KEY_ARN"
 
+      # The variable values (D23). Never printed, cached or uploaded.
+      - name: Fetch the tfvars
+        if: steps.tfvars.outputs.present == 'true'
+        run: aws s3 cp --only-show-errors "s3://$TF_STATE_BUCKET/schoolhub/$TARGET_ENV/terraform.tfvars" "$RUNNER_TEMP/env.tfvars"
+
+      # The diff goes to a file, never the log (D22). -detailed-exitcode: 0 = no
+      # changes, 2 = changes, 1 = error. A drifted environment is visible, not re-converged.
       - name: terraform plan
         id: plan
+        if: steps.tfvars.outputs.present == 'true'
         working-directory: ${{ matrix.dir }}
-        # -detailed-exitcode: 0 = no changes, 2 = changes, 1 = error. A drifted
-        # environment should be visible, not silently re-converged.
         run: |
           set +e
-          terraform plan -input=false -lock-timeout=5m -out=tfplan -detailed-exitcode
+          terraform plan -input=false -lock-timeout=5m -detailed-exitcode \
+            -var-file="$RUNNER_TEMP/env.tfvars" -out="$RUNNER_TEMP/tfplan" > "$RUNNER_TEMP/plan.log" 2>&1
           code=$?
           set -e
-          echo "exitcode=${code}" >> "$GITHUB_OUTPUT"
-          if [ "${code}" -eq 1 ]; then
+          echo "exitcode=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then
+            # Only the Error: lines: the detail lines after them can echo tfvars values.
+            echo "::error::terraform plan failed; its Error: lines follow"
+            grep '^Error:' "$RUNNER_TEMP/plan.log" || true
             exit 1
           fi
 
-      - name: Render plan
-        working-directory: ${{ matrix.dir }}
-        run: terraform show -no-color tfplan | tee plan.txt
-
-      # Fail loudly on anything that destroys a stateful resource. A plan that
-      # replaces the database is sometimes correct and never routine.
-      - name: Flag destructive changes
+      # Counts only (N11). A replace counts as both an add and a destroy.
+      - name: Count changes
+        id: counts
+        if: steps.tfvars.outputs.present == 'true'
         working-directory: ${{ matrix.dir }}
         run: |
-          if grep -qE '^\s*# .*(aws_db_instance|aws_s3_bucket|aws_route53_zone|aws_elasticache_replication_group).* will be (destroyed|replaced)' plan.txt; then
-            echo "::error::This plan destroys or replaces a stateful resource. Do not approve without a written recovery plan."
+          terraform show -json "$RUNNER_TEMP/tfplan" > "$RUNNER_TEMP/plan.json"
+          read -r add change destroy stateful < <(jq -r '
+            [.resource_changes[]? | {type, actions: .change.actions}] as $rc
+            | [
+                ([$rc[] | select(.actions | index("create"))] | length),
+                ([$rc[] | select(.actions == ["update"])] | length),
+                ([$rc[] | select(.actions | index("delete"))] | length),
+                ([$rc[] | select((.actions | index("delete"))
+                  and (.type | IN("aws_db_instance", "aws_s3_bucket", "aws_route53_zone", "aws_elasticache_replication_group")))] | length)
+              ] | @tsv' "$RUNNER_TEMP/plan.json")
+          rm -f "$RUNNER_TEMP/plan.json"
+          destructive=false
+          if [ "$destroy" -gt 0 ]; then destructive=true; fi
+          {
+            echo "add=$add"
+            echo "change=$change"
+            echo "destroy=$destroy"
+            echo "destructive=$destructive"
+            echo "stateful=$stateful"
+          } >> "$GITHUB_OUTPUT"
+          flag=no
+          if [ "$destructive" = "true" ]; then flag=yes; fi
+          summary="$TARGET_ENV: $add to add, $change to change, $destroy to destroy. Destructive: $flag."
+          echo "$summary"
+          echo "$summary" >> "$GITHUB_STEP_SUMMARY"
+
+      # Fail loudly on anything that destroys a stateful resource. A plan that replaces
+      # the database is sometimes correct and never routine.
+      - name: Flag destructive changes
+        if: steps.tfvars.outputs.present == 'true'
+        env:
+          DESTRUCTIVE: ${{ steps.counts.outputs.destructive }}
+          STATEFUL: ${{ steps.counts.outputs.stateful }}
+        run: |
+          if [ "$STATEFUL" -gt 0 ]; then
+            echo "::error::This plan destroys or replaces $STATEFUL stateful resource(s). Do not apply without a written recovery plan."
             exit 1
           fi
+          if [ "$DESTRUCTIVE" = "true" ]; then
+            echo "::warning::This plan destroys or replaces resources; read the full plan before applying."
+          fi
 
-      - name: Comment plan on the PR
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+      - name: Comment the counts on the PR
+        if: always() && github.event_name == 'pull_request' && steps.counts.outcome == 'success'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        env:
+          ADD: ${{ steps.counts.outputs.add }}
+          CHANGE: ${{ steps.counts.outputs.change }}
+          DESTROY: ${{ steps.counts.outputs.destroy }}
+          DESTRUCTIVE: ${{ steps.counts.outputs.destructive }}
         with:
           script: |
-            const fs = require('fs');
-            const plan = fs.readFileSync('${{ matrix.dir }}/plan.txt', 'utf8');
-            const truncated = plan.length > 60000
-              ? plan.slice(0, 60000) + '\n\n... truncated, see the job log ...'
-              : plan;
+            const { ADD, CHANGE, DESTROY, DESTRUCTIVE, TARGET_ENV } = process.env;
+            const flag = DESTRUCTIVE === 'true' ? 'yes' : 'no';
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `### Terraform plan — \`${{ matrix.env }}\`\n\n<details><summary>Show plan</summary>\n\n\`\`\`terraform\n${truncated}\n\`\`\`\n\n</details>`,
+              body: `### Terraform plan: \`${TARGET_ENV}\`\n\n${ADD} to add, ${CHANGE} to change, ${DESTROY} to destroy. Destructive: ${flag}. The full plan is read at apply.`,
             });

@@ -6,6 +6,7 @@ docs/02-architecture/tech-stack.md, api-architecture.md, multi-tenancy.md.
 
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import quote
 
 import environ
 from celery.schedules import crontab
@@ -478,6 +479,29 @@ CACHES = {
         "LOCATION": env("REDIS_URL", default="redis://localhost:6379/0"),
     },
 }
+
+
+def redis_settings(host: str, port: int, token: str) -> dict:
+    """Cache and Celery settings for a TLS, token-authenticated Redis (ElastiCache in prod).
+
+    Pure: reads no environment. Databases 0/1/2 match the local REDIS_URL/CELERY_* defaults;
+    Celery refuses a rediss:// URL without ssl_cert_reqs.
+    """
+
+    def url(db: int) -> str:
+        return f"rediss://:{quote(token, safe='')}@{host}:{port}/{db}?ssl_cert_reqs=required"
+
+    return {
+        "CACHES": {
+            "default": {
+                "BACKEND": "django.core.cache.backends.redis.RedisCache",
+                "LOCATION": url(0),
+            },
+        },
+        "CELERY_BROKER_URL": url(1),
+        "CELERY_RESULT_BACKEND": url(2),
+    }
+
 
 # Outbound email goes through core.notifications' EmailAdapter, which is a thin
 # wrapper over whatever EMAIL_BACKEND points at — the console backend in dev, a

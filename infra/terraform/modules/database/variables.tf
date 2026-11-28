@@ -138,3 +138,13 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "connections_alarm_threshold" {
+  description = "DatabaseConnections alarm threshold: about 80% of the instance's max_connections (confirm with SHOW max_connections after the first apply)."
+  type        = number
+
+  validation {
+    condition     = var.connections_alarm_threshold > 0
+    error_message = "connections_alarm_threshold must be positive."
+  }
+}

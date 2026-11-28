@@ -54,7 +54,7 @@ Paths are relative to the repo root. **Always** also load `AGENTS.md`.
 | **Reports & dashboards** | `docs/03-modules/reporting-analytics.md` · `M(subject module)` §13 · `docs/07-quality/non-functional.md` |
 | **Security review / hardening** | `docs/06-security/security.md` · `docs/02-architecture/auth-and-rbac.md` · `docs/02-architecture/multi-tenancy.md` |
 | **Write or review tests** | `docs/07-quality/testing-strategy.md` · `M(x)` §11 (validations) · `E(x)` |
-| **Infra, CI/CD, deploy, environments** | `docs/02-architecture/hosting-deployment.md` · `docs/02-architecture/repo-structure.md` · `docs/02-architecture/database-architecture.md` (migrations/backup) |
+| **Infra, CI/CD, deploy, environments** | `docs/02-architecture/hosting-deployment.md` · `docs/02-architecture/repo-structure.md` · `docs/02-architecture/database-architecture.md` (migrations/backup) · `infra/runbooks/deploy.md` · skill `.claude/skills/schoolhub-deploy/` |
 | **Tenant onboarding / plans / platform console** | `docs/03-modules/platform-admin.md` · `docs/02-architecture/multi-tenancy.md` · `docs/05-database/entities/tenancy.md` |
 | **Project planning / estimating a phase** | `docs/01-phases/phase-plan.md` · the specific `docs/01-phases/phase-N-*.md` |
 | **Requirements / scope question** | `docs/00-overview/requirements.md` · `docs/00-overview/vision.md` · `M(x)` if module-specific |

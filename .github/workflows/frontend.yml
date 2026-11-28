@@ -42,9 +42,11 @@ on:
       - "tsconfig.base.json"
       - ".github/workflows/frontend.yml"
 
+# On main, one group per SHA: ci_gate.py (deploy.yml) reads every main run, so none may
+# be cancelled or left pending behind another. PR branches still cancel stale runs.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read

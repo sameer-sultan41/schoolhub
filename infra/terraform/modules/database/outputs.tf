@@ -14,7 +14,7 @@ output "endpoint" {
 }
 
 output "address" {
-  description = "Hostname only. This is what PgBouncer's [databases] section points at."
+  description = "Hostname only: the host in the app and migrator DATABASE_URLs (direct to RDS in v1, ADR-0040) and the db-bootstrap task's PGHOST."
   value       = aws_db_instance.this.address
 }
 
@@ -56,4 +56,9 @@ output "multi_az" {
 output "backup_retention_days" {
   description = "Effective PITR window in days."
   value       = aws_db_instance.this.backup_retention_period
+}
+
+output "connections_alarm_threshold" {
+  description = "DatabaseConnections alarm threshold, for the deploy runbook's max_connections check."
+  value       = aws_cloudwatch_metric_alarm.connections.threshold
 }

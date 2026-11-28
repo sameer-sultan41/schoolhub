@@ -6,7 +6,7 @@ Everything here is a hardening decision; see docs/06-security/security.md.
 from django.core.exceptions import ImproperlyConfigured
 
 from config.settings.base import *
-from config.settings.base import WEBSITE_DNS_VERIFIER, env
+from config.settings.base import WEBSITE_DNS_VERIFIER, env, redis_settings
 
 DEBUG = False
 
@@ -29,6 +29,13 @@ if NUM_PROXIES < 0:
     raise ImproperlyConfigured("NUM_PROXIES must be 0 (direct) or the proxy count, not negative.")
 REST_FRAMEWORK = {**REST_FRAMEWORK, "NUM_PROXIES": NUM_PROXIES}
 
+# Required: ElastiCache with TLS and an auth token. The token is injected as a secret and
+# never part of a URL in the task definition. New objects, so base.py's stay untouched.
+_redis = redis_settings(env("REDIS_HOST"), env.int("REDIS_PORT"), env("REDIS_AUTH_TOKEN"))
+CACHES = _redis["CACHES"]
+CELERY_BROKER_URL = _redis["CELERY_BROKER_URL"]
+CELERY_RESULT_BACKEND = _redis["CELERY_RESULT_BACKEND"]
+
 SECURE_SSL_REDIRECT = True
 SECURE_HSTS_SECONDS = 31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
@@ -49,5 +56,6 @@ CORS_ALLOW_CREDENTIALS = True
 
 X_FRAME_OPTIONS = "DENY"
 
-# Connection reuse; PgBouncer fronts the database in transaction pooling mode.
+# Connection reuse. v1 connects directly to RDS (ADR-0040); keep code pooler-safe
+# (infra/AGENTS.md rule 2).
 DATABASES["default"]["CONN_MAX_AGE"] = env.int("DB_CONN_MAX_AGE", default=0)

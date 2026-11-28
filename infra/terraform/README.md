@@ -20,12 +20,13 @@ Work through this list in order. Steps 1–4 are one-time bootstrap that Terrafo
 cannot do for itself, because it needs somewhere to put its state before it can
 create anything.
 
-1. **Create the state bucket and enable versioning**, one per environment, in the
-   environment's own account. Block all public access. Enable SSE-KMS. Versioning
-   is what recovers a state file someone truncated.
-2. **Create the OIDC provider and the CI role** so GitHub Actions assumes a role
-   rather than holding long-lived keys. The plan role is read-only; the apply role
-   is separate and assumable only from the protected environment.
+1. **Apply [`bootstrap/`](bootstrap/README.md)** once, with admin credentials. It
+   creates the shared state bucket (versioned, SSE-KMS, history-erasure deny), the
+   GitHub OIDC provider, the per-environment plan and deploy roles, and the three
+   ECR repositories. Its README has the first-run sequence, including the OIDC
+   subject customisation.
+2. **Record the bootstrap outputs as GitHub variables** (`terraform output -json
+   github_variables`); the `schoolhub-deploy` skill's bootstrap mode sets them.
 3. **Register the platform domain and create the Route 53 hosted zone.** The `cdn`
    module takes `hosted_zone_id` as an input; it does not create the zone, because
    a destroyed and recreated zone means new nameservers and a domain-wide outage.
@@ -39,15 +40,19 @@ create anything.
    carefully, not least.
 6. Apply **staging first**, in full, and leave it running for at least one release
    cycle before pointing anything at production.
-7. Run `postgres/init/01-extensions.sql` and `postgres/init/02-app-role.sql`
-   against the new RDS instance as the master user, through the SSM bastion. **The
-   application role does not exist until you do this, and it is the role RLS binds
-   to.** Terraform deliberately does not create it — see
-   `modules/database/main.tf`.
-8. Verify the tenant boundary before any real data lands:
-   `psql -U schoolhub_app -c "SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user"`
-   must return `f`, and `SELECT tablename, tableowner FROM pg_tables WHERE schemaname='public'`
-   must show `schoolhub_migrator` as the owner of every table.
+7. **Run the `db-bootstrap` task** (`schoolhub-<env>-db-bootstrap`, declared in
+   `envs/*/main.tf`) with admin credentials, after `infra/scripts/bootstrap-secrets.sh
+   --phase post-apply`. It runs `postgres/init/01-extensions.sql` and
+   `postgres/init/02-app-role.sql` against RDS as the master user, from the same
+   files compose runs. **The application role does not exist until you do this,
+   and it is the role RLS binds to.** Terraform deliberately does not create it —
+   see `modules/database/main.tf`. The task must exit 0; its log ends with
+   `Roles ready`. Re-run it after any role-password rotation.
+8. Verify the tenant boundary before any real data lands. The `db-bootstrap`
+   task's exit 0 proves the role half: `02-app-role.sql` raises if `schoolhub_app`
+   or `schoolhub_readonly` is a superuser or has `BYPASSRLS`. The ownership half
+   (`schoolhub_migrator` owns every table in `public`) is checked after the first
+   migrate.
 
 ## Layout
 
@@ -59,7 +64,9 @@ terraform/
 │   ├── cache/         ElastiCache Redis 8, TLS + AUTH, no backups by design
 │   ├── storage/       S3 uploads + backups, versioning, lifecycle, Object Lock
 │   ├── ecs-service/   One Fargate service: task def, roles, target group, scaling
-│   └── cdn/           CloudFront, wildcard ACM cert, Route 53, WAF
+│   ├── cdn/           CloudFront, wildcard ACM cert, Route 53, WAF
+│   └── gha-deploy-policy/  The env-scoped half of the CI deploy role
+├── bootstrap/         State bucket, GitHub OIDC, CI roles, ECR (applied once, local state)
 └── envs/
     ├── staging/       Scaled-down copy of the production topology
     └── production/    Multi-AZ, WAF, Object Lock, no auto-apply
@@ -71,9 +78,9 @@ file per environment instead of hidden three levels down.
 
 ## Conventions
 
-- **Provider `~> 6.0`, Terraform `>= 1.9`** in modules; environments require
-  `>= 1.10` because their backends use native S3 state locking (`use_lockfile`),
-  which does not exist before 1.10.
+- **Provider `~> 6.0`, Terraform `>= 1.9`** in modules; environments and
+  `bootstrap/` require `>= 1.11`, where native S3 state locking (`use_lockfile`)
+  is GA.
 - **Every variable has a description and, where a wrong value is dangerous, a
   `validation` block.** `engine_version` refusing anything but PostgreSQL 18 and
   `master_username` refusing `schoolhub_app` are the load-bearing ones.
@@ -93,7 +100,6 @@ file per environment instead of hidden three levels down.
 
 Honest gaps, so nobody assumes coverage that does not exist:
 
-- **ECR repositories and lifecycle policies** — created with the CI pipeline.
 - **The ECS cluster itself** — `envs/*/main.tf` creates one inline; extract it to
   a module if a second cluster ever appears.
 - **The ALB** — also inline in the environments, since there is exactly one.

@@ -66,6 +66,7 @@ vendor has an opinion on), then the vendor skills below, then generic guidance.
    | A dashboard feature screen (list + form + detail + an action) | `schoolhub-dashboard-screen` |
    | A backend module or resource, or splitting a flat app | `schoolhub-backend-module` |
    | A new or ported primitive in `packages/ui` | `schoolhub-ui-port` |
+   | Deploying, promoting, rolling back, or "what's deployed" | `schoolhub-deploy` |
    | React/Next performance — waterfalls, bundle size, re-renders | `react-best-practices` |
    | Route/file conventions, RSC boundaries, data fetching | `next-best-practices` |
    | Caching, PPR, `use cache` / `cacheLife` / `cacheTag` | `next-cache-components` |

@@ -40,7 +40,7 @@ components and says where each pin lives. Keep the two in step:
 | Node | 20 | **24 LTS** (`node:24-slim` in the compose images and the production image; [ADR-0026](../docs/decisions/0026-live-lane-backend-in-compose-apps-on-the-runner.md)) | `NODE_IMAGE` build arg |
 | MinIO (local and CI only) | unspecified | `pgsty/minio` and `pgsty/mc`, tag and digest ([ADR-0025](../docs/decisions/0025-minio-images-from-the-pgsty-community-build.md)) | `compose/docker-compose.yml` |
 | PgBouncer | unspecified | latest stable, transaction mode | `postgres/pgbouncer/pgbouncer.ini` |
-| Terraform | unspecified | `>= 1.9`, AWS provider `~> 6.0` | `terraform/**` |
+| Terraform | unspecified | `>= 1.11` in the roots (S3 native state locking), `>= 1.9` in modules; AWS provider `~> 6.0` | `terraform/**` |
 
 The major version is pinned in exactly one place per component and flows outward from there.
 Dev, CI and production must always agree — RLS and planner behavior are what the test suite
@@ -85,9 +85,12 @@ docker network) stay as-is — only host-exposed ports and host-facing URLs need
    authoritative tenant boundary; a role change can silently delete that boundary while every
    test still passes. Any diff touching roles, ownership, `GRANT`, or `ALTER DEFAULT PRIVILEGES`
    needs a security review.
-2. **PgBouncer runs in transaction pooling mode.** Therefore: `SET LOCAL app.tenant_id` inside a
-   transaction only. Never session-level `SET`, never session advisory locks, never session-scope
-   prepared statements, never `LISTEN`/`NOTIFY` in application code.
+2. **Code stays pooler-safe.** In AWS v1 the app connects directly to RDS on 5432
+   ([ADR-0040](../docs/decisions/0040-deploy-pipeline-github-actions-oidc.md)); PgBouncer runs
+   only in local compose until the deferred pooler lands. The transaction-pooling rules still
+   hold, so code stays pooler-safe: `SET LOCAL app.tenant_id` inside a transaction only. Never
+   session-level `SET`, never session advisory locks, never session-scope prepared statements,
+   never `LISTEN`/`NOTIFY` in application code.
 3. **PostgreSQL 18 is pinned.** Not `latest`, not a floating major. Local dev, CI and production
    run the same major version, because RLS and planner behavior are what we test. The same rule
    applies to Redis 8, Python 3.14 and Node 24 — see the version table above.
@@ -101,14 +104,19 @@ docker network) stay as-is — only host-exposed ports and host-facing URLs need
    against the migrated schema — that is what makes rollback a one-command operation.
 7. **Nothing exists only in a console.** Every piece of infrastructure is reproducible from this
    repo plus the secret store plus backups. Click-ops changes must be back-ported the same day.
-8. **Terraform under `terraform/` is not applied yet.** It is the Phase 6 AWS target. Do not add
-   an apply step to CI, and do not put state, credentials, or real account IDs in it.
+8. **Terraform is applied by a human, from the CI plan.** CI (`infra-terraform.yml`) plans and
+   shows only resource counts; it never applies, and there is no apply role. No state,
+   credentials, tfvars or real account IDs in the repo; env tfvars live in the state bucket
+   ([ADR-0040](../docs/decisions/0040-deploy-pipeline-github-actions-oidc.md)).
 9. **`celery-beat` runs exactly one task. Ever.** A second scheduler double-fires every periodic
    job — duplicate fee reminders to parents, duplicate retention purges. `modules/ecs-service`
    refuses `desired_count > 1` for that service; do not work around it.
 10. **The CDN cache key must include the `Host` header.** Tenant identity on the public website is
     the hostname. A cache that ignores `Host` serves one school's pages under another school's
     domain — cross-tenant exposure, from the edge, to the public.
+11. **Deploying or rolling back: use the `schoolhub-deploy` skill; never from a laptop.** Deploys
+    run only in GitHub Actions (`deploy.yml`); agents never run `terraform apply`, a mutating
+    `aws` command or `docker push`.
 
 ## Conventions
 

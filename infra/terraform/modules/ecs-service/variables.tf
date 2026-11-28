@@ -23,6 +23,12 @@ variable "service_name" {
   }
 }
 
+variable "create_service" {
+  description = "Create the ECS service, target group, listener rule and autoscaling. False for a one-off task (migrate, db-bootstrap): only the task definition, both roles and the log group are created."
+  type        = bool
+  default     = true
+}
+
 variable "cluster_arn" {
   description = "ECS cluster to run in."
   type        = string
@@ -135,6 +141,12 @@ variable "secret_arns" {
   description = "Map of environment variable name to Secrets Manager or SSM ARN. Injected by the agent at task start; the value never appears in the task definition."
   type        = map(string)
   default     = {}
+}
+
+variable "secret_kms_key_arns" {
+  description = "Customer-managed KMS keys that encrypt secrets in secret_arns. The execution role gets kms:Decrypt on exactly these, through Secrets Manager only."
+  type        = list(string)
+  default     = []
 }
 
 variable "task_role_policy_arns" {

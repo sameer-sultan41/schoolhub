@@ -1,0 +1,109 @@
+# The migrate step of deploy-env.yml: render -> check -> run the one-off task -> report.
+# The task runs `manage.py migrate` on the new api image and must exit 0 before any
+# service rolls out (D9). AWS credentials come from the calling job.
+name: ECS migrate
+description: Run the migrate task on a new image and report only its exit status and error lines.
+inputs:
+  cluster:
+    description: ECS cluster name (schoolhub-<env>).
+    required: true
+  task-family:
+    description: The migrate task definition family (schoolhub-<env>-migrate).
+    required: true
+  image:
+    description: Full api image URI with the SHA tag.
+    required: true
+  subnets:
+    description: Comma-separated private subnet IDs.
+    required: true
+  security-group:
+    description: The migrate security group ID.
+    required: true
+  environment:
+    description: staging or production, for the task-role prefix check.
+    required: true
+  account-id:
+    description: AWS account ID the task roles must belong to.
+    required: true
+  registry:
+    description: ECR registry every container image must come from.
+    required: true
+  started-by:
+    description: The task's startedBy value.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Render migrate
+      id: render
+      uses: aws-actions/amazon-ecs-render-task-definition@8d79160660ad39c402a16e5fc7cd2a32e8f7d6b7 # v1.9.1
+      with:
+        task-definition-family: ${{ inputs.task-family }}
+        container-name: migrate
+        image: ${{ inputs.image }}
+
+    - name: Check the migrate render belongs to ${{ inputs.environment }}
+      shell: bash
+      env:
+        RENDERED: ${{ steps.render.outputs.task-definition }}
+        CLUSTER: ${{ inputs.cluster }}
+        TARGET_ENV: ${{ inputs.environment }}
+        ACCOUNT_ID: ${{ inputs.account-id }}
+        REGISTRY: ${{ inputs.registry }}
+      run: |
+        python3 .github/scripts/check_task_definition.py --file "$RENDERED" --cluster "$CLUSTER" \
+          --service migrate --env "$TARGET_ENV" --account "$ACCOUNT_ID" --registry "$REGISTRY"
+
+    # Fails if any container exits non-zero.
+    - name: Run migrate
+      id: run
+      uses: aws-actions/amazon-ecs-deploy-task-definition@a00d4d57ac0de1a99b39fe469f3d898d38717c2b # v2.6.4
+      with:
+        task-definition: ${{ steps.render.outputs.task-definition }}
+        cluster: ${{ inputs.cluster }}
+        run-task: true
+        run-task-launch-type: FARGATE
+        run-task-subnets: ${{ inputs.subnets }}
+        run-task-security-groups: ${{ inputs.security-group }}
+        run-task-assign-public-IP: DISABLED
+        run-task-started-by: ${{ inputs.started-by }}
+        wait-for-task-stopped: true
+        wait-for-minutes: 15
+
+    # Public log (D22): exit code, stoppedReason and error lines only; never the full
+    # log, and nothing but the exit code in the summary.
+    - name: Migrate result
+      if: always() && (steps.run.outcome == 'success' || steps.run.outcome == 'failure')
+      shell: bash
+      env:
+        CLUSTER: ${{ inputs.cluster }}
+        RENDERED: ${{ steps.render.outputs.task-definition }}
+        TASK_ARNS: ${{ steps.run.outputs.run-task-arn }}
+      run: |
+        task=$(python3 -c 'import json, sys; arns = json.loads(sys.argv[1] or "[]"); print(arns[0] if arns else "")' "$TASK_ARNS")
+        if [ -z "$task" ]; then
+          echo "migrate: no task started"
+          echo "migrate: no task started" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+        read -r code reason < <(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$task" \
+          --query 'tasks[0].[containers[0].exitCode, stoppedReason]' --output text)
+        echo "migrate: exit $code ($reason)"
+        echo "migrate: exit $code" >> "$GITHUB_STEP_SUMMARY"
+        read -r group prefix < <(python3 -c '
+        import json, sys
+        td = json.load(open(sys.argv[1]))
+        c = next(c for c in td["containerDefinitions"] if c["name"] == "migrate")
+        o = c["logConfiguration"]["options"]
+        print(o["awslogs-group"], o["awslogs-stream-prefix"])
+        ' "$RENDERED")
+        stream="$prefix/migrate/${task##*/}"
+        aws logs get-log-events --log-group-name "$group" --log-stream-name "$stream" --start-from-head \
+          --query 'events[].message' --output json \
+          | python3 -c '
+        import json, re, sys
+        pattern = re.compile(r"^(ERROR|CRITICAL)|Traceback|django\.db\.utils\.|psycopg\.errors\.")
+        lines = [m for m in json.load(sys.stdin) if pattern.search(m)]
+        for line in lines[:50]:
+            print(line.rstrip())
+        ' || echo "migrate: could not read the log stream; the full log is in CloudWatch"
