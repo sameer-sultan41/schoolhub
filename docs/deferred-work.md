@@ -273,7 +273,7 @@ either this file or `project-status.md`.
       the longest is refused 422 rather than hidden, since the API does not publish its maximum.
       The proxy's session marker is one cookie per host, so ending an impersonated tab also
       clears it for a normal session open in another tab of the same school's host; that tab
-      then goes to sign-in on its next full navigation.
+      then goes to sign-in on its next in-app navigation (client navigations included).
 
 - **AI gateway and AI-FEE-02 follow-ups** (`feat/ai-gateway`, plan
   `docs/superpowers/plans/2026-11-07-ai-gateway.md`, [ADR-0035](decisions/0035-ai-gateway-shape.md)).

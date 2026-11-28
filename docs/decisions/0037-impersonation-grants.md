@@ -84,5 +84,12 @@ moment the grant is released or the operator loses the right to hold it. Decided
   the target's permissions and audited with `impersonated_by`, so it is detectable, not
   prevented. Alerting on `platform.impersonation.*` and on invitations made under
   impersonation is deferred with SEC-19's alerting (`docs/deferred-work.md`).
+- **Residual risk: the handoff code is a bearer credential.** The handoff page exchanges the
+  code as soon as it loads, so whoever opens the link first acts as the target. An insider
+  holding `platform.tenant.impersonate` could send the link to another person, whose browser
+  then acts as the target. Every action is still audited to the operator who started the grant.
+- **Residual risk: the handoff overwrites the host-wide session marker.** The proxy's marker is
+  one cookie per host. Ending an impersonated session sends the same host's normal tabs to
+  `/login` on their next in-app navigation, including client-side navigations.
 - The tenant-visible impersonation log is deferred (`docs/deferred-work.md`); owners get the
   in-app notice instead.
