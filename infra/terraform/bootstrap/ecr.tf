@@ -13,6 +13,12 @@ resource "aws_ecr_repository" "this" {
   encryption_configuration {
     encryption_type = "AES256"
   }
+
+  # The registry-level configuration below governs once applied; this keeps
+  # each repository safe on its own too (trivy AWS-0030).
+  image_scanning_configuration {
+    scan_on_push = true
+  }
 }
 
 # Age-based, never count-based: a count rule would expire production's running
@@ -51,7 +57,7 @@ resource "aws_ecr_lifecycle_policy" "this" {
   })
 }
 
-# Scanning is a registry setting, not per repository.
+# Scanning is set for the whole registry; it overrides the per-repository flag.
 resource "aws_ecr_registry_scanning_configuration" "this" {
   scan_type = "BASIC"
 
