@@ -23,6 +23,14 @@ mock_provider "aws" {
     }
   }
 
+  # Mocked policy documents must still be valid JSON: the provider validates
+  # assume_role_policy and bucket policies even under a mock.
+  mock_data "aws_iam_policy_document" {
+    defaults = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+
   mock_data "aws_iam_role" {
     defaults = {
       name = "schoolhub-gha-deploy-staging"
@@ -36,6 +44,20 @@ mock_provider "aws" {
 }
 
 mock_provider "random" {}
+
+# modules/cdn keys its Route 53 records on the certificate's validation options,
+# so they must be known at plan; a mock would leave them unknown.
+override_resource {
+  target          = module.cdn.aws_acm_certificate.this
+  override_during = plan
+  values = {
+    arn = "arn:aws:acm:us-east-1:111111111111:certificate/cdn"
+    domain_validation_options = [
+      { domain_name = "staging.schoolhub.example.org", resource_record_name = "_a.staging.schoolhub.example.org.", resource_record_type = "CNAME", resource_record_value = "_v.acm-validations.aws." },
+      { domain_name = "*.staging.schoolhub.example.org", resource_record_name = "_a.staging.schoolhub.example.org.", resource_record_type = "CNAME", resource_record_value = "_v.acm-validations.aws." },
+    ]
+  }
+}
 
 variables {
   aws_region                       = "me-central-1"
@@ -60,19 +82,13 @@ variables {
 }
 
 run "alb_uses_regional_certificate" {
-  command = plan
+  command = apply
 
   override_resource {
-    target = aws_acm_certificate.alb
+    target          = aws_acm_certificate.alb
+    override_during = plan
     values = {
       arn = "arn:aws:acm:me-central-1:111111111111:certificate/alb"
-    }
-  }
-
-  override_resource {
-    target = module.cdn.aws_acm_certificate.this
-    values = {
-      arn = "arn:aws:acm:us-east-1:111111111111:certificate/cdn"
     }
   }
 
@@ -88,7 +104,7 @@ run "alb_uses_regional_certificate" {
 }
 
 run "alb_cert_covers_every_cdn_alias" {
-  command = plan
+  command = apply
 
   assert {
     condition     = length(setsubtract(["staging.schoolhub.example.org", "*.staging.schoolhub.example.org"], concat([aws_acm_certificate.alb.domain_name], tolist(aws_acm_certificate.alb.subject_alternative_names)))) == 0
@@ -97,10 +113,11 @@ run "alb_cert_covers_every_cdn_alias" {
 }
 
 run "alb_validation_reuses_cdn_records" {
-  command = plan
+  command = apply
 
   override_resource {
-    target = aws_acm_certificate.alb
+    target          = aws_acm_certificate.alb
+    override_during = plan
     values = {
       arn = "arn:aws:acm:me-central-1:111111111111:certificate/alb"
       domain_validation_options = [
@@ -117,7 +134,7 @@ run "alb_validation_reuses_cdn_records" {
 }
 
 run "redis_token_never_in_environment" {
-  command = plan
+  command = apply
 
   assert {
     condition     = !contains(keys(local.api_environment), "REDIS_AUTH_TOKEN")
@@ -136,7 +153,7 @@ run "redis_token_never_in_environment" {
 }
 
 run "cors_and_csrf_name_the_app_origin" {
-  command = plan
+  command = apply
 
   assert {
     condition     = local.api_environment["CORS_ALLOWED_ORIGINS"] == "https://app.staging.schoolhub.example.org"
@@ -150,7 +167,7 @@ run "cors_and_csrf_name_the_app_origin" {
 }
 
 run "connections_alarm_threshold_set" {
-  command = plan
+  command = apply
 
   assert {
     condition     = module.database.connections_alarm_threshold == 360

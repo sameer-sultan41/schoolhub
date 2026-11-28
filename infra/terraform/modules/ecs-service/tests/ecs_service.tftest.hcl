@@ -5,6 +5,14 @@
 mock_provider "aws" {
   override_during = plan
 
+  # Mocked policy documents must still be valid JSON: the provider validates
+  # assume_role_policy and bucket policies even under a mock.
+  mock_data "aws_iam_policy_document" {
+    defaults = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+
   mock_data "aws_region" {
     defaults = {
       region = "me-central-1"
@@ -26,7 +34,7 @@ variables {
 }
 
 run "beat_never_overlaps" {
-  command = plan
+  command = apply
 
   variables {
     service_name       = "celery-beat"
@@ -48,7 +56,7 @@ run "beat_never_overlaps" {
 }
 
 run "web_service_rolls_with_full_capacity" {
-  command = plan
+  command = apply
 
   assert {
     condition     = aws_ecs_service.this[0].deployment_maximum_percent == 200 && aws_ecs_service.this[0].deployment_minimum_healthy_percent == 100
@@ -57,7 +65,7 @@ run "web_service_rolls_with_full_capacity" {
 }
 
 run "task_only_creates_no_service" {
-  command = plan
+  command = apply
 
   variables {
     service_name   = "migrate"
@@ -78,7 +86,7 @@ run "task_only_creates_no_service" {
 }
 
 run "json_key_secret_scoped_to_secret_arn" {
-  command = plan
+  command = apply
 
   variables {
     secret_arns = {
@@ -94,7 +102,7 @@ run "json_key_secret_scoped_to_secret_arn" {
 }
 
 run "kms_decrypt_only_when_keys_given" {
-  command = plan
+  command = apply
 
   variables {
     secret_arns = {
@@ -109,7 +117,7 @@ run "kms_decrypt_only_when_keys_given" {
 }
 
 run "kms_decrypt_scoped_to_given_keys" {
-  command = plan
+  command = apply
 
   variables {
     secret_arns = {

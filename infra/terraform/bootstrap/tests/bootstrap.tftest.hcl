@@ -19,7 +19,7 @@ variables {
 }
 
 run "deploy_production_trusts_only_deploy_env_called_by_deploy_on_main" {
-  command = plan
+  command = apply
 
   assert {
     condition     = length(jsondecode(aws_iam_role.deploy["production"].assume_role_policy).Statement) == 1
@@ -38,7 +38,7 @@ run "deploy_production_trusts_only_deploy_env_called_by_deploy_on_main" {
 }
 
 run "deploy_staging_trusts_only_deploy_env_called_by_deploy_on_main" {
-  command = plan
+  command = apply
 
   assert {
     condition     = length(jsondecode(aws_iam_role.deploy["staging"].assume_role_policy).Statement) == 1
@@ -57,7 +57,7 @@ run "deploy_staging_trusts_only_deploy_env_called_by_deploy_on_main" {
 }
 
 run "plan_production_rejects_pull_request" {
-  command = plan
+  command = apply
 
   assert {
     condition     = length(jsondecode(aws_iam_role.plan["production"].assume_role_policy).Statement) == 1
@@ -76,7 +76,7 @@ run "plan_production_rejects_pull_request" {
 }
 
 run "plan_staging_wildcard_only_in_pr_number" {
-  command = plan
+  command = apply
 
   assert {
     condition = one([
@@ -96,7 +96,7 @@ run "plan_staging_wildcard_only_in_pr_number" {
 }
 
 run "every_role_session_is_7200" {
-  command = plan
+  command = apply
 
   assert {
     condition     = alltrue([for r in concat(values(aws_iam_role.deploy), values(aws_iam_role.plan)) : r.max_session_duration == 7200])
@@ -105,7 +105,7 @@ run "every_role_session_is_7200" {
 }
 
 run "production_deploy_ecr_actions_exact" {
-  command = plan
+  command = apply
 
   assert {
     condition = sort(distinct(flatten([
@@ -117,7 +117,7 @@ run "production_deploy_ecr_actions_exact" {
 }
 
 run "plan_role_reads_own_tfvars_only" {
-  command = plan
+  command = apply
 
   assert {
     condition = anytrue([
@@ -144,7 +144,7 @@ run "region_allow_list" {
 }
 
 run "plan_role_can_write_lock_with_kms" {
-  command = plan
+  command = apply
 
   assert {
     condition = alltrue([
@@ -168,7 +168,7 @@ run "plan_role_can_write_lock_with_kms" {
 }
 
 run "plan_role_state_scoped" {
-  command = plan
+  command = apply
 
   assert {
     condition     = !strcontains(aws_iam_role_policy.plan["staging"].policy, "schoolhub/production/")
@@ -182,7 +182,7 @@ run "plan_role_state_scoped" {
 }
 
 run "staging_plan_denies_foreign_data_plane" {
-  command = plan
+  command = apply
 
   assert {
     condition = length(setsubtract(
@@ -207,7 +207,7 @@ run "staging_plan_denies_foreign_data_plane" {
 }
 
 run "ecr_immutable" {
-  command = plan
+  command = apply
 
   assert {
     condition     = alltrue([for r in values(aws_ecr_repository.this) : r.image_tag_mutability == "IMMUTABLE"])
@@ -216,7 +216,7 @@ run "ecr_immutable" {
 }
 
 run "ecr_expiry_is_age_based" {
-  command = plan
+  command = apply
 
   assert {
     condition     = alltrue([for r in jsondecode(aws_ecr_lifecycle_policy.this["api"].policy).rules : r.selection.countType == "sinceImagePushed"])

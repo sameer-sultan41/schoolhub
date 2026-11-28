@@ -21,7 +21,7 @@ variables {
 }
 
 run "cdn_validation_lists_every_name" {
-  command = plan
+  command = apply
 
   providers = {
     aws           = aws
@@ -31,7 +31,8 @@ run "cdn_validation_lists_every_name" {
   # ACM gives the apex and its wildcard the same record; the tenant's custom
   # domain has its own, created in the tenant's zone.
   override_resource {
-    target = aws_acm_certificate.this
+    target          = aws_acm_certificate.this
+    override_during = plan
     values = {
       arn = "arn:aws:acm:us-east-1:111111111111:certificate/cdn"
       domain_validation_options = [
