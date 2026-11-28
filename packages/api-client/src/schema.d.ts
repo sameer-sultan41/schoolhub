@@ -14277,6 +14277,11 @@ export interface components {
              * @description After the start.
              */
             current_period_end: string;
+            /**
+             * @description A paid sign-up onto a plan whose limits are below the school's latest usage snapshot goes ahead anyway; without it that is a 409 limit_below_usage.
+             * @default false
+             */
+            acknowledge_over_usage: boolean;
         };
         SubscriptionChangePlan: {
             plan_code: string;
@@ -22211,7 +22216,7 @@ export interface operations {
                     "application/json": components["schemas"]["SubscriptionState"];
                 };
             };
-            /** @description invalid_transition: the subscription's status does not allow this move; subscription_exists: the school already has a live subscription; toggle_refused: the plan would switch off a module the school still needs. */
+            /** @description invalid_transition: the subscription's status does not allow this move; subscription_exists: the school already has a live subscription; toggle_refused: the plan would switch off a module the school still needs; limit_below_usage: a paid sign-up onto a plan whose limits are below the school's usage, without acknowledge_over_usage. */
             409: {
                 headers: {
                     [name: string]: unknown;

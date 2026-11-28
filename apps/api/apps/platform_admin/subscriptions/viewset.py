@@ -53,7 +53,8 @@ _PLAN_CONFLICT = OpenApiResponse(
 _ACTIVATE_CONFLICT = OpenApiResponse(
     description="invalid_transition: the subscription's status does not allow this move; "
     "subscription_exists: the school already has a live subscription; toggle_refused: the "
-    "plan would switch off a module the school still needs."
+    "plan would switch off a module the school still needs; limit_below_usage: a paid sign-up "
+    "onto a plan whose limits are below the school's usage, without acknowledge_over_usage."
 )
 _UPDATE = "platform.subscription.update"
 
@@ -122,7 +123,13 @@ class TenantSubscriptionViewSet(PlatformTenantNestedMixin, PlatformViewSet):
             if sub is None:
                 if not code:
                     raise serializers.ValidationError({"plan_code": [PLAN_REQUIRED]})
-                return services.subscribe(request.tenant, code, **period, actor_id=request.user.pk)
+                return services.subscribe(
+                    request.tenant,
+                    code,
+                    **period,
+                    actor_id=request.user.pk,
+                    acknowledge_over_usage=data["acknowledge_over_usage"],
+                )
             if code and code != sub.plan.code:
                 raise serializers.ValidationError({"plan_code": [USE_CHANGE_PLAN]})
             return services.activate(sub, **period, actor_id=request.user.pk)

@@ -25,6 +25,7 @@ from django.db.models import Sum
 
 from apps.platform_admin.models import BillingPeriod, SubscriptionStatus, TenantUsageSnapshot
 from apps.platform_admin.subscriptions.services import live_subscription
+from apps.platform_admin.uploads import TENANT_EXPORT
 from apps.platform_admin.usage.limits import storage_gb
 from apps.staff_management.models import EXITED_EMPLOYMENT_STATUSES, Staff
 from apps.student_management.models import Student, StudentStatus
@@ -73,7 +74,9 @@ def count_staff(tenant_id: uuid.UUID) -> int:
 
 def count_storage_bytes(tenant_id: uuid.UUID) -> int:
     _require_bound(tenant_id)
-    total = File.objects.filter(deleted_at__isnull=True).aggregate(total=Sum("size_bytes"))
+    # Platform export archives are the console's, which the school can neither see nor delete.
+    files = File.objects.filter(deleted_at__isnull=True).exclude(purpose=TENANT_EXPORT.key)
+    total = files.aggregate(total=Sum("size_bytes"))
     return total["total"] or 0
 
 

@@ -99,6 +99,12 @@ class SubscriptionActivateSerializer(serializers.Serializer):
     )
     current_period_start = serializers.DateTimeField()
     current_period_end = serializers.DateTimeField(help_text="After the start.")
+    acknowledge_over_usage = serializers.BooleanField(
+        required=False,
+        default=False,
+        help_text="A paid sign-up onto a plan whose limits are below the school's latest usage "
+        "snapshot goes ahead anyway; without it that is a 409 limit_below_usage.",
+    )
 
 
 class SubscriptionPaymentSerializer(serializers.Serializer):
