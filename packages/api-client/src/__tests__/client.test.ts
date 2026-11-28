@@ -413,7 +413,10 @@ describe("collectNumberedPages", () => {
   });
 
   it("stops at maxPages", async () => {
-    const fetchImpl = jest.fn().mockResolvedValue(numberedPage(["a"], 1, 9));
+    // A fresh Response per call: a body can be read only once.
+    const fetchImpl = jest
+      .fn()
+      .mockImplementation(() => Promise.resolve(numberedPage(["a"], 1, 9)));
     const client = new ApiClient({ baseUrl: "https://api.test/api/v1", fetchImpl });
 
     await collectNumberedPages<string>(client, "/x", { maxPages: 3 });
