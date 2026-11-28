@@ -99,31 +99,43 @@ dashboard and website from the workspace root (`API_REPO_PATH` and `FRONTEND_REP
 The init script refuses to finish if the app or readonly role ends up with superuser or
 `BYPASSRLS`, and CI asserts the same three properties against a live PostgreSQL 18 on every PR.
 
-Applications connect through **PgBouncer in transaction pooling mode**, which means tenant
+Locally, applications connect through **PgBouncer in transaction pooling mode** (AWS v1 connects
+directly to RDS; the code stays pooler-safe either way, ADR-0040), which means tenant
 context must be set with `SET LOCAL app.tenant_id` (or `set_config(..., true)`) *inside a
 transaction*. A session-level `SET` leaks one tenant's context onto the next request that
 reuses the pooled server connection. See `postgres/pgbouncer/pgbouncer.ini`.
 
 ## 3. Deploy flow
 
-Per `docs/02-architecture/hosting-deployment.md` §3 and §6:
+Per `docs/02-architecture/hosting-deployment.md` §3 and §6, and
+[ADR-0040](../docs/decisions/0040-deploy-pipeline-github-actions-oidc.md). Deploys run only in
+GitHub Actions; the entry point is `/schoolhub-deploy`.
 
 ```
-lint → test → build image (tagged with git SHA) → push to registry
-   └─ merge to main ─→ [staging] migrate → deploy → smoke test
-        └─ manual approval gate ─→ [production] migrate → deploy → smoke test
+merge to main ─→ deploy.yml: ci-gate → preview (migration guard)
+   └─→ [staging] build images (tag = SHA, ECR) → migrate → api → worker → dashboard → website → beat → smoke
+dispatch (sha) ─→ deploy.yml: ci-gate → preview (staging ran it?)
+   └─→ production Environment approval ─→ [production] migrate → same rollout → smoke (no build)
 ```
 
-- One immutable image per service per commit. The **same image** moves staging → production;
-  nothing is rebuilt between environments.
-- The migrate job runs as a one-off task **before** new containers receive traffic, using the
-  migrator role. Migrations are expand-phase only, so the old code keeps working throughout.
+- One immutable image per service per commit, built once by the staging run. The **same image**
+  moves staging → production; nothing is rebuilt between environments.
+- CI reaches AWS through GitHub OIDC only: one deploy role per environment, trusted only for
+  `deploy-env.yml` on `main`. No AWS keys in GitHub.
+- The migrate task runs **before** new containers receive traffic, using the migrator role,
+  directly on 5432. `check_migrations.py` blocks non-expand migrations unless overridden.
 - Contract-phase migrations (drops) ship in a *later* release, after the release that stopped
   using the old structure is verified in production.
-- Production deploys require a GitHub Environments approval and are recorded (who / what SHA /
-  when) for the audit trail.
+- Every run is a GitHub Deployment (who / what SHA / overrides / when): the record of what is
+  deployed where.
 
-Full procedure: [`runbooks/deploy.md`](runbooks/deploy.md).
+**First-time order** (nothing is applied until a human does this): bootstrap apply
+([`terraform/bootstrap/`](terraform/bootstrap/README.md)) and the OIDC `sub` customisation →
+`/schoolhub-deploy bootstrap` (GitHub variables and Environments) →
+`scripts/bootstrap-secrets.sh --phase pre-apply` → build-only staging run → env tfvars object
+→ env apply → `bootstrap-secrets.sh --phase post-apply` → db-bootstrap task → env outputs into
+the Environment → first deploy → smoke tenant. Full steps:
+[`runbooks/deploy.md`](runbooks/deploy.md) "First-time order of operations".
 
 ## 4. Secrets
 
@@ -155,8 +167,8 @@ Full procedure: [`runbooks/deploy.md`](runbooks/deploy.md).
 
 | Runbook | Use when |
 | --- | --- |
-| [`deploy.md`](runbooks/deploy.md) | Shipping a release to staging or production |
-| [`rollback.md`](runbooks/rollback.md) | A release is bad and must be reverted |
+| [`deploy.md`](runbooks/deploy.md) | Shipping a release to staging or production — through `/schoolhub-deploy` |
+| [`rollback.md`](runbooks/rollback.md) | A release is bad and must be reverted — `/schoolhub-deploy rollback` |
 | [`backup-restore.md`](runbooks/backup-restore.md) | Restoring the database, whole or single-tenant |
 | [`dr-drill.md`](runbooks/dr-drill.md) | The quarterly restore/DR exercise |
 | [`incident.md`](runbooks/incident.md) | A production incident is in progress |
@@ -168,7 +180,7 @@ Full procedure: [`runbooks/deploy.md`](runbooks/deploy.md).
 infra/
 ├── compose/      # local development stack + documented .env.example
 ├── postgres/     # extensions, roles/RLS bootstrap, PgBouncer config
-├── terraform/    # AWS target for Phase 6 — written, NOT applied
+├── terraform/    # AWS: bootstrap root + envs; planned in CI, applied by a human
 ├── scripts/      # backup, restore, secret rotation, dev seeding
 ├── runbooks/     # operational procedures
 └── .github/      # infrastructure CI (terraform plan, compose validation)

@@ -128,16 +128,20 @@ either this file or `project-status.md`.
     (300 s) stale after a publish. The fix is the singular `cacheHandler` (with
     `cacheMaxMemorySize: 0`) backed by shared storage, implementing `refreshTags`/`updateTags`,
     which means giving the renderer Redis access. It is a renderer design change.
-  - **The dashboard image is per-environment.** `NEXT_PUBLIC_API_BASE_URL` and
+  - **LAUNCH BLOCKER (production): the dashboard image is per-environment.**
+    `launch-blocker:dashboard-runtime-env` `NEXT_PUBLIC_API_BASE_URL` and
     `NEXT_PUBLIC_PLATFORM_DOMAIN` are inlined at its build (the client `login-form.tsx` and
     `forgot-password-form.tsx` read them, as do `next.config.ts`'s rewrites), so it cannot yet be
-    promoted unchanged the way the renderer now is. It needs the same runtime treatment.
-  - **Terraform sets neither `CORS_ALLOWED_ORIGINS` nor `CSRF_TRUSTED_ORIGINS`.** `prod.py`
-    defaults both to `[]`. Tenant-origin CORS for the public form goes through
-    `website_cms.cors`, but the dashboard's cross-origin calls to `api.<domain>` and any
-    CSRF-checked POST need them.
-  - **The ALB reuses the CloudFront certificate**, issued in us-east-1. That works only while
-    `aws_region = "us-east-1"`; any other region needs a regional ACM certificate for the ALB.
+    promoted unchanged the way the renderer now is. The fix is the separate dashboard runtime-env
+    plan and PR (deploy-pipeline plan, Task 5b). Until it lands the image carries build-only
+    placeholders, so staging's dashboard browser calls fail, and the `schoolhub-deploy` skill
+    refuses `promote production` while this marker is open ([ADR-0040](decisions/0040-deploy-pipeline-github-actions-oidc.md)).
+  - ~~**Terraform sets neither `CORS_ALLOWED_ORIGINS` nor `CSRF_TRUSTED_ORIGINS`.**~~ **Closed
+    by the deploy-pipeline PR** for `app.<domain>`: both environments set them
+    ([ADR-0040](decisions/0040-deploy-pipeline-github-actions-oidc.md)). The tenant dashboards on
+    `*.app.<domain>` are still left out (deploy-pipeline follow-ups, below).
+  - ~~**The ALB reuses the CloudFront certificate**~~ **Closed by the deploy-pipeline PR:** the
+    ALB has its own regional ACM certificate with the CloudFront certificate's names.
   - **A CloudFront custom origin header** as defence in depth beside the prefix list: it would
     stop another CloudFront distribution reaching the ALB around this one's WAF, at the cost of a
     shared secret in state and a condition on every listener rule.
@@ -150,6 +154,53 @@ either this file or `project-status.md`.
     ADR-0013). `platform-admin.md` §11 already states the rule.
   - **`SizeRestrictions_BODY` (8 KB) on webhook bodies.** The production WAF's common rule set
     blocks bodies over 8 KB; a bulk publish with a long tag list could exceed it.
+
+- **Deploy pipeline follow-ups** (plan `docs/superpowers/plans/2026-11-23-deploy-pipeline-and-skill.md`,
+  [ADR-0040](decisions/0040-deploy-pipeline-github-actions-oidc.md)). Nothing is applied until the
+  human bootstrap in `infra/runbooks/deploy.md`.
+  - **Tenant dashboards on `*.app.<domain>` are not covered by CORS or either certificate.**
+    Production's dashboard listener rule answers `*.app.<domain>` (the tenant's own dashboard
+    host), but `CORS_ALLOWED_ORIGINS`/`CSRF_TRUSTED_ORIGINS` name only `https://app.<domain>`,
+    and both the CloudFront and the regional ALB certificate
+    carry `*.<domain>`, which covers one label only. A browser on `school.app.<domain>` gets a
+    certificate error, and its API calls would fail CORS. The certificate gap predates this
+    PR. The fix needs `*.app.<domain>` on both certificates (one more name against the ACM
+    10-name limit, so the custom-domain alias limit drops to 7) and an origin regex
+    (`CORS_ALLOWED_ORIGIN_REGEXES`) rather than a list.
+  - **An apply workflow.** Infra is applied by a human from the CI plan; an apply job (with its
+    own role and Environment gate) can follow once the plan step has run cleanly for a while.
+  - **A separate production AWS account.** One account holds both environments, separated by
+    name prefix and state key; role ARNs are variables, so a second account changes no workflow.
+  - **A single production approver.** The user is the only required reviewer, with
+    `prevent_self_review=false`, so no second person checks a production deploy. Add a second
+    reviewer and turn self-review prevention on when the team grows.
+  - **A connection pooler (PgBouncer as an ECS service, or RDS Proxy).** v1 connects directly to
+    RDS on 5432. Trigger: the `DatabaseConnections` alarm fires, or task counts grow. The code is
+    already pooler-safe (`infra/AGENTS.md` rule 2).
+  - **An alert on ECR scan findings** (an EventBridge rule on `ECR Image Scan` to SNS). The
+    registry scans on push, but nothing reads the results.
+  - **The RDS master password in Terraform state.** Moving it to
+    `manage_master_user_password` would let the production plan role stop reading a secret.
+  - **`statement_timeout` for the migrator.** The parameter group's `statement_timeout = 60000`
+    kills a long `CREATE INDEX` in a migration; `ALTER ROLE schoolhub_migrator SET
+    statement_timeout = 0` fixes it, in `02-app-role.sql` (security review).
+  - **Major bumps of the actions in `infra-terraform.yml` and the existing workflows**, and moving
+    the existing jobs' tag pins to commit SHAs. The new deploy workflows pin every action by SHA;
+    the older ones still use tags and older majors.
+  - **actionlint for the existing workflows.** `repo-hygiene`'s `actionlint` job checks the new
+    deploy workflows only.
+  - **The custom-domain limit.** ACM allows 10 names per certificate by default; the platform
+    domain and its wildcard use 2, so `custom_domain_aliases` is validated to at most 8. Beyond
+    8, raise the ACM "Domain names per ACM certificate" quota in both `us-east-1` and the app's
+    Region (then the validation limit), or move both the ALB and CloudFront to per-domain
+    certificates.
+  - **`AddField` NOT NULL without `db_default` on a model created in the same release** is a
+    contract finding in `check_migrations.py`, though it is safe (no old code reads the new
+    table). Passing it when the model is new is a small change to `_classify_add_field`.
+  - **The guardrail hook blocks a Bash heredoc that only writes a file containing `aws` text.**
+    No AWS command runs, but the `PreToolUse` guardrail (`base` plugin, `guardrails.sh`) matches
+    the text and blocks it; implementers wrote those files with the Write tool instead. A
+    guardrail false positive, to report to the plugin's owners.
 
 - **AI gateway and AI-FEE-02 follow-ups** (`feat/ai-gateway`, plan
   `docs/superpowers/plans/2026-11-07-ai-gateway.md`, [ADR-0035](decisions/0035-ai-gateway-shape.md)).
@@ -814,11 +865,13 @@ either this file or `project-status.md`.
   as is, since removing it changes the gate's timing, a decision of its own. Either resolve
   the version with `pnpm --filter @schoolhub/e2e exec node -p …` or drop the cache, as
   Playwright's CI docs advise.
-- **The dashboard image's auth-proxy target is fixed at build time.** The `/api/auth/*`
+- **LAUNCH BLOCKER (production): the dashboard image's auth-proxy target is fixed at build
+  time.** `launch-blocker:dashboard-runtime-env` The `/api/auth/*`
   rewrite reads `API_BASE_URL` (then `NEXT_PUBLIC_API_BASE_URL`) in `next.config.ts`, which a
   standalone build serializes at `next build`. One image can't be pointed at a different API
   per environment without a rebuild, which `infra/AGENTS.md` rule 5 (one image promoted
-  staging → production) will need before a real deploy.
+  staging → production) needs. The fix is the separate dashboard runtime-env plan and PR
+  (deploy-pipeline plan, Task 5b); until then staging's dashboard browser calls fail.
 - **`timetable`'s gaps are named, not hidden.** `POST
 /timetables/{section_id}:generate-draft` is **not built**: it is AI-TTB-01,
   Phase 3 work that has to go through the `core/ai` gateway (AGENTS.md hard

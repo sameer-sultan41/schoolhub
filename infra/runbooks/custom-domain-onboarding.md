@@ -42,9 +42,11 @@ registrar credentials.
    ```
    _schoolhub-verify.www.cityschool.example.  TXT  "schoolhub-verify=<token>"
    ```
-3. **Send the school both records at once** — the TXT above and the CNAME they
-   will need in step 6. One email, two records, with a short note that the CNAME
-   is the one that switches traffic. Splitting these across two emails is how a
+3. **Send the school the records at once** — the TXT above and the traffic CNAME
+   they will need in step 6, with a short note that the traffic CNAME is the one
+   that switches traffic and must wait for our go-ahead. The certificate
+   validation CNAME (step 5.2) exists only after the apply; warn them a third
+   record follows within a day. Splitting this into many separate asks is how a
    two-day onboarding becomes a two-week one.
 4. **Wait for propagation and verify:**
    ```
@@ -52,11 +54,41 @@ registrar credentials.
    ```
    The platform re-checks automatically every 15 minutes. Do not proceed until
    the domain shows `verified`.
-5. **Add the domain to the distribution.** Append it to `custom_domain_aliases`
-   in `terraform/envs/production/terraform.tfvars`, then plan and apply. ACM
-   adds it to the certificate and validates it via the platform's own zone.
-   **The domain must already be verified in step 4** — an unvalidated name makes
-   the apply wait on ACM for 30+ minutes and then fail.
+5. **Add the domain to both certificates.** The CloudFront certificate
+   (`us-east-1`) and the ALB's regional certificate carry the same names, so one
+   alias list feeds both. **The domain must already be verified in step 4.**
+   1. **The apply adds the alias.** Append it to `custom_domain_aliases` in
+      production's tfvars object (download, edit, upload: [`deploy.md`](deploy.md)
+      "Env tfvars"), then plan and apply. At most 8 aliases: ACM allows 10 names
+      per certificate by default and the platform domain and its wildcard use 2.
+      A ninth alias needs the ACM "Domain names per ACM certificate" quota raised
+      in both `us-east-1` and the app's Region first, then the validation limit
+      in `envs/production/variables.tf`. Both certificates are replaced
+      (`create_before_destroy`); the new ones wait in `PENDING_VALIDATION`, and
+      the listener and CloudFront keep the old certificates until validation
+      completes, so no tenant is affected meanwhile.
+   2. **Read the new name's validation CNAME** from either certificate:
+      `aws acm describe-certificate --certificate-arn <arn> --query "Certificate.DomainValidationOptions[?DomainName=='<alias>'].ResourceRecord"`.
+      It is the same CNAME for the `us-east-1` certificate and the regional one
+      (same account, same name).
+   3. **The school creates that CNAME** in their own DNS zone. The platform zone
+      validates only the platform domain and its wildcard; a custom domain is
+      validated only by the record the school creates.
+   4. **Both certificates reach `ISSUED`**
+      (`aws acm describe-certificate --certificate-arn <arn> --query Certificate.Status`,
+      in `us-east-1` and in the app's Region) **before** the school points the
+      domain at CloudFront in step 6.
+
+   **The wait.** The apply blocks in `aws_acm_certificate_validation` until
+   validation completes, up to its create timeout (75 minutes, the AWS provider
+   default for 6.x). ACM gives a pending certificate **72 hours**; after that it
+   is `FAILED` and must be replaced.
+   - Apply timed out because the school has not created the CNAME yet: nothing
+     is broken, the old certificates still serve. Re-run the same apply once the
+     CNAME exists.
+   - 72 hours passed: re-run the apply with `-replace` on both certificates
+     (`aws_acm_certificate.alb` and `module.cdn.aws_acm_certificate.this`) and
+     start again at 5.2.
 6. **Have the school point traffic at us:**
    ```
    www.cityschool.example.  CNAME  <distribution-domain>.cloudfront.net.

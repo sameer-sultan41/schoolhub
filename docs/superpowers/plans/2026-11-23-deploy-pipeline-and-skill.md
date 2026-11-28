@@ -1430,6 +1430,45 @@ A skill has no unit test. The checks are:
 
 ---
 
+## Implementation amendments
+
+What was built differs from the task text above in these places (stop rule 3: the plan matches the code). Each deviation is the implementer's, with its reason; the change reviewer checks them.
+
+**Tasks 1–3**
+- `DenyDataPlaneImageLayers` uses `arn:aws:ecr:*:*:repository/*`, and `kms:Decrypt` uses `arn:aws:kms:<r>:<a>:key/*` plus an alias condition, instead of `*`: the repository's hook forbids `Resource "*"`; the effect is the same.
+- The staging plan role's trust is two statements (`StringEquals` for `main`, `StringLike` for PRs), so the two `sub` conditions OR rather than AND.
+- `terraform test` runs in its own `test` matrix job (bootstrap, ecs-service, gha-deploy-policy, cdn, both envs), because `modules/cdn` cannot run in the `validate` matrix; the `aws_route53_record` grep is a step there.
+- `infra/postgres/init/**` joined `infra-terraform.yml`'s path filter in Task 2, not Task 6, because db-bootstrap reads those files from Task 2 on.
+- `gha-deploy-policy`'s `ListTasks` resource is `container-instance/<cluster>/*` with the cluster condition, not `*` (same hook). `TaskDefinitions` keeps `*` (no resource-level support).
+- `modules/database` gains the output `connections_alarm_threshold`, because a test cannot read a child module's resources.
+- The ecs-service execution-secrets policy is a `jsonencode` local, not `aws_iam_policy_document`, so the test can assert `kms:Decrypt`.
+- The tfvars examples use `me-central-1` (the region allow-list rejects `us-east-1`).
+- `postgres_client_image` is pinned to the `public.ecr.aws` `postgres:18-alpine` index digest.
+- The plan commit also carries `.cspell/project-words.txt`: cspell rejected the plan's Terraform terms.
+- `rotate-secrets.sh`'s `MANUAL` refusal prints the classification note instead of hardcoded website-token text, so the new `db/*-url` arm gives the right reason. The drift test also covers `db_role_password_arns`, and `bootstrap-secrets.sh` avoids associative arrays (macOS bash 3.2).
+- `apps/api/.env.example` gained the three Redis names with the user's explicit OK (M-3).
+
+**Tasks 4–6**
+- `deploy-env.yml`'s rollout job checks out the workflow's own commit (`main`) with full history, not `inputs.sha`: a rollback target may predate the scripts and the composite action, and the guard reads the target with `git show`. The build job still checks out `inputs.sha`.
+- Task 6's plan job uses `configure-aws-credentials` v6.3.1 (the deploy pin), not v4: v4.3.1 has no `allowed-account-ids` input.
+- `check_migrations.py`: `AddField` with any `db_default` (literal or expression) passes; `ManyToManyField` passes (no column); `classify_source` takes `new_tables`; helpers `defined_fields` (so an `AlterField` cannot vouch for itself) and `created_tables`; a missing target SHA exits 2.
+- `ci_gate.py`: a conclusion outside the table (for example `stale`) is red, not green.
+- The helper-pin test loads the checker with `importlib` (ruff E402), and strips only `DROP POLICY IF EXISTS … ON …;` before `scan_sql`.
+- `deployments.py` exits 2 on an API error; callers treat 2 as a failure even where 1 is overridable.
+- `On failure` derives the failed step from the step outcomes for the status description.
+- The Terraform plan JSON goes to a temp file read by `jq`, then deleted; the stateful-destroy check reads the JSON `type`. The plan job's `needs` is unchanged (`test` not added). `infra-terraform.yml`'s workflow-level `pull-requests: write` and `id-token: write` moved to the plan job only.
+- The deferred entries 4.4 asked for (actionlint for the existing workflows, existing tag pins, v4 major bumps) were written by Task 8.
+
+**Tasks 7–8**
+- `error-catalogue.md` uses the real output: `check_migrations.py` prints `::error file=<path>,line=<n>::contract: <Op>: <reason> (override: --allow-contract)`, and the smoke step's `curl -f` fails as `curl: (22) … error: <code>`. Rows were added for `resolve`, `ci-gate`, a non-descendant dispatch, `this SHA was never live`, `deployments.py` exit 2, a missing deployed SHA, `check_task_definition.py`, the build-only notice, the home-page HTML check, the slow invalidation notice and a denied `ask` prompt.
+- The soak window (precondition 3) uses the Deployments' `created_at` from `deployments.py show` and `history`, because the script exposes no status timestamps; it starts a few minutes early.
+- `deployments.py history` includes the current deployment; the skill's rollback drops it.
+- The `superpowers:writing-skills` pressure tests (baseline and with-skill subagent runs) were not run: the implementer brief forbade dispatching subagents. Task 9's `change-reviewer` and the dry-run walkthrough remain the checks.
+- Prettier wrote the `ask` array on one line in `.claude/settings.json`.
+- `deploy.md` seeds the smoke tenant through the platform-admin console: no management command creates a tenant in AWS (the `seed_*` commands are for dev and E2E).
+- `deferred-work.md`: the website launch-infra entries for CORS/CSRF and the ALB certificate are struck as closed by this PR. New entries beyond 8.3's list: tenant dashboards on `*.app.<domain>` are covered by neither CORS nor either certificate (found in Task 2; the certificate gap predates this branch), the migrator `statement_timeout` (Task 3's risk table), the `AddField` on a new model false positive, and the guardrail hook blocking a Bash heredoc that only writes `aws` text.
+- `infra/AGENTS.md`'s version table now says `>= 1.11` for the roots and `>= 1.9` for modules, matching the code.
+
 ## Independent review
 
 - **Reviewer:** plan-reviewer agent, 2026-11-28 (third pass)

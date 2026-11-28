@@ -25,6 +25,7 @@
 10. Every brief to a subagent carries this repository's overrides (L11).
 11. A viewset you edited is the one `config/api_v1.py` routes to (L40), and every fixture of a type the regenerated contract changed was updated in the same commit (L41).
 12. Every value Terraform passes to an app is read by that app, under that name, at that port or path (L74).
+13. A service that must never run twice has `deployment_maximum_percent` ≤ 100 in code, with a test (L75).
 
 ## 3. Lessons
 
@@ -531,6 +532,11 @@
 
 - **Mistake.** The website launch infrastructure named settings modules (`config.settings.production`, `.staging`) that never existed, gave the renderer `NEXT_PUBLIC_API_BASE_URL`, which it never reads, routed port 3001 to an image listening on 3000, and probed `/api/health` routes neither frontend had. The API's `/healthz` could never pass behind the ALB under `prod.py` (the probe's IP Host got `DisallowedHost` or the SSL redirect), and a `NEXT_PUBLIC_` value read by server code would have been frozen into the promoted image at build.
 - **Check.** For every environment variable, port, settings module and health path Terraform passes to an app, open the file that reads or serves it. A health path must pass under the production middleware with an IP `Host` and no `X-Forwarded-Proto`. No per-environment value may be a `NEXT_PUBLIC_*`, which `next build` inlines into server bundles too.
+
+### L75. A singleton service's deployment percentages are code, not a comment
+
+- **Mistake.** `infra/terraform/modules/ecs-service/main.tf` said celery-beat deploys "stop-then-start instead of rolling", but `aws_ecs_service.this` set `deployment_maximum_percent = 200` and `deployment_minimum_healthy_percent = 100` for every service; the beat-only `deployment_controller { type = "ECS" }` changes neither. Every beat deploy would briefly run two schedulers and double-fire periodic tasks. Found while planning the deploy pipeline; fixed in `c55eb29f` and pinned by `ecs_service.tftest.hcl`'s `beat_never_overlaps`.
+- **Check.** For a service that must never run twice, read `deployment_maximum_percent` ≤ 100 (and `deployment_minimum_healthy_percent = 0`) in the module code, not in its comment, and confirm a test asserts it.
 
 ## 4. Adding a lesson
 

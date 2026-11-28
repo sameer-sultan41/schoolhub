@@ -50,29 +50,54 @@ the first four felt slow.
 
 ## Steps — 3. Redeploy the previous image
 
-7. Find the previous good task definition revision:
+7. Run `/schoolhub-deploy rollback` (the
+   [`schoolhub-deploy`](../../.claude/skills/schoolhub-deploy/SKILL.md) skill). It lists the
+   environment's earlier successful deployments (`deployments.py history`), defaults to the
+   one before the current one, and dispatches
+   `gh workflow run deploy.yml --ref main -f environment=<env> -f sha=<previous sha> -f mode=rollback`.
+   Production still waits on the Environment approval.
+8. The rollback runs no build and no migration. It redeploys the previous SHA's images in
+   the normal order — `api` → `celery-worker` → `dashboard` → `website` → `celery-beat`
+   (one task) — each waiting for stability, then invalidates CloudFront and runs the smoke
+   checks.
+9. **Do not touch the database schema.** Because migrations are expand-phase
+   only, the previous code runs against the migrated schema unchanged. Reversing
+   a migration under running code turns one incident into two.
+10. **A rollback across a contract migration is refused.** If any deployment between the
+    target and the current SHA carried `contract_override` (a contract migration shipped
+    under `allow_contract_migration`), the old code may not run on today's schema. `preview`
+    refuses unless `allow_contract_migration=true` confirms it, and the skill sets that only
+    after the user has read the list (`deployments.py overrides-between`).
+11. **Images expire.** ECR expires SHA tags 365 days after push, so a target older than that
+    fails at "Verify all three images exist"; the skill warns from 300 days. Pick a newer
+    target.
+
+### Break-glass, when GitHub Actions is unavailable (human only)
+
+Only when the workflow cannot run (a GitHub outage). Agents never run these.
+
+1. Find the previous good task definition revision per service:
    `aws ecs describe-task-definition --task-definition schoolhub-production-api \
-      --query 'taskDefinition.revision'` and take the revision before the
-   current one.
-8. Roll the service back:
+      --query 'taskDefinition.revision'` and take the revision before the current one.
+2. Roll each service back, in the order `api`, `celery-worker`, `dashboard`, `website`,
+   `celery-beat`:
    `aws ecs update-service --cluster schoolhub-production \
       --service schoolhub-production-api \
       --task-definition schoolhub-production-api:<previous-revision> \
       --force-new-deployment`
-9. **Do not touch the database schema.** Because migrations are expand-phase
-   only, the previous code runs against the migrated schema unchanged. Reversing
-   a migration under running code turns one incident into two.
-10. Roll back each affected service the same way. Order: `api` first (it is what
-    everything else talks to), then `dashboard` and `website`, then
-    `celery-worker`, then `celery-beat`.
-11. Watch until each service shows one `PRIMARY` deployment with
-    `runningCount == desiredCount`.
+   Scale `celery-beat` to 0 before its update and back to 1 after, never above 1.
+3. Watch until each service shows one `PRIMARY` deployment with
+   `runningCount == desiredCount`.
+4. Invalidate CloudFront: `aws cloudfront create-invalidation --distribution-id <id> --paths '/*'`.
+5. No GitHub Deployment records this rollback; note it in the incident timeline, and the
+   next workflow deploy re-establishes the record.
 
 ## Steps — 4. Purge the edge
 
-12. Invalidate CloudFront so the renderer stops serving the bad build:
-    `aws cloudfront create-invalidation --distribution-id <id> --paths '/*'`,
-    then purge ISR caches for affected tenants via the revalidation webhook.
+12. The rollback workflow already invalidates CloudFront (`/*`). Purge ISR caches for
+    affected tenants by hand, via the revalidation webhook; that stays manual. For an edge
+    problem with no rollback, invalidate by hand:
+    `aws cloudfront create-invalidation --distribution-id <id> --paths '/*'`.
 13. `/*` is blunt — it costs money and leaves a cold cache. It is still correct
     when the alternative is one tenant's content served under another's domain.
 
@@ -86,10 +111,8 @@ the first four felt slow.
 4. Celery queue depths are draining, not growing.
 5. `celery-beat` `runningCount` is exactly 1.
 6. Two tenant websites render their own branding.
-7. The deployed image tag is the one you intended:
-   `aws ecs describe-services --cluster schoolhub-production \
-      --services schoolhub-production-api \
-      --query 'services[0].taskDefinition'`
+7. The deployed SHA is the one you intended:
+   `python3 .github/scripts/deployments.py current --env production` (`/schoolhub-deploy status`).
 
 ## Rollback (of the rollback)
 
