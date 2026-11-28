@@ -569,6 +569,11 @@
 - **Mistake.** Platform-admin PR D ran `git commit --amend ... | tail`; cspell rejected the amend, but the pipeline's status was `tail`'s, so the push went ahead with the unfixed commit. Later a plain `git commit` swept two renames `git mv` had staged into an unrelated commit, without their importers (caught by `git show --stat` before the push).
 - **Check.** Commit with `git commit -- <paths>` and test the exit status on its own (no pipe, or `${pipestatus[1]}` in zsh). Before every push, `git show --stat` each new commit and confirm it holds only the files it names.
 
+### L81. A guard that the first failure clears does not cover the failures after it
+
+- **Mistake.** Platform-admin PR E (Task 11): the "never refresh an impersonated tab" flag was cleared by the first 401's handler. `ApiClient` shares one refresh only among 401s inside one microtask, so a later 401 found no flag and no token and called the real refresh (change review of `232eb61a`; fixed in `a23fb2b3`).
+- **Check.** For a guard on a failure path, ask what the second, third and still-in-flight failure see after the first one's cleanup. Clear the guard only on the event that makes it untrue (here a normal sign-in), and test a second call after the first handler ran.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.
