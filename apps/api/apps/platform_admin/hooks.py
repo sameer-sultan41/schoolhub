@@ -5,9 +5,9 @@
 - the subscription state `:reinstate` follows (`core.tenancy.subscription_state`);
 - the plan step of feature resolution (`core.tenancy.features.register_plan_resolver`);
 - quotas (`core.tenancy.quotas`): the limits, the usage counters (the one implementation, in
-  `usage.services`; storage in bytes) and the threshold notice.
-
-A later PR adds the impersonation-grant checker to this same function.
+  `usage.services`; storage in bytes) and the threshold notice;
+- impersonation (`core.rbac.impersonation`): the grant checker the authenticator asks on every
+  impersonated request, and the release that logout and ``:end`` call (ADR-0037).
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ def register() -> None:
     # Imported here, not at module level: `ready()` is the first moment models may load. The
     # services import the lifecycle, which imports `notifications` and so registers its
     # triggers before any request can send one.
+    from apps.platform_admin.impersonation.services import live_grant, release_from_session
     from apps.platform_admin.subscriptions.services import (
         effective_limits,
         live_subscription_state,
@@ -25,6 +26,7 @@ def register() -> None:
     from apps.platform_admin.tenants.services import owner_invitation_eligible
     from apps.platform_admin.usage.quotas import threshold_reached
     from apps.platform_admin.usage.services import count_staff, count_storage_bytes, count_students
+    from core.rbac.impersonation import register_impersonation_hooks
     from core.rbac.invitations.eligibility import register_invitation_eligibility
     from core.rbac.models import InvitationKind
     from core.tenancy.features import register_plan_resolver
@@ -48,3 +50,4 @@ def register() -> None:
     register_usage_counter("students", count_students)
     register_usage_counter("staff", count_staff)
     register_usage_counter("storage_gb", count_storage_bytes, unit=BYTES_PER_GB)
+    register_impersonation_hooks(check=live_grant, end=release_from_session)

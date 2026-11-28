@@ -1,7 +1,9 @@
 import { act } from "@testing-library/react";
 
+import { accessTokenStore } from "@/lib/auth";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
+import { impersonationToken } from "@/test-fixtures/impersonation";
 import { buildUser, renderHookWithClient } from "@/test-utils";
 
 import { useSignOut } from "../use-sign-out";
@@ -51,5 +53,23 @@ describe("useSignOut", () => {
 
     expect(queryClient.getQueryData(queryKeys.currentUser())).toBeUndefined();
     expect(mockReplace).toHaveBeenCalledWith("/login");
+  });
+
+  it("signing out of an impersonated session lands on the ended page, not sign-in", async () => {
+    mockLogout.mockResolvedValue(undefined);
+    accessTokenStore.set(impersonationToken(), 1800);
+    try {
+      const { result } = renderHookWithClient(() => useSignOut());
+
+      await act(async () => {
+        result.current();
+        await Promise.resolve();
+      });
+
+      expect(mockLogout).toHaveBeenCalledTimes(1);
+      expect(mockReplace).toHaveBeenCalledWith("/impersonate?ended=1");
+    } finally {
+      accessTokenStore.clear();
+    }
   });
 });

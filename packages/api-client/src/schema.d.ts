@@ -513,7 +513,47 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Refused 403 ``impersonation_forbidden`` under impersonation (ADR-0037). */
         post: operations["auth_change_password_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/impersonation:end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description End the impersonated session's own grant; 404 when the session is not impersonated. */
+        post: operations["auth_impersonation:end_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/impersonation:exchange": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Spend a handoff code (single use, ``PLATFORM_HANDOFF_CODE_TTL_SECONDS``) for
+         *     ``{access, expires_in}``: an access token of the user, with no refresh token or cookie,
+         *     that expires with the grant. An unknown, spent or expired code, or a grant that is no longer
+         *     live, is a 400 ``invalid_link``.
+         */
+        post: operations["auth_impersonation:exchange_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -596,6 +636,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * @description Ends the session: blacklists the refresh cookie's token, or, under impersonation,
+         *     releases the grant and leaves the cookie alone (the operator's tab holds none of its own).
+         */
         post: operations["auth_logout_create"];
         delete?: never;
         options?: never;
@@ -610,7 +654,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The authenticated principal, with effective permissions for UI gating. */
+        /**
+         * @description The authenticated principal, with effective permissions for UI gating, and the
+         *     impersonation the session runs under (`impersonation`, null for a normal session).
+         */
         get: operations["auth_me_retrieve"];
         put?: never;
         post?: never;
@@ -681,7 +728,8 @@ export interface paths {
          *     Platform users only in v1 (a tenant principal gets 404). Refused 409
          *     ``mfa_already_enabled`` once MFA is on, so a password-only token can never replace an
          *     enrolled factor (ruling A2); an operator who lost theirs is reset with
-         *     ``create_platform_admin --reset-mfa``.
+         *     ``create_platform_admin --reset-mfa``. Refused 403 ``impersonation_forbidden`` under
+         *     impersonation (ADR-0037).
          */
         post: operations["auth_mfa:enroll_create"];
         delete?: never;
@@ -4203,6 +4251,28 @@ export interface paths {
         patch: operations["platform_feature_flags_partial_update"];
         trace?: never;
     };
+    "/api/v1/platform/impersonation-grants/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Release or revoke an impersonation grant
+         * @description `DELETE /platform/impersonation-grants/{id}`: the holder releases, a super admin revokes.
+         *
+         *     Anyone else gets a 404, as for a grant that does not exist. Ending an ended grant is a 204.
+         */
+        delete: operations["platform_impersonation_grants_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/plans": {
         parameters: {
             query?: never;
@@ -4556,6 +4626,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/tenants/{tenant_pk}/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The school's users the console may impersonate
+         * @description `GET /platform/tenants/{tenant_pk}/users?q=&role=`: whom the console may impersonate.
+         *
+         *     The school's active, non-platform logins, with their live roles' slugs. ``q`` matches the
+         *     name, email or username; ``role`` a role slug.
+         */
+        get: operations["platform_tenants_users_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/tenants/{tenant_pk}:delete": {
         parameters: {
             query?: never;
@@ -4602,6 +4695,26 @@ export interface paths {
          *     List it before `PlatformViewSet`: ``class X(PlatformTenantNestedMixin, PlatformViewSet)``.
          */
         post: operations["platform_tenants_:export_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_pk}:impersonate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Impersonate a school user: a time-boxed grant and its one-time handoff link
+         * @description `POST /platform/tenants/{tenant_pk}:impersonate`.
+         */
+        post: operations["platform_tenants_:impersonate_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9658,6 +9771,37 @@ export interface components {
         IdCardGenerateRequest: {
             student_ids: string[];
         };
+        ImpersonateRequest: {
+            /** Format: uuid */
+            user_id: string;
+            /** @description Why. Kept in the audit log, and shown to the school's owners in their notice. */
+            reason: string;
+            /** @description 1 to PLATFORM_IMPERSONATION_MAX_MINUTES; outside it, a 422. */
+            duration_minutes: number;
+        };
+        ImpersonationExchange: {
+            code: string;
+        };
+        /** @description Schema only: an access token with no refresh token, valid until the grant expires. */
+        ImpersonationExchangeResponse: {
+            access: string;
+            expires_in: number;
+        };
+        /** @description Schema only: the grant, and the link that opens the school's dashboard as the user. */
+        ImpersonationGrantStarted: {
+            /** Format: uuid */
+            grant_id: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** @description Single use, within PLATFORM_HANDOFF_CODE_TTL_SECONDS; the code is its fragment. */
+            handoff_url: string;
+        };
+        /** @description Who is acting as this user, and until when; the dashboard's banner shows it. */
+        ImpersonationSummary: {
+            by_name: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
         /** @description `reports.income_vs_expense`: an income or expense account's net over the period. */
         IncomeVsExpenseReportRow: {
             /** Format: uuid */
@@ -10146,6 +10290,35 @@ export interface components {
         MarksUnlockResult: {
             unlocked_rows: number;
             already_unlocked: boolean;
+        };
+        /**
+         * @description `/auth/me`: the user, plus the impersonation the session runs under (ADR-0037).
+         *
+         *     ``impersonation`` is null for a normal session. It is read from the request, which the
+         *     authenticator annotated after checking the grant, so it is never stale.
+         */
+        Me: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: email */
+            readonly email: string;
+            /** @description School-issued login for students without email. */
+            readonly username: string | null;
+            readonly first_name: string;
+            readonly last_name: string;
+            readonly full_name: string;
+            readonly phone: string;
+            /** Format: uuid */
+            readonly tenant: string | null;
+            readonly tenant_summary: components["schemas"]["TenantSummary"] | null;
+            /** @description Platform-scope principal (no tenant). */
+            readonly is_platform: boolean;
+            readonly mfa_enabled: boolean;
+            readonly permissions: string[];
+            readonly roles: string[];
+            /** @description A student or guardian, so a client routes them to the portal rather than guessing. */
+            readonly is_restricted_principal: boolean;
+            readonly impersonation: components["schemas"]["ImpersonationSummary"] | null;
         };
         /** @description One message in a thread, as its participants read it. */
         Message: {
@@ -10868,6 +11041,17 @@ export interface components {
         };
         PaginatedPlanList: {
             data?: components["schemas"]["Plan"][];
+            meta?: {
+                pagination?: {
+                    page?: number;
+                    page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
+                };
+            };
+        };
+        PaginatedPlatformTenantUserList: {
+            data?: components["schemas"]["PlatformTenantUser"][];
             meta?: {
                 pagination?: {
                     page?: number;
@@ -12734,6 +12918,15 @@ export interface components {
                     [key: string]: unknown;
                 }[];
             };
+        };
+        /** @description A school user the console may impersonate: who, and their roles' slugs. */
+        PlatformTenantUser: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly name: string;
+            /** Format: email */
+            readonly email: string;
+            readonly roles: string[];
         };
         PortalChild: {
             student: components["schemas"]["PortalStudent"];
@@ -15652,6 +15845,63 @@ export interface operations {
             };
         };
     };
+    "auth_impersonation:end_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description not_found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "auth_impersonation:exchange_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImpersonationExchange"];
+                "application/x-www-form-urlencoded": components["schemas"]["ImpersonationExchange"];
+                "multipart/form-data": components["schemas"]["ImpersonationExchange"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpersonationExchangeResponse"];
+                };
+            };
+            /** @description invalid_link */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     "auth_invitations:accept_create": {
         parameters: {
             query?: never;
@@ -15758,7 +16008,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["User"];
+                    "application/json": components["schemas"]["Me"];
                 };
             };
         };
@@ -21712,6 +21962,26 @@ export interface operations {
             };
         };
     };
+    platform_impersonation_grants_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     platform_plans_list: {
         parameters: {
             query?: {
@@ -22356,6 +22626,36 @@ export interface operations {
             };
         };
     };
+    platform_tenants_users_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+                /** @description Part of a name, email or username. */
+                q?: string;
+                /** @description A role slug the user holds. */
+                role?: string;
+            };
+            header?: never;
+            path: {
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPlatformTenantUserList"];
+                };
+            };
+        };
+    };
     "platform_tenants_:delete_create": {
         parameters: {
             query?: never;
@@ -22409,6 +22709,47 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ExportAccepted"];
                 };
+            };
+        };
+    };
+    "platform_tenants_:impersonate_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImpersonateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ImpersonateRequest"];
+                "multipart/form-data": components["schemas"]["ImpersonateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpersonationGrantStarted"];
+                };
+            };
+            /** @description conflict: the school is not operational. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description domain_rule_violation: a duration out of range, or a user who is not an active, non-platform user of this school. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

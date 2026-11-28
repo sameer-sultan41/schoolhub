@@ -2,7 +2,9 @@ import { ApiError } from "@schoolhub/api-client";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { accessTokenStore } from "@/lib/auth";
 import { Services } from "@/services";
+import { impersonationToken } from "@/test-fixtures/impersonation";
 import { mocked } from "@/test-fixtures/list-screen";
 import { renderWithProviders } from "@/test-utils";
 
@@ -111,5 +113,18 @@ describe("ChangePasswordForm", () => {
       "Current password is incorrect.",
     );
     expect(screen.getByLabelText("New password")).toHaveValue(NEXT);
+  });
+
+  it("under impersonation shows why instead of the form (the API refuses it with 403)", () => {
+    accessTokenStore.set(impersonationToken(), 1800);
+    try {
+      renderWithProviders(<ChangePasswordForm />);
+
+      expect(screen.getByText("Not available in a support session")).toBeInTheDocument();
+      expect(screen.queryByLabelText("Current password")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Change password" })).not.toBeInTheDocument();
+    } finally {
+      accessTokenStore.clear();
+    }
   });
 });

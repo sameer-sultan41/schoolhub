@@ -5,7 +5,7 @@ import { domAnimation, LazyMotion, MotionConfig } from "motion/react";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import { setUnauthorizedHandler } from "@/lib/auth";
-import { Paths } from "@/config/paths";
+import { impersonationEndedPath, Paths } from "@/config/paths";
 import { getQueryClient } from "@/lib/query-client";
 
 /**
@@ -30,10 +30,11 @@ export function AppProviders({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    // Fired when a refresh attempt could not rescue a 401 — the session is genuinely over.
-    setUnauthorizedHandler(() => {
+    // Fired when a refresh attempt could not rescue a 401 — the session is genuinely over. An
+    // impersonated one never refreshes and ends on the page that says so, not at sign-in.
+    setUnauthorizedHandler((_error, { impersonated }) => {
       queryClient.clear();
-      router.replace(Paths.LOGIN);
+      router.replace(impersonated ? impersonationEndedPath() : Paths.LOGIN);
     });
   }, [queryClient, router]);
 

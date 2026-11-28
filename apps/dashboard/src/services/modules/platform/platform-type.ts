@@ -40,6 +40,11 @@ export type ExportDownload = ApiSchemas["ExportDownload"];
 /** `GET /platform/reports/{key}`'s JSON: each section a list of rows with the same keys. */
 export type PlatformReport = ApiSchemas["PlatformReport"];
 
+/** A school user the console may impersonate, and starting that impersonation (ADR-0037). */
+export type TenantUser = ApiSchemas["PlatformTenantUser"];
+export type ImpersonateInput = ApiSchemas["ImpersonateRequest"];
+export type GrantStarted = ApiSchemas["ImpersonationGrantStarted"];
+
 /** A quota metric's limit: a whole number, or `null` for unlimited. */
 export type Limits = Record<string, number | null>;
 
@@ -74,6 +79,14 @@ export interface PlatformPageQuery {
 export interface TenantPageQuery extends PlatformPageQuery {
   status?: TenantStatus;
   currentPlan?: string;
+}
+
+/** `GET /platform/tenants/{id}/users`: by part of a name, email or username, and a role slug. */
+export interface TenantUserQuery {
+  q?: string;
+  role?: string;
+  page?: number;
+  pageSize?: number;
 }
 
 export interface PlanPageQuery extends PlatformPageQuery {

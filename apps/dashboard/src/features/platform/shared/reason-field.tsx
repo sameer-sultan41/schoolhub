@@ -21,12 +21,15 @@ export function ReasonField<TValues extends FieldValues>({
   name,
   description,
   optional = false,
+  maxLength = REASON_MAX_LENGTH,
 }: {
   form: UseFormReturn<TValues>;
   name: Path<TValues>;
   description?: string;
   /** `:reinstate` takes a reason without requiring one. */
   optional?: boolean;
+  /** The server's cap for this action's reason, when it is not a lifecycle one. */
+  maxLength?: number;
 }) {
   const t = useTranslations("platform");
   return (
@@ -37,7 +40,7 @@ export function ReasonField<TValues extends FieldValues>({
         <FormItem>
           <FormLabel required={!optional}>{t("lifecycle.reason")}</FormLabel>
           <FormControl required={!optional}>
-            <Textarea rows={3} maxLength={REASON_MAX_LENGTH} {...field} />
+            <Textarea rows={3} maxLength={maxLength} {...field} />
           </FormControl>
           <FormDescription>{description ?? t("lifecycle.reasonHint")}</FormDescription>
           <FormMessage />

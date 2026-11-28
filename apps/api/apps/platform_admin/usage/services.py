@@ -23,6 +23,7 @@ from decimal import Decimal
 
 from django.db.models import Sum
 
+from apps.platform_admin.impersonation import services as impersonation
 from apps.platform_admin.models import BillingPeriod, SubscriptionStatus, TenantUsageSnapshot
 from apps.platform_admin.subscriptions.services import live_subscription
 from apps.platform_admin.uploads import TENANT_EXPORT
@@ -120,6 +121,7 @@ def snapshot_tenant(tenant_id: uuid.UUID) -> TenantUsageSnapshot:
         students=count_students(tenant_id),
         staff=count_staff(tenant_id),
         storage_bytes=count_storage_bytes(tenant_id),
+        impersonations_30d=impersonation.count_recent(tenant_id),
         modules_enabled=sorted(
             spec.key
             for spec in feature_registry.all()

@@ -20,7 +20,8 @@ import { env } from "./env";
  *   rather than calling the API directly, so the cookie is always same-origin.
  * - A 401 triggers exactly one refresh, shared across concurrent requests, then the original
  *   request replays. A refresh that comes back 401/403 means the session is over: clear
- *   state and bounce to /login. A refresh that is throttled, 5xx or unreachable means
+ *   state and bounce to /login. An impersonated session (ADR-0037) never refreshes: its 401
+ *   ends it. A refresh that is throttled, 5xx or unreachable means
  *   nothing of the sort — that error propagates and the session is left intact.
  *
  * The same endpoints serve future mobile clients with secure storage instead of a cookie —
@@ -45,8 +46,8 @@ const SESSION_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
  * the same rule that blocks `Domain=.com`). Setting it from JS already running on
  * whichever host the browser is on sidesteps that entirely, in every environment.
  */
-export function setSessionCookie(): void {
-  document.cookie = `${Cookies.SESSION}=1; path=/; max-age=${SESSION_COOKIE_MAX_AGE_SECONDS}; samesite=lax`;
+export function setSessionCookie(maxAgeSeconds: number = SESSION_COOKIE_MAX_AGE_SECONDS): void {
+  document.cookie = `${Cookies.SESSION}=1; path=/; max-age=${maxAgeSeconds}; samesite=lax`;
 }
 
 export function clearSessionCookie(): void {
@@ -81,7 +82,86 @@ export const mfaChallengeStore = {
   },
 };
 
-type UnauthorizedHandler = (error: ApiError) => void;
+/** The `amr` value of an impersonated session's access token (ADR-0037). */
+const IMPERSONATION_AMR = "impersonation";
+
+/**
+ * This tab's note that it held an impersonated session. A flag, never the token. It outlives the
+ * token (a reload, or the session's end), so the tab never refreshes into the host's refresh
+ * cookie, which is someone else's session, and says the session ended. It lasts until the tab
+ * closes (`sessionStorage`) or a normal sign-in in it (`forgetImpersonatedTab`). Storage can be
+ * unavailable (a private window); the token check still holds while the token does.
+ */
+const IMPERSONATED_TAB_KEY = "sh_impersonated";
+
+function readTabFlag(): boolean {
+  try {
+    return window.sessionStorage.getItem(IMPERSONATED_TAB_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeTabFlag(on: boolean): void {
+  try {
+    if (on) {
+      window.sessionStorage.setItem(IMPERSONATED_TAB_KEY, "1");
+    } else {
+      window.sessionStorage.removeItem(IMPERSONATED_TAB_KEY);
+    }
+  } catch {
+    // Unavailable storage only loses the reload case: that tab then signs in as usual.
+  }
+}
+
+/** Whether a JWT's `amr` claim says impersonation. Read only, never verified: UI routing; the API
+ * checks the grant on every request. */
+export function isImpersonationToken(token: string | null): boolean {
+  const payload = token?.split(".")[1];
+  if (!payload) return false;
+  try {
+    const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+    const claims = JSON.parse(json) as { amr?: unknown };
+    return Array.isArray(claims.amr) && claims.amr.includes(IMPERSONATION_AMR);
+  } catch {
+    return false;
+  }
+}
+
+/** Whether this tab's session is an impersonation: the token says so while there is one, and the
+ * tab flag answers once it is gone (a reload, a 401, the end). */
+export function isImpersonating(): boolean {
+  const token = accessTokenStore.get();
+  return token === null ? readTabFlag() : isImpersonationToken(token);
+}
+
+/** A normal sign-in in this tab: it is no longer an impersonated one. */
+export function forgetImpersonatedTab(): void {
+  writeTabFlag(false);
+}
+
+/**
+ * Makes an exchanged impersonation token this tab's session: the token in memory, the proxy's
+ * marker for exactly the grant's lifetime, and the tab flag. A pending sign-in challenge is
+ * dropped, so nothing of a previous session is left beside it.
+ */
+export function startImpersonatedSession(access: string, expiresInSeconds: number): void {
+  mfaChallengeStore.set(null);
+  accessTokenStore.set(access, expiresInSeconds);
+  setSessionCookie(expiresInSeconds);
+  writeTabFlag(true);
+}
+
+/** Drops an impersonated session from this tab. The server ends the grant; this only forgets it.
+ * The tab flag stays: a 401 still in flight must not refresh either. */
+export function endImpersonatedSession(): void {
+  accessTokenStore.clear();
+  clearSessionCookie();
+}
+
+/** `impersonated`: the session that ended was an impersonation, so the tab goes to the ended page,
+ * not to sign-in (ADR-0037). */
+type UnauthorizedHandler = (error: ApiError, session: { impersonated: boolean }) => void;
 
 let onUnauthorized: UnauthorizedHandler = () => {
   accessTokenStore.clear();
@@ -113,6 +193,9 @@ export const apiClient: ApiClient = createApiClient({
    * in-memory token, leaves the refresh cookie alone, and surfaces the real error.
    */
   refreshAccessToken: async () => {
+    // An impersonated session has no refresh token (ADR-0037), and a refresh cookie on this host
+    // belongs to another session: refreshing would swap identities. Its 401 is the end.
+    if (isImpersonating()) return null;
     const refreshed = await refreshAccessToken({
       baseUrl: AUTH_PROXY_BASE_URL,
       path: endpoints.auth.refresh,
@@ -125,9 +208,14 @@ export const apiClient: ApiClient = createApiClient({
     return refreshed.accessToken;
   },
   onUnauthorized: (error) => {
-    accessTokenStore.clear();
-    clearSessionCookie();
-    onUnauthorized(error);
+    const impersonated = isImpersonating() || error.code === "impersonation_ended";
+    if (impersonated) {
+      endImpersonatedSession();
+    } else {
+      accessTokenStore.clear();
+      clearSessionCookie();
+    }
+    onUnauthorized(error, { impersonated });
   },
 });
 

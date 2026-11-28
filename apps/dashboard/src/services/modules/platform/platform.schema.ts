@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-import { BILLING_PERIODS, QUOTA_METRICS } from "./platform-constant";
+import {
+  BILLING_PERIODS,
+  IMPERSONATION_REASON_MAX_LENGTH,
+  QUOTA_METRICS,
+} from "./platform-constant";
 
 /**
  * The console's form schemas, snake_case like the API so a server field error lands on its input
@@ -64,3 +68,14 @@ export function createPlanFormSchema(messages: PlatformFormMessages) {
   });
 }
 export type PlanFormValues = z.infer<ReturnType<typeof createPlanFormSchema>>;
+
+/** Who to act as, why (kept in the audit log) and for how long, in minutes, as the duration
+ * `Select` holds it. */
+export function createImpersonateSchema(messages: PlatformFormMessages) {
+  return z.object({
+    user_id: z.string().min(1, messages.required),
+    reason: requiredText(IMPERSONATION_REASON_MAX_LENGTH, messages),
+    duration_minutes: z.string().regex(WHOLE_NUMBER_PATTERN, messages.wholeNumber),
+  });
+}
+export type ImpersonateFormValues = z.infer<ReturnType<typeof createImpersonateSchema>>;

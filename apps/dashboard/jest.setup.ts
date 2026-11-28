@@ -9,6 +9,13 @@ process.env.NEXT_PUBLIC_APP_URL ??= "http://localhost:3000";
 // .env.local under NODE_ENV=test anyway), so every test run needs its own default.
 process.env.NEXT_PUBLIC_PLATFORM_DOMAIN ??= "schoolhub.test";
 
+// jsdom has no `fetch`, and `@/lib/auth` builds its API clients at import, binding
+// `globalThis.fetch` then. A test that imports the real module (for `accessTokenStore`) and
+// mocks the network at `@/services` would otherwise fail to load. The stand-in refuses every
+// call, so a test that reaches the network by mistake fails loudly instead of passing.
+globalThis.fetch ??= () =>
+  Promise.reject(new Error("No network in unit tests: mock the service or the client."));
+
 // Guarded throughout: this setup file runs for EVERY test file regardless of its own
 // testEnvironment, and a file using `@jest-environment node` (proxy/route-handler tests
 // needing the real Request/Response globals) has no `window` at all — referencing it

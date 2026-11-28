@@ -24,11 +24,14 @@ from decimal import Decimal
 
 from celery import shared_task
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 
 from apps.platform_admin import notifications
 from apps.platform_admin.export.tasks import export_tenant
 from apps.platform_admin.flags.services import lapse_expired_overrides
+from apps.platform_admin.impersonation import events as impersonation_events
+from apps.platform_admin.impersonation import services as impersonation
 from apps.platform_admin.models import Subscription, SubscriptionStatus
 from apps.platform_admin.subscriptions.services import grace_ends, live_subscription
 from apps.platform_admin.tenants import lifecycle
@@ -40,6 +43,7 @@ from core.tenancy.models import Tenant, TenantStatus
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "close_expired_impersonations",
     "dunning_sweep",
     "expire_trials",
     "export_tenant",
@@ -264,3 +268,31 @@ def snapshot_all() -> dict[str, int]:
     the console read the snapshots, never the schools' tables (multi-tenancy §8).
     """
     return for_each_tenant(snapshot_step, job="usage-snapshot")
+
+
+# ------------------------------------------------------------------------- impersonation
+
+
+@shared_task
+def close_expired_impersonations() -> dict[str, int]:
+    """Every five minutes: record the end of each impersonation grant whose time ran out.
+
+    The authenticator already refuses an expired grant's token on its own; this writes the
+    `expired` end, its security event and the owners' notice (§7.3, §12). Grants are a
+    platform table, so no school is bound to find them.
+    """
+    closed = failed = 0
+    for grant_id in impersonation.expired_open_grants():
+        try:
+            # The end and its events together, or neither: a crash between them would leave
+            # an ended grant no later run picks up again, with no event and no notice.
+            with transaction.atomic():
+                grant = impersonation.close_expired(grant_id)
+                if grant is not None:
+                    impersonation_events.ended(grant)
+                    closed += 1
+        except Exception:
+            failed += 1
+            logger.exception("closing expired impersonation grant %s failed", grant_id)
+    logger.info("close-expired-impersonations: %d closed, %d failure(s)", closed, failed)
+    return {"closed": closed, "failed": failed}

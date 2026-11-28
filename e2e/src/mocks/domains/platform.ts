@@ -3,12 +3,15 @@ import { fail, noContent, ok } from "../envelope";
 import { pageOf } from "../list";
 import type { MockModule, MockRequest } from "../router";
 import { colonAction } from "./attendance-mock-utils";
+import { grantStarted } from "./impersonation";
 
 type Tenant = ApiSchemas["Tenant"];
 type TenantStatus = Tenant["status"];
 
 export interface PlatformModuleOptions {
   tenants?: Tenant[];
+  /** The users `GET /platform/tenants/{id}/users` lists, whom `:impersonate` accepts. */
+  users?: ApiSchemas["PlatformTenantUser"][];
 }
 
 const NOW = "2026-11-24T09:00:00Z";
@@ -65,6 +68,18 @@ function blankReason(request: MockRequest) {
 export function platformModule(options: PlatformModuleOptions = {}): MockModule {
   return (api) => {
     const tenants = [...(options.tenants ?? [])];
+    const users = options.users ?? [];
+
+    api.get("/platform/tenants/:tenantId/users", (request) => {
+      const q = request.searchParams.get("q")?.toLowerCase() ?? "";
+      const role = request.searchParams.get("role");
+      const matching = users.filter(
+        (user) =>
+          (!q || `${user.name} ${user.email}`.toLowerCase().includes(q)) &&
+          (!role || user.roles.includes(role)),
+      );
+      return pageOf(matching, request.searchParams);
+    });
 
     api.get("/platform/tenants", (request) => {
       const search = request.searchParams.get("search")?.toLowerCase() ?? "";
@@ -104,6 +119,15 @@ export function platformModule(options: PlatformModuleOptions = {}): MockModule 
       const { id, action } = colonAction(request.params["target"]);
       const index = tenants.findIndex((candidate) => candidate.id === id);
       const tenant = tenants[index];
+      if (tenant && action === "impersonate") {
+        const body = request.json() as ApiSchemas["ImpersonateRequest"] | null;
+        if (!users.some((user) => user.id === body?.user_id)) {
+          return fail(422, "The user is not an active user of this school.", {
+            code: "domain_rule_violation",
+          });
+        }
+        return ok(grantStarted(tenant.slug), { status: 201 });
+      }
       const edge = action ? EDGES[action] : undefined;
       if (!tenant || !edge) return fail(404, "Not found.");
       if (action === "suspend" && blankReason(request)) {

@@ -10,3 +10,7 @@ export const PASSWORD_MIN_LENGTH = 10;
 
 /** The 400 code every unusable emailed link gets (`core/api/exceptions.py`'s `InvalidLink`). */
 export const INVALID_LINK_CODE = "invalid_link";
+
+/** The fragment key the console's impersonation handoff carries: `/impersonate#school=<slug>&code=…`
+ * (ADR-0037). The school is the host already; only the code is sent. */
+export const IMPERSONATION_LINK_KEYS = ["code"] as const;

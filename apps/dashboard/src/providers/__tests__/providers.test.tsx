@@ -41,8 +41,22 @@ describe("AppProviders", () => {
 
     expect(mockSetUnauthorizedHandler).toHaveBeenCalledTimes(1);
     const handler = mockSetUnauthorizedHandler.mock.calls[0]?.[0];
-    handler?.(undefined as never);
+    handler?.(undefined as never, { impersonated: false });
 
     expect(mockReplace).toHaveBeenCalledWith("/login");
+  });
+
+  it("sends an ended impersonation to the page that says so, never to sign-in", () => {
+    render(
+      <AppProviders>
+        <span>content</span>
+      </AppProviders>,
+    );
+
+    const handler = mockSetUnauthorizedHandler.mock.calls[0]?.[0];
+    handler?.(undefined as never, { impersonated: true });
+
+    expect(mockReplace).toHaveBeenCalledWith("/impersonate?ended=1");
+    expect(mockReplace).not.toHaveBeenCalledWith("/login");
   });
 });

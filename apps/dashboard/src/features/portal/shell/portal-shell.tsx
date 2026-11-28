@@ -6,6 +6,7 @@ import { Badge, Button, EmptyState } from "@schoolhub/ui";
 import { School } from "lucide-react";
 import { useTranslations } from "next-intl";
 
+import { ImpersonationBanner } from "@/components/impersonation-banner";
 import { LoadErrorCard } from "@/components/load-error-card";
 import { useSignOut } from "@/hooks/use-sign-out";
 import { ApiError } from "@/services";
@@ -72,6 +73,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
           <main>{children}</main>
         )}
       </div>
+      <ImpersonationBanner />
     </div>
   );
 }

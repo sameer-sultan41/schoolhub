@@ -591,6 +591,11 @@
 - **Recurred.** The first `safeNextPath` checked the origin of the parsed input, then returned the normalised path. Dot segments (`/..//evil.example`, `/%2e%2e//evil.example`, `/x/../\evil.example`) keep the sentinel origin yet normalise to `//evil.example`, a 307 off-site from the proxy (final review, Critical).
 - **Check.** Pass every redirect target through `safeNextPath` (`apps/dashboard/src/lib/safe-next-path.ts`) and never hand-write a `startsWith("/")` check. When writing such a check, validate the value you return, not the value you parsed: here, the returned path must not start with `//`, and the tests carry each dot-segment form.
 
+### L83. A guard that the first failure clears does not cover the failures after it
+
+- **Mistake.** Platform-admin PR E (Task 11): the "never refresh an impersonated tab" flag was cleared by the first 401's handler. `ApiClient` shares one refresh only among 401s inside one microtask, so a later 401 found no flag and no token and called the real refresh (change review of `232eb61a`; fixed in `a23fb2b3`).
+- **Check.** For a guard on a failure path, ask what the second, third and still-in-flight failure see after the first one's cleanup. Clear the guard only on the event that makes it untrue (here a normal sign-in), and test a second call after the first handler ran.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.

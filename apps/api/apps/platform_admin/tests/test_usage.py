@@ -193,8 +193,8 @@ class SnapshotTests(TestCase):
         self.assertEqual(snap.mrr_amount, Decimal("10000.00"))
         self.assertEqual(snap.currency, "PKR")
         self.assertEqual((snap.students, snap.staff, snap.storage_bytes), (3, 1, 0))
-        # Task 10 fills it; until then it is unknown, not zero.
-        self.assertIsNone(snap.impersonations_30d)
+        # No grant was taken for this school (test_impersonation.py counts real ones).
+        self.assertEqual(snap.impersonations_30d, 0)
         self.assertIn("module.timetable", snap.modules_enabled)
         left_out = sorted(
             spec.key

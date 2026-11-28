@@ -239,4 +239,37 @@ describe("platform-service", () => {
       query: { format: "csv" },
     });
   });
+
+  it("lists the school's users the console may impersonate, by q and role", async () => {
+    const { fetchTenantUsers } = await service();
+
+    await fetchTenantUsers(ID, { q: "ayesha", role: "teacher", pageSize: 20 });
+
+    expect(mockGet).toHaveBeenCalledWith(
+      `/platform/tenants/${ID}/users`,
+      expect.objectContaining({
+        query: expect.objectContaining({ q: "ayesha", role: "teacher", page_size: 20 }) as unknown,
+      }),
+    );
+  });
+
+  it("starts an impersonation with no Idempotency-Key (the replay would hold the code)", async () => {
+    const { impersonateUser } = await service();
+    const started = {
+      grant_id: "grant-1",
+      expires_at: "2026-11-28T10:30:00Z",
+      handoff_url: "https://city-school.app.schoolhub.test/impersonate#school=city-school&code=c",
+    };
+    mockPost.mockResolvedValueOnce({ data: started });
+
+    await expect(
+      impersonateUser(ID, { user_id: "user-1", reason: "Ticket 42", duration_minutes: 30 }),
+    ).resolves.toEqual(started);
+
+    expect(mockPost).toHaveBeenCalledWith(`/platform/tenants/${ID}:impersonate`, {
+      user_id: "user-1",
+      reason: "Ticket 42",
+      duration_minutes: 30,
+    });
+  });
 });

@@ -3,8 +3,11 @@ import {
   changePassword,
   confirmMfa,
   confirmPasswordReset,
+  endImpersonation,
   enrollMfa,
+  exchangeImpersonationCode,
   fetchCurrentUser,
+  forgetImpersonation,
   hasPendingMfaChallenge,
   login,
   logout,
@@ -30,6 +33,9 @@ export const AuthService = {
   verifyMfa,
   enrollMfa,
   confirmMfa,
+  exchangeImpersonationCode,
+  endImpersonation,
+  forgetImpersonation,
 };
 export type {
   AuthenticatedUser,

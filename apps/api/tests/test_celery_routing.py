@@ -77,6 +77,7 @@ class CeleryRoutingTests(SimpleTestCase):
             ("apps.platform_admin.tasks.dunning_sweep", "bulk"),
             ("apps.platform_admin.tasks.lapse_overrides", "bulk"),
             ("apps.platform_admin.tasks.snapshot_all", "bulk"),
+            ("apps.platform_admin.tasks.close_expired_impersonations", "bulk"),
             # Lives in export/tasks.py, named into this namespace (ruling C5).
             ("apps.platform_admin.tasks.export_tenant", "bulk"),
             ("apps.platform_admin.tasks.send_trial_expiring_notice", "transactional"),
@@ -97,6 +98,7 @@ class CeleryRoutingTests(SimpleTestCase):
             "dunning_sweep",
             "lapse_overrides",
             "snapshot_all",
+            "close_expired_impersonations",
         ):
             with self.subTest(task=task):
                 self.assertIn(f"apps.platform_admin.tasks.{task}", scheduled)

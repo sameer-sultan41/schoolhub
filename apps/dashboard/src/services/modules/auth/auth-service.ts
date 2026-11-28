@@ -5,13 +5,18 @@ import {
   apiClient,
   authProxyClient,
   clearSessionCookie,
+  endImpersonatedSession,
+  forgetImpersonatedTab,
+  isImpersonating,
   mfaChallengeStore,
   setSessionCookie,
+  startImpersonatedSession,
 } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
 import type {
   AuthenticatedUser,
   ChangePasswordInput,
+  ImpersonationExchange,
   InvitationAccept,
   InvitationLink,
   InvitationPreview,
@@ -49,6 +54,7 @@ export type {
 
 /** A completed sign-in's token and the proxy's session marker. */
 function startSession(data: { access_token: string; expires_in: number }): void {
+  forgetImpersonatedTab();
   accessTokenStore.set(data.access_token, data.expires_in);
   setSessionCookie();
 }
@@ -155,6 +161,12 @@ export async function confirmMfa(code: string): Promise<MfaConfirmResponse> {
 }
 
 export async function logout(): Promise<void> {
+  // An impersonated session releases its grant and never touches this browser's refresh cookie,
+  // which is not its own (ADR-0037).
+  if (isImpersonating()) {
+    await endImpersonation();
+    return;
+  }
   try {
     await authProxyClient.post(endpoints.auth.logout, undefined, {
       credentials: "include",
@@ -249,4 +261,40 @@ export async function requestPasswordReset(body: PasswordResetRequest): Promise<
 /** Sets the new password from a reset link and signs out every device; `204`. */
 export async function confirmPasswordReset(body: PasswordResetConfirm): Promise<void> {
   await apiClient.post(endpoints.auth.passwordResetConfirm, body, LINK_REQUEST);
+}
+
+/**
+ * The impersonation handoff (ADR-0037): spends the console's single-use code for an access token of
+ * the user, with no refresh token, and makes it this tab's session. The tab's in-memory token is
+ * dropped first, so the exchange is anonymous and a refused code leaves no token behind; the host's
+ * own cookie session is not touched. Straight to the API, never a refresh: a 400 `invalid_link` is
+ * an unusable code.
+ */
+export async function exchangeImpersonationCode(code: string): Promise<void> {
+  accessTokenStore.clear();
+  const { data } = await apiClient.post<ImpersonationExchange>(
+    endpoints.auth.impersonationExchange,
+    { code },
+    LINK_REQUEST,
+  );
+  startImpersonatedSession(data.access, data.expires_in);
+}
+
+/**
+ * Ends this tab's impersonated session: releases its grant (`:end`), then forgets it here. A grant
+ * that already ended answers 401 or 404, which ends the same way; only a non-API failure rethrows.
+ */
+export async function endImpersonation(): Promise<void> {
+  try {
+    await apiClient.post(endpoints.auth.impersonationEnd, undefined, { skipAuthRefresh: true });
+  } catch (error) {
+    if (!(error instanceof ApiError)) throw error;
+  } finally {
+    endImpersonatedSession();
+  }
+}
+
+/** Forgets this tab's impersonated session without a request: the API already said it ended. */
+export function forgetImpersonation(): void {
+  endImpersonatedSession();
 }

@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { Container } from "@/app/(app)/shell/partials/common/container";
+import { ImpersonateUserAction } from "@/features/platform/impersonation/impersonate-user-action";
 import { TenantDetail } from "@/features/platform/tenants/tenant-detail";
 import { isUuid } from "@/lib/helpers";
 
@@ -18,7 +19,11 @@ export default async function PlatformTenantPage({
   return (
     <Container>
       <Suspense>
-        <TenantDetail key={tenantId} tenantId={tenantId} />
+        <TenantDetail
+          key={tenantId}
+          tenantId={tenantId}
+          extraActions={<ImpersonateUserAction tenantId={tenantId} />}
+        />
       </Suspense>
     </Container>
   );

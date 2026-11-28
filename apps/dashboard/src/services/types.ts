@@ -260,6 +260,8 @@ export type {
   FeatureFlagUpdateInput,
   FeatureOverrideInput,
   FeatureOverrideRecord,
+  GrantStarted,
+  ImpersonateInput,
   Limits,
   OverUsage,
   PlanInput,
@@ -285,6 +287,8 @@ export type {
   TenantStatus,
   TenantUpdateInput,
   TenantUsage,
+  TenantUser,
+  TenantUserQuery,
   UsageSnapshot,
 } from "./modules/platform";
 export type { SchoolSettingsRecord, SchoolSettingsUpdate } from "./modules/school-settings";

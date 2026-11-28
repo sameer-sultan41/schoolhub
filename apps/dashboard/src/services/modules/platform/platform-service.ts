@@ -1,7 +1,12 @@
 import { collectNumberedPages, fetchPage, MAX_PAGE_SIZE, type Page } from "@schoolhub/api-client";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
-import { toPageParams, toPlanQueryParams, toTenantQueryParams } from "./platform-helper";
+import {
+  toPageParams,
+  toPlanQueryParams,
+  toTenantQueryParams,
+  toTenantUserQueryParams,
+} from "./platform-helper";
 import type {
   ActivateSubscriptionInput,
   ChangePlanInput,
@@ -12,6 +17,8 @@ import type {
   FeatureFlagUpdateInput,
   FeatureOverrideInput,
   FeatureOverrideRecord,
+  GrantStarted,
+  ImpersonateInput,
   PlanInput,
   PlanPageQuery,
   PlanRecord,
@@ -30,6 +37,8 @@ import type {
   TenantRecord,
   TenantUpdateInput,
   TenantUsage,
+  TenantUser,
+  TenantUserQuery,
 } from "./platform-type";
 
 /**
@@ -138,6 +147,34 @@ export async function fetchTenantUsage(id: string): Promise<TenantUsage> {
 export async function refreshTenantUsage(id: string): Promise<TenantUsage> {
   const { data } = await apiClient.post<TenantUsage>(
     endpoints.platform.tenantAction(id, "refresh-usage"),
+  );
+  return data;
+}
+
+// --- Impersonation (ADR-0037) ---------------------------------------------------------------
+
+/** The school's active, non-platform users the console may impersonate (page-numbered). */
+export async function fetchTenantUsers(
+  tenantId: string,
+  query: TenantUserQuery,
+): Promise<Page<TenantUser>> {
+  return fetchPage<TenantUser>(apiClient, endpoints.platform.tenantUsers(tenantId), {
+    query: toTenantUserQueryParams(query),
+  });
+}
+
+/**
+ * Starts acting as one of the school's users: the grant, its end and the single-use handoff link.
+ * No `Idempotency-Key`, deliberately: the server would store the answer, code and all, to replay
+ * it. A retry starts a new grant, which releases the first (ADR-0037).
+ */
+export async function impersonateUser(
+  tenantId: string,
+  input: ImpersonateInput,
+): Promise<GrantStarted> {
+  const { data } = await apiClient.post<GrantStarted>(
+    endpoints.platform.tenantAction(tenantId, "impersonate"),
+    input,
   );
   return data;
 }

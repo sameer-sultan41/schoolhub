@@ -16,11 +16,12 @@ import { safeNextPath } from "@/lib/safe-next-path";
  */
 
 /**
- * Pages an emailed link opens (ADR-0033). Public, and never redirected for a signed-in
- * visitor: the browser carries the fragment (`#school=…&token=…`) across a redirect, so
- * sending them to /dashboard would drop the link and leave its token in that URL.
+ * Pages a link opens with a secret in its fragment: an emailed one (ADR-0033) or the console's
+ * impersonation handoff (ADR-0037). Public, and never redirected for a signed-in visitor: the
+ * browser carries the fragment (`#school=…&token=…`) across a redirect, so sending them to
+ * /dashboard would drop the link and leave its secret in that URL.
  */
-const LINK_PATHS = [Paths.ACCEPT_INVITE, Paths.RESET_PASSWORD];
+const LINK_PATHS = [Paths.ACCEPT_INVITE, Paths.RESET_PASSWORD, Paths.IMPERSONATE];
 
 /**
  * The second factor's pages, likewise public and never redirected: a challenged sign-in has no

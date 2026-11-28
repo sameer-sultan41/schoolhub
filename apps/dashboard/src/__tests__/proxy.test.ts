@@ -107,6 +107,16 @@ describe("proxy", () => {
     expect(proxy(makeRequest("/reset-password", { session: true })).status).toBe(200);
   });
 
+  it("lets the impersonation handoff through on a school's host, with or without a session", () => {
+    // The console's link opens a fresh tab with no session; a tab that already has one must not
+    // be redirected either, or the browser would carry the code's fragment to /dashboard.
+    expect(proxy(makeRequest("/impersonate", { host: TENANT_HOST })).status).toBe(200);
+    expect(proxy(makeRequest("/impersonate", { host: TENANT_HOST, session: true })).status).toBe(
+      200,
+    );
+    expect(proxy(makeRequest("/impersonate?ended=1", { host: TENANT_HOST })).status).toBe(200);
+  });
+
   it("still sends a signed-in visitor away from /forgot-password", () => {
     const response = proxy(makeRequest("/forgot-password", { session: true }));
     expect(response.status).toBe(307);

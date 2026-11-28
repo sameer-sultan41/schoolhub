@@ -2,7 +2,9 @@ import { ApiError } from "@schoolhub/api-client";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { accessTokenStore } from "@/lib/auth";
 import { Services } from "@/services";
+import { impersonationToken } from "@/test-fixtures/impersonation";
 import { buildUser, renderWithProviders } from "@/test-utils";
 
 import { MfaEnrollForm } from "../mfa-enroll-form";
@@ -134,5 +136,20 @@ describe("MfaEnrollForm", () => {
       "href",
       "/login",
     );
+  });
+
+  it("under impersonation shows why instead of starting an enrolment", () => {
+    accessTokenStore.set(impersonationToken(), 1800);
+    try {
+      renderWithProviders(<MfaEnrollForm />);
+
+      expect(screen.getByText("Not available in a support session")).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Set up authenticator" }),
+      ).not.toBeInTheDocument();
+      expect(auth.enrollMfa).not.toHaveBeenCalled();
+    } finally {
+      accessTokenStore.clear();
+    }
   });
 });

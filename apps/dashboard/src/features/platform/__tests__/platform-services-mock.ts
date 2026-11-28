@@ -21,6 +21,8 @@ export function platformServicesMock() {
       "downloadTenantExport",
       "fetchTenantUsage",
       "refreshTenantUsage",
+      "fetchTenantUsers",
+      "impersonateUser",
       "fetchSubscription",
       "updateSubscription",
       "activateSubscription",
