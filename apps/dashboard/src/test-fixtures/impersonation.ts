@@ -1,7 +1,5 @@
 import type { AuthenticatedUser } from "@schoolhub/types";
 
-import { buildUser } from "@/test-utils";
-
 /** An unsigned JWT with these claims: the dashboard only reads `amr`, it never verifies. */
 function jwt(claims: Record<string, unknown>): string {
   const encode = (value: object) =>
@@ -25,10 +23,14 @@ export function schoolToken(): string {
   return jwt({ token_type: "access", sub: "user-1", amr: ["pwd"] });
 }
 
-/** `/auth/me` for an impersonated session: the target, and who is acting as them until when. */
-export function impersonatedUser(expiresAt: string): AuthenticatedUser {
+/**
+ * `/auth/me` for an impersonated session: the target, and who is acting as them until when.
+ * Takes the base user (`buildUser([])`) rather than importing `@/test-utils`, which registers
+ * React Testing Library's hooks: a test importing this fixture inside an `it` could not load it.
+ */
+export function impersonatedUser(base: AuthenticatedUser, expiresAt: string): AuthenticatedUser {
   return {
-    ...buildUser([]),
+    ...base,
     full_name: "Ayesha Khan",
     impersonation: { by_name: "Support Operator", expires_at: expiresAt },
   };

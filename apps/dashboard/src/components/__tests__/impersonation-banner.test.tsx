@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { accessTokenStore } from "@/lib/auth";
 import { ApiError, Services } from "@/services";
 import { impersonatedUser, impersonationToken, schoolToken } from "@/test-fixtures/impersonation";
-import { renderWithProviders } from "@/test-utils";
+import { buildUser, renderWithProviders } from "@/test-utils";
 
 import { ImpersonationBanner } from "../impersonation-banner";
 
@@ -61,7 +61,7 @@ describe("ImpersonationBanner", () => {
   it("names who is impersonated, the operator and the time left", async () => {
     impersonating(true);
     const expiresAt = new Date(Date.now() + 25 * MINUTE).toISOString();
-    auth.fetchCurrentUser.mockResolvedValue(impersonatedUser(expiresAt));
+    auth.fetchCurrentUser.mockResolvedValue(impersonatedUser(buildUser([]), expiresAt));
     renderWithProviders(<ImpersonationBanner />);
 
     const banner = await screen.findByRole("region", { name: "Support session" });
@@ -74,7 +74,7 @@ describe("ImpersonationBanner", () => {
     // Same user record as the test above: only the token differs.
     impersonating(false);
     auth.fetchCurrentUser.mockResolvedValue(
-      impersonatedUser(new Date(Date.now() + 25 * MINUTE).toISOString()),
+      impersonatedUser(buildUser([]), new Date(Date.now() + 25 * MINUTE).toISOString()),
     );
     renderWithProviders(<ImpersonationBanner />);
 
@@ -85,7 +85,7 @@ describe("ImpersonationBanner", () => {
   it("End session releases the grant and opens the ended page", async () => {
     impersonating(true);
     const expiresAt = new Date(Date.now() + 25 * MINUTE).toISOString();
-    auth.fetchCurrentUser.mockResolvedValue(impersonatedUser(expiresAt));
+    auth.fetchCurrentUser.mockResolvedValue(impersonatedUser(buildUser([]), expiresAt));
     renderWithProviders(<ImpersonationBanner />);
 
     await userEvent.setup().click(await screen.findByRole("button", { name: "End session" }));
@@ -101,7 +101,7 @@ describe("ImpersonationBanner", () => {
     async (status) => {
       impersonating(true);
       const expiresAt = new Date(Date.now() + 25 * MINUTE).toISOString();
-      auth.fetchCurrentUser.mockResolvedValue(impersonatedUser(expiresAt));
+      auth.fetchCurrentUser.mockResolvedValue(impersonatedUser(buildUser([]), expiresAt));
       renderWithProviders(
         <>
           <ImpersonationBanner />
@@ -121,7 +121,7 @@ describe("ImpersonationBanner", () => {
   it("a grant past its time ends the session without waiting for a request", async () => {
     impersonating(true);
     const expiresAt = new Date(Date.now() - 1000).toISOString();
-    auth.fetchCurrentUser.mockResolvedValue(impersonatedUser(expiresAt));
+    auth.fetchCurrentUser.mockResolvedValue(impersonatedUser(buildUser([]), expiresAt));
     renderWithProviders(<ImpersonationBanner />);
 
     await waitFor(() => {
