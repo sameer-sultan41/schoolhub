@@ -77,14 +77,16 @@ export function SectionListItem({
           <GripVertical aria-hidden="true" />
         </Button>
       )}
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="sm"
         aria-pressed={isSelected}
         // While an upload runs, leaving the section would unmount its image field and drop the
         // upload's result, so only the section being edited stays selectable.
         disabled={locked && !isSelected}
         onClick={onSelect}
-        className="flex min-w-0 flex-1 items-center gap-2 rounded-sm px-1.5 py-1 text-start text-sm font-medium hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-60"
+        className="min-w-0 flex-1 justify-start px-1.5 text-start"
       >
         <span className="truncate">{t("sectionName", { index: position, type: label })}</span>
         {isVisible ? null : (
@@ -99,7 +101,7 @@ export function SectionListItem({
             {t("needsAttention")}
           </span>
         ) : null}
-      </button>
+      </Button>
       {readOnly ? null : (
         <>
           <Button
