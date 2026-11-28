@@ -713,13 +713,14 @@ class ConcurrentExchangeTests(TransactionTestCase):
         tenant = make_tenant(status=TenantStatus.ACTIVE)
         target = tenant_user(tenant)
         operator = platform_user("platform_support")
-        started = impersonation_services.start(
-            tenant=tenant,
-            operator_id=operator.pk,
-            target_user_id=target.pk,
-            reason=REASON,
-            duration_minutes=30,
-        )
+        with transaction.atomic():
+            started = impersonation_services.start(
+                tenant=tenant,
+                operator_id=operator.pk,
+                target_user_id=target.pk,
+                reason=REASON,
+                duration_minutes=30,
+            )
 
         def contender():
             try:

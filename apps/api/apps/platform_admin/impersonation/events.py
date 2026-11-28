@@ -74,7 +74,10 @@ def _notify(grant: ImpersonationGrant, event: str) -> None:
         timing = f"It ends by {grant.expires_at.strftime(_WHEN)} at the latest."
     else:
         timing = f"It ended at {(grant.released_at or grant.expires_at).strftime(_WHEN)}."
-    operator = grant.granted_to.get_full_name()
+    # Not `get_full_name()`: it falls back to the email, which the school must not see.
+    operator = " ".join(
+        part for part in (grant.granted_to.first_name, grant.granted_to.last_name) if part
+    ).strip()
     notifications.notify_owners(
         grant.tenant,
         notifications.IMPERSONATION,
@@ -82,7 +85,7 @@ def _notify(grant: ImpersonationGrant, event: str) -> None:
             "impersonation.event": event,
             "impersonation.operator": f"{SUPPORT_NAME} ({operator})" if operator else SUPPORT_NAME,
             "impersonation.target": grant.target_user.get_full_name() or grant.target_user.email,
-            "impersonation.reason": grant.reason,
+            "impersonation.reason": grant.reason.rstrip(". "),
             "impersonation.timing": timing,
         },
         source_type="impersonation_grant",
