@@ -69,6 +69,7 @@ describe("Services", () => {
       "parentPortal",
       "payments",
       "periods",
+      "platform",
       "promotions",
       "questionBanks",
       "receipts",
@@ -97,6 +98,12 @@ describe("Services", () => {
     expect(typeof Services.auth.fetchCurrentUser).toBe("function");
     expect(typeof Services.auth.restoreSession).toBe("function");
     expect(typeof Services.auth.changePassword).toBe("function");
+    expect(typeof Services.auth.verifyMfa).toBe("function");
+    expect(typeof Services.auth.enrollMfa).toBe("function");
+    expect(typeof Services.auth.confirmMfa).toBe("function");
+    expect(typeof Services.platform.fetchTenantPage).toBe("function");
+    expect(typeof Services.platform.suspendTenant).toBe("function");
+    expect(typeof Services.platform.updatePlan).toBe("function");
 
     expect(typeof Services.vouchers.listVouchers).toBe("function");
     expect(typeof Services.vouchers.downloadVoucher).toBe("function");

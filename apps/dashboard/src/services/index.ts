@@ -45,6 +45,7 @@ import { QuestionBanksService } from "./modules/question-banks";
 import { ReportCardsService } from "./modules/report-cards";
 import { RoomsService } from "./modules/rooms";
 import { ScholarshipsService } from "./modules/scholarships";
+import { PlatformService } from "./modules/platform";
 import { SchoolOrganizationService } from "./modules/school-organization";
 import { SchoolSettingsService } from "./modules/school-settings";
 import { StaffService } from "./modules/staff";
@@ -85,6 +86,7 @@ export const Services = {
   dashboard: DashboardService,
   files: FilesService,
   jobs: JobsService,
+  platform: PlatformService,
   schoolOrganization: SchoolOrganizationService,
   schoolSettings: SchoolSettingsService,
   curriculum: CurriculumService,

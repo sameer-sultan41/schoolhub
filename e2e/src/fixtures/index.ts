@@ -40,6 +40,7 @@ import {
   LoginPage,
   MessagesPage,
   OversightPage,
+  PlatformConsolePage,
   PortalChildPage,
   PortalCommunicationPage,
   PortalLeavePage,
@@ -121,6 +122,7 @@ export interface E2EFixtures {
   weekGridPage: WeekGridPage;
   timetablePeriodsPage: TimetablePeriodsPage;
   timetableRoomsPage: TimetableRoomsPage;
+  platformConsolePage: PlatformConsolePage;
   schoolSetupPage: SchoolSetupPage;
   timetableSubstitutionsPage: TimetableSubstitutionsPage;
   myTimetablePage: MyTimetablePage;
@@ -309,6 +311,9 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
     await use(new TimetablePeriodsPage(page));
   },
 
+  platformConsolePage: async ({ page }, use) => {
+    await use(new PlatformConsolePage(page));
+  },
   schoolSetupPage: async ({ page }, use) => {
     await use(new SchoolSetupPage(page));
   },

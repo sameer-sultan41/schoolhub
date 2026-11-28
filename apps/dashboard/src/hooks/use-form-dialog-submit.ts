@@ -20,6 +20,12 @@ export interface FormDialogSubmitOptions<TValues extends FieldValues, TResult> {
   onSuccess: (result: TResult, values: TValues) => void;
   /** Shown when the failure is not an API error. */
   fallbackMessage: string;
+  /** The caller's own wording for a refusal whose meaning rides in `meta` (a flag, a list of
+   * breaches), shown as the form's message; `undefined` keeps the usual field mapping. */
+  describeError?: (error: unknown) => string | undefined;
+  /** Called on every failure, after it is shown: for a refusal the dialog answers with its own
+   * next step (an acknowledgement, say). */
+  onError?: (error: unknown, values: TValues) => void;
 }
 
 /**
@@ -33,6 +39,8 @@ export function useFormDialogSubmit<TValues extends FieldValues, TResult>({
   knownFields,
   onSuccess,
   fallbackMessage,
+  describeError,
+  onError,
 }: FormDialogSubmitOptions<TValues, TResult>) {
   const tErrors = useTranslations("errors");
   const submitGuard = useSubmitGuard();
@@ -43,7 +51,14 @@ export function useFormDialogSubmit<TValues extends FieldValues, TResult>({
     onSuccess: (result, values) => {
       onSuccess(result, values);
     },
-    onError: (error) => {
+    onError: (error, values) => {
+      const described = describeError?.(error);
+      if (described !== undefined) {
+        form.clearErrors();
+        setFormError(described);
+        onError?.(error, values);
+        return;
+      }
       const fields = typeof knownFields === "function" ? knownFields() : knownFields;
       applyServerFieldErrors({
         error: foldUnknownFieldErrors(error, fields),
@@ -53,6 +68,7 @@ export function useFormDialogSubmit<TValues extends FieldValues, TResult>({
         fallback: fallbackMessage,
         setFormError,
       });
+      onError?.(error, values);
     },
   });
 

@@ -1,3 +1,5 @@
+import { safeNextPath } from "@/lib/safe-next-path";
+
 /**
  * Every dashboard page path, in one place — grouped the same way `lib/regex.ts` groups
  * this app's regex patterns, so the two "one named object, not scattered literals"
@@ -80,11 +82,34 @@ export const Paths = {
   EXAMS_GRADING_SCALES: "/exams/grading-scales",
   EXAMS_REPORTS: "/exams/reports",
   EXAMS_QUESTION_BANKS: "/exams/question-banks",
+  /** The platform console (`app/(platform)/platform`), served on the bare app host only
+   * (`proxy.ts`). A platform operator's home. */
+  PLATFORM: "/platform",
+  PLATFORM_TENANTS: "/platform/tenants",
+  PLATFORM_PLANS: "/platform/plans",
+  PLATFORM_FEATURE_FLAGS: "/platform/feature-flags",
+  PLATFORM_REPORTS: "/platform/reports",
+  /** The second factor (`app/(auth)/mfa`): a challenged sign-in's code, and a platform
+   * operator's first enrolment. Public to the proxy, never redirected. */
+  MFA: "/mfa",
+  MFA_VERIFY: "/mfa/verify",
+  MFA_ENROLL: "/mfa/enroll",
   LOGIN: "/login",
   FORGOT_PASSWORD: "/forgot-password",
   RESET_PASSWORD: "/reset-password",
   ACCEPT_INVITE: "/accept-invite",
 } as const;
+
+/** The second-factor page, carrying a safe `next` through (`safeNextPath`), else none. */
+export const mfaVerifyPath = (next?: string | null) => {
+  const safe = safeNextPath(next);
+  return safe
+    ? `${Paths.MFA_VERIFY}?${new URLSearchParams({ next: safe }).toString()}`
+    : Paths.MFA_VERIFY;
+};
+
+/** One school's page in the platform console. */
+export const platformTenantPath = (tenantId: string) => `${Paths.PLATFORM_TENANTS}/${tenantId}`;
 
 /** One promotion batch's review page, under the promotions list. */
 export const promotionBatchPath = (batchId: string) => `${Paths.ACADEMICS_PROMOTIONS}/${batchId}`;

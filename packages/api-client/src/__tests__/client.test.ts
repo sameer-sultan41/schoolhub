@@ -1,6 +1,6 @@
 import { ApiClient, buildQueryString } from "../client";
 import { ApiError } from "../errors";
-import { collectPages } from "../pagination";
+import { collectNumberedPages, collectPages } from "../pagination";
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   // Headers is a class, not a plain object — init.headers may be a real Headers instance
@@ -44,6 +44,44 @@ describe("ApiClient", () => {
     expect(result.data).toEqual({ id: "s1" });
     expect(result.meta?.pagination).toEqual({ next_cursor: null });
     expect(result.requestId).toBe("req-1");
+  });
+
+  it("carries a refusal's Retry-After seconds on the error", async () => {
+    // `core/rbac/views.py`'s `_refusal`: a timed MFA lock is a 429 `mfa_locked` with the wait
+    // in the header, not the body.
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(
+          { error: { code: "mfa_locked", message: "Too many wrong codes.", request_id: "r" } },
+          { status: 429, headers: { "Retry-After": "900" } },
+        ),
+      );
+    const client = new ApiClient({ baseUrl: "https://api.test/api/v1", fetchImpl });
+
+    const error = await client.post("/auth/mfa:verify", {}).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).code).toBe("mfa_locked");
+    expect((error as ApiError).retryAfter).toBe(900);
+  });
+
+  it("leaves retryAfter null without a header, or with one that is not a number of seconds", async () => {
+    // The operator-only MFA lock sends no Retry-After: nothing but an operator lifts it.
+    const body = { error: { code: "mfa_locked", message: "Locked.", request_id: "r" } };
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(body, { status: 429 }))
+      .mockResolvedValueOnce(
+        jsonResponse(body, { status: 429, headers: { "Retry-After": "soon" } }),
+      );
+    const client = new ApiClient({ baseUrl: "https://api.test/api/v1", fetchImpl });
+
+    const first = await client.post("/x", {}).catch((caught: unknown) => caught);
+    const second = await client.post("/x", {}).catch((caught: unknown) => caught);
+
+    expect((first as ApiError).retryAfter).toBeNull();
+    expect((second as ApiError).retryAfter).toBeNull();
   });
 
   it("sends the access token as a bearer header", async () => {
@@ -347,5 +385,42 @@ describe("ApiClient.downloadBlob", () => {
       status: 404,
     });
     await expect(client.downloadBlob("/receipts/x/download")).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe("collectNumberedPages", () => {
+  function numberedPage(items: string[], page: number, totalPages: number): Response {
+    return jsonResponse({
+      data: items,
+      meta: { pagination: { page, page_size: 2, total_count: 3, total_pages: totalPages } },
+    });
+  }
+
+  it("walks page numbers to the last page the server reports", async () => {
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValueOnce(numberedPage(["a", "b"], 1, 2))
+      .mockResolvedValueOnce(numberedPage(["c"], 2, 2));
+    const client = new ApiClient({ baseUrl: "https://api.test/api/v1", fetchImpl });
+
+    await expect(
+      collectNumberedPages<string>(client, "/platform/plans", { query: { is_active: true } }),
+    ).resolves.toEqual(["a", "b", "c"]);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    const second = String(fetchImpl.mock.calls[1]?.[0]);
+    expect(new URL(second).searchParams.get("page")).toBe("2");
+    expect(new URL(second).searchParams.get("is_active")).toBe("true");
+  });
+
+  it("stops at maxPages", async () => {
+    // A fresh Response per call: a body can be read only once.
+    const fetchImpl = jest
+      .fn()
+      .mockImplementation(() => Promise.resolve(numberedPage(["a"], 1, 9)));
+    const client = new ApiClient({ baseUrl: "https://api.test/api/v1", fetchImpl });
+
+    await collectNumberedPages<string>(client, "/x", { maxPages: 3 });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 });

@@ -11,6 +11,9 @@ export interface ConfirmActionOptions<TResult> {
   onSuccess: (result: TResult) => void;
   /** Shown when the failure is not an API error. */
   fallbackMessage: string;
+  /** The caller's own wording for a refusal whose meaning rides in `meta` (a flag, a list of
+   * breaches); `undefined` falls back to the usual message. */
+  describeError?: (error: unknown) => string | undefined;
 }
 
 /**
@@ -22,6 +25,7 @@ export function useConfirmAction<TResult>({
   mutationFn,
   onSuccess,
   fallbackMessage,
+  describeError,
 }: ConfirmActionOptions<TResult>) {
   const tErrors = useTranslations("errors");
   const [error, setError] = useState<string | null>(null);
@@ -33,12 +37,13 @@ export function useConfirmAction<TResult>({
     },
     onError: (mutationError) => {
       setError(
-        resolveErrorMessage(
-          foldUnknownFieldErrors(mutationError),
-          tErrors,
-          fallbackMessage,
-          NON_FIELD,
-        ),
+        describeError?.(mutationError) ??
+          resolveErrorMessage(
+            foldUnknownFieldErrors(mutationError),
+            tErrors,
+            fallbackMessage,
+            NON_FIELD,
+          ),
       );
     },
   });

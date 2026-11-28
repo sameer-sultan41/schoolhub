@@ -1,13 +1,18 @@
 import {
   acceptInvitation,
   changePassword,
+  confirmMfa,
   confirmPasswordReset,
+  enrollMfa,
   fetchCurrentUser,
+  hasPendingMfaChallenge,
   login,
   logout,
   previewInvitation,
   requestPasswordReset,
   restoreSession,
+  subscribeMfaChallenge,
+  verifyMfa,
 } from "./auth-service";
 
 export const AuthService = {
@@ -20,6 +25,11 @@ export const AuthService = {
   acceptInvitation,
   requestPasswordReset,
   confirmPasswordReset,
+  hasPendingMfaChallenge,
+  subscribeMfaChallenge,
+  verifyMfa,
+  enrollMfa,
+  confirmMfa,
 };
 export type {
   AuthenticatedUser,
@@ -27,4 +37,8 @@ export type {
   InvitationPreview,
   LoginCredentials,
   LoginResponse,
+  LoginResult,
+  MfaConfirmResponse,
+  MfaEnrollResponse,
+  MfaFactor,
 } from "./auth-service";

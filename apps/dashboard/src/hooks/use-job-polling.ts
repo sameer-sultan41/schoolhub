@@ -6,14 +6,15 @@ import { skipToken, useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
 import type { BackgroundJobRecord } from "@/services/modules/jobs/jobs-service";
+import type { JobStatus } from "@schoolhub/types";
 
 const POLL_INTERVAL_MS = 2000;
 /** ~2 minutes — long enough for a real CSV export/import, short enough that a stuck
  * worker doesn't leave the UI spinning forever. */
 const MAX_POLL_DURATION_MS = 120_000;
 
-export interface JobPollingResult {
-  job: BackgroundJobRecord | undefined;
+export interface JobWatchResult<TJob> {
+  job: TJob | undefined;
   /** True while an actual poll is scheduled — false once terminal, timed out,
    * errored, or `jobId` is null. */
   isPolling: boolean;
@@ -30,6 +31,8 @@ export interface JobPollingResult {
    * would orphan it. A no-op while `jobId` is null. */
   resume: () => void;
 }
+
+export type JobPollingResult = JobWatchResult<BackgroundJobRecord>;
 
 export interface JobPollingCallbacks {
   /** Called once each time a watch times out — e.g. a "still running" toast. */
@@ -59,6 +62,19 @@ export function useJobPolling(
   jobId: string | null,
   callbacks: JobPollingCallbacks = {},
 ): JobPollingResult {
+  return useJobWatch(module, jobId, Services.jobs.fetchJob, callbacks);
+}
+
+/**
+ * `useJobPolling` over any job endpoint: `fetchJob` reads one job by id (a school's platform
+ * job, `GET /platform/tenants/{id}/jobs/{job_id}`, say). Same watch, timeout and resume.
+ */
+export function useJobWatch<TJob extends { status: JobStatus }>(
+  module: string,
+  jobId: string | null,
+  fetchJob: (jobId: string) => Promise<TJob>,
+  callbacks: JobPollingCallbacks = {},
+): JobWatchResult<TJob> {
   const [watch, setWatch] = useState(0);
   // React's "store the previous value in state" pattern — resets per `jobId` change
   // during render, not in an effect, so no render ever sees the old watch's state.
@@ -75,7 +91,7 @@ export function useJobPolling(
 
   const query = useQuery({
     queryKey: queryKeys.jobWatch(module, jobId ?? "none", watch),
-    queryFn: jobId !== null && !rawTimedOut ? () => Services.jobs.fetchJob(jobId) : skipToken,
+    queryFn: jobId !== null && !rawTimedOut ? () => fetchJob(jobId) : skipToken,
     // Polling a background job the user is actively waiting on is exactly the case
     // this option exists for — without it, TanStack Query pauses polling the moment
     // the tab loses focus, and a user who switches tabs mid-export would come back to

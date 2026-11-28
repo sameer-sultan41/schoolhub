@@ -570,6 +570,27 @@
 - **Mistake.** Platform-admin PR C added error codes the server emits (`limit_below_usage`, then `quota_exceeded`) and missed a place each time: `quota_exceeded` was emitted for a task before `packages/types/src/api.ts` listed it (`3e07f908`), and the contract test's mirror must be kept in step by hand.
 - **Check.** When a `CodedAPIException` gets a new `default_code`, add it in the same commit to `API_ERROR_CODES` in `packages/types/src/api.ts` (with a comment naming the status and `meta`), to the mirror list in `apps/api/tests/test_api_contract.py`, and to the emitted-exception imports in that same test (beside `LimitBelowUsage`), so the test sees the code the server raises.
 
+### L79. A RED across packages proves only the packages Turbo reached
+
+- **Mistake.** Platform-admin PR D's RED commit (`0d4c23be`) failed tests in two packages. Turbo stops the task graph at the first failing task, so frontend run 45329263477 reported only `@schoolhub/api-client`'s failure; the dashboard suite started and never reported, and its five RED tests had no evidence until a second push made api-client green (run 45330441484).
+- **Check.** In the RED run's `Test (coverage)` log, find a `Tests:` summary for every package the commit touches. If one is missing, the RED is unproven there: push the earlier package's fix alone, wait for the run, and cite the run that shows each package's failures.
+
+### L80. A pipeline hides a hook's rejection, and `git commit` takes every staged path
+
+- **Mistake.** Platform-admin PR D ran `git commit --amend ... | tail`; cspell rejected the amend, but the pipeline's status was `tail`'s, so the push went ahead with the unfixed commit. Later a plain `git commit` swept two renames `git mv` had staged into an unrelated commit, without their importers (caught by `git show --stat` before the push).
+- **Check.** Commit with `git commit -- <paths>` and test the exit status on its own (no pipe, or `${pipestatus[1]}` in zsh). Before every push, `git show --stat` each new commit and confirm it holds only the files it names.
+
+### L81. An Idempotency-Key covers one attempt: a failed attempt needs a new key
+
+- **Mistake.** Platform-admin PR D's export panel (`tenant-export-panel.tsx`) kept one key for the dialog's life. `:export` runs under `run_idempotent`, which replays a key's first 202, so after the job failed, "Export first" got the failed job back and the operator was stuck until they reopened Delete (review, Important 1).
+- **Check.** For any `Idempotency-Key` held across clicks, ask what the server replays for it. Mint a new key once the attempt it covered has ended, in success or in a failed job, and pin it with a test that the retry's key differs.
+
+### L82. A redirect target is safe only if the value you return resolves to your own origin
+
+- **Mistake.** PR D carried the login's `next?.startsWith("/")` check into the MFA step. `//evil.example` and `/\evil.example` both pass it, and a browser reads them as another host, so a phishing `next` survived password and TOTP (review, Important 2).
+- **Recurred.** The first `safeNextPath` checked the origin of the parsed input, then returned the normalised path. Dot segments (`/..//evil.example`, `/%2e%2e//evil.example`, `/x/../\evil.example`) keep the sentinel origin yet normalise to `//evil.example`, a 307 off-site from the proxy (final review, Critical).
+- **Check.** Pass every redirect target through `safeNextPath` (`apps/dashboard/src/lib/safe-next-path.ts`) and never hand-write a `startsWith("/")` check. When writing such a check, validate the value you return, not the value you parsed: here, the returned path must not start with `//`, and the tests carry each dot-segment form.
+
 ## 4. Adding a lesson
 
 1. Number it next (`L14`) and give it a short title that states the rule.

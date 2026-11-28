@@ -79,3 +79,25 @@ export function createChangePasswordSchema(messages: {
 }
 
 export type ChangePasswordFormValues = z.infer<ReturnType<typeof createChangePasswordSchema>>;
+
+/** The second factor's messages: already translated by the caller. */
+export interface MfaCodeMessages {
+  codeInvalid: string;
+  required: string;
+}
+
+/** A TOTP code is six digits (RFC 6238, as `core/rbac/mfa.py` issues them); a recovery code is
+ * any non-blank text, since the server ignores its case, dashes and spaces. */
+export function createMfaCodeSchema(factor: "code" | "recovery", messages: MfaCodeMessages) {
+  return z.object({
+    code:
+      factor === "code"
+        ? z
+            .string()
+            .trim()
+            .regex(/^\d{6}$/, messages.codeInvalid)
+        : z.string().trim().min(1, messages.required),
+  });
+}
+
+export type MfaCodeValues = z.infer<ReturnType<typeof createMfaCodeSchema>>;

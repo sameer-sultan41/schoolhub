@@ -55,6 +55,32 @@ export function clearSessionCookie(): void {
 
 export const accessTokenStore = createAccessTokenStore();
 
+/**
+ * The second factor's pending challenge: `/auth/login`'s signed `mfa_token`, held in memory like
+ * the access token (never storage a script can read) until `/auth/mfa:verify` spends it. A reload
+ * drops it and the user signs in again; the server's challenge expires within minutes anyway
+ * (`MFA_CHALLENGE_TTL_SECONDS`).
+ */
+let pendingMfaToken: string | null = null;
+const mfaChallengeListeners = new Set<() => void>();
+
+export const mfaChallengeStore = {
+  get: (): string | null => pendingMfaToken,
+  set(token: string | null): void {
+    pendingMfaToken = token;
+    mfaChallengeListeners.forEach((listener) => {
+      listener();
+    });
+  },
+  /** For `useSyncExternalStore`. */
+  subscribe(listener: () => void): () => void {
+    mfaChallengeListeners.add(listener);
+    return () => {
+      mfaChallengeListeners.delete(listener);
+    };
+  },
+};
+
 type UnauthorizedHandler = (error: ApiError) => void;
 
 let onUnauthorized: UnauthorizedHandler = () => {

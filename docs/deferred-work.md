@@ -47,9 +47,6 @@ either this file or `project-status.md`.
     for per-account lockout with exponential backoff on login. The MFA lockout lets anyone who
     holds the password lock the operator out of the console, up to the operator-only lock at
     100 failures (NIST SP 800-63B §5.2.2 accepts this trade-off).
-  - **`packages/types` `LoginResponse` does not model the challenge.** The dashboard's login
-    form expects tokens; no tenant user can have MFA on yet, and the platform console (PR D)
-    handles `mfa_required`.
   - **The MFA challenge is not bound to the password state.** A challenge minted before a
     password change or reset stays redeemable for its `MFA_CHALLENGE_TTL_SECONDS` (300). Binding
     it means signing a fingerprint of the password hash (as Django's reset tokens do) into the
@@ -58,6 +55,26 @@ either this file or `project-status.md`.
     anyone: an operator locked out by someone holding their password learns of it only when
     they try to sign in. It needs a log-based monitor once the observability stack's alerting
     lands.
+
+- **The platform console (PR D, `apps/dashboard/src/features/platform/`) leaves out:**
+  - **Negotiated limits and the billing reference have no form.** `PATCH
+    /platform/tenants/{id}/subscription` (`limits_override`, `billing_provider`,
+    `billing_provider_ref`, with its `acknowledge_over_usage` 409) is in the API; the Subscription
+    tab shows the values but cannot edit them. The acknowledgement dialog is ready to reuse.
+  - **`quota_exceeded` on a school's own screens names no metric.** It shows the generic
+    `errors.quota_exceeded`; `meta` carries `{metric, limit, usage}`, which `resolveErrorMessage`
+    does not interpolate. A school screen that creates students or staff could say which limit.
+  - **An operator sees the vendor demo menu entries** (Dashboards, Public Profile, My Account)
+    beside the Platform entry, as every signed-in user does today; following Dashboards lands on
+    the staff shell, which sends them back to `/platform`. The console wants its own menu once
+    the demo content goes.
+  - **A signed-in operator at `/login` or `/` takes one extra hop.** The proxy can't tell who is
+    signed in (an opaque cookie), so it sends them to `/dashboard`, and `AudienceGate` then
+    sends them to `/platform`.
+  - **Recovery codes can be copied, not downloaded or printed.**
+  - **`toggle_refused` in Urdu names the flag but not the reason.** The server's reason is an
+    English sentence from the guard, so Urdu leaves it out rather than mix languages; a reason
+    code on the refusal would let both locales translate it.
 
 - **Platform scope (RBAC), what platform-admin PR A leaves out** (Task 1, `core/rbac/sync.py`,
   ADR-0036).

@@ -27,6 +27,11 @@ export const endpoints = {
     invitationAccept: "/auth/invitations:accept",
     passwordReset: "/auth/password-reset",
     passwordResetConfirm: "/auth/password-reset:confirm",
+    /** The second factor. `:verify` and `:confirm` set the refresh cookie, so they go through
+     * the auth proxy like login (`/api/auth/mfa:verify`); `:enroll` sets none and goes direct. */
+    mfaVerify: "/mfa:verify",
+    mfaConfirm: "/mfa:confirm",
+    mfaEnroll: "/auth/mfa:enroll",
   },
   /** The school's profile and configuration: a singleton (`GET`/`PATCH`). */
   schoolSettings: {
@@ -517,5 +522,27 @@ export const endpoints = {
   feeSchedules: {
     list: "/fee-schedules",
     detail: (id: string) => `/fee-schedules/${id}`,
+  },
+  /** The platform console (`/platform/*`, platform-admin.md §16): a platform token with a second
+   * factor only; a school's token gets 404. Colon-actions, not nested paths. */
+  platform: {
+    tenants: "/platform/tenants",
+    tenant: (id: string) => `/platform/tenants/${id}`,
+    tenantAction: (id: string, action: string) => `/platform/tenants/${id}:${action}`,
+    tenantJob: (id: string, jobId: string) => `/platform/tenants/${id}/jobs/${jobId}`,
+    tenantJobDownload: (id: string, jobId: string) =>
+      `/platform/tenants/${id}/jobs/${jobId}:download`,
+    tenantUsage: (id: string) => `/platform/tenants/${id}/usage`,
+    subscription: (id: string) => `/platform/tenants/${id}/subscription`,
+    subscriptionAction: (id: string, action: string) =>
+      `/platform/tenants/${id}/subscription:${action}`,
+    overrides: (id: string) => `/platform/tenants/${id}/feature-overrides`,
+    override: (id: string, overrideId: string) =>
+      `/platform/tenants/${id}/feature-overrides/${overrideId}`,
+    plans: "/platform/plans",
+    plan: (id: string) => `/platform/plans/${id}`,
+    featureFlags: "/platform/feature-flags",
+    featureFlag: (id: string) => `/platform/feature-flags/${id}`,
+    report: (key: string) => `/platform/reports/${key}`,
   },
 } as const;

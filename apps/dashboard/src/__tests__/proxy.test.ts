@@ -7,8 +7,16 @@
 import { NextRequest } from "next/server";
 import { proxy } from "../proxy";
 
-function makeRequest(path: string, { session = false }: { session?: boolean } = {}) {
-  const url = `https://app.schoolhub.test${path}`;
+// jest.setup.ts sets NEXT_PUBLIC_PLATFORM_DOMAIN=schoolhub.test, so `app.schoolhub.test` is the
+// bare dashboard host and `<slug>.app.schoolhub.test` a school's.
+const BARE_HOST = "app.schoolhub.test";
+const TENANT_HOST = "city-school.app.schoolhub.test";
+
+function makeRequest(
+  path: string,
+  { session = false, host = BARE_HOST }: { session?: boolean; host?: string } = {},
+) {
+  const url = `https://${host}${path}`;
   const headers: Record<string, string> = session ? { cookie: "sh_session=1" } : {};
   return new NextRequest(url, { headers });
 }
@@ -67,6 +75,16 @@ describe("proxy", () => {
     expect(response.headers.get("location")).toBe("https://app.schoolhub.test/students");
   });
 
+  it.each(["//evil.example", "/\\evil.example", "/..//evil.example"])(
+    "never follows %s, which a browser reads as another host",
+    (next) => {
+      const response = proxy(
+        makeRequest(`/login?next=${encodeURIComponent(next)}`, { session: true }),
+      );
+      expect(response.headers.get("location")).toBe("https://app.schoolhub.test/dashboard");
+    },
+  );
+
   it("never treats an off-site next param as a redirect target", () => {
     const response = proxy(makeRequest("/login?next=https://evil.example.com", { session: true }));
     expect(response.headers.get("location")).toBe("https://app.schoolhub.test/dashboard");
@@ -93,5 +111,46 @@ describe("proxy", () => {
     const response = proxy(makeRequest("/forgot-password", { session: true }));
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("https://app.schoolhub.test/dashboard");
+  });
+
+  describe("platform console", () => {
+    it("404s /platform/* on a school's host, signed in or not", () => {
+      expect(proxy(makeRequest("/platform/tenants", { host: TENANT_HOST })).status).toBe(404);
+      expect(
+        proxy(makeRequest("/platform/tenants", { host: TENANT_HOST, session: true })).status,
+      ).toBe(404);
+      expect(proxy(makeRequest("/platform", { host: TENANT_HOST, session: true })).status).toBe(
+        404,
+      );
+    });
+
+    it("serves /platform/* on the bare app host to a signed-in visitor", () => {
+      expect(proxy(makeRequest("/platform/tenants", { session: true })).status).toBe(200);
+    });
+
+    it("sends an anonymous visitor on the bare host to /login, like any protected page", () => {
+      const response = proxy(makeRequest("/platform/tenants"));
+      expect(response.status).toBe(307);
+      expect(new URL(response.headers.get("location") ?? "").pathname).toBe("/login");
+    });
+
+    it("does not treat a path that merely starts with /platform as the console", () => {
+      expect(proxy(makeRequest("/platforms", { host: TENANT_HOST, session: true })).status).toBe(
+        200,
+      );
+    });
+  });
+
+  describe("second-factor pages", () => {
+    it("lets an anonymous visitor reach /mfa/verify", () => {
+      expect(proxy(makeRequest("/mfa/verify")).status).toBe(200);
+    });
+
+    it("never redirects a signed-in visitor off /mfa/*", () => {
+      // A first sign-in holds a password-only session while it enrols; sending it to the
+      // dashboard would loop it back here.
+      expect(proxy(makeRequest("/mfa/enroll", { session: true })).status).toBe(200);
+      expect(proxy(makeRequest("/mfa/verify", { session: true })).status).toBe(200);
+    });
   });
 });

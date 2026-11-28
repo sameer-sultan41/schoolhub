@@ -1,18 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { getCoreRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table";
-import { isOffsetPagination, type Page } from "@schoolhub/types";
+import type { ColumnDef } from "@tanstack/react-table";
+import type { Page } from "@schoolhub/types";
 
-import {
-  hideableColumnIds,
-  useDataGridUrlState,
-  type FilterSpec,
-} from "@/hooks/use-data-grid-url-state";
-import { usePageClamp } from "@/hooks/use-page-clamp";
-import { toOrdering } from "@/lib/helpers";
-import { queryKeys } from "@/lib/query-client";
+import type { FilterSpec } from "@/hooks/use-data-grid-url-state";
+import { usePagedList } from "@/hooks/use-paged-list";
 import type { StructurePageQuery } from "@/services";
 import {
   SCHOOL_ORGANIZATION_QUERY_MODULE,
@@ -41,74 +33,15 @@ export interface StructureListOptions<TRow extends { id: string }, F extends str
 }
 
 /**
- * The read behind one of the School module's paged structure lists: the search, filters, sort,
- * page and hidden columns in the URL (ADR-0024), one page query, the stale-page guard, and the
- * table over it. The screen keeps its columns, filter controls and dialogs.
+ * One of the School module's paged structure lists: `usePagedList` under the school-organization
+ * query module, so a structure write refreshes the pickers that read the same records.
  */
-export function useStructureList<TRow extends { id: string }, F extends string>({
-  resource,
-  columns,
-  urlFilters,
-  sortField,
-  sortableIds,
-  defaultSorting,
-  showActions,
-  toFilterQuery,
-  fetchPage,
-}: StructureListOptions<TRow, F>) {
-  const hideableIds = useMemo(() => hideableColumnIds(columns), [columns]);
-  const urlState = useDataGridUrlState({
-    filters: urlFilters,
-    sortableIds,
-    defaultSorting,
-    hideableIds,
-    trimSearch: true,
+export function useStructureList<TRow extends { id: string }, F extends string>(
+  options: StructureListOptions<TRow, F>,
+) {
+  return usePagedList<TRow, F, StructurePageQuery>({
+    ...options,
+    queryModule: SCHOOL_ORGANIZATION_QUERY_MODULE,
+    actionsColumnId: STRUCTURE_ACTIONS_COLUMN_ID,
   });
-  const { filters, search, sorting, pagination, columnVisibility, setPageIndex } = urlState;
-
-  const pageQuery: StructurePageQuery = {
-    page: pagination.pageIndex + 1,
-    pageSize: pagination.pageSize,
-    search: search || undefined,
-    ordering: toOrdering(sorting, sortField),
-    ...toFilterQuery(filters),
-  };
-
-  const query = useQuery({
-    queryKey: queryKeys.list(SCHOOL_ORGANIZATION_QUERY_MODULE, resource, { ...pageQuery }),
-    queryFn: () => fetchPage(pageQuery),
-    placeholderData: keepPreviousData,
-  });
-
-  const pageMeta = query.data?.pagination;
-  const totalCount = pageMeta && isOffsetPagination(pageMeta) ? pageMeta.total_count : 0;
-  const { pageCount, isStalePage } = usePageClamp({
-    pageMeta,
-    isPlaceholderData: query.isPlaceholderData,
-    error: query.error,
-    pageIndex: pagination.pageIndex,
-    setPageIndex,
-  });
-
-  const rows = useMemo(() => query.data?.items ?? [], [query.data]);
-  const visibility = useMemo(
-    () => ({ ...columnVisibility, [STRUCTURE_ACTIONS_COLUMN_ID]: showActions }),
-    [columnVisibility, showActions],
-  );
-
-  const table = useReactTable({
-    data: rows,
-    columns,
-    pageCount,
-    state: { pagination, sorting, columnVisibility: visibility },
-    onPaginationChange: urlState.onPaginationChange,
-    onSortingChange: urlState.onSortingChange,
-    onColumnVisibilityChange: urlState.onColumnVisibilityChange,
-    manualPagination: true,
-    manualSorting: true,
-    getRowId: (record) => record.id,
-    getCoreRowModel: getCoreRowModel(),
-  });
-
-  return { ...urlState, query, table, totalCount, isStalePage };
 }

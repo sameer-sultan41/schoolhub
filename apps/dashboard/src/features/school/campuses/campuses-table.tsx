@@ -7,7 +7,7 @@ import { Building2 } from "lucide-react";
 
 import { SearchInput } from "@/components/search-input";
 import { RemoveRecordDialog } from "@/features/school/shared/remove-record-dialog";
-import { StructureGridCard } from "@/features/school/shared/structure-grid-card";
+import { PagedGridCard } from "@/components/paged-grid-card";
 import { StructureStatusFilter } from "@/features/school/shared/structure-status";
 import { useStructureList } from "@/features/school/shared/use-structure-list";
 import { CAMPUS_KEYS } from "@/features/school/school-permissions";
@@ -68,7 +68,7 @@ export function CampusesTable() {
 
   return (
     <>
-      <StructureGridCard
+      <PagedGridCard
         table={list.table}
         query={list.query}
         totalCount={list.totalCount}
