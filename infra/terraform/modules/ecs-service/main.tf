@@ -353,17 +353,19 @@ resource "aws_ecs_service" "this" {
   }
 
   # Rolling deployment with room for a full extra set of tasks, and never below
-  # 100% healthy: a deploy must not reduce capacity.
-  deployment_maximum_percent         = 200
-  deployment_minimum_healthy_percent = 100
+  # 100% healthy: a deploy must not reduce capacity. The singleton is the
+  # exception: 100/0 makes ECS stop the old beat before starting the new one,
+  # a 1-2 minute gap with no scheduler instead of two schedulers.
+  deployment_maximum_percent         = local.is_singleton ? 100 : 200
+  deployment_minimum_healthy_percent = local.is_singleton ? 0 : 100
 
   deployment_circuit_breaker {
     enable   = var.deployment_circuit_breaker
     rollback = var.deployment_circuit_breaker
   }
 
-  # A singleton scheduler cannot run two copies even briefly, so beat is
-  # stop-then-start instead of rolling.
+  # A singleton scheduler cannot run two copies even briefly; the percentages
+  # above make beat stop-then-start.
   dynamic "deployment_controller" {
     for_each = local.is_singleton ? [1] : []
 
