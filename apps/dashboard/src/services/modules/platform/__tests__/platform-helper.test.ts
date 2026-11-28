@@ -16,14 +16,28 @@ describe("platform-helper", () => {
     // `apps/api/apps/platform_admin/usage/limits.py`'s `breaches`, plus junk the reader drops.
     const meta = {
       over_usage: [
-        { tenant_id: "t1", metric: "students", limit: 100, usage: 320 },
+        {
+          tenant_id: "t1",
+          tenant_name: "City School",
+          slug: "city-school",
+          metric: "students",
+          limit: 100,
+          usage: 320,
+        },
         { tenant_id: "t2", metric: "staff", limit: "10", usage: 12 },
         null,
       ],
     };
 
     expect(readOverUsage(meta)).toEqual([
-      { tenant_id: "t1", metric: "students", limit: 100, usage: 320 },
+      {
+        tenant_id: "t1",
+        tenant_name: "City School",
+        slug: "city-school",
+        metric: "students",
+        limit: 100,
+        usage: 320,
+      },
     ]);
     expect(readOverUsage({})).toEqual([]);
     expect(readOverUsage({ over_usage: "nope" })).toEqual([]);

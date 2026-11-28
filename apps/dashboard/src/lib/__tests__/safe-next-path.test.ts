@@ -13,8 +13,20 @@ describe("safeNextPath", () => {
     ["an absolute URL", "https://evil.example/login"],
     ["a scheme with no slashes", "javascript:alert(1)"],
     ["a relative path", "platform"],
+    // Dot segments a parser resolves into a protocol-relative path: the input's origin is the
+    // sentinel's, but the path it returns is `//evil.example`.
+    ["a parent segment before a double slash", "/..//evil.example"],
+    ["a current segment before a double slash", "/.//evil.example"],
+    ["a segment climbed back out of", "/a/..//evil.example"],
+    ["an encoded parent segment", "/%2e%2e//evil.example"],
+    ["a parent segment before a backslash", "/x/../\\evil.example"],
   ])("refuses %s", (_case, next) => {
     expect(safeNextPath(next)).toBeNull();
+  });
+
+  it("keeps encoded slashes as a same-origin path, since they are not path separators", () => {
+    expect(safeNextPath("/%2F%2F/evil.example")).toBe("/%2F%2F/evil.example");
+    expect(safeNextPath("/%5C/evil.example")).toBe("/%5C/evil.example");
   });
 
   it("refuses nothing at all", () => {

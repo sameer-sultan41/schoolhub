@@ -75,7 +75,7 @@ describe("proxy", () => {
     expect(response.headers.get("location")).toBe("https://app.schoolhub.test/students");
   });
 
-  it.each(["//evil.example", "/\\evil.example"])(
+  it.each(["//evil.example", "/\\evil.example", "/..//evil.example"])(
     "never follows %s, which a browser reads as another host",
     (next) => {
       const response = proxy(

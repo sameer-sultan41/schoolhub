@@ -29,6 +29,7 @@ from apps.platform_admin.tests.base import (
 )
 from apps.platform_admin.tests.test_subscriptions import live_on
 from apps.platform_admin.uploads import TENANT_EXPORT
+from apps.platform_admin.usage import limits
 from apps.platform_admin.usage import services as usage
 from apps.school_organization.tests.factories import CampusFactory, UserFactory, grant
 from apps.staff_management.models import EmploymentStatus
@@ -88,6 +89,18 @@ def populate(tenant: Tenant, *, students=(), staff=(), files=()) -> None:
             StaffFactory(tenant=tenant, campus=campus, employment_status=employment_status)
         for size in files:
             FileFactory(tenant=tenant, size_bytes=size)
+
+
+def breach_of(tenant: Tenant, metric: str, *, limit: int, usage: int) -> dict:
+    """One `meta.over_usage` entry: the school named, so a client needs no lookup per school."""
+    return {
+        "tenant_id": str(tenant.pk),
+        "tenant_name": tenant.name,
+        "slug": tenant.slug,
+        "metric": metric,
+        "limit": limit,
+        "usage": usage,
+    }
 
 
 class UsageCounterTests(TestCase):
@@ -338,6 +351,27 @@ class UsageRouteTests(PlatformAPITestCase):
 class LimitBelowUsageTests(PlatformAPITestCase):
     """Review Focus 4: a limit lowered below a school's latest snapshot needs the ack."""
 
+    def test_over_usage_names_every_school_in_one_query(self) -> None:
+        plan = make_plan(limits={"students": 500})
+        first = make_tenant(status=S.TRIAL, name="City School", slug="city-school")
+        second = make_tenant(status=S.TRIAL, name="Hill School", slug="hill-school")
+        for tenant, students in ((first, 50), (second, 80)):
+            live_on(tenant, plan)
+            snapshot_of(tenant, students=students)
+        snapshots = limits.latest_snapshots([first.pk, second.pk])
+
+        # One query for every school's name, however many schools are over.
+        with self.assertNumQueries(1):
+            found = limits.breaches({"students": 500}, {"students": 10}, snapshots)
+
+        self.assertCountEqual(
+            found,
+            [
+                breach_of(first, "students", limit=10, usage=50),
+                breach_of(second, "students", limit=10, usage=80),
+            ],
+        )
+
     def test_lowering_limit_below_usage_is_409(self) -> None:
         plan = make_plan(limits={"students": 500, "sms_credits": 1000})
         tenant = make_tenant(status=S.TRIAL)
@@ -351,7 +385,7 @@ class LimitBelowUsageTests(PlatformAPITestCase):
         self.assert_error(refused, status.HTTP_409_CONFLICT, "limit_below_usage")
         self.assertEqual(
             refused.json()["error"]["meta"]["over_usage"],
-            [{"tenant_id": str(tenant.pk), "metric": "students", "limit": 10, "usage": 50}],
+            [breach_of(tenant, "students", limit=10, usage=50)],
         )
         plan.refresh_from_db()
         self.assertEqual(plan.limits["students"], 500)
@@ -459,7 +493,7 @@ class LimitBelowUsageTests(PlatformAPITestCase):
         self.assert_error(refused, status.HTTP_409_CONFLICT, "limit_below_usage")
         self.assertEqual(
             refused.json()["error"]["meta"]["over_usage"],
-            [{"tenant_id": str(tenant.pk), "metric": "students", "limit": 10, "usage": 50}],
+            [breach_of(tenant, "students", limit=10, usage=50)],
         )
         self.assertEqual(Tenant.objects.get(pk=tenant.pk).current_plan, "")
 
@@ -484,7 +518,7 @@ class LimitBelowUsageTests(PlatformAPITestCase):
         self.assert_error(refused, status.HTTP_409_CONFLICT, "limit_below_usage")
         self.assertEqual(
             refused.json()["error"]["meta"]["over_usage"],
-            [{"tenant_id": str(tenant.pk), "metric": "students", "limit": 10, "usage": 50}],
+            [breach_of(tenant, "students", limit=10, usage=50)],
         )
         self.assertNotEqual(Tenant.objects.get(pk=tenant.pk).current_plan, smaller.code)
 

@@ -55,6 +55,9 @@ export type SubscriptionAction =
  * (`apps/api/apps/platform_admin/usage/limits.py`'s `breaches`). */
 export interface OverUsage {
   tenant_id: string;
+  /** The school's name and subdomain, so a client names it without a lookup per school. */
+  tenant_name: string;
+  slug: string;
   metric: string;
   limit: number;
   usage: number;

@@ -124,6 +124,8 @@ test.describe("platform console", () => {
     await expect(page).toHaveURL("/dashboard");
     // The sidebar has rendered the owner's own entries, so a missing console entry is real.
     await expect(page.getByRole("link", { name: "Students", exact: true })).toBeVisible();
+    // The console's own sidebar entry, not just one of its children.
+    await expect(page.getByRole("button", { name: "Platform" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Tenants" })).toHaveCount(0);
   });
 });
